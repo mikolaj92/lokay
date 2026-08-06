@@ -42,6 +42,7 @@ lokay-pr-merge = "lokay.proc.pr_merge:main"
 lokay-run-path = "lokay.proc.run_path:main"
 lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
 lokay-pr-repair = "lokay.compose.pr_repair:main"
+lokay-pr-triage = "lokay.compose.pr_triage:main"
 lokay-tick = "lokay.compose.tick:main"
 lokay-mill = "lokay.compose.mill:main"
 

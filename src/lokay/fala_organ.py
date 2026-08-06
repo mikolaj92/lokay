@@ -60,6 +60,7 @@ def _live_flags(inputs: dict[str, Any]) -> list[str]:
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     from lokay.proc import (
         assign_issue,
+        close_issue,
         commit_all,
         get_issue,
         list_prs,
@@ -67,11 +68,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         pr_checks,
         pr_create,
         pr_label,
+        pr_merge,
         push_branch,
         run_agent,
         triage_issue,
         worktree_add,
     )
+    from lokay.stuck import issue_number_from_branch
 
     cfg = _cfg_flags(inputs)
     live = _live_flags(inputs)
@@ -84,6 +87,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     if pr_number is not None:
         pr_number = int(pr_number)
     repair_mode = str(inputs.get("mode") or "") == "repair"
+    branch = str(
+        inputs.get("branch")
+        or up.get("make_branch", {}).get("branch")
+        or up.get("worktree_add", {}).get("branch")
+        or ""
+    )
 
     if atom == "get_issue":
         assert repo and issue_number is not None
@@ -104,6 +113,77 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         return _run_atom_main(
             pr_checks.main,
             [*cfg, "--repo", repo, "--pr", str(pr_number)],
+        )
+
+    if atom == "pr_merge":
+        assert repo and pr_number is not None
+        checks = up.get("pr_checks") or {}
+        # Skip cleanly when checks are not mergeable under policy.
+        if checks and not (
+            checks.get("merge_ok")
+            or checks.get("green")
+            or checks.get("status") == "passed"
+        ):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "checks_not_mergeable",
+                "status": checks.get("status"),
+                "repo": repo,
+                "pr": pr_number,
+            }
+        return _run_atom_main(
+            pr_merge.main,
+            [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],
+        )
+
+    if atom == "close_issue":
+        assert repo
+        merged = up.get("pr_merge") or {}
+        # Only close after merge ran (live merged=true) or dry-run planned merge.
+        if merged.get("skipped"):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "pr_merge_skipped",
+                "repo": repo,
+                "pr": pr_number,
+            }
+        if not (merged.get("merged") or merged.get("planned")):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "pr_not_merged",
+                "repo": repo,
+                "pr": pr_number,
+            }
+        if issue_number is None and branch:
+            prefix = str(inputs.get("branch_prefix") or "ai/fix")
+            issue_number = issue_number_from_branch(branch, branch_prefix=prefix)
+        if issue_number is None:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "issue_number_unknown",
+                "branch": branch,
+                "pr": pr_number,
+            }
+        comment = str(
+            inputs.get("comment")
+            or f"Closed by Lokay after merging PR #{pr_number}."
+        )
+        return _run_atom_main(
+            close_issue.main,
+            [
+                *cfg,
+                *live,
+                "--repo",
+                repo,
+                "--issue",
+                str(issue_number),
+                "--comment",
+                comment,
+            ],
         )
 
     if atom == "assign_issue":

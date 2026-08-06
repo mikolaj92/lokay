@@ -28,11 +28,11 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err("--repo is required"))
     if args.path in {"issue_to_pr", "issue_triage"} and args.issue is None:
         return emit_exit(err(f"--issue is required for {args.path}"))
-    if args.path == "pr_repair":
+    if args.path in {"pr_repair", "pr_triage"}:
         if args.pr is None:
-            return emit_exit(err("--pr is required for pr_repair"))
+            return emit_exit(err(f"--pr is required for {args.path}"))
         if not args.branch:
-            return emit_exit(err("--branch is required for pr_repair"))
+            return emit_exit(err(f"--branch is required for {args.path}"))
 
     try:
         result = run_path(

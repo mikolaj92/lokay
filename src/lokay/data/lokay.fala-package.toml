@@ -162,6 +162,36 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "push" }
 retry_policy = "none"
 
+# --- PR triage: checks → merge (policy) → close linked issue ---
+
+[[correlation_paths]]
+id = "pr_triage"
+title = "PR triage"
+description = "Merge a ready AI PR when checks/policy allow, then close the linked issue."
+
+[[correlation_paths.effectors]]
+id = "pr_checks"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+config = { atom = "pr_checks" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "pr_merge"
+capability = "lokay_atom"
+conduction = ["pr_checks"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+config = { atom = "pr_merge" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "close_issue"
+capability = "lokay_atom"
+conduction = ["pr_checks", "pr_merge"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+config = { atom = "close_issue" }
+retry_policy = "none"
+
 [runtime.backend]
 kind = "sqlite"
 path = ".fala/lokay-state.sqlite"

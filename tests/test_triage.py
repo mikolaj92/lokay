@@ -90,6 +90,19 @@ def test_pr_repair_path_in_package():
     assert "pr_checks" in agent["conduction"]
 
 
+def test_pr_triage_path_in_package():
+    desc = describe_package()
+    ids = [p["id"] for p in desc["paths"]]
+    assert "pr_triage" in ids
+    path = next(p for p in desc["paths"] if p["id"] == "pr_triage")
+    node_ids = [n["id"] for n in path["nodes"]]
+    assert node_ids == ["pr_checks", "pr_merge", "close_issue"]
+    merge = next(n for n in path["nodes"] if n["id"] == "pr_merge")
+    assert "pr_checks" in merge["conduction"]
+    close = next(n for n in path["nodes"] if n["id"] == "close_issue")
+    assert "pr_merge" in close["conduction"]
+
+
 def test_package_files_exist():
     root = Path(__file__).resolve().parents[1]
     assert (root / "fala" / "lokay.fala-package.toml").is_file()

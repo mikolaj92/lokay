@@ -125,6 +125,8 @@ def run_path(
         "assign_issue",
         "make_branch",
         "pr_checks",
+        "pr_merge",
+        "close_issue",
         "worktree_add",
         "run_agent",
         "commit_all",

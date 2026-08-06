@@ -41,6 +41,14 @@ pr_checks
                     └─→ push
 ```
 
+### `pr_triage` (merge policy → close issue)
+
+```text
+pr_checks
+  └─→ pr_merge     ← skipped when checks not mergeable / merge disabled
+        └─→ close_issue   ← issue# from ai/fix/N-* branch when known
+```
+
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **run_agent** is the only slot that may call a coding harness (`fake` | `grok`).
 - Everything else is deterministic (`gh` / `git` / pure functions).

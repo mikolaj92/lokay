@@ -19,15 +19,14 @@ from typing import Any, Callable
 
 from lokay.compose.issue_to_pr import compose_issue_to_pr
 from lokay.compose.pr_repair import compose_pr_repair
+from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
-from lokay.proc import close_issue as p_close
 from lokay.proc import label_issue as p_label
 from lokay.proc import list_inbox as p_list_inbox
 from lokay.proc import list_issues as p_list_issues
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc import pr_checks as p_checks
-from lokay.proc import pr_merge as p_merge
 from lokay.proc import select_issue as p_select
 from lokay.proc import triage_issue as p_triage
 from lokay.proc._common import add_config_live, load_cfg
@@ -145,7 +144,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "lokay-list-inbox + lokay-triage-issue (or path issue_triage)",
         "lokay-list-issues + exclude stuck + select + issue_to_pr",
         "on failure: stuck ledger → ai:blocked",
-        "list-prs + pr-checks; red → pr_repair; green → merge + close",
+        "list-prs + pr-checks; failed → pr_repair; mergeable → Fala pr_triage",
     ]
     planned.append(
         {
@@ -411,38 +410,25 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 mergeable_green += 1
                 continue
             mergeable_green += 1
-            if not live:
+            if not live or not head:
                 continue
-            merged = _run(
-                p_merge.main,
-                [*cfg_flag, *live_flag, "--repo", repo.name, "--pr", str(pr_num)],
+            # Fala owns merge → close order (pr_triage path).
+            tri = compose_pr_triage(
+                config_path=config_path,
+                repo=repo.name,
+                pr_number=pr_num,
+                branch=head,
+                live=True,
             )
-            actions.append({"step": "pr_merge", "pr": pr_num, **merged})
-            if not (merged.get("ok") and merged.get("merged")):
-                continue
-            progress += 1
-            remaining_prs = max(0, remaining_prs - 1)
-            mergeable_green = max(0, mergeable_green - 1)
-            issue_n = issue_number_from_branch(head, branch_prefix=cfg.branch_prefix)
-            if issue_n is not None:
-                closed = _run(
-                    p_close.main,
-                    [
-                        *cfg_flag,
-                        *live_flag,
-                        "--repo",
-                        repo.name,
-                        "--issue",
-                        str(issue_n),
-                        "--comment",
-                        f"Closed by Lokay after merging PR #{pr_num}.",
-                    ],
-                )
-                actions.append(
-                    {"step": "close_issue", "issue": issue_n, "pr": pr_num, **closed}
-                )
-                if closed.get("ok") and closed.get("closed"):
-                    progress += 1
+            actions.append(
+                {"step": "pr_triage", "pr": pr_num, "branch": head, **tri}
+            )
+            if tri.get("ok"):
+                progress += 1
+                remaining_prs = max(0, remaining_prs - 1)
+                mergeable_green = max(0, mergeable_green - 1)
+                issue_n = issue_number_from_branch(head, branch_prefix=cfg.branch_prefix)
+                if issue_n is not None:
                     clear_issue(stuck, repo.name, issue_n)
                     save_stuck(stuck_path, stuck)
 
