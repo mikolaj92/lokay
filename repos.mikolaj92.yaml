@@ -1,13 +1,11 @@
-# Source (non-fork) repos for Lokay mill scope.
-# Priorities: products > platform libs > tooling > experimental.
-# clone_path: local working tree (required for issue_to_pr / worktree).
-# enabled: false = listed but skipped by mill (missing clone or out of scope).
+# Repos Lokay manages (mikolaj92 source / non-fork).
+# This file IS the scope of "which repos we handle" — not a denylist.
+# Missing local clone = need to clone (uv run lokay-repos-clone-missing --live), not "disabled".
 
 owner: mikolaj92
 default_clone_root: /Users/mikomac/Developer/OSS
 
 repos:
-  # --- product / high priority ---
   - name: mikolaj92/lokay-lite
     clone_path: /Users/mikomac/Developer/OSS/lokay
     priority: 100
@@ -47,8 +45,6 @@ repos:
   - name: mikolaj92/basecoat-factory
     clone_path: /Users/mikomac/Developer/OSS/basecoat-factory
     priority: 60
-
-  # --- platform / libs ---
   - name: mikolaj92/my-usermanager
     clone_path: /Users/mikomac/Developer/OSS/my-usermanager
     priority: 55
@@ -70,6 +66,9 @@ repos:
   - name: mikolaj92/OpenAPITransportKit
     clone_path: /Users/mikomac/Developer/OSS/swift-openapi-transport-kit
     priority: 45
+  - name: mikolaj92/sqlite.fire
+    clone_path: /Users/mikomac/Developer/OSS/sqlite.fire
+    priority: 40
   - name: mikolaj92/ShowMeThePlayer
     clone_path: /Users/mikomac/Developer/OSS/ShowMeThePlayer
     priority: 40
@@ -77,42 +76,23 @@ repos:
     clone_path: /Users/mikomac/Developer/OSS/PunkRecords
     priority: 40
   - name: mikolaj92/punk-records
-    clone_path: /Users/mikomac/Developer/OSS/PunkRecords
+    clone_path: /Users/mikomac/Developer/OSS/punk-records
     priority: 35
-    note: same local tree as PunkRecords if only one clone
-
-  # --- automation / legacy ---
   - name: mikolaj92/lokay
     clone_path: /Users/mikomac/Developer/OSS/hermes-plugin-oss-repo-agent
     priority: 30
-    note: legacy Hermes plugin; prefer lokay-lite for new work
   - name: mikolaj92/influenzer
     clone_path: /Users/mikomac/Developer/OSS/influenzer
     priority: 25
-    enabled: false
-    note: clone missing locally
-
-  # --- personal / optional ---
-  - name: mikolaj92/dotfiles
-    clone_path: /Users/mikomac/Developer/dotfiles
-    priority: 10
-    enabled: false
-    note: personal; excluded from mill by default
-
-  # --- missing local clones (enable after clone) ---
-  - name: mikolaj92/sqlite.fire
-    clone_path: /Users/mikomac/Developer/OSS/sqlite.fire
-    priority: 40
-    enabled: false
   - name: mikolaj92/VibeTLA
     clone_path: /Users/mikomac/Developer/OSS/VibeTLA
     priority: 20
-    enabled: false
   - name: mikolaj92/VibeFront
     clone_path: /Users/mikomac/Developer/OSS/VibeFront
     priority: 20
-    enabled: false
   - name: mikolaj92/hermetic-alchemy
     clone_path: /Users/mikomac/Developer/OSS/hermetic-alchemy
     priority: 20
-    enabled: false
+  - name: mikolaj92/dotfiles
+    clone_path: /Users/mikomac/Developer/dotfiles
+    priority: 15

@@ -70,8 +70,8 @@ class Config:
         for repo in active:
             if "/" not in repo.name:
                 errors.append(f"repo name must be owner/name: {repo.name!r}")
-            if self.live and not repo.clone_path.exists():
-                errors.append(f"clone_path missing for {repo.name}: {repo.clone_path}")
+            # Missing clone is not a config error: triage/list still work via gh.
+            # Live implement skips or fails per-repo when worktree is needed.
         if self.live and self.executor_enabled and self.max_turns < 1:
             errors.append("executor.max_turns must be >= 1")
         # require_checks=false is allowed: repos without CI can still merge when
@@ -123,12 +123,10 @@ def _load_repos(data: dict[str, Any], cfg_path: Path) -> list[RepoConfig]:
         by_name[repo.name] = repo  # config wins
 
     repos = list(by_name.values())
-    # Auto-disable missing clones unless explicitly enabled with path (live will error)
+    # Scope = listed repos. Missing clone is a note for operators, not exclusion.
     for repo in repos:
-        if repo.enabled and not repo.clone_path.exists():
-            repo.enabled = False
-            if not repo.note:
-                repo.note = "auto-disabled: clone_path missing"
+        if not repo.clone_path.exists() and not repo.note:
+            repo.note = "clone_path missing — clone before issue_to_pr/worktree"
 
     repos.sort(key=lambda r: (-r.priority, r.name))
     return repos

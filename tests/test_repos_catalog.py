@@ -19,13 +19,13 @@ def test_catalog_loads_thirty_source_repos():
         p = root / ".pytest_catalog_config.yaml"
         p.write_text(yaml.dump(data), encoding="utf-8")
         cfg = load_config(p)
-    assert len(cfg.repos) >= 24  # catalog may auto-disable missing
+    assert len(cfg.repos) == 30
     names = {r.name for r in cfg.repos}
     assert "mikolaj92/Temida" in names
     assert "mikolaj92/Fala" in names
     assert "mikolaj92/msds-portal" in names
     assert "mikolaj92/lokay-lite" in names
-    # mill only walks enabled
-    for r in cfg.active_repos():
-        assert r.enabled
-        assert r.clone_path.exists()
+    assert "mikolaj92/dotfiles" in names  # in scope, even if clone missing
+    # all catalog entries enabled by default (scope != clone presence)
+    assert all(r.enabled for r in cfg.repos)
+    assert len(cfg.active_repos()) == 30

@@ -64,13 +64,15 @@ merge:
     assert cfg.require_checks is False
 
 
-def test_live_requires_clone(tmp_path: Path):
+def test_live_allows_missing_clone_in_validate(tmp_path: Path):
+    """Scope lists repos even without local trees; implement needs clone later."""
     cfg = Config(
         mode="live",
         repos=[RepoConfig(name="a/b", clone_path=tmp_path / "missing")],
     )
-    errs = cfg.validate()
-    assert any("clone_path missing" in e for e in errs)
+    assert cfg.validate() == []
+    assert len(cfg.active_repos()) == 1
+    assert not cfg.active_repos()[0].clone_path.exists()
 
 
 def test_grok_argv_uses_grok_not_omp():

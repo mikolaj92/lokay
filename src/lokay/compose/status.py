@@ -28,9 +28,13 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         blockers.append(
             "merge.require_checks is true (no-CI PRs blocked; set false for canary/no-CI)"
         )
-    for repo in cfg.active_repos():
-        if not repo.clone_path.exists():
-            blockers.append(f"clone_path missing: {repo.name} → {repo.clone_path}")
+    missing_clones = [
+        f"{repo.name} → {repo.clone_path}"
+        for repo in cfg.active_repos()
+        if not repo.clone_path.exists()
+    ]
+    # Missing clones do not block mill_ready for triage-only progress;
+    # they block full implement for those repos (reported separately).
 
     survey = compose_tick(config_path=config_path, live=False)
     remaining = survey.get("remaining") or {}
@@ -68,6 +72,7 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         repos=[r.name for r in cfg.active_repos()],
         repos_disabled=[r.name for r in cfg.repos if not r.enabled],
         repos_total=len(cfg.repos),
+        missing_clones=missing_clones,
         graphs=graphs,
         mill_ready=mill_ready,
         blockers=blockers,
