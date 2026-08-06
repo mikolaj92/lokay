@@ -7,6 +7,7 @@ github:
   allow_unassigned: false
   ready_label: ai:ready
   blocked_label: ai:blocked
+  needs_feedback_label: ai:needs-feedback
   branch_prefix: ai/fix
   pr_labels:
     - ai:generated
@@ -28,6 +29,7 @@ executor:
 
 merge:
   enabled: false
+  # true: only merge when CI passed. false: also merge when branch has no checks.
   require_checks: true
   require_test_evidence: true
 
@@ -39,4 +41,7 @@ state:
 
 limits:
   max_issues_per_tick: 1
+  max_triage_per_tick: 5
+  max_repairs_per_tick: 1
+  max_failures_before_block: 2
   min_free_gb: 2

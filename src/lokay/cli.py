@@ -6,6 +6,8 @@ import sys
 
 from lokay import __version__
 from lokay.compose.issue_to_pr import compose_issue_to_pr
+from lokay.compose.mill import compose_mill
+from lokay.compose.status import compose_status
 from lokay.compose.tick import compose_tick
 from lokay.config import load_config, starter_config_text
 
@@ -54,6 +56,22 @@ def cmd_tick(args: argparse.Namespace) -> int:
     return 0 if payload.get("ok") else 1
 
 
+def cmd_mill(args: argparse.Namespace) -> int:
+    payload = compose_mill(
+        config_path=args.config,
+        live=bool(args.live),
+        max_passes=int(args.max_passes),
+    )
+    _print(payload)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    payload = compose_status(config_path=args.config)
+    _print(payload)
+    return 0 if payload.get("ok") else 1
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     payload = compose_issue_to_pr(
         config_path=args.config,
@@ -75,6 +93,8 @@ def cmd_path(args: argparse.Namespace) -> int:
         path_id=args.path,
         repo=args.repo,
         issue=args.issue,
+        pr=getattr(args, "pr", None),
+        branch=getattr(args, "branch", None),
         config_path=args.config,
         live=bool(args.live),
         package_path=args.package,
@@ -106,10 +126,20 @@ def build_parser() -> argparse.ArgumentParser:
     add_config(val)
     val.set_defaults(func=cmd_validate)
 
-    t = sub.add_parser("tick", help="Composer: one intake+triage cycle")
+    t = sub.add_parser("tick", help="Composer: survey + optional live mill pass")
     add_config(t)
     t.add_argument("--live", action="store_true")
     t.set_defaults(func=cmd_tick)
+
+    m = sub.add_parser("mill", help="Composer: tick until idle or max passes")
+    add_config(m)
+    m.add_argument("--live", action="store_true")
+    m.add_argument("--max-passes", type=int, default=8)
+    m.set_defaults(func=cmd_mill)
+
+    st = sub.add_parser("status", help="DoD readiness + remaining work (read-only)")
+    add_config(st)
+    st.set_defaults(func=cmd_status)
 
     r = sub.add_parser("run", help="Run Fala issue_to_pr graph for one issue")
     add_config(r)
@@ -123,6 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--path", default="issue_to_pr")
     g.add_argument("--repo")
     g.add_argument("--issue", type=int)
+    g.add_argument("--pr", type=int)
+    g.add_argument("--branch")
     g.add_argument("--live", action="store_true")
     g.add_argument("--describe", action="store_true")
     g.add_argument("--package")

@@ -37,5 +37,6 @@ Fala organs are invoked as:
 uv run pytest -q
 uv run lokay-make-branch --repo a/b --issue 1 --title t
 uv run lokay path --describe
+uv run lokay status --config config.yaml
 uv run lokay tick --config config.yaml
 ```

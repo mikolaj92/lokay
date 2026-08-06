@@ -20,8 +20,12 @@ fala = { path = "../Fala", editable = true }
 lokay = "lokay.cli:main"
 # Atomic processes (one job each)
 lokay-list-issues = "lokay.proc.list_issues:main"
+lokay-list-inbox = "lokay.proc.list_inbox:main"
 lokay-get-issue = "lokay.proc.get_issue:main"
 lokay-select-issue = "lokay.proc.select_issue:main"
+lokay-triage-issue = "lokay.proc.triage_issue:main"
+lokay-label-issue = "lokay.proc.label_issue:main"
+lokay-close-issue = "lokay.proc.close_issue:main"
 lokay-assign-issue = "lokay.proc.assign_issue:main"
 lokay-make-branch = "lokay.proc.make_branch:main"
 lokay-worktree-add = "lokay.proc.worktree_add:main"
@@ -37,7 +41,11 @@ lokay-pr-merge = "lokay.proc.pr_merge:main"
 # Graph (Fala) + composers
 lokay-run-path = "lokay.proc.run_path:main"
 lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
+lokay-pr-repair = "lokay.compose.pr_repair:main"
+lokay-pr-triage = "lokay.compose.pr_triage:main"
 lokay-tick = "lokay.compose.tick:main"
+lokay-mill = "lokay.compose.mill:main"
+lokay-status = "lokay.compose.status:main"
 
 [build-system]
 requires = ["hatchling"]

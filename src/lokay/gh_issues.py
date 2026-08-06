@@ -5,6 +5,7 @@ import json
 from lokay.config import Config, RepoConfig
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
+from lokay.triage import is_undecided
 
 
 def _eligible(assignees: list[str], config: Config) -> bool:
@@ -13,6 +14,20 @@ def _eligible(assignees: list[str], config: Config) -> bool:
     if config.assignee in assignees:
         return True
     return (not assignees) and config.allow_unassigned
+
+
+def _issue_from_row(repo_name: str, row: dict) -> Issue:
+    labels = [lbl.get("name", "") for lbl in row.get("labels") or []]
+    assignees = [a.get("login", "") for a in row.get("assignees") or []]
+    return Issue(
+        repo=repo_name,
+        number=int(row["number"]),
+        title=str(row.get("title") or ""),
+        body=str(row.get("body") or ""),
+        labels=labels,
+        assignees=assignees,
+        url=str(row.get("url") or ""),
+    )
 
 
 def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
@@ -35,24 +50,105 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         return []
     issues: list[Issue] = []
     for row in json.loads(result.stdout or "[]"):
-        labels = [lbl.get("name", "") for lbl in row.get("labels") or []]
-        if config.blocked_label in labels:
+        issue = _issue_from_row(repo.name, row)
+        if config.blocked_label in issue.labels:
             continue
-        assignees = [a.get("login", "") for a in row.get("assignees") or []]
-        if not _eligible(assignees, config):
+        if not _eligible(issue.assignees, config):
             continue
-        issues.append(
-            Issue(
-                repo=repo.name,
-                number=int(row["number"]),
-                title=str(row.get("title") or ""),
-                body=str(row.get("body") or ""),
-                labels=labels,
-                assignees=assignees,
-                url=str(row.get("url") or ""),
-            )
-        )
+        issues.append(issue)
     return issues
+
+
+def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
+    """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
+    args = [
+        "issue",
+        "list",
+        "--repo",
+        repo.name,
+        "--state",
+        "open",
+        "--json",
+        "number,title,body,labels,assignees,url",
+        "--limit",
+        "50",
+    ]
+    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
+    if not live:
+        return []
+    out: list[Issue] = []
+    for row in json.loads(result.stdout or "[]"):
+        issue = _issue_from_row(repo.name, row)
+        if not is_undecided(
+            issue.labels,
+            ready_label=config.ready_label,
+            blocked_label=config.blocked_label,
+            needs_feedback_label=config.needs_feedback_label,
+        ):
+            continue
+        out.append(issue)
+    return out
+
+
+def add_issue_labels(
+    runner: Runner, repo: str, number: int, labels: list[str], *, live: bool
+) -> None:
+    for label in labels:
+        if not label:
+            continue
+        runner.run_checked(
+            gh_spec(
+                [
+                    "issue",
+                    "edit",
+                    str(number),
+                    "--repo",
+                    repo,
+                    "--add-label",
+                    label,
+                ]
+            ),
+            live=live,
+        )
+
+
+def remove_issue_labels(
+    runner: Runner, repo: str, number: int, labels: list[str], *, live: bool
+) -> None:
+    for label in labels:
+        if not label:
+            continue
+        runner.run_checked(
+            gh_spec(
+                [
+                    "issue",
+                    "edit",
+                    str(number),
+                    "--repo",
+                    repo,
+                    "--remove-label",
+                    label,
+                ]
+            ),
+            live=live,
+        )
+
+
+def comment_issue(runner: Runner, repo: str, number: int, body: str, *, live: bool) -> None:
+    runner.run_checked(
+        gh_spec(
+            [
+                "issue",
+                "comment",
+                str(number),
+                "--repo",
+                repo,
+                "--body",
+                body,
+            ]
+        ),
+        live=live,
+    )
 
 
 def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: bool) -> Issue | None:

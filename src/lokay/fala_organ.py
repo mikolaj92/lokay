@@ -14,7 +14,7 @@ from typing import Any
 from fala import sdk
 
 from lokay.models import Issue
-from lokay.prompts import issue_fix_prompt, pr_body
+from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt
 
 
 def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -60,16 +60,21 @@ def _live_flags(inputs: dict[str, Any]) -> list[str]:
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     from lokay.proc import (
         assign_issue,
+        close_issue,
         commit_all,
         get_issue,
         list_prs,
         make_branch,
+        pr_checks,
         pr_create,
         pr_label,
+        pr_merge,
         push_branch,
         run_agent,
+        triage_issue,
         worktree_add,
     )
+    from lokay.stuck import issue_number_from_branch
 
     cfg = _cfg_flags(inputs)
     live = _live_flags(inputs)
@@ -78,12 +83,107 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     if issue_number is None and "get_issue" in up:
         issue_number = up["get_issue"].get("issue", {}).get("number")
     issue_number = int(issue_number) if issue_number is not None else None
+    pr_number = inputs.get("pr") or inputs.get("pr_number")
+    if pr_number is not None:
+        pr_number = int(pr_number)
+    repair_mode = str(inputs.get("mode") or "") == "repair"
+    branch = str(
+        inputs.get("branch")
+        or up.get("make_branch", {}).get("branch")
+        or up.get("worktree_add", {}).get("branch")
+        or ""
+    )
 
     if atom == "get_issue":
         assert repo and issue_number is not None
         return _run_atom_main(
             get_issue.main,
             [*cfg, "--repo", repo, "--issue", str(issue_number)],
+        )
+
+    if atom == "triage_issue":
+        assert repo and issue_number is not None
+        return _run_atom_main(
+            triage_issue.main,
+            [*cfg, *live, "--repo", repo, "--issue", str(issue_number)],
+        )
+
+    if atom == "pr_checks":
+        assert repo and pr_number is not None
+        return _run_atom_main(
+            pr_checks.main,
+            [*cfg, "--repo", repo, "--pr", str(pr_number)],
+        )
+
+    if atom == "pr_merge":
+        assert repo and pr_number is not None
+        checks = up.get("pr_checks") or {}
+        # Skip cleanly when checks are not mergeable under policy.
+        if checks and not (
+            checks.get("merge_ok")
+            or checks.get("green")
+            or checks.get("status") == "passed"
+        ):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "checks_not_mergeable",
+                "status": checks.get("status"),
+                "repo": repo,
+                "pr": pr_number,
+            }
+        return _run_atom_main(
+            pr_merge.main,
+            [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],
+        )
+
+    if atom == "close_issue":
+        assert repo
+        merged = up.get("pr_merge") or {}
+        # Only close after merge ran (live merged=true) or dry-run planned merge.
+        if merged.get("skipped"):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "pr_merge_skipped",
+                "repo": repo,
+                "pr": pr_number,
+            }
+        if not (merged.get("merged") or merged.get("planned")):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "pr_not_merged",
+                "repo": repo,
+                "pr": pr_number,
+            }
+        if issue_number is None and branch:
+            prefix = str(inputs.get("branch_prefix") or "ai/fix")
+            issue_number = issue_number_from_branch(branch, branch_prefix=prefix)
+        if issue_number is None:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "issue_number_unknown",
+                "branch": branch,
+                "pr": pr_number,
+            }
+        comment = str(
+            inputs.get("comment")
+            or f"Closed by Lokay after merging PR #{pr_number}."
+        )
+        return _run_atom_main(
+            close_issue.main,
+            [
+                *cfg,
+                *live,
+                "--repo",
+                repo,
+                "--issue",
+                str(issue_number),
+                "--comment",
+                comment,
+            ],
         )
 
     if atom == "assign_issue":
@@ -113,7 +213,11 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
 
     if atom == "worktree_add":
-        branch = str(up.get("make_branch", {}).get("branch") or inputs.get("branch") or "")
+        branch = str(
+            up.get("make_branch", {}).get("branch")
+            or inputs.get("branch")
+            or ""
+        )
         assert repo and branch
         return _run_atom_main(
             worktree_add.main,
@@ -122,11 +226,31 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "run_agent":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
-        branch = str(up.get("make_branch", {}).get("branch") or "")
-        issue_raw = up.get("get_issue", {}).get("issue") or {}
-        issue = Issue.from_dict(issue_raw) if issue_raw else None
-        assert worktree and issue is not None
-        prompt = issue_fix_prompt(issue, branch=branch)
+        branch = str(
+            up.get("make_branch", {}).get("branch")
+            or inputs.get("branch")
+            or up.get("worktree_add", {}).get("branch")
+            or ""
+        )
+        assert worktree
+        if repair_mode:
+            assert pr_number is not None and branch
+            checks_text = str(
+                up.get("pr_checks", {}).get("text")
+                or inputs.get("checks_text")
+                or ""
+            )
+            prompt = repair_pr_prompt(
+                repo=repo,
+                pr_number=pr_number,
+                branch=branch,
+                checks_text=checks_text,
+            )
+        else:
+            issue_raw = up.get("get_issue", {}).get("issue") or {}
+            issue = Issue.from_dict(issue_raw) if issue_raw else None
+            assert issue is not None
+            prompt = issue_fix_prompt(issue, branch=branch)
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
             fh.write(prompt)
             prompt_path = fh.name
@@ -141,9 +265,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     if atom == "commit_all":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         issue_raw = up.get("get_issue", {}).get("issue") or {}
-        n = issue_raw.get("number", issue_number)
-        title = str(issue_raw.get("title") or "")[:60]
-        msg = str(inputs.get("message") or f"fix: {repo}#{n} {title}")
+        if repair_mode and pr_number is not None:
+            msg = str(inputs.get("message") or f"repair: {repo} PR #{pr_number} checks")
+        else:
+            n = issue_raw.get("number", issue_number)
+            title = str(issue_raw.get("title") or "")[:60]
+            msg = str(inputs.get("message") or f"fix: {repo}#{n} {title}")
         assert worktree
         return _run_atom_main(
             commit_all.main,
@@ -152,7 +279,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
-        branch = str(up.get("make_branch", {}).get("branch") or "")
+        branch = str(
+            up.get("make_branch", {}).get("branch")
+            or inputs.get("branch")
+            or up.get("worktree_add", {}).get("branch")
+            or ""
+        )
         assert worktree and branch
         return _run_atom_main(
             push_branch.main,

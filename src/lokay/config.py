@@ -27,6 +27,7 @@ class Config:
     allow_unassigned: bool = False
     ready_label: str = "ai:ready"
     blocked_label: str = "ai:blocked"
+    needs_feedback_label: str = "ai:needs-feedback"
     branch_prefix: str = "ai/fix"
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
@@ -43,6 +44,9 @@ class Config:
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
     max_issues_per_tick: int = 1
+    max_triage_per_tick: int = 5
+    max_repairs_per_tick: int = 1
+    max_failures_before_block: int = 2
     min_free_gb: float = 2.0
     config_path: Path | None = None
 
@@ -63,13 +67,51 @@ class Config:
                 errors.append(f"clone_path missing for {repo.name}: {repo.clone_path}")
         if self.live and self.executor_enabled and self.max_turns < 1:
             errors.append("executor.max_turns must be >= 1")
-        if self.merge_enabled and not self.require_checks:
-            errors.append("merge.require_checks must stay true when merge.enabled")
+        # require_checks=false is allowed: repos without CI can still merge when
+        # merge.enabled (explicit opt-in). require_checks=true remains the default.
         return errors
 
 
 def _expand(path: str | Path) -> Path:
     return Path(os.path.expanduser(str(path))).resolve()
+
+
+def _env_truthy(name: str) -> bool | None:
+    """Return True/False if env is set, else None (leave config file value)."""
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return None
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def apply_env_overrides(cfg: Config) -> Config:
+    """Apply optional process env overrides for continuous/live mill.
+
+    Safe defaults stay in config.yaml; the factory can enable live milling
+    without rewriting the file:
+
+      LOKAY_MODE=live|dry-run
+      LOKAY_EXECUTOR_ENABLED=1|0
+      LOKAY_AGENT=fake|grok
+      LOKAY_MERGE_ENABLED=1|0
+      LOKAY_REQUIRE_CHECKS=1|0   (0 for no-CI canary repos)
+    """
+    mode = (os.environ.get("LOKAY_MODE") or "").strip().lower()
+    if mode in {"live", "dry-run"}:
+        cfg.mode = mode
+    v = _env_truthy("LOKAY_EXECUTOR_ENABLED")
+    if v is not None:
+        cfg.executor_enabled = v
+    agent = (os.environ.get("LOKAY_AGENT") or "").strip().lower()
+    if agent:
+        cfg.agent = agent
+    v = _env_truthy("LOKAY_MERGE_ENABLED")
+    if v is not None:
+        cfg.merge_enabled = v
+    v = _env_truthy("LOKAY_REQUIRE_CHECKS")
+    if v is not None:
+        cfg.require_checks = v
+    return cfg
 
 
 def load_config(path: str | Path | None = None) -> Config:
@@ -108,12 +150,13 @@ def load_config(path: str | Path | None = None) -> Config:
         )
     repos.sort(key=lambda r: (-r.priority, r.name))
 
-    return Config(
+    cfg = Config(
         mode=str(data.get("mode", "dry-run")),
         assignee=str(gh.get("assignee", "mikolaj92")),
         allow_unassigned=bool(gh.get("allow_unassigned", False)),
         ready_label=str(gh.get("ready_label", "ai:ready")),
         blocked_label=str(gh.get("blocked_label", "ai:blocked")),
+        needs_feedback_label=str(gh.get("needs_feedback_label", "ai:needs-feedback")),
         branch_prefix=str(gh.get("branch_prefix", "ai/fix")),
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
@@ -130,9 +173,13 @@ def load_config(path: str | Path | None = None) -> Config:
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issues_per_tick=int(lim.get("max_issues_per_tick", 1)),
+        max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
+        max_repairs_per_tick=int(lim.get("max_repairs_per_tick", 1)),
+        max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
         config_path=cfg_path,
     )
+    return apply_env_overrides(cfg)
 
 
 def starter_config_text(*, assignee: str = "mikolaj92", repo: str | None = None, clone: str | None = None) -> str:

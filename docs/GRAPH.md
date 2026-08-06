@@ -7,6 +7,8 @@ which jobs run after which.
 
 [`fala/lokay.fala-package.toml`](../fala/lokay.fala-package.toml)
 
+### `issue_to_pr`
+
 ```text
 get_issue
   ├─→ assign_issue
@@ -18,6 +20,33 @@ get_issue
                                 └─→ pr_create
                                       └─→ list_prs
                                             └─→ pr_label
+```
+
+### `issue_triage` (inbox → labels)
+
+```text
+get_issue
+  └─→ triage_issue   ← pure rules → ai:ready | ai:needs-feedback | OOS close
+```
+
+`ai:ready` is an **outcome** of triage, not the start of the universe.
+
+### `pr_repair` (red checks on open ai/fix PR)
+
+```text
+pr_checks
+  └─→ worktree_add
+        └─→ run_agent   ← repair prompt (only non-deterministic node)
+              └─→ commit_all
+                    └─→ push
+```
+
+### `pr_triage` (merge policy → close issue)
+
+```text
+pr_checks
+  └─→ pr_merge     ← skipped when checks not mergeable / merge disabled
+        └─→ close_issue   ← issue# from ai/fix/N-* branch when known
 ```
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).

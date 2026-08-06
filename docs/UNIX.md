@@ -17,8 +17,12 @@ Lokay is a **pipeline of small programs**, not a monolith.
 
 | Program | Job |
 | --- | --- |
-| `lokay-list-issues` | list ready issues for one repo |
-| `lokay-select-issue` | pick one issue from a list (stdin) |
+| `lokay-list-issues` | list ready (`ai:ready`) issues for one repo |
+| `lokay-list-inbox` | list undecided open issues (no triage labels yet) |
+| `lokay-triage-issue` | decide + apply ready / needs-feedback / OOS |
+| `lokay-label-issue` | add label(s) on an issue |
+| `lokay-close-issue` | close issue (+ optional comment) |
+| `lokay-select-issue` | pick one issue from a list (stdin; supports exclude) |
 | `lokay-assign-issue` | assign maintainer on GitHub |
 | `lokay-make-branch` | pure: branch name from repo+number+title |
 | `lokay-worktree-add` | create/reuse git worktree |
@@ -28,10 +32,14 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-create` | open PR |
 | `lokay-pr-label` | add labels |
 | `lokay-list-prs` | list open `ai/fix/*` PRs |
-| `lokay-pr-checks` | report checks green/fail |
+| `lokay-pr-checks` | report checks status (passed/failed/pending/none) |
 | `lokay-pr-merge` | merge if policy allows |
-| `lokay-issue-to-pr` | **compose** the above for one issue |
-| `lokay-tick` | **compose** intake + triage once |
+| `lokay-issue-to-pr` | **compose** Fala `issue_to_pr` for one issue |
+| `lokay-pr-repair` | **compose** Fala `pr_repair` for one red PR |
+| `lokay-pr-triage` | **compose** Fala `pr_triage` (checks → merge → close) |
+| `lokay-tick` | **compose** multi-repo survey (+ live triage/ready/PR) |
+| `lokay-mill` | **compose** bounded ticks until idle / stall / budget |
+| `lokay-status` | **compose** DoD readiness + remaining work (read-only) |
 | `lokay` | umbrella CLI (`init` / `validate` / thin wrappers) |
 
 ## Anti-patterns

@@ -62,12 +62,15 @@ def run_path(
     path_id: str,
     repo: str,
     issue: int | None = None,
+    pr: int | None = None,
+    branch: str | None = None,
     config_path: str | Path | None = None,
     live: bool = False,
     package_path: str | Path | None = None,
     db_path: str | Path | None = None,
     run_id: str | None = None,
     max_ticks: int = 64,
+    extra_inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Drive Fala host_run_package for a Lokay graph path."""
     try:
@@ -105,12 +108,25 @@ def run_path(
     if issue is not None:
         base_input["issue"] = int(issue)
         base_input["issue_number"] = int(issue)
+    if pr is not None:
+        base_input["pr"] = int(pr)
+        base_input["pr_number"] = int(pr)
+    if branch:
+        base_input["branch"] = str(branch)
+    if path_id == "pr_repair":
+        base_input["mode"] = "repair"
+    if extra_inputs:
+        base_input.update(extra_inputs)
 
-    # Same authored inputs for every step; atoms pick what they need.
+    # Same authored inputs for every known step; Fala only runs path effectors.
     steps = [
         "get_issue",
+        "triage_issue",
         "assign_issue",
         "make_branch",
+        "pr_checks",
+        "pr_merge",
+        "close_issue",
         "worktree_add",
         "run_agent",
         "commit_all",
@@ -159,6 +175,8 @@ def run_path(
         "run_id": rid,
         "repo": repo,
         "issue": issue,
+        "pr": pr,
+        "branch": branch,
         "live": live,
         "fala": result,
     }
