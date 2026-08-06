@@ -1,0 +1,113 @@
+from pathlib import Path
+
+from lokay.agent import build_grok_argv, run_fake_agent
+from lokay.compose.tick import compose_tick
+from lokay.config import Config, RepoConfig, load_config
+from lokay.git_branch import branch_for_issue
+from lokay.proc.make_branch import main as make_branch_main
+
+
+def test_load_example(tmp_path: Path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        """
+mode: dry-run
+github:
+  assignee: mikolaj92
+  ready_label: ai:ready
+repos:
+  - name: mikolaj92/lokay
+    clone_path: /tmp/lokay-clone
+    priority: 10
+executor:
+  enabled: false
+  agent: fake
+  command: grok
+  max_turns: 12
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.mode == "dry-run"
+    assert cfg.agent == "fake"
+    assert cfg.validate() == []
+
+
+def test_live_requires_clone(tmp_path: Path):
+    cfg = Config(
+        mode="live",
+        repos=[RepoConfig(name="a/b", clone_path=tmp_path / "missing")],
+    )
+    errs = cfg.validate()
+    assert any("clone_path missing" in e for e in errs)
+
+
+def test_grok_argv_uses_grok_not_omp():
+    cfg = Config(grok_command="grok", max_turns=7, always_approve=True, grok_model="grok-4")
+    argv = build_grok_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
+    assert argv[0] == "grok"
+    assert "omp" not in argv
+
+
+def test_fake_agent_writes_marker(tmp_path: Path):
+    (tmp_path / "CANARY_TODO.txt").write_text("FIXME please\n", encoding="utf-8")
+    result = run_fake_agent(worktree=tmp_path, prompt="fix canary")
+    assert result["status"] == "completed"
+    assert (tmp_path / "LOKAY_CANARY.md").is_file()
+    assert "fixed" in (tmp_path / "CANARY_TODO.txt").read_text(encoding="utf-8")
+
+
+def test_make_branch_atomic(capsys):
+    code = make_branch_main(
+        ["--prefix", "ai/fix", "--repo", "a/b", "--issue", "3", "--title", "Hello World"]
+    )
+    assert code == 0
+    import json
+
+    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert out["ok"] is True
+    assert out["branch"].startswith("ai/fix/3-")
+    assert branch_for_issue("ai/fix", "a/b", 3, "Hello World") == out["branch"]
+
+
+def test_tick_dry_run(tmp_path: Path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path}
+executor:
+  command: grok
+  agent: fake
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    result = compose_tick(config_path=str(cfg_path), live=False)
+    assert result["ok"] is True
+    assert result["live"] is False
+
+
+def test_tick_refuses_live_when_mode_dry(tmp_path: Path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path}
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    result = compose_tick(config_path=str(cfg_path), live=True)
+    assert result["ok"] is False

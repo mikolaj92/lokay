@@ -1,0 +1,42 @@
+# Lokay lite — deterministic pipeline + one swappable agent slot.
+
+mode: dry-run  # dry-run | live
+
+github:
+  assignee: mikolaj92
+  allow_unassigned: false
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels:
+    - ai:generated
+    - ai:pr-opened
+
+repos:
+  # - name: mikolaj92/lokay-lite
+  #   clone_path: /Users/mikomac/Developer/OSS/lokay
+  #   priority: 10
+
+executor:
+  enabled: false
+  agent: fake          # fake | grok  (harness is not the architecture)
+  command: grok        # binary when agent=grok
+  model: null
+  max_turns: 40
+  timeout_seconds: 1800
+  always_approve: true
+
+merge:
+  enabled: false
+  require_checks: true
+  require_test_evidence: true
+
+worktrees:
+  root: ~/.lokay/worktrees
+
+state:
+  path: ~/.lokay/state.jsonl
+
+limits:
+  max_issues_per_tick: 1
+  min_free_gb: 2

@@ -1,0 +1,41 @@
+"""Atomic: ensure git worktree for branch."""
+
+from __future__ import annotations
+
+import argparse
+
+from lokay.envelope import emit_exit, err, ok
+from lokay.git_worktree import ensure_worktree
+from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(prog="lokay-worktree-add")
+    add_config_live(p)
+    p.add_argument("--repo", required=True)
+    p.add_argument("--branch", required=True)
+    p.add_argument("--base", default="main")
+    args = p.parse_args(argv)
+    cfg = load_cfg(args)
+    live = mutations_allowed(live_flag=args.live)
+    repo = next((r for r in cfg.repos if r.name == args.repo), None)
+    if repo is None:
+        return emit_exit(err(f"repo not in config: {args.repo}"))
+    try:
+        path = ensure_worktree(
+            runner(), cfg, repo, args.branch, live=live, base=args.base
+        )
+    except Exception as exc:  # noqa: BLE001
+        return emit_exit(err(str(exc)))
+    return emit_exit(
+        ok(
+            planned=not live,
+            repo=args.repo,
+            branch=args.branch,
+            worktree=str(path),
+        )
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

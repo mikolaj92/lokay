@@ -1,0 +1,49 @@
+[project]
+name = "lokay"
+version = "0.3.0"
+description = "Unix-style atomic issue→PR processes (GitHub + Grok). No Hermes/Kanban/Fala."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+lokay = "lokay.cli:main"
+# Atomic processes (one job each)
+lokay-list-issues = "lokay.proc.list_issues:main"
+lokay-get-issue = "lokay.proc.get_issue:main"
+lokay-select-issue = "lokay.proc.select_issue:main"
+lokay-assign-issue = "lokay.proc.assign_issue:main"
+lokay-make-branch = "lokay.proc.make_branch:main"
+lokay-worktree-add = "lokay.proc.worktree_add:main"
+lokay-run-agent = "lokay.proc.run_agent:main"
+lokay-run-grok = "lokay.proc.run_grok:main"
+lokay-commit-all = "lokay.proc.commit_all:main"
+lokay-push = "lokay.proc.push_branch:main"
+lokay-pr-create = "lokay.proc.pr_create:main"
+lokay-pr-label = "lokay.proc.pr_label:main"
+lokay-list-prs = "lokay.proc.list_prs:main"
+lokay-pr-checks = "lokay.proc.pr_checks:main"
+lokay-pr-merge = "lokay.proc.pr_merge:main"
+# Composers only
+lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
+lokay-tick = "lokay.compose.tick:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lokay"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/lokay" = "lokay"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
