@@ -206,29 +206,38 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if triage_budget <= 0:
                 break
             num = int(issue["number"])
-            try:
-                tri = run_path(
-                    path_id="issue_triage",
-                    repo=repo.name,
-                    issue=num,
-                    config_path=config_path,
-                    live=True,
-                )
-                actions.append({"step": "issue_triage", "repo": repo.name, "issue": num, **tri})
-                if tri.get("ok"):
-                    progress += 1
-                    remaining_inbox = max(0, remaining_inbox - 1)
-            except Exception:
-                tri = _run(
-                    p_triage.main,
-                    [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num)],
-                )
-                actions.append({"step": "triage_issue", "repo": repo.name, **tri})
-                if tri.get("ok") and (
-                    tri.get("applied") or tri.get("decision", {}).get("decision") != "skip"
-                ):
-                    progress += 1
-                    remaining_inbox = max(0, remaining_inbox - 1)
+            # Prefer atom triage (Fala host may abort; opt-in LOKAY_USE_FALA=1).
+            from lokay.compose._atoms import use_fala
+
+            if use_fala():
+                try:
+                    tri = run_path(
+                        path_id="issue_triage",
+                        repo=repo.name,
+                        issue=num,
+                        config_path=config_path,
+                        live=True,
+                    )
+                    actions.append(
+                        {"step": "issue_triage", "repo": repo.name, "issue": num, **tri}
+                    )
+                    if tri.get("ok"):
+                        progress += 1
+                        remaining_inbox = max(0, remaining_inbox - 1)
+                    triage_budget -= 1
+                    continue
+                except Exception:
+                    pass
+            tri = _run(
+                p_triage.main,
+                [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num)],
+            )
+            actions.append({"step": "triage_issue", "repo": repo.name, **tri})
+            if tri.get("ok") and (
+                tri.get("applied") or tri.get("decision", {}).get("decision") != "skip"
+            ):
+                progress += 1
+                remaining_inbox = max(0, remaining_inbox - 1)
             triage_budget -= 1
 
     # --- 2) Ready: survey; skip issues that already have open AI PRs; implement if live ---
@@ -386,11 +395,24 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     # --- 3) PR triage (reuse surveyed PR list): repair/merge when live ---
     pending_checks = 0
     no_checks_blocked = 0
+    merge_conflicts = 0
     for repo in cfg.repos:
         pr_list = prs_by_repo.get(repo.name) or []
         for pr in pr_list:
             pr_num = int(pr["number"])
             head = str(pr.get("head_ref") or "")
+            mergeable = str(pr.get("mergeable") or "").upper()
+            if mergeable in {"CONFLICTING", "DIRTY"}:
+                merge_conflicts += 1
+                actions.append(
+                    {
+                        "step": "pr_conflict",
+                        "pr": pr_num,
+                        "mergeable": mergeable,
+                        "branch": head,
+                    }
+                )
+                continue
             chk = _run(
                 p_checks.main,
                 [*cfg_flag, "--repo", repo.name, "--pr", str(pr_num)],
@@ -442,7 +464,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             mergeable_green += 1
             if not live or not head:
                 continue
-            # Fala owns merge → close order (pr_triage path).
+            # pr_triage: atom pipeline (or Fala if LOKAY_USE_FALA=1).
             tri = compose_pr_triage(
                 config_path=config_path,
                 repo=repo.name,
@@ -453,14 +475,21 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             actions.append(
                 {"step": "pr_triage", "pr": pr_num, "branch": head, **tri}
             )
-            if tri.get("ok"):
-                progress += 1
-                remaining_prs = max(0, remaining_prs - 1)
-                mergeable_green = max(0, mergeable_green - 1)
-                issue_n = issue_number_from_branch(head, branch_prefix=cfg.branch_prefix)
-                if issue_n is not None:
-                    clear_issue(stuck, repo.name, issue_n)
-                    save_stuck(stuck_path, stuck)
+            if not tri.get("ok"):
+                continue
+            if tri.get("skipped"):
+                # PR still open — keep remaining_prs; isolate conflicts.
+                if tri.get("reason") == "merge_conflicts":
+                    merge_conflicts += 1
+                continue
+            # Successful merge (+ optional close).
+            progress += 1
+            remaining_prs = max(0, remaining_prs - 1)
+            mergeable_green = max(0, mergeable_green - 1)
+            issue_n = issue_number_from_branch(head, branch_prefix=cfg.branch_prefix)
+            if issue_n is not None:
+                clear_issue(stuck, repo.name, issue_n)
+                save_stuck(stuck_path, stuck)
 
     remaining = {
         "inbox": remaining_inbox,
@@ -471,6 +500,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "needs_repair": needs_repair,
         "pending_checks": pending_checks,
         "no_checks_blocked": no_checks_blocked,
+        "merge_conflicts": merge_conflicts,
         "blocked_this_pass": blocked_this_pass,
     }
     return _health_payload(

@@ -82,3 +82,7 @@ Materialized package: `~/.lokay/fala/lokay.fala-package.toml`
 | `lokay-*` procs | Unix atoms |
 
 Do not put graph order in the coding harness. Do not reintroduce Hermes Kanban as the ledger for step order.
+
+**Runtime note:** composers execute the same step order as **Unix atomics** by
+default (`lokay.compose.*`). Set `LOKAY_USE_FALA=1` to drive steps via the Fala
+host + `lokay.fala_organ` instead.

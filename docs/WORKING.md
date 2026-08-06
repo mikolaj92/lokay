@@ -18,6 +18,10 @@ configured repos. Order lives in Fala; atoms are Unix small programs.
 
 Mutations require `mode: live`, `--live`, and for the agent slot `executor.enabled`.
 
+Composers (`issue_to_pr`, `pr_repair`, `pr_triage`) run as **Unix atom pipelines** by
+default. Set `LOKAY_USE_FALA=1` to force the Fala host (currently can abort on
+package load in some environments).
+
 ## Status (is the machine WORKING?)
 
 ```bash
