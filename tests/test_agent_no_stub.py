@@ -19,6 +19,8 @@ def test_grok_argv():
     assert "--output-format" in argv
     assert "--always-approve" in argv
     assert "--max-turns" in argv
+    assert "--permission-mode" in argv
+    assert argv[argv.index("--permission-mode") + 1] == "bypassPermissions"
 
 
 def test_reject_fake(monkeypatch):
