@@ -39,7 +39,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
         {
             "config": str(cfg.config_path),
             "mode": cfg.mode,
-            "repos": [r.name for r in cfg.repos],
+            "repos": [r.name for r in cfg.active_repos()],
+            "repos_disabled": [r.name for r in cfg.repos if not r.enabled],
+            "repos_total": len(cfg.repos),
             "executor": cfg.grok_command,
             "executor_enabled": cfg.executor_enabled,
             "ok": not errors,

@@ -151,7 +151,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         {
             "kind": "tick",
             "status": "mutating" if live else "survey",
-            "repos": [r.name for r in cfg.repos],
+            "repos": [r.name for r in cfg.active_repos()],
             "agent": cfg.agent,
             "pipeline": pipeline,
         }
@@ -186,7 +186,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     # --- 0) PR heads first (filter ready issues already covered by open AI PRs) ---
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
-    for repo in cfg.repos:
+    for repo in cfg.active_repos():
         prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_prs", "repo": repo.name, **prs})
         pr_list = list(prs.get("prs") or []) if prs.get("ok") else []
@@ -194,7 +194,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         remaining_prs += len(pr_list)
 
     # --- 1) Inbox: always survey; triage only when live ---
-    for repo in cfg.repos:
+    for repo in cfg.active_repos():
         listed = _run(p_list_inbox.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_inbox", "repo": repo.name, **listed})
         if not listed.get("ok"):
@@ -242,7 +242,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             triage_budget -= 1
 
     # --- 2) Ready: survey; skip issues that already have open AI PRs; implement if live ---
-    for repo in cfg.repos:
+    for repo in cfg.active_repos():
         listed = _run(p_list_issues.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_issues", "repo": repo.name, **listed})
         if not listed.get("ok"):
@@ -413,7 +413,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     pending_checks = 0
     no_checks_blocked = 0
     merge_conflicts = 0
-    for repo in cfg.repos:
+    for repo in cfg.active_repos():
         pr_list = prs_by_repo.get(repo.name) or []
         for pr in pr_list:
             pr_num = int(pr["number"])

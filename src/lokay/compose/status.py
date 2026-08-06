@@ -28,7 +28,7 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         blockers.append(
             "merge.require_checks is true (no-CI PRs blocked; set false for canary/no-CI)"
         )
-    for repo in cfg.repos:
+    for repo in cfg.active_repos():
         if not repo.clone_path.exists():
             blockers.append(f"clone_path missing: {repo.name} → {repo.clone_path}")
 
@@ -65,7 +65,9 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         agent=cfg.agent,
         merge_enabled=cfg.merge_enabled,
         require_checks=cfg.require_checks,
-        repos=[r.name for r in cfg.repos],
+        repos=[r.name for r in cfg.active_repos()],
+        repos_disabled=[r.name for r in cfg.repos if not r.enabled],
+        repos_total=len(cfg.repos),
         graphs=graphs,
         mill_ready=mill_ready,
         blockers=blockers,

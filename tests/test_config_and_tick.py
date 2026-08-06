@@ -17,20 +17,21 @@ github:
   ready_label: ai:ready
 repos:
   - name: mikolaj92/lokay
-    clone_path: /tmp/lokay-clone
+    clone_path: {tmp_path}
     priority: 10
 executor:
   enabled: false
   agent: fake
   command: grok
   max_turns: 12
-""",
+""".replace("{tmp_path}", str(tmp_path)),
         encoding="utf-8",
     )
     cfg = load_config(cfg_path)
     assert cfg.mode == "dry-run"
     assert cfg.agent == "fake"
     assert cfg.validate() == []
+    assert len(cfg.active_repos()) == 1
 
 
 def test_env_overrides_enable_live_mill(tmp_path: Path, monkeypatch):

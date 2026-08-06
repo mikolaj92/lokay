@@ -1,6 +1,9 @@
-# Lokay lite — deterministic pipeline + one swappable agent slot.
+# Lokay lite — multi-repo mill scope for mikolaj92 source libraries.
 
 mode: dry-run  # dry-run | live
+
+# Catalog of product/libs (30 source repos, non-forks). Config `repos:` can override.
+repos_file: repos.mikolaj92.yaml
 
 github:
   assignee: mikolaj92
@@ -13,15 +16,17 @@ github:
     - ai:generated
     - ai:pr-opened
 
-repos:
-  # - name: mikolaj92/lokay-lite
-  #   clone_path: /Users/mikomac/Developer/OSS/lokay
-  #   priority: 10
+# Optional overrides / extras (merged by name on top of repos_file):
+# repos:
+#   - name: mikolaj92/some-extra
+#     clone_path: /path/to/clone
+#     priority: 50
+#     enabled: true
 
 executor:
   enabled: false
-  agent: fake          # fake | grok  (harness is not the architecture)
-  command: grok        # binary when agent=grok
+  agent: fake          # fake | grok
+  command: grok
   model: null
   max_turns: 40
   timeout_seconds: 1800
@@ -29,7 +34,6 @@ executor:
 
 merge:
   enabled: false
-  # true: only merge when CI passed. false: also merge when branch has no checks.
   require_checks: true
   require_test_evidence: true
 

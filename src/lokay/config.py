@@ -18,6 +18,8 @@ class RepoConfig:
     name: str
     clone_path: Path
     priority: int = 10
+    enabled: bool = True
+    note: str = ""
 
 
 @dataclass
@@ -54,13 +56,18 @@ class Config:
     def live(self) -> bool:
         return self.mode == "live"
 
+    def active_repos(self) -> list[RepoConfig]:
+        """Enabled repos only (mill / tick iterate these)."""
+        return [r for r in self.repos if r.enabled]
+
     def validate(self) -> list[str]:
         errors: list[str] = []
         if self.mode not in {"dry-run", "live"}:
             errors.append(f"mode must be dry-run|live, got {self.mode!r}")
-        if not self.repos:
-            errors.append("repos: at least one repository is required")
-        for repo in self.repos:
+        active = self.active_repos()
+        if not active:
+            errors.append("repos: at least one enabled repository is required")
+        for repo in active:
             if "/" not in repo.name:
                 errors.append(f"repo name must be owner/name: {repo.name!r}")
             if self.live and not repo.clone_path.exists():
@@ -74,6 +81,57 @@ class Config:
 
 def _expand(path: str | Path) -> Path:
     return Path(os.path.expanduser(str(path))).resolve()
+
+
+def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
+    repos: list[RepoConfig] = []
+    for raw in raw_list or []:
+        if not isinstance(raw, dict):
+            continue
+        repos.append(
+            RepoConfig(
+                name=str(raw["name"]),
+                clone_path=_expand(raw["clone_path"]),
+                priority=int(raw.get("priority", 10)),
+                enabled=bool(raw.get("enabled", True)),
+                note=str(raw.get("note") or ""),
+            )
+        )
+    return repos
+
+
+def _load_repos(data: dict[str, Any], cfg_path: Path) -> list[RepoConfig]:
+    """Load repos from config and optional catalog file (repos_file).
+
+    Catalog entries are base; config `repos:` override/extend by name.
+    """
+    by_name: dict[str, RepoConfig] = {}
+
+    catalog_ref = data.get("repos_file") or data.get("repos_catalog")
+    if catalog_ref:
+        cat_path = Path(str(catalog_ref))
+        if not cat_path.is_absolute():
+            cat_path = (cfg_path.parent / cat_path).resolve()
+        else:
+            cat_path = _expand(cat_path)
+        if cat_path.is_file():
+            cat = yaml.safe_load(cat_path.read_text(encoding="utf-8")) or {}
+            for repo in _parse_repo_entries(list(cat.get("repos") or [])):
+                by_name[repo.name] = repo
+
+    for repo in _parse_repo_entries(list(data.get("repos") or [])):
+        by_name[repo.name] = repo  # config wins
+
+    repos = list(by_name.values())
+    # Auto-disable missing clones unless explicitly enabled with path (live will error)
+    for repo in repos:
+        if repo.enabled and not repo.clone_path.exists():
+            repo.enabled = False
+            if not repo.note:
+                repo.note = "auto-disabled: clone_path missing"
+
+    repos.sort(key=lambda r: (-r.priority, r.name))
+    return repos
 
 
 def _env_truthy(name: str) -> bool | None:
@@ -139,16 +197,7 @@ def load_config(path: str | Path | None = None) -> Config:
     st = data.get("state") or {}
     lim = data.get("limits") or {}
 
-    repos: list[RepoConfig] = []
-    for raw in data.get("repos") or []:
-        repos.append(
-            RepoConfig(
-                name=str(raw["name"]),
-                clone_path=_expand(raw["clone_path"]),
-                priority=int(raw.get("priority", 10)),
-            )
-        )
-    repos.sort(key=lambda r: (-r.priority, r.name))
+    repos = _load_repos(data, cfg_path)
 
     cfg = Config(
         mode=str(data.get("mode", "dry-run")),

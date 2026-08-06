@@ -41,6 +41,7 @@ lokay-pr-merge = "lokay.proc.pr_merge:main"
 lokay-pr-close = "lokay.proc.pr_close:main"
 # Graph (Fala) + composers
 lokay-run-path = "lokay.proc.run_path:main"
+lokay-repos = "lokay.proc.repos_list:main"
 lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
 lokay-pr-repair = "lokay.compose.pr_repair:main"
 lokay-pr-triage = "lokay.compose.pr_triage:main"
