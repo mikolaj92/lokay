@@ -14,7 +14,15 @@ def ensure_worktree(
     *,
     live: bool,
     base: str = "main",
+    reset_to_base: bool = False,
 ) -> Path:
+    """Ensure a worktree for *branch*.
+
+    When ``reset_to_base`` is True (issue_to_pr re-implement path), the worktree
+    and branch are recreated from ``origin/<base>`` so a prior CONFLICTING PR on
+    the same branch name cannot poison the next attempt. Best-effort deletes the
+    remote branch so a subsequent non-force push can publish the rewrite.
+    """
     root = config.worktrees_root / repo.name.replace("/", "__")
     worktree = root / branch.replace("/", "__")
     if not live:
@@ -26,10 +34,54 @@ def ensure_worktree(
         git_spec(["fetch", "origin", base], cwd=clone, timeout_seconds=300),
         live=True,
     )
+    start_ref = f"origin/{base}"
+
+    if reset_to_base:
+        if worktree.exists():
+            rm = runner.run(
+                git_spec(
+                    ["worktree", "remove", "--force", str(worktree)],
+                    cwd=clone,
+                    timeout_seconds=120,
+                ),
+                live=True,
+            )
+            if rm.returncode != 0 and worktree.exists():
+                # Detached/corrupt registry: drop directory then prune.
+                import shutil
+
+                shutil.rmtree(worktree, ignore_errors=True)
+                runner.run(
+                    git_spec(["worktree", "prune"], cwd=clone, timeout_seconds=60),
+                    live=True,
+                )
+        # -B: create or reset branch to start_ref at the new worktree path.
+        result = runner.run(
+            git_spec(
+                ["worktree", "add", "-B", branch, str(worktree), start_ref],
+                cwd=clone,
+                timeout_seconds=180,
+            ),
+            live=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"worktree reset-to-base failed:\n{result.stderr}\n{result.stdout}"
+            )
+        # Drop stale remote tip (old conflicting commits) so push need not force.
+        runner.run(
+            git_spec(
+                ["push", "origin", "--delete", branch],
+                cwd=clone,
+                timeout_seconds=120,
+            ),
+            live=True,
+        )
+        return worktree
+
     if worktree.exists():
         return worktree
 
-    start_ref = f"origin/{base}"
     result = runner.run(
         git_spec(
             ["worktree", "add", "-b", branch, str(worktree), start_ref],

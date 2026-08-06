@@ -73,9 +73,19 @@ def _atomic_issue_to_pr(
         return {"ok": False, "error": "make_branch failed", "engine": "atoms", "steps": steps}
     branch = str(branch_res["branch"])
 
+    # Always reset onto origin/main so re-implement after a closed CONFLICTING
+    # PR does not reuse a stale tip under the same deterministic branch name.
     wt = run_atom(
         p_worktree.main,
-        [*cfg_flag, *live_flag, "--repo", repo, "--branch", branch],
+        [
+            *cfg_flag,
+            *live_flag,
+            "--repo",
+            repo,
+            "--branch",
+            branch,
+            "--reset-base",
+        ],
     )
     steps.append({"step": "worktree_add", **wt})
     if not wt.get("ok"):

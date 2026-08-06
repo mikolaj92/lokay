@@ -350,6 +350,22 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 progress += 1
                 remaining_ready = max(0, remaining_ready - 1)
                 clear_issue(stuck, selected["repo"], num)
+                # Same-pass PR triage must see the new open AI PR (no false idle).
+                pr_n = result.get("pr")
+                br = str(result.get("branch") or "")
+                if pr_n is not None and br:
+                    remaining_prs += 1
+                    prs_by_repo.setdefault(selected["repo"], []).append(
+                        {
+                            "number": int(pr_n),
+                            "head_ref": br,
+                            "mergeable": "UNKNOWN",
+                            "title": str(
+                                (selected.get("title") if isinstance(selected, dict) else "")
+                                or ""
+                            ),
+                        }
+                    )
             else:
                 row = record_failure(
                     stuck,

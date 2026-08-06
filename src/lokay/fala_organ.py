@@ -219,10 +219,14 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             or ""
         )
         assert repo and branch
-        return _run_atom_main(
-            worktree_add.main,
-            [*cfg, *live, "--repo", repo, "--branch", branch],
-        )
+        # issue_to_pr has make_branch upstream → always reset onto origin/main.
+        # pr_repair reuses the existing PR branch tip (no make_branch).
+        argv = [*cfg, *live, "--repo", repo, "--branch", branch]
+        if "make_branch" in up or not repair_mode:
+            # Prefer reset when this is not an explicit repair path.
+            if "make_branch" in up:
+                argv.append("--reset-base")
+        return _run_atom_main(worktree_add.main, argv)
 
     if atom == "run_agent":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
