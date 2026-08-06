@@ -11,6 +11,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 5. **Dry-run is a flag, not a mode buried in business logic.** `--live` opts into mutation; default plans only.
 6. **No hidden side channels.** If a step needs data, it takes CLI args or stdin JSON / Fala conduction from the previous step — not Hermes Kanban.
 7. **Order is a Fala graph.** Atomic programs do not choose the next step. See `docs/GRAPH.md` and `fala/lokay.fala-package.toml`.
+8. **Always `uv`.** Entry points and Fala organs use `uv run` (or `uv run --project …`); do not call bare `python3`.
 
 ## Atomic CLI map
 

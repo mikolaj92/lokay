@@ -13,13 +13,29 @@
 
 ## Stack
 
-- Agent: **Grok** (`lokay-run-grok`), not omp.
-- No Hermes plugin, no Kanban, no Fala graph required.
+- Agent: **Grok** / `fake` via `lokay-run-agent` (harness is swappable).
+- Process order: **Fala** (`fala/lokay.fala-package.toml`).
+- No Hermes plugin, no Kanban ledger for step order.
+
+## Tooling law
+
+**Always `uv`, never bare `python3` / `python`.**
+
+```bash
+uv run pytest -q
+uv run lokay …
+uv run python -m lokay.fala_organ   # only if needed; prefer entrypoints
+```
+
+Fala organs are invoked as:
+
+`uv run --project <lokay-root> python -m lokay.fala_organ`
 
 ## Verify
 
 ```bash
 uv run pytest -q
 uv run lokay-make-branch --repo a/b --issue 1 --title t
+uv run lokay path --describe
 uv run lokay tick --config config.yaml
 ```

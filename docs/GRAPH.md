@@ -40,7 +40,8 @@ uv run lokay-run-path --config config.yaml --path issue_to_pr \
 ```
 
 Journal: `~/.lokay/fala/state.sqlite`  
-Materialized package: `~/.lokay/fala/lokay.fala-package.toml` (Python path filled in)
+Materialized package: `~/.lokay/fala/lokay.fala-package.toml`  
+(`uv run --project <checkout>` filled in for every organ — never bare `python3`)
 
 ## Bridge
 

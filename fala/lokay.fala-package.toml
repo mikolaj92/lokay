@@ -18,7 +18,7 @@ description = "Deterministic pipeline with a single non-deterministic agent node
 [[correlation_paths.effectors]]
 id = "get_issue"
 capability = "lokay_atom"
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "get_issue" }
 retry_policy = "none"
 
@@ -26,7 +26,7 @@ retry_policy = "none"
 id = "assign_issue"
 capability = "lokay_atom"
 conduction = ["get_issue"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "assign_issue" }
 retry_policy = "none"
 
@@ -34,7 +34,7 @@ retry_policy = "none"
 id = "make_branch"
 capability = "lokay_atom"
 conduction = ["get_issue"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "make_branch" }
 retry_policy = "none"
 
@@ -42,7 +42,7 @@ retry_policy = "none"
 id = "worktree_add"
 capability = "lokay_atom"
 conduction = ["get_issue", "make_branch"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "worktree_add" }
 retry_policy = "none"
 
@@ -50,7 +50,7 @@ retry_policy = "none"
 id = "run_agent"
 capability = "lokay_atom"
 conduction = ["get_issue", "make_branch", "worktree_add"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 3600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 3600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "run_agent" }
 retry_policy = "none"
 
@@ -58,7 +58,7 @@ retry_policy = "none"
 id = "commit_all"
 capability = "lokay_atom"
 conduction = ["get_issue", "worktree_add", "run_agent"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "commit_all" }
 retry_policy = "none"
 
@@ -66,7 +66,7 @@ retry_policy = "none"
 id = "push"
 capability = "lokay_atom"
 conduction = ["make_branch", "worktree_add", "commit_all"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "push" }
 retry_policy = "none"
 
@@ -74,7 +74,7 @@ retry_policy = "none"
 id = "pr_create"
 capability = "lokay_atom"
 conduction = ["get_issue", "make_branch", "run_agent", "push"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "pr_create" }
 retry_policy = "none"
 
@@ -82,7 +82,7 @@ retry_policy = "none"
 id = "list_prs"
 capability = "lokay_atom"
 conduction = ["get_issue", "pr_create"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "list_prs" }
 retry_policy = "none"
 
@@ -90,7 +90,7 @@ retry_policy = "none"
 id = "pr_label"
 capability = "lokay_atom"
 conduction = ["get_issue", "make_branch", "list_prs"]
-adapter = { kind = "subprocess", command = ["PLACEHOLDER_PYTHON", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG"] }
 config = { atom = "pr_label" }
 retry_policy = "none"
 

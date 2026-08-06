@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import uuid
 from pathlib import Path
 from typing import Any
@@ -46,14 +45,13 @@ def find_default_package() -> Path:
 ROOT = _project_root()
 
 
-def _python() -> str:
-    return sys.executable
-
-
-def _materialize_package(src: Path, dest: Path) -> Path:
-    """Write package with absolute Python for subprocess adapters."""
+def _materialize_package(src: Path, dest: Path, *, project: Path) -> Path:
+    """Write package with absolute project path; organs always run via `uv run`."""
     text = src.read_text(encoding="utf-8")
-    text = text.replace("PLACEHOLDER_PYTHON", _python())
+    # Prefer project checkout so `uv run --project` resolves the lokay env.
+    text = text.replace("PLACEHOLDER_PROJECT", str(project.resolve()))
+    # Legacy placeholder (if any old package still uses it)
+    text = text.replace("PLACEHOLDER_PYTHON", "uv")
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
     return dest
@@ -86,7 +84,14 @@ def run_path(
     work = Path(db_path) if db_path else Path.home() / ".lokay" / "fala"
     work.mkdir(parents=True, exist_ok=True)
     pkg_runtime = work / "lokay.fala-package.toml"
-    _materialize_package(pkg_src, pkg_runtime)
+    project = _project_root()
+    # Prefer repo root that contains pyproject.toml for uv --project
+    if not (project / "pyproject.toml").is_file():
+        for cand in (Path.cwd(), pkg_src.resolve().parents[1]):
+            if (cand / "pyproject.toml").is_file() and (cand / "fala").is_dir():
+                project = cand
+                break
+    _materialize_package(pkg_src, pkg_runtime, project=project)
     db = work / "state.sqlite"
 
     cfg = str(Path(config_path).expanduser().resolve()) if config_path else ""
