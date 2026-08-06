@@ -76,6 +76,44 @@ def _expand(path: str | Path) -> Path:
     return Path(os.path.expanduser(str(path))).resolve()
 
 
+def _env_truthy(name: str) -> bool | None:
+    """Return True/False if env is set, else None (leave config file value)."""
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return None
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def apply_env_overrides(cfg: Config) -> Config:
+    """Apply optional process env overrides for continuous/live mill.
+
+    Safe defaults stay in config.yaml; the factory can enable live milling
+    without rewriting the file:
+
+      LOKAY_MODE=live|dry-run
+      LOKAY_EXECUTOR_ENABLED=1|0
+      LOKAY_AGENT=fake|grok
+      LOKAY_MERGE_ENABLED=1|0
+      LOKAY_REQUIRE_CHECKS=1|0   (0 for no-CI canary repos)
+    """
+    mode = (os.environ.get("LOKAY_MODE") or "").strip().lower()
+    if mode in {"live", "dry-run"}:
+        cfg.mode = mode
+    v = _env_truthy("LOKAY_EXECUTOR_ENABLED")
+    if v is not None:
+        cfg.executor_enabled = v
+    agent = (os.environ.get("LOKAY_AGENT") or "").strip().lower()
+    if agent:
+        cfg.agent = agent
+    v = _env_truthy("LOKAY_MERGE_ENABLED")
+    if v is not None:
+        cfg.merge_enabled = v
+    v = _env_truthy("LOKAY_REQUIRE_CHECKS")
+    if v is not None:
+        cfg.require_checks = v
+    return cfg
+
+
 def load_config(path: str | Path | None = None) -> Config:
     cfg_path: Path | None
     if path is not None:
@@ -112,7 +150,7 @@ def load_config(path: str | Path | None = None) -> Config:
         )
     repos.sort(key=lambda r: (-r.priority, r.name))
 
-    return Config(
+    cfg = Config(
         mode=str(data.get("mode", "dry-run")),
         assignee=str(gh.get("assignee", "mikolaj92")),
         allow_unassigned=bool(gh.get("allow_unassigned", False)),
@@ -141,6 +179,7 @@ def load_config(path: str | Path | None = None) -> Config:
         min_free_gb=float(lim.get("min_free_gb", 2)),
         config_path=cfg_path,
     )
+    return apply_env_overrides(cfg)
 
 
 def starter_config_text(*, assignee: str = "mikolaj92", repo: str | None = None, clone: str | None = None) -> str:

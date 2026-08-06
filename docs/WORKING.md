@@ -37,6 +37,17 @@ and survey `remaining`. **ok=false** when work remains but mill is not live-read
 uv run lokay-mill --config config.yaml --live --max-passes 8
 ```
 
+Or keep a safe dry-run `config.yaml` and enable live via env (no file rewrite):
+
+```bash
+export LOKAY_MODE=live
+export LOKAY_EXECUTOR_ENABLED=1
+export LOKAY_AGENT=fake          # or grok
+export LOKAY_MERGE_ENABLED=1
+export LOKAY_REQUIRE_CHECKS=0    # canary / no-CI
+uv run lokay-mill --config config.yaml --live --max-passes 8
+```
+
 Runs bounded tick passes until `idle`, stall, wait, or budget. External
 schedulers re-invoke; the process does not sleep forever.
 

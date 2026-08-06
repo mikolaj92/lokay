@@ -52,6 +52,11 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
             + int(remaining.get("open_ai_prs") or 0)
         )
 
+    live_env_hint = (
+        "LOKAY_MODE=live LOKAY_EXECUTOR_ENABLED=1 LOKAY_AGENT=fake "
+        "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=0 "
+        "uv run lokay-mill --config config.yaml --live"
+    )
     payload = ok(
         kind="status",
         config=str(cfg.config_path),
@@ -69,6 +74,7 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         remaining=remaining,
         survey_ok=survey.get("ok"),
         work_units=work,
+        live_env_hint=live_env_hint if not mill_ready else None,
     )
     if not idle and not mill_ready:
         payload["ok"] = False

@@ -33,6 +33,36 @@ executor:
     assert cfg.validate() == []
 
 
+def test_env_overrides_enable_live_mill(tmp_path: Path, monkeypatch):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+  require_checks: true
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LOKAY_MODE", "live")
+    monkeypatch.setenv("LOKAY_EXECUTOR_ENABLED", "1")
+    monkeypatch.setenv("LOKAY_AGENT", "fake")
+    monkeypatch.setenv("LOKAY_MERGE_ENABLED", "true")
+    monkeypatch.setenv("LOKAY_REQUIRE_CHECKS", "0")
+    cfg = load_config(cfg_path)
+    assert cfg.mode == "live"
+    assert cfg.executor_enabled is True
+    assert cfg.agent == "fake"
+    assert cfg.merge_enabled is True
+    assert cfg.require_checks is False
+
+
 def test_live_requires_clone(tmp_path: Path):
     cfg = Config(
         mode="live",
