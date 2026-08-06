@@ -94,17 +94,65 @@ def add_pr_labels(runner: Runner, repo: str, number: int, labels: list[str], *, 
         )
 
 
-def pr_checks_green(runner: Runner, repo: str, number: int, *, live: bool) -> tuple[bool, str]:
+def pr_checks_report(
+    runner: Runner, repo: str, number: int, *, live: bool
+) -> dict[str, Any]:
+    """Classify PR checks for triage.
+
+    status:
+      - passed: all required checks green (gh exit 0)
+      - failed: at least one check failed
+      - pending: checks still running (gh often exit 8)
+      - none: repository reports no checks on the head branch
+      - offline: dry-run / no network
+    """
     result = runner.run(
         gh_spec(["pr", "checks", str(number), "--repo", repo], timeout_seconds=120),
         live=live,
     )
     if not live:
-        return False, "dry-run"
-    text = (result.stdout or "") + "\n" + (result.stderr or "")
+        return {
+            "status": "offline",
+            "green": False,
+            "no_checks": False,
+            "text": "dry-run",
+        }
+    text = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+    low = text.lower()
+    if "no checks reported" in low:
+        return {
+            "status": "none",
+            "green": False,
+            "no_checks": True,
+            "text": text or "no checks reported",
+        }
     if result.returncode == 0:
-        return True, text.strip() or "checks passed"
-    return False, text.strip() or f"checks exit {result.returncode}"
+        return {
+            "status": "passed",
+            "green": True,
+            "no_checks": False,
+            "text": text or "checks passed",
+        }
+    # gh: pending checks commonly exit 8
+    if result.returncode == 8 or "pending" in low or "in_progress" in low:
+        return {
+            "status": "pending",
+            "green": False,
+            "no_checks": False,
+            "text": text or f"checks pending (exit {result.returncode})",
+        }
+    return {
+        "status": "failed",
+        "green": False,
+        "no_checks": False,
+        "text": text or f"checks exit {result.returncode}",
+    }
+
+
+def pr_checks_green(runner: Runner, repo: str, number: int, *, live: bool) -> tuple[bool, str]:
+    """Backward-compatible: green only when status is passed."""
+    report = pr_checks_report(runner, repo, number, live=live)
+    return bool(report.get("green")), str(report.get("text") or "")
 
 
 def merge_pr(runner: Runner, repo: str, number: int, *, live: bool) -> CommandResult:

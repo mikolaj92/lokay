@@ -355,6 +355,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         save_stuck(stuck_path, stuck)
 
     # --- 3) PR triage (reuse surveyed PR list): repair/merge when live ---
+    pending_checks = 0
+    no_checks_blocked = 0
     for repo in cfg.repos:
         pr_list = prs_by_repo.get(repo.name) or []
         for pr in pr_list:
@@ -367,7 +369,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             actions.append({"step": "pr_checks", "pr": pr_num, **chk})
             if not chk.get("ok"):
                 continue
-            if not chk.get("green"):
+            status = str(chk.get("status") or ("passed" if chk.get("green") else "failed"))
+            # Failed CI → repair path (not "no checks").
+            if status == "failed":
                 needs_repair += 1
                 if live and repair_budget > 0 and cfg.executor_enabled and head:
                     repair = compose_pr_repair(
@@ -385,7 +389,26 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         progress += 1
                         needs_repair = max(0, needs_repair - 1)
                 continue
+            if status == "pending":
+                pending_checks += 1
+                continue
+            if status == "none":
+                # No CI on branch: merge only when require_checks is false.
+                if cfg.require_checks:
+                    no_checks_blocked += 1
+                    continue
+                # fall through as merge_ok
+            elif status not in {"passed", "offline"} and not chk.get("merge_ok"):
+                continue
+            # merge_ok from atom, or passed / allowed none
+            can_merge = bool(chk.get("merge_ok")) or status == "passed" or (
+                status == "none" and not cfg.require_checks
+            )
+            if not can_merge:
+                continue
             if not cfg.merge_enabled:
+                # Count as mergeable under policy once merge is turned on.
+                mergeable_green += 1
                 continue
             mergeable_green += 1
             if not live:
@@ -430,6 +453,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "open_ai_prs": remaining_prs,
         "mergeable_green": mergeable_green,
         "needs_repair": needs_repair,
+        "pending_checks": pending_checks,
+        "no_checks_blocked": no_checks_blocked,
         "blocked_this_pass": blocked_this_pass,
     }
     return _health_payload(

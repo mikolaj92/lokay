@@ -67,8 +67,8 @@ class Config:
                 errors.append(f"clone_path missing for {repo.name}: {repo.clone_path}")
         if self.live and self.executor_enabled and self.max_turns < 1:
             errors.append("executor.max_turns must be >= 1")
-        if self.merge_enabled and not self.require_checks:
-            errors.append("merge.require_checks must stay true when merge.enabled")
+        # require_checks=false is allowed: repos without CI can still merge when
+        # merge.enabled (explicit opt-in). require_checks=true remains the default.
         return errors
 
 

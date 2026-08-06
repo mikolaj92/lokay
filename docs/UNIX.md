@@ -32,7 +32,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-create` | open PR |
 | `lokay-pr-label` | add labels |
 | `lokay-list-prs` | list open `ai/fix/*` PRs |
-| `lokay-pr-checks` | report checks green/fail |
+| `lokay-pr-checks` | report checks status (passed/failed/pending/none) |
 | `lokay-pr-merge` | merge if policy allows |
 | `lokay-issue-to-pr` | **compose** Fala `issue_to_pr` for one issue |
 | `lokay-pr-repair` | **compose** Fala `pr_repair` for one red PR |

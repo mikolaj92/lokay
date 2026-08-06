@@ -29,6 +29,7 @@ executor:
 
 merge:
   enabled: false
+  # true: only merge when CI passed. false: also merge when branch has no checks.
   require_checks: true
   require_test_evidence: true
 
