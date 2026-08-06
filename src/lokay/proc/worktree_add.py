@@ -15,6 +15,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", required=True)
     p.add_argument("--branch", required=True)
     p.add_argument("--base", default="main")
+    p.add_argument(
+        "--reset-base",
+        action="store_true",
+        help="recreate branch/worktree from origin/<base> (issue_to_pr re-implement)",
+    )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live)
@@ -23,7 +28,13 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(f"repo not in config: {args.repo}"))
     try:
         path = ensure_worktree(
-            runner(), cfg, repo, args.branch, live=live, base=args.base
+            runner(),
+            cfg,
+            repo,
+            args.branch,
+            live=live,
+            base=args.base,
+            reset_to_base=bool(args.reset_base),
         )
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
@@ -33,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             branch=args.branch,
             worktree=str(path),
+            reset_to_base=bool(args.reset_base),
         )
     )
 
