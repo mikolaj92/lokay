@@ -34,6 +34,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-list-prs` | list open `ai/fix/*` PRs |
 | `lokay-pr-checks` | report checks status (passed/failed/pending/none) |
 | `lokay-pr-merge` | merge if policy allows |
+| `lokay-pr-close` | close PR (e.g. merge conflicts; re-ready linked issue via tick) |
 | `lokay-issue-to-pr` | **compose** Fala `issue_to_pr` for one issue |
 | `lokay-pr-repair` | **compose** Fala `pr_repair` for one red PR |
 | `lokay-pr-triage` | **compose** Fala `pr_triage` (checks → merge → close) |

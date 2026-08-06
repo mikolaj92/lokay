@@ -27,6 +27,7 @@ from lokay.proc import list_inbox as p_list_inbox
 from lokay.proc import list_issues as p_list_issues
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc import pr_checks as p_checks
+from lokay.proc import pr_close as p_pr_close
 from lokay.proc import select_issue as p_select
 from lokay.proc import triage_issue as p_triage
 from lokay.proc._common import add_config_live, load_cfg
@@ -144,7 +145,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "lokay-list-inbox + lokay-triage-issue (or path issue_triage)",
         "lokay-list-issues + exclude stuck + select + issue_to_pr",
         "on failure: stuck ledger → ai:blocked",
-        "list-prs + pr-checks; failed → pr_repair; mergeable → Fala pr_triage",
+        "list-prs + pr-checks; CONFLICTING → close+re-ready; failed → pr_repair; mergeable → pr_triage",
     ]
     planned.append(
         {
@@ -412,6 +413,72 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         "branch": head,
                     }
                 )
+                # Dead PR: close + re-queue linked issue so mill can re-implement
+                # from current main (stuck one conflict must not freeze ready work).
+                if not live:
+                    continue
+                issue_n = issue_number_from_branch(
+                    head, branch_prefix=cfg.branch_prefix
+                )
+                comment = (
+                    f"Lokay closed PR #{pr_num}: mergeable={mergeable}. "
+                    "Will re-implement from current main."
+                )
+                closed = _run(
+                    p_pr_close.main,
+                    [
+                        *cfg_flag,
+                        *live_flag,
+                        "--repo",
+                        repo.name,
+                        "--pr",
+                        str(pr_num),
+                        "--comment",
+                        comment,
+                    ],
+                )
+                actions.append(
+                    {
+                        "step": "pr_close_conflict",
+                        "pr": pr_num,
+                        "branch": head,
+                        "issue": issue_n,
+                        **closed,
+                    }
+                )
+                if not (closed.get("ok") and (closed.get("closed") or closed.get("planned"))):
+                    continue
+                progress += 1
+                remaining_prs = max(0, remaining_prs - 1)
+                merge_conflicts = max(0, merge_conflicts - 1)
+                if issue_n is not None:
+                    # Drop stuck ledger so a fresh issue_to_pr can run.
+                    clear_issue(stuck, repo.name, issue_n)
+                    save_stuck(stuck_path, stuck)
+                    ready_again = _run(
+                        p_label.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            repo.name,
+                            "--issue",
+                            str(issue_n),
+                            "--label",
+                            cfg.ready_label,
+                        ],
+                    )
+                    actions.append(
+                        {
+                            "step": "re_ready_after_conflict",
+                            "repo": repo.name,
+                            "issue": issue_n,
+                            "pr": pr_num,
+                            **ready_again,
+                        }
+                    )
+                    if ready_again.get("ok") and ready_again.get("applied"):
+                        remaining_ready += 1
                 continue
             chk = _run(
                 p_checks.main,
