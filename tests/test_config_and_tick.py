@@ -70,7 +70,8 @@ def test_make_branch_atomic(capsys):
     assert branch_for_issue("ai/fix", "a/b", 3, "Hello World") == out["branch"]
 
 
-def test_tick_dry_run(tmp_path: Path):
+def test_tick_offline_survey(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -92,6 +93,30 @@ state:
     result = compose_tick(config_path=str(cfg_path), live=False)
     assert result["ok"] is True
     assert result["live"] is False
+    assert result["health"] == "offline"
+
+
+def test_mill_offline_one_pass(tmp_path: Path, monkeypatch):
+    from lokay.compose.mill import compose_mill
+
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path}
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    result = compose_mill(config_path=str(cfg_path), live=False, max_passes=3)
+    assert result.get("health") == "offline"
+    assert result.get("passes") == 1
 
 
 def test_tick_refuses_live_when_mode_dry(tmp_path: Path):

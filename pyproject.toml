@@ -43,6 +43,7 @@ lokay-run-path = "lokay.proc.run_path:main"
 lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
 lokay-pr-repair = "lokay.compose.pr_repair:main"
 lokay-tick = "lokay.compose.tick:main"
+lokay-mill = "lokay.compose.mill:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -6,6 +6,7 @@ import sys
 
 from lokay import __version__
 from lokay.compose.issue_to_pr import compose_issue_to_pr
+from lokay.compose.mill import compose_mill
 from lokay.compose.tick import compose_tick
 from lokay.config import load_config, starter_config_text
 
@@ -50,6 +51,16 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 def cmd_tick(args: argparse.Namespace) -> int:
     payload = compose_tick(config_path=args.config, live=bool(args.live))
+    _print(payload)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_mill(args: argparse.Namespace) -> int:
+    payload = compose_mill(
+        config_path=args.config,
+        live=bool(args.live),
+        max_passes=int(args.max_passes),
+    )
     _print(payload)
     return 0 if payload.get("ok") else 1
 
@@ -108,10 +119,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_config(val)
     val.set_defaults(func=cmd_validate)
 
-    t = sub.add_parser("tick", help="Composer: one intake+triage cycle")
+    t = sub.add_parser("tick", help="Composer: survey + optional live mill pass")
     add_config(t)
     t.add_argument("--live", action="store_true")
     t.set_defaults(func=cmd_tick)
+
+    m = sub.add_parser("mill", help="Composer: tick until idle or max passes")
+    add_config(m)
+    m.add_argument("--live", action="store_true")
+    m.add_argument("--max-passes", type=int, default=8)
+    m.set_defaults(func=cmd_mill)
 
     r = sub.add_parser("run", help="Run Fala issue_to_pr graph for one issue")
     add_config(r)

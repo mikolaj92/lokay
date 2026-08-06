@@ -36,7 +36,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-merge` | merge if policy allows |
 | `lokay-issue-to-pr` | **compose** Fala `issue_to_pr` for one issue |
 | `lokay-pr-repair` | **compose** Fala `pr_repair` for one red PR |
-| `lokay-tick` | **compose** multi-repo: triage → ready → PR repair/merge |
+| `lokay-tick` | **compose** multi-repo survey (+ live triage/ready/PR) |
+| `lokay-mill` | **compose** bounded ticks until idle / stall / budget |
 | `lokay` | umbrella CLI (`init` / `validate` / thin wrappers) |
 
 ## Anti-patterns
