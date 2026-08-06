@@ -1,6 +1,7 @@
 """Composer: full multi-repo pass — inbox triage → ready → PR peek.
 
-Idle only when no remaining actionable work was observed after the pass.
+Stuck issues are isolated (failure ledger → ai:blocked) so one failure cannot
+starve other ready work. Idle only when no remaining actionable work remains.
 """
 
 from __future__ import annotations
@@ -9,11 +10,14 @@ import argparse
 import contextlib
 import io
 import json
+import sys
 from typing import Any, Callable
 
 from lokay.compose.issue_to_pr import compose_issue_to_pr
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
+from lokay.proc import close_issue as p_close
+from lokay.proc import label_issue as p_label
 from lokay.proc import list_inbox as p_list_inbox
 from lokay.proc import list_issues as p_list_issues
 from lokay.proc import list_prs as p_list_prs
@@ -22,6 +26,15 @@ from lokay.proc import pr_merge as p_merge
 from lokay.proc import select_issue as p_select
 from lokay.proc import triage_issue as p_triage
 from lokay.proc._common import add_config_live, load_cfg
+from lokay.stuck import (
+    clear_issue,
+    excluded_numbers,
+    issue_number_from_branch,
+    load_stuck,
+    record_failure,
+    save_stuck,
+    stuck_path_for,
+)
 
 
 def _run(main_fn: Callable[..., int], argv: list[str]) -> dict[str, Any]:
@@ -45,7 +58,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     live_flag = ["--live"] if live else []
     planned: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
-    progress = 0  # steps that moved work forward
+    progress = 0
+    blocked_this_pass = 0
 
     if not live:
         planned.append(
@@ -56,8 +70,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 "agent": cfg.agent,
                 "pipeline": [
                     "lokay-list-inbox + lokay-triage-issue (or path issue_triage)",
-                    "lokay-list-issues + lokay-select-issue + lokay-issue-to-pr",
-                    "lokay-list-prs + lokay-pr-checks (+ lokay-pr-merge if enabled)",
+                    "lokay-list-issues + exclude stuck + lokay-select-issue + lokay-issue-to-pr",
+                    "on failure: stuck ledger; after N fails → lokay-label-issue ai:blocked",
+                    "lokay-list-prs + lokay-pr-checks (+ merge + close issue if enabled)",
                 ],
             }
         )
@@ -77,6 +92,10 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     remaining_prs = 0
     triage_budget = max(0, int(cfg.max_triage_per_tick))
     issue_budget = max(0, int(cfg.max_issues_per_tick))
+    max_fail = max(1, int(cfg.max_failures_before_block))
+
+    stuck_path = stuck_path_for(cfg.state_path)
+    stuck = load_stuck(stuck_path)
 
     # --- 1) Inbox triage across all repos ---
     for repo in cfg.repos:
@@ -90,7 +109,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if triage_budget <= 0:
                 break
             num = int(issue["number"])
-            # Prefer Fala issue_triage when available; fall back to atom.
             try:
                 tri = run_path(
                     path_id="issue_triage",
@@ -109,12 +127,14 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num)],
                 )
                 actions.append({"step": "triage_issue", "repo": repo.name, **tri})
-                if tri.get("ok") and (tri.get("applied") or tri.get("decision", {}).get("decision") != "skip"):
+                if tri.get("ok") and (
+                    tri.get("applied") or tri.get("decision", {}).get("decision") != "skip"
+                ):
                     progress += 1
                     remaining_inbox = max(0, remaining_inbox - 1)
             triage_budget -= 1
 
-    # --- 2) Ready intake: walk repos until issue budget exhausted ---
+    # --- 2) Ready intake with stuck isolation ---
     for repo in cfg.repos:
         if issue_budget <= 0:
             break
@@ -123,33 +143,91 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         if not listed.get("ok"):
             continue
         issues = list(listed.get("issues") or [])
+        skip = excluded_numbers(stuck, repo.name)
+        if skip:
+            actions.append(
+                {
+                    "step": "skip_stuck",
+                    "repo": repo.name,
+                    "exclude": sorted(skip),
+                }
+            )
         remaining_ready += len(issues)
+        # Prefer non-stuck; never re-select ledger-blocked numbers this pass.
         while issues and issue_budget > 0:
-            buf_in = json.dumps({"issues": issues})
+            eligible = [i for i in issues if int(i.get("number", -1)) not in skip]
+            if not eligible:
+                break
+            buf_in = json.dumps({"issues": eligible, "exclude": sorted(skip)})
             buf_out = io.StringIO()
-            with contextlib.redirect_stdout(buf_out), contextlib.redirect_stdin(io.StringIO(buf_in)):
-                code = p_select.main([])
+            old_stdin = sys.stdin
+            try:
+                sys.stdin = io.StringIO(buf_in)
+                with contextlib.redirect_stdout(buf_out):
+                    code = p_select.main([])
+            finally:
+                sys.stdin = old_stdin
             sel = json.loads(buf_out.getvalue().strip().splitlines()[-1])
             sel["_exit"] = code
             actions.append({"step": "select_issue", "repo": repo.name, **sel})
             selected = sel.get("selected")
             if not selected:
                 break
+            num = int(selected["number"])
             result = compose_issue_to_pr(
                 config_path=config_path,
                 repo=selected["repo"],
-                issue_number=int(selected["number"]),
+                issue_number=num,
                 live=True,
             )
             actions.append({"step": "issue_to_pr", **result})
             if result.get("ok"):
                 progress += 1
                 remaining_ready = max(0, remaining_ready - 1)
+                clear_issue(stuck, selected["repo"], num)
+            else:
+                row = record_failure(
+                    stuck,
+                    repo=selected["repo"],
+                    number=num,
+                    error=str(result.get("error") or result.get("fala") or "issue_to_pr failed"),
+                    max_failures=max_fail,
+                )
+                actions.append(
+                    {
+                        "step": "record_stuck",
+                        "repo": selected["repo"],
+                        "issue": num,
+                        "failures": row.get("failures"),
+                        "blocked": bool(row.get("blocked")),
+                    }
+                )
+                if row.get("blocked"):
+                    skip.add(num)
+                    blocked_this_pass += 1
+                    lab = _run(
+                        p_label.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            selected["repo"],
+                            "--issue",
+                            str(num),
+                            "--label",
+                            cfg.blocked_label,
+                        ],
+                    )
+                    actions.append({"step": "label_blocked", **lab})
+                    if lab.get("ok") and lab.get("applied"):
+                        progress += 1  # isolation is progress (unblocks mill)
+                        remaining_ready = max(0, remaining_ready - 1)
             issue_budget -= 1
-            # Drop selected so we can mill next ready in same repo
-            issues = [i for i in issues if int(i.get("number", -1)) != int(selected["number"])]
+            issues = [i for i in issues if int(i.get("number", -1)) != num]
 
-    # --- 3) PR triage peek (+ merge when policy allows) ---
+    save_stuck(stuck_path, stuck)
+
+    # --- 3) PR triage peek (+ merge + close linked issue when policy allows) ---
     mergeable_green = 0
     for repo in cfg.repos:
         prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
@@ -167,27 +245,59 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             actions.append({"step": "pr_checks", "pr": pr_num, **chk})
             if not chk.get("ok"):
                 continue
-            if chk.get("green"):
-                if cfg.merge_enabled:
-                    mergeable_green += 1
-                    merged = _run(
-                        p_merge.main,
-                        [*cfg_flag, *live_flag, "--repo", repo.name, "--pr", str(pr_num)],
-                    )
-                    actions.append({"step": "pr_merge", "pr": pr_num, **merged})
-                    if merged.get("ok") and merged.get("merged"):
-                        progress += 1
-                        remaining_prs = max(0, remaining_prs - 1)
-                        mergeable_green = max(0, mergeable_green - 1)
-                # else: green but merge disabled — waiting on human policy
+            if not chk.get("green"):
+                continue
+            if not cfg.merge_enabled:
+                continue
+            mergeable_green += 1
+            merged = _run(
+                p_merge.main,
+                [*cfg_flag, *live_flag, "--repo", repo.name, "--pr", str(pr_num)],
+            )
+            actions.append({"step": "pr_merge", "pr": pr_num, **merged})
+            if not (merged.get("ok") and merged.get("merged")):
+                continue
+            progress += 1
+            remaining_prs = max(0, remaining_prs - 1)
+            mergeable_green = max(0, mergeable_green - 1)
+            issue_n = issue_number_from_branch(
+                str(pr.get("head_ref") or ""),
+                branch_prefix=cfg.branch_prefix,
+            )
+            if issue_n is not None:
+                closed = _run(
+                    p_close.main,
+                    [
+                        *cfg_flag,
+                        *live_flag,
+                        "--repo",
+                        repo.name,
+                        "--issue",
+                        str(issue_n),
+                        "--comment",
+                        f"Closed by Lokay after merging PR #{pr_num}.",
+                    ],
+                )
+                actions.append(
+                    {
+                        "step": "close_issue",
+                        "issue": issue_n,
+                        "pr": pr_num,
+                        **closed,
+                    }
+                )
+                if closed.get("ok") and closed.get("closed"):
+                    progress += 1
+                    clear_issue(stuck, repo.name, issue_n)
+                    save_stuck(stuck_path, stuck)
 
     remaining = {
         "inbox": remaining_inbox,
         "ready": remaining_ready,
         "open_ai_prs": remaining_prs,
         "mergeable_green": mergeable_green,
+        "blocked_this_pass": blocked_this_pass,
     }
-    # Actionable now: inbox to triage, ready to implement, or green PRs we can merge.
     actionable_now = remaining_inbox + remaining_ready + mergeable_green
     idle = remaining_inbox == 0 and remaining_ready == 0 and remaining_prs == 0
     if idle:
@@ -195,13 +305,10 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     elif progress > 0:
         health = "progress"
     elif actionable_now > 0:
-        # Inbox/ready/mergeable work existed but nothing advanced — stall.
         health = "stall"
     else:
-        # Open PRs waiting on CI or merge policy — not idle, not stall.
         health = "waiting"
 
-    # Fail-closed: green noop while actionable work remains is NOT WORKING.
     ok_flag = health != "stall"
     payload = ok(
         mode=cfg.mode,
@@ -213,6 +320,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         remaining=remaining,
         idle=idle,
         health=health,
+        stuck_path=str(stuck_path),
     )
     if not ok_flag:
         payload["ok"] = False

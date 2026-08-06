@@ -41,4 +41,5 @@ state:
 limits:
   max_issues_per_tick: 1
   max_triage_per_tick: 5
+  max_failures_before_block: 2
   min_free_gb: 2

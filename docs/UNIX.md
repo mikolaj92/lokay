@@ -20,7 +20,9 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-list-issues` | list ready (`ai:ready`) issues for one repo |
 | `lokay-list-inbox` | list undecided open issues (no triage labels yet) |
 | `lokay-triage-issue` | decide + apply ready / needs-feedback / OOS |
-| `lokay-select-issue` | pick one issue from a list (stdin) |
+| `lokay-label-issue` | add label(s) on an issue |
+| `lokay-close-issue` | close issue (+ optional comment) |
+| `lokay-select-issue` | pick one issue from a list (stdin; supports exclude) |
 | `lokay-assign-issue` | assign maintainer on GitHub |
 | `lokay-make-branch` | pure: branch name from repo+number+title |
 | `lokay-worktree-add` | create/reuse git worktree |
