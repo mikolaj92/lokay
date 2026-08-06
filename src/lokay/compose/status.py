@@ -26,7 +26,7 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         blockers.append("merge.enabled is false (PRs cannot merge)")
     if cfg.require_checks:
         blockers.append(
-            "merge.require_checks is true (no-CI PRs blocked; set false for canary/no-CI)"
+            "merge.require_checks is true (repos without CI cannot merge until checks exist or policy is relaxed)"
         )
     missing_clones = [
         f"{repo.name} → {repo.clone_path}"

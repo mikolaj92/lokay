@@ -1,14 +1,14 @@
-# Lokay lite (Unix processes)
+# Lokay lite
 
-Minimal **issue → Grok → PR** automation as **small atomic programs**.
+**Issue triage → real coding agent (Grok) → PR → PR triage → main**, as Unix atoms + optional Fala graphs.
 
-Binding design notes: [`docs/UNIX.md`](docs/UNIX.md).
-
-| Old Lokay | This checkout |
+| Binding docs | |
 | --- | --- |
-| Hermes + Kanban + Fala graph | **standalone** atomics |
-| omp | **Grok** |
-| one mega tick | **compose** of `lokay-*` tools |
+| [`docs/WORKING.md`](docs/WORKING.md) | When the machine is WORKING |
+| [`docs/NO_STUBS.md`](docs/NO_STUBS.md) | **No fake/stub agents** |
+| [`docs/UNIX.md`](docs/UNIX.md) | Small processes |
+| [`docs/GRAPH.md`](docs/GRAPH.md) | Fala / path order |
+| [`repos.mikolaj92.yaml`](repos.mikolaj92.yaml) | Managed repos (scope) |
 
 ## Install
 
@@ -18,97 +18,43 @@ uv sync
 uv run pytest -q
 ```
 
-## Atomic tools (one job each)
+## Continuous mill (this machine)
 
-```text
-lokay-list-issues      list ready (ai:ready) issues (JSON)
-lokay-list-inbox       list undecided open issues
-lokay-triage-issue     apply ready / needs-feedback / OOS
-lokay-select-issue     pick one issue from stdin JSON
-lokay-assign-issue     assign maintainer
-lokay-make-branch      pure branch name
-lokay-worktree-add     git worktree
-lokay-run-grok         coding agent in worktree
-lokay-commit-all       commit if dirty
-lokay-push             push (never force)
-lokay-pr-create        open PR
-lokay-pr-label         labels
-lokay-list-prs         open ai/fix/* PRs
-lokay-pr-checks        CI status
-lokay-pr-merge         merge if policy allows
-```
-
-Composers (only chain the above):
-
-```text
-lokay-issue-to-pr      one issue end-to-end
-lokay-tick             multi-repo: inbox triage → ready → PR
-lokay                  umbrella: init | validate | tick | run
-```
-
-Example pipe:
+LaunchAgent **`ai.mikolaj.lokay-mill`** runs every **10 minutes**:
 
 ```bash
-uv run lokay-list-issues --config config.yaml --repo owner/name --live \
-  | uv run lokay-select-issue \
-  | jq .
+launchctl print "gui/$(id -u)/ai.mikolaj.lokay-mill" | head -25
+tail -f ~/.lokay/logs/mill-latest.log
 ```
 
-## Happy path
+Env (production): `LOKAY_MODE=live`, `LOKAY_EXECUTOR_ENABLED=1`, **`LOKAY_AGENT=grok`**, merge on.
+
+**Do not set `LOKAY_AGENT=fake`.** It is rejected at runtime.
+
+## Manual
 
 ```bash
-uv run lokay init --config config.yaml \
-  --repo mikolaj92/SOME-REPO \
-  --clone /Users/mikomac/Developer/OSS/SOME-REPO \
-  --force
-
 uv run lokay validate --config config.yaml
-uv run lokay tick --config config.yaml          # dry-run plan
-uv run lokay-make-branch --repo a/b --issue 1 --title "demo"
+uv run lokay-repos --config config.yaml
+uv run lokay status --config config.yaml
+uv run lokay-mill --config config.yaml --live --max-passes 8
 ```
 
-Live requires **both**:
-
-1. `mode: live` and `executor.enabled: true` in config  
-2. `--live` on the command  
-
-```bash
-uv run lokay-issue-to-pr --config config.yaml --repo owner/name --issue 12 --live
-```
+Dry-run (no mutations): omit `--live` / use `mode: dry-run` — still **not** a stub agent.
 
 ## Layout
 
 ```text
-src/lokay/
-  proc/           # atomic processes (CLI entrypoints)
-  compose/        # only chains atomics
-  gh_issues.py    # issue I/O helpers
-  gh_prs.py       # PR I/O helpers
-  git_*.py        # branch / worktree / commit / push
-  grok_agent.py
-  models.py
-  envelope.py     # JSON ok/err stdout
-docs/UNIX.md      # process philosophy (binding)
+repos.mikolaj92.yaml   # which repos we mill
+fala/                  # declarative graphs
+src/lokay/proc/        # atomic CLIs
+src/lokay/compose/     # tick / mill / status
+scripts/lokay-mill-daemon.sh
+docs/NO_STUBS.md
 ```
 
 ## Safety
 
-- dry-run default  
-- no force-push / repo delete / raw curl  
-- issue body untrusted in Grok prompt  
-
-## Not goals yet
-
-Hermes, Kanban, Fala multi-effector graphs, launchd immutability theater — only after atomics are boringly reliable.
-
-
-## Canary status (this machine)
-
-First live e2e on 2026-08-06 (agent=`grok`):
-
-- repo: [mikolaj92/lokay-lite](https://github.com/mikolaj92/lokay-lite)
-- issue: #1
-- PR: https://github.com/mikolaj92/lokay-lite/pull/2
-- steps: get → assign → branch → worktree → agent → commit → push → pr → labels
-
-Swap agent with `executor.agent: grok` when ready; pipeline stays the same.
+- Real agent only (Grok)
+- No force-push / repo delete / raw curl
+- Issue body is untrusted evidence in prompts

@@ -1,8 +1,9 @@
-# Lokay lite — multi-repo mill scope for mikolaj92 source libraries.
+# Lokay lite — multi-repo mill for mikolaj92 source libraries.
+# Stubs/fake agents are FORBIDDEN — docs/NO_STUBS.md
 
-mode: dry-run  # dry-run | live
+mode: live  # dry-run | live  (dry-run = no mutations; still real agent if invoked)
 
-# Catalog of product/libs (30 source repos, non-forks). Config `repos:` can override.
+# Catalog = which repos we manage (not a denylist).
 repos_file: repos.mikolaj92.yaml
 
 github:
@@ -24,8 +25,8 @@ github:
 #     enabled: true
 
 executor:
-  enabled: false
-  agent: grok          # real harness only — stubs forbidden
+  enabled: true
+  agent: grok          # ONLY real harness — fake/stub/mock/noop rejected
   command: grok
   model: null
   max_turns: 40
@@ -33,7 +34,7 @@ executor:
   always_approve: true
 
 merge:
-  enabled: false
+  enabled: true
   require_checks: true
   require_test_evidence: true
 

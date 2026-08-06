@@ -6,45 +6,35 @@ Lokay is a **pipeline of small programs**, not a monolith.
 
 1. **One process = one job.** List issues. Make a branch name. Add a worktree. Run Grok. Push. Open a PR. Check CI. Merge. Nothing else.
 2. **Small files.** Prefer a new module under `src/lokay/proc/` over growing an existing one past ~100 lines of real logic.
-3. **Compose, don’t absorb.** Higher-level flows (`issue-to-pr`, `tick`) only **call** atomic processes in order. They must not reimplement GitHub/git/Grok.
+3. **Compose, don’t absorb.** Higher-level flows only **call** atomic processes or Fala graphs. They must not reimplement GitHub/git/Grok.
 4. **Text interfaces.** Each process speaks **JSON on stdout** (one object). Errors: non-zero exit + JSON `{"ok":false,"error":...}` when practical.
-5. **Dry-run is a flag, not a mode buried in business logic.** `--live` opts into mutation; default plans only.
-6. **No hidden side channels.** If a step needs data, it takes CLI args or stdin JSON / Fala conduction from the previous step — not Hermes Kanban.
-7. **Order is a Fala graph.** Atomic programs do not choose the next step. See `docs/GRAPH.md` and `fala/lokay.fala-package.toml`.
-8. **Always `uv`.** Entry points and Fala organs use `uv run` (or `uv run --project …`); do not call bare `python3`.
+5. **Dry-run is explicit non-mutation**, not a fake agent. Use `mode: dry-run` or omit `--live`.
+6. **No hidden side channels.** Data flows via CLI args, stdin JSON, or Fala conduction — not Hermes Kanban.
+7. **Order is a Fala graph** (or atom pipeline that mirrors it). See `docs/GRAPH.md`.
+8. **Always `uv`.** Prefer `uv run lokay …` / `uv run --project …`; do not call bare `python3` for product flows.
+9. **No stubs.** See [`NO_STUBS.md`](NO_STUBS.md).
 
 ## Atomic CLI map
 
 | Program | Job |
 | --- | --- |
-| `lokay-list-issues` | list ready (`ai:ready`) issues for one repo |
-| `lokay-list-inbox` | list undecided open issues (no triage labels yet) |
-| `lokay-triage-issue` | decide + apply ready / needs-feedback / OOS |
-| `lokay-label-issue` | add label(s) on an issue |
-| `lokay-close-issue` | close issue (+ optional comment) |
-| `lokay-select-issue` | pick one issue from a list (stdin; supports exclude) |
-| `lokay-assign-issue` | assign maintainer on GitHub |
-| `lokay-make-branch` | pure: branch name from repo+number+title |
-| `lokay-worktree-add` | create/reuse git worktree |
-| `lokay-run-grok` | run Grok coding agent in worktree |
-| `lokay-commit-all` | stage+commit if dirty |
-| `lokay-push` | push branch (no force) |
-| `lokay-pr-create` | open PR |
-| `lokay-pr-label` | add labels |
-| `lokay-list-prs` | list open `ai/fix/*` PRs |
-| `lokay-pr-checks` | report checks status (passed/failed/pending/none) |
-| `lokay-pr-merge` | merge if policy allows |
-| `lokay-pr-close` | close PR (e.g. merge conflicts; re-ready linked issue via tick) |
-| `lokay-issue-to-pr` | **compose** Fala `issue_to_pr` for one issue |
-| `lokay-pr-repair` | **compose** Fala `pr_repair` for one red PR |
-| `lokay-pr-triage` | **compose** Fala `pr_triage` (checks → merge → close) |
-| `lokay-tick` | **compose** multi-repo survey (+ live triage/ready/PR) |
-| `lokay-mill` | **compose** bounded ticks until idle / stall / budget |
-| `lokay-status` | **compose** DoD readiness + remaining work (read-only) |
-| `lokay` | umbrella CLI (`init` / `validate` / thin wrappers) |
+| `lokay-list-inbox` | undecided open issues |
+| `lokay-list-issues` | `ai:ready` issues |
+| `lokay-triage-issue` | apply triage decision |
+| `lokay-select-issue` | pick one issue |
+| `lokay-assign-issue` | assign maintainer |
+| `lokay-make-branch` | pure branch name |
+| `lokay-worktree-add` | git worktree |
+| `lokay-run-agent` / `lokay-run-grok` | **real** coding agent |
+| `lokay-commit-all` | commit if dirty |
+| `lokay-push` | push (never force) |
+| `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
+| `lokay-repos` | list managed repos |
+| `lokay-mill` / `lokay-status` | continuous factory |
 
 ## Anti-patterns
 
-- One 300-line module that does intake + worktree + agent + PR + triage.
-- Shared mutable “session” objects that skip process boundaries.
-- Re-introducing Hermes Kanban or Fala graphs **before** the atomic CLI path is boringly reliable.
+- One 300-line module that does intake + worktree + agent + PR.
+- Shared mutable “session” that skips process boundaries.
+- Stub/fake coding agents or canary marker files as “success”.
+- Hermes Kanban as the ledger for step order.

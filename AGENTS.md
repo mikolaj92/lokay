@@ -2,41 +2,32 @@
 
 ## Design law
 
-**Unix small programs + Fala graph for order.** See `docs/UNIX.md` and `docs/GRAPH.md`.
+**Unix small programs + Fala graph for order + real agent only.**
 
-- New capability → new file under `src/lokay/proc/` + `project.scripts` entry.
-- New ordering / branching → edit `fala/lokay.fala-package.toml` (conduction), not the agent.
-- Do **not** grow `compose/*` with GitHub/git/Grok logic; call `graph_run` / atomics.
-- Prefer ~50–100 line process modules.
+- See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/NO_STUBS.md`**.
+- New capability → `src/lokay/proc/` + `project.scripts`.
+- New ordering → `fala/lokay.fala-package.toml` (conduction).
+- Do **not** grow `compose/*` with GitHub/git/agent logic beyond wiring.
 - JSON on stdout (`envelope.ok` / `envelope.err`).
-- Fala organ: `lokay.fala_organ` only maps atom name + conduction → atom CLI.
+
+## Hard bans
+
+- **No** `fake` / `stub` / `mock` / `noop` agent.
+- **No** canary-only “fixes” (`LOKAY_CANARY.md` style).
+- **No** bare `python3` for product CLI — use **`uv run`**.
+- **No** Hermes Kanban as execution ledger.
 
 ## Stack
 
-- Agent: **Grok**  via `lokay-run-agent` (real harness only).
-- Process order: **Fala** (`fala/lokay.fala-package.toml`).
-- No Hermes plugin, no Kanban ledger for step order.
-
-## Tooling law
-
-**Always `uv`, never bare `python3` / `python`.**
-
-```bash
-uv run pytest -q
-uv run lokay …
-uv run python -m lokay.fala_organ   # only if needed; prefer entrypoints
-```
-
-Fala organs are invoked as:
-
-`uv run --project <lokay-root> python -m lokay.fala_organ`
+- Agent: **Grok** (`lokay-run-agent` / `executor.agent: grok`).
+- Scope: `repos.mikolaj92.yaml` (managed repos).
+- Continuous mill: LaunchAgent `ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`.
 
 ## Verify
 
 ```bash
 uv run pytest -q
-uv run lokay-make-branch --repo a/b --issue 1 --title t
-uv run lokay path --describe
+uv run lokay validate --config config.yaml
+uv run lokay-repos --config config.yaml
 uv run lokay status --config config.yaml
-uv run lokay tick --config config.yaml
 ```
