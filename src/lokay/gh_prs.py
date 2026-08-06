@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from lokay.config import Config, RepoConfig
+from lokay.gh_issues import ensure_labels
 from lokay.models import PullRequest
 from lokay.runner import CommandResult, Runner, gh_spec
 
@@ -87,6 +88,7 @@ def create_pr(
 
 
 def add_pr_labels(runner: Runner, repo: str, number: int, labels: list[str], *, live: bool) -> None:
+    ensure_labels(runner, repo, labels, live=live)
     for label in labels:
         runner.run(
             gh_spec(["pr", "edit", str(number), "--repo", repo, "--add-label", label]),

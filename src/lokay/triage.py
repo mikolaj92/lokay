@@ -42,14 +42,19 @@ class TriageDecision:
         return asdict(self)
 
 
+# Parking labels: not inbox, not implementable (factory keeps milling elsewhere).
+PARK_LABELS = frozenset({"frozen", "ai:frozen"})
+
+
 def decision_labels(
     *,
     ready_label: str = "ai:ready",
     blocked_label: str = "ai:blocked",
     needs_feedback_label: str = "ai:needs-feedback",
+    park_labels: Iterable[str] = PARK_LABELS,
 ) -> frozenset[str]:
     """Labels that mean the issue already left the undecided inbox."""
-    return frozenset({ready_label, blocked_label, needs_feedback_label})
+    return frozenset({ready_label, blocked_label, needs_feedback_label}) | frozenset(park_labels)
 
 
 def is_undecided(
@@ -58,13 +63,20 @@ def is_undecided(
     ready_label: str = "ai:ready",
     blocked_label: str = "ai:blocked",
     needs_feedback_label: str = "ai:needs-feedback",
+    park_labels: Iterable[str] = PARK_LABELS,
 ) -> bool:
     decided = decision_labels(
         ready_label=ready_label,
         blocked_label=blocked_label,
         needs_feedback_label=needs_feedback_label,
+        park_labels=park_labels,
     )
     return not (set(labels) & decided)
+
+
+def is_parked(labels: Iterable[str], *, park_labels: Iterable[str] = PARK_LABELS) -> bool:
+    """True when issue is intentionally parked (frozen) — skip implement."""
+    return bool(set(labels) & frozenset(park_labels))
 
 
 def _checkbox_count(body: str) -> int:
@@ -80,6 +92,11 @@ def decide_issue(
 ) -> TriageDecision:
     """Classify one issue. Pure — no I/O."""
     labels = list(issue.labels or [])
+    if is_parked(labels):
+        return TriageDecision(
+            decision="skip",
+            reason="parked_frozen",
+        )
     if not is_undecided(
         labels,
         ready_label=ready_label,

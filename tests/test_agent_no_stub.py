@@ -12,6 +12,13 @@ def test_grok_argv():
     argv = build_grok_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
     assert argv[0] == "grok"
     assert "omp" not in argv
+    # Headless: -p/--single, not bare positional (TUI needs a TTY).
+    assert "-p" in argv
+    assert argv[argv.index("-p") + 1] == "fix it"
+    assert argv[-1] == "fix it"
+    assert "--output-format" in argv
+    assert "--always-approve" in argv
+    assert "--max-turns" in argv
 
 
 def test_reject_fake(monkeypatch):

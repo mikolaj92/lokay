@@ -28,9 +28,25 @@ def compose_mill(
     max_passes = max(1, int(max_passes))
     results: list[dict[str, Any]] = []
     total_progress = 0
+    prev_work_key: tuple[int, ...] | None = None
+
+    def _work_key(remaining: Any) -> tuple[int, ...]:
+        if not isinstance(remaining, dict):
+            return (-1,)
+        return (
+            int(remaining.get("inbox") or 0),
+            int(remaining.get("ready") or 0),
+            int(remaining.get("open_ai_prs") or 0),
+            int(remaining.get("mergeable_green") or 0),
+            int(remaining.get("needs_repair") or 0),
+            int(remaining.get("no_checks_blocked") or 0),
+            int(remaining.get("merge_conflicts") or 0),
+            int(remaining.get("survey_errors") or 0),
+        )
 
     for i in range(max_passes):
         tick = compose_tick(config_path=config_path, live=live)
+        remaining = tick.get("remaining")
         results.append(
             {
                 "pass": i + 1,
@@ -38,11 +54,12 @@ def compose_mill(
                 "health": tick.get("health"),
                 "idle": tick.get("idle"),
                 "progress": tick.get("progress"),
-                "remaining": tick.get("remaining"),
+                "remaining": remaining,
                 "error": tick.get("error"),
             }
         )
         total_progress += int(tick.get("progress") or 0)
+        work_key = _work_key(remaining)
 
         if tick.get("idle"):
             return ok(
@@ -68,13 +85,13 @@ def compose_mill(
                 "results": results,
             }
 
-        if tick.get("health") == "stall":
+        if tick.get("health") in {"stall", "survey_error"}:
             return err(
-                "mill stalled: actionable work remains but no progress",
+                f"mill {tick.get('health')}: actionable work remains but no real progress",
                 mode=cfg.mode,
                 live=live,
                 idle=False,
-                health="stall",
+                health=tick.get("health"),
                 passes=i + 1,
                 max_passes=max_passes,
                 progress=total_progress,
@@ -96,6 +113,23 @@ def compose_mill(
                 last=tick,
                 note="stopped: zero progress this pass (waiting or blocked)",
             )
+
+        # Green-noop guard: claimed progress but remaining work fingerprint unchanged.
+        if prev_work_key is not None and work_key == prev_work_key:
+            return err(
+                "mill plateau: progress claimed but remaining work unchanged (green noop)",
+                mode=cfg.mode,
+                live=live,
+                idle=False,
+                health="plateau",
+                passes=i + 1,
+                max_passes=max_passes,
+                progress=total_progress,
+                results=results,
+                last=tick,
+                remaining=remaining,
+            )
+        prev_work_key = work_key
 
     # Budget exhausted with work still present.
     last = results[-1] if results else {}

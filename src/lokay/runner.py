@@ -1,12 +1,33 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Sequence
 
 from lokay.safety import SafetyError, validate_argv
+
+# Force machine-readable CLI output. Host shells often export CLICOLOR_FORCE /
+# FORCE_COLOR which make modern `gh --json` emit ANSI and break json.loads.
+_MACHINE_ENV = {
+    "NO_COLOR": "1",
+    "CLICOLOR": "0",
+    "CLICOLOR_FORCE": "0",
+    "FORCE_COLOR": "0",
+    "GH_FORCE_TTY": "0",
+    "TERM": "dumb",
+}
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI SGR/CSI sequences (defensive if a child still colors)."""
+    if not text or "\x1b" not in text:
+        return text
+    return _ANSI_RE.sub("", text)
 
 
 @dataclass(frozen=True)
@@ -48,7 +69,13 @@ class Runner:
         if not live:
             return CommandResult(spec=spec, executed=False, returncode=0)
         env = os.environ.copy()
+        env.update(_MACHINE_ENV)
         env.update(spec.env)
+        # Spec env must not re-enable forced color for machine parsers.
+        env["NO_COLOR"] = "1"
+        env["CLICOLOR_FORCE"] = "0"
+        env["FORCE_COLOR"] = "0"
+        env["GH_FORCE_TTY"] = "0"
         completed = subprocess.run(
             list(spec.argv),
             cwd=spec.cwd,
@@ -62,8 +89,8 @@ class Runner:
             spec=spec,
             executed=True,
             returncode=completed.returncode,
-            stdout=completed.stdout or "",
-            stderr=completed.stderr or "",
+            stdout=strip_ansi(completed.stdout or ""),
+            stderr=strip_ansi(completed.stderr or ""),
         )
 
     def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:

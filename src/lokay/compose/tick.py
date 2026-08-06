@@ -76,6 +76,7 @@ def _health_payload(
     prs = int(remaining.get("open_ai_prs") or 0)
     mergeable_green = int(remaining.get("mergeable_green") or 0)
     needs_repair = int(remaining.get("needs_repair") or 0)
+    survey_errors = int(remaining.get("survey_errors") or 0)
     repair_actionable = needs_repair if executor_enabled else 0
     # Ready issues need the agent slot when live.
     ready_actionable = ready if (not live or executor_enabled) else 0
@@ -86,12 +87,15 @@ def _health_payload(
     else:
         actionable_now = inbox + ready + prs
 
-    idle = inbox == 0 and ready == 0 and prs == 0
-    if idle:
+    # Fail-closed: any survey atom failure means we do not know remaining work → not idle.
+    idle = inbox == 0 and ready == 0 and prs == 0 and survey_errors == 0
+    if survey_errors > 0 and progress == 0:
+        health = "survey_error"
+    elif idle:
         health = "idle"
     elif progress > 0:
         health = "progress"
-    elif not live and actionable_now > 0:
+    elif not live and (actionable_now > 0 or survey_errors > 0):
         health = "work_remaining"
     elif agent_blocked and progress == 0 and inbox == 0 and mergeable_green == 0:
         # NOT WORKING: ready work exists but agent never runs.
@@ -101,7 +105,7 @@ def _health_payload(
     else:
         health = "waiting"
 
-    ok_flag = health not in {"stall", "work_remaining"}
+    ok_flag = health not in {"stall", "work_remaining", "survey_error"}
     payload = ok(
         mode=cfg_mode,
         live=live,
@@ -117,7 +121,11 @@ def _health_payload(
     )
     if not ok_flag:
         payload["ok"] = False
-        if health == "work_remaining":
+        if health == "survey_error":
+            payload["error"] = (
+                f"survey_error: {survey_errors} list atom(s) failed — refuse false idle"
+            )
+        elif health == "work_remaining":
             payload["error"] = "work_remaining: survey found actionable work (not idle)"
         elif agent_blocked and ready > 0:
             payload["error"] = (
@@ -176,6 +184,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     remaining_prs = 0
     needs_repair = 0
     mergeable_green = 0
+    survey_errors = 0
     triage_budget = max(0, int(cfg.max_triage_per_tick)) if live else 0
     issue_budget = max(0, int(cfg.max_issues_per_tick)) if live else 0
     repair_budget = max(0, int(cfg.max_repairs_per_tick)) if live else 0
@@ -189,7 +198,11 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     for repo in cfg.active_repos():
         prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_prs", "repo": repo.name, **prs})
-        pr_list = list(prs.get("prs") or []) if prs.get("ok") else []
+        if not prs.get("ok"):
+            survey_errors += 1
+            prs_by_repo[repo.name] = []
+            continue
+        pr_list = list(prs.get("prs") or [])
         prs_by_repo[repo.name] = pr_list
         remaining_prs += len(pr_list)
 
@@ -198,6 +211,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         listed = _run(p_list_inbox.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_inbox", "repo": repo.name, **listed})
         if not listed.get("ok"):
+            survey_errors += 1
             continue
         inbox = list(listed.get("issues") or [])
         remaining_inbox += len(inbox)
@@ -234,9 +248,10 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num)],
             )
             actions.append({"step": "triage_issue", "repo": repo.name, **tri})
-            if tri.get("ok") and (
-                tri.get("applied") or tri.get("decision", {}).get("decision") != "skip"
-            ):
+            # Live: only real mutations count as progress (no green noop).
+            # Survey: count non-skip decisions as planned work handled this pass.
+            decided = tri.get("decision", {}).get("decision") not in {None, "skip"}
+            if tri.get("ok") and (tri.get("applied") if live else decided):
                 progress += 1
                 remaining_inbox = max(0, remaining_inbox - 1)
             triage_budget -= 1
@@ -246,6 +261,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         listed = _run(p_list_issues.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_issues", "repo": repo.name, **listed})
         if not listed.get("ok"):
+            survey_errors += 1
             continue
         issues = list(listed.get("issues") or [])
         covered = issue_numbers_covered_by_prs(
@@ -585,6 +601,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "no_checks_blocked": no_checks_blocked,
         "merge_conflicts": merge_conflicts,
         "blocked_this_pass": blocked_this_pass,
+        "survey_errors": survey_errors,
     }
     return _health_payload(
         cfg_mode=cfg.mode,

@@ -7,6 +7,7 @@ Order matches Fala path `issue_to_pr`. Default engine: Unix atomics
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from lokay.compose._atoms import run_atom, unlink_quiet, use_fala, write_temp
@@ -113,6 +114,24 @@ def _atomic_issue_to_pr(
     steps.append({"step": "commit_all", **committed})
     if not committed.get("ok"):
         return {"ok": False, "error": "commit_all failed", "engine": "atoms", "steps": steps}
+
+    # Agent must leave real work. Empty tree + no commits ahead of main is NOT a PR.
+    # (commit_all ok=true with committed=false when nothing staged.)
+    if live and not committed.get("committed"):
+        from lokay.git_commit import branch_ahead_of_main
+        from lokay.proc._common import runner as _runner
+
+        ahead = branch_ahead_of_main(_runner(), Path(worktree), live=True)
+        steps.append({"step": "branch_ahead_check", "ahead": ahead, "worktree": worktree})
+        if ahead <= 0:
+            return {
+                "ok": False,
+                "error": (
+                    "agent produced no commits (empty worktree vs origin/main) — refuse empty PR"
+                ),
+                "engine": "atoms",
+                "steps": steps,
+            }
 
     pushed = run_atom(
         p_push.main,

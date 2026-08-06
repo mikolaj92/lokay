@@ -5,7 +5,75 @@ import json
 from lokay.config import Config, RepoConfig
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
-from lokay.triage import is_undecided
+from lokay.triage import is_parked, is_undecided
+
+# Standard factory labels (create-if-missing so triage works on new repos).
+_LABEL_META: dict[str, tuple[str, str]] = {
+    "ai:ready": ("0E8A16", "Ready for AI agent work"),
+    "ai:blocked": ("D73A4A", "AI agent work is blocked"),
+    "ai:needs-feedback": ("B60205", "Needs human feedback before AI work"),
+    "ai:generated": ("C5DEF5", "Generated or assisted by AI agent"),
+    "ai:pr-opened": ("5319E7", "AI-generated PR opened"),
+    "ai:in-progress": ("1D76DB", "AI agent work in progress"),
+    "frozen": ("BFD4F2", "Intentionally paused for now"),
+    "ai:frozen": ("BFD4F2", "Intentionally paused for now"),
+}
+
+
+def ensure_labels(runner: Runner, repo: str, labels: list[str], *, live: bool) -> None:
+    """Create missing labels on repo (idempotent). Required before gh issue edit --add-label."""
+    for label in labels:
+        if not label:
+            continue
+        color, desc = _LABEL_META.get(label, ("ededed", "Lokay factory label"))
+        # gh label create fails if exists unless --force; use create then ignore exists.
+        result = runner.run(
+            gh_spec(
+                [
+                    "label",
+                    "create",
+                    label,
+                    "--repo",
+                    repo,
+                    "--color",
+                    color,
+                    "--description",
+                    desc,
+                ],
+                timeout_seconds=60,
+            ),
+            live=live,
+        )
+        if not live:
+            continue
+        if result.returncode == 0:
+            continue
+        err_text = f"{result.stdout}\n{result.stderr}".lower()
+        if "already exists" in err_text:
+            continue
+        # Retry with --force for older gh that uses different wording, else raise.
+        forced = runner.run(
+            gh_spec(
+                [
+                    "label",
+                    "create",
+                    label,
+                    "--repo",
+                    repo,
+                    "--color",
+                    color,
+                    "--description",
+                    desc,
+                    "--force",
+                ],
+                timeout_seconds=60,
+            ),
+            live=live,
+        )
+        if forced.returncode != 0 and "already exists" not in f"{forced.stdout}\n{forced.stderr}".lower():
+            raise RuntimeError(
+                f"ensure label {label!r} on {repo} failed: {forced.stderr or forced.stdout}"
+            )
 
 
 def _eligible(assignees: list[str], config: Config) -> bool:
@@ -53,6 +121,8 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         issue = _issue_from_row(repo.name, row)
         if config.blocked_label in issue.labels:
             continue
+        if is_parked(issue.labels):
+            continue
         if not _eligible(issue.assignees, config):
             continue
         issues.append(issue)
@@ -93,6 +163,7 @@ def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
 def add_issue_labels(
     runner: Runner, repo: str, number: int, labels: list[str], *, live: bool
 ) -> None:
+    ensure_labels(runner, repo, labels, live=live)
     for label in labels:
         if not label:
             continue

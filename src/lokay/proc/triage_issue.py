@@ -9,7 +9,13 @@ import argparse
 import os
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import add_issue_labels, close_issue, comment_issue, get_issue
+from lokay.gh_issues import (
+    add_issue_labels,
+    assign_issue,
+    close_issue,
+    comment_issue,
+    get_issue,
+)
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 from lokay.triage import decide_issue
 
@@ -50,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
                     list(decision.add_labels),
                     live=True,
                 )
+            # Ready without assignee is invisible under allow_unassigned=false.
+            if decision.decision == "ready" and cfg.assignee:
+                assign_issue(runner(), cfg, args.repo, args.issue, live=True)
             if decision.comment:
                 comment_issue(runner(), args.repo, args.issue, decision.comment, live=True)
             if decision.close:

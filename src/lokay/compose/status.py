@@ -17,6 +17,7 @@ from lokay.proc._common import add_config, load_cfg
 
 def compose_status(*, config_path: str | None) -> dict[str, Any]:
     cfg = load_cfg(argparse.Namespace(config=config_path))
+    # Hard blockers: mill cannot act at all (not policy tradeoffs).
     blockers: list[str] = []
     if cfg.mode != "live":
         blockers.append("mode is not live (need mode: live)")
@@ -24,9 +25,12 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         blockers.append("executor.enabled is false (agent never runs)")
     if not cfg.merge_enabled:
         blockers.append("merge.enabled is false (PRs cannot merge)")
+    # require_checks is policy for no-CI PRs (counted as no_checks_blocked), not a mill_ready
+    # hard stop — mill still triages inbox, implements ready, repairs failed CI, merges green.
+    policy_notes: list[str] = []
     if cfg.require_checks:
-        blockers.append(
-            "merge.require_checks is true (repos without CI cannot merge until checks exist or policy is relaxed)"
+        policy_notes.append(
+            "merge.require_checks=true: no-CI PRs wait (no_checks_blocked); green CI still merges"
         )
     missing_clones = [
         f"{repo.name} → {repo.clone_path}"
@@ -35,6 +39,10 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
     ]
     # Missing clones do not block mill_ready for triage-only progress;
     # they block full implement for those repos (reported separately).
+    if missing_clones:
+        policy_notes.append(
+            f"{len(missing_clones)} missing clone(s) — implement blocked there; triage still runs"
+        )
 
     survey = compose_tick(config_path=config_path, live=False)
     remaining = survey.get("remaining") or {}
@@ -49,16 +57,19 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
     # Production signal: either truly idle, or mill is ready and can act.
     # Fail when work remains while mill cannot act (the factory is NOT WORKING).
     work = 0
+    survey_errors = 0
     if isinstance(remaining, dict) and "note" not in remaining:
+        survey_errors = int(remaining.get("survey_errors") or 0)
         work = (
             int(remaining.get("inbox") or 0)
             + int(remaining.get("ready") or 0)
             + int(remaining.get("open_ai_prs") or 0)
+            + survey_errors  # unknown work is still work — refuse green noop
         )
 
     live_env_hint = (
         "LOKAY_MODE=live LOKAY_EXECUTOR_ENABLED=1 LOKAY_AGENT=grok "
-        "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=0 "
+        "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=1 "
         "uv run lokay-mill --config config.yaml --live"
     )
     payload = ok(
@@ -76,6 +87,7 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         graphs=graphs,
         mill_ready=mill_ready,
         blockers=blockers,
+        policy_notes=policy_notes,
         idle=idle,
         health=survey.get("health"),
         remaining=remaining,
@@ -86,6 +98,10 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
     if not idle and not mill_ready:
         payload["ok"] = False
         payload["error"] = "not working: work remains but mill is not live-ready"
+    elif survey_errors > 0:
+        payload["ok"] = False
+        payload["error"] = "not working: survey atom failures (refuse false idle)"
+        payload["note"] = "survey_errors > 0 — fix gh/network before trusting idle"
     elif not idle and mill_ready:
         # Configured to mill but work still there — status reports busy (ok true
         # for "status succeeded"; use health/work_units for operators).

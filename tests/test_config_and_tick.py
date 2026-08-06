@@ -80,6 +80,7 @@ def test_grok_argv_uses_grok_not_omp():
     argv = build_grok_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
     assert argv[0] == "grok"
     assert "omp" not in argv
+    assert "-p" in argv  # headless; positional prompt is TUI-only
 
 
 

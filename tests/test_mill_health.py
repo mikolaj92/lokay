@@ -138,3 +138,28 @@ def test_progress_after_conflict_close():
     )
     assert payload["health"] == "progress"
     assert payload["ok"] is True
+
+
+
+def test_survey_errors_refuse_idle():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=False,
+        executed=False,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 0,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+            "survey_errors": 3,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["idle"] is False
+    assert payload["health"] == "survey_error"
+    assert payload["ok"] is False

@@ -14,6 +14,12 @@ class AgentError(RuntimeError):
 
 
 def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
+    """Build headless grok argv (tools + multi-turn).
+
+    Positional prompt starts the interactive TUI and fails without a TTY
+    ("Device not configured"). Headless mode is ``-p/--single`` (or
+    ``--prompt-file``) with ``--output-format`` — see grok README Headless Mode.
+    """
     argv: list[str] = [config.grok_command, "--cwd", str(worktree)]
     if config.always_approve:
         argv.append("--always-approve")
@@ -21,8 +27,10 @@ def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]
     argv.extend(["--output-format", "plain"])
     if config.grok_model:
         argv.extend(["-m", config.grok_model])
+    # acceptEdits + always-approve is enough for factory writes; bypass is broader.
     argv.extend(["--permission-mode", "acceptEdits"])
-    argv.append(prompt)
+    # Headless multi-turn with tools (NOT interactive TUI).
+    argv.extend(["-p", prompt])
     return argv
 
 
