@@ -3,14 +3,18 @@ name = "lokay"
 version = "0.3.0"
 description = "Unix-style atomic issue→PR processes (GitHub + Grok). No Hermes/Kanban/Fala."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
   "pyyaml>=6.0",
+  "fala",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+
+[tool.uv.sources]
+fala = { path = "../Fala", editable = true }
 
 [project.scripts]
 lokay = "lokay.cli:main"
@@ -30,7 +34,8 @@ lokay-pr-label = "lokay.proc.pr_label:main"
 lokay-list-prs = "lokay.proc.list_prs:main"
 lokay-pr-checks = "lokay.proc.pr_checks:main"
 lokay-pr-merge = "lokay.proc.pr_merge:main"
-# Composers only
+# Graph (Fala) + composers
+lokay-run-path = "lokay.proc.run_path:main"
 lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
 lokay-tick = "lokay.compose.tick:main"
 

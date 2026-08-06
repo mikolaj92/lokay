@@ -9,7 +9,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 3. **Compose, don’t absorb.** Higher-level flows (`issue-to-pr`, `tick`) only **call** atomic processes in order. They must not reimplement GitHub/git/Grok.
 4. **Text interfaces.** Each process speaks **JSON on stdout** (one object). Errors: non-zero exit + JSON `{"ok":false,"error":...}` when practical.
 5. **Dry-run is a flag, not a mode buried in business logic.** `--live` opts into mutation; default plans only.
-6. **No hidden side channels.** If a step needs data, it takes CLI args or stdin JSON from the previous step — not a secret global blackboard (no Kanban, no Fala journal required).
+6. **No hidden side channels.** If a step needs data, it takes CLI args or stdin JSON / Fala conduction from the previous step — not Hermes Kanban.
+7. **Order is a Fala graph.** Atomic programs do not choose the next step. See `docs/GRAPH.md` and `fala/lokay.fala-package.toml`.
 
 ## Atomic CLI map
 

@@ -65,6 +65,24 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0 if payload.get("ok") else 1
 
 
+def cmd_path(args: argparse.Namespace) -> int:
+    from lokay.graph_run import describe_package, run_path
+
+    if args.describe:
+        _print({"ok": True, **describe_package(args.package)})
+        return 0
+    payload = run_path(
+        path_id=args.path,
+        repo=args.repo,
+        issue=args.issue,
+        config_path=args.config,
+        live=bool(args.live),
+        package_path=args.package,
+    )
+    _print(payload)
+    return 0 if payload.get("ok") else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="lokay",
@@ -93,12 +111,22 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--live", action="store_true")
     t.set_defaults(func=cmd_tick)
 
-    r = sub.add_parser("run", help="Composer: one issue→PR chain")
+    r = sub.add_parser("run", help="Run Fala issue_to_pr graph for one issue")
     add_config(r)
     r.add_argument("--repo", required=True)
     r.add_argument("--issue", required=True, type=int)
     r.add_argument("--live", action="store_true")
     r.set_defaults(func=cmd_run)
+
+    g = sub.add_parser("path", help="Run/describe Fala correlation path")
+    add_config(g)
+    g.add_argument("--path", default="issue_to_pr")
+    g.add_argument("--repo")
+    g.add_argument("--issue", type=int)
+    g.add_argument("--live", action="store_true")
+    g.add_argument("--describe", action="store_true")
+    g.add_argument("--package")
+    g.set_defaults(func=cmd_path)
 
     return p
 
