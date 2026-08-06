@@ -21,7 +21,9 @@ uv run pytest -q
 ## Atomic tools (one job each)
 
 ```text
-lokay-list-issues      list ready issues (JSON)
+lokay-list-issues      list ready (ai:ready) issues (JSON)
+lokay-list-inbox       list undecided open issues
+lokay-triage-issue     apply ready / needs-feedback / OOS
 lokay-select-issue     pick one issue from stdin JSON
 lokay-assign-issue     assign maintainer
 lokay-make-branch      pure branch name
@@ -40,7 +42,7 @@ Composers (only chain the above):
 
 ```text
 lokay-issue-to-pr      one issue end-to-end
-lokay-tick             one intake + triage peek
+lokay-tick             multi-repo: inbox triage → ready → PR
 lokay                  umbrella: init | validate | tick | run
 ```
 

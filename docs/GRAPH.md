@@ -7,6 +7,8 @@ which jobs run after which.
 
 [`fala/lokay.fala-package.toml`](../fala/lokay.fala-package.toml)
 
+### `issue_to_pr`
+
 ```text
 get_issue
   ├─→ assign_issue
@@ -19,6 +21,15 @@ get_issue
                                       └─→ list_prs
                                             └─→ pr_label
 ```
+
+### `issue_triage` (inbox → labels)
+
+```text
+get_issue
+  └─→ triage_issue   ← pure rules → ai:ready | ai:needs-feedback | OOS close
+```
+
+`ai:ready` is an **outcome** of triage, not the start of the universe.
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **run_agent** is the only slot that may call a coding harness (`fake` | `grok`).

@@ -106,9 +106,10 @@ def run_path(
         base_input["issue"] = int(issue)
         base_input["issue_number"] = int(issue)
 
-    # Same authored inputs for every step; atoms pick what they need.
+    # Same authored inputs for every known step; Fala only runs path effectors.
     steps = [
         "get_issue",
+        "triage_issue",
         "assign_issue",
         "make_branch",
         "worktree_add",

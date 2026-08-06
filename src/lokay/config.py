@@ -27,6 +27,7 @@ class Config:
     allow_unassigned: bool = False
     ready_label: str = "ai:ready"
     blocked_label: str = "ai:blocked"
+    needs_feedback_label: str = "ai:needs-feedback"
     branch_prefix: str = "ai/fix"
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
@@ -43,6 +44,7 @@ class Config:
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
     max_issues_per_tick: int = 1
+    max_triage_per_tick: int = 5
     min_free_gb: float = 2.0
     config_path: Path | None = None
 
@@ -114,6 +116,7 @@ def load_config(path: str | Path | None = None) -> Config:
         allow_unassigned=bool(gh.get("allow_unassigned", False)),
         ready_label=str(gh.get("ready_label", "ai:ready")),
         blocked_label=str(gh.get("blocked_label", "ai:blocked")),
+        needs_feedback_label=str(gh.get("needs_feedback_label", "ai:needs-feedback")),
         branch_prefix=str(gh.get("branch_prefix", "ai/fix")),
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
@@ -130,6 +133,7 @@ def load_config(path: str | Path | None = None) -> Config:
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issues_per_tick=int(lim.get("max_issues_per_tick", 1)),
+        max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
         config_path=cfg_path,
     )

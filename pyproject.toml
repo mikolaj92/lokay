@@ -20,8 +20,10 @@ fala = { path = "../Fala", editable = true }
 lokay = "lokay.cli:main"
 # Atomic processes (one job each)
 lokay-list-issues = "lokay.proc.list_issues:main"
+lokay-list-inbox = "lokay.proc.list_inbox:main"
 lokay-get-issue = "lokay.proc.get_issue:main"
 lokay-select-issue = "lokay.proc.select_issue:main"
+lokay-triage-issue = "lokay.proc.triage_issue:main"
 lokay-assign-issue = "lokay.proc.assign_issue:main"
 lokay-make-branch = "lokay.proc.make_branch:main"
 lokay-worktree-add = "lokay.proc.worktree_add:main"

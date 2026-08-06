@@ -17,7 +17,9 @@ Lokay is a **pipeline of small programs**, not a monolith.
 
 | Program | Job |
 | --- | --- |
-| `lokay-list-issues` | list ready issues for one repo |
+| `lokay-list-issues` | list ready (`ai:ready`) issues for one repo |
+| `lokay-list-inbox` | list undecided open issues (no triage labels yet) |
+| `lokay-triage-issue` | decide + apply ready / needs-feedback / OOS |
 | `lokay-select-issue` | pick one issue from a list (stdin) |
 | `lokay-assign-issue` | assign maintainer on GitHub |
 | `lokay-make-branch` | pure: branch name from repo+number+title |
@@ -31,7 +33,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-checks` | report checks green/fail |
 | `lokay-pr-merge` | merge if policy allows |
 | `lokay-issue-to-pr` | **compose** the above for one issue |
-| `lokay-tick` | **compose** intake + triage once |
+| `lokay-tick` | **compose** multi-repo: inbox triage → ready → PR peek |
 | `lokay` | umbrella CLI (`init` / `validate` / thin wrappers) |
 
 ## Anti-patterns

@@ -68,6 +68,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         pr_label,
         push_branch,
         run_agent,
+        triage_issue,
         worktree_add,
     )
 
@@ -84,6 +85,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         return _run_atom_main(
             get_issue.main,
             [*cfg, "--repo", repo, "--issue", str(issue_number)],
+        )
+
+    if atom == "triage_issue":
+        assert repo and issue_number is not None
+        return _run_atom_main(
+            triage_issue.main,
+            [*cfg, *live, "--repo", repo, "--issue", str(issue_number)],
         )
 
     if atom == "assign_issue":

@@ -7,6 +7,7 @@ github:
   allow_unassigned: false
   ready_label: ai:ready
   blocked_label: ai:blocked
+  needs_feedback_label: ai:needs-feedback
   branch_prefix: ai/fix
   pr_labels:
     - ai:generated
@@ -39,4 +40,5 @@ state:
 
 limits:
   max_issues_per_tick: 1
+  max_triage_per_tick: 5
   min_free_gb: 2
