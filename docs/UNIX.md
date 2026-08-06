@@ -39,6 +39,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-triage` | **compose** Fala `pr_triage` (checks → merge → close) |
 | `lokay-tick` | **compose** multi-repo survey (+ live triage/ready/PR) |
 | `lokay-mill` | **compose** bounded ticks until idle / stall / budget |
+| `lokay-status` | **compose** DoD readiness + remaining work (read-only) |
 | `lokay` | umbrella CLI (`init` / `validate` / thin wrappers) |
 
 ## Anti-patterns

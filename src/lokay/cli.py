@@ -7,6 +7,7 @@ import sys
 from lokay import __version__
 from lokay.compose.issue_to_pr import compose_issue_to_pr
 from lokay.compose.mill import compose_mill
+from lokay.compose.status import compose_status
 from lokay.compose.tick import compose_tick
 from lokay.config import load_config, starter_config_text
 
@@ -61,6 +62,12 @@ def cmd_mill(args: argparse.Namespace) -> int:
         live=bool(args.live),
         max_passes=int(args.max_passes),
     )
+    _print(payload)
+    return 0 if payload.get("ok") else 1
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    payload = compose_status(config_path=args.config)
     _print(payload)
     return 0 if payload.get("ok") else 1
 
@@ -129,6 +136,10 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--live", action="store_true")
     m.add_argument("--max-passes", type=int, default=8)
     m.set_defaults(func=cmd_mill)
+
+    st = sub.add_parser("status", help="DoD readiness + remaining work (read-only)")
+    add_config(st)
+    st.set_defaults(func=cmd_status)
 
     r = sub.add_parser("run", help="Run Fala issue_to_pr graph for one issue")
     add_config(r)

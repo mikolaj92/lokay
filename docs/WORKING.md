@@ -18,9 +18,22 @@ configured repos. Order lives in Fala; atoms are Unix small programs.
 
 Mutations require `mode: live`, `--live`, and for the agent slot `executor.enabled`.
 
+## Status (is the machine WORKING?)
+
+```bash
+uv run lokay status --config config.yaml
+# or: uv run lokay-status --config config.yaml
+```
+
+Reports `mill_ready`, `blockers` (mode/executor/merge/require_checks/clones),
+and survey `remaining`. **ok=false** when work remains but mill is not live-ready
+(NOT WORKING). Live ticks also remove `ai:ready` once an open AI PR owns the issue.
+
 ## Continuous mill
 
 ```bash
+# need: mode: live, executor.enabled, merge.enabled;
+# for no-CI repos: merge.require_checks: false
 uv run lokay-mill --config config.yaml --live --max-passes 8
 ```
 

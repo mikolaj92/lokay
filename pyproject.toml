@@ -45,6 +45,7 @@ lokay-pr-repair = "lokay.compose.pr_repair:main"
 lokay-pr-triage = "lokay.compose.pr_triage:main"
 lokay-tick = "lokay.compose.tick:main"
 lokay-mill = "lokay.compose.mill:main"
+lokay-status = "lokay.compose.status:main"
 
 [build-system]
 requires = ["hatchling"]

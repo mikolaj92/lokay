@@ -112,6 +112,28 @@ def add_issue_labels(
         )
 
 
+def remove_issue_labels(
+    runner: Runner, repo: str, number: int, labels: list[str], *, live: bool
+) -> None:
+    for label in labels:
+        if not label:
+            continue
+        runner.run_checked(
+            gh_spec(
+                [
+                    "issue",
+                    "edit",
+                    str(number),
+                    "--repo",
+                    repo,
+                    "--remove-label",
+                    label,
+                ]
+            ),
+            live=live,
+        )
+
+
 def comment_issue(runner: Runner, repo: str, number: int, body: str, *, live: bool) -> None:
     runner.run_checked(
         gh_spec(

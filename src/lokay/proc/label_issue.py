@@ -1,11 +1,11 @@
-"""Atomic: add label(s) to a GitHub issue. Mutates only with --live."""
+"""Atomic: add or remove label(s) on a GitHub issue. Mutates only with --live."""
 
 from __future__ import annotations
 
 import argparse
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import add_issue_labels
+from lokay.gh_issues import add_issue_labels, remove_issue_labels
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
@@ -19,7 +19,12 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         dest="labels",
         required=True,
-        help="label to add (repeatable)",
+        help="label to add/remove (repeatable)",
+    )
+    p.add_argument(
+        "--remove",
+        action="store_true",
+        help="remove labels instead of adding",
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
@@ -28,7 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     if not labels:
         return emit_exit(err("at least one --label required"))
     try:
-        add_issue_labels(runner(), args.repo, args.issue, labels, live=live)
+        if args.remove:
+            remove_issue_labels(runner(), args.repo, args.issue, labels, live=live)
+        else:
+            add_issue_labels(runner(), args.repo, args.issue, labels, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(
@@ -37,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             issue=args.issue,
             labels=labels,
+            removed=bool(args.remove),
             applied=live,
         )
     )

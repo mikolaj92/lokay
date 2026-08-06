@@ -251,9 +251,39 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     "issues": sorted(covered),
                 }
             )
-            remaining_ready_with_pr += sum(
-                1 for i in issues if int(i.get("number", -1)) in covered
-            )
+            covered_ready = [
+                i for i in issues if int(i.get("number", -1)) in covered
+            ]
+            remaining_ready_with_pr += len(covered_ready)
+            # Live: drop ai:ready so PR triage owns the work (no re-implement).
+            if live and covered_ready:
+                for issue in covered_ready:
+                    num = int(issue["number"])
+                    unlab = _run(
+                        p_label.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            repo.name,
+                            "--issue",
+                            str(num),
+                            "--label",
+                            cfg.ready_label,
+                            "--remove",
+                        ],
+                    )
+                    actions.append(
+                        {
+                            "step": "unready_with_open_pr",
+                            "repo": repo.name,
+                            "issue": num,
+                            **unlab,
+                        }
+                    )
+                    if unlab.get("ok") and unlab.get("applied"):
+                        progress += 1
+                        remaining_ready_with_pr = max(0, remaining_ready_with_pr - 1)
         if excluded_numbers(stuck, repo.name):
             actions.append(
                 {
