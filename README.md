@@ -98,3 +98,15 @@ docs/UNIX.md      # process philosophy (binding)
 ## Not goals yet
 
 Hermes, Kanban, Fala multi-effector graphs, launchd immutability theater — only after atomics are boringly reliable.
+
+
+## Canary status (this machine)
+
+First live e2e on 2026-08-06 (agent=`fake`):
+
+- repo: [mikolaj92/lokay-lite](https://github.com/mikolaj92/lokay-lite)
+- issue: #1
+- PR: https://github.com/mikolaj92/lokay-lite/pull/2
+- steps: get → assign → branch → worktree → agent → commit → push → pr → labels
+
+Swap agent with `executor.agent: grok` when ready; pipeline stays the same.
