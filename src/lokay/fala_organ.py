@@ -14,7 +14,7 @@ from typing import Any
 from fala import sdk
 
 from lokay.models import Issue
-from lokay.prompts import issue_fix_prompt, pr_body
+from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt
 
 
 def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -64,6 +64,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         get_issue,
         list_prs,
         make_branch,
+        pr_checks,
         pr_create,
         pr_label,
         push_branch,
@@ -79,6 +80,10 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     if issue_number is None and "get_issue" in up:
         issue_number = up["get_issue"].get("issue", {}).get("number")
     issue_number = int(issue_number) if issue_number is not None else None
+    pr_number = inputs.get("pr") or inputs.get("pr_number")
+    if pr_number is not None:
+        pr_number = int(pr_number)
+    repair_mode = str(inputs.get("mode") or "") == "repair"
 
     if atom == "get_issue":
         assert repo and issue_number is not None
@@ -92,6 +97,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         return _run_atom_main(
             triage_issue.main,
             [*cfg, *live, "--repo", repo, "--issue", str(issue_number)],
+        )
+
+    if atom == "pr_checks":
+        assert repo and pr_number is not None
+        return _run_atom_main(
+            pr_checks.main,
+            [*cfg, "--repo", repo, "--pr", str(pr_number)],
         )
 
     if atom == "assign_issue":
@@ -121,7 +133,11 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
 
     if atom == "worktree_add":
-        branch = str(up.get("make_branch", {}).get("branch") or inputs.get("branch") or "")
+        branch = str(
+            up.get("make_branch", {}).get("branch")
+            or inputs.get("branch")
+            or ""
+        )
         assert repo and branch
         return _run_atom_main(
             worktree_add.main,
@@ -130,11 +146,31 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "run_agent":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
-        branch = str(up.get("make_branch", {}).get("branch") or "")
-        issue_raw = up.get("get_issue", {}).get("issue") or {}
-        issue = Issue.from_dict(issue_raw) if issue_raw else None
-        assert worktree and issue is not None
-        prompt = issue_fix_prompt(issue, branch=branch)
+        branch = str(
+            up.get("make_branch", {}).get("branch")
+            or inputs.get("branch")
+            or up.get("worktree_add", {}).get("branch")
+            or ""
+        )
+        assert worktree
+        if repair_mode:
+            assert pr_number is not None and branch
+            checks_text = str(
+                up.get("pr_checks", {}).get("text")
+                or inputs.get("checks_text")
+                or ""
+            )
+            prompt = repair_pr_prompt(
+                repo=repo,
+                pr_number=pr_number,
+                branch=branch,
+                checks_text=checks_text,
+            )
+        else:
+            issue_raw = up.get("get_issue", {}).get("issue") or {}
+            issue = Issue.from_dict(issue_raw) if issue_raw else None
+            assert issue is not None
+            prompt = issue_fix_prompt(issue, branch=branch)
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
             fh.write(prompt)
             prompt_path = fh.name
@@ -149,9 +185,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     if atom == "commit_all":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         issue_raw = up.get("get_issue", {}).get("issue") or {}
-        n = issue_raw.get("number", issue_number)
-        title = str(issue_raw.get("title") or "")[:60]
-        msg = str(inputs.get("message") or f"fix: {repo}#{n} {title}")
+        if repair_mode and pr_number is not None:
+            msg = str(inputs.get("message") or f"repair: {repo} PR #{pr_number} checks")
+        else:
+            n = issue_raw.get("number", issue_number)
+            title = str(issue_raw.get("title") or "")[:60]
+            msg = str(inputs.get("message") or f"fix: {repo}#{n} {title}")
         assert worktree
         return _run_atom_main(
             commit_all.main,
@@ -160,7 +199,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
-        branch = str(up.get("make_branch", {}).get("branch") or "")
+        branch = str(
+            up.get("make_branch", {}).get("branch")
+            or inputs.get("branch")
+            or up.get("worktree_add", {}).get("branch")
+            or ""
+        )
         assert worktree and branch
         return _run_atom_main(
             push_branch.main,

@@ -14,6 +14,7 @@ import sys
 from typing import Any, Callable
 
 from lokay.compose.issue_to_pr import compose_issue_to_pr
+from lokay.compose.pr_repair import compose_pr_repair
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
 from lokay.proc import close_issue as p_close
@@ -72,7 +73,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     "lokay-list-inbox + lokay-triage-issue (or path issue_triage)",
                     "lokay-list-issues + exclude stuck + lokay-select-issue + lokay-issue-to-pr",
                     "on failure: stuck ledger; after N fails → lokay-label-issue ai:blocked",
-                    "lokay-list-prs + lokay-pr-checks (+ merge + close issue if enabled)",
+                    "lokay-list-prs + lokay-pr-checks",
+                    "red checks → Fala pr_repair (agent fix + push) when executor enabled",
+                    "green + merge.enabled → merge + close linked issue",
                 ],
             }
         )
@@ -90,8 +93,10 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     remaining_inbox = 0
     remaining_ready = 0
     remaining_prs = 0
+    needs_repair = 0
     triage_budget = max(0, int(cfg.max_triage_per_tick))
     issue_budget = max(0, int(cfg.max_issues_per_tick))
+    repair_budget = max(0, int(cfg.max_repairs_per_tick))
     max_fail = max(1, int(cfg.max_failures_before_block))
 
     stuck_path = stuck_path_for(cfg.state_path)
@@ -227,7 +232,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     save_stuck(stuck_path, stuck)
 
-    # --- 3) PR triage peek (+ merge + close linked issue when policy allows) ---
+    # --- 3) PR triage: repair red checks, merge green when policy allows ---
     mergeable_green = 0
     for repo in cfg.repos:
         prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
@@ -238,6 +243,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         remaining_prs += len(pr_list)
         for pr in pr_list:
             pr_num = int(pr["number"])
+            head = str(pr.get("head_ref") or "")
             chk = _run(
                 p_checks.main,
                 [*cfg_flag, "--repo", repo.name, "--pr", str(pr_num)],
@@ -246,6 +252,29 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if not chk.get("ok"):
                 continue
             if not chk.get("green"):
+                needs_repair += 1
+                # Repair when executor is on and budget remains; one red PR must not
+                # block later green merges in the same pass.
+                if repair_budget > 0 and cfg.executor_enabled and head:
+                    repair = compose_pr_repair(
+                        config_path=config_path,
+                        repo=repo.name,
+                        pr_number=pr_num,
+                        branch=head,
+                        live=True,
+                    )
+                    actions.append(
+                        {
+                            "step": "pr_repair",
+                            "pr": pr_num,
+                            "branch": head,
+                            **repair,
+                        }
+                    )
+                    repair_budget -= 1
+                    if repair.get("ok"):
+                        progress += 1
+                        needs_repair = max(0, needs_repair - 1)
                 continue
             if not cfg.merge_enabled:
                 continue
@@ -261,7 +290,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             remaining_prs = max(0, remaining_prs - 1)
             mergeable_green = max(0, mergeable_green - 1)
             issue_n = issue_number_from_branch(
-                str(pr.get("head_ref") or ""),
+                head,
                 branch_prefix=cfg.branch_prefix,
             )
             if issue_n is not None:
@@ -296,9 +325,12 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "ready": remaining_ready,
         "open_ai_prs": remaining_prs,
         "mergeable_green": mergeable_green,
+        "needs_repair": needs_repair,
         "blocked_this_pass": blocked_this_pass,
     }
-    actionable_now = remaining_inbox + remaining_ready + mergeable_green
+    # Red PRs are only "actionable now" when the agent slot can run repairs.
+    repair_actionable = needs_repair if cfg.executor_enabled else 0
+    actionable_now = remaining_inbox + remaining_ready + mergeable_green + repair_actionable
     idle = remaining_inbox == 0 and remaining_ready == 0 and remaining_prs == 0
     if idle:
         health = "idle"
@@ -308,7 +340,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         health = "stall"
     else:
         health = "waiting"
-
     ok_flag = health != "stall"
     payload = ok(
         mode=cfg.mode,

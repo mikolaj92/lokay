@@ -31,6 +31,16 @@ get_issue
 
 `ai:ready` is an **outcome** of triage, not the start of the universe.
 
+### `pr_repair` (red checks on open ai/fix PR)
+
+```text
+pr_checks
+  └─→ worktree_add
+        └─→ run_agent   ← repair prompt (only non-deterministic node)
+              └─→ commit_all
+                    └─→ push
+```
+
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **run_agent** is the only slot that may call a coding harness (`fake` | `grok`).
 - Everything else is deterministic (`gh` / `git` / pure functions).

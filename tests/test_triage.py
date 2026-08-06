@@ -78,6 +78,18 @@ def test_issue_triage_path_in_package():
     assert "get_issue" in triage["conduction"]
 
 
+def test_pr_repair_path_in_package():
+    desc = describe_package()
+    ids = [p["id"] for p in desc["paths"]]
+    assert "pr_repair" in ids
+    path = next(p for p in desc["paths"] if p["id"] == "pr_repair")
+    node_ids = [n["id"] for n in path["nodes"]]
+    assert node_ids == ["pr_checks", "worktree_add", "run_agent", "commit_all", "push"]
+    agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
+    assert "worktree_add" in agent["conduction"]
+    assert "pr_checks" in agent["conduction"]
+
+
 def test_package_files_exist():
     root = Path(__file__).resolve().parents[1]
     assert (root / "fala" / "lokay.fala-package.toml").is_file()

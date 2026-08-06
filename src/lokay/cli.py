@@ -75,6 +75,8 @@ def cmd_path(args: argparse.Namespace) -> int:
         path_id=args.path,
         repo=args.repo,
         issue=args.issue,
+        pr=getattr(args, "pr", None),
+        branch=getattr(args, "branch", None),
         config_path=args.config,
         live=bool(args.live),
         package_path=args.package,
@@ -123,6 +125,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--path", default="issue_to_pr")
     g.add_argument("--repo")
     g.add_argument("--issue", type=int)
+    g.add_argument("--pr", type=int)
+    g.add_argument("--branch")
     g.add_argument("--live", action="store_true")
     g.add_argument("--describe", action="store_true")
     g.add_argument("--package")

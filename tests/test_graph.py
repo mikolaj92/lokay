@@ -17,6 +17,11 @@ def test_describe_issue_to_pr_graph():
     assert "get_issue" in agent["conduction"]
 
 
+def test_describe_includes_pr_repair():
+    desc = describe_package()
+    assert any(p["id"] == "pr_repair" for p in desc["paths"])
+
+
 def test_package_file_exists():
     root = Path(__file__).resolve().parents[1]
     assert (root / "fala" / "lokay.fala-package.toml").is_file()
