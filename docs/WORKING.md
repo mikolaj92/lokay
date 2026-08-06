@@ -46,7 +46,7 @@ Or keep a safe dry-run `config.yaml` and enable live via env (no file rewrite):
 ```bash
 export LOKAY_MODE=live
 export LOKAY_EXECUTOR_ENABLED=1
-export LOKAY_AGENT=fake          # or grok
+export LOKAY_AGENT=grok          # or grok
 export LOKAY_MERGE_ENABLED=1
 export LOKAY_REQUIRE_CHECKS=0    # canary / no-CI
 uv run lokay-mill --config config.yaml --live --max-passes 8

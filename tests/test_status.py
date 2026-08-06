@@ -16,7 +16,7 @@ repos:
     clone_path: {tmp_path}
 executor:
   enabled: false
-  agent: fake
+  agent: grok
 merge:
   enabled: false
   require_checks: true

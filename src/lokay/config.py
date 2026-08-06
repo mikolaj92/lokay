@@ -34,7 +34,7 @@ class Config:
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
     executor_enabled: bool = False
-    agent: str = "grok"  # grok | fake — harness is swappable
+    agent: str = "grok"  # real harness only (no stubs)
     grok_command: str = "grok"
     grok_model: str | None = None
     max_turns: int = 40
@@ -148,7 +148,7 @@ def apply_env_overrides(cfg: Config) -> Config:
 
       LOKAY_MODE=live|dry-run
       LOKAY_EXECUTOR_ENABLED=1|0
-      LOKAY_AGENT=fake|grok
+      LOKAY_AGENT=grok
       LOKAY_MERGE_ENABLED=1|0
       LOKAY_REQUIRE_CHECKS=1|0   (0 for no-CI canary repos)
     """
@@ -160,7 +160,13 @@ def apply_env_overrides(cfg: Config) -> Config:
         cfg.executor_enabled = v
     agent = (os.environ.get("LOKAY_AGENT") or "").strip().lower()
     if agent:
+        if agent in {"fake", "stub", "mock", "noop"}:
+            raise ValueError(
+                f"LOKAY_AGENT={agent!r} forbidden — no stubs; use grok"
+            )
         cfg.agent = agent
+    if cfg.agent in {"fake", "stub", "mock", "noop"}:
+        raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs; use grok")
     v = _env_truthy("LOKAY_MERGE_ENABLED")
     if v is not None:
         cfg.merge_enabled = v
@@ -208,7 +214,7 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
         executor_enabled=bool(ex.get("enabled", False)),
-        agent=str(ex.get("agent", "grok")).strip().lower() or "grok",
+        agent=str(ex.get("agent", "grok")).strip().lower() or "grok",  # never fake
         grok_command=str(ex.get("command", "grok")),
         grok_model=(str(ex["model"]) if ex.get("model") else None),
         max_turns=int(ex.get("max_turns", 40)),

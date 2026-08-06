@@ -15,7 +15,7 @@ cd "${ROOT}"
 # Live factory (override with env in the plist if needed)
 export LOKAY_MODE="${LOKAY_MODE:-live}"
 export LOKAY_EXECUTOR_ENABLED="${LOKAY_EXECUTOR_ENABLED:-1}"
-export LOKAY_AGENT="${LOKAY_AGENT:-fake}"
+export LOKAY_AGENT="${LOKAY_AGENT:-grok}"
 export LOKAY_MERGE_ENABLED="${LOKAY_MERGE_ENABLED:-1}"
 # Product repos often have CI; set 0 only if you accept merge without checks.
 export LOKAY_REQUIRE_CHECKS="${LOKAY_REQUIRE_CHECKS:-1}"

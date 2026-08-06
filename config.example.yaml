@@ -25,7 +25,7 @@ github:
 
 executor:
   enabled: false
-  agent: fake          # fake | grok
+  agent: grok          # real harness only — stubs forbidden
   command: grok
   model: null
   max_turns: 40

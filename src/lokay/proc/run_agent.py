@@ -1,4 +1,4 @@
-"""Atomic: run the agent slot (fake|grok) in a worktree. Only non-deterministic step."""
+"""Atomic: run the agent slot (grok only) in a worktree. Only non-deterministic step."""
 
 from __future__ import annotations
 

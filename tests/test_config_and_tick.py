@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from lokay.agent import build_grok_argv, run_fake_agent
+from lokay.agent import build_grok_argv
 from lokay.compose.tick import compose_tick
 from lokay.config import Config, RepoConfig, load_config
 from lokay.git_branch import branch_for_issue
@@ -21,7 +21,7 @@ repos:
     priority: 10
 executor:
   enabled: false
-  agent: fake
+  agent: grok
   command: grok
   max_turns: 12
 """.replace("{tmp_path}", str(tmp_path)),
@@ -29,7 +29,7 @@ executor:
     )
     cfg = load_config(cfg_path)
     assert cfg.mode == "dry-run"
-    assert cfg.agent == "fake"
+    assert cfg.agent == "grok"
     assert cfg.validate() == []
     assert len(cfg.active_repos()) == 1
 
@@ -53,13 +53,13 @@ merge:
     )
     monkeypatch.setenv("LOKAY_MODE", "live")
     monkeypatch.setenv("LOKAY_EXECUTOR_ENABLED", "1")
-    monkeypatch.setenv("LOKAY_AGENT", "fake")
+    monkeypatch.setenv("LOKAY_AGENT", "grok")
     monkeypatch.setenv("LOKAY_MERGE_ENABLED", "true")
     monkeypatch.setenv("LOKAY_REQUIRE_CHECKS", "0")
     cfg = load_config(cfg_path)
     assert cfg.mode == "live"
     assert cfg.executor_enabled is True
-    assert cfg.agent == "fake"
+    assert cfg.agent == "grok"
     assert cfg.merge_enabled is True
     assert cfg.require_checks is False
 
@@ -81,13 +81,6 @@ def test_grok_argv_uses_grok_not_omp():
     assert argv[0] == "grok"
     assert "omp" not in argv
 
-
-def test_fake_agent_writes_marker(tmp_path: Path):
-    (tmp_path / "CANARY_TODO.txt").write_text("FIXME please\n", encoding="utf-8")
-    result = run_fake_agent(worktree=tmp_path, prompt="fix canary")
-    assert result["status"] == "completed"
-    assert (tmp_path / "LOKAY_CANARY.md").is_file()
-    assert "fixed" in (tmp_path / "CANARY_TODO.txt").read_text(encoding="utf-8")
 
 
 def test_make_branch_atomic(capsys):
@@ -114,7 +107,7 @@ repos:
     clone_path: {tmp_path}
 executor:
   command: grok
-  agent: fake
+  agent: grok
   enabled: false
 worktrees:
   root: {tmp_path / "wt"}

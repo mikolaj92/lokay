@@ -104,7 +104,7 @@ Hermes, Kanban, Fala multi-effector graphs, launchd immutability theater — onl
 
 ## Canary status (this machine)
 
-First live e2e on 2026-08-06 (agent=`fake`):
+First live e2e on 2026-08-06 (agent=`grok`):
 
 - repo: [mikolaj92/lokay-lite](https://github.com/mikolaj92/lokay-lite)
 - issue: #1

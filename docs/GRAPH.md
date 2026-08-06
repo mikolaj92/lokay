@@ -54,7 +54,7 @@ Tick also handles **merge conflicts** outside this path: `mergeable=CONFLICTING|
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
-- **run_agent** is the only slot that may call a coding harness (`fake` | `grok`).
+- **run_agent** is the only slot that may call a coding harness (`grok` only — no stubs).
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run

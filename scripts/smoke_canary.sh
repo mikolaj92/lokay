@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deterministic canary: requires config mode:live, executor.agent=fake, executor.enabled=true
+# Deterministic canary: requires config mode:live, executor.agent=grok, executor.enabled=true
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CFG="${1:-$ROOT/config.yaml}"

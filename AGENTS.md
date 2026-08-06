@@ -13,7 +13,7 @@
 
 ## Stack
 
-- Agent: **Grok** / `fake` via `lokay-run-agent` (harness is swappable).
+- Agent: **Grok**  via `lokay-run-agent` (real harness only).
 - Process order: **Fala** (`fala/lokay.fala-package.toml`).
 - No Hermes plugin, no Kanban ledger for step order.
 

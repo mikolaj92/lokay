@@ -1,4 +1,4 @@
-"""Agent slot — the only non-deterministic step. Harness is swappable."""
+"""Agent slot — real coding harness only. No stubs."""
 
 from __future__ import annotations
 
@@ -7,6 +7,10 @@ from pathlib import Path
 
 from lokay.config import Config
 from lokay.runner import CommandSpec, Runner
+
+
+class AgentError(RuntimeError):
+    pass
 
 
 def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
@@ -22,25 +26,16 @@ def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]
     return argv
 
 
-def run_fake_agent(*, worktree: Path, prompt: str) -> dict:
-    """Deterministic stand-in for CI/canary: apply a trivial fix marker."""
-    marker = worktree / "LOKAY_CANARY.md"
-    marker.write_text(
-        "# Lokay canary\n\nAgent slot ran (fake).\n\nPrompt bytes: "
-        f"{len(prompt)}\n",
-        encoding="utf-8",
-    )
-    # optional: touch a known broken file pattern from canary issues
-    todo = worktree / "CANARY_TODO.txt"
-    if todo.is_file() and "FIXME" in todo.read_text(encoding="utf-8"):
-        todo.write_text("fixed by lokay fake agent\n", encoding="utf-8")
-    return {
-        "status": "completed",
-        "agent": "fake",
-        "worktree": str(worktree),
-        "files": ["LOKAY_CANARY.md"] + (["CANARY_TODO.txt"] if todo.is_file() else []),
-        "stdout_tail": "fake agent wrote LOKAY_CANARY.md",
-    }
+def resolve_agent_kind(config: Config) -> str:
+    kind = (os.environ.get("LOKAY_AGENT") or config.agent or "grok").strip().lower()
+    if kind in {"fake", "stub", "mock", "noop"}:
+        raise AgentError(
+            f"agent={kind!r} is forbidden — no stubs; use a real harness (grok)"
+        )
+    if kind != "grok":
+        # future: other real harnesses; reject unknowns for now
+        raise AgentError(f"unknown agent {kind!r}; supported real harness: grok")
+    return kind
 
 
 def run_agent(
@@ -51,32 +46,21 @@ def run_agent(
     prompt: str,
     execute: bool,
 ) -> dict:
-    """Run the configured agent.
+    """Run the real coding agent (grok). Never a stub."""
+    kind = resolve_agent_kind(config)
+    argv = build_grok_argv(config, worktree=worktree, prompt=prompt)
 
-    execute=False → plan only (no process).
-    Agent kind: config.agent or env LOKAY_AGENT (fake|grok).
-    """
-    kind = (os.environ.get("LOKAY_AGENT") or config.agent or "grok").strip().lower()
     if not execute or not config.executor_enabled:
-        argv = (
-            ["fake-agent", str(worktree)]
-            if kind == "fake"
-            else build_grok_argv(config, worktree=worktree, prompt=prompt)[:-1] + ["<prompt>"]
-        )
         return {
             "status": "planned",
             "agent": kind,
-            "command": argv,
+            "command": argv[:-1] + ["<prompt>"],
             "prompt_len": len(prompt),
             "worktree": str(worktree),
             "executor_enabled": config.executor_enabled,
             "execute": execute,
         }
 
-    if kind == "fake":
-        return run_fake_agent(worktree=worktree, prompt=prompt)
-
-    argv = build_grok_argv(config, worktree=worktree, prompt=prompt)
     spec = CommandSpec(
         argv=tuple(argv),
         cwd=str(worktree),
@@ -85,7 +69,7 @@ def run_agent(
     result = runner.run(spec, live=True)
     return {
         "status": "completed" if result.returncode == 0 else "failed",
-        "agent": "grok",
+        "agent": kind,
         "returncode": result.returncode,
         "stdout_tail": (result.stdout or "")[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],

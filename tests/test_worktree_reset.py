@@ -20,7 +20,7 @@ repos:
     clone_path: {tmp_path / "clone"}
 executor:
   enabled: false
-  agent: fake
+  agent: grok
 merge:
   enabled: false
 worktrees:
