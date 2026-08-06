@@ -69,3 +69,26 @@ def test_live_stall_when_ready_no_progress():
     )
     assert payload["health"] == "stall"
     assert payload["ok"] is False
+
+
+def test_live_stall_when_ready_but_agent_disabled():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 1,
+            "open_ai_prs": 0,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=False,
+    )
+    assert payload["health"] == "stall"
+    assert payload["ok"] is False
+    assert "executor.enabled" in str(payload.get("error") or "")

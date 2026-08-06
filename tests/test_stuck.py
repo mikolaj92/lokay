@@ -22,6 +22,17 @@ def test_issue_number_from_branch():
     assert issue_number_from_branch("feature/foo") is None
 
 
+def test_issue_numbers_covered_by_prs():
+    from lokay.stuck import issue_numbers_covered_by_prs
+
+    prs = [
+        {"number": 2, "head_ref": "ai/fix/1-canary-b9ef84f6"},
+        {"number": 4, "head_ref": "ai/fix/3-canary-58b8306c"},
+        {"number": 9, "head_ref": "main"},
+    ]
+    assert issue_numbers_covered_by_prs(prs) == {1, 3}
+
+
 def test_record_failure_blocks_after_threshold(tmp_path: Path):
     path = stuck_path_for(tmp_path / "state.jsonl")
     data = load_stuck(path)

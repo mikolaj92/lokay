@@ -35,6 +35,7 @@ from lokay.stuck import (
     clear_issue,
     excluded_numbers,
     issue_number_from_branch,
+    issue_numbers_covered_by_prs,
     load_stuck,
     record_failure,
     save_stuck,
@@ -71,16 +72,17 @@ def _health_payload(
     executor_enabled: bool,
 ) -> dict[str, Any]:
     inbox = int(remaining.get("inbox") or 0)
-    ready = int(remaining.get("ready") or 0)
+    ready = int(remaining.get("ready") or 0)  # implementable (no open AI PR yet)
     prs = int(remaining.get("open_ai_prs") or 0)
     mergeable_green = int(remaining.get("mergeable_green") or 0)
     needs_repair = int(remaining.get("needs_repair") or 0)
     repair_actionable = needs_repair if executor_enabled else 0
-    # Ready issues are actionable when live milling (agent) can run; inbox triage
-    # is always machine work once live. For survey-only, any inbox/ready/prs is
-    # "work remaining" (must not green-noop).
+    # Ready issues need the agent slot when live.
+    ready_actionable = ready if (not live or executor_enabled) else 0
+    agent_blocked = bool(live and ready > 0 and not executor_enabled)
+
     if live:
-        actionable_now = inbox + ready + mergeable_green + repair_actionable
+        actionable_now = inbox + ready_actionable + mergeable_green + repair_actionable
     else:
         actionable_now = inbox + ready + prs
 
@@ -90,14 +92,15 @@ def _health_payload(
     elif progress > 0:
         health = "progress"
     elif not live and actionable_now > 0:
-        # Survey saw work; this pass did not mutate — not a production noop.
         health = "work_remaining"
+    elif agent_blocked and progress == 0 and inbox == 0 and mergeable_green == 0:
+        # NOT WORKING: ready work exists but agent never runs.
+        health = "stall"
     elif actionable_now > 0:
         health = "stall"
     else:
         health = "waiting"
 
-    # Fail metrics when work remains without true idle (or live stall).
     ok_flag = health not in {"stall", "work_remaining"}
     payload = ok(
         mode=cfg_mode,
@@ -110,11 +113,16 @@ def _health_payload(
         idle=idle,
         health=health,
         stuck_path=stuck_path,
+        executor_enabled=executor_enabled,
     )
     if not ok_flag:
         payload["ok"] = False
         if health == "work_remaining":
             payload["error"] = "work_remaining: survey found actionable work (not idle)"
+        elif agent_blocked and ready > 0:
+            payload["error"] = (
+                "stall: ready work remains but executor.enabled is false (agent never runs)"
+            )
         else:
             payload["error"] = "stall: actionable work remains but no progress this pass"
     return payload
@@ -164,6 +172,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     remaining_inbox = 0
     remaining_ready = 0
+    remaining_ready_with_pr = 0
     remaining_prs = 0
     needs_repair = 0
     mergeable_green = 0
@@ -174,6 +183,15 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     stuck_path = stuck_path_for(cfg.state_path)
     stuck = load_stuck(stuck_path)
+
+    # --- 0) PR heads first (filter ready issues already covered by open AI PRs) ---
+    prs_by_repo: dict[str, list[dict[str, Any]]] = {}
+    for repo in cfg.repos:
+        prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
+        actions.append({"step": "list_prs", "repo": repo.name, **prs})
+        pr_list = list(prs.get("prs") or []) if prs.get("ok") else []
+        prs_by_repo[repo.name] = pr_list
+        remaining_prs += len(pr_list)
 
     # --- 1) Inbox: always survey; triage only when live ---
     for repo in cfg.repos:
@@ -214,24 +232,59 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     remaining_inbox = max(0, remaining_inbox - 1)
             triage_budget -= 1
 
-    # --- 2) Ready: always survey; implement only when live ---
+    # --- 2) Ready: survey; skip issues that already have open AI PRs; implement if live ---
     for repo in cfg.repos:
         listed = _run(p_list_issues.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_issues", "repo": repo.name, **listed})
         if not listed.get("ok"):
             continue
         issues = list(listed.get("issues") or [])
-        skip = excluded_numbers(stuck, repo.name)
-        if skip:
-            actions.append({"step": "skip_stuck", "repo": repo.name, "exclude": sorted(skip)})
-        remaining_ready += len(issues)
+        covered = issue_numbers_covered_by_prs(
+            prs_by_repo.get(repo.name) or [],
+            branch_prefix=cfg.branch_prefix,
+        )
+        skip = excluded_numbers(stuck, repo.name) | covered
+        if covered:
+            actions.append(
+                {
+                    "step": "skip_ready_with_open_pr",
+                    "repo": repo.name,
+                    "issues": sorted(covered),
+                }
+            )
+            remaining_ready_with_pr += sum(
+                1 for i in issues if int(i.get("number", -1)) in covered
+            )
+        if excluded_numbers(stuck, repo.name):
+            actions.append(
+                {
+                    "step": "skip_stuck",
+                    "repo": repo.name,
+                    "exclude": sorted(excluded_numbers(stuck, repo.name)),
+                }
+            )
+        implementable = [i for i in issues if int(i.get("number", -1)) not in skip]
+        remaining_ready += len(implementable)
+        # Live implement only when agent slot can run — never fake progress.
         if not live or issue_budget <= 0:
             continue
-        while issues and issue_budget > 0:
-            eligible = [i for i in issues if int(i.get("number", -1)) not in skip]
-            if not eligible:
-                break
-            buf_in = json.dumps({"issues": eligible, "exclude": sorted(skip)})
+        if implementable and not cfg.executor_enabled:
+            actions.append(
+                {
+                    "step": "skip_ready_agent_disabled",
+                    "repo": repo.name,
+                    "count": len(implementable),
+                    "note": "executor.enabled is false; refuse issue_to_pr",
+                }
+            )
+            continue
+        while implementable and issue_budget > 0:
+            buf_in = json.dumps(
+                {
+                    "issues": implementable,
+                    "exclude": sorted(skip),
+                }
+            )
             buf_out = io.StringIO()
             old_stdin = sys.stdin
             try:
@@ -296,19 +349,14 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         progress += 1
                         remaining_ready = max(0, remaining_ready - 1)
             issue_budget -= 1
-            issues = [i for i in issues if int(i.get("number", -1)) != num]
+            implementable = [i for i in implementable if int(i.get("number", -1)) != num]
 
     if live:
         save_stuck(stuck_path, stuck)
 
-    # --- 3) PRs: always survey checks; repair/merge only when live ---
+    # --- 3) PR triage (reuse surveyed PR list): repair/merge when live ---
     for repo in cfg.repos:
-        prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
-        actions.append({"step": "list_prs", "repo": repo.name, **prs})
-        if not prs.get("ok"):
-            continue
-        pr_list = list(prs.get("prs") or [])
-        remaining_prs += len(pr_list)
+        pr_list = prs_by_repo.get(repo.name) or []
         for pr in pr_list:
             pr_num = int(pr["number"])
             head = str(pr.get("head_ref") or "")
@@ -378,6 +426,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     remaining = {
         "inbox": remaining_inbox,
         "ready": remaining_ready,
+        "ready_with_open_pr": remaining_ready_with_pr,
         "open_ai_prs": remaining_prs,
         "mergeable_green": mergeable_green,
         "needs_repair": needs_repair,

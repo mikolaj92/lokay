@@ -112,3 +112,26 @@ def issue_number_from_branch(head_ref: str, *, branch_prefix: str = "ai/fix") ->
     if head.isdigit():
         return int(head)
     return None
+
+
+def issue_numbers_covered_by_prs(
+    prs: list[dict[str, Any]],
+    *,
+    branch_prefix: str = "ai/fix",
+) -> set[int]:
+    """Issue numbers already represented by open ai/fix/* PR head branches.
+
+    Ready issues with an open agent PR belong to PR triage, not a second
+    issue_to_pr mill (avoids duplicate work / agent never needed again).
+    """
+    out: set[int] = set()
+    for pr in prs:
+        if not isinstance(pr, dict):
+            continue
+        n = issue_number_from_branch(
+            str(pr.get("head_ref") or ""),
+            branch_prefix=branch_prefix,
+        )
+        if n is not None:
+            out.add(n)
+    return out

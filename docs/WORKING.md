@@ -7,7 +7,7 @@ configured repos. Order lives in Fala; atoms are Unix small programs.
 
 1. **Survey** every configured repo (read-only network): inbox, `ai:ready`, open `ai/fix/*` PRs.
 2. **Inbox triage** (before ready): undecided open issues → `ai:ready` | `ai:needs-feedback` | OOS close. Path: `issue_triage`.
-3. **Implement ready**: Fala `issue_to_pr` → agent → commit/push → PR. Stuck failures → ledger → `ai:blocked` so other issues still mill.
+3. **Implement ready**: Fala `issue_to_pr` → agent → commit/push → PR. Skip ready issues that already have an open `ai/fix/*` PR (owned by PR triage). Stuck failures → ledger → `ai:blocked`. Live ready work with `executor.enabled: false` is a **stall** (agent never runs).
 4. **PR triage**: checks; red → `pr_repair`; green + `merge.enabled` → merge + close linked issue.
 5. **Health**
    - `idle` — survey found no inbox, ready, or open AI PRs
