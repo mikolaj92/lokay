@@ -173,6 +173,21 @@ def merge_pr(runner: Runner, repo: str, number: int, *, live: bool) -> CommandRe
     )
 
 
+def close_pr(
+    runner: Runner,
+    repo: str,
+    number: int,
+    *,
+    live: bool,
+    comment: str = "",
+) -> CommandResult:
+    """Close an open PR (no delete-branch). Optional comment explains why."""
+    args = ["pr", "close", str(number), "--repo", repo]
+    if comment:
+        args.extend(["--comment", comment])
+    return runner.run_checked(gh_spec(args, timeout_seconds=120), live=live)
+
+
 def view_pr(runner: Runner, repo: str, number: int, *, live: bool) -> dict[str, Any]:
     result = runner.run_checked(
         gh_spec(

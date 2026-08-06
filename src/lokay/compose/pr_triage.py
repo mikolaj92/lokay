@@ -1,14 +1,122 @@
-"""Composer: run the Fala pr_triage graph (checks → merge → close issue)."""
+"""Composer: PR triage — checks → merge → close linked issue.
+
+Order matches Fala path `pr_triage`. Default engine: Unix atomics
+(LOKAY_USE_FALA=1 to force Fala host).
+"""
 
 from __future__ import annotations
 
 import argparse
+from typing import Any
 
+from lokay.compose._atoms import run_atom, use_fala
 from lokay.config import load_config
 from lokay.envelope import emit_exit
-from lokay.graph_run import run_path
+from lokay.proc import close_issue as p_close
+from lokay.proc import pr_checks as p_checks
+from lokay.proc import pr_merge as p_merge
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
+from lokay.stuck import issue_number_from_branch
+
+
+def _atomic_pr_triage(
+    *,
+    config_path: str | None,
+    repo: str,
+    pr_number: int,
+    branch: str,
+    live: bool,
+) -> dict[str, Any]:
+    cfg = load_config(config_path)
+    cfg_flag = ["--config", config_path] if config_path else []
+    live_flag = ["--live"] if live else []
+    steps: list[dict[str, Any]] = []
+
+    chk = run_atom(
+        p_checks.main,
+        [*cfg_flag, "--repo", repo, "--pr", str(pr_number)],
+    )
+    steps.append({"step": "pr_checks", **chk})
+    if not chk.get("ok"):
+        return {"ok": False, "error": "pr_checks failed", "engine": "atoms", "steps": steps}
+
+    status = str(chk.get("status") or "")
+    can_merge = bool(chk.get("merge_ok")) or status == "passed" or (
+        status == "none" and not cfg.require_checks
+    )
+    if not can_merge:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "checks_not_mergeable",
+            "engine": "atoms",
+            "status": status,
+            "steps": steps,
+        }
+    if not cfg.merge_enabled:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "merge_disabled",
+            "engine": "atoms",
+            "steps": steps,
+        }
+
+    merged = run_atom(
+        p_merge.main,
+        [*cfg_flag, *live_flag, "--repo", repo, "--pr", str(pr_number)],
+    )
+    steps.append({"step": "pr_merge", **merged})
+    if not merged.get("ok"):
+        err_txt = str(merged.get("error") or "pr_merge failed")
+        # Conflicts are not a machine stall of the whole mill — isolate this PR.
+        if "merge conflict" in err_txt.lower() or "merge conflicts" in err_txt.lower():
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "merge_conflicts",
+                "engine": "atoms",
+                "error": err_txt,
+                "steps": steps,
+            }
+        return {"ok": False, "error": err_txt, "engine": "atoms", "steps": steps}
+    if live and not merged.get("merged"):
+        return {"ok": False, "error": "pr_merge did not merge", "engine": "atoms", "steps": steps}
+
+    issue_n = issue_number_from_branch(branch, branch_prefix=cfg.branch_prefix)
+    if issue_n is None:
+        return {
+            "ok": True,
+            "engine": "atoms",
+            "merged": bool(merged.get("merged") or not live),
+            "closed_issue": None,
+            "steps": steps,
+            "note": "no issue number in branch name",
+        }
+
+    closed = run_atom(
+        p_close.main,
+        [
+            *cfg_flag,
+            *live_flag,
+            "--repo",
+            repo,
+            "--issue",
+            str(issue_n),
+            "--comment",
+            f"Closed by Lokay after merging PR #{pr_number}.",
+        ],
+    )
+    steps.append({"step": "close_issue", "issue": issue_n, **closed})
+    return {
+        "ok": bool(closed.get("ok")),
+        "engine": "atoms",
+        "merged": bool(merged.get("merged") or not live),
+        "closed_issue": issue_n if closed.get("ok") else None,
+        "steps": steps,
+        "error": closed.get("error"),
+    }
 
 
 def compose_pr_triage(
@@ -29,16 +137,31 @@ def compose_pr_triage(
     if not branch:
         return {"ok": False, "error": "branch required for pr_triage"}
 
-    result = run_path(
-        path_id="pr_triage",
-        repo=repo,
-        pr=pr_number,
-        branch=branch,
-        config_path=config_path,
-        live=live,
-    )
-    result["kind"] = "pr_triage"
-    result["planned"] = not live
+    if use_fala():
+        from lokay.graph_run import run_path
+
+        result = run_path(
+            path_id="pr_triage",
+            repo=repo,
+            pr=pr_number,
+            branch=branch,
+            config_path=config_path,
+            live=live,
+        )
+        result["kind"] = "pr_triage"
+        result["engine"] = "fala"
+        result["planned"] = not live
+    else:
+        result = _atomic_pr_triage(
+            config_path=config_path,
+            repo=repo,
+            pr_number=pr_number,
+            branch=branch,
+            live=live,
+        )
+        result["kind"] = "pr_triage"
+        result["planned"] = not live
+
     try:
         cfg = load_config(config_path)
         append_event(cfg.state_path, result)
