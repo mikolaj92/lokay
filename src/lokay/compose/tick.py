@@ -1,4 +1,7 @@
-"""Composer: full multi-repo pass — inbox triage → ready → PR triage.
+"""Composer: full multi-repo pass — inbox triage → PR close-out → ready implement.
+
+Serial work policy: finish open AI PRs (merge/repair/close) before opening new ones.
+At most one new issue_to_pr per tick, and never in a repo that still has an open AI PR.
 
 Always **surveys** all configured repos (read-only network) so a tick cannot
 report green/planned while work remains. Mutations require --live + mode:live.
@@ -149,11 +152,11 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     blocked_this_pass = 0
 
     pipeline = [
-        "survey: list-inbox + list-issues + list-prs (all repos)",
-        "lokay-list-inbox + lokay-triage-issue (or path issue_triage)",
-        "lokay-list-issues + exclude stuck + select + issue_to_pr",
+        "survey: list-prs + list-inbox + list-issues (all repos)",
+        "triage inbox (may mark several ai:ready; does not open PRs)",
+        "PR-first: conflict close / repair / merge open AI PRs (land code before new work)",
+        "implement at most one ready issue, only in repos with zero open AI PRs",
         "on failure: stuck ledger → ai:blocked",
-        "list-prs + pr-checks; CONFLICTING → close+re-ready; failed → pr_repair; mergeable → pr_triage",
     ]
     planned.append(
         {
@@ -256,12 +259,16 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 remaining_inbox = max(0, remaining_inbox - 1)
             triage_budget -= 1
 
-    # --- 2) Ready: survey; skip issues that already have open AI PRs; implement if live ---
+    # --- 2) Ready survey only: unready issues covered by open AI PRs; do NOT implement yet ---
+    # Serial policy: land/repair open PRs before starting new issue_to_pr (avoids PR pile-up
+    # and cross-issue conflicts on the same repo).
+    ready_by_repo: dict[str, list[dict[str, Any]]] = {}
     for repo in cfg.active_repos():
         listed = _run(p_list_issues.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_issues", "repo": repo.name, **listed})
         if not listed.get("ok"):
             survey_errors += 1
+            ready_by_repo[repo.name] = []
             continue
         issues = list(listed.get("issues") or [])
         covered = issue_numbers_covered_by_prs(
@@ -319,11 +326,220 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 }
             )
         implementable = [i for i in issues if int(i.get("number", -1)) not in skip]
+        ready_by_repo[repo.name] = implementable
         remaining_ready += len(implementable)
-        # Live implement only when agent slot can run — never fake progress.
+
+    # --- 3) PR-first: repair/merge/close open AI PRs before any new implement ---
+    pending_checks = 0
+    no_checks_blocked = 0
+    merge_conflicts = 0
+    for repo in cfg.active_repos():
+        pr_list = list(prs_by_repo.get(repo.name) or [])
+        still_open: list[dict[str, Any]] = []
+        for pr in pr_list:
+            pr_num = int(pr["number"])
+            head = str(pr.get("head_ref") or "")
+            mergeable = str(pr.get("mergeable") or "").upper()
+            if mergeable in {"CONFLICTING", "DIRTY"}:
+                merge_conflicts += 1
+                actions.append(
+                    {
+                        "step": "pr_conflict",
+                        "pr": pr_num,
+                        "mergeable": mergeable,
+                        "branch": head,
+                    }
+                )
+                # Dead PR: close + re-queue linked issue so mill can re-implement
+                # from current main (stuck one conflict must not freeze ready work).
+                if not live:
+                    still_open.append(pr)
+                    continue
+                issue_n = issue_number_from_branch(
+                    head, branch_prefix=cfg.branch_prefix
+                )
+                comment = (
+                    f"Lokay closed PR #{pr_num}: mergeable={mergeable}. "
+                    "Will re-implement from current main."
+                )
+                closed = _run(
+                    p_pr_close.main,
+                    [
+                        *cfg_flag,
+                        *live_flag,
+                        "--repo",
+                        repo.name,
+                        "--pr",
+                        str(pr_num),
+                        "--comment",
+                        comment,
+                    ],
+                )
+                actions.append(
+                    {
+                        "step": "pr_close_conflict",
+                        "pr": pr_num,
+                        "branch": head,
+                        "issue": issue_n,
+                        **closed,
+                    }
+                )
+                if not (closed.get("ok") and (closed.get("closed") or closed.get("planned"))):
+                    still_open.append(pr)
+                    continue
+                progress += 1
+                remaining_prs = max(0, remaining_prs - 1)
+                merge_conflicts = max(0, merge_conflicts - 1)
+                if issue_n is not None:
+                    # Drop stuck ledger so a fresh issue_to_pr can run.
+                    clear_issue(stuck, repo.name, issue_n)
+                    save_stuck(stuck_path, stuck)
+                    ready_again = _run(
+                        p_label.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            repo.name,
+                            "--issue",
+                            str(issue_n),
+                            "--label",
+                            cfg.ready_label,
+                        ],
+                    )
+                    actions.append(
+                        {
+                            "step": "re_ready_after_conflict",
+                            "repo": repo.name,
+                            "issue": issue_n,
+                            "pr": pr_num,
+                            **ready_again,
+                        }
+                    )
+                    if ready_again.get("ok") and ready_again.get("applied"):
+                        remaining_ready += 1
+                        # make implementable again this pass if we free the PR slot
+                        ready_by_repo.setdefault(repo.name, []).append(
+                            {
+                                "number": issue_n,
+                                "repo": repo.name,
+                                "title": str(pr.get("title") or f"issue {issue_n}"),
+                            }
+                        )
+                # closed → not still open
+                continue
+            chk = _run(
+                p_checks.main,
+                [*cfg_flag, "--repo", repo.name, "--pr", str(pr_num)],
+            )
+            actions.append({"step": "pr_checks", "pr": pr_num, **chk})
+            if not chk.get("ok"):
+                still_open.append(pr)
+                continue
+            status = str(chk.get("status") or ("passed" if chk.get("green") else "failed"))
+            # Failed CI → repair path (not "no checks").
+            if status == "failed":
+                needs_repair += 1
+                if live and repair_budget > 0 and cfg.executor_enabled and head:
+                    repair = compose_pr_repair(
+                        config_path=config_path,
+                        repo=repo.name,
+                        pr_number=pr_num,
+                        branch=head,
+                        live=True,
+                    )
+                    actions.append(
+                        {"step": "pr_repair", "pr": pr_num, "branch": head, **repair}
+                    )
+                    repair_budget -= 1
+                    if repair.get("ok"):
+                        progress += 1
+                        needs_repair = max(0, needs_repair - 1)
+                still_open.append(pr)
+                continue
+            if status == "pending":
+                pending_checks += 1
+                still_open.append(pr)
+                continue
+            if status == "none":
+                # No CI on branch: merge only when require_checks is false.
+                if cfg.require_checks:
+                    no_checks_blocked += 1
+                    still_open.append(pr)
+                    continue
+                # fall through as merge_ok
+            elif status not in {"passed", "offline"} and not chk.get("merge_ok"):
+                still_open.append(pr)
+                continue
+            # merge_ok from atom, or passed / allowed none
+            can_merge = bool(chk.get("merge_ok")) or status == "passed" or (
+                status == "none" and not cfg.require_checks
+            )
+            if not can_merge:
+                still_open.append(pr)
+                continue
+            if not cfg.merge_enabled:
+                # Count as mergeable under policy once merge is turned on.
+                mergeable_green += 1
+                still_open.append(pr)
+                continue
+            mergeable_green += 1
+            if not live or not head:
+                still_open.append(pr)
+                continue
+            # pr_triage: atom pipeline (or Fala if LOKAY_USE_FALA=1).
+            tri = compose_pr_triage(
+                config_path=config_path,
+                repo=repo.name,
+                pr_number=pr_num,
+                branch=head,
+                live=True,
+            )
+            actions.append(
+                {"step": "pr_triage", "pr": pr_num, "branch": head, **tri}
+            )
+            if not tri.get("ok"):
+                still_open.append(pr)
+                continue
+            if tri.get("skipped"):
+                # PR still open — keep remaining_prs; isolate conflicts.
+                if tri.get("reason") == "merge_conflicts":
+                    merge_conflicts += 1
+                still_open.append(pr)
+                continue
+            # Successful merge (+ optional close).
+            progress += 1
+            remaining_prs = max(0, remaining_prs - 1)
+            mergeable_green = max(0, mergeable_green - 1)
+            issue_n = issue_number_from_branch(head, branch_prefix=cfg.branch_prefix)
+            if issue_n is not None:
+                clear_issue(stuck, repo.name, issue_n)
+                save_stuck(stuck_path, stuck)
+            # merged → do not keep in still_open
+        prs_by_repo[repo.name] = still_open
+
+    if live:
+        save_stuck(stuck_path, stuck)
+
+    # --- 4) Implement at most one ready issue, only in repos with zero open AI PRs ---
+    for repo in cfg.active_repos():
         if not live or issue_budget <= 0:
+            break
+        open_prs = prs_by_repo.get(repo.name) or []
+        if open_prs:
+            actions.append(
+                {
+                    "step": "skip_ready_open_ai_pr",
+                    "repo": repo.name,
+                    "open_ai_prs": len(open_prs),
+                    "note": "serial policy: finish open AI PR before new issue_to_pr",
+                }
+            )
             continue
-        if implementable and not cfg.executor_enabled:
+        implementable = list(ready_by_repo.get(repo.name) or [])
+        if not implementable:
+            continue
+        if not cfg.executor_enabled:
             actions.append(
                 {
                     "step": "skip_ready_agent_disabled",
@@ -333,6 +549,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 }
             )
             continue
+        skip = excluded_numbers(stuck, repo.name)
         while implementable and issue_budget > 0:
             buf_in = json.dumps(
                 {
@@ -366,7 +583,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 progress += 1
                 remaining_ready = max(0, remaining_ready - 1)
                 clear_issue(stuck, selected["repo"], num)
-                # Same-pass PR triage must see the new open AI PR (no false idle).
                 pr_n = result.get("pr")
                 br = str(result.get("branch") or "")
                 if pr_n is not None and br:
@@ -382,6 +598,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                             ),
                         }
                     )
+                # Serial: one new PR per tick globally (issue_budget usually 1).
             else:
                 row = record_failure(
                     stuck,
@@ -421,174 +638,12 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         remaining_ready = max(0, remaining_ready - 1)
             issue_budget -= 1
             implementable = [i for i in implementable if int(i.get("number", -1)) != num]
+            # After opening a PR for this repo, stop implementing more here.
+            if prs_by_repo.get(repo.name):
+                break
 
     if live:
         save_stuck(stuck_path, stuck)
-
-    # --- 3) PR triage (reuse surveyed PR list): repair/merge when live ---
-    pending_checks = 0
-    no_checks_blocked = 0
-    merge_conflicts = 0
-    for repo in cfg.active_repos():
-        pr_list = prs_by_repo.get(repo.name) or []
-        for pr in pr_list:
-            pr_num = int(pr["number"])
-            head = str(pr.get("head_ref") or "")
-            mergeable = str(pr.get("mergeable") or "").upper()
-            if mergeable in {"CONFLICTING", "DIRTY"}:
-                merge_conflicts += 1
-                actions.append(
-                    {
-                        "step": "pr_conflict",
-                        "pr": pr_num,
-                        "mergeable": mergeable,
-                        "branch": head,
-                    }
-                )
-                # Dead PR: close + re-queue linked issue so mill can re-implement
-                # from current main (stuck one conflict must not freeze ready work).
-                if not live:
-                    continue
-                issue_n = issue_number_from_branch(
-                    head, branch_prefix=cfg.branch_prefix
-                )
-                comment = (
-                    f"Lokay closed PR #{pr_num}: mergeable={mergeable}. "
-                    "Will re-implement from current main."
-                )
-                closed = _run(
-                    p_pr_close.main,
-                    [
-                        *cfg_flag,
-                        *live_flag,
-                        "--repo",
-                        repo.name,
-                        "--pr",
-                        str(pr_num),
-                        "--comment",
-                        comment,
-                    ],
-                )
-                actions.append(
-                    {
-                        "step": "pr_close_conflict",
-                        "pr": pr_num,
-                        "branch": head,
-                        "issue": issue_n,
-                        **closed,
-                    }
-                )
-                if not (closed.get("ok") and (closed.get("closed") or closed.get("planned"))):
-                    continue
-                progress += 1
-                remaining_prs = max(0, remaining_prs - 1)
-                merge_conflicts = max(0, merge_conflicts - 1)
-                if issue_n is not None:
-                    # Drop stuck ledger so a fresh issue_to_pr can run.
-                    clear_issue(stuck, repo.name, issue_n)
-                    save_stuck(stuck_path, stuck)
-                    ready_again = _run(
-                        p_label.main,
-                        [
-                            *cfg_flag,
-                            *live_flag,
-                            "--repo",
-                            repo.name,
-                            "--issue",
-                            str(issue_n),
-                            "--label",
-                            cfg.ready_label,
-                        ],
-                    )
-                    actions.append(
-                        {
-                            "step": "re_ready_after_conflict",
-                            "repo": repo.name,
-                            "issue": issue_n,
-                            "pr": pr_num,
-                            **ready_again,
-                        }
-                    )
-                    if ready_again.get("ok") and ready_again.get("applied"):
-                        remaining_ready += 1
-                continue
-            chk = _run(
-                p_checks.main,
-                [*cfg_flag, "--repo", repo.name, "--pr", str(pr_num)],
-            )
-            actions.append({"step": "pr_checks", "pr": pr_num, **chk})
-            if not chk.get("ok"):
-                continue
-            status = str(chk.get("status") or ("passed" if chk.get("green") else "failed"))
-            # Failed CI → repair path (not "no checks").
-            if status == "failed":
-                needs_repair += 1
-                if live and repair_budget > 0 and cfg.executor_enabled and head:
-                    repair = compose_pr_repair(
-                        config_path=config_path,
-                        repo=repo.name,
-                        pr_number=pr_num,
-                        branch=head,
-                        live=True,
-                    )
-                    actions.append(
-                        {"step": "pr_repair", "pr": pr_num, "branch": head, **repair}
-                    )
-                    repair_budget -= 1
-                    if repair.get("ok"):
-                        progress += 1
-                        needs_repair = max(0, needs_repair - 1)
-                continue
-            if status == "pending":
-                pending_checks += 1
-                continue
-            if status == "none":
-                # No CI on branch: merge only when require_checks is false.
-                if cfg.require_checks:
-                    no_checks_blocked += 1
-                    continue
-                # fall through as merge_ok
-            elif status not in {"passed", "offline"} and not chk.get("merge_ok"):
-                continue
-            # merge_ok from atom, or passed / allowed none
-            can_merge = bool(chk.get("merge_ok")) or status == "passed" or (
-                status == "none" and not cfg.require_checks
-            )
-            if not can_merge:
-                continue
-            if not cfg.merge_enabled:
-                # Count as mergeable under policy once merge is turned on.
-                mergeable_green += 1
-                continue
-            mergeable_green += 1
-            if not live or not head:
-                continue
-            # pr_triage: atom pipeline (or Fala if LOKAY_USE_FALA=1).
-            tri = compose_pr_triage(
-                config_path=config_path,
-                repo=repo.name,
-                pr_number=pr_num,
-                branch=head,
-                live=True,
-            )
-            actions.append(
-                {"step": "pr_triage", "pr": pr_num, "branch": head, **tri}
-            )
-            if not tri.get("ok"):
-                continue
-            if tri.get("skipped"):
-                # PR still open — keep remaining_prs; isolate conflicts.
-                if tri.get("reason") == "merge_conflicts":
-                    merge_conflicts += 1
-                continue
-            # Successful merge (+ optional close).
-            progress += 1
-            remaining_prs = max(0, remaining_prs - 1)
-            mergeable_green = max(0, mergeable_green - 1)
-            issue_n = issue_number_from_branch(head, branch_prefix=cfg.branch_prefix)
-            if issue_n is not None:
-                clear_issue(stuck, repo.name, issue_n)
-                save_stuck(stuck_path, stuck)
 
     remaining = {
         "inbox": remaining_inbox,

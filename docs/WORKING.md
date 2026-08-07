@@ -1,15 +1,15 @@
 # WORKING machine (Definition of Done)
 
 Lokay is **working** only if it continuously mills **all** work across
-configured repos (`repos.mikolaj92.yaml`). Order: triage → implement → PR triage.
+configured repos (`repos.mikolaj92.yaml`). Order: triage → **PR close-out** → implement (serial).
 Agent must be **real** ([`NO_STUBS.md`](NO_STUBS.md)).
 
 ## Full pass (one tick)
 
 1. **Survey** every managed repo: inbox, `ai:ready`, open `ai/fix/*` PRs.
 2. **Inbox triage** (before ready): undecided issues → `ai:ready` | `ai:needs-feedback` | OOS. Path: `issue_triage`.
-3. **Implement ready**: `issue_to_pr` → **Grok** → commit/push → PR. Worktree reset to `origin/main` when needed. Skip ready issues that already have an open AI PR. Stuck → ledger → `ai:blocked`. Live ready with `executor.enabled: false` is a **stall**.
-4. **PR triage**: checks; conflicts → close + re-ready; failed → `pr_repair`; mergeable + policy → merge → close issue.
+3. **PR-first close-out**: for open AI PRs — conflicts → close + re-ready; failed → `pr_repair`; mergeable + policy → merge → close issue. Land code before opening new fronts.
+4. **Implement ready (serial)**: at most one `issue_to_pr` per tick, **only** in a repo with **zero** open AI PRs. Grok → commit/push → PR. Worktree from `origin/main`. Stuck → ledger → `ai:blocked`. Live ready with `executor.enabled: false` is a **stall**.
 5. **Health**: `idle` only when survey finds no actionable work. Survey work without mutations → **not** a green success.
 
 ## Continuous mill
