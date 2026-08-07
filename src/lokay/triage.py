@@ -12,14 +12,32 @@ from typing import Any, Iterable
 
 from lokay.models import Issue
 
-# Substrings (lowercase) that mark out-of-scope inbox items.
-OOS_MARKERS = (
+# Title markers for whole-issue OOS (substring match on title only).
+OOS_TITLE_MARKERS = (
     "out of scope",
     "out-of-scope",
     "[oos]",
     "wontfix",
     "won't fix",
     "will not fix",
+)
+
+# Explicit whole-issue status in body (not section headings).
+_OOS_STATUS_LINE = re.compile(
+    r"(?im)^\s*(?:status|decision)\s*:\s*out[\s-]*of[\s-]*scope\b"
+)
+_OOS_STANDALONE = re.compile(
+    r"(?im)^\s*(?:\[oos\]|out[\s-]*of[\s-]*scope|wontfix|won't fix|will not fix)\s*$"
+)
+_OOS_INLINE_TAG = re.compile(r"(?i)\[oos\]")
+_WONTFIX = re.compile(r"(?i)\b(?:wontfix|won't fix|will not fix)\b")
+
+# Strip non-goal sections so "Out of scope" headings never close real bugs.
+_NONGOAL_SECTION = re.compile(
+    r"(?ims)^#{1,6}\s*(?:"
+    r"out\s*of\s*scope|out-of-scope|non-?goals|not\s+in\s+(?:this\s+)?scope|"
+    r"explicitly\s+not\s+in\s+this\s+issue"
+    r")\s*\n.*?(?=^#{1,6}\s|\Z)"
 )
 
 # Title/body heuristics for "enough spec".
@@ -83,6 +101,35 @@ def _checkbox_count(body: str) -> int:
     return len(re.findall(r"^\s*[-*]\s*\[[ xX]\]", body, flags=re.MULTILINE))
 
 
+def _strip_nongoal_sections(body: str) -> str:
+    """Remove markdown sections that list non-goals (not issue status)."""
+    return _NONGOAL_SECTION.sub("", body or "")
+
+
+def _is_out_of_scope(title: str, body: str) -> bool:
+    """Whole-issue OOS only — never ## Out of scope non-goal sections.
+
+    True when:
+    - title contains an OOS marker, or
+    - body (after stripping non-goal sections) has explicit status/decision
+      line, standalone OOS line, [oos] tag, or wontfix wording.
+    """
+    title_l = (title or "").lower()
+    if any(m in title_l for m in OOS_TITLE_MARKERS):
+        return True
+
+    rest = _strip_nongoal_sections(body or "")
+    if _OOS_STATUS_LINE.search(rest):
+        return True
+    if _OOS_STANDALONE.search(rest):
+        return True
+    if _OOS_INLINE_TAG.search(rest):
+        return True
+    if _WONTFIX.search(rest):
+        return True
+    return False
+
+
 def decide_issue(
     issue: Issue,
     *,
@@ -112,14 +159,15 @@ def decide_issue(
     body = (issue.body or "").strip()
     blob = f"{title}\n{body}".lower()
 
-    if any(m in blob for m in OOS_MARKERS):
+    if _is_out_of_scope(title, body):
         return TriageDecision(
             decision="out_of_scope",
             reason="oos_marker",
             close=True,
             comment=(
                 "Closed as out of scope by Lokay inbox triage "
-                f"(marker in title/body). Reopen with a clear in-scope ask if needed."
+                "(explicit OOS marker in title or status — not a Non-goals section). "
+                "Reopen with a clear in-scope ask if needed."
             ),
         )
 

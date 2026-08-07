@@ -3,7 +3,7 @@
 # Scope: repos.mikolaj92.yaml (all managed source repos).
 set -euo pipefail
 
-export PATH="${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
+export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 
 ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
 CFG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"

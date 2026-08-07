@@ -58,10 +58,59 @@ def test_decide_body_short():
     assert d.reason == "body_too_short"
 
 
-def test_decide_oos():
-    d = decide_issue(_issue(title="Please ignore [oos]", body="out of scope for this project entirely."))
+def test_decide_oos_title_marker():
+    d = decide_issue(_issue(title="Please ignore [oos]", body="Please add feature X with acceptance: does Y when Z."))
     assert d.decision == "out_of_scope"
     assert d.close is True
+
+
+def test_decide_oos_status_line():
+    d = decide_issue(
+        _issue(
+            title="Legacy widget removal",
+            body="Status: out of scope\n\nWe will not ship this path.",
+        )
+    )
+    assert d.decision == "out_of_scope"
+    assert d.reason == "oos_marker"
+
+
+def test_decide_ready_despite_out_of_scope_section():
+    """## Out of scope non-goals must NOT close real implementable bugs."""
+    body = """## Goal
+Make /ready fail when CT242 is down.
+
+## Live repro
+curl -sS -m 5 http://127.0.0.1:8000/ready
+
+## Out of scope
+- Fixing CT242 host availability itself (sibling ops issue)
+- Changing search endpoint behavior (sibling hang-fix issue)
+
+## Done means
+- [ ] With CT242 down: GET /ready returns non-ready
+"""
+    d = decide_issue(_issue(title="Mnemozyna: /ready must probe CT242", body=body))
+    assert d.decision == "ready", d
+    assert d.close is False
+    assert "ai:ready" in d.add_labels
+
+
+def test_decide_ready_non_goals_heading():
+    body = """## Goal
+Fail closed knowledge endpoints on timeout.
+
+## Non-goals
+- Restoring CT242 host
+- Vector embedding redesign
+
+## Done means
+- [ ] Endpoints return 503 within budget
+"""
+    d = decide_issue(
+        _issue(title="Mnemozyna: knowledge endpoints fail closed", body=body)
+    )
+    assert d.decision == "ready", d
 
 
 def test_decide_too_large():
