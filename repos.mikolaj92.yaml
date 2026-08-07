@@ -78,9 +78,6 @@ repos:
   - name: mikolaj92/punk-records
     clone_path: /Users/mikomac/Developer/OSS/punk-records
     priority: 35
-  - name: mikolaj92/lokay
-    clone_path: /Users/mikomac/Developer/OSS/hermes-plugin-oss-repo-agent
-    priority: 30
   - name: mikolaj92/influenzer
     clone_path: /Users/mikomac/Developer/OSS/influenzer
     priority: 25
