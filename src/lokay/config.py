@@ -41,7 +41,7 @@ class Config:
     timeout_seconds: int = 1800
     always_approve: bool = True
     merge_enabled: bool = False
-    require_checks: bool = True
+    require_checks: bool = False
     require_test_evidence: bool = True
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
@@ -74,8 +74,8 @@ class Config:
             # Live implement skips or fails per-repo when worktree is needed.
         if self.live and self.executor_enabled and self.max_turns < 1:
             errors.append("executor.max_turns must be >= 1")
-        # require_checks=false is allowed: repos without CI can still merge when
-        # merge.enabled (explicit opt-in). require_checks=true remains the default.
+        # require_checks=false by default: local trust only. Do not gate merges on
+        # GitHub Actions / remote CI providers (cost + free-tier limits).
         return errors
 
 
@@ -221,7 +221,7 @@ def load_config(path: str | Path | None = None) -> Config:
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
         always_approve=bool(ex.get("always_approve", True)),
         merge_enabled=bool(mg.get("enabled", False)),
-        require_checks=bool(mg.get("require_checks", True)),
+        require_checks=bool(mg.get("require_checks", False)),
         require_test_evidence=bool(mg.get("require_test_evidence", True)),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
