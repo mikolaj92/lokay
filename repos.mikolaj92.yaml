@@ -6,7 +6,7 @@ owner: mikolaj92
 default_clone_root: /Users/mikomac/Developer/OSS
 
 repos:
-  - name: mikolaj92/lokay-lite
+  - name: mikolaj92/lokay
     clone_path: /Users/mikomac/Developer/OSS/lokay
     priority: 100
   - name: mikolaj92/Temida

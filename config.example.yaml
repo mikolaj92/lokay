@@ -1,4 +1,4 @@
-# Lokay lite — multi-repo mill for mikolaj92 source libraries.
+# Lokay — multi-repo mill for mikolaj92 source libraries.
 # Stubs/fake agents are FORBIDDEN — docs/NO_STUBS.md
 
 mode: live  # dry-run | live  (dry-run = no mutations; still real agent if invoked)

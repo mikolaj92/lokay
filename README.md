@@ -1,4 +1,4 @@
-# Lokay lite
+# Lokay
 
 **Issue triage → real coding agent (Grok) → PR → PR triage → main**, as Unix atoms + optional Fala graphs.
 

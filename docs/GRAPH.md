@@ -66,10 +66,10 @@ uv run lokay path --describe
 
 # execute (Fala host + organ → atoms)
 uv run lokay-run-path --config config.yaml --path issue_to_pr \
-  --repo mikolaj92/lokay-lite --issue 1
+  --repo mikolaj92/lokay --issue 1
 # live mutations:
 uv run lokay-run-path --config config.yaml --path issue_to_pr \
-  --repo mikolaj92/lokay-lite --issue 1 --live
+  --repo mikolaj92/lokay --issue 1 --live
 ```
 
 Journal: `~/.lokay/fala/state.sqlite`  

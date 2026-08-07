@@ -56,7 +56,7 @@ Summarize what you fixed and how you verified it.
 def pr_body(issue: Issue, *, agent_summary: str) -> str:
     return f"""## Summary
 
-Automated Lokay lite fix for {issue.repo}#{issue.number}.
+Automated Lokay fix for {issue.repo}#{issue.number}.
 
 Closes #{issue.number}
 

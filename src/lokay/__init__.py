@@ -1,3 +1,3 @@
-"""Lokay lite: guarded issue → Grok → PR. No Hermes/Kanban/Fala."""
+"""Lokay: guarded issue → Grok → PR mill. Unix atoms + Fala order; no Hermes/Kanban."""
 
 __version__ = "0.3.0"

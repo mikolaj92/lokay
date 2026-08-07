@@ -24,7 +24,7 @@ def test_catalog_loads_thirty_source_repos():
     assert "mikolaj92/Temida" in names
     assert "mikolaj92/Fala" in names
     assert "mikolaj92/msds-portal" in names
-    assert "mikolaj92/lokay-lite" in names
+    assert "mikolaj92/lokay" in names
     assert "mikolaj92/dotfiles" in names  # in scope, even if clone missing
     # all catalog entries enabled by default (scope != clone presence)
     assert all(r.enabled for r in cfg.repos)
