@@ -42,6 +42,7 @@ class Config:
     always_approve: bool = True
     merge_enabled: bool = False
     require_checks: bool = False
+    require_llm_review: bool = True  # structured Grok review before auto-merge
     require_test_evidence: bool = True
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
@@ -151,6 +152,7 @@ def apply_env_overrides(cfg: Config) -> Config:
       LOKAY_AGENT=grok
       LOKAY_MERGE_ENABLED=1|0
       LOKAY_REQUIRE_CHECKS=1|0   (0 for no-CI canary repos)
+      LOKAY_REQUIRE_LLM_REVIEW=1|0  (structured Grok review before merge)
     """
     mode = (os.environ.get("LOKAY_MODE") or "").strip().lower()
     if mode in {"live", "dry-run"}:
@@ -173,6 +175,9 @@ def apply_env_overrides(cfg: Config) -> Config:
     v = _env_truthy("LOKAY_REQUIRE_CHECKS")
     if v is not None:
         cfg.require_checks = v
+    v = _env_truthy("LOKAY_REQUIRE_LLM_REVIEW")
+    if v is not None:
+        cfg.require_llm_review = v
     return cfg
 
 
@@ -222,6 +227,7 @@ def load_config(path: str | Path | None = None) -> Config:
         always_approve=bool(ex.get("always_approve", True)),
         merge_enabled=bool(mg.get("enabled", False)),
         require_checks=bool(mg.get("require_checks", False)),
+        require_llm_review=bool(mg.get("require_llm_review", True)),
         require_test_evidence=bool(mg.get("require_test_evidence", True)),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),

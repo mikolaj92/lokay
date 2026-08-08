@@ -37,6 +37,7 @@ lokay-pr-create = "lokay.proc.pr_create:main"
 lokay-pr-label = "lokay.proc.pr_label:main"
 lokay-list-prs = "lokay.proc.list_prs:main"
 lokay-pr-checks = "lokay.proc.pr_checks:main"
+lokay-pr-review = "lokay.proc.pr_review:main"
 lokay-pr-merge = "lokay.proc.pr_merge:main"
 lokay-pr-close = "lokay.proc.pr_close:main"
 # Graph (Fala) + composers

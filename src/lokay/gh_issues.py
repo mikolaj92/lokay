@@ -13,6 +13,8 @@ _LABEL_META: dict[str, tuple[str, str]] = {
     "ai:blocked": ("D73A4A", "AI agent work is blocked"),
     "ai:needs-feedback": ("B60205", "Needs human feedback before AI work"),
     "ai:generated": ("C5DEF5", "Generated or assisted by AI agent"),
+    "ai:needs-review": ("D93F0B", "LLM PR review requests human judgment"),
+    "ai:request-changes": ("FBCA04", "LLM PR review requested changes"),
     "ai:pr-opened": ("5319E7", "AI-generated PR opened"),
     "ai:in-progress": ("1D76DB", "AI agent work in progress"),
     "frozen": ("BFD4F2", "Intentionally paused for now"),
