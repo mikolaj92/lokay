@@ -46,12 +46,13 @@ ROOT = _project_root()
 
 
 def _materialize_package(src: Path, dest: Path, *, project: Path) -> Path:
-    """Write package with absolute project path; organs always run via `uv run`."""
+    """Write package with absolute project path; organs always run via `uv run`.
+
+    Canonical substitution only: PLACEHOLDER_PROJECT → checkout path.
+    Package adapters hardcode `uv` (never bare python3 / PLACEHOLDER_PYTHON).
+    """
     text = src.read_text(encoding="utf-8")
-    # Prefer project checkout so `uv run --project` resolves the lokay env.
     text = text.replace("PLACEHOLDER_PROJECT", str(project.resolve()))
-    # Legacy placeholder (if any old package still uses it)
-    text = text.replace("PLACEHOLDER_PYTHON", "uv")
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
     return dest
@@ -184,10 +185,7 @@ def run_path(
 
 def describe_package(package_path: str | Path | None = None) -> dict[str, Any]:
     """Parse graph structure without running (order inspection)."""
-    try:
-        import tomllib
-    except ImportError:  # pragma: no cover
-        import tomli as tomllib  # type: ignore
+    import tomllib
 
     pkg = Path(package_path) if package_path else find_default_package()
     data = tomllib.loads(pkg.read_text(encoding="utf-8"))
