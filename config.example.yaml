@@ -36,6 +36,7 @@ executor:
 merge:
   enabled: true
   require_checks: false
+  require_llm_review: true  # Grok structured review before auto-merge
   require_test_evidence: true
 
 worktrees:

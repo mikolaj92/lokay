@@ -185,11 +185,15 @@ def test_pr_triage_path_in_package():
     assert "pr_triage" in ids
     path = next(p for p in desc["paths"] if p["id"] == "pr_triage")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["pr_checks", "pr_merge", "close_issue"]
+    assert node_ids == ["pr_checks", "pr_review", "pr_merge", "close_issue"]
+    review = next(n for n in path["nodes"] if n["id"] == "pr_review")
+    assert "pr_checks" in review["conduction"]
     merge = next(n for n in path["nodes"] if n["id"] == "pr_merge")
     assert "pr_checks" in merge["conduction"]
+    assert "pr_review" in merge["conduction"]
     close = next(n for n in path["nodes"] if n["id"] == "close_issue")
     assert "pr_merge" in close["conduction"]
+    assert "pr_review" in close["conduction"]
 
 
 def test_package_files_exist():

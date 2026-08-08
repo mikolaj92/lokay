@@ -45,9 +45,13 @@ pr_checks
 
 ```text
 pr_checks
-  └─→ pr_merge     ← skipped when checks not mergeable / merge disabled
-        └─→ close_issue   ← issue# from ai/fix/N-* branch when known
+  └─→ pr_review    ← LLM structured review (non-deterministic; fail closed)
+        └─→ pr_merge     ← skipped when checks not mergeable / review not approve / merge disabled
+              └─→ close_issue   ← issue# from ai/fix/N-* branch when known
 ```
+
+`pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
+Config: `merge.require_llm_review` (default true). Env: `LOKAY_REQUIRE_LLM_REVIEW`.
 
 Tick also handles **merge conflicts** outside this path: `mergeable=CONFLICTING|DIRTY`
 → `lokay-pr-close` + re-label linked issue `ai:ready` so the next pass re-runs

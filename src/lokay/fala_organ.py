@@ -69,6 +69,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         pr_create,
         pr_label,
         pr_merge,
+        pr_review,
         push_branch,
         run_agent,
         triage_issue,
@@ -115,6 +116,24 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             [*cfg, "--repo", repo, "--pr", str(pr_number)],
         )
 
+    if atom == "pr_review":
+        assert repo and pr_number is not None
+        checks = up.get("pr_checks") or {}
+        argv = [
+            *cfg,
+            *live,
+            "--repo",
+            repo,
+            "--pr",
+            str(pr_number),
+        ]
+        if branch:
+            argv.extend(["--branch", branch])
+        checks_text = str(checks.get("text") or inputs.get("checks_text") or "")
+        if checks_text:
+            argv.extend(["--checks-text", checks_text])
+        return _run_atom_main(pr_review.main, argv)
+
     if atom == "pr_merge":
         assert repo and pr_number is not None
         checks = up.get("pr_checks") or {}
@@ -132,6 +151,30 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
                 "repo": repo,
                 "pr": pr_number,
             }
+        review = up.get("pr_review") or {}
+        if review:
+            if review.get("skipped") and review.get("reason") in {
+                "executor_disabled",
+                "invalid_review_json",
+                "llm_review_requires_executor",
+            }:
+                return {
+                    "ok": True,
+                    "skipped": True,
+                    "reason": str(review.get("reason") or "pr_review_skipped"),
+                    "repo": repo,
+                    "pr": pr_number,
+                    "review": review.get("decision"),
+                }
+            if not review.get("merge_ok"):
+                return {
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "llm_review_not_approved",
+                    "repo": repo,
+                    "pr": pr_number,
+                    "review": review.get("decision"),
+                }
         return _run_atom_main(
             pr_merge.main,
             [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],

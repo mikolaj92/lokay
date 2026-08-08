@@ -14,6 +14,7 @@ from lokay.config import load_config
 from lokay.envelope import emit_exit
 from lokay.proc import close_issue as p_close
 from lokay.proc import pr_checks as p_checks
+from lokay.proc import pr_review as p_review
 from lokay.proc import pr_merge as p_merge
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
@@ -54,6 +55,62 @@ def _atomic_pr_triage(
             "status": status,
             "steps": steps,
         }
+
+    # Optional LLM structured review before merge (fail closed).
+    if cfg.require_llm_review and cfg.executor_enabled:
+        rev = run_atom(
+            p_review.main,
+            [
+                *cfg_flag,
+                *live_flag,
+                "--repo",
+                repo,
+                "--pr",
+                str(pr_number),
+                "--branch",
+                branch,
+                "--checks-text",
+                str(chk.get("text") or ""),
+            ],
+        )
+        steps.append({"step": "pr_review", **rev})
+        if not rev.get("ok"):
+            return {
+                "ok": False,
+                "error": rev.get("error") or "pr_review failed",
+                "engine": "atoms",
+                "steps": steps,
+            }
+        if rev.get("skipped") and rev.get("reason") in {
+            "executor_disabled",
+            "invalid_review_json",
+        }:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": str(rev.get("reason") or "pr_review_skipped"),
+                "engine": "atoms",
+                "review": rev.get("decision"),
+                "steps": steps,
+            }
+        if not rev.get("merge_ok"):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "llm_review_not_approved",
+                "engine": "atoms",
+                "review": rev.get("decision"),
+                "steps": steps,
+            }
+    elif cfg.require_llm_review and not cfg.executor_enabled:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "llm_review_requires_executor",
+            "engine": "atoms",
+            "steps": steps,
+        }
+
     if not cfg.merge_enabled:
         return {
             "ok": True,

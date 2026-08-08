@@ -38,3 +38,5 @@ May no-op **only** after a full multi-repo survey with **no** remaining actionab
 ## Graphs
 
 See [`GRAPH.md`](GRAPH.md).
+
+- `pr_review`: structured LLM gate before auto-merge when `merge.require_llm_review`.
