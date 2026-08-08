@@ -1,4 +1,4 @@
-"""Atomic: run the agent slot (grok only) in a worktree. Only non-deterministic step."""
+"""Atomic: run configured coding harness in a worktree. Only non-deterministic step."""
 
 from __future__ import annotations
 

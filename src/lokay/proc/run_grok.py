@@ -1,8 +1,10 @@
-"""Explicit harness-named entry: same process as lokay-run-agent.
+"""Back-compat CLI name for lokay-run-agent (same atom).
 
-Not a silent fallback — both names are first-class scripts (docs/UNIX.md).
-Harness selection is still config/env (`executor.agent` / LOKAY_AGENT).
+Historical entrypoint. Prefer ``lokay-run-agent`` — harness is chosen only by
+``executor.command`` / ``executor.args`` in config.
 """
+
+from __future__ import annotations
 
 from lokay.proc.run_agent import main
 

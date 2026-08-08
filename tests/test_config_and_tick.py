@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from lokay.agent import build_grok_argv
+from lokay.agent import build_agent_argv
 from lokay.compose.tick import compose_tick
 from lokay.config import Config, RepoConfig, load_config
 from lokay.git_branch import branch_for_issue
@@ -85,12 +85,35 @@ def test_live_allows_missing_clone_in_validate(tmp_path: Path):
     assert not cfg.active_repos()[0].clone_path.exists()
 
 
-def test_grok_argv_uses_grok_not_omp():
-    cfg = Config(grok_command="grok", max_turns=7, always_approve=True, grok_model="grok-4")
-    argv = build_grok_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
+def test_agent_argv_from_template_not_vendor_branch():
+    """Harness flags come from executor.args template — not hardcoded vendor switch."""
+    grok_args = [
+        "--cwd",
+        "{cwd}",
+        "--always-approve",
+        "--max-turns",
+        "{max_turns}",
+        "--output-format",
+        "plain",
+        "-m",
+        "{model}",
+        "--permission-mode",
+        "bypassPermissions",
+        "-p",
+        "{prompt}",
+    ]
+    cfg = Config(
+        agent="grok",
+        agent_command="grok",
+        agent_model="grok-4",
+        agent_args=list(grok_args),
+        max_turns=7,
+    )
+    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
     assert argv[0] == "grok"
     assert "omp" not in argv
-    assert "-p" in argv  # headless; positional prompt is TUI-only
+    assert "-p" in argv and argv[argv.index("-p") + 1] == "fix it"
+    assert argv[argv.index("-m") + 1] == "grok-4"
 
 
 
