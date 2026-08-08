@@ -13,6 +13,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 7. **Order is a Fala graph** (or atom pipeline that mirrors it). See `docs/GRAPH.md`.
 8. **Always `uv`.** Prefer `uv run lokay …` / `uv run --project …`; do not call bare `python3` for product flows.
 9. **No stubs.** See [`NO_STUBS.md`](NO_STUBS.md).
+10. **Hypermedia UI (if any):** server owns state, HTML fragments, no SPA. See [`HTMX.md`](HTMX.md).
 
 ## Atomic CLI map
 

@@ -8,6 +8,7 @@
 | [`docs/NO_STUBS.md`](docs/NO_STUBS.md) | **No fake/stub agents** |
 | [`docs/UNIX.md`](docs/UNIX.md) | Small processes |
 | [`docs/GRAPH.md`](docs/GRAPH.md) | Fala / path order |
+| [`docs/HTMX.md`](docs/HTMX.md) | Hypermedia UI: server fragments, no SPA |
 | [`repos.mikolaj92.yaml`](repos.mikolaj92.yaml) | Managed repos (scope) |
 
 ## Install
