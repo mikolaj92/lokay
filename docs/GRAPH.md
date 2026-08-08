@@ -89,4 +89,6 @@ Do not put graph order in the coding harness. Do not reintroduce Hermes Kanban a
 
 **Runtime note:** composers execute the same step order as **Unix atomics** by
 default (`lokay.compose.*`). Set `LOKAY_USE_FALA=1` to drive steps via the Fala
-host + `lokay.fala_organ` instead.
+host + `lokay.fala_organ` instead. That switch is **explicit** — when Fala is
+selected, failures must not silently fall back to atoms (see
+[`FALLBACKS.md`](FALLBACKS.md)).
