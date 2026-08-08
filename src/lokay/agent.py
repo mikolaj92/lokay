@@ -1,4 +1,4 @@
-"""Agent slot — real coding harness only. No stubs."""
+"""Agent slot — real coding harness only. No stubs, no silent fallbacks."""
 
 from __future__ import annotations
 
@@ -19,8 +19,17 @@ def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]
     Positional prompt starts the interactive TUI and fails without a TTY
     ("Device not configured"). Headless mode is ``-p/--single`` (or
     ``--prompt-file``) with ``--output-format`` — see grok README Headless Mode.
+
+    Fail-closed: empty ``executor.command`` is an error (no invented binary).
+    Model is optional: when unset, omit ``-m`` so the CLI uses its own default
+    (never substitute another model name here).
     """
-    argv: list[str] = [config.grok_command, "--cwd", str(worktree)]
+    command = (config.grok_command or "").strip()
+    if not command:
+        raise AgentError(
+            "executor.command is empty — set a real harness binary (e.g. grok)"
+        )
+    argv: list[str] = [command, "--cwd", str(worktree)]
     if config.always_approve:
         argv.append("--always-approve")
     argv.extend(["--max-turns", str(config.max_turns)])
@@ -35,7 +44,21 @@ def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]
 
 
 def resolve_agent_kind(config: Config) -> str:
-    kind = (os.environ.get("LOKAY_AGENT") or config.agent or "grok").strip().lower()
+    """Resolve harness name. Explicit config/env only — never invent a default.
+
+    Order: non-empty ``LOKAY_AGENT`` env, else ``config.agent``. Empty after
+    strip fails closed (no silent ``or "grok"``).
+    """
+    env_raw = os.environ.get("LOKAY_AGENT")
+    if env_raw is not None and str(env_raw).strip():
+        kind = str(env_raw).strip().lower()
+    else:
+        kind = (config.agent or "").strip().lower()
+    if not kind:
+        raise AgentError(
+            "agent not configured — set executor.agent or LOKAY_AGENT "
+            "(real harness only; no silent default)"
+        )
     if kind in {"fake", "stub", "mock", "noop"}:
         raise AgentError(
             f"agent={kind!r} is forbidden — no stubs; use a real harness (grok)"
@@ -54,11 +77,15 @@ def run_agent(
     prompt: str,
     execute: bool,
 ) -> dict:
-    """Run the real coding agent (grok). Never a stub."""
+    """Run the real coding agent (grok). Never a stub.
+
+    execute=False → plan only (status planned). execute=True with
+    executor.enabled=false fails closed (no silent plan-as-success).
+    """
     kind = resolve_agent_kind(config)
     argv = build_grok_argv(config, worktree=worktree, prompt=prompt)
 
-    if not execute or not config.executor_enabled:
+    if not execute:
         return {
             "status": "planned",
             "agent": kind,
@@ -68,6 +95,12 @@ def run_agent(
             "executor_enabled": config.executor_enabled,
             "execute": execute,
         }
+
+    if not config.executor_enabled:
+        raise AgentError(
+            "executor.enabled is false — refuse agent execute "
+            "(no silent plan fallback when execute was requested)"
+        )
 
     spec = CommandSpec(
         argv=tuple(argv),

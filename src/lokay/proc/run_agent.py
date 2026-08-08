@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from lokay.agent import run_agent
+from lokay.agent import AgentError, run_agent
 from lokay.envelope import emit_exit, err, ok, read_stdin_json
 from lokay.proc._common import add_config_live, agent_execute_allowed, load_cfg, runner
 
@@ -30,17 +30,35 @@ def main(argv: list[str] | None = None) -> int:
     if not prompt:
         return emit_exit(err("missing prompt"))
 
-    result = run_agent(
-        runner(),
-        cfg,
-        worktree=Path(args.worktree),
-        prompt=prompt,
-        execute=execute,
-    )
-    if args.live and not cfg.executor_enabled:
-        result = {**result, "status": "planned", "note": "executor.enabled is false"}
-    if args.live and cfg.mode != "live":
-        result = {**result, "status": "planned", "note": "config mode is not live"}
+    # --live without permission to execute is misconfig, not synthetic success.
+    if args.live and not execute:
+        reasons: list[str] = []
+        if not cfg.executor_enabled:
+            reasons.append("executor.enabled is false")
+        if cfg.mode != "live":
+            reasons.append(f"config mode is {cfg.mode!r} (need live)")
+        return emit_exit(
+            err(
+                "refusing --live agent run: "
+                + ("; ".join(reasons) or "execute not allowed"),
+                status="refused",
+                executor_enabled=cfg.executor_enabled,
+                mode=cfg.mode,
+                live=True,
+            )
+        )
+
+    try:
+        result = run_agent(
+            runner(),
+            cfg,
+            worktree=Path(args.worktree),
+            prompt=prompt,
+            execute=execute,
+        )
+    except AgentError as exc:
+        return emit_exit(err(str(exc), status="refused"))
+
     ok_flag = result.get("status") != "failed"
     return emit_exit(ok(**result) if ok_flag else err("agent failed", **result))
 

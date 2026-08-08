@@ -7,7 +7,17 @@ from lokay.git_branch import branch_for_issue
 from lokay.proc.make_branch import main as make_branch_main
 
 
-def test_load_example(tmp_path: Path):
+def test_load_example(tmp_path: Path, monkeypatch):
+    # File values only — do not inherit LaunchAgent mill env.
+    for key in (
+        "LOKAY_MODE",
+        "LOKAY_EXECUTOR_ENABLED",
+        "LOKAY_AGENT",
+        "LOKAY_MERGE_ENABLED",
+        "LOKAY_REQUIRE_CHECKS",
+        "LOKAY_CONFIG",
+    ):
+        monkeypatch.delenv(key, raising=False)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         """
