@@ -49,6 +49,8 @@ app-wide client store of server/domain data.
 
 - Static guard: `tests/test_alpine_boundaries.py` (no global store; Alpine
   menus/dialogs require Escape + accessible markup when present).
+- Platform stack: same-origin Alpine via app-factory when chrome exists —
+  [`PLATFORM_UI.md`](PLATFORM_UI.md).
 - Agents: Alpine skill defaults — local state only; pair with [`HTMX.md`](HTMX.md).
 
 CLI-only tree with **no** Alpine is compliant: there is no store and no

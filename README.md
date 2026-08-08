@@ -10,6 +10,7 @@
 | [`docs/GRAPH.md`](docs/GRAPH.md) | Fala / path order |
 | [`docs/HTMX.md`](docs/HTMX.md) | Hypermedia UI: server fragments, no SPA |
 | [`docs/ALPINE.md`](docs/ALPINE.md) | Alpine: local UI state only, no app-wide store |
+| [`docs/PLATFORM_UI.md`](docs/PLATFORM_UI.md) | Full Basecoat+HTMX+Alpine via product_shell; COMPAT pins |
 | [`repos.mikolaj92.yaml`](repos.mikolaj92.yaml) | Managed repos (scope) |
 
 ## Install
