@@ -50,6 +50,28 @@ Forbidden host forks: identity/avatar in sidebar, theme in sidebar, logout in
 nav menu, or logout next to the account name in the header. Do **not** re-copy
 theme boot, shell boot, or platform foot templates into this repo.
 
+### Done means (issue #13 — host shell)
+
+These acceptance criteria are binding when any host HTML base/layout exists
+under `src/` or `scripts/`. A **CLI-only tree with zero HTML is compliant**.
+
+1. **Base layout extends `product_shell`** — every host base/layout shell
+   template uses Jinja `{% extends …product_shell… %}` (or equivalent). Hosts
+   provide menu data and page blocks only; they do not reimplement the frame.
+2. **Logout only on account surface (`platform_session`)** — the Log out
+   control appears only via the platform `platform_session` partial (account
+   page). No logout form/link in host nav, header, or sidebar chrome.
+3. **Theme / locale only via platform partials** — theme toggle and locale
+   switcher come from `platform_theme_locale` / `platform_controls` includes.
+   Host code must not reimplement theme boot or locale chrome.
+4. **No forked sidebar / header / theme boot** — do not copy into this repo
+   host forks of `product_shell.html`, `shell_boot.html`, `theme_boot.html`,
+   or `platform_foot.html`. Auth chrome uses `platform_auth` in the sidebar
+   foot; identity/avatar stays in the main header via `product_shell`.
+
+CLI-only (no HTML templates) satisfies all four: there is no host chrome to
+fork. Static guards: `tests/test_host_shell_chrome.py`.
+
 Detail for shell extension only: issue #13. BOM pin enforcement when packages
 are real dependencies: issue #14.
 
@@ -101,6 +123,7 @@ no chrome to fork and no CDN surface.
 
 ## Enforcement
 
-- Static guard: `tests/test_platform_ui_stack.py`
+- Static guard (stack / CDN / BOM): `tests/test_platform_ui_stack.py`
+- Static guard (chrome placement / product_shell): `tests/test_host_shell_chrome.py`
 - Related: `tests/test_htmx_boundaries.py`, `tests/test_alpine_boundaries.py`
 - Upstream matrix: app-factory `COMPAT.md` (host rule + BOM table)
