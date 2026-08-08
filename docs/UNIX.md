@@ -15,6 +15,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 9. **No stubs.** See [`NO_STUBS.md`](NO_STUBS.md).
 10. **Hypermedia UI (if any):** server owns state, HTML fragments, no SPA. See [`HTMX.md`](HTMX.md).
 11. **Alpine (if any):** local UI state only (toggles/menus/disclosure); no app-wide store. See [`ALPINE.md`](ALPINE.md).
+12. **Platform stack (if any auth/chrome UI):** `product_shell` + same-origin `/static/platform` Basecoat/HTMX/Alpine; COMPAT tags. See [`PLATFORM_UI.md`](PLATFORM_UI.md).
 
 ## Atomic CLI map
 

@@ -25,7 +25,7 @@ added later, it follows these rules — no hidden SPA.
 ## Allowed client JS
 
 - **HTMX** for request/swap (prefer same-origin platform assets when a shell
-  exists; see platform UI / product_shell issues — not CDN forks).
+  exists; see [`PLATFORM_UI.md`](PLATFORM_UI.md) — not CDN forks).
 - **Alpine** only for local UI (toggles, menus, disclosure) — no business rules
   or server-state mirrors. See [`ALPINE.md`](ALPINE.md).
 
@@ -44,6 +44,8 @@ added later, it follows these rules — no hidden SPA.
   progressive; no JSON-for-chrome render patterns in product code).
 - Alpine guard: `tests/test_alpine_boundaries.py` (local UI only; see
   [`ALPINE.md`](ALPINE.md)).
+- Platform stack guard: `tests/test_platform_ui_stack.py` (product_shell +
+  same-origin assets; see [`PLATFORM_UI.md`](PLATFORM_UI.md)).
 - Agents: prefer HTMX skill defaults when touching any future templates.
 
 CLI-only tree with **no** HTML is compliant: there is no SPA chrome and no
