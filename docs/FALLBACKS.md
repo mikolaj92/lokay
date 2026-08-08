@@ -17,7 +17,7 @@ Related: issue #17 (graph_run placeholders), issue #18 (AI agent fail-closed),
 | `tick` Fala fail → silent atom | super-fallback | **Deleted** | When `LOKAY_USE_FALA=1`, fail closed for that issue |
 | `PLACEHOLDER_PYTHON` / tomli shim | legacy | **Deleted** (#17) | Only `PLACEHOLDER_PROJECT` remains |
 | Agent `or "grok"` / plan-as-success | silent invent | **Deleted** (#18) | Fail closed; see `NO_STUBS.md` |
-| `lokay-run-grok` → `run_agent` | named alias | **Deprecate** | Same atom as `lokay-run-agent`; harness is config, not entry name |
+| `lokay-run-grok` | named alias | **Deleted** | Use `lokay-run-agent` only |
 | `LOKAY_USE_FALA` dual engine | explicit opt-in | **Promote** | Default = Unix atomics; Fala only when set |
 | `find_default_package` candidates | package discover | **Promote** | env → repo `fala/` → packaged `data/` |
 | `append_event` best-effort `except` | telemetry | **Promote** | State log must not abort mill; documented |

@@ -34,11 +34,11 @@ class Config:
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
     executor_enabled: bool = False
-    agent: str = "omp"  # label only (logs/state); not an allowlist of vendors
+    agent: str = "omp"  # log label only
     agent_command: str = "omp"  # harness binary on PATH (executor.command)
-    agent_model: str | None = "omniroute/omp/default"
-    # Argv *after* the binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
-    # Empty model drops a preceding flag + {model} pair.
+    agent_model: str | None = None  # optional; omit from args unless harness needs it
+    # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
+    # Empty {model} drops a preceding flag + {model} pair.
     agent_args: list[str] = field(
         default_factory=lambda: [
             "--cwd",
@@ -46,8 +46,6 @@ class Config:
             "-p",
             "{prompt}",
             "--auto-approve",
-            "--model",
-            "{model}",
             "--max-time",
             "{timeout}",
         ]
@@ -254,15 +252,13 @@ def load_config(path: str | Path | None = None) -> Config:
         # Label + binary + argv template. Empty agent/command/args fail closed.
         agent=str(ex.get("agent", "omp")).strip().lower(),
         agent_command=str(ex.get("command", "omp")).strip(),
-        agent_model=(str(ex["model"]) if ex.get("model") else None),
+        agent_model=(str(ex["model"]) if ex.get("model") not in (None, "") else None),
         agent_args=list(ex["args"]) if ex.get("args") is not None else [
             "--cwd",
             "{cwd}",
             "-p",
             "{prompt}",
             "--auto-approve",
-            "--model",
-            "{model}",
             "--max-time",
             "{timeout}",
         ],

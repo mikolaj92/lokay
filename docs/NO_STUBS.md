@@ -22,13 +22,12 @@ Harness identity is **not** baked into callers. Config owns the binary:
 ```yaml
 executor:
   enabled: true
-  agent: omp              # log label only
-  command: omp            # binary on PATH
-  model: omniroute/omp/default
-  args: [ ... ]           # argv template
+  agent: omp       # log label only
+  command: omp     # binary on PATH
+  args: [ ... ]    # argv template; omit model unless the harness needs it
 ```
 
-Switching Grok ↔ OMP ↔ anything else is a **config change**, not a code fork.
+The goal passed to the harness is always the same: implement the issue (or repair the PR) in the worktree; the orchestrator opens/merges the PR. Switching harness is a **config change**, not a code fork.
 
 ## Fail closed
 
@@ -44,6 +43,6 @@ Switching Grok ↔ OMP ↔ anything else is a **config change**, not a code fork
 |-----------|--------|
 | `or "grok"` invent harness | **Deleted** — fail closed |
 | `lokay.grok_agent` re-export | **Deleted** |
-| `lokay-run-grok` | **Deprecated alias** of `lokay-run-agent` (same atom) |
+| `lokay-run-grok` | **Deleted** — use `lokay-run-agent` |
 
 Broader compat inventory: [`FALLBACKS.md`](FALLBACKS.md)

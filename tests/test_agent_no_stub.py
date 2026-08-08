@@ -1,38 +1,31 @@
-"""Agent / LLM path: no stubs, no silent harness inventing; generic argv template."""
+"""Agent path: one harness slot; no stubs; no vendor hardcoding."""
 
 from pathlib import Path
 
 import pytest
 
 from lokay.agent import AgentError, build_agent_argv, resolve_agent_kind, run_agent
-from lokay.config import Config, apply_env_overrides, load_config
+from lokay.config import Config, load_config
 from lokay.runner import Runner
 
+# Default-style omp: no model flag — harness uses its own default.
 OMP_ARGS = [
     "--cwd",
     "{cwd}",
     "-p",
     "{prompt}",
     "--auto-approve",
-    "--model",
-    "{model}",
     "--max-time",
     "{timeout}",
 ]
-GROK_ARGS = [
+# Optional harness that wants an explicit model via template.
+ALT_ARGS = [
     "--cwd",
     "{cwd}",
-    "--always-approve",
-    "--max-turns",
-    "{max_turns}",
-    "--output-format",
-    "plain",
-    "-m",
-    "{model}",
-    "--permission-mode",
-    "bypassPermissions",
     "-p",
     "{prompt}",
+    "--model",
+    "{model}",
 ]
 
 
@@ -49,51 +42,45 @@ def _clear_mill_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_template_omp_argv():
-    cfg = Config(
-        agent="omp",
-        agent_command="omp",
-        agent_model="omniroute/omp/default",
-        agent_args=list(OMP_ARGS),
-        timeout_seconds=1800,
-    )
-    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
-    assert argv == [
-        "omp",
-        "--cwd",
-        "/tmp/wt",
-        "-p",
-        "fix it",
-        "--auto-approve",
-        "--model",
-        "omniroute/omp/default",
-        "--max-time",
-        "1800",
-    ]
-
-
-def test_template_alternate_harness_same_builder():
-    cfg = Config(
-        agent="grok",
-        agent_command="grok",
-        agent_model="grok-4",
-        agent_args=list(GROK_ARGS),
-        max_turns=7,
-    )
-    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
-    assert argv[0] == "grok"
-    assert "-p" in argv and argv[argv.index("-p") + 1] == "fix it"
-    assert argv[argv.index("-m") + 1] == "grok-4"
-    assert "--permission-mode" in argv
-    # alias still works
-
-
-def test_empty_model_drops_flag_pair():
+def test_omp_argv_without_model():
     cfg = Config(
         agent="omp",
         agent_command="omp",
         agent_model=None,
         agent_args=list(OMP_ARGS),
+        timeout_seconds=1800,
+    )
+    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="implement issue")
+    assert argv == [
+        "omp",
+        "--cwd",
+        "/tmp/wt",
+        "-p",
+        "implement issue",
+        "--auto-approve",
+        "--max-time",
+        "1800",
+    ]
+    assert "--model" not in argv
+
+
+def test_optional_model_in_template_when_set():
+    cfg = Config(
+        agent="alt",
+        agent_command="alt-agent",
+        agent_model="some-model",
+        agent_args=list(ALT_ARGS),
+    )
+    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
+    assert argv[argv.index("--model") + 1] == "some-model"
+
+
+def test_empty_model_drops_flag_pair():
+    cfg = Config(
+        agent="alt",
+        agent_command="alt-agent",
+        agent_model=None,
+        agent_args=list(ALT_ARGS),
     )
     argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
     assert "--model" not in argv
@@ -116,9 +103,6 @@ def test_reject_fake(monkeypatch):
     monkeypatch.delenv("LOKAY_AGENT", raising=False)
     with pytest.raises(AgentError, match="forbidden"):
         resolve_agent_kind(Config(agent="fake", agent_command="omp", agent_args=list(OMP_ARGS)))
-    monkeypatch.setenv("LOKAY_AGENT", "stub")
-    with pytest.raises(AgentError, match="forbidden"):
-        resolve_agent_kind(Config(agent="omp", agent_command="omp", agent_args=list(OMP_ARGS)))
 
 
 def test_empty_agent_fails_closed(monkeypatch):
@@ -130,7 +114,6 @@ def test_empty_agent_fails_closed(monkeypatch):
 def test_any_label_ok_if_not_stub(monkeypatch):
     monkeypatch.delenv("LOKAY_AGENT", raising=False)
     assert resolve_agent_kind(Config(agent="omp", agent_command="omp", agent_args=list(OMP_ARGS))) == "omp"
-    assert resolve_agent_kind(Config(agent="grok", agent_command="grok", agent_args=list(GROK_ARGS))) == "grok"
     assert resolve_agent_kind(Config(agent="my-agent", agent_command="x", agent_args=["{prompt}"])) == "my-agent"
 
 
@@ -185,3 +168,27 @@ executor:
     )
     with pytest.raises(ValueError, match="command"):
         load_config(cfg_path)
+
+
+def test_default_config_args_have_no_model(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  agent: omp
+  command: omp
+""",
+        encoding="utf-8",
+    )
+    c = load_config(cfg_path)
+    assert c.agent_model is None
+    argv = build_agent_argv(c, worktree=Path("/tmp/wt"), prompt="goal")
+    assert argv[0] == "omp"
+    assert "--model" not in argv
+    assert "-p" in argv

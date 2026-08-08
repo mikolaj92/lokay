@@ -28,7 +28,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-assign-issue` | assign maintainer |
 | `lokay-make-branch` | pure branch name |
 | `lokay-worktree-add` | git worktree |
-| `lokay-run-agent` | **coding harness slot** (binary from config; `lokay-run-grok` = deprecated alias) |
+| `lokay-run-agent` | **coding harness slot** (binary + args from config only) |
 | `lokay-commit-all` | commit if dirty |
 | `lokay-push` | push (never force) |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
