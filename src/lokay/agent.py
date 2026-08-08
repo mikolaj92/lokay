@@ -28,7 +28,7 @@ class AgentError(RuntimeError):
 
 
 def resolve_agent_kind(config: Config) -> str:
-    """Label only. LOKAY_AGENT overrides config.agent. Never invents a name."""
+    """Log label only (not an allowlist). LOKAY_AGENT overrides config.agent."""
     env_raw = os.environ.get("LOKAY_AGENT")
     if env_raw is not None and str(env_raw).strip():
         kind = str(env_raw).strip().lower()
@@ -110,11 +110,6 @@ def build_agent_argv(config: Config, *, worktree: Path, prompt: str) -> list[str
         argv.append(rendered)
         i += 1
     return argv
-
-
-# Thin alias for older imports/tests.
-def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
-    return build_agent_argv(config, worktree=worktree, prompt=prompt)
 
 
 def run_agent(

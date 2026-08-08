@@ -45,7 +45,7 @@ pr_checks
 
 ```text
 pr_checks
-  └─→ pr_review    ← LLM structured review (non-deterministic; fail closed)
+  └─→ pr_review    ← structured harness review via run_agent (fail closed)
         └─→ pr_merge     ← skipped when checks not mergeable / review not approve / merge disabled
               └─→ close_issue   ← issue# from ai/fix/N-* branch when known
 ```
@@ -58,7 +58,7 @@ Tick also handles **merge conflicts** outside this path: `mergeable=CONFLICTING|
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
-- **run_agent** is the only non-deterministic coding slot — **real harness only** (`grok`). See [`NO_STUBS.md`](NO_STUBS.md).
+- **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md).
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run

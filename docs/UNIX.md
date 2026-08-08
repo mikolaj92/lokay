@@ -6,7 +6,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 
 1. **One process = one job.** List issues. Make a branch name. Add a worktree. Run Grok. Push. Open a PR. Check CI. Merge. Nothing else.
 2. **Small files.** Prefer a new module under `src/lokay/proc/` over growing an existing one past ~100 lines of real logic.
-3. **Compose, don’t absorb.** Higher-level flows only **call** atomic processes or Fala graphs. They must not reimplement GitHub/git/Grok.
+3. **Compose, don’t absorb.** Higher-level flows only **call** atomic processes or Fala graphs. They must not reimplement GitHub/git/the coding harness.
 4. **Text interfaces.** Each process speaks **JSON on stdout** (one object). Errors: non-zero exit + JSON `{"ok":false,"error":...}` when practical.
 5. **Dry-run is explicit non-mutation**, not a fake agent. Use `mode: dry-run` or omit `--live`.
 6. **No hidden side channels.** Data flows via CLI args, stdin JSON, or Fala conduction — not Hermes Kanban.
@@ -28,7 +28,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-assign-issue` | assign maintainer |
 | `lokay-make-branch` | pure branch name |
 | `lokay-worktree-add` | git worktree |
-| `lokay-run-agent` / `lokay-run-grok` | **real** coding agent |
+| `lokay-run-agent` | **coding harness slot** (binary from config; `lokay-run-grok` = deprecated alias) |
 | `lokay-commit-all` | commit if dirty |
 | `lokay-push` | push (never force) |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |

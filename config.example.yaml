@@ -26,11 +26,11 @@ github:
 
 executor:
   enabled: true
-  agent: omp                 # label for logs only
-  command: omp               # binary on PATH
+  agent: omp                 # log label only (not an allowlist)
+  command: omp               # harness binary on PATH — swap to change implementation
   model: omniroute/omp/default
   # argv after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
-  # To use grok instead, only change command/args, e.g.:
+  # Example alternate harness (any CLI): change command + args only; no code changes.
   #   command: grok
   #   args: [--cwd, "{cwd}", --always-approve, --max-turns, "{max_turns}",
   #          --output-format, plain, -m, "{model}", --permission-mode, bypassPermissions, -p, "{prompt}"]

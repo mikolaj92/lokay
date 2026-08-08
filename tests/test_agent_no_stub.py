@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from lokay.agent import AgentError, build_agent_argv, build_grok_argv, resolve_agent_kind, run_agent
+from lokay.agent import AgentError, build_agent_argv, resolve_agent_kind, run_agent
 from lokay.config import Config, apply_env_overrides, load_config
 from lokay.runner import Runner
 
@@ -72,7 +72,7 @@ def test_template_omp_argv():
     ]
 
 
-def test_template_grok_argv_via_same_builder():
+def test_template_alternate_harness_same_builder():
     cfg = Config(
         agent="grok",
         agent_command="grok",
@@ -86,7 +86,6 @@ def test_template_grok_argv_via_same_builder():
     assert argv[argv.index("-m") + 1] == "grok-4"
     assert "--permission-mode" in argv
     # alias still works
-    assert build_grok_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it") == argv
 
 
 def test_empty_model_drops_flag_pair():

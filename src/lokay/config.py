@@ -35,7 +35,7 @@ class Config:
     repos: list[RepoConfig] = field(default_factory=list)
     executor_enabled: bool = False
     agent: str = "omp"  # label only (logs/state); not an allowlist of vendors
-    agent_command: str = "omp"  # harness binary (was executor.command / grok_command)
+    agent_command: str = "omp"  # harness binary on PATH (executor.command)
     agent_model: str | None = "omniroute/omp/default"
     # Argv *after* the binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
     # Empty model drops a preceding flag + {model} pair.
@@ -73,23 +73,6 @@ class Config:
         return self.mode == "live"
 
 
-    # Back-compat names (prefer agent_command / agent_model).
-    @property
-    def grok_command(self) -> str:
-        return self.agent_command
-
-    @grok_command.setter
-    def grok_command(self, value: str) -> None:
-        self.agent_command = value
-
-    @property
-    def grok_model(self) -> str | None:
-        return self.agent_model
-
-    @grok_model.setter
-    def grok_model(self, value: str | None) -> None:
-        self.agent_model = value
-
     def active_repos(self) -> list[RepoConfig]:
         """Enabled repos only (mill / tick iterate these)."""
         return [r for r in self.repos if r.enabled]
@@ -110,7 +93,7 @@ class Config:
             errors.append("executor.max_turns must be >= 1")
         # AI path: empty agent/command is misconfig — fail closed (no invent).
         if not (self.agent or "").strip():
-            errors.append("executor.agent must be non-empty (real harness, e.g. grok)")
+            errors.append("executor.agent must be non-empty (log label for the harness slot)")
         if not (self.agent_command or "").strip():
             errors.append("executor.command must be non-empty")
         if not (self.agent_args or []):
@@ -189,7 +172,7 @@ def apply_env_overrides(cfg: Config) -> Config:
 
       LOKAY_MODE=live|dry-run
       LOKAY_EXECUTOR_ENABLED=1|0
-      LOKAY_AGENT=grok
+      LOKAY_AGENT=<label>     (log label; binary is executor.command)
       LOKAY_MERGE_ENABLED=1|0
       LOKAY_REQUIRE_CHECKS=1|0   (0 for no-CI canary repos)
       LOKAY_REQUIRE_LLM_REVIEW=1|0  (structured Grok review before merge)
@@ -204,16 +187,16 @@ def apply_env_overrides(cfg: Config) -> Config:
     if agent:
         if agent in {"fake", "stub", "mock", "noop"}:
             raise ValueError(
-                f"LOKAY_AGENT={agent!r} forbidden — no stubs; use grok"
+                f"LOKAY_AGENT={agent!r} forbidden — no stubs"
             )
         cfg.agent = agent
     # Empty agent is misconfig — never re-fill with a silent default.
     if not (cfg.agent or "").strip():
         raise ValueError(
-            "executor.agent / LOKAY_AGENT empty — set a real harness (e.g. grok)"
+            "executor.agent / LOKAY_AGENT empty — set a non-empty harness label"
         )
     if cfg.agent in {"fake", "stub", "mock", "noop"}:
-        raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs; use grok")
+        raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs")
     if not (cfg.agent_command or "").strip():
         raise ValueError("executor.command empty — set harness binary")
     if not (cfg.agent_args or []):

@@ -1,7 +1,8 @@
-"""Back-compat CLI name for lokay-run-agent (same atom).
+"""Deprecated alias of ``lokay-run-agent``.
 
-Historical entrypoint. Prefer ``lokay-run-agent`` — harness is chosen only by
-``executor.command`` / ``executor.args`` in config.
+Kept so old scripts do not break. Prefer ``lokay-run-agent`` — the harness is
+chosen only by ``executor.command`` / ``executor.args`` in config, not by this
+entry point name.
 """
 
 from __future__ import annotations
