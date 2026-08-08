@@ -4,7 +4,7 @@
 
 **Unix small programs + Fala graph for order + real agent only.**
 
-- See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**.
+- See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
 - Do **not** grow `compose/*` with GitHub/git/agent logic beyond wiring.
@@ -17,6 +17,7 @@
 - **No** bare `python3` for product CLI — use **`uv run`**.
 - **No** Hermes Kanban as execution ledger.
 - **No** hidden SPA / JSON+client-render chrome — server HTML fragments if UI exists (`docs/HTMX.md`).
+- **No** app-wide Alpine store / server-state mirrors — local UI only (`docs/ALPINE.md`).
 
 ## Stack
 
