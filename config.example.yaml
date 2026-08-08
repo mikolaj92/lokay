@@ -26,44 +26,19 @@ github:
 
 executor:
   enabled: true
-  agent: omp                 # log label only (not an allowlist)
-  command: omp               # harness binary on PATH — swap to change implementation
-  model: omniroute/omp/default
-  # argv after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
-  # Example alternate harness (any CLI): change command + args only; no code changes.
-  #   command: grok
-  #   args: [--cwd, "{cwd}", --always-approve, --max-turns, "{max_turns}",
-  #          --output-format, plain, -m, "{model}", --permission-mode, bypassPermissions, -p, "{prompt}"]
+  agent: omp                 # log label only
+  command: omp               # harness binary — swap to change implementation
+  # model: optional; omit so the harness uses its own default
+  # args after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
   args:
     - --cwd
     - "{cwd}"
     - -p
     - "{prompt}"
     - --auto-approve
-    - --model
-    - "{model}"
     - --max-time
     - "{timeout}"
   max_turns: 40
   timeout_seconds: 1800
   always_approve: true
 
-
-merge:
-  enabled: true
-  require_checks: false
-  require_llm_review: true  # Grok structured review before auto-merge
-  require_test_evidence: true
-
-worktrees:
-  root: ~/.lokay/worktrees
-
-state:
-  path: ~/.lokay/state.jsonl
-
-limits:
-  max_issues_per_tick: 1
-  max_triage_per_tick: 5
-  max_repairs_per_tick: 1
-  max_failures_before_block: 2
-  min_free_gb: 2

@@ -30,7 +30,6 @@ lokay-assign-issue = "lokay.proc.assign_issue:main"
 lokay-make-branch = "lokay.proc.make_branch:main"
 lokay-worktree-add = "lokay.proc.worktree_add:main"
 lokay-run-agent = "lokay.proc.run_agent:main"
-lokay-run-grok = "lokay.proc.run_grok:main"  # deprecated alias of lokay-run-agent
 lokay-commit-all = "lokay.proc.commit_all:main"
 lokay-push = "lokay.proc.push_branch:main"
 lokay-pr-create = "lokay.proc.pr_create:main"
