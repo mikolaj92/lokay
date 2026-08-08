@@ -41,3 +41,6 @@ config, LaunchAgent env, and runtime agent selection:
 
 If you need a dry pass without mutations, use **`mode: dry-run`** or omit `--live`.
 That is not a stub agent — it is an explicit non-mutating mode.
+
+Broader compat / rare-path inventory (non-AI): [`FALLBACKS.md`](FALLBACKS.md)
+(issue #19).

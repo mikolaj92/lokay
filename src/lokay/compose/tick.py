@@ -224,7 +224,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if triage_budget <= 0:
                 break
             num = int(issue["number"])
-            # Prefer atom triage (Fala host may abort; opt-in LOKAY_USE_FALA=1).
+            # Default: Unix atom triage. LOKAY_USE_FALA=1 is explicit — no silent atom fallback.
             from lokay.compose._atoms import use_fala
 
             if use_fala():
@@ -242,10 +242,19 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     if tri.get("ok"):
                         progress += 1
                         remaining_inbox = max(0, remaining_inbox - 1)
-                    triage_budget -= 1
-                    continue
-                except Exception:
-                    pass
+                except Exception as exc:
+                    actions.append(
+                        {
+                            "step": "issue_triage",
+                            "repo": repo.name,
+                            "issue": num,
+                            "ok": False,
+                            "engine": "fala",
+                            "error": f"Fala path failed (no atom super-fallback): {exc}",
+                        }
+                    )
+                triage_budget -= 1
+                continue
             tri = _run(
                 p_triage.main,
                 [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num)],

@@ -151,12 +151,6 @@ def pr_checks_report(
     }
 
 
-def pr_checks_green(runner: Runner, repo: str, number: int, *, live: bool) -> tuple[bool, str]:
-    """Backward-compatible: green only when status is passed."""
-    report = pr_checks_report(runner, repo, number, live=live)
-    return bool(report.get("green")), str(report.get("text") or "")
-
-
 def merge_pr(runner: Runner, repo: str, number: int, *, live: bool) -> CommandResult:
     return runner.run_checked(
         gh_spec(

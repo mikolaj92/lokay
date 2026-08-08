@@ -1,7 +1,8 @@
 """Shared helpers: run atomic mains and optional Fala paths.
 
-Default engine is **Unix atomics** (reliable). Fala is opt-in via LOKAY_USE_FALA=1
-because the current Fala host can abort on package load (Mojo UTF-8 assert).
+Default engine is **Unix atomics**. Fala is an explicit opt-in (`LOKAY_USE_FALA=1`),
+not a silent fallback. When Fala is requested, failures must surface — do not
+fall through to atoms (docs/FALLBACKS.md).
 """
 
 from __future__ import annotations

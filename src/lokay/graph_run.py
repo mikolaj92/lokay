@@ -147,13 +147,9 @@ def run_path(
         if str(src) not in prev.split(os.pathsep):
             os.environ["PYTHONPATH"] = str(src) + (os.pathsep + prev if prev else "")
 
-    # Fala Mojo sources (editable path dep sibling ../Fala)
+    # Fala Mojo sources: FALA_HOME env, else sibling ../Fala only (no machine hardcodes).
     if not os.environ.get("FALA_HOME"):
-        for candidate in (
-            root.parent / "Fala",
-            Path.cwd().parent / "Fala",
-            Path("/Users/mikomac/Developer/OSS/Fala"),
-        ):
+        for candidate in (root.parent / "Fala", Path.cwd().parent / "Fala"):
             if (candidate / "mojo" / "fala").is_dir():
                 os.environ["FALA_HOME"] = str(candidate.resolve())
                 break
