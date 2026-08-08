@@ -1,54 +1,34 @@
-"""Agent slot — real coding harness only. No stubs, no silent fallbacks."""
+"""Agent slot — run a configured external coding harness.
+
+No stubs. No silent defaults. No per-vendor argv hardcoding in mill code.
+
+Mill only knows:
+  - executor.command  — binary on PATH
+  - executor.args     — argv template with placeholders
+  - executor.agent    — label for logs/state (any non-stub name)
+
+Switch harness by editing config (command/args), not by forking lokay.
+"""
 
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from lokay.config import Config
 from lokay.runner import CommandSpec, Runner
+
+STUB_AGENTS = frozenset({"fake", "stub", "mock", "noop"})
+_PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
 
 
 class AgentError(RuntimeError):
     pass
 
 
-def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
-    """Build headless grok argv (tools + multi-turn).
-
-    Positional prompt starts the interactive TUI and fails without a TTY
-    ("Device not configured"). Headless mode is ``-p/--single`` (or
-    ``--prompt-file``) with ``--output-format`` — see grok README Headless Mode.
-
-    Fail-closed: empty ``executor.command`` is an error (no invented binary).
-    Model is optional: when unset, omit ``-m`` so the CLI uses its own default
-    (never substitute another model name here).
-    """
-    command = (config.grok_command or "").strip()
-    if not command:
-        raise AgentError(
-            "executor.command is empty — set a real harness binary (e.g. grok)"
-        )
-    argv: list[str] = [command, "--cwd", str(worktree)]
-    if config.always_approve:
-        argv.append("--always-approve")
-    argv.extend(["--max-turns", str(config.max_turns)])
-    argv.extend(["--output-format", "plain"])
-    if config.grok_model:
-        argv.extend(["-m", config.grok_model])
-    # Headless tool writes need bypassPermissions; acceptEdits cancels write tools.
-    argv.extend(["--permission-mode", "bypassPermissions"])
-    # Headless multi-turn with tools (NOT interactive TUI).
-    argv.extend(["-p", prompt])
-    return argv
-
-
 def resolve_agent_kind(config: Config) -> str:
-    """Resolve harness name. Explicit config/env only — never invent a default.
-
-    Order: non-empty ``LOKAY_AGENT`` env, else ``config.agent``. Empty after
-    strip fails closed (no silent ``or "grok"``).
-    """
+    """Label only. LOKAY_AGENT overrides config.agent. Never invents a name."""
     env_raw = os.environ.get("LOKAY_AGENT")
     if env_raw is not None and str(env_raw).strip():
         kind = str(env_raw).strip().lower()
@@ -56,17 +36,85 @@ def resolve_agent_kind(config: Config) -> str:
         kind = (config.agent or "").strip().lower()
     if not kind:
         raise AgentError(
-            "agent not configured — set executor.agent or LOKAY_AGENT "
-            "(real harness only; no silent default)"
+            "agent not configured — set executor.agent or LOKAY_AGENT"
         )
-    if kind in {"fake", "stub", "mock", "noop"}:
+    if kind in STUB_AGENTS:
         raise AgentError(
-            f"agent={kind!r} is forbidden — no stubs; use a real harness (grok)"
+            f"agent={kind!r} is forbidden — no stubs; set a real harness label"
         )
-    if kind != "grok":
-        # future: other real harnesses; reject unknowns for now
-        raise AgentError(f"unknown agent {kind!r}; supported real harness: grok")
     return kind
+
+
+def _values(
+    config: Config, *, worktree: Path, prompt: str, command: str
+) -> dict[str, str]:
+    return {
+        "command": command,
+        "cwd": str(worktree),
+        "prompt": prompt,
+        "model": (config.agent_model or "").strip(),
+        "max_turns": str(int(config.max_turns)),
+        "timeout": str(int(config.timeout_seconds)),
+    }
+
+
+def _render_arg(token: str, values: dict[str, str]) -> str | None:
+    # Drop optional model flag pair handled by caller; drop bare {model} if empty.
+    if token == "{model}" and not values.get("model"):
+        return None
+
+    def repl(m: re.Match[str]) -> str:
+        key = m.group(1)
+        if key not in values:
+            raise AgentError(
+                f"unknown placeholder {{{key}}} in executor.args "
+                f"(allowed: {sorted(values)})"
+            )
+        return values[key]
+
+    return _PLACEHOLDER_RE.sub(repl, token)
+
+
+def build_agent_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
+    """Build argv from executor.command + executor.args. Fail closed on empty."""
+    command = (config.agent_command or "").strip()
+    if not command:
+        raise AgentError(
+            "executor.command is empty — set the harness binary"
+        )
+    raw_args = list(config.agent_args or [])
+    if not raw_args:
+        raise AgentError(
+            "executor.args is empty — set argv template "
+            "({cwd} {prompt} {model} {max_turns} {timeout})"
+        )
+    values = _values(config, worktree=worktree, prompt=prompt, command=command)
+    argv: list[str] = [command]
+    i = 0
+    tokens = [str(t) for t in raw_args]
+    while i < len(tokens):
+        tok = tokens[i]
+        # If a flag is followed by {model} and model is empty, drop both.
+        if (
+            i + 1 < len(tokens)
+            and tokens[i + 1] == "{model}"
+            and not values.get("model")
+            and tok.startswith("-")
+        ):
+            i += 2
+            continue
+        rendered = _render_arg(tok, values)
+        if rendered is None:
+            i += 1
+            continue
+        argv.append(rendered)
+        i += 1
+    return argv
+
+
+# Thin alias for older imports/tests.
+def build_grok_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
+    return build_agent_argv(config, worktree=worktree, prompt=prompt)
 
 
 def run_agent(
@@ -77,19 +125,16 @@ def run_agent(
     prompt: str,
     execute: bool,
 ) -> dict:
-    """Run the real coding agent (grok). Never a stub.
-
-    execute=False → plan only (status planned). execute=True with
-    executor.enabled=false fails closed (no silent plan-as-success).
-    """
+    """Run configured harness. execute=False → plan only."""
     kind = resolve_agent_kind(config)
-    argv = build_grok_argv(config, worktree=worktree, prompt=prompt)
+    argv = build_agent_argv(config, worktree=worktree, prompt=prompt)
+    display = [("<prompt>" if p == prompt else p) for p in argv]
 
     if not execute:
         return {
             "status": "planned",
             "agent": kind,
-            "command": argv[:-1] + ["<prompt>"],
+            "command": display,
             "prompt_len": len(prompt),
             "worktree": str(worktree),
             "executor_enabled": config.executor_enabled,
@@ -102,12 +147,14 @@ def run_agent(
             "(no silent plan fallback when execute was requested)"
         )
 
-    spec = CommandSpec(
-        argv=tuple(argv),
-        cwd=str(worktree),
-        timeout_seconds=config.timeout_seconds,
+    result = runner.run(
+        CommandSpec(
+            argv=tuple(argv),
+            cwd=str(worktree),
+            timeout_seconds=config.timeout_seconds,
+        ),
+        live=True,
     )
-    result = runner.run(spec, live=True)
     return {
         "status": "completed" if result.returncode == 0 else "failed",
         "agent": kind,

@@ -34,12 +34,27 @@ class Config:
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
     executor_enabled: bool = False
-    agent: str = "grok"  # real harness only (no stubs)
-    grok_command: str = "grok"
-    grok_model: str | None = None
+    agent: str = "omp"  # label only (logs/state); not an allowlist of vendors
+    agent_command: str = "omp"  # harness binary (was executor.command / grok_command)
+    agent_model: str | None = "omniroute/omp/default"
+    # Argv *after* the binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
+    # Empty model drops a preceding flag + {model} pair.
+    agent_args: list[str] = field(
+        default_factory=lambda: [
+            "--cwd",
+            "{cwd}",
+            "-p",
+            "{prompt}",
+            "--auto-approve",
+            "--model",
+            "{model}",
+            "--max-time",
+            "{timeout}",
+        ]
+    )
     max_turns: int = 40
     timeout_seconds: int = 1800
-    always_approve: bool = True
+    always_approve: bool = True  # kept for harness templates that care; omp uses args
     merge_enabled: bool = False
     require_checks: bool = False
     require_llm_review: bool = True  # structured Grok review before auto-merge
@@ -56,6 +71,24 @@ class Config:
     @property
     def live(self) -> bool:
         return self.mode == "live"
+
+
+    # Back-compat names (prefer agent_command / agent_model).
+    @property
+    def grok_command(self) -> str:
+        return self.agent_command
+
+    @grok_command.setter
+    def grok_command(self, value: str) -> None:
+        self.agent_command = value
+
+    @property
+    def grok_model(self) -> str | None:
+        return self.agent_model
+
+    @grok_model.setter
+    def grok_model(self, value: str | None) -> None:
+        self.agent_model = value
 
     def active_repos(self) -> list[RepoConfig]:
         """Enabled repos only (mill / tick iterate these)."""
@@ -78,8 +111,10 @@ class Config:
         # AI path: empty agent/command is misconfig — fail closed (no invent).
         if not (self.agent or "").strip():
             errors.append("executor.agent must be non-empty (real harness, e.g. grok)")
-        if not (self.grok_command or "").strip():
-            errors.append("executor.command must be non-empty (e.g. grok)")
+        if not (self.agent_command or "").strip():
+            errors.append("executor.command must be non-empty")
+        if not (self.agent_args or []):
+            errors.append("executor.args must be a non-empty argv template")
         # require_checks=false by default: local trust only. Do not gate merges on
         # GitHub Actions / remote CI providers (cost + free-tier limits).
         return errors
@@ -179,10 +214,10 @@ def apply_env_overrides(cfg: Config) -> Config:
         )
     if cfg.agent in {"fake", "stub", "mock", "noop"}:
         raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs; use grok")
-    if not (cfg.grok_command or "").strip():
-        raise ValueError(
-            "executor.command empty — set a real harness binary (e.g. grok)"
-        )
+    if not (cfg.agent_command or "").strip():
+        raise ValueError("executor.command empty — set harness binary")
+    if not (cfg.agent_args or []):
+        raise ValueError("executor.args empty — set argv template")
     v = _env_truthy("LOKAY_MERGE_ENABLED")
     if v is not None:
         cfg.merge_enabled = v
@@ -233,11 +268,21 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
         executor_enabled=bool(ex.get("enabled", False)),
-        # Schema default when key absent is "grok". Empty string is misconfig —
-        # fail closed below (no silent invent of a harness name).
-        agent=str(ex.get("agent", "grok")).strip().lower(),
-        grok_command=str(ex.get("command", "grok")).strip(),
-        grok_model=(str(ex["model"]) if ex.get("model") else None),
+        # Label + binary + argv template. Empty agent/command/args fail closed.
+        agent=str(ex.get("agent", "omp")).strip().lower(),
+        agent_command=str(ex.get("command", "omp")).strip(),
+        agent_model=(str(ex["model"]) if ex.get("model") else None),
+        agent_args=list(ex["args"]) if ex.get("args") is not None else [
+            "--cwd",
+            "{cwd}",
+            "-p",
+            "{prompt}",
+            "--auto-approve",
+            "--model",
+            "{model}",
+            "--max-time",
+            "{timeout}",
+        ],
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
         always_approve=bool(ex.get("always_approve", True)),

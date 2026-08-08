@@ -42,7 +42,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
             "repos": [r.name for r in cfg.active_repos()],
             "repos_disabled": [r.name for r in cfg.repos if not r.enabled],
             "repos_total": len(cfg.repos),
-            "executor": cfg.grok_command,
+            "executor": cfg.agent_command,
             "executor_enabled": cfg.executor_enabled,
             "ok": not errors,
             "errors": errors,
