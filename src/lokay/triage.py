@@ -194,14 +194,20 @@ def decide_issue(
         )
 
     boxes = _checkbox_count(body)
-    if boxes > MAX_CHECKBOXES or re.search(r"\bepic\b", blob):
+    # "epic" only in TITLE means the whole issue is an epic tracker.
+    # Body phrases like "Parent epic" / "child of epic" must NOT block implementable issues
+    # (Pad Audit wave: 362 false needs-feedback from "## Parent epic" footers).
+    title_is_epic = bool(re.search(r"\bepic\b", title.lower()))
+    if boxes > MAX_CHECKBOXES or title_is_epic:
         return TriageDecision(
             decision="needs_feedback",
             reason="too_large_split",
             add_labels=(needs_feedback_label,),
             comment=(
                 "Needs feedback: issue looks too large for one AI pass "
-                f"(checkboxes={boxes}). Please split into smaller issues."
+                f"(checkboxes={boxes}"
+                + ("; title contains epic" if title_is_epic else "")
+                + "). Please split into smaller issues."
             ),
         )
 

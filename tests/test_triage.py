@@ -113,6 +113,36 @@ Fail closed knowledge endpoints on timeout.
     assert d.decision == "ready", d
 
 
+
+
+def test_decide_ready_with_parent_epic_footer():
+    """Body 'Parent epic' must not force needs_feedback (only title epic does)."""
+    body = """## Goal
+Adopt full Basecoat + HTMX + Alpine stack via product_shell.
+
+## Done means
+- [ ] product_shell used
+- [ ] No CDN for htmx
+
+## Parent epic
+- [Pad Audit] Platform UI + Fala unix processes + no-legacy epic (app-factory)
+"""
+    d = decide_issue(_issue(title="Platform UI audit: adopt full Basecoat stack", body=body))
+    assert d.decision == "ready", d
+    assert "ai:ready" in d.add_labels
+
+
+def test_decide_needs_feedback_title_epic():
+    d = decide_issue(
+        _issue(
+            title="[Pad Audit] Platform UI + Fala unix processes + no-legacy epic (app-factory)",
+            body="## Goal\nTrack child issues for platform audit.\n\n## Done means\n- [ ] children filed\n",
+        )
+    )
+    assert d.decision == "needs_feedback"
+    assert d.reason == "too_large_split"
+
+
 def test_decide_too_large():
     body = "\n".join(f"- [ ] task {i} more text here" for i in range(8))
     d = decide_issue(_issue(body=body))
