@@ -14,6 +14,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 8. **Always `uv`.** Prefer `uv run lokay …` / `uv run --project …`; do not call bare `python3` for product flows.
 9. **No stubs.** See [`NO_STUBS.md`](NO_STUBS.md).
 10. **Hypermedia UI (if any):** server owns state, HTML fragments, no SPA. See [`HTMX.md`](HTMX.md).
+11. **Alpine (if any):** local UI state only (toggles/menus/disclosure); no app-wide store. See [`ALPINE.md`](ALPINE.md).
 
 ## Atomic CLI map
 

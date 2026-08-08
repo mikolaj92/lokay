@@ -27,14 +27,14 @@ added later, it follows these rules — no hidden SPA.
 - **HTMX** for request/swap (prefer same-origin platform assets when a shell
   exists; see platform UI / product_shell issues — not CDN forks).
 - **Alpine** only for local UI (toggles, menus, disclosure) — no business rules
-  or server-state mirrors. See Alpine pad-audit child when filed.
+  or server-state mirrors. See [`ALPINE.md`](ALPINE.md).
 
 ## Anti-patterns
 
 | Forbidden | Why |
 | --- | --- |
 | JSON + client templates for core chrome | Hidden SPA; server no longer owns view |
-| Global client store of server domain state | Duplicates authority; drift |
+| Global client store of server domain state | Duplicates authority; drift (see [`ALPINE.md`](ALPINE.md)) |
 | Forms that only work with JS (`preventDefault` only, no `action`) | Breaks progressive enhancement |
 | Custom chrome that reimplements platform shell | Forks product_shell contract |
 
@@ -42,6 +42,8 @@ added later, it follows these rules — no hidden SPA.
 
 - Static guard: `tests/test_htmx_boundaries.py` (no SPA stacks; HTML forms stay
   progressive; no JSON-for-chrome render patterns in product code).
+- Alpine guard: `tests/test_alpine_boundaries.py` (local UI only; see
+  [`ALPINE.md`](ALPINE.md)).
 - Agents: prefer HTMX skill defaults when touching any future templates.
 
 CLI-only tree with **no** HTML is compliant: there is no SPA chrome and no
