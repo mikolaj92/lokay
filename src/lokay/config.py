@@ -74,6 +74,11 @@ class Config:
             # Live implement skips or fails per-repo when worktree is needed.
         if self.live and self.executor_enabled and self.max_turns < 1:
             errors.append("executor.max_turns must be >= 1")
+        # AI path: empty agent/command is misconfig — fail closed (no invent).
+        if not (self.agent or "").strip():
+            errors.append("executor.agent must be non-empty (real harness, e.g. grok)")
+        if not (self.grok_command or "").strip():
+            errors.append("executor.command must be non-empty (e.g. grok)")
         # require_checks=false by default: local trust only. Do not gate merges on
         # GitHub Actions / remote CI providers (cost + free-tier limits).
         return errors
@@ -165,8 +170,17 @@ def apply_env_overrides(cfg: Config) -> Config:
                 f"LOKAY_AGENT={agent!r} forbidden — no stubs; use grok"
             )
         cfg.agent = agent
+    # Empty agent is misconfig — never re-fill with a silent default.
+    if not (cfg.agent or "").strip():
+        raise ValueError(
+            "executor.agent / LOKAY_AGENT empty — set a real harness (e.g. grok)"
+        )
     if cfg.agent in {"fake", "stub", "mock", "noop"}:
         raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs; use grok")
+    if not (cfg.grok_command or "").strip():
+        raise ValueError(
+            "executor.command empty — set a real harness binary (e.g. grok)"
+        )
     v = _env_truthy("LOKAY_MERGE_ENABLED")
     if v is not None:
         cfg.merge_enabled = v
@@ -214,8 +228,10 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
         executor_enabled=bool(ex.get("enabled", False)),
-        agent=str(ex.get("agent", "grok")).strip().lower() or "grok",  # never fake
-        grok_command=str(ex.get("command", "grok")),
+        # Schema default when key absent is "grok". Empty string is misconfig —
+        # fail closed below (no silent invent of a harness name).
+        agent=str(ex.get("agent", "grok")).strip().lower(),
+        grok_command=str(ex.get("command", "grok")).strip(),
         grok_model=(str(ex["model"]) if ex.get("model") else None),
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
