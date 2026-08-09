@@ -123,7 +123,10 @@ def compose_pr_repair(
         if not branch:
             return {"ok": False, "error": "branch required for pr_repair"}
 
-    if use_fala():
+    # Fala's run envelope cannot yet prove that commit_all produced a commit.
+    # Review-driven repairs therefore use atoms so zero-diff stays fail-closed.
+    review_repair = bool(review)
+    if use_fala() and not review_repair:
         from lokay.graph_run import run_path
 
         result = run_path(

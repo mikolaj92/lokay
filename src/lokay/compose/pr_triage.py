@@ -204,7 +204,12 @@ def compose_pr_triage(
     if not branch:
         return {"ok": False, "error": "branch required for pr_triage"}
 
-    if use_fala():
+    cfg = load_config(config_path)
+    # Structured-review outcomes must be visible to tick as repairable/not-repairable.
+    # Fala's run envelope does not expose terminal effector values yet, so this
+    # safety-critical path explicitly uses atoms even when Fala is opted in.
+    structured_review = cfg.require_llm_review and cfg.executor_enabled
+    if use_fala() and not structured_review:
         from lokay.graph_run import run_path
 
         result = run_path(

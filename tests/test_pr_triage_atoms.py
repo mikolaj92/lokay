@@ -92,3 +92,21 @@ def test_needs_human_is_not_repairable(tmp_path, monkeypatch):
     )
     assert result["reason"] == "llm_review_not_approved"
     assert result["repairable"] is False
+
+
+def test_fala_opt_in_uses_atoms_when_structured_review_required(tmp_path, monkeypatch):
+    cfg = _live_config(tmp_path)
+    monkeypatch.setenv("LOKAY_USE_FALA", "1")
+    called = []
+
+    def fake_atomic(**kwargs):
+        called.append(kwargs)
+        return {"ok": True, "skipped": True, "repairable": True}
+
+    monkeypatch.setattr(pr_triage, "_atomic_pr_triage", fake_atomic)
+    result = pr_triage.compose_pr_triage(
+        config_path=cfg, repo="a/b", pr_number=9, branch="ai/fix/9-x", live=True
+    )
+    assert called
+    assert result["kind"] in {"pr_repair", "pr_triage"}
+    assert result["repairable"] is True
