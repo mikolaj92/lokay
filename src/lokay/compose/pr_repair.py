@@ -7,6 +7,7 @@ Order matches Fala path `pr_repair`. Default engine: Unix atomics
 from __future__ import annotations
 
 import argparse
+import json
 from typing import Any
 
 from lokay.compose._atoms import run_atom, unlink_quiet, use_fala, write_temp
@@ -29,6 +30,7 @@ def _atomic_pr_repair(
     pr_number: int,
     branch: str,
     live: bool,
+    review: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     cfg_flag = ["--config", config_path] if config_path else []
     live_flag = ["--live"] if live else []
@@ -56,6 +58,7 @@ def _atomic_pr_repair(
         pr_number=pr_number,
         branch=branch,
         checks_text=str(chk.get("text") or ""),
+        review_text=json.dumps(review or {}, ensure_ascii=False, sort_keys=True),
     )
     prompt_path = write_temp(prompt)
     try:
@@ -82,6 +85,13 @@ def _atomic_pr_repair(
     steps.append({"step": "commit_all", **committed})
     if not committed.get("ok"):
         return {"ok": False, "error": "commit_all failed", "engine": "atoms", "steps": steps}
+    if live and not committed.get("committed"):
+        return {
+            "ok": False,
+            "error": "repair produced no commit",
+            "engine": "atoms",
+            "steps": steps,
+        }
 
     pushed = run_atom(
         p_push.main,
@@ -101,6 +111,7 @@ def compose_pr_repair(
     pr_number: int,
     branch: str,
     live: bool,
+    review: dict[str, Any] | None = None,
 ) -> dict:
     if live:
         cfg = load_config(config_path)
@@ -112,7 +123,9 @@ def compose_pr_repair(
         if not branch:
             return {"ok": False, "error": "branch required for pr_repair"}
 
-    if use_fala():
+    # Fala's run envelope cannot yet prove that commit_all produced a commit.
+    # All live repairs therefore use atoms so zero-diff stays fail-closed.
+    if use_fala() and not live:
         from lokay.graph_run import run_path
 
         result = run_path(
@@ -122,6 +135,7 @@ def compose_pr_repair(
             branch=branch,
             config_path=config_path,
             live=live,
+            extra_inputs={"review": review or {}},
         )
         result["kind"] = "pr_repair"
         result["engine"] = "fala"
@@ -133,6 +147,7 @@ def compose_pr_repair(
             pr_number=pr_number,
             branch=branch,
             live=live,
+            review=review,
         )
         result["kind"] = "pr_repair"
         result["planned"] = not live
@@ -151,13 +166,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", required=True)
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--branch", required=True, help="head ref of the PR")
+    p.add_argument("--review-json", default="", help="structured request_changes evidence")
     args = p.parse_args(argv)
+    try:
+        review = json.loads(args.review_json) if args.review_json else None
+    except json.JSONDecodeError as exc:
+        return emit_exit({"ok": False, "error": f"invalid --review-json: {exc}"})
     payload = compose_pr_repair(
         config_path=args.config,
         repo=args.repo,
         pr_number=int(args.pr),
         branch=str(args.branch),
         live=bool(args.live),
+        review=review,
     )
     return emit_exit(payload if "ok" in payload else {**payload, "ok": bool(payload.get("ok"))})
 

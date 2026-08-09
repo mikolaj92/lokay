@@ -511,7 +511,33 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 still_open.append(pr)
                 continue
             if tri.get("skipped"):
-                # PR still open — keep remaining_prs; isolate conflicts.
+                # An actionable structured review goes back to the coding executor on
+                # this existing PR branch. Human/security/invalid decisions stay closed.
+                if tri.get("repairable"):
+                    needs_repair += 1
+                    if repair_budget > 0 and cfg.executor_enabled:
+                        repair = compose_pr_repair(
+                            config_path=config_path,
+                            repo=repo.name,
+                            pr_number=pr_num,
+                            branch=head,
+                            live=True,
+                            review=dict(tri.get("review") or {}),
+                        )
+                        actions.append(
+                            {
+                                "step": "pr_review_repair",
+                                "pr": pr_num,
+                                "branch": head,
+                                **repair,
+                            }
+                        )
+                        # Every attempt consumes budget, including failures.
+                        repair_budget -= 1
+                        if repair.get("ok"):
+                            progress += 1
+                            needs_repair = max(0, needs_repair - 1)
+                # PR remains open after repair. Fresh checks and review happen next pass.
                 if tri.get("reason") == "merge_conflicts":
                     merge_conflicts += 1
                 still_open.append(pr)

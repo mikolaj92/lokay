@@ -76,7 +76,10 @@ def decision_from_dict(data: dict[str, Any]) -> PrReviewDecision:
     def _bool(key: str, default: bool) -> bool:
         if key not in data:
             return default
-        return bool(data[key])
+        value = data[key]
+        if not isinstance(value, bool):
+            raise PrReviewError(f"{key} must be a boolean")
+        return value
 
     def _str_list(key: str) -> tuple[str, ...]:
         val = data.get(key) or []
@@ -102,14 +105,19 @@ def parse_review_output(text: str) -> PrReviewDecision:
 
 
 def should_merge(decision: PrReviewDecision) -> bool:
-    """Merge only on explicit approve without secrets flag."""
+    """Merge only on an explicit, internally consistent approval."""
     if decision.verdict != "approve":
         return False
-    if decision.secrets:
+    if decision.secrets or decision.blocking:
         return False
-    if decision.blocking:
+    if not decision.scope_ok or not decision.tests_adequate:
         return False
     return True
+
+
+def should_repair(decision: PrReviewDecision) -> bool:
+    """Only ordinary actionable findings may be delegated back to the coder."""
+    return decision.verdict == "request_changes" and not decision.secrets
 
 
 def review_prompt(

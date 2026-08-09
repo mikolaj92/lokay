@@ -94,12 +94,22 @@ def _atomic_pr_triage(
                 "steps": steps,
             }
         if not rev.get("merge_ok"):
+            decision = rev.get("decision")
+            verdict = str((decision or {}).get("verdict") or "")
+            repairable = verdict == "request_changes" and not bool(
+                (decision or {}).get("secrets")
+            )
             return {
                 "ok": True,
                 "skipped": True,
-                "reason": "llm_review_not_approved",
+                "reason": (
+                    "llm_review_requested_changes"
+                    if repairable
+                    else "llm_review_not_approved"
+                ),
+                "repairable": repairable,
                 "engine": "atoms",
-                "review": rev.get("decision"),
+                "review": decision,
                 "steps": steps,
             }
     elif cfg.require_llm_review and not cfg.executor_enabled:
@@ -194,7 +204,12 @@ def compose_pr_triage(
     if not branch:
         return {"ok": False, "error": "branch required for pr_triage"}
 
-    if use_fala():
+    cfg = load_config(config_path)
+    # Structured-review outcomes must be visible to tick as repairable/not-repairable.
+    # Fala's run envelope does not expose terminal effector values yet, so this
+    # safety-critical path explicitly uses atoms even when Fala is opted in.
+    structured_review = cfg.require_llm_review
+    if use_fala() and not structured_review:
         from lokay.graph_run import run_path
 
         result = run_path(
