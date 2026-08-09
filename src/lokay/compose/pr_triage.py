@@ -94,12 +94,22 @@ def _atomic_pr_triage(
                 "steps": steps,
             }
         if not rev.get("merge_ok"):
+            decision = rev.get("decision")
+            verdict = str((decision or {}).get("verdict") or "")
+            repairable = verdict == "request_changes" and not bool(
+                (decision or {}).get("secrets")
+            )
             return {
                 "ok": True,
                 "skipped": True,
-                "reason": "llm_review_not_approved",
+                "reason": (
+                    "llm_review_requested_changes"
+                    if repairable
+                    else "llm_review_not_approved"
+                ),
+                "repairable": repairable,
                 "engine": "atoms",
-                "review": rev.get("decision"),
+                "review": decision,
                 "steps": steps,
             }
     elif cfg.require_llm_review and not cfg.executor_enabled:

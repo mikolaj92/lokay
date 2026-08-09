@@ -6,6 +6,7 @@ from lokay.pr_review import (
     PrReviewError,
     parse_review_output,
     should_merge,
+    should_repair,
 )
 
 
@@ -62,3 +63,31 @@ def test_needs_human():
     )
     assert d.verdict == "needs_human"
     assert should_merge(d) is False
+
+
+def test_request_changes_is_repairable_without_secrets():
+    d = parse_review_output(
+        '{"verdict":"request_changes","secrets":false,"blocking":["fix it"]}'
+    )
+    assert should_repair(d) is True
+    assert should_merge(d) is False
+
+
+def test_request_changes_with_secrets_is_not_repairable():
+    d = parse_review_output(
+        '{"verdict":"request_changes","secrets":true,"blocking":["key"]}'
+    )
+    assert should_repair(d) is False
+
+
+@pytest.mark.parametrize(
+    "field", ["scope_ok", "tests_adequate"]
+)
+def test_approve_rejects_false_safety_field(field):
+    d = parse_review_output(f'{{"verdict":"approve","{field}":false}}')
+    assert should_merge(d) is False
+
+
+def test_boolean_strings_fail_closed():
+    with pytest.raises(PrReviewError):
+        parse_review_output('{"verdict":"approve","secrets":"false"}')

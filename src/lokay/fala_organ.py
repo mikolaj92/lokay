@@ -292,6 +292,9 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
                 pr_number=pr_number,
                 branch=branch,
                 checks_text=checks_text,
+                review_text=json.dumps(
+                    inputs.get("review") or {}, ensure_ascii=False, sort_keys=True
+                ),
             )
         else:
             issue_raw = up.get("get_issue", {}).get("issue") or {}

@@ -189,3 +189,81 @@ state:
     )
     result = compose_tick(config_path=str(cfg_path), live=True)
     assert result["ok"] is False
+
+
+def test_tick_routes_request_changes_to_repair_and_keeps_pr_open(tmp_path, monkeypatch):
+    from lokay.compose import tick
+
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  command: omp
+  args: ["-p", "{{prompt}}"]
+merge:
+  enabled: true
+  require_checks: false
+  require_llm_review: true
+limits:
+  max_triage_per_tick: 0
+  max_issues_per_tick: 0
+  max_repairs_per_tick: 1
+worktrees:
+  root: {tmp_path / 'wt'}
+state:
+  path: {tmp_path / 'state.jsonl'}
+""",
+        encoding="utf-8",
+    )
+    branch = "ai/fix/7-x"
+
+    def fake_run(fn, argv):
+        if fn is tick.p_list_prs.main:
+            return {
+                "ok": True,
+                "prs": [{"number": 12, "head_ref": branch, "mergeable": "MERGEABLE"}],
+            }
+        if fn in {tick.p_list_inbox.main, tick.p_list_issues.main}:
+            key = "issues"
+            return {"ok": True, key: []}
+        if fn is tick.p_checks.main:
+            return {"ok": True, "status": "none", "merge_ok": True}
+        raise AssertionError(f"unexpected atom: {fn}")
+
+    triage_calls = []
+    repair_calls = []
+
+    def fake_triage(**kwargs):
+        triage_calls.append(kwargs)
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "llm_review_requested_changes",
+            "repairable": True,
+            "review": {
+                "verdict": "request_changes",
+                "secrets": False,
+                "blocking": ["validate theme"],
+            },
+        }
+
+    def fake_repair(**kwargs):
+        repair_calls.append(kwargs)
+        return {"ok": True, "pushed": True}
+
+    monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(tick, "compose_pr_triage", fake_triage)
+    monkeypatch.setattr(tick, "compose_pr_repair", fake_repair)
+    result = tick.compose_tick(config_path=str(cfg_path), live=True)
+
+    assert len(triage_calls) == 1
+    assert len(repair_calls) == 1
+    assert repair_calls[0]["review"]["blocking"] == ["validate theme"]
+    assert result["progress"] == 1
+    assert result["remaining"]["open_ai_prs"] == 1
+    assert any(action["step"] == "pr_review_repair" for action in result["actions"])
