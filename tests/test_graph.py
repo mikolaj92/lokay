@@ -155,3 +155,40 @@ def test_fala_issue_triage_skip_contract_is_not_applied():
         "triage_issue": {"id": "triage_issue", "status": "completed", "output": {"values": {"applied": False, "decision": {"decision": "skip"}}}},
     })
     assert out["ok"] and not out["applied"] and out["skipped"]
+
+
+def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
+    import lokay.graph_run as graph_run
+
+    package = Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml"
+    captured = []
+
+    def fake_host_run_package(**kwargs):
+        captured.append(kwargs)
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
+    expected = {
+        "issue_to_pr": {"get_issue", "assign_issue", "make_branch", "worktree_add", "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label"},
+        "issue_triage": {"get_issue", "triage_issue"},
+        "pr_repair": {"pr_checks", "worktree_add", "run_agent", "commit_all", "push"},
+        "pr_triage": {"pr_checks", "pr_review", "pr_merge", "close_issue"},
+    }
+    for path_id, effectors in expected.items():
+        graph_run.run_path(path_id=path_id, repo="a/b", issue=1, pr=2, branch="ai/fix/1-x", live=False, package_path=str(package), db_path=str(tmp_path / path_id))
+        assert set(captured[-1]["effector_inputs"]) == effectors
+
+
+def test_run_path_rejects_unknown_path_before_fala(tmp_path, monkeypatch):
+    import lokay.graph_run as graph_run
+
+    called = False
+    def fake_host_run_package(**kwargs):
+        nonlocal called
+        called = True
+        return {}
+    monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
+    package = Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml"
+    with pytest.raises(ValueError, match="unknown Fala correlation path"):
+        graph_run.run_path(path_id="missing", repo="a/b", live=False, package_path=str(package), db_path=str(tmp_path / "missing"))
+    assert called is False
