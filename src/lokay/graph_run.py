@@ -119,25 +119,20 @@ def run_path(
     if extra_inputs:
         base_input.update(extra_inputs)
 
-    # Same authored inputs for every known step; Fala only runs path effectors.
-    steps = [
-        "get_issue",
-        "triage_issue",
-        "assign_issue",
-        "make_branch",
-        "pr_checks",
-        "pr_review",
-        "pr_merge",
-        "close_issue",
-        "worktree_add",
-        "run_agent",
-        "commit_all",
-        "push",
-        "pr_create",
-        "list_prs",
-        "pr_label",
-    ]
-    effector_inputs = {step: dict(base_input) for step in steps}
+    # Fala rejects input keys outside the instantiated plan. Keep this mapping
+    # aligned with the authored package and pass only the selected path's IDs.
+    path_effectors = {
+        "issue_to_pr": (
+            "get_issue", "assign_issue", "make_branch", "worktree_add",
+            "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label",
+        ),
+        "issue_triage": ("get_issue", "triage_issue"),
+        "pr_repair": ("pr_checks", "worktree_add", "run_agent", "commit_all", "push"),
+        "pr_triage": ("pr_checks", "pr_review", "pr_merge", "close_issue"),
+    }
+    if path_id not in path_effectors:
+        raise ValueError(f"unknown Fala correlation path: {path_id}")
+    effector_inputs = {step: dict(base_input) for step in path_effectors[path_id]}
 
     rid = run_id or f"lokay-{uuid.uuid4().hex[:12]}"
     # Ensure organ imports resolve from checkout when not fully installed
