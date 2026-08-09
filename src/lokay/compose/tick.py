@@ -224,48 +224,41 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if triage_budget <= 0:
                 break
             num = int(issue["number"])
-            # Default: Unix atom triage. LOKAY_USE_FALA=1 is explicit — no silent atom fallback.
-            from lokay.compose._atoms import use_fala
-
-            if use_fala():
-                try:
-                    tri = run_path(
-                        path_id="issue_triage",
-                        repo=repo.name,
-                        issue=num,
-                        config_path=config_path,
-                        live=True,
+            try:
+                tri = run_path(
+                    path_id="issue_triage",
+                    repo=repo.name,
+                    issue=num,
+                    config_path=config_path,
+                    live=True,
+                )
+                actions.append(
+                    {"step": "issue_triage", "repo": repo.name, "issue": num, **tri}
+                )
+                # Live progress means a real label mutation, never merely a
+                # successfully completed graph or a decision=skip no-op.
+                decision = tri.get("decision")
+                skipped = (
+                    tri.get("skipped")
+                    or (
+                        isinstance(decision, dict)
+                        and decision.get("decision") == "skip"
                     )
-                    actions.append(
-                        {"step": "issue_triage", "repo": repo.name, "issue": num, **tri}
-                    )
-                    if tri.get("ok"):
-                        progress += 1
-                        remaining_inbox = max(0, remaining_inbox - 1)
-                except Exception as exc:
-                    actions.append(
-                        {
-                            "step": "issue_triage",
-                            "repo": repo.name,
-                            "issue": num,
-                            "ok": False,
-                            "engine": "fala",
-                            "error": f"Fala path failed (no atom super-fallback): {exc}",
-                        }
-                    )
-                triage_budget -= 1
-                continue
-            tri = _run(
-                p_triage.main,
-                [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num)],
-            )
-            actions.append({"step": "triage_issue", "repo": repo.name, **tri})
-            # Live: only real mutations count as progress (no green noop).
-            # Survey: count non-skip decisions as planned work handled this pass.
-            decided = tri.get("decision", {}).get("decision") not in {None, "skip"}
-            if tri.get("ok") and (tri.get("applied") if live else decided):
-                progress += 1
-                remaining_inbox = max(0, remaining_inbox - 1)
+                )
+                if tri.get("ok") and tri.get("applied") is True and not skipped:
+                    progress += 1
+                    remaining_inbox = max(0, remaining_inbox - 1)
+            except Exception as exc:
+                actions.append(
+                    {
+                        "step": "issue_triage",
+                        "repo": repo.name,
+                        "issue": num,
+                        "ok": False,
+                        "engine": "fala",
+                        "error": f"Fala path failed (no atom super-fallback): {exc}",
+                    }
+                )
             triage_budget -= 1
 
     # --- 2) Ready survey only: unready issues covered by open AI PRs; do NOT implement yet ---
@@ -496,7 +489,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if not live or not head:
                 still_open.append(pr)
                 continue
-            # pr_triage: atom pipeline (or Fala if LOKAY_USE_FALA=1).
+            # pr_triage: Fala graph; atoms execute only as graph nodes.
             tri = compose_pr_triage(
                 config_path=config_path,
                 repo=repo.name,
