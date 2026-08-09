@@ -103,3 +103,38 @@ state:
     assert called
     assert result["kind"] in {"pr_repair", "pr_triage"}
     assert result["ok"] is False
+
+
+def test_all_live_repairs_use_zero_diff_safe_atoms_when_fala_opted_in(
+    tmp_path: Path, monkeypatch
+):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  command: omp
+  args: ["-p", "{{prompt}}"]
+state:
+  path: {tmp_path / 'state.jsonl'}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LOKAY_USE_FALA", "1")
+    called = []
+
+    def fake_atomic(**kwargs):
+        called.append(kwargs)
+        return {"ok": False, "error": "repair produced no commit"}
+
+    monkeypatch.setattr(pr_repair, "_atomic_pr_repair", fake_atomic)
+    result = pr_repair.compose_pr_repair(
+        config_path=str(cfg), repo="a/b", pr_number=3,
+        branch="ai/fix/3-x", live=True,
+    )
+    assert called
+    assert result["ok"] is False

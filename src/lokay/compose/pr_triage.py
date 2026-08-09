@@ -208,7 +208,7 @@ def compose_pr_triage(
     # Structured-review outcomes must be visible to tick as repairable/not-repairable.
     # Fala's run envelope does not expose terminal effector values yet, so this
     # safety-critical path explicitly uses atoms even when Fala is opted in.
-    structured_review = cfg.require_llm_review and cfg.executor_enabled
+    structured_review = cfg.require_llm_review
     if use_fala() and not structured_review:
         from lokay.graph_run import run_path
 

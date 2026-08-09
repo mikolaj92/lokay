@@ -110,3 +110,26 @@ def test_fala_opt_in_uses_atoms_when_structured_review_required(tmp_path, monkey
     assert called
     assert result["kind"] in {"pr_repair", "pr_triage"}
     assert result["repairable"] is True
+
+
+def test_fala_opt_in_uses_atoms_when_review_required_executor_disabled(
+    tmp_path, monkeypatch
+):
+    cfg = Path(_live_config(tmp_path))
+    cfg.write_text(
+        cfg.read_text(encoding="utf-8").replace("enabled: true", "enabled: false"),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LOKAY_USE_FALA", "1")
+    called = []
+
+    def fake_atomic(**kwargs):
+        called.append(kwargs)
+        return {"ok": True, "skipped": True, "reason": "llm_review_requires_executor"}
+
+    monkeypatch.setattr(pr_triage, "_atomic_pr_triage", fake_atomic)
+    result = pr_triage.compose_pr_triage(
+        config_path=str(cfg), repo="a/b", pr_number=10, branch="ai/fix/10-x", live=True
+    )
+    assert called
+    assert result["reason"] == "llm_review_requires_executor"
