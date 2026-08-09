@@ -73,3 +73,14 @@ def test_required_review_with_disabled_executor_stays_blocked(tmp_path, monkeypa
     )
     assert merged["skipped"] is True
     assert merged["reason"] == "executor_disabled"
+
+
+def test_bundled_fala_manifest_is_ascii_safe():
+    """Native TOML parsing must never land on a UTF-8 continuation byte."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    authored = (root / "fala" / "lokay.fala-package.toml").read_bytes()
+    bundled = (root / "src" / "lokay" / "data" / "lokay.fala-package.toml").read_bytes()
+    assert authored == bundled
+    authored.decode("ascii")
