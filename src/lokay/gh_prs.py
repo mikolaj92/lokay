@@ -9,6 +9,17 @@ from lokay.models import PullRequest
 from lokay.runner import CommandResult, Runner, gh_spec
 
 
+def _label_names(value: Any) -> list[str] | None:
+    if not isinstance(value, list):
+        return None
+    if not all(
+        isinstance(label, dict) and isinstance(label.get("name"), str)
+        for label in value
+    ):
+        return None
+    return [str(label["name"]) for label in value]
+
+
 def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[PullRequest]:
     args = [
         "pr",
@@ -18,7 +29,7 @@ def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: 
         "--state",
         "open",
         "--json",
-        "number,title,body,headRefName,headRefOid,author,url,isDraft,mergeable",
+        "number,title,body,headRefName,headRefOid,author,url,isDraft,mergeable,labels",
         "--limit",
         "50",
     ]
@@ -46,6 +57,7 @@ def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: 
                 url=str(row.get("url") or ""),
                 is_draft=bool(row.get("isDraft")),
                 mergeable=str(row["mergeable"]) if row.get("mergeable") is not None else None,
+                labels=_label_names(row.get("labels")),
             )
         )
     return out
