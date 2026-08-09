@@ -94,7 +94,7 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "pr_label" }
 retry_policy = "none"
 
-# --- Inbox triage: undecided issue → labels (ai:ready is an outcome) ---
+# --- Inbox triage: undecided issue -> labels (ai:ready is an outcome) ---
 
 [[correlation_paths]]
 id = "issue_triage"
@@ -116,7 +116,7 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "triage_issue" }
 retry_policy = "none"
 
-# --- PR repair: red checks → agent fix on existing branch → push ---
+# --- PR repair: red checks -> agent fix on existing branch -> push ---
 
 [[correlation_paths]]
 id = "pr_repair"
@@ -162,7 +162,7 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "push" }
 retry_policy = "none"
 
-# --- PR triage: checks → merge (policy) → close linked issue ---
+# --- PR triage: checks -> merge (policy) -> close linked issue ---
 
 [[correlation_paths]]
 id = "pr_triage"
