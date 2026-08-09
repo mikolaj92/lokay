@@ -51,7 +51,7 @@ Dry-run (no mutations): omit `--live` / use `mode: dry-run` — still **not** a 
 repos.mikolaj92.yaml   # which repos we mill
 fala/                  # declarative graphs
 src/lokay/proc/        # atomic CLIs
-src/lokay/compose/     # tick / mill / status
+src/lokay/compose/     # Fala-only entrypoints + tick / mill / status
 scripts/lokay-mill-daemon.sh
 docs/NO_STUBS.md
 ```

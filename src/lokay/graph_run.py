@@ -126,6 +126,7 @@ def run_path(
         "assign_issue",
         "make_branch",
         "pr_checks",
+        "pr_review",
         "pr_merge",
         "close_issue",
         "worktree_add",
@@ -163,8 +164,11 @@ def run_path(
         max_ticks=max_ticks,
         worker_id="lokay-graph",
     )
-    return {
-        "ok": bool(result.get("ok")),
+    envelope = {
+        "ok": (
+            bool(result.get("ok"))
+            and str(result.get("run_status") or "completed") == "completed"
+        ),
         "engine": "fala",
         "path_id": path_id,
         "package": str(pkg_runtime),
@@ -177,6 +181,190 @@ def run_path(
         "live": live,
         "fala": result,
     }
+    return normalize_path_result(envelope)
+
+
+def _process_payload(process: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap one terminal Fala effector output into the atom envelope."""
+    raw = process.get("output")
+    if raw is None:
+        raw = process.get("output_json")
+    if isinstance(raw, str):
+        import json
+        try:
+            raw = json.loads(raw)
+        except (TypeError, ValueError):
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    values = raw.get("values")
+    return dict(values if isinstance(values, dict) else raw)
+
+
+def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize Fala's ``id/status/output/error`` process entries.
+
+    Compose callers never interpret host internals.  A failed host/process stays
+    failed, while successful terminal atom values form the existing contracts.
+    """
+    fala = result.get("fala") if isinstance(result.get("fala"), dict) else {}
+    effector_results = fala.get("effector_results")
+    entries: list[tuple[str, dict[str, Any]]] = []
+    results_error: str | None = None
+    if effector_results is not None:
+        if not isinstance(effector_results, dict) or not effector_results:
+            results_error = "Fala effector_results is missing or malformed"
+        elif any(not isinstance(value, dict) for value in effector_results.values()):
+            results_error = "Fala effector_results contains a malformed entry"
+        else:
+            entries = [(str(key), value) for key, value in effector_results.items()]
+            for _key, value in entries:
+                status = str(value.get("status") or "").lower()
+                if status in {"completed", "succeeded", "success"}:
+                    raw_output = value.get("output")
+                    if raw_output is None:
+                        raw_output = value.get("output_json")
+                    if isinstance(raw_output, str):
+                        import json
+                        try:
+                            raw_output = json.loads(raw_output)
+                        except (TypeError, ValueError):
+                            raw_output = None
+                    if not isinstance(raw_output, dict):
+                        results_error = (
+                            "Fala effector_results contains a completed entry "
+                            "without structured output"
+                        )
+                        entries = []
+                        break
+    else:
+        # Compatibility with hosts that embedded terminal output in processes.
+        # Fala's id/status-only process summaries are deliberately not accepted.
+        processes = fala.get("processes")
+        if isinstance(processes, list):
+            legacy = [
+                value for value in processes
+                if isinstance(value, dict)
+                and ("output" in value or "output_json" in value)
+            ]
+            entries = [
+                (
+                    str(value.get("effector_id") or str(value.get("id") or "").rsplit(":", 1)[-1]),
+                    value,
+                )
+                for value in legacy
+            ]
+        if not entries:
+            results_error = "Fala completed without terminal effector_results"
+
+    terminal: dict[str, dict[str, Any]] = {}
+    steps: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for keyed_id, process in entries:
+        process_id = str(process.get("id") or "")
+        effector_id = keyed_id or str(
+            process.get("effector_id") or process_id.rsplit(":", 1)[-1]
+        )
+        payload = _process_payload(process)
+        item = {"step": effector_id, "status": process.get("status"), **payload}
+        error = process.get("error")
+        if error not in (None, "", {}):
+            item["error"] = error
+        terminal[effector_id] = item
+        steps.append(item)
+        status = str(process.get("status") or "").lower()
+        if status in {"failed", "cancelled", "canceled", "timed_out", "error"}:
+            failed.append(item)
+
+    out = {**result, "terminal": terminal, "steps": steps}
+    if results_error and result.get("ok"):
+        out.update(ok=False, error=results_error)
+        return out
+    if failed or not result.get("ok"):
+        out["ok"] = False
+        out["error"] = failed[0].get("error") if failed else result.get("error")
+        if not out.get("error"):
+            out["error"] = "Fala path failed"
+        return out
+
+    out["ok"] = True
+    path_id = str(result.get("path_id") or "")
+    if path_id == "pr_triage":
+        review = terminal.get("pr_review", {})
+        decision = review.get("decision") if isinstance(review.get("decision"), dict) else {}
+        merge = terminal.get("pr_merge", {})
+        close = terminal.get("close_issue", {})
+        if review.get("skipped") and not review.get("merge_ok"):
+            out.update(
+                skipped=True,
+                reason=review.get("reason") or "pr_review_skipped",
+                repairable=False,
+                review=decision,
+            )
+        elif review.get("merge_ok") and review.get("reason") == "llm_review_not_required":
+            if merge.get("skipped"):
+                out.update(
+                    skipped=True,
+                    reason=merge.get("reason") or "pr_merge_skipped",
+                    repairable=False,
+                )
+            else:
+                out.update(
+                    merged=bool(merge.get("merged") or merge.get("planned")),
+                    closed_issue=close.get("issue"),
+                )
+        elif str(decision.get("verdict") or "") != "approve":
+            repairable = (
+                decision.get("verdict") == "request_changes"
+                and not bool(decision.get("secrets"))
+            )
+            out.update(
+                skipped=True,
+                reason=(
+                    "llm_review_requested_changes"
+                    if repairable
+                    else "llm_review_not_approved"
+                ),
+                repairable=repairable,
+                review=decision,
+            )
+        elif merge.get("skipped"):
+            out.update(
+                skipped=True,
+                reason=merge.get("reason") or "pr_merge_skipped",
+                repairable=False,
+                review=decision,
+            )
+        else:
+            out.update(
+                merged=bool(merge.get("merged") or merge.get("planned")),
+                closed_issue=close.get("issue"),
+                review=decision,
+            )
+    elif path_id == "issue_triage":
+        triage = terminal.get("triage_issue", {})
+        decision = triage.get("decision")
+        out.update(
+            applied=triage.get("applied") is True,
+            decision=decision if isinstance(decision, dict) else {},
+            skipped=(
+                bool(triage.get("skipped"))
+                or (isinstance(decision, dict) and decision.get("decision") == "skip")
+            ),
+        )
+        if triage.get("reason"):
+            out["reason"] = triage.get("reason")
+    elif path_id == "pr_repair":
+        commit = terminal.get("commit_all", {})
+        out.update(repo=result.get("repo"), pr=result.get("pr"), branch=result.get("branch"))
+        if result.get("live") and commit.get("committed") is not True:
+            out.update(ok=False, error="repair produced no commit")
+    elif path_id == "issue_to_pr":
+        out.update(
+            branch=terminal.get("make_branch", {}).get("branch"),
+            pr=terminal.get("pr_label", {}).get("pr"),
+        )
+    return out
 
 
 def describe_package(package_path: str | Path | None = None) -> dict[str, Any]:

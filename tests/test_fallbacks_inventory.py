@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from lokay import gh_prs, graph_run
-from lokay.compose._atoms import use_fala
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,12 +41,9 @@ def test_run_path_fala_home_candidates_are_relative_only():
     assert "Path(\"/Users/" not in src
 
 
-def test_use_fala_is_explicit_opt_in(monkeypatch):
-    """Promoted: dual engine is opt-in env, default off."""
-    monkeypatch.delenv("LOKAY_USE_FALA", raising=False)
-    assert use_fala() is False
-    monkeypatch.setenv("LOKAY_USE_FALA", "1")
-    assert use_fala() is True
+def test_no_runtime_engine_selector():
+    """Fala is the only composer; no environment-selected Python graph remains."""
+    assert not (ROOT / "src" / "lokay" / "compose" / "_atoms.py").exists()
 
 
 def test_tick_fala_failure_does_not_fall_through_to_atoms(tmp_path: Path, monkeypatch):
@@ -125,7 +121,7 @@ merge:
         if a.get("step") == "issue_triage" and a.get("ok") is False
     ]
     assert fala_fail, f"expected Fala fail action, got {actions!r}"
-    assert "no atom super-fallback" in str(fala_fail[0].get("error") or "")
+    assert "Fala path failed" in str(fala_fail[0].get("error") or "")
     triage_atoms = [n for n in atom_calls if "triage" in n]
     assert triage_atoms == [], f"atom triage must not run after Fala fail: {triage_atoms}"
 
@@ -135,3 +131,46 @@ def test_fallbacks_doc_exists():
     text = (ROOT / "docs" / "FALLBACKS.md").read_text(encoding="utf-8")
     assert "pr_checks_green" in text
     assert "Deleted" in text
+
+
+def test_tick_fala_triage_noop_does_not_count_as_progress(tmp_path, monkeypatch):
+    from lokay.compose import tick as tick_mod
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(f"""
+mode: live
+repos:
+  - name: o/r
+    clone_path: {tmp_path}
+executor:
+  enabled: false
+limits:
+  max_triage_per_tick: 1
+  max_issues_per_tick: 0
+  max_repairs_per_tick: 0
+merge:
+  enabled: false
+state:
+  path: {tmp_path / 'state.jsonl'}
+""", encoding="utf-8")
+
+    def fake_atom(main, argv):
+        name = getattr(main, "__module__", "")
+        if name.endswith("list_inbox"):
+            return {"ok": True, "issues": [{"number": 1, "title": "skip"}]}
+        if name.endswith("list_issues"):
+            return {"ok": True, "issues": []}
+        if name.endswith("list_prs"):
+            return {"ok": True, "prs": []}
+        return {"ok": True}
+
+    monkeypatch.setattr(tick_mod, "_run", fake_atom)
+    monkeypatch.setattr(tick_mod, "run_path", lambda **kwargs: {
+        "ok": True,
+        "applied": False,
+        "skipped": True,
+        "decision": {"decision": "skip"},
+    })
+    out = tick_mod.compose_tick(config_path=str(cfg), live=True)
+    assert out["progress"] == 0
+    assert out["remaining"]["inbox"] == 1

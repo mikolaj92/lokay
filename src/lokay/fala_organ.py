@@ -118,6 +118,21 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "pr_review":
         assert repo and pr_number is not None
+        # The graph always contains the review effector, but review policy is
+        # optional.  Bypass the executor entirely when deterministic merge is
+        # configured; downstream merge treats merge_ok=true as approval.
+        from lokay.config import load_config
+
+        review_cfg = load_config(str(inputs.get("config_path") or inputs.get("config") or "") or None)
+        if not review_cfg.require_llm_review:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "llm_review_not_required",
+                "merge_ok": True,
+                "repo": repo,
+                "pr": pr_number,
+            }
         checks = up.get("pr_checks") or {}
         argv = [
             *cfg,
@@ -153,11 +168,15 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             }
         review = up.get("pr_review") or {}
         if review:
-            if review.get("skipped") and review.get("reason") in {
-                "executor_disabled",
-                "invalid_review_json",
-                "llm_review_requires_executor",
-            }:
+            if (
+                not review.get("merge_ok")
+                and review.get("skipped")
+                and review.get("reason") in {
+                    "executor_disabled",
+                    "invalid_review_json",
+                    "llm_review_requires_executor",
+                }
+            ):
                 return {
                     "ok": True,
                     "skipped": True,
@@ -292,6 +311,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
                 pr_number=pr_number,
                 branch=branch,
                 checks_text=checks_text,
+                review_text=json.dumps(inputs.get("review") or {}, ensure_ascii=False, sort_keys=True),
             )
         else:
             issue_raw = up.get("get_issue", {}).get("issue") or {}
@@ -333,6 +353,16 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             or ""
         )
         assert worktree and branch
+        committed = up.get("commit_all", {}).get("committed")
+        if inputs.get("live") and committed is not True:
+            return {
+                "ok": False,
+                "error": "refusing live push: upstream commit_all.committed is not true",
+                "reason": "zero_diff",
+                "committed": committed,
+                "worktree": worktree,
+                "branch": branch,
+            }
         return _run_atom_main(
             push_branch.main,
             [*live, "--worktree", worktree, "--branch", branch],
