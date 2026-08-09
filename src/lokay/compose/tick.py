@@ -50,6 +50,14 @@ def _offline() -> bool:
     return os.environ.get("LOKAY_OFFLINE", "").strip() in {"1", "true", "yes"}
 
 
+def _is_manual_pr(pr: dict[str, Any]) -> bool:
+    """Only an explicit, well-formed terminal label removes PR backpressure."""
+    labels = pr.get("labels")
+    return isinstance(labels, list) and all(isinstance(x, str) for x in labels) and (
+        "ai:needs-review" in labels
+    )
+
+
 def _run(main_fn: Callable[..., int], argv: list[str]) -> dict[str, Any]:
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -76,7 +84,11 @@ def _health_payload(
 ) -> dict[str, Any]:
     inbox = int(remaining.get("inbox") or 0)
     ready = int(remaining.get("ready") or 0)  # implementable (no open AI PR yet)
-    prs = int(remaining.get("open_ai_prs") or 0)
+    prs = int(
+        remaining.get("actionable_open_ai_prs")
+        if remaining.get("actionable_open_ai_prs") is not None
+        else remaining.get("open_ai_prs") or 0
+    )
     mergeable_green = int(remaining.get("mergeable_green") or 0)
     needs_repair = int(remaining.get("needs_repair") or 0)
     survey_errors = int(remaining.get("survey_errors") or 0)
@@ -185,6 +197,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     remaining_ready = 0
     remaining_ready_with_pr = 0
     remaining_prs = 0
+    actionable_prs = 0
+    manual_prs = 0
     needs_repair = 0
     mergeable_green = 0
     survey_errors = 0
@@ -208,6 +222,17 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         pr_list = list(prs.get("prs") or [])
         prs_by_repo[repo.name] = pr_list
         remaining_prs += len(pr_list)
+        actionable_prs += sum(not _is_manual_pr(pr) for pr in pr_list)
+        manual_prs += sum(_is_manual_pr(pr) for pr in pr_list)
+
+    triage_block_reason: str | None = None
+    if survey_errors:
+        triage_block_reason = "PR survey failed closed; refuse inbox triage mutations"
+    elif actionable_prs:
+        triage_block_reason = (
+            f"global PR-first backpressure: {actionable_prs} actionable AI PR(s) "
+            "block inbox triage mutations"
+        )
 
     # --- 1) Inbox: always survey; triage only when live ---
     for repo in cfg.active_repos():
@@ -219,6 +244,16 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         inbox = list(listed.get("issues") or [])
         remaining_inbox += len(inbox)
         if not live:
+            continue
+        if triage_block_reason:
+            actions.append(
+                {
+                    "step": "skip_inbox_triage_global_backpressure",
+                    "repo": repo.name,
+                    "count": len(inbox),
+                    "reason": triage_block_reason,
+                }
+            )
             continue
         for issue in inbox:
             if triage_budget <= 0:
@@ -339,6 +374,17 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         pr_list = list(prs_by_repo.get(repo.name) or [])
         still_open: list[dict[str, Any]] = []
         for pr in pr_list:
+            if _is_manual_pr(pr):
+                still_open.append(pr)
+                actions.append(
+                    {
+                        "step": "skip_manual_pr",
+                        "repo": repo.name,
+                        "pr": int(pr["number"]),
+                        "reason": "ai:needs-review is terminal/manual",
+                    }
+                )
+                continue
             pr_num = int(pr["number"])
             head = str(pr.get("head_ref") or "")
             mergeable = str(pr.get("mergeable") or "").upper()
@@ -533,6 +579,14 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 # PR remains open after repair. Fresh checks and review happen next pass.
                 if tri.get("reason") == "merge_conflicts":
                     merge_conflicts += 1
+                review = tri.get("review")
+                if isinstance(review, dict) and (
+                    review.get("verdict") == "needs_human"
+                    or review.get("secrets") is True
+                ):
+                    # pr_review applied ai:needs-review; reflect that mutation in
+                    # this pass rather than waiting for the next survey.
+                    pr["labels"] = ["ai:needs-review"]
                 still_open.append(pr)
                 continue
             # Successful merge (+ optional close).
@@ -549,8 +603,33 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     if live:
         save_stuck(stuck_path, stuck)
 
-    # --- 4) Implement at most one ready issue, only in repos with zero open AI PRs ---
+    # Recount from the post-processing queue. Intake is globally PR-first: an
+    # actionable PR in any managed repository blocks issue_to_pr everywhere.
+    remaining_prs = sum(len(prs) for prs in prs_by_repo.values())
+    actionable_prs = sum(
+        not _is_manual_pr(pr) for prs in prs_by_repo.values() for pr in prs
+    )
+    manual_prs = sum(_is_manual_pr(pr) for prs in prs_by_repo.values() for pr in prs)
+    intake_skip_reason: str | None = None
+    if survey_errors:
+        intake_skip_reason = "PR survey failed closed; refuse issue_to_pr"
+    elif actionable_prs:
+        intake_skip_reason = (
+            f"global PR-first backpressure: {actionable_prs} actionable AI PR(s) remain open"
+        )
+        actions.append(
+            {
+                "step": "skip_issue_to_pr_global_backpressure",
+                "actionable_open_ai_prs": actionable_prs,
+                "manual_open_ai_prs": manual_prs,
+                "reason": intake_skip_reason,
+            }
+        )
+
+    # --- 4) Implement at most one ready issue, only when no actionable AI PR is open ---
     for repo in cfg.active_repos():
+        if intake_skip_reason:
+            break
         if not live or issue_budget <= 0:
             break
         open_prs = prs_by_repo.get(repo.name) or []
@@ -615,6 +694,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 br = str(result.get("branch") or "")
                 if pr_n is not None and br:
                     remaining_prs += 1
+                    actionable_prs += 1
                     prs_by_repo.setdefault(selected["repo"], []).append(
                         {
                             "number": int(pr_n),
@@ -678,6 +758,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "ready": remaining_ready,
         "ready_with_open_pr": remaining_ready_with_pr,
         "open_ai_prs": remaining_prs,
+        "actionable_open_ai_prs": actionable_prs,
+        "manual_open_ai_prs": manual_prs,
+        "intake_skip_reason": intake_skip_reason,
         "mergeable_green": mergeable_green,
         "needs_repair": needs_repair,
         "pending_checks": pending_checks,

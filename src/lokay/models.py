@@ -42,6 +42,7 @@ class PullRequest:
     url: str
     is_draft: bool
     mergeable: str | None
+    labels: list[str] | None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -59,4 +60,7 @@ class PullRequest:
             url=str(data.get("url") or ""),
             is_draft=bool(data.get("is_draft")),
             mergeable=data.get("mergeable"),
+            labels=(
+                list(data["labels"]) if isinstance(data.get("labels"), list) else None
+            ),
         )
