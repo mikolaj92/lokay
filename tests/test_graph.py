@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from lokay.graph_run import _materialize_package, describe_package, find_default_package, normalize_path_result
 
 
