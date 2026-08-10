@@ -49,6 +49,10 @@ def _lease_path() -> Path:
     return Path.home() / ".lokay" / "health-lease"
 
 
+def _repair_lease_path() -> Path:
+    return Path.home() / ".lokay" / "self-repair-lease"
+
+
 def issue_health_lease(*, ttl_seconds: int = 300) -> None:
     """Issue a short-lived process-tree capability without persisting its secret."""
     import time
@@ -148,6 +152,83 @@ def has_health_lease() -> bool:
         return False
 
 
+def issue_self_repair_lease(*, fingerprint: str, ttl_seconds: int = 1800) -> None:
+    """Authorize only the dedicated, fixed-scope repair path for this process tree.
+
+    This is separate from the healthy lease: product intake must remain blocked.
+    The secret is never persisted and the record is useful only while the mill
+    owner still holds its singleton lock.
+    """
+    import time
+
+    token = secrets.token_hex(32)
+    path = _repair_lease_path()
+    if not _safe_owned_path(path.parent):
+        raise RuntimeError("unsafe self-repair lease directory")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "token_sha256": hashlib.sha256(token.encode("ascii")).hexdigest(),
+        "owner_pid": os.getpid(),
+        "fingerprint": str(fingerprint)[:64],
+        "issued_at": int(time.time()),
+        "expires_at": int(time.time()) + max(1, min(int(ttl_seconds), 3600)),
+    }
+    temp = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(temp, flags, 0o600)
+    try:
+        os.write(fd, json.dumps(record, sort_keys=True).encode("ascii")); os.fsync(fd)
+    finally:
+        os.close(fd)
+    try:
+        if path.exists() or path.is_symlink():
+            import stat
+            st = path.lstat()
+            if path.is_symlink() or not stat.S_ISREG(st.st_mode) or (hasattr(os, "getuid") and st.st_uid != os.getuid()):
+                raise RuntimeError("unsafe existing self-repair lease")
+        os.replace(temp, path)
+    finally:
+        try: temp.unlink()
+        except FileNotFoundError: pass
+    os.environ["LOKAY_SELF_REPAIR_LEASE"] = token
+    os.environ["LOKAY_SELF_REPAIR_FINGERPRINT"] = str(fingerprint)[:64]
+
+
+def revoke_self_repair_lease() -> None:
+    os.environ.pop("LOKAY_SELF_REPAIR_LEASE", None)
+    os.environ.pop("LOKAY_SELF_REPAIR_FINGERPRINT", None)
+    try: _repair_lease_path().unlink()
+    except FileNotFoundError: pass
+
+
+def has_self_repair_lease() -> bool:
+    import time
+
+    token = os.environ.get("LOKAY_SELF_REPAIR_LEASE", "")
+    fingerprint = os.environ.get("LOKAY_SELF_REPAIR_FINGERPRINT", "")
+    path = _repair_lease_path()
+    try:
+        st = path.lstat(); record = json.loads(path.read_text(encoding="ascii"))
+        owner_pid = int(record["owner_pid"]); os.kill(owner_pid, 0)
+        lock_path = Path.home() / ".lokay" / "mill.lock"
+        lock_key = str(lock_path.absolute())
+        lock_held = owner_pid == os.getpid() and lock_key in _LOCKS
+        if not lock_held:
+            probe = lock_path.open("a+")
+            try:
+                try: fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB); fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+                except BlockingIOError: lock_held = True
+            finally: probe.close()
+        return (
+            lock_held and len(token) == 64 and fingerprint == str(record["fingerprint"])
+            and not path.is_symlink() and (not hasattr(os, "getuid") or st.st_uid == os.getuid())
+            and st.st_mode & 0o077 == 0 and int(record["issued_at"]) <= int(time.time()) < int(record["expires_at"])
+            and secrets.compare_digest(str(record["token_sha256"]), hashlib.sha256(token.encode("ascii")).hexdigest())
+        )
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False
+
+
 def acquire_run_lock(lock_path: Path) -> bool:
     """Acquire and retain an OS advisory lock for this process."""
     key = str(lock_path.expanduser().absolute())
@@ -222,7 +303,9 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable"))
 
     lock_path = cfg.state_path.parent / "mill.lock"
-    singleton_ok = acquire_run_lock(lock_path)
+    singleton_ok = acquire_run_lock(lock_path) or (
+        os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1" and has_self_repair_lease()
+    )
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
     return {"ok": all(x["ok"] for x in findings), "findings": findings}, cfg
 
@@ -253,7 +336,7 @@ def _github_incident(result: dict[str, Any]) -> str | None:
     fp = result["fingerprint"]
     marker = f"<!-- lokay-preflight:{fp} -->"
     try:
-        listed = subprocess.run(["gh", "issue", "list", "--repo", "mikolaj92/lokay", "--state", "open", "--search", marker, "--json", "number,body", "--limit", "20"], capture_output=True, text=True, timeout=15, check=False)
+        listed = subprocess.run(["gh", "issue", "list", "--repo", "mikolaj92/lokay", "--state", "open", "--json", "number,body", "--limit", "50"], capture_output=True, text=True, timeout=15, check=False)
         rows = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
         match = next((r for r in rows if marker in str(r.get("body") or "")), None)
         summary = ", ".join(x["name"] for x in result["findings"] if not x["ok"])
@@ -287,7 +370,8 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
     if checked["ok"]:
-        issue_health_lease()
+        if os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") != "1":
+            issue_health_lease()
     else:
         try: result["local_incident"] = str(_persist_incident(cfg, result))
         except OSError: result["local_incident"] = None

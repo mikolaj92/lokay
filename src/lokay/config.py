@@ -62,6 +62,7 @@ class Config:
     max_issues_per_tick: int = 1
     max_triage_per_tick: int = 5
     max_repairs_per_tick: int = 1
+    max_self_repair_attempts: int = 2
     max_failures_before_block: int = 2
     min_free_gb: float = 2.0
     config_path: Path | None = None
@@ -274,6 +275,7 @@ def load_config(path: str | Path | None = None) -> Config:
         max_issues_per_tick=int(lim.get("max_issues_per_tick", 1)),
         max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
         max_repairs_per_tick=int(lim.get("max_repairs_per_tick", 1)),
+        max_self_repair_attempts=int(lim.get("max_self_repair_attempts", 2)),
         max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
         config_path=cfg_path,

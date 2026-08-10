@@ -75,9 +75,13 @@ def run_path(
 ) -> dict[str, Any]:
     """Drive Fala host_run_package for a Lokay graph path."""
     if live:
-        from lokay.preflight import require_healthy
+        from lokay.preflight import has_self_repair_lease, require_healthy
 
-        require_healthy(str(config_path) if config_path else None)
+        if has_self_repair_lease():
+            if repo != "mikolaj92/lokay" or path_id not in {"issue_to_pr", "pr_repair", "pr_triage"}:
+                raise RuntimeError("self-repair capability is restricted to the Lokay repair lane")
+        else:
+            require_healthy(str(config_path) if config_path else None)
     try:
         from fala import host_run_package
     except ImportError as exc:  # pragma: no cover
@@ -154,15 +158,25 @@ def run_path(
                 os.environ["FALA_HOME"] = str(candidate.resolve())
                 break
 
-    result = host_run_package(
-        db_path=db,
-        package_path=pkg_runtime,
-        path_id=path_id,
-        run_id=rid,
-        effector_inputs=effector_inputs,
-        max_ticks=max_ticks,
-        worker_id="lokay-graph",
-    )
+    repair_atom = live and has_self_repair_lease()
+    previous_repair_atom = os.environ.get("LOKAY_SELF_REPAIR_ATOM")
+    if repair_atom:
+        os.environ["LOKAY_SELF_REPAIR_ATOM"] = "1"
+    try:
+        result = host_run_package(
+            db_path=db,
+            package_path=pkg_runtime,
+            path_id=path_id,
+            run_id=rid,
+            effector_inputs=effector_inputs,
+            max_ticks=max_ticks,
+            worker_id="lokay-graph",
+        )
+    finally:
+        if previous_repair_atom is None:
+            os.environ.pop("LOKAY_SELF_REPAIR_ATOM", None)
+        else:
+            os.environ["LOKAY_SELF_REPAIR_ATOM"] = previous_repair_atom
     envelope = {
         "ok": (
             bool(result.get("ok"))

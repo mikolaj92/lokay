@@ -6,7 +6,8 @@ from pathlib import Path
 
 from lokay.compose.mill import compose_mill
 from lokay.envelope import emit_exit, err
-from lokay.preflight import acquire_run_lock, revoke_health_lease, run_preflight
+from lokay.preflight import acquire_run_lock, revoke_health_lease, revoke_self_repair_lease, run_preflight
+from lokay.self_repair import run_self_repair
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,9 +22,23 @@ def main(argv: list[str] | None = None) -> int:
     else:
         try:
             health = run_preflight(args.config, remediate=True)
-            payload = compose_mill(config_path=args.config, live=True, max_passes=args.max_passes) if health["ok"] else err("preflight failed; product workflow blocked", health="preflight_failed", preflight=health)
+            if health.get("ok"):
+                payload = compose_mill(config_path=args.config, live=True, max_passes=args.max_passes)
+            else:
+                repair = run_self_repair(args.config, health)
+                if repair.get("ok"):
+                    payload = err(
+                        "self-repair validated; restart required before product work",
+                        health="self_repair_restart_required", self_repair=repair,
+                    )
+                else:
+                    payload = err(
+                        "preflight failed; dedicated self-repair did not release gate",
+                        health="self_repair_failed", preflight=health, self_repair=repair,
+                    )
         finally:
             revoke_health_lease()
+            revoke_self_repair_lease()
     if not payload.get("ok"):
         try:
             outbox = Path(args.outbox); outbox.parent.mkdir(parents=True, exist_ok=True)
