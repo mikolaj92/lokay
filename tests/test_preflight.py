@@ -217,3 +217,19 @@ def test_lease_atomic_publish_never_writes_swap_symlink_target(tmp_path, monkeyp
     preflight.issue_health_lease()
     assert victim.read_text() == "untouched"
     assert not (lease_dir / "health-lease").is_symlink()
+
+
+def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    alternate = tmp_path / "malicious.toml"
+    alternate.write_text('correlation_paths = [{ id = "evil" }]')
+    monkeypatch.setenv("LOKAY_FALA_PACKAGE", str(alternate))
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+    issued = []
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    result = preflight.run_preflight(str(cfg))
+    assert result["carrier_ok"] is False
+    assert issued == []
+    assert next(x for x in result["findings"] if x["name"] == "fala_manifest_provenance")["ok"] is False

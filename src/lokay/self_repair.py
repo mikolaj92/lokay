@@ -21,6 +21,7 @@ from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.config import load_config
 from lokay.state import append_event
+from lokay.preflight import trusted_fala_manifest
 
 SELF_REPAIR_REPO = "mikolaj92/lokay"
 _ISSUE_URL = re.compile(r"^https://github\.com/mikolaj92/lokay/issues/(\d+)$")
@@ -141,6 +142,7 @@ def run_self_repair(
     # Carrier preflight issued the ordinary health lease.  Every live Fala atom
     # uses the same normal gate as product work; there is no repair bypass.
     deadline = time.monotonic() + min(max(60, cfg.whole_run_deadline_seconds), 3600)
+    package_path = str(trusted_fala_manifest())
     try:
         for attempt in range(1, budget + 1):
             row: dict[str, Any] = {"attempt": attempt}
@@ -149,7 +151,7 @@ def run_self_repair(
             except Exception:
                 row.update(ok=False, phase="discover_pr", reason="github_unavailable"); break
             if pr is None:
-                made = compose_issue_to_pr(config_path=config_path, repo=SELF_REPAIR_REPO, issue_number=issue, live=True, incident_fingerprint=str(preflight.get("fingerprint") or ""))
+                made = compose_issue_to_pr(config_path=config_path, repo=SELF_REPAIR_REPO, issue_number=issue, live=True, incident_fingerprint=str(preflight.get("fingerprint") or ""), package_path=package_path)
                 row["issue_to_pr"] = made
                 if not made.get("ok"):
                     row.update(ok=False, phase="issue_to_pr"); continue
@@ -172,7 +174,7 @@ def run_self_repair(
             status = _checks(pr_number, require_checks=cfg.require_checks)
             row["checks"] = status
             if status == "failed":
-                repaired = compose_pr_repair(config_path=config_path, repo=SELF_REPAIR_REPO, pr_number=pr_number, branch=branch, live=True)
+                repaired = compose_pr_repair(config_path=config_path, repo=SELF_REPAIR_REPO, pr_number=pr_number, branch=branch, live=True, package_path=package_path)
                 row["pr_repair"] = repaired
                 # Validation always occurs on a later bounded attempt/fresh query.
                 continue
@@ -180,7 +182,7 @@ def run_self_repair(
                 row.update(ok=False, phase="validation", reason=status); break
             if not cfg.merge_enabled:
                 row.update(ok=False, phase="merge", reason="merge_policy_disabled"); break
-            triaged = compose_pr_triage(config_path=config_path, repo=SELF_REPAIR_REPO, pr_number=pr_number, branch=branch, live=True, keep_issue_open=True)
+            triaged = compose_pr_triage(config_path=config_path, repo=SELF_REPAIR_REPO, pr_number=pr_number, branch=branch, live=True, keep_issue_open=True, package_path=package_path)
             row["pr_triage"] = triaged
             if not triaged.get("ok") or not triaged.get("merged"):
                 row.update(ok=False, phase="normal_merge_policy"); continue

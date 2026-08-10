@@ -18,6 +18,7 @@ def unhealthy(url="https://github.com/mikolaj92/lokay/issues/44"):
 
 def setup_lane(monkeypatch, tmp_path, **cfg_kw):
     monkeypatch.setattr(self_repair, "load_config", lambda p: cfg(tmp_path, **cfg_kw))
+    monkeypatch.setattr(self_repair, "trusted_fala_manifest", lambda: tmp_path / "trusted.toml")
     monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->", "mergeCommit": {"oid": "merge"}})
 
 

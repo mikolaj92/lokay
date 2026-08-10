@@ -20,6 +20,7 @@ def compose_pr_repair(
     branch: str,
     live: bool,
     review: dict | None = None,
+    package_path: str | None = None,
 ) -> dict:
     if live and load_config(config_path).mode != "live":
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
@@ -28,7 +29,7 @@ def compose_pr_repair(
 
     result = run_path(
         path_id="pr_repair", repo=repo, pr=pr_number, branch=branch,
-        config_path=config_path, live=live, extra_inputs={"review": review or {}},
+        config_path=config_path, live=live, package_path=package_path, extra_inputs={"review": review or {}},
     )
     result.update(kind="pr_repair", engine="fala", planned=not live)
     try:

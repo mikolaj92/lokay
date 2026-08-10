@@ -18,6 +18,20 @@ _REDACTED = "[redacted]"
 _LOCKS: dict[str, Any] = {}
 
 
+def trusted_fala_manifest() -> Path:
+    """Return the committed manifest only after exact packaged/source provenance."""
+    source = Path(__file__).resolve().parents[2] / "fala" / "lokay.fala-package.toml"
+    packaged = Path(__file__).resolve().parent / "data" / "lokay.fala-package.toml"
+    if not source.is_file() or not packaged.is_file():
+        raise RuntimeError("canonical Fala manifests unavailable")
+    if source.read_bytes() != packaged.read_bytes():
+        raise RuntimeError("canonical Fala manifests differ")
+    override = os.environ.get("LOKAY_FALA_PACKAGE")
+    if override and Path(override).expanduser().resolve() != source.resolve():
+        raise RuntimeError("untrusted LOKAY_FALA_PACKAGE override")
+    return source
+
+
 def _finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> dict[str, Any]:
     return {"name": name, "ok": passed, "code": code[:80], "detail": code[:80], "repaired": repaired}
 
@@ -192,7 +206,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     findings.append(_finding("disk_headroom", disk_ok, "ok" if disk_ok else "insufficient"))
 
     try:
-        package = find_default_package()
+        package = trusted_fala_manifest()
         package_ok = package.is_file()
         project = package.resolve().parents[1]
         fala_probe = subprocess.run(
@@ -207,7 +221,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
             check=False,
         )
         fala_ok = package_ok and fala_probe.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
         fala_ok = False
     findings.append(_finding("fala_smoke", fala_ok, "ok" if fala_ok else "unavailable"))
 
@@ -225,16 +239,20 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     singleton_ok = acquire_run_lock(lock_path)
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
 
-    # Deeper, repairable Lokay integrity.  Carrier health above is sufficient to
-    # run the ordinary gated Fala/GitHub/executor workflow; this check is not a
-    # privileged bypass and never masks a missing carrier prerequisite.
+    # Manifest provenance is a carrier prerequisite: never run Fala from an
+    # env-selected or mismatched graph.  Deeper Python syntax integrity remains
+    # repairable once that trusted carrier is healthy.
     try:
-        source_manifest = find_default_package()
-        packaged_manifest = Path(__file__).parent / "data" / "lokay.fala-package.toml"
-        integrity_ok = packaged_manifest.is_file() and source_manifest.read_bytes() == packaged_manifest.read_bytes()
-    except OSError:
+        trusted_fala_manifest(); manifest_ok = True
+    except (OSError, RuntimeError):
+        manifest_ok = False
+    findings.append(_finding("fala_manifest_provenance", manifest_ok, "ok" if manifest_ok else "untrusted_or_mismatch"))
+    try:
+        import ast
+        integrity_ok = all(ast.parse(path.read_text(encoding="utf-8")) is not None for path in Path(__file__).parent.rglob("*.py"))
+    except (OSError, SyntaxError, UnicodeError):
         integrity_ok = False
-    findings.append(_finding("lokay_integrity", integrity_ok, "ok" if integrity_ok else "manifest_mismatch"))
+    findings.append(_finding("lokay_integrity", integrity_ok, "ok" if integrity_ok else "python_syntax_invalid"))
     carrier = [x for x in findings if x["name"] != "lokay_integrity"]
     return {"ok": all(x["ok"] for x in findings), "carrier_ok": all(x["ok"] for x in carrier), "integrity_ok": integrity_ok, "findings": findings}, cfg
 
@@ -266,7 +284,7 @@ def _github_incident(result: dict[str, Any]) -> str | None:
     marker = f"<!-- lokay-preflight:{fp} -->"
     try:
         listed = subprocess.run([
-            "gh", "api", "--paginate", "repos/mikolaj92/lokay/issues",
+            "gh", "api", "--method", "GET", "--paginate", "repos/mikolaj92/lokay/issues",
             "-f", "state=open", "-f", "per_page=100", "--slurp",
         ], capture_output=True, text=True, timeout=30, check=False)
         pages = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
