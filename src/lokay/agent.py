@@ -147,7 +147,7 @@ def run_agent(
             argv=tuple(argv),
             cwd=str(worktree),
             # Never delegate the orchestration health capability to the coding agent.
-            env={"LOKAY_HEALTH_LEASE": "", "LOKAY_SELF_REPAIR_LEASE": "", "LOKAY_SELF_REPAIR_FINGERPRINT": "", "LOKAY_SELF_REPAIR_ATOM": ""},
+            env={"LOKAY_HEALTH_LEASE": "", "LOKAY_REPAIR_BROKER": "", "LOKAY_REPAIR_ISSUE": "", "LOKAY_REPAIR_FINGERPRINT": "", "LOKAY_REPAIR_REPO": "", "LOKAY_FALA_ATOM": ""},
             timeout_seconds=config.timeout_seconds,
         ),
         live=True,

@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -18,12 +20,8 @@ from lokay.compose.issue_to_pr import compose_issue_to_pr
 from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.config import load_config
-from lokay.preflight import (
-    issue_self_repair_lease,
-    revoke_health_lease,
-    revoke_self_repair_lease,
-    run_preflight,
-)
+from lokay.preflight import revoke_health_lease
+from lokay.repair_broker import RepairBroker
 from lokay.state import append_event
 
 SELF_REPAIR_REPO = "mikolaj92/lokay"
@@ -53,14 +51,19 @@ def _incident_number(preflight: dict[str, Any]) -> int | None:
 def _repair_pr(issue: int, *, branch_prefix: str = "ai/fix") -> dict[str, Any] | None:
     rows = _gh_json([
         "pr", "list", "--repo", SELF_REPAIR_REPO, "--state", "open",
-        "--json", "number,headRefName,mergeable", "--limit", "50",
+        "--json", "number,headRefName,headRefOid,headRepository,baseRefName,body,mergeable", "--limit", "50",
     ])
     if not isinstance(rows, list):
         raise RuntimeError("malformed GitHub PR response")
     # Branch names are deterministic and begin <prefix>/<issue>-.  Restricting
     # by issue prevents an unrelated Lokay PR from entering the repair lane.
     prefix = f"{branch_prefix.rstrip('/')}/{issue}-"
-    matches = [row for row in rows if str(row.get("headRefName") or "").startswith(prefix)]
+    marker = f"<!-- lokay-preflight:{os.environ.get('LOKAY_REPAIR_FINGERPRINT', '')} -->"
+    matches = [row for row in rows if
+        str(row.get("headRefName") or "").startswith(prefix)
+        and str(row.get("baseRefName") or "") == "main"
+        and str(((row.get("headRepository") or {}).get("nameWithOwner") or "")) == SELF_REPAIR_REPO
+        and marker in str(row.get("body") or "")]
     if len(matches) > 1:
         raise RuntimeError("ambiguous repair PRs")
     return dict(matches[0]) if matches else None
@@ -80,11 +83,14 @@ def _checks(pr: int, *, require_checks: bool) -> str:
     return "failed"
 
 
-def _activate(cfg: Any) -> dict[str, Any]:
+def _activate(cfg: Any, *, expected_commit: str) -> dict[str, Any]:
     """Fast-forward the configured Lokay checkout, but never touch dirty state."""
     repo = next((r for r in cfg.active_repos() if r.name == SELF_REPAIR_REPO), None)
     if repo is None or not repo.clone_path.is_dir():
         return {"ok": False, "activated": False, "reason": "lokay_clone_unavailable"}
+    origin = subprocess.run(["git", "-C", str(repo.clone_path), "remote", "get-url", "origin"], capture_output=True, text=True, timeout=30, check=False)
+    if origin.returncode or "mikolaj92/lokay" not in origin.stdout:
+        return {"ok": False, "activated": False, "reason": "wrong_origin"}
     commands = [
         ["git", "-C", str(repo.clone_path), "status", "--porcelain"],
         ["git", "-C", str(repo.clone_path), "fetch", "origin", "main"],
@@ -97,7 +103,10 @@ def _activate(cfg: Any) -> dict[str, Any]:
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, check=False)
         if result.returncode:
             return {"ok": False, "activated": False, "reason": "fast_forward_failed"}
-    return {"ok": True, "activated": True, "path": str(repo.clone_path)}
+    ancestor = subprocess.run(["git", "-C", str(repo.clone_path), "merge-base", "--is-ancestor", expected_commit, "HEAD"], timeout=30, check=False)
+    if ancestor.returncode:
+        return {"ok": False, "activated": False, "reason": "exact_merge_not_activated"}
+    return {"ok": True, "activated": True, "path": str(repo.clone_path), "commit": expected_commit}
 
 
 def run_self_repair(
@@ -127,10 +136,11 @@ def run_self_repair(
         result["reason"] = "executor_disabled"
         _event(cfg, phase="blocked", reason=result["reason"]); return result
 
-    # Do not mint a healthy lease.  Only the three Lokay Fala paths recognize
-    # this separate capability; all normal product mutations remain blocked.
     revoke_health_lease()
-    issue_self_repair_lease(fingerprint=str(preflight.get("fingerprint") or "unknown"))
+    deadline = time.monotonic() + min(max(60, cfg.whole_run_deadline_seconds), 3600)
+    broker = RepairBroker(issue=issue, fingerprint=str(preflight.get("fingerprint") or "unknown"), deadline=deadline)
+    previous = {key: os.environ.get(key) for key in broker.env()}
+    os.environ.update(broker.env())
     try:
         for attempt in range(1, budget + 1):
             row: dict[str, Any] = {"attempt": attempt}
@@ -150,7 +160,17 @@ def run_self_repair(
                     row.update(ok=False, phase="issue_to_pr", reason="zero_diff_or_no_pr"); continue
                 pr = {"number": int(pr_number), "headRefName": branch}
             pr_number = int(pr["number"]); branch = str(pr.get("headRefName") or "")
-            row.update(pr=pr_number, branch=branch)
+            identity = _gh_json(["pr", "view", str(pr_number), "--repo", SELF_REPAIR_REPO, "--json", "headRefName,headRefOid,headRepository,baseRefName,body"])
+            head_sha = str(identity.get("headRefOid") or "")
+            marker = f"<!-- lokay-preflight:{preflight.get('fingerprint')} -->"
+            if (str(identity.get("headRefName") or "") != branch or not head_sha
+                or str(identity.get("baseRefName") or "") != "main"
+                or str(((identity.get("headRepository") or {}).get("nameWithOwner") or "")) != SELF_REPAIR_REPO
+                or marker not in str(identity.get("body") or "")):
+                row.update(ok=False, phase="pr_identity"); break
+            broker.bind_pr(pr=pr_number, branch=branch, head_sha=head_sha)
+            os.environ.update({"LOKAY_REPAIR_PR": str(pr_number), "LOKAY_REPAIR_BRANCH": branch, "LOKAY_REPAIR_HEAD_SHA": head_sha})
+            row.update(pr=pr_number, branch=branch, head_sha=head_sha)
             status = _checks(pr_number, require_checks=cfg.require_checks)
             row["checks"] = status
             if status == "failed":
@@ -162,11 +182,15 @@ def run_self_repair(
                 row.update(ok=False, phase="validation", reason=status); break
             if not cfg.merge_enabled:
                 row.update(ok=False, phase="merge", reason="merge_policy_disabled"); break
-            triaged = compose_pr_triage(config_path=config_path, repo=SELF_REPAIR_REPO, pr_number=pr_number, branch=branch, live=True)
+            triaged = compose_pr_triage(config_path=config_path, repo=SELF_REPAIR_REPO, pr_number=pr_number, branch=branch, live=True, keep_issue_open=True)
             row["pr_triage"] = triaged
             if not triaged.get("ok") or not triaged.get("merged"):
                 row.update(ok=False, phase="normal_merge_policy"); continue
-            activation = _activate(cfg); row["activation"] = activation
+            merged = _gh_json(["pr", "view", str(pr_number), "--repo", SELF_REPAIR_REPO, "--json", "mergeCommit,headRefName,headRepository"])
+            merge_commit = str(((merged or {}).get("mergeCommit") or {}).get("oid") or "")
+            if not merge_commit or str(merged.get("headRefName") or "") != branch:
+                row.update(ok=False, phase="merged_identity"); break
+            activation = _activate(cfg, expected_commit=merge_commit); row["activation"] = activation
             if not activation.get("ok"):
                 row.update(ok=False, phase="activation"); break
             check = subprocess.run(
@@ -181,11 +205,21 @@ def run_self_repair(
             except (ValueError, IndexError): health = {"ok": False, "health": "validation_failed"}
             row["preflight"] = {"ok": bool(check.returncode == 0 and health.get("ok")), "health": health.get("health")}
             if row["preflight"]["ok"]:
-                result.update(ok=True, health="restart_required", gate_released=False, validated=True, repaired_pr=pr_number, activation=activation)
+                closed = subprocess.run(["gh", "issue", "close", str(issue), "--repo", SELF_REPAIR_REPO,
+                    "--comment", f"Validated repair PR #{pr_number} for fingerprint {preflight.get('fingerprint')}."],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=30, check=False)
+                row["incident_closed"] = closed.returncode == 0
+                if closed.returncode != 0:
+                    row.update(ok=False, phase="incident_close"); result["reason"] = "validated_but_close_failed"; break
+                result.update(ok=True, health="restart_required", gate_released=False, validated=True, repaired_pr=pr_number, activation=activation, incident_closed=True)
                 _event(cfg, phase="validated_restart_required", issue=issue, pr=pr_number, activation=activation)
                 return result
         result["reason"] = result.get("reason") or "repair_budget_exhausted"
         _event(cfg, phase="failed", issue=issue, attempts=len(result["attempts"]), reason=result["reason"])
         return result
     finally:
-        revoke_self_repair_lease()
+        broker.close()
+        for key, value in previous.items():
+            if value is None: os.environ.pop(key, None)
+            else: os.environ[key] = value

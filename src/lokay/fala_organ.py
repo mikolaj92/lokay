@@ -58,6 +58,11 @@ def _live_flags(inputs: dict[str, Any]) -> list[str]:
 
 
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    os.environ["LOKAY_FALA_ATOM"] = atom
+    os.environ["LOKAY_REPAIR_REPO"] = str(inputs.get("repo") or "")
+    os.environ["LOKAY_REPAIR_PR"] = str(inputs.get("pr") or inputs.get("pr_number") or "0")
+    os.environ["LOKAY_REPAIR_BRANCH"] = str(inputs.get("branch") or "")
+    os.environ["LOKAY_REPAIR_HEAD_SHA"] = str(inputs.get("head_sha") or "")
     from lokay.proc import (
         assign_issue,
         close_issue,
@@ -201,6 +206,8 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "close_issue":
         assert repo
+        if inputs.get("keep_issue_open"):
+            return {"ok": True, "skipped": True, "reason": "self_repair_validation_pending"}
         merged = up.get("pr_merge") or {}
         # Only close after merge ran (live merged=true) or dry-run planned merge.
         if merged.get("skipped"):

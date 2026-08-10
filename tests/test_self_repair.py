@@ -5,7 +5,7 @@ from lokay import self_repair
 
 
 def cfg(tmp_path, **kw):
-    base = dict(state_path=tmp_path / "state.jsonl", max_repairs_per_tick=2, max_self_repair_attempts=2,
+    base = dict(state_path=tmp_path / "state.jsonl", max_repairs_per_tick=2, max_self_repair_attempts=2, whole_run_deadline_seconds=3600,
                 executor_enabled=True, require_checks=False, merge_enabled=True, branch_prefix="ai/fix",
                 active_repos=lambda: [])
     base.update(kw); return SimpleNamespace(**base)
@@ -18,9 +18,9 @@ def unhealthy(url="https://github.com/mikolaj92/lokay/issues/44"):
 
 def setup_lane(monkeypatch, tmp_path, **cfg_kw):
     monkeypatch.setattr(self_repair, "load_config", lambda p: cfg(tmp_path, **cfg_kw))
-    monkeypatch.setattr(self_repair, "issue_self_repair_lease", lambda **k: None)
-    monkeypatch.setattr(self_repair, "revoke_self_repair_lease", lambda: None)
     monkeypatch.setattr(self_repair, "revoke_health_lease", lambda: None)
+    monkeypatch.setattr(self_repair, "RepairBroker", lambda **k: SimpleNamespace(env=lambda: {}, close=lambda: None, bind_pr=lambda **k: None))
+    monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->", "mergeCommit": {"oid": "merge"}})
 
 
 def test_missing_deduplicated_incident_never_runs_executor(monkeypatch, tmp_path):
@@ -72,7 +72,8 @@ def test_normal_policy_merge_activation_and_preflight_release(monkeypatch, tmp_p
     monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: {"number": 7, "headRefName": "ai/fix/44-health"})
     monkeypatch.setattr(self_repair, "_checks", lambda *a, **k: "passed")
     monkeypatch.setattr(self_repair, "compose_pr_triage", lambda **k: {"ok": True, "merged": True})
-    monkeypatch.setattr(self_repair, "_activate", lambda c: {"ok": True, "activated": True, "path": str(tmp_path)})
+    monkeypatch.setattr(self_repair, "_activate", lambda c, **kw: {"ok": True, "activated": True, "path": str(tmp_path)})
+    monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"mergeCommit": {"oid": "abc"}, "headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->"})
     monkeypatch.setattr(self_repair.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout='{"ok": true, "health": "healthy"}\n', stderr=""))
     result = self_repair.run_self_repair("x", unhealthy())
     assert result["ok"] and result["validated"] and not result["gate_released"] and result["repaired_pr"] == 7
@@ -89,8 +90,8 @@ def test_merge_policy_disabled_fails_closed(monkeypatch, tmp_path):
 
 def test_multiple_repair_prs_fail_closed(monkeypatch):
     monkeypatch.setattr(self_repair, "_gh_json", lambda a: [
-        {"number": 1, "headRefName": "ai/fix/44-a"},
-        {"number": 2, "headRefName": "ai/fix/44-b"},
+        {"number": 1, "headRefName": "ai/fix/44-a", "baseRefName": "main", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "body": "<!-- lokay-preflight: -->"},
+        {"number": 2, "headRefName": "ai/fix/44-b", "baseRefName": "main", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "body": "<!-- lokay-preflight: -->"},
     ])
     import pytest
     with pytest.raises(RuntimeError, match="ambiguous"):

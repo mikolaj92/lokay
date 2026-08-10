@@ -6,7 +6,7 @@ from pathlib import Path
 
 from lokay.compose.mill import compose_mill
 from lokay.envelope import emit_exit, err
-from lokay.preflight import acquire_run_lock, revoke_health_lease, revoke_self_repair_lease, run_preflight
+from lokay.preflight import acquire_run_lock, revoke_health_lease, run_preflight
 from lokay.self_repair import run_self_repair
 
 
@@ -38,7 +38,6 @@ def main(argv: list[str] | None = None) -> int:
                     )
         finally:
             revoke_health_lease()
-            revoke_self_repair_lease()
     if not payload.get("ok"):
         try:
             outbox = Path(args.outbox); outbox.parent.mkdir(parents=True, exist_ok=True)

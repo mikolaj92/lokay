@@ -46,3 +46,4 @@ executor:
 # Dedicated self-repair uses its own bounded agent-attempt budget.
 limits:
   max_self_repair_attempts: 2
+  whole_run_deadline_seconds: 3600
