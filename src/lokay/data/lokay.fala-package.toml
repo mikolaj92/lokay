@@ -10,6 +10,21 @@ description = "Guarded issue-to-PR graph. Order is the product; agent is one nod
 id = "lokay_atom"
 title = "Run one Lokay atom via Fala organ"
 
+# Parent factory Fala. It owns the top-level pass and invokes child Fala paths
+# through the factory_tick subprocess boundary. Parent and children use separate
+# journals (factory/ versus ~/.lokay/fala/state.sqlite).
+[[correlation_paths]]
+id = "factory_pass"
+title = "Lokay factory pass"
+description = "Parent Fala for one complete multi-repository factory pass."
+
+[[correlation_paths.effectors]]
+id = "factory_tick"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE"] }
+config = { atom = "factory_tick" }
+retry_policy = "none"
+
 [[correlation_paths]]
 id = "issue_to_pr"
 title = "Issue to PR"

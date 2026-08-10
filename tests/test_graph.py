@@ -5,6 +5,12 @@ import pytest
 from lokay.graph_run import _materialize_package, describe_package, find_default_package, normalize_path_result
 
 
+def test_describe_parent_factory_graph():
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
+    assert [node["id"] for node in path["nodes"]] == ["factory_tick"]
+
+
 def test_describe_issue_to_pr_graph():
     desc = describe_package()
     assert desc["package_id"] == "lokay"
@@ -171,6 +177,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
     expected = {
+        "factory_pass": {"factory_tick"},
         "issue_to_pr": {"get_issue", "assign_issue", "make_branch", "worktree_add", "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label"},
         "issue_triage": {"get_issue", "triage_issue"},
         "pr_repair": {"pr_checks", "worktree_add", "run_agent", "commit_all", "push"},
@@ -179,6 +186,28 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
     for path_id, effectors in expected.items():
         graph_run.run_path(path_id=path_id, repo="a/b", issue=1, pr=2, branch="ai/fix/1-x", live=False, package_path=str(package), db_path=str(tmp_path / path_id))
         assert set(captured[-1]["effector_inputs"]) == effectors
+
+
+def test_factory_path_normalizes_tick_contract():
+    out = _host("factory_pass", {
+        "factory_tick": {
+            "id": "factory_tick",
+            "status": "completed",
+            "output": {"values": {
+                "ok": True,
+                "tick": {
+                    "ok": True,
+                    "health": "progress",
+                    "progress": 1,
+                    "remaining": {"ready": 2},
+                },
+            }},
+        },
+    })
+    assert out["ok"] is True
+    assert out["health"] == "progress"
+    assert out["progress"] == 1
+    assert out["remaining"] == {"ready": 2}
 
 
 def test_run_path_rejects_unknown_path_before_fala(tmp_path, monkeypatch):

@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
-from lokay.compose.tick import compose_tick
+from lokay.compose.factory import compose_factory_pass
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.preflight import run_preflight
@@ -58,7 +58,7 @@ def compose_mill(
         )
 
     for i in range(max_passes):
-        tick = compose_tick(config_path=config_path, live=live)
+        tick = compose_factory_pass(config_path=config_path, live=live)
         remaining = tick.get("remaining")
         results.append(
             {

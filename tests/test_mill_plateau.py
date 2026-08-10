@@ -49,7 +49,7 @@ state:
         }
 
     monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(mill_mod, "compose_tick", fake_tick)
+    monkeypatch.setattr(mill_mod, "compose_factory_pass", fake_tick)
     out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=8)
     assert out["ok"] is False
     assert out["health"] == "plateau"
@@ -100,7 +100,7 @@ state:
         }
 
     monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(mill_mod, "compose_tick", fake_tick)
+    monkeypatch.setattr(mill_mod, "compose_factory_pass", fake_tick)
     out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=8)
 
     assert out["ok"] is False

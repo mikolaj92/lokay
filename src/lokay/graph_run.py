@@ -85,6 +85,10 @@ def run_path(
             "fala package is required: uv add / path to Fala python binding"
         ) from exc
 
+    # Package effectors explicitly inherit the health capability. Fala requires
+    # every declared key to exist, including read-only runs where it is empty.
+    os.environ.setdefault("LOKAY_HEALTH_LEASE", "")
+
     pkg_src = Path(package_path) if package_path else find_default_package()
     if not pkg_src.is_file():
         raise FileNotFoundError(f"Fala package not found: {pkg_src}")
@@ -126,6 +130,7 @@ def run_path(
     # Fala rejects input keys outside the instantiated plan. Keep this mapping
     # aligned with the authored package and pass only the selected path's IDs.
     path_effectors = {
+        "factory_pass": ("factory_tick",),
         "issue_to_pr": (
             "get_issue", "assign_issue", "make_branch", "worktree_add",
             "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label",
@@ -363,6 +368,13 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             branch=terminal.get("make_branch", {}).get("branch"),
             pr=terminal.get("pr_label", {}).get("pr"),
         )
+    elif path_id == "factory_pass":
+        factory = terminal.get("factory_tick", {})
+        tick = factory.get("tick") if isinstance(factory.get("tick"), dict) else factory
+        out.update({key: value for key, value in tick.items() if key not in {"step", "status", "atom", "_exit"}})
+        out["ok"] = bool(tick.get("ok", True))
+        if not out["ok"]:
+            out["error"] = tick.get("error") or "factory tick failed"
     return out
 
 

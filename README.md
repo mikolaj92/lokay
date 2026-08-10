@@ -10,12 +10,12 @@ Lokay continuously mills work across configured GitHub repositories: survey and 
 4. If no actionable AI PR remains, implements at most one ready issue through `issue_to_pr`, and only in a repository with no open AI PR.
 5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes.
 
-The top-level tick policy—survey, triage, global PR-first, and selection of at most one issue—is implemented in `src/lokay/compose/tick.py`. Fala controls atom order inside the four workflow paths.
+The top-level mill runs the parent `factory_pass` Fala. Its `factory_tick` effector applies the multi-repo pass policy and composes the smaller `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr` child Falas. Parent and child runs use separate journals.
 
 ## Architecture
 
 - `src/lokay/proc/`: small command-line atoms. They exchange JSON envelopes on stdout.
-- `fala/lokay.fala-package.toml`: authored Fala conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
+- `fala/lokay.fala-package.toml`: authored parent `factory_pass` plus child conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
 - `src/lokay/compose/`: graph entrypoints plus the Python tick, mill, and status policy.
 - `executor.command` and `executor.args`: the sole nondeterministic coding slot. Lokay rejects fake, stub, and no-op agents.
 - `repos.mikolaj92.yaml`: managed repository scope.
@@ -56,6 +56,7 @@ This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill
 ## Workflow paths
 
 ```text
+factory_pass:  factory_tick → composes one or more child path runs
 issue_triage: get_issue → triage_issue
 pr_repair:    pr_checks → worktree_add → run_agent → commit_all → push
 pr_triage:    pr_checks → pr_review → pr_merge → close_issue

@@ -39,4 +39,5 @@ May no-op **only** after a full multi-repo survey with **no** remaining actionab
 
 See [`GRAPH.md`](GRAPH.md).
 
+- `factory_pass` is the parent Fala run used by the mill; it composes the smaller workflow Falas through a separate journal boundary.
 - `pr_review`: structured LLM gate before auto-merge when `merge.require_llm_review`.

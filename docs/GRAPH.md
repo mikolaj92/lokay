@@ -7,6 +7,22 @@ which jobs run after which.
 
 [`fala/lokay.fala-package.toml`](../fala/lokay.fala-package.toml)
 
+### `factory_pass` (parent)
+
+```text
+factory_tick
+  ├─→ issue_triage child Fala
+  ├─→ pr_repair child Fala
+  ├─→ pr_triage child Fala
+  └─→ issue_to_pr child Fala
+```
+
+The mill invokes this parent path. `factory_tick` owns one bounded multi-repo
+pass and starts the smaller paths through `run_path`; the parent journal is
+`~/.lokay/fala/factory/state.sqlite`, while child paths use
+`~/.lokay/fala/state.sqlite`. This follows Fala's subprocess/separate-journal
+parent-child boundary.
+
 ### `issue_to_pr`
 
 ```text
@@ -91,7 +107,8 @@ Materialized package: `~/.lokay/fala/lokay.fala-package.toml`
 
 Do not put graph order in the coding harness. Do not reintroduce Hermes Kanban as the ledger for step order.
 
-**Runtime note:** Fala is the only workflow composer. Python composers validate the
-public command contract, invoke `lokay.graph_run.run_path`, and normalize Fala's
-terminal per-effector outputs. Atomic `lokay-*` processes remain the execution
+**Runtime note:** Fala is the only workflow composer. Python composers validate the public command contract, invoke
+`lokay.graph_run.run_path`, and normalize Fala's terminal per-effector outputs.
+`compose_mill` repeats the parent `factory_pass`; it does not invoke child paths
+directly. Atomic `lokay-*` processes remain the execution
 boundary, but there is no runtime Python fallback graph or engine-selection flag.

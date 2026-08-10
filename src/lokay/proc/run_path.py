@@ -19,6 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--live", action="store_true")
     p.add_argument("--describe", action="store_true", help="print graph only")
     p.add_argument("--package", help="override fala package path")
+    p.add_argument("--db-dir", help="journal directory for this Fala instance")
     args = p.parse_args(argv)
 
     if args.describe:
@@ -44,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
             config_path=args.config,
             live=bool(args.live),
             package_path=args.package,
+            db_path=args.db_dir,
         )
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))

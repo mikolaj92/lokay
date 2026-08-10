@@ -62,6 +62,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         assign_issue,
         close_issue,
         commit_all,
+        factory_tick,
         get_issue,
         list_prs,
         make_branch,
@@ -94,6 +95,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         or up.get("worktree_add", {}).get("branch")
         or ""
     )
+
+    if atom == "factory_tick":
+        # Domain health (work_remaining/stall) is a successful parent effector
+        # result, not a corrupt Fala execution. Preserve the complete envelope
+        # and let the parent path normalizer restore its public ok/error fields.
+        return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
 
     if atom == "get_issue":
         assert repo and issue_number is not None
