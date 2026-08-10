@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from lokay import preflight
 from lokay.compose import tick
 
@@ -68,6 +70,7 @@ def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
 
 
 def test_failed_preflight_blocks_every_product_atom(monkeypatch):
+    monkeypatch.setattr(tick, "has_health_lease", lambda: False)
     monkeypatch.setattr(
         tick,
         "run_preflight",
@@ -84,6 +87,23 @@ def test_failed_preflight_blocks_every_product_atom(monkeypatch):
     assert result["executed"] is False
     assert result["actions"] == []
     assert result["health"] == "preflight_failed"
+
+
+def test_inherited_lease_skips_duplicate_tick_preflight(monkeypatch):
+    monkeypatch.setattr(tick, "has_health_lease", lambda: True)
+    monkeypatch.setattr(
+        tick,
+        "run_preflight",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("duplicate preflight")),
+    )
+    monkeypatch.setattr(
+        tick,
+        "load_cfg",
+        lambda namespace: (_ for _ in ()).throw(RuntimeError("past preflight")),
+    )
+
+    with pytest.raises(RuntimeError, match="past preflight"):
+        tick.compose_tick(config_path="config.yaml", live=True)
 
 
 def test_no_repair_keeps_missing_locale_unhealthy(tmp_path, monkeypatch):
@@ -217,6 +237,32 @@ def test_lease_atomic_publish_never_writes_swap_symlink_target(tmp_path, monkeyp
     preflight.issue_health_lease()
     assert victim.read_text() == "untouched"
     assert not (lease_dir / "health-lease").is_symlink()
+
+
+def test_trusted_manifest_uses_packaged_copy_without_checkout(tmp_path, monkeypatch):
+    installed = tmp_path / "site-packages" / "lokay"
+    packaged = installed / "data" / "lokay.fala-package.toml"
+    packaged.parent.mkdir(parents=True)
+    packaged.write_text('[[correlation_paths]]\nid = "factory_pass"\n', encoding="utf-8")
+    monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("LOKAY_FALA_PACKAGE", raising=False)
+
+    assert preflight.trusted_fala_manifest() == packaged
+
+
+def test_trusted_manifest_rejects_checkout_mismatch(tmp_path, monkeypatch):
+    installed = tmp_path / "checkout" / "src" / "lokay"
+    packaged = installed / "data" / "lokay.fala-package.toml"
+    source = tmp_path / "checkout" / "fala" / "lokay.fala-package.toml"
+    packaged.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    packaged.write_text('[[correlation_paths]]\nid = "packaged"\n', encoding="utf-8")
+    source.write_text('[[correlation_paths]]\nid = "source"\n', encoding="utf-8")
+    monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
+
+    with pytest.raises(RuntimeError, match="differ"):
+        preflight.trusted_fala_manifest()
 
 
 def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypatch):

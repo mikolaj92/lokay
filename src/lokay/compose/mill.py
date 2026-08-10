@@ -21,8 +21,10 @@ def compose_mill(
     config_path: str | None,
     live: bool,
     max_passes: int = 8,
+    preflight: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    preflight = run_preflight(config_path, remediate=True) if live else {"ok": True}
+    if preflight is None:
+        preflight = run_preflight(config_path, remediate=True) if live else {"ok": True}
     if not preflight.get("ok"):
         return err(
             "preflight failed; product workflow blocked",

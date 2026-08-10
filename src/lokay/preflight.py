@@ -8,28 +8,36 @@ import os
 import secrets
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
 from lokay.config import load_config
-from lokay.graph_run import find_default_package
 
 _REDACTED = "[redacted]"
 _LOCKS: dict[str, Any] = {}
 
 
 def trusted_fala_manifest() -> Path:
-    """Return the committed manifest only after exact packaged/source provenance."""
-    source = Path(__file__).resolve().parents[2] / "fala" / "lokay.fala-package.toml"
-    packaged = Path(__file__).resolve().parent / "data" / "lokay.fala-package.toml"
-    if not source.is_file() or not packaged.is_file():
-        raise RuntimeError("canonical Fala manifests unavailable")
-    if source.read_bytes() != packaged.read_bytes():
+    """Return the canonical manifest from a checkout or installed wheel."""
+    here = Path(__file__).resolve()
+    packaged = here.parent / "data" / "lokay.fala-package.toml"
+    if not packaged.is_file():
+        raise RuntimeError("packaged Fala manifest unavailable")
+
+    source_candidates = (
+        here.parents[2] / "fala" / "lokay.fala-package.toml",
+        Path.cwd() / "fala" / "lokay.fala-package.toml",
+    )
+    source = next((path for path in source_candidates if path.is_file()), None)
+    if source is not None and source.read_bytes() != packaged.read_bytes():
         raise RuntimeError("canonical Fala manifests differ")
+
+    trusted = source or packaged
     override = os.environ.get("LOKAY_FALA_PACKAGE")
-    if override and Path(override).expanduser().resolve() != source.resolve():
+    if override and Path(override).expanduser().resolve() != trusted.resolve():
         raise RuntimeError("untrusted LOKAY_FALA_PACKAGE override")
-    return source
+    return trusted
 
 
 def _finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> dict[str, Any]:
@@ -206,22 +214,12 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     findings.append(_finding("disk_headroom", disk_ok, "ok" if disk_ok else "insufficient"))
 
     try:
+        from fala import host_run_package
+
         package = trusted_fala_manifest()
-        package_ok = package.is_file()
-        project = package.resolve().parents[1]
-        fala_probe = subprocess.run(
-            [
-                "uv", "run", "--project", str(project), "python", "-c",
-                "import fala,tomllib,pathlib; assert tomllib.loads(pathlib.Path(%r).read_text()).get('correlation_paths')" % str(package),
-            ],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=30,
-            check=False,
-        )
-        fala_ok = package_ok and fala_probe.returncode == 0
-    except (OSError, RuntimeError, subprocess.TimeoutExpired):
+        manifest = tomllib.loads(package.read_text(encoding="utf-8"))
+        fala_ok = callable(host_run_package) and bool(manifest.get("correlation_paths"))
+    except (ImportError, OSError, RuntimeError, tomllib.TOMLDecodeError):
         fala_ok = False
     findings.append(_finding("fala_smoke", fala_ok, "ok" if fala_ok else "unavailable"))
 

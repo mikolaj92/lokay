@@ -1,6 +1,17 @@
 from lokay.proc import daemon
 
 
+def test_healthy_daemon_reuses_preflight_lease_for_product(monkeypatch, tmp_path):
+    health = {"ok": True, "carrier_ok": True, "fingerprint": "healthy"}
+    captured = []
+    monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: True)
+    monkeypatch.setattr(daemon, "run_preflight", lambda *a, **k: health)
+    monkeypatch.setattr(daemon, "compose_mill", lambda **kwargs: captured.append(kwargs) or {"ok": True})
+
+    assert daemon.main(["--config", "x", "--outbox", str(tmp_path / "out")]) == 0
+    assert captured == [{"config_path": "x", "live": True, "max_passes": 8, "preflight": health}]
+
+
 def test_unhealthy_daemon_services_lane_and_never_product(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: True)
     monkeypatch.setattr(daemon, "run_preflight", lambda *a, **k: {"ok": False, "carrier_ok": True, "incident_url": "https://github.com/mikolaj92/lokay/issues/4"})

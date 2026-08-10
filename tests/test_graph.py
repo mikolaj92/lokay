@@ -11,6 +11,16 @@ def test_describe_parent_factory_graph():
     assert [node["id"] for node in path["nodes"]] == ["factory_tick"]
 
 
+def test_parent_factory_inherits_fala_home_and_health_lease():
+    import tomllib
+
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    factory = next(path for path in package["correlation_paths"] if path["id"] == "factory_pass")
+    inherited = factory["effectors"][0]["adapter"]["inherit_env"]
+    assert "FALA_HOME" in inherited
+    assert "LOKAY_HEALTH_LEASE" in inherited
+
+
 def test_describe_issue_to_pr_graph():
     desc = describe_package()
     assert desc["package_id"] == "lokay"
