@@ -88,26 +88,31 @@ def test_live_allows_missing_clone_in_validate(tmp_path: Path):
 def test_agent_argv_from_template_not_vendor_branch():
     """Harness flags come from executor.args template — not hardcoded vendor switch."""
     args = [
-        "--cwd",
-        "{cwd}",
         "-p",
         "{prompt}",
-        "--auto-approve",
-        "--max-time",
-        "{timeout}",
+        "--model",
+        "{model}",
+        "--approve",
+        "--no-session",
     ]
     cfg = Config(
-        agent="omp",
-        agent_command="omp",
-        agent_model=None,
+        agent="pi",
+        agent_command="pi",
+        agent_model="omniroute/pi",
         agent_args=list(args),
         timeout_seconds=99,
     )
     argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="fix it")
-    assert argv[0] == "omp"
-    assert "--model" not in argv
-    assert argv[argv.index("-p") + 1] == "fix it"
-    assert argv[argv.index("--max-time") + 1] == "99"
+    assert argv == [
+        "pi",
+        "-p",
+        "fix it",
+        "--model",
+        "omniroute/pi",
+        "--approve",
+        "--no-session",
+    ]
+    assert "--cwd" not in argv
 
 
 def test_make_branch_atomic(capsys):

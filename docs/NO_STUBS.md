@@ -22,8 +22,8 @@ Harness identity is **not** baked into callers. Config owns the binary:
 ```yaml
 executor:
   enabled: true
-  agent: omp       # log label only
-  command: omp     # binary on PATH
+  agent: pi        # log label only
+  command: pi      # binary on PATH
   args: [ ... ]    # argv template; omit model unless the harness needs it
 ```
 

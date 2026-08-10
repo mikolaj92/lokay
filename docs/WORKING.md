@@ -19,7 +19,7 @@ LaunchAgent or:
 ```bash
 export LOKAY_MODE=live
 export LOKAY_EXECUTOR_ENABLED=1
-export LOKAY_AGENT=omp   # log label only; binary is executor.command in config
+export LOKAY_AGENT=pi    # log label only; binary is executor.command in config
 export LOKAY_MERGE_ENABLED=1
 # LOKAY_REQUIRE_CHECKS=1 default (set 0 only if you accept merge without CI)
 uv run lokay-mill --config config.yaml --live --max-passes 8

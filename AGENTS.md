@@ -22,7 +22,7 @@
 
 ## Stack
 
-- Executor: **configured harness slot** (`lokay-run-agent`; `executor.command` + `executor.args`).
+- Executor: **Pi** (`lokay-run-agent`; `executor.command: pi`, model `omniroute/pi`).
 - Scope: `repos.mikolaj92.yaml` (managed repos).
 - Continuous mill: LaunchAgent `ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`.
 
