@@ -34,25 +34,24 @@ class Config:
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
     executor_enabled: bool = False
-    agent: str = "omp"  # log label only
-    agent_command: str = "omp"  # harness binary on PATH (executor.command)
-    agent_model: str | None = None  # optional; omit from args unless harness needs it
+    agent: str = "pi"  # log label only
+    agent_command: str = "pi"  # harness binary on PATH (executor.command)
+    agent_model: str | None = "omniroute/pi"
     # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
     # Empty {model} drops a preceding flag + {model} pair.
     agent_args: list[str] = field(
         default_factory=lambda: [
-            "--cwd",
-            "{cwd}",
             "-p",
             "{prompt}",
-            "--auto-approve",
-            "--max-time",
-            "{timeout}",
+            "--model",
+            "{model}",
+            "--approve",
+            "--no-session",
         ]
     )
     max_turns: int = 40
     timeout_seconds: int = 1800
-    always_approve: bool = True  # kept for harness templates that care; omp uses args
+    always_approve: bool = True  # kept for harness templates that care
     merge_enabled: bool = False
     require_checks: bool = False
     require_llm_review: bool = True  # structured executor review before auto-merge
@@ -252,17 +251,18 @@ def load_config(path: str | Path | None = None) -> Config:
         repos=repos,
         executor_enabled=bool(ex.get("enabled", False)),
         # Label + binary + argv template. Empty agent/command/args fail closed.
-        agent=str(ex.get("agent", "omp")).strip().lower(),
-        agent_command=str(ex.get("command", "omp")).strip(),
-        agent_model=(str(ex["model"]) if ex.get("model") not in (None, "") else None),
+        agent=str(ex.get("agent", "pi")).strip().lower(),
+        agent_command=str(ex.get("command", "pi")).strip(),
+        agent_model=(
+            str(ex["model"]) if ex.get("model") not in (None, "") else "omniroute/pi"
+        ),
         agent_args=list(ex["args"]) if ex.get("args") is not None else [
-            "--cwd",
-            "{cwd}",
             "-p",
             "{prompt}",
-            "--auto-approve",
-            "--max-time",
-            "{timeout}",
+            "--model",
+            "{model}",
+            "--approve",
+            "--no-session",
         ],
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),

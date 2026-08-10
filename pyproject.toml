@@ -1,7 +1,7 @@
 [project]
 name = "lokay"
 version = "0.3.0"
-description = "Unix-style atomic issue→PR processes (GitHub + a configured executor). No Hermes/Kanban/Fala."
+description = "Continuous multi-repo issue-to-PR mill built from Unix atoms and Fala."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

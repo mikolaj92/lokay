@@ -8,15 +8,14 @@ from lokay.agent import AgentError, build_agent_argv, resolve_agent_kind, run_ag
 from lokay.config import Config, load_config
 from lokay.runner import Runner
 
-# Default-style omp: no model flag — harness uses its own default.
-OMP_ARGS = [
-    "--cwd",
-    "{cwd}",
+# Default Pi invocation uses the configured OmniRoute combo.
+PI_ARGS = [
     "-p",
     "{prompt}",
-    "--auto-approve",
-    "--max-time",
-    "{timeout}",
+    "--model",
+    "{model}",
+    "--approve",
+    "--no-session",
 ]
 # Optional harness that wants an explicit model via template.
 ALT_ARGS = [
@@ -42,26 +41,24 @@ def _clear_mill_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_omp_argv_without_model():
+def test_pi_argv_with_model():
     cfg = Config(
-        agent="omp",
-        agent_command="omp",
-        agent_model=None,
-        agent_args=list(OMP_ARGS),
+        agent="pi",
+        agent_command="pi",
+        agent_model="omniroute/pi",
+        agent_args=list(PI_ARGS),
         timeout_seconds=1800,
     )
     argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="implement issue")
     assert argv == [
-        "omp",
-        "--cwd",
-        "/tmp/wt",
+        "pi",
         "-p",
         "implement issue",
-        "--auto-approve",
-        "--max-time",
-        "1800",
+        "--model",
+        "omniroute/pi",
+        "--approve",
+        "--no-session",
     ]
-    assert "--model" not in argv
 
 
 def test_optional_model_in_template_when_set():
@@ -88,13 +85,13 @@ def test_empty_model_drops_flag_pair():
 
 
 def test_empty_command_fails():
-    cfg = Config(agent="omp", agent_command="", agent_args=list(OMP_ARGS))
+    cfg = Config(agent="pi", agent_command="", agent_args=list(PI_ARGS))
     with pytest.raises(AgentError, match="command is empty"):
         build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
 
 
 def test_empty_args_fails():
-    cfg = Config(agent="omp", agent_command="omp", agent_args=[])
+    cfg = Config(agent="pi", agent_command="pi", agent_args=[])
     with pytest.raises(AgentError, match="args is empty"):
         build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
 
@@ -102,30 +99,30 @@ def test_empty_args_fails():
 def test_reject_fake(monkeypatch):
     monkeypatch.delenv("LOKAY_AGENT", raising=False)
     with pytest.raises(AgentError, match="forbidden"):
-        resolve_agent_kind(Config(agent="fake", agent_command="omp", agent_args=list(OMP_ARGS)))
+        resolve_agent_kind(Config(agent="fake", agent_command="pi", agent_args=list(PI_ARGS)))
 
 
 def test_empty_agent_fails_closed(monkeypatch):
     monkeypatch.delenv("LOKAY_AGENT", raising=False)
     with pytest.raises(AgentError, match="not configured"):
-        resolve_agent_kind(Config(agent="", agent_command="omp", agent_args=list(OMP_ARGS)))
+        resolve_agent_kind(Config(agent="", agent_command="pi", agent_args=list(PI_ARGS)))
 
 
 def test_any_label_ok_if_not_stub(monkeypatch):
     monkeypatch.delenv("LOKAY_AGENT", raising=False)
-    assert resolve_agent_kind(Config(agent="omp", agent_command="omp", agent_args=list(OMP_ARGS))) == "omp"
+    assert resolve_agent_kind(Config(agent="pi", agent_command="pi", agent_args=list(PI_ARGS))) == "pi"
     assert resolve_agent_kind(Config(agent="my-agent", agent_command="x", agent_args=["{prompt}"])) == "my-agent"
 
 
 def test_planned_does_not_execute(tmp_path: Path):
-    cfg = Config(agent="omp", agent_command="omp", agent_args=list(OMP_ARGS), executor_enabled=True)
+    cfg = Config(agent="pi", agent_command="pi", agent_args=list(PI_ARGS), executor_enabled=True)
     out = run_agent(Runner(), cfg, worktree=tmp_path, prompt="x", execute=False)
     assert out["status"] == "planned"
-    assert out["agent"] == "omp"
+    assert out["agent"] == "pi"
 
 
 def test_execute_true_with_executor_disabled_fails_closed(tmp_path: Path):
-    cfg = Config(agent="omp", agent_command="omp", agent_args=list(OMP_ARGS), executor_enabled=False)
+    cfg = Config(agent="pi", agent_command="pi", agent_args=list(PI_ARGS), executor_enabled=False)
     with pytest.raises(AgentError, match="executor.enabled is false"):
         run_agent(Runner(), cfg, worktree=tmp_path, prompt="x", execute=True)
 
@@ -141,7 +138,7 @@ repos:
     clone_path: {tmp_path}
 executor:
   agent: ""
-  command: omp
+  command: pi
   args: ["-p", "{{prompt}}"]
 """,
         encoding="utf-8",
@@ -160,7 +157,7 @@ repos:
   - name: a/b
     clone_path: {tmp_path}
 executor:
-  agent: omp
+  agent: pi
   command: ""
   args: ["-p", "{{prompt}}"]
 """,
@@ -170,7 +167,7 @@ executor:
         load_config(cfg_path)
 
 
-def test_default_config_args_have_no_model(tmp_path: Path, monkeypatch):
+def test_default_config_args_use_pi_model(tmp_path: Path, monkeypatch):
     _clear_mill_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
@@ -181,14 +178,14 @@ repos:
     clone_path: {tmp_path}
 executor:
   enabled: true
-  agent: omp
-  command: omp
+  agent: pi
+  command: pi
 """,
         encoding="utf-8",
     )
     c = load_config(cfg_path)
-    assert c.agent_model is None
+    assert c.agent_model == "omniroute/pi"
     argv = build_agent_argv(c, worktree=Path("/tmp/wt"), prompt="goal")
-    assert argv[0] == "omp"
-    assert "--model" not in argv
+    assert argv[0] == "pi"
+    assert argv[argv.index("--model") + 1] == "omniroute/pi"
     assert "-p" in argv

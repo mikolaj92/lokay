@@ -26,18 +26,17 @@ github:
 
 executor:
   enabled: true
-  agent: omp                 # log label only
-  command: omp               # harness binary — swap to change implementation
-  # model: optional; omit so the harness uses its own default
+  agent: pi                  # log label only
+  command: pi               # harness binary — swap to change implementation
+  model: omniroute/pi
   # args after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
   args:
-    - --cwd
-    - "{cwd}"
     - -p
     - "{prompt}"
-    - --auto-approve
-    - --max-time
-    - "{timeout}"
+    - --model
+    - "{model}"
+    - --approve
+    - --no-session
   max_turns: 40
   timeout_seconds: 1800
   always_approve: true
