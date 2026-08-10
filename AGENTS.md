@@ -22,7 +22,7 @@
 
 ## Stack
 
-- Agent: **Grok** (`lokay-run-agent` / `executor.agent: grok`).
+- Executor: **configured harness slot** (`lokay-run-agent`; `executor.command` + `executor.args`).
 - Scope: `repos.mikolaj92.yaml` (managed repos).
 - Continuous mill: LaunchAgent `ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`.
 

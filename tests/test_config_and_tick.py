@@ -264,6 +264,10 @@ state:
     assert len(triage_calls) == 1
     assert len(repair_calls) == 1
     assert repair_calls[0]["review"]["blocking"] == ["validate theme"]
-    assert result["progress"] == 1
+    # Running/pushing a repair is an attempt, not proven queue movement.  The PR
+    # stays open and the observed review need remains actionable until re-survey.
+    assert result["progress"] == 0
+    assert result["health"] == "stall"
+    assert result["remaining"]["needs_repair"] == 1
     assert result["remaining"]["open_ai_prs"] == 1
     assert any(action["step"] == "pr_review_repair" for action in result["actions"])

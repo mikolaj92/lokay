@@ -68,7 +68,7 @@ def compose_status(*, config_path: str | None) -> dict[str, Any]:
         )
 
     live_env_hint = (
-        "LOKAY_MODE=live LOKAY_EXECUTOR_ENABLED=1 LOKAY_AGENT=grok "
+        "LOKAY_MODE=live LOKAY_EXECUTOR_ENABLED=1 "
         "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=1 "
         "uv run lokay-mill --config config.yaml --live"
     )

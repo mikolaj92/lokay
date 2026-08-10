@@ -55,7 +55,7 @@ class Config:
     always_approve: bool = True  # kept for harness templates that care; omp uses args
     merge_enabled: bool = False
     require_checks: bool = False
-    require_llm_review: bool = True  # structured Grok review before auto-merge
+    require_llm_review: bool = True  # structured executor review before auto-merge
     require_test_evidence: bool = True
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
@@ -173,7 +173,7 @@ def apply_env_overrides(cfg: Config) -> Config:
       LOKAY_AGENT=<label>     (log label; binary is executor.command)
       LOKAY_MERGE_ENABLED=1|0
       LOKAY_REQUIRE_CHECKS=1|0   (0 for no-CI canary repos)
-      LOKAY_REQUIRE_LLM_REVIEW=1|0  (structured Grok review before merge)
+      LOKAY_REQUIRE_LLM_REVIEW=1|0  (structured executor review before merge)
     """
     mode = (os.environ.get("LOKAY_MODE") or "").strip().lower()
     if mode in {"live", "dry-run"}:

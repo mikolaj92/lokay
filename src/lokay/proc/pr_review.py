@@ -1,4 +1,4 @@
-"""Atomic: LLM structured review of an AI PR (grok). Fail closed on bad JSON."""
+"""Atomic: LLM structured review of an AI PR (configured executor). Fail closed on bad JSON."""
 
 from __future__ import annotations
 
@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         checks_text=checks_text,
     )
 
-    # grok requires a cwd; prefer configured clone, else temp dir (review is read-only)
+    # The executor requires a cwd; prefer configured clone, else temp dir (review is read-only)
     try:
         worktree = resolve_repo_clone(cfg, args.repo)
         if not worktree.is_dir():

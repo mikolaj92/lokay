@@ -1,6 +1,6 @@
 # Lokay
 
-**Issue triage → real coding agent (Grok) → PR → PR triage → main**, as Unix atoms + optional Fala graphs.
+**Issue triage → configured coding executor → PR → PR triage → main**, as Unix atoms + optional Fala graphs.
 
 | Binding docs | |
 | --- | --- |
@@ -30,7 +30,7 @@ launchctl print "gui/$(id -u)/ai.mikolaj.lokay-mill" | head -25
 tail -f ~/.lokay/logs/mill-latest.log
 ```
 
-Env (production): `LOKAY_MODE=live`, `LOKAY_EXECUTOR_ENABLED=1`, **`LOKAY_AGENT=grok`**, merge on.
+Env (production): `LOKAY_MODE=live`, `LOKAY_EXECUTOR_ENABLED=1`, executor command/metadata from `config.yaml`, merge on.
 
 **Do not set `LOKAY_AGENT=fake`.** It is rejected at runtime.
 
@@ -58,6 +58,6 @@ docs/NO_STUBS.md
 
 ## Safety
 
-- Real agent only (Grok)
+- Real coding executor only (configured command + arguments)
 - No force-push / repo delete / raw curl
 - Issue body is untrusted evidence in prompts

@@ -32,6 +32,7 @@ state:
     assert any("mode is not live" in b for b in result["blockers"])
     assert any("executor.enabled" in b for b in result["blockers"])
     assert any("merge.enabled" in b for b in result["blockers"])
+    assert "LOKAY_AGENT" not in result["live_env_hint"]
 
 
 def test_require_checks_is_policy_not_hard_blocker(tmp_path: Path, monkeypatch):
@@ -60,3 +61,10 @@ state:
     assert result["mill_ready"] is True
     assert result["blockers"] == []
     assert any("require_checks" in n for n in result.get("policy_notes") or [])
+
+
+def test_mill_daemon_does_not_override_configured_executor_metadata():
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")
+    assert 'export LOKAY_AGENT=' not in script
+    assert 'LOKAY_AGENT:-grok' not in script

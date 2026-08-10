@@ -4,7 +4,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 
 ## Rules
 
-1. **One process = one job.** List issues. Make a branch name. Add a worktree. Run Grok. Push. Open a PR. Check CI. Merge. Nothing else.
+1. **One process = one job.** List issues. Make a branch name. Add a worktree. Run the configured coding executor. Push. Open a PR. Check CI. Merge. Nothing else.
 2. **Small files.** Prefer a new module under `src/lokay/proc/` over growing an existing one past ~100 lines of real logic.
 3. **Compose, don’t absorb.** Higher-level flows only **call** atomic processes or Fala graphs. They must not reimplement GitHub/git/the coding harness.
 4. **Text interfaces.** Each process speaks **JSON on stdout** (one object). Errors: non-zero exit + JSON `{"ok":false,"error":...}` when practical.

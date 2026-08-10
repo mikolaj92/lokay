@@ -500,9 +500,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         {"step": "pr_repair", "pr": pr_num, "branch": head, **repair}
                     )
                     repair_budget -= 1
-                    if repair.get("ok"):
-                        progress += 1
-                        needs_repair = max(0, needs_repair - 1)
+                    # A successful executor invocation records an attempt, but the
+                    # queue has not moved: the PR remains open with the same observed
+                    # failed checks until a later survey proves otherwise.
                 still_open.append(pr)
                 continue
             if status == "pending":
@@ -573,9 +573,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         )
                         # Every attempt consumes budget, including failures.
                         repair_budget -= 1
-                        if repair.get("ok"):
-                            progress += 1
-                            needs_repair = max(0, needs_repair - 1)
+                        # Repair success is not queue progress.  Keep the observed
+                        # repair need until fresh checks/review prove state movement.
                 # PR remains open after repair. Fresh checks and review happen next pass.
                 if tri.get("reason") == "merge_conflicts":
                     merge_conflicts += 1

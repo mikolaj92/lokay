@@ -9,7 +9,7 @@ Agent must be **real** ([`NO_STUBS.md`](NO_STUBS.md)).
 1. **Survey** every managed repo: inbox, `ai:ready`, open `ai/fix/*` PRs.
 2. **Inbox triage** (before ready): undecided issues → `ai:ready` | `ai:needs-feedback` | OOS. Path: `issue_triage`.
 3. **PR-first close-out**: for open AI PRs — conflicts → close + re-ready; failed → `pr_repair`; mergeable + policy → merge → close issue. Land code before opening new fronts.
-4. **Implement ready (serial)**: at most one `issue_to_pr` per tick, **only** in a repo with **zero** open AI PRs. Grok → commit/push → PR. Worktree from `origin/main`. Stuck → ledger → `ai:blocked`. Live ready with `executor.enabled: false` is a **stall**.
+4. **Implement ready (serial)**: at most one `issue_to_pr` per tick, **only** in a repo with **zero** open AI PRs. configured executor → commit/push → PR. Worktree from `origin/main`. Stuck → ledger → `ai:blocked`. Live ready with `executor.enabled: false` is a **stall**.
 5. **Health**: `idle` only when survey finds no actionable work. Survey work without mutations → **not** a green success.
 
 ## Continuous mill
