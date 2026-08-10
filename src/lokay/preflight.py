@@ -18,6 +18,20 @@ _REDACTED = "[redacted]"
 _LOCKS: dict[str, Any] = {}
 
 
+def trusted_fala_manifest() -> Path:
+    """Return the committed manifest only after exact packaged/source provenance."""
+    source = Path(__file__).resolve().parents[2] / "fala" / "lokay.fala-package.toml"
+    packaged = Path(__file__).resolve().parent / "data" / "lokay.fala-package.toml"
+    if not source.is_file() or not packaged.is_file():
+        raise RuntimeError("canonical Fala manifests unavailable")
+    if source.read_bytes() != packaged.read_bytes():
+        raise RuntimeError("canonical Fala manifests differ")
+    override = os.environ.get("LOKAY_FALA_PACKAGE")
+    if override and Path(override).expanduser().resolve() != source.resolve():
+        raise RuntimeError("untrusted LOKAY_FALA_PACKAGE override")
+    return source
+
+
 def _finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> dict[str, Any]:
     return {"name": name, "ok": passed, "code": code[:80], "detail": code[:80], "repaired": repaired}
 
@@ -170,7 +184,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
         cfg = load_config(config_path)
     except Exception as exc:
         finding = _finding("config", False, type(exc).__name__)
-        return {"ok": False, "findings": [finding]}, None
+        return {"ok": False, "carrier_ok": False, "integrity_ok": False, "findings": [finding]}, None
 
     findings: list[dict[str, Any]] = []
     required = ("PATH", "HOME", "USER", "TMPDIR", "LANG")
@@ -192,7 +206,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     findings.append(_finding("disk_headroom", disk_ok, "ok" if disk_ok else "insufficient"))
 
     try:
-        package = find_default_package()
+        package = trusted_fala_manifest()
         package_ok = package.is_file()
         project = package.resolve().parents[1]
         fala_probe = subprocess.run(
@@ -207,7 +221,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
             check=False,
         )
         fala_ok = package_ok and fala_probe.returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, RuntimeError, subprocess.TimeoutExpired):
         fala_ok = False
     findings.append(_finding("fala_smoke", fala_ok, "ok" if fala_ok else "unavailable"))
 
@@ -224,7 +238,23 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     lock_path = cfg.state_path.parent / "mill.lock"
     singleton_ok = acquire_run_lock(lock_path)
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
-    return {"ok": all(x["ok"] for x in findings), "findings": findings}, cfg
+
+    # Manifest provenance is a carrier prerequisite: never run Fala from an
+    # env-selected or mismatched graph.  Deeper Python syntax integrity remains
+    # repairable once that trusted carrier is healthy.
+    try:
+        trusted_fala_manifest(); manifest_ok = True
+    except (OSError, RuntimeError):
+        manifest_ok = False
+    findings.append(_finding("fala_manifest_provenance", manifest_ok, "ok" if manifest_ok else "untrusted_or_mismatch"))
+    try:
+        import ast
+        integrity_ok = all(ast.parse(path.read_text(encoding="utf-8")) is not None for path in Path(__file__).parent.rglob("*.py"))
+    except (OSError, SyntaxError, UnicodeError):
+        integrity_ok = False
+    findings.append(_finding("lokay_integrity", integrity_ok, "ok" if integrity_ok else "python_syntax_invalid"))
+    carrier = [x for x in findings if x["name"] != "lokay_integrity"]
+    return {"ok": all(x["ok"] for x in findings), "carrier_ok": all(x["ok"] for x in carrier), "integrity_ok": integrity_ok, "findings": findings}, cfg
 
 
 def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
@@ -253,13 +283,17 @@ def _github_incident(result: dict[str, Any]) -> str | None:
     fp = result["fingerprint"]
     marker = f"<!-- lokay-preflight:{fp} -->"
     try:
-        listed = subprocess.run(["gh", "issue", "list", "--repo", "mikolaj92/lokay", "--state", "open", "--search", marker, "--json", "number,body", "--limit", "20"], capture_output=True, text=True, timeout=15, check=False)
-        rows = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
+        listed = subprocess.run([
+            "gh", "api", "--method", "GET", "--paginate", "repos/mikolaj92/lokay/issues",
+            "-f", "state=open", "-f", "per_page=100", "--slurp",
+        ], capture_output=True, text=True, timeout=30, check=False)
+        pages = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
+        rows = [row for page in pages if isinstance(page, list) for row in page if isinstance(row, dict) and "pull_request" not in row]
         match = next((r for r in rows if marker in str(r.get("body") or "")), None)
         summary = ", ".join(x["name"] for x in result["findings"] if not x["ok"])
         if match:
-            subprocess.run(["gh", "issue", "comment", str(match["number"]), "--repo", "mikolaj92/lokay", "--body", f"Preflight failed again: {summary}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=False)
-            return f"https://github.com/mikolaj92/lokay/issues/{match['number']}"
+            commented = subprocess.run(["gh", "issue", "comment", str(match["number"]), "--repo", "mikolaj92/lokay", "--body", f"Preflight failed again: {summary}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=False)
+            return f"https://github.com/mikolaj92/lokay/issues/{match['number']}" if commented.returncode == 0 else None
         made = subprocess.run(["gh", "issue", "create", "--repo", "mikolaj92/lokay", "--title", f"Preflight failure {fp}", "--body", f"{marker}\nBounded checks failed: {summary}"], capture_output=True, text=True, timeout=15, check=False)
         return getattr(made, "stdout", "").strip()[:240] if made.returncode == 0 else None
     except (OSError, ValueError, subprocess.TimeoutExpired):
@@ -286,9 +320,9 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
-    if checked["ok"]:
+    if checked.get("carrier_ok"):
         issue_health_lease()
-    else:
+    if not checked["ok"]:
         try: result["local_incident"] = str(_persist_incident(cfg, result))
         except OSError: result["local_incident"] = None
         result["incident_url"] = _github_incident(result)

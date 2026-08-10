@@ -18,6 +18,8 @@ def compose_pr_triage(
     pr_number: int,
     branch: str,
     live: bool,
+    keep_issue_open: bool = False,
+    package_path: str | None = None,
 ) -> dict:
     if live and load_config(config_path).mode != "live":
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
@@ -26,7 +28,7 @@ def compose_pr_triage(
 
     result = run_path(
         path_id="pr_triage", repo=repo, pr=pr_number, branch=branch,
-        config_path=config_path, live=live,
+        config_path=config_path, live=live, package_path=package_path, extra_inputs={"keep_issue_open": keep_issue_open},
     )
     result.update(kind="pr_triage", engine="fala", planned=not live)
     try:
