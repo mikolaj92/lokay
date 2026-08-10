@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pr", required=True, type=int)
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     if live and not cfg.merge_enabled:
         return emit_exit(err("merge.enabled is false in config", planned=True))
     try:

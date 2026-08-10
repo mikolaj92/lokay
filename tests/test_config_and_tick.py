@@ -256,6 +256,7 @@ state:
         repair_calls.append(kwargs)
         return {"ok": True, "pushed": True}
 
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "compose_pr_triage", fake_triage)
     monkeypatch.setattr(tick, "compose_pr_repair", fake_repair)
@@ -271,3 +272,17 @@ state:
     assert result["remaining"]["needs_repair"] == 1
     assert result["remaining"]["open_ai_prs"] == 1
     assert any(action["step"] == "pr_review_repair" for action in result["actions"])
+
+
+def test_agent_executor_environment_strips_health_lease(tmp_path):
+    from lokay.agent import run_agent
+    from lokay.runner import CommandResult
+    class CapturingRunner:
+        spec = None
+        def run(self, spec, *, live):
+            self.spec = spec
+            return CommandResult(spec=spec, executed=True, returncode=0)
+    cfg = Config(mode="live", executor_enabled=True, agent="omp", agent_command="true", agent_args=["{{prompt}}"])
+    runner = CapturingRunner()
+    run_agent(runner, cfg, worktree=tmp_path, prompt="x", execute=True)
+    assert runner.spec.env["LOKAY_HEALTH_LEASE"] == ""

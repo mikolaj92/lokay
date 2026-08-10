@@ -34,6 +34,7 @@ from lokay.proc import pr_close as p_pr_close
 from lokay.proc import select_issue as p_select
 from lokay.proc import triage_issue as p_triage
 from lokay.proc._common import add_config_live, load_cfg
+from lokay.preflight import run_preflight
 from lokay.stuck import (
     clear_issue,
     excluded_numbers,
@@ -152,6 +153,20 @@ def _health_payload(
 
 
 def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
+    preflight = run_preflight(config_path, remediate=True) if live else {"ok": True}
+    if not preflight.get("ok"):
+        return err(
+            "preflight failed; product workflow blocked",
+            health="preflight_failed",
+            preflight=preflight,
+            live=live,
+            executed=False,
+            progress=0,
+            idle=False,
+            actions=[],
+            planned=[],
+        )
+
     cfg = load_cfg(argparse.Namespace(config=config_path))
     if live and cfg.mode != "live":
         return err("refusing --live while config mode is not live")

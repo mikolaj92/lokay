@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--base", default="main")
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     body = args.body
     if args.body_file:
         body = Path(args.body_file).read_text(encoding="utf-8")

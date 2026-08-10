@@ -14,7 +14,7 @@ def main(argv: list[str] | None = None) -> int:
     add_config_live(p)
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     r = runner()
     planned: list[dict] = []
     cloned: list[dict] = []

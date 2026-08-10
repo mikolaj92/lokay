@@ -341,7 +341,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         assert worktree
         return _run_atom_main(
             commit_all.main,
-            [*live, "--worktree", worktree, "--message", msg],
+            [*cfg, *live, "--worktree", worktree, "--message", msg],
         )
 
     if atom == "push":
@@ -365,7 +365,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             }
         return _run_atom_main(
             push_branch.main,
-            [*live, "--worktree", worktree, "--branch", branch],
+            [*cfg, *live, "--worktree", worktree, "--branch", branch],
         )
 
     if atom == "pr_create":

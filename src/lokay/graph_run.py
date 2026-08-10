@@ -74,6 +74,10 @@ def run_path(
     extra_inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Drive Fala host_run_package for a Lokay graph path."""
+    if live:
+        from lokay.preflight import require_healthy
+
+        require_healthy(str(config_path) if config_path else None)
     try:
         from fala import host_run_package
     except ImportError as exc:  # pragma: no cover

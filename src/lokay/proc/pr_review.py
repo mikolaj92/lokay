@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
             "Will not auto-merge until a valid review is produced."
         )
         applied = False
-        if mutations_allowed(live_flag=args.live):
+        if mutations_allowed(live_flag=args.live, cfg=cfg):
             try:
                 r.run_checked(
                     gh_spec(
@@ -209,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
 
     merge_ok = should_merge(decision)
     applied = False
-    if mutations_allowed(live_flag=args.live):
+    if mutations_allowed(live_flag=args.live, cfg=cfg):
         try:
             lines = [
                 f"## Lokay LLM PR review: **{decision.verdict}** (risk={decision.risk})",

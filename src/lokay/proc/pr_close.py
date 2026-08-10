@@ -20,8 +20,8 @@ def main(argv: list[str] | None = None) -> int:
         help="optional comment explaining why the PR is closed",
     )
     args = p.parse_args(argv)
-    cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    cfg = load_cfg(args) if args.live else None
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
         close_pr(
             runner(),

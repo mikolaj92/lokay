@@ -17,7 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--comment", default="", help="optional closing comment")
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
         if args.comment:
             comment_issue(runner(), args.repo, args.issue, args.comment, live=live)

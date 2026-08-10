@@ -17,7 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--label", action="append", dest="labels", default=[])
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     labels = args.labels or list(cfg.pr_labels)
     try:
         add_pr_labels(runner(), args.repo, args.pr, labels, live=live)

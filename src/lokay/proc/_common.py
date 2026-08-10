@@ -44,11 +44,22 @@ def read_live(args: argparse.Namespace) -> bool:
     return True
 
 
-def mutations_allowed(*, live_flag: bool) -> bool:
-    return bool(live_flag)
+def mutations_allowed(*, live_flag: bool, cfg: Config | None = None) -> bool:
+    if not live_flag:
+        return False
+    if cfg is None:
+        raise RuntimeError("live mutation requires config for the health gate")
+    from lokay.preflight import require_healthy
+
+    require_healthy(str(cfg.config_path) if cfg.config_path else None)
+    return True
 
 
 def agent_execute_allowed(cfg: Config, *, live_flag: bool) -> bool:
+    if live_flag:
+        from lokay.preflight import require_healthy
+
+        require_healthy(str(cfg.config_path) if cfg.config_path else None)
     return bool(live_flag and cfg.mode == "live" and cfg.executor_enabled)
 
 

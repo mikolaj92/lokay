@@ -48,6 +48,7 @@ state:
             "remaining": dict(remaining),
         }
 
+    monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(mill_mod, "compose_tick", fake_tick)
     out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=8)
     assert out["ok"] is False
@@ -98,6 +99,7 @@ state:
             "actions": [{"step": "pr_repair", "ok": True, "pushed": True}],
         }
 
+    monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(mill_mod, "compose_tick", fake_tick)
     out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=8)
 

@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     labels = [str(x) for x in (args.labels or []) if x]
     if not labels:
         return emit_exit(err("at least one --label required"))

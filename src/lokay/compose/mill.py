@@ -13,6 +13,7 @@ from typing import Any
 from lokay.compose.tick import compose_tick
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live, load_cfg
+from lokay.preflight import run_preflight
 
 
 def compose_mill(
@@ -21,6 +22,18 @@ def compose_mill(
     live: bool,
     max_passes: int = 8,
 ) -> dict[str, Any]:
+    preflight = run_preflight(config_path, remediate=True) if live else {"ok": True}
+    if not preflight.get("ok"):
+        return err(
+            "preflight failed; product workflow blocked",
+            health="preflight_failed",
+            preflight=preflight,
+            live=live,
+            idle=False,
+            progress=0,
+            results=[],
+        )
+
     cfg = load_cfg(argparse.Namespace(config=config_path))
     if live and cfg.mode != "live":
         return err("refusing --live while config mode is not live")

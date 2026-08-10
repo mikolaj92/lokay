@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--issue", required=True, type=int)
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
         assign_issue(runner(), cfg, args.repo, args.issue, live=live)
     except Exception as exc:  # noqa: BLE001

@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     repo = next((r for r in cfg.repos if r.name == args.repo), None)
     if repo is None:
         return emit_exit(err(f"repo not in config: {args.repo}"))

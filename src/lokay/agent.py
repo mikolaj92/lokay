@@ -146,6 +146,8 @@ def run_agent(
         CommandSpec(
             argv=tuple(argv),
             cwd=str(worktree),
+            # Never delegate the orchestration health capability to the coding agent.
+            env={"LOKAY_HEALTH_LEASE": ""},
             timeout_seconds=config.timeout_seconds,
         ),
         live=True,
