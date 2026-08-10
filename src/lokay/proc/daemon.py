@@ -24,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
             health = run_preflight(args.config, remediate=True)
             if health.get("ok"):
                 payload = compose_mill(config_path=args.config, live=True, max_passes=args.max_passes)
+            elif not health.get("carrier_ok"):
+                payload = err("carrier preflight failed; self-repair and product work blocked", health="carrier_failed", preflight=health)
             else:
                 repair = run_self_repair(args.config, health)
                 if repair.get("ok"):

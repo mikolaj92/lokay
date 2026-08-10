@@ -20,8 +20,6 @@ from lokay.compose.issue_to_pr import compose_issue_to_pr
 from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.config import load_config
-from lokay.preflight import revoke_health_lease
-from lokay.repair_broker import RepairBroker
 from lokay.state import append_event
 
 SELF_REPAIR_REPO = "mikolaj92/lokay"
@@ -48,7 +46,7 @@ def _incident_number(preflight: dict[str, Any]) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _repair_pr(issue: int, *, branch_prefix: str = "ai/fix") -> dict[str, Any] | None:
+def _repair_pr(issue: int, *, fingerprint: str, branch_prefix: str = "ai/fix") -> dict[str, Any] | None:
     rows = _gh_json([
         "pr", "list", "--repo", SELF_REPAIR_REPO, "--state", "open",
         "--json", "number,headRefName,headRefOid,headRepository,baseRefName,body,mergeable", "--limit", "50",
@@ -58,7 +56,7 @@ def _repair_pr(issue: int, *, branch_prefix: str = "ai/fix") -> dict[str, Any] |
     # Branch names are deterministic and begin <prefix>/<issue>-.  Restricting
     # by issue prevents an unrelated Lokay PR from entering the repair lane.
     prefix = f"{branch_prefix.rstrip('/')}/{issue}-"
-    marker = f"<!-- lokay-preflight:{os.environ.get('LOKAY_REPAIR_FINGERPRINT', '')} -->"
+    marker = f"<!-- lokay-preflight:{fingerprint} -->"
     matches = [row for row in rows if
         str(row.get("headRefName") or "").startswith(prefix)
         and str(row.get("baseRefName") or "") == "main"
@@ -126,6 +124,9 @@ def run_self_repair(
     }
     _event(cfg, phase="start", fingerprint=preflight.get("fingerprint"), issue=issue, budget=budget)
     failed_names = {x.get("name") for x in preflight.get("findings", []) if not x.get("ok")}
+    if not preflight.get("carrier_ok"):
+        result["reason"] = "carrier_unhealthy"
+        _event(cfg, phase="blocked", reason=result["reason"]); return result
     if issue is None:
         result["reason"] = "deduplicated_incident_unavailable"
         _event(cfg, phase="blocked", reason=result["reason"]); return result
@@ -136,16 +137,14 @@ def run_self_repair(
         result["reason"] = "executor_disabled"
         _event(cfg, phase="blocked", reason=result["reason"]); return result
 
-    revoke_health_lease()
+    # Carrier preflight issued the ordinary health lease.  Every live Fala atom
+    # uses the same normal gate as product work; there is no repair bypass.
     deadline = time.monotonic() + min(max(60, cfg.whole_run_deadline_seconds), 3600)
-    broker = RepairBroker(issue=issue, fingerprint=str(preflight.get("fingerprint") or "unknown"), deadline=deadline)
-    previous = {key: os.environ.get(key) for key in broker.env()}
-    os.environ.update(broker.env())
     try:
         for attempt in range(1, budget + 1):
             row: dict[str, Any] = {"attempt": attempt}
             result["attempts"].append(row)
-            try: pr = _repair_pr(issue, branch_prefix=cfg.branch_prefix)
+            try: pr = _repair_pr(issue, fingerprint=str(preflight.get("fingerprint") or ""), branch_prefix=cfg.branch_prefix)
             except Exception:
                 row.update(ok=False, phase="discover_pr", reason="github_unavailable"); break
             if pr is None:
@@ -168,8 +167,6 @@ def run_self_repair(
                 or str(((identity.get("headRepository") or {}).get("nameWithOwner") or "")) != SELF_REPAIR_REPO
                 or marker not in str(identity.get("body") or "")):
                 row.update(ok=False, phase="pr_identity"); break
-            broker.bind_pr(pr=pr_number, branch=branch, head_sha=head_sha)
-            os.environ.update({"LOKAY_REPAIR_PR": str(pr_number), "LOKAY_REPAIR_BRANCH": branch, "LOKAY_REPAIR_HEAD_SHA": head_sha})
             row.update(pr=pr_number, branch=branch, head_sha=head_sha)
             status = _checks(pr_number, require_checks=cfg.require_checks)
             row["checks"] = status
@@ -219,7 +216,4 @@ def run_self_repair(
         _event(cfg, phase="failed", issue=issue, attempts=len(result["attempts"]), reason=result["reason"])
         return result
     finally:
-        broker.close()
-        for key, value in previous.items():
-            if value is None: os.environ.pop(key, None)
-            else: os.environ[key] = value
+        pass

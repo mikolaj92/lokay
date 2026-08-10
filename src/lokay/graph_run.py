@@ -76,10 +76,8 @@ def run_path(
     """Drive Fala host_run_package for a Lokay graph path."""
     if live:
         from lokay.preflight import require_healthy
-        if os.environ.get("LOKAY_REPAIR_BROKER"):
-            if repo != "mikolaj92/lokay" or path_id not in {"issue_to_pr", "pr_repair", "pr_triage"}:
-                raise RuntimeError("repair broker restricted to Lokay lane")
-        else: require_healthy(str(config_path) if config_path else None)
+
+        require_healthy(str(config_path) if config_path else None)
     try:
         from fala import host_run_package
     except ImportError as exc:  # pragma: no cover

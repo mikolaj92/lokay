@@ -50,9 +50,7 @@ def mutations_allowed(*, live_flag: bool, cfg: Config | None = None) -> bool:
     if cfg is None:
         raise RuntimeError("live mutation requires config for the health gate")
     from lokay.preflight import require_healthy
-    from lokay.repair_broker import broker_authorized
 
-    if broker_authorized(): return True
     require_healthy(str(cfg.config_path) if cfg.config_path else None)
     return True
 
@@ -60,9 +58,8 @@ def mutations_allowed(*, live_flag: bool, cfg: Config | None = None) -> bool:
 def agent_execute_allowed(cfg: Config, *, live_flag: bool) -> bool:
     if live_flag:
         from lokay.preflight import require_healthy
-        from lokay.repair_broker import broker_authorized
 
-        if not broker_authorized(): require_healthy(str(cfg.config_path) if cfg.config_path else None)
+        require_healthy(str(cfg.config_path) if cfg.config_path else None)
     return bool(live_flag and cfg.mode == "live" and cfg.executor_enabled)
 
 

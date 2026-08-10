@@ -170,7 +170,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
         cfg = load_config(config_path)
     except Exception as exc:
         finding = _finding("config", False, type(exc).__name__)
-        return {"ok": False, "findings": [finding]}, None
+        return {"ok": False, "carrier_ok": False, "integrity_ok": False, "findings": [finding]}, None
 
     findings: list[dict[str, Any]] = []
     required = ("PATH", "HOME", "USER", "TMPDIR", "LANG")
@@ -224,7 +224,19 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     lock_path = cfg.state_path.parent / "mill.lock"
     singleton_ok = acquire_run_lock(lock_path)
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
-    return {"ok": all(x["ok"] for x in findings), "findings": findings}, cfg
+
+    # Deeper, repairable Lokay integrity.  Carrier health above is sufficient to
+    # run the ordinary gated Fala/GitHub/executor workflow; this check is not a
+    # privileged bypass and never masks a missing carrier prerequisite.
+    try:
+        source_manifest = find_default_package()
+        packaged_manifest = Path(__file__).parent / "data" / "lokay.fala-package.toml"
+        integrity_ok = packaged_manifest.is_file() and source_manifest.read_bytes() == packaged_manifest.read_bytes()
+    except OSError:
+        integrity_ok = False
+    findings.append(_finding("lokay_integrity", integrity_ok, "ok" if integrity_ok else "manifest_mismatch"))
+    carrier = [x for x in findings if x["name"] != "lokay_integrity"]
+    return {"ok": all(x["ok"] for x in findings), "carrier_ok": all(x["ok"] for x in carrier), "integrity_ok": integrity_ok, "findings": findings}, cfg
 
 
 def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
@@ -286,9 +298,9 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
-    if checked["ok"]:
+    if checked.get("carrier_ok"):
         issue_health_lease()
-    else:
+    if not checked["ok"]:
         try: result["local_incident"] = str(_persist_incident(cfg, result))
         except OSError: result["local_incident"] = None
         result["incident_url"] = _github_incident(result)

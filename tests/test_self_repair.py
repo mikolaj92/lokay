@@ -12,14 +12,12 @@ def cfg(tmp_path, **kw):
 
 
 def unhealthy(url="https://github.com/mikolaj92/lokay/issues/44"):
-    return {"ok": False, "fingerprint": "abc", "incident_url": url,
+    return {"ok": False, "carrier_ok": True, "integrity_ok": False, "fingerprint": "abc", "incident_url": url,
             "findings": [{"name": "fala_smoke", "ok": False}]}
 
 
 def setup_lane(monkeypatch, tmp_path, **cfg_kw):
     monkeypatch.setattr(self_repair, "load_config", lambda p: cfg(tmp_path, **cfg_kw))
-    monkeypatch.setattr(self_repair, "revoke_health_lease", lambda: None)
-    monkeypatch.setattr(self_repair, "RepairBroker", lambda **k: SimpleNamespace(env=lambda: {}, close=lambda: None, bind_pr=lambda **k: None))
     monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->", "mergeCommit": {"oid": "merge"}})
 
 
@@ -95,11 +93,19 @@ def test_multiple_repair_prs_fail_closed(monkeypatch):
     ])
     import pytest
     with pytest.raises(RuntimeError, match="ambiguous"):
-        self_repair._repair_pr(44)
+        self_repair._repair_pr(44, fingerprint="")
 
 
 def test_wrong_issue_branch_is_not_selected(monkeypatch):
     monkeypatch.setattr(self_repair, "_gh_json", lambda a: [
         {"number": 1, "headRefName": "ai/fix/144-not-this-issue"},
     ])
-    assert self_repair._repair_pr(44) is None
+    assert self_repair._repair_pr(44, fingerprint="") is None
+
+
+def test_carrier_unhealthy_never_discovers_or_runs_agent(monkeypatch, tmp_path):
+    setup_lane(monkeypatch, tmp_path)
+    value = unhealthy(); value["carrier_ok"] = False
+    monkeypatch.setattr(self_repair, "_repair_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("workflow ran")))
+    result = self_repair.run_self_repair("x", value)
+    assert result["reason"] == "carrier_unhealthy" and result["attempts"] == []
