@@ -74,12 +74,14 @@ Summarize what you fixed and how you verified it.
 """
 
 
-def pr_body(issue: Issue, *, agent_summary: str) -> str:
-    return f"""## Summary
+def pr_body(issue: Issue, *, agent_summary: str, incident_fingerprint: str = "") -> str:
+    linkage = f"Refs #{issue.number}" if incident_fingerprint else f"Closes #{issue.number}"
+    marker = f"<!-- lokay-preflight:{incident_fingerprint} -->\n" if incident_fingerprint else ""
+    return f"""{marker}## Summary
 
 Automated Lokay fix for {issue.repo}#{issue.number}.
 
-Closes #{issue.number}
+{linkage}
 
 ## Issue
 

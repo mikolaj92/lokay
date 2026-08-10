@@ -87,7 +87,8 @@ def _activate(cfg: Any, *, expected_commit: str) -> dict[str, Any]:
     if repo is None or not repo.clone_path.is_dir():
         return {"ok": False, "activated": False, "reason": "lokay_clone_unavailable"}
     origin = subprocess.run(["git", "-C", str(repo.clone_path), "remote", "get-url", "origin"], capture_output=True, text=True, timeout=30, check=False)
-    if origin.returncode or "mikolaj92/lokay" not in origin.stdout:
+    canonical = origin.stdout.strip().removesuffix(".git")
+    if origin.returncode or canonical not in {"https://github.com/mikolaj92/lokay", "git@github.com:mikolaj92/lokay"}:
         return {"ok": False, "activated": False, "reason": "wrong_origin"}
     commands = [
         ["git", "-C", str(repo.clone_path), "status", "--porcelain"],
@@ -101,8 +102,8 @@ def _activate(cfg: Any, *, expected_commit: str) -> dict[str, Any]:
         result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120, check=False)
         if result.returncode:
             return {"ok": False, "activated": False, "reason": "fast_forward_failed"}
-    ancestor = subprocess.run(["git", "-C", str(repo.clone_path), "merge-base", "--is-ancestor", expected_commit, "HEAD"], timeout=30, check=False)
-    if ancestor.returncode:
+    head = subprocess.run(["git", "-C", str(repo.clone_path), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=30, check=False)
+    if head.returncode or head.stdout.strip() != expected_commit:
         return {"ok": False, "activated": False, "reason": "exact_merge_not_activated"}
     return {"ok": True, "activated": True, "path": str(repo.clone_path), "commit": expected_commit}
 
@@ -148,7 +149,7 @@ def run_self_repair(
             except Exception:
                 row.update(ok=False, phase="discover_pr", reason="github_unavailable"); break
             if pr is None:
-                made = compose_issue_to_pr(config_path=config_path, repo=SELF_REPAIR_REPO, issue_number=issue, live=True)
+                made = compose_issue_to_pr(config_path=config_path, repo=SELF_REPAIR_REPO, issue_number=issue, live=True, incident_fingerprint=str(preflight.get("fingerprint") or ""))
                 row["issue_to_pr"] = made
                 if not made.get("ok"):
                     row.update(ok=False, phase="issue_to_pr"); continue

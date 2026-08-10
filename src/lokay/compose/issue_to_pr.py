@@ -17,6 +17,7 @@ def compose_issue_to_pr(
     repo: str,
     issue_number: int,
     live: bool,
+    incident_fingerprint: str = "",
 ) -> dict:
     if live and load_config(config_path).mode != "live":
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
@@ -24,6 +25,7 @@ def compose_issue_to_pr(
     result = run_path(
         path_id="issue_to_pr", repo=repo, issue=issue_number,
         config_path=config_path, live=live,
+        extra_inputs={"incident_fingerprint": incident_fingerprint, "keep_issue_open": bool(incident_fingerprint)},
     )
     result.update(kind="issue_to_pr", engine="fala", planned=not live)
     try:

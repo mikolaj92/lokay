@@ -109,3 +109,12 @@ def test_carrier_unhealthy_never_discovers_or_runs_agent(monkeypatch, tmp_path):
     monkeypatch.setattr(self_repair, "_repair_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("workflow ran")))
     result = self_repair.run_self_repair("x", value)
     assert result["reason"] == "carrier_unhealthy" and result["attempts"] == []
+
+
+def test_self_repair_pr_body_has_owned_marker_and_nonclosing_link():
+    from lokay.models import Issue
+    from lokay.prompts import pr_body
+    issue = Issue(repo="mikolaj92/lokay", number=44, title="health", body="", labels=[], assignees=[], url="")
+    body = pr_body(issue, agent_summary="untrusted", incident_fingerprint="abc")
+    assert body.startswith("<!-- lokay-preflight:abc -->")
+    assert "Refs #44" in body and "Closes #44" not in body

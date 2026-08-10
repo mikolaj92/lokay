@@ -47,3 +47,9 @@ executor:
 limits:
   max_self_repair_attempts: 2
   whole_run_deadline_seconds: 3600
+
+# Automatic self-repair obeys this normal merge policy and blocks when disabled.
+merge:
+  enabled: false
+  require_checks: false
+  require_llm_review: true

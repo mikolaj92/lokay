@@ -265,8 +265,12 @@ def _github_incident(result: dict[str, Any]) -> str | None:
     fp = result["fingerprint"]
     marker = f"<!-- lokay-preflight:{fp} -->"
     try:
-        listed = subprocess.run(["gh", "issue", "list", "--repo", "mikolaj92/lokay", "--state", "open", "--json", "number,body", "--limit", "100"], capture_output=True, text=True, timeout=15, check=False)
-        rows = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
+        listed = subprocess.run([
+            "gh", "api", "--paginate", "repos/mikolaj92/lokay/issues",
+            "-f", "state=open", "-f", "per_page=100", "--slurp",
+        ], capture_output=True, text=True, timeout=30, check=False)
+        pages = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
+        rows = [row for page in pages if isinstance(page, list) for row in page if isinstance(row, dict) and "pull_request" not in row]
         match = next((r for r in rows if marker in str(r.get("body") or "")), None)
         summary = ", ".join(x["name"] for x in result["findings"] if not x["ok"])
         if match:

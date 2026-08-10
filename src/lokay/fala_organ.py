@@ -376,7 +376,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         issue = Issue.from_dict(issue_raw)
         agent = up.get("run_agent", {})
         summary = str(agent.get("stdout_tail") or agent.get("status") or "")
-        body = pr_body(issue, agent_summary=summary)
+        body = pr_body(issue, agent_summary=summary, incident_fingerprint=str(inputs.get("incident_fingerprint") or ""))
         title = f"fix: {repo}#{issue.number} {issue.title[:72]}"
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
             fh.write(body)
