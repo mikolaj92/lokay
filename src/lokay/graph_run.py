@@ -137,6 +137,10 @@ def run_path(
     # Fala rejects input keys outside the instantiated plan. Keep this mapping
     # aligned with the authored package and pass only the selected path's IDs.
     path_effectors = {
+        "daemon_cycle": (
+            "recovery_begin", "recovery_mill", "recovery_observe",
+            "recovery_record", "recovery_incident", "recovery_run_self_repair",
+        ),
         "factory_pass": ("factory_tick",),
         "issue_to_pr": (
             "get_issue", "assign_issue", "make_branch", "worktree_add",
@@ -412,6 +416,21 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         )
         if not out["validated"] or not out["restart_required"]:
             out.update(ok=False, error="self-repair did not validate activated main")
+    elif path_id == "daemon_cycle":
+        mill = terminal.get("recovery_mill", {}).get("mill")
+        if not isinstance(mill, dict):
+            out.update(ok=False, error="daemon cycle completed without mill envelope")
+        else:
+            repair = terminal.get("recovery_run_self_repair", {})
+            if repair.get("restart_required") is True:
+                out.update(
+                    ok=False,
+                    health="self_repair_restart_required",
+                    error="confirmed stall repaired; restart required before product work",
+                    self_repair=repair,
+                )
+            else:
+                out.update(mill)
     elif path_id == "factory_pass":
         factory = terminal.get("factory_tick", {})
         tick = factory.get("tick") if isinstance(factory.get("tick"), dict) else factory

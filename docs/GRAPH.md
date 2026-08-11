@@ -7,6 +7,22 @@ which jobs run after which.
 
 [`fala/lokay.fala-package.toml`](../fala/lokay.fala-package.toml)
 
+### `daemon_cycle` (top-level parent)
+
+```text
+recovery_begin
+  → recovery_mill
+    → recovery_observe
+      → recovery_record (persistent 4-of-5 quorum)
+        → recovery_incident (skipped until quorum)
+          → recovery_run_self_repair (self_repair child Fala)
+```
+
+The daemon owns only the singleton lock, health lease and initial carrier
+preflight. Fala owns product/recovery order. Every node above is a separate
+`lokay-recovery-*` Unix process returning one JSON envelope. A product run that
+actually publishes or merges work records no systemic stall fingerprint.
+
 ### `factory_pass` (parent)
 
 ```text

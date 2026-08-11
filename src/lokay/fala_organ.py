@@ -74,6 +74,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         pr_merge,
         pr_review,
         push_branch,
+        recovery_begin,
+        recovery_incident,
+        recovery_mill,
+        recovery_observe,
+        recovery_record,
+        recovery_run_self_repair,
         run_agent,
         triage_issue,
         worktree_add,
@@ -103,6 +109,68 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         or up.get("worktree_add", {}).get("branch")
         or ""
     )
+
+    if atom == "recovery_begin":
+        return _run_atom_main(recovery_begin.main, [*cfg, *live])
+
+    if atom == "recovery_mill":
+        return _run_atom_main(
+            recovery_mill.main,
+            [*cfg, *live, "--max-passes", str(int(inputs.get("max_passes") or 8))],
+        )
+
+    if atom == "recovery_observe":
+        begin = up.get("recovery_begin", {})
+        mill = up.get("recovery_mill", {}).get("mill")
+        assert begin.get("state_path") and mill is not None
+        return _run_atom_main(
+            recovery_observe.main,
+            [
+                "--state-path", str(begin["state_path"]),
+                "--state-offset", str(begin.get("state_offset") or 0),
+                "--mill-json", json.dumps(mill, ensure_ascii=False),
+            ],
+        )
+
+    if atom == "recovery_record":
+        begin = up.get("recovery_begin", {})
+        observation = up.get("recovery_observe", {}).get("observation")
+        assert begin.get("state_path") and observation is not None
+        return _run_atom_main(
+            recovery_record.main,
+            [
+                "--state-path", str(begin["state_path"]),
+                "--observation-json", json.dumps(observation, ensure_ascii=False),
+            ],
+        )
+
+    if atom == "recovery_incident":
+        recorded = up.get("recovery_record", {})
+        if recorded.get("confirmed") is not True:
+            return {"ok": True, "skipped": True, "reason": "stall_quorum_not_met"}
+        recovery = recorded.get("recovery") or {}
+        return _run_atom_main(
+            recovery_incident.main,
+            [
+                "--fingerprint", str(recovery.get("fingerprint") or ""),
+                "--evidence", str(recovery.get("evidence") or ""),
+            ],
+        )
+
+    if atom == "recovery_run_self_repair":
+        incident = up.get("recovery_incident", {})
+        if incident.get("skipped"):
+            return {"ok": True, "skipped": True, "reason": incident.get("reason")}
+        assert incident.get("fingerprint") and incident.get("incident_url")
+        return _run_atom_main(
+            recovery_run_self_repair.main,
+            [
+                *cfg,
+                "--fingerprint", str(incident["fingerprint"]),
+                "--incident-url", str(incident["incident_url"]),
+                "--evidence", str(incident.get("failure_evidence") or ""),
+            ],
+        )
 
     if atom == "factory_tick":
         # Domain health (work_remaining/stall) is a successful parent effector
