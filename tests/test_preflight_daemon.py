@@ -5,7 +5,9 @@ from pathlib import Path
 
 def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     script = (Path(__file__).parents[1] / "scripts" / "lokay-mill-daemon.sh").read_text()
-    assert script.index('command -v uv') < script.index('uv run lokay-daemon')
+    daemon_command = 'uv run --reinstall-package lokay lokay-daemon'
+    assert script.index('command -v uv') < script.index(daemon_command)
+    assert script.count(daemon_command) == 1
     assert 'uv run lokay-repos' not in script
     assert 'uv run lokay-mill' not in script
     assert 'preflight-bootstrap-incidents.log' in script
@@ -30,7 +32,9 @@ def test_daemon_exposes_local_pi_to_preflight(tmp_path):
     (local_bin / "pi").write_text("#!/bin/sh\nexit 0\n")
     (local_bin / "pi").chmod(0o755)
     (local_bin / "uv").write_text(
-        "#!/bin/sh\nprintf '%s\\n' \"$(command -v pi)\" \"$PATH\"\n"
+        "#!/bin/sh\n"
+        "test \"$1 $2 $3\" = 'run --reinstall-package lokay' || exit 64\n"
+        "printf '%s\\n' \"$(command -v pi)\" \"$PATH\"\n"
     )
     (local_bin / "uv").chmod(0o755)
 
