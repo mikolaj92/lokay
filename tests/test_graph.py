@@ -11,6 +11,32 @@ def test_describe_parent_factory_graph():
     assert [node["id"] for node in path["nodes"]] == ["factory_tick"]
 
 
+def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
+    from lokay import graph_run
+
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "parent-token")
+    monkeypatch.setattr(
+        "lokay.preflight.require_healthy",
+        lambda config: monkeypatch.setenv("LOKAY_HEALTH_LEASE", "nested-token"),
+    )
+    captured = {}
+    monkeypatch.setattr(
+        "fala.host_run_package",
+        lambda **kwargs: captured.update(token=__import__("os").environ["LOKAY_HEALTH_LEASE"])
+        or {"ok": True, "run_status": "completed", "effector_results": {}},
+    )
+
+    graph_run.run_path(
+        path_id="factory_pass",
+        repo="__factory__",
+        live=True,
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+    )
+
+    assert captured["token"] == "parent-token"
+
+
 def test_parent_factory_inherits_fala_home_and_health_lease():
     import tomllib
 

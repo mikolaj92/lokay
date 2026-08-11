@@ -74,6 +74,8 @@ def run_path(
     extra_inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Drive Fala host_run_package for a Lokay graph path."""
+    # Preserve the daemon-issued capability across any defensive nested check.
+    inherited_health_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     if live:
         from lokay.preflight import require_healthy
 
@@ -87,6 +89,8 @@ def run_path(
 
     # Package effectors explicitly inherit the health capability. Fala requires
     # every declared key to exist, including read-only runs where it is empty.
+    # Do not let a nested preflight replace the parent's valid process-tree
+    # token; only the lock-owning daemon may issue/revoke that capability.
     os.environ.setdefault("LOKAY_HEALTH_LEASE", "")
 
     pkg_src = Path(package_path) if package_path else find_default_package()
@@ -105,6 +109,9 @@ def run_path(
                 break
     _materialize_package(pkg_src, pkg_runtime, project=project)
     db = work / "state.sqlite"
+
+    if os.environ.get("LOKAY_HEALTH_LEASE", "") != inherited_health_lease:
+        os.environ["LOKAY_HEALTH_LEASE"] = inherited_health_lease
 
     cfg = str(Path(config_path).expanduser().resolve()) if config_path else ""
     base_input: dict[str, Any] = {
