@@ -34,7 +34,7 @@ from lokay.proc import pr_close as p_pr_close
 from lokay.proc import select_issue as p_select
 from lokay.proc import triage_issue as p_triage
 from lokay.proc._common import add_config_live, load_cfg
-from lokay.preflight import has_health_lease, run_preflight
+from lokay.preflight import health_lease_status, run_preflight
 from lokay.stuck import (
     clear_issue,
     excluded_numbers,
@@ -155,11 +155,18 @@ def _health_payload(
 def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     # Parent daemon/Fala already passed preflight and issued a process-tree lease.
     # Re-running here would mistake the parent's singleton lock for contention.
-    preflight = (
-        {"ok": True, "lease": True}
-        if live and has_health_lease()
-        else run_preflight(config_path, remediate=True) if live else {"ok": True}
-    )
+    lease_ok, lease_reason = health_lease_status()
+    if live and os.environ.get("LOKAY_HEALTH_LEASE"):
+        # A delegated capability must validate as-is. Never let nested Fala mint
+        # a replacement lease owned by factory_tick; that process exits before
+        # later child effectors and leaves them with a dead owner/missing record.
+        preflight = (
+            {"ok": True, "lease": True}
+            if lease_ok
+            else {"ok": False, "lease": False, "lease_reason": lease_reason}
+        )
+    else:
+        preflight = run_preflight(config_path, remediate=True) if live else {"ok": True}
     if not preflight.get("ok"):
         return err(
             "preflight failed; product workflow blocked",

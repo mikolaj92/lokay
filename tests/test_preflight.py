@@ -70,7 +70,8 @@ def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
 
 
 def test_failed_preflight_blocks_every_product_atom(monkeypatch):
-    monkeypatch.setattr(tick, "has_health_lease", lambda: False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.setattr(tick, "health_lease_status", lambda: (False, "token_missing"))
     monkeypatch.setattr(
         tick,
         "run_preflight",
@@ -90,7 +91,8 @@ def test_failed_preflight_blocks_every_product_atom(monkeypatch):
 
 
 def test_inherited_lease_skips_duplicate_tick_preflight(monkeypatch):
-    monkeypatch.setattr(tick, "has_health_lease", lambda: True)
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(tick, "health_lease_status", lambda: (True, "ok"))
     monkeypatch.setattr(
         tick,
         "run_preflight",
@@ -104,6 +106,23 @@ def test_inherited_lease_skips_duplicate_tick_preflight(monkeypatch):
 
     with pytest.raises(RuntimeError, match="past preflight"):
         tick.compose_tick(config_path="config.yaml", live=True)
+
+
+def test_rejected_inherited_tick_lease_is_not_reissued(monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(
+        tick, "health_lease_status", lambda: (False, "lease_unavailable_FileNotFoundError")
+    )
+    monkeypatch.setattr(
+        tick,
+        "run_preflight",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested preflight")),
+    )
+
+    result = tick.compose_tick(config_path="config.yaml", live=True)
+
+    assert result["ok"] is False
+    assert result["preflight"]["lease_reason"] == "lease_unavailable_FileNotFoundError"
 
 
 def test_no_repair_keeps_missing_locale_unhealthy(tmp_path, monkeypatch):
