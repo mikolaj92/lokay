@@ -14,6 +14,26 @@ def test_strip_ansi_removes_sgr():
     assert json.loads(plain) == [{"number": 31}]
 
 
+def test_runner_spec_env_does_not_mutate_parent(monkeypatch):
+    import os
+
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "parent-token")
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured.update(kwargs["env"])
+        return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr("lokay.runner.subprocess.run", fake_run)
+    Runner().run(
+        CommandSpec(argv=("echo",), env={"LOKAY_HEALTH_LEASE": ""}),
+        live=True,
+    )
+
+    assert captured["LOKAY_HEALTH_LEASE"] == ""
+    assert os.environ["LOKAY_HEALTH_LEASE"] == "parent-token"
+
+
 def test_runner_env_disables_force_color(monkeypatch):
     """Even if host exports FORCE_COLOR/CLICOLOR_FORCE, child env is neutralized."""
     monkeypatch.setenv('FORCE_COLOR', '1')

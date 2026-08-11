@@ -71,6 +71,9 @@ class Runner:
         env = os.environ.copy()
         env.update(_MACHINE_ENV)
         env.update(spec.env)
+        # Command-specific environment must never mutate the long-lived organ.
+        # In particular run_agent clears the lease only in the coding harness,
+        # while later Fala atoms still need the daemon-issued capability.
         # Spec env must not re-enable forced color for machine parsers.
         env["NO_COLOR"] = "1"
         env["CLICOLOR_FORCE"] = "0"
