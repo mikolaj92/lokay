@@ -227,6 +227,24 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
     preflight.revoke_health_lease()
 
 
+def test_github_incident_refuses_singleton_only_failure(monkeypatch):
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("GitHub mutation attempted for operational overlap")
+        ),
+    )
+    result = {
+        "findings": [
+            preflight._finding("github_authentication", True, "ok"),
+            preflight._finding("singleton_overlap", False, "contended"),
+        ]
+    }
+
+    assert preflight._github_incident(result) is None
+
+
 def test_singleton_contention_is_recorded_locally_without_opening_issue(monkeypatch):
     monkeypatch.setattr(
         preflight,
