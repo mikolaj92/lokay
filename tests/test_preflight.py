@@ -204,11 +204,14 @@ def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
     assert Path(result["local_incident"]).is_file()
 
 
-def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, monkeypatch):
+def test_preflight_repairs_daemon_path_for_pi_in_local_bin(tmp_path, monkeypatch):
+    """Issue #15: preflight must find the configured Pi installation when the
+    daemon process starts with launchd's system-only PATH."""
     cfg = _config(tmp_path)
+    cfg.write_text(cfg.read_text().replace("command: omp", "command: pi"))
     user_bin = tmp_path / ".local" / "bin"
     user_bin.mkdir(parents=True)
-    (user_bin / "omp").touch(mode=0o755)
+    (user_bin / "pi").touch(mode=0o755)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("LANG", "C.UTF-8")
@@ -219,6 +222,7 @@ def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, mo
     result = preflight.run_preflight(str(cfg))
 
     assert result["ok"] is True, result
+    assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{user_bin}"
     assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
     finding = next(x for x in result["findings"] if x["name"] == "executor_availability")
     assert finding["ok"] is True
@@ -251,27 +255,6 @@ def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monk
     # The other half of the incident pair (fala_smoke) stays healthy against
     # the real installed Fala and canonical manifest.
     assert next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
-
-
-def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypatch):
-    cfg = _config(tmp_path)
-    agent_bin = tmp_path / ".pi" / "agent" / "bin"
-    agent_bin.mkdir(parents=True)
-    (agent_bin / "omp").touch(mode=0o755)
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("PATH", "/usr/bin:/bin")
-    monkeypatch.setenv("LANG", "C.UTF-8")
-    real_which = preflight.shutil.which
-    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
-    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
-
-    result = preflight.run_preflight(str(cfg))
-
-    assert result["ok"] is True, result
-    assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{agent_bin}"
-    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
-    assert executor["ok"] is True
-    assert executor["repaired"] is True
 
 
 def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, monkeypatch):
