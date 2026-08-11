@@ -376,8 +376,15 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             out["reason"] = triage.get("reason")
     elif path_id == "pr_repair":
         commit = terminal.get("commit_all", {})
+        push = terminal.get("push", {})
         out.update(repo=result.get("repo"), pr=result.get("pr"), branch=result.get("branch"))
-        if result.get("live") and commit.get("committed") is not True:
+        # commit_all=false is valid when the repair agent committed directly;
+        # the push effector proves whether unpublished progress existed.
+        if (
+            result.get("live")
+            and commit.get("committed") is not True
+            and push.get("pushed") is not True
+        ):
             out.update(ok=False, error="repair produced no commit")
     elif path_id == "issue_to_pr":
         out.update(

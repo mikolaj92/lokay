@@ -149,6 +149,25 @@ def test_fala_zero_diff_repair_contract():
     assert out["ok"] is False and out["error"] == "repair produced no commit"
 
 
+def test_fala_agent_committed_repair_contract():
+    out = _host(
+        "pr_repair",
+        {
+            "commit_all": {
+                "id": "commit_all",
+                "status": "completed",
+                "output": {"values": {"committed": False}},
+            },
+            "push": {
+                "id": "push",
+                "status": "completed",
+                "output": {"values": {"pushed": True}},
+            },
+        },
+    )
+    assert out["ok"] is True
+
+
 def test_completed_path_without_effector_results_fails_closed():
     out = normalize_path_result({
         "ok": True,
