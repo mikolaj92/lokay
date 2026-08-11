@@ -131,7 +131,8 @@ def revoke_health_lease() -> None:
         pass
 
 
-def has_health_lease() -> bool:
+def health_lease_status() -> tuple[bool, str]:
+    """Validate the inherited run capability and return a bounded reason."""
     import time
 
     token = os.environ.get("LOKAY_HEALTH_LEASE", "")
@@ -157,20 +158,32 @@ def has_health_lease() -> bool:
                     lock_held = True
             finally:
                 probe.close()
-        return (
-            lock_held
-            and len(token) == 64
-            and not path.is_symlink()
-            and (not hasattr(os, "getuid") or st.st_uid == os.getuid())
-            and st.st_mode & 0o077 == 0
-            and int(record["issued_at"]) <= int(time.time()) < int(record["expires_at"])
-            and secrets.compare_digest(
-                str(record["token_sha256"]),
-                hashlib.sha256(token.encode("ascii")).hexdigest(),
-            )
+        now = int(time.time())
+        checks = (
+            (lock_held, "lock_not_held"),
+            (len(token) == 64, "token_missing"),
+            (not path.is_symlink(), "lease_symlink"),
+            (not hasattr(os, "getuid") or st.st_uid == os.getuid(), "wrong_owner"),
+            (st.st_mode & 0o077 == 0, "unsafe_mode"),
+            (int(record["issued_at"]) <= now < int(record["expires_at"]), "expired"),
+            (
+                secrets.compare_digest(
+                    str(record["token_sha256"]),
+                    hashlib.sha256(token.encode("ascii")).hexdigest(),
+                ),
+                "token_mismatch",
+            ),
         )
+        for passed, reason in checks:
+            if not passed:
+                return False, reason
+        return True, "ok"
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        return False
+        return False, "lease_unavailable"
+
+
+def has_health_lease() -> bool:
+    return health_lease_status()[0]
 
 
 def acquire_run_lock(lock_path: Path) -> bool:
@@ -331,8 +344,11 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
 
 
 def require_healthy(config_path: str | None) -> None:
-    if has_health_lease():
+    healthy, lease_reason = health_lease_status()
+    if healthy:
         return
     result = run_preflight(config_path, remediate=True)
     if not result["ok"]:
-        raise RuntimeError("preflight failed; live mutation blocked")
+        raise RuntimeError(
+            f"preflight failed; live mutation blocked (lease={lease_reason})"
+        )
