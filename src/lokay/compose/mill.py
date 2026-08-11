@@ -8,15 +8,44 @@ pass budget (external schedulers re-invoke mill/tick).
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Any
 
 from lokay.compose.factory import compose_factory_pass
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live, load_cfg
-from lokay.preflight import run_preflight
+from lokay.preflight import revoke_health_lease, run_preflight
 
 
 def compose_mill(
+    *,
+    config_path: str | None,
+    live: bool,
+    max_passes: int = 8,
+    preflight: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Run the mill under one process-tree health capability."""
+    inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    owns_lease = False
+    if preflight is None and live:
+        # A direct lokay-mill invocation owns preflight and must delegate its
+        # result through the parent Fala subprocess. Otherwise factory_tick
+        # repeats preflight and reports this process's lock as contention.
+        preflight = run_preflight(config_path, remediate=True, issue_lease=True)
+        owns_lease = not inherited_lease and bool(os.environ.get("LOKAY_HEALTH_LEASE"))
+    try:
+        return _compose_mill(
+            config_path=config_path,
+            live=live,
+            max_passes=max_passes,
+            preflight=preflight,
+        )
+    finally:
+        if owns_lease:
+            revoke_health_lease()
+
+
+def _compose_mill(
     *,
     config_path: str | None,
     live: bool,

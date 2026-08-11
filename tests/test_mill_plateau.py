@@ -2,7 +2,50 @@
 
 from __future__ import annotations
 
+import os
+
 from lokay.compose import mill as mill_mod
+
+
+def test_direct_live_mill_delegates_and_revokes_preflight_lease(monkeypatch, tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    calls: list[tuple[str, bool]] = []
+
+    def preflight(config_path, *, remediate, issue_lease=False):
+        calls.append(("preflight", issue_lease))
+        monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+        return {"ok": True}
+
+    def factory_pass(**kwargs):
+        calls.append(("factory", bool(os.environ.get("LOKAY_HEALTH_LEASE"))))
+        return {"ok": True, "idle": True, "health": "idle", "progress": 0}
+
+    def revoke():
+        calls.append(("revoke", True))
+        os.environ.pop("LOKAY_HEALTH_LEASE", None)
+
+    monkeypatch.setattr(mill_mod, "run_preflight", preflight)
+    monkeypatch.setattr(mill_mod, "compose_factory_pass", factory_pass)
+    monkeypatch.setattr(mill_mod, "revoke_health_lease", revoke)
+
+    result = mill_mod.compose_mill(config_path=str(cfg_path), live=True)
+
+    assert result["ok"] is True
+    assert calls == [("preflight", True), ("factory", True), ("revoke", True)]
 
 
 def test_mill_plateau_stops_when_remaining_unchanged(monkeypatch, tmp_path):
