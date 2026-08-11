@@ -773,6 +773,21 @@ def test_trusted_manifest_uses_packaged_copy_without_checkout(tmp_path, monkeypa
     assert preflight.trusted_fala_manifest() == packaged
 
 
+def test_installed_manifest_ignores_unrelated_checkout_cwd(tmp_path, monkeypatch):
+    installed = tmp_path / "site-packages" / "lokay"
+    packaged = installed / "data" / "lokay.fala-package.toml"
+    cwd_manifest = tmp_path / "checkout" / "fala" / "lokay.fala-package.toml"
+    packaged.parent.mkdir(parents=True)
+    cwd_manifest.parent.mkdir(parents=True)
+    packaged.write_text('[[correlation_paths]]\nid = "installed"\n', encoding="utf-8")
+    cwd_manifest.write_text('[[correlation_paths]]\nid = "upgrading"\n', encoding="utf-8")
+    monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
+    monkeypatch.chdir(cwd_manifest.parents[1])
+    monkeypatch.delenv("LOKAY_FALA_PACKAGE", raising=False)
+
+    assert preflight.trusted_fala_manifest() == packaged
+
+
 def test_trusted_manifest_rejects_checkout_mismatch(tmp_path, monkeypatch):
     installed = tmp_path / "checkout" / "src" / "lokay"
     packaged = installed / "data" / "lokay.fala-package.toml"
