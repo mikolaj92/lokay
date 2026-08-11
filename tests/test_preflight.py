@@ -257,6 +257,23 @@ def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):
     assert preflight.has_health_lease() is False
 
 
+def test_child_cannot_revoke_parent_health_lease(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    preflight.issue_health_lease()
+    path = tmp_path / ".lokay" / "health-lease"
+    parent_token = __import__("os").environ["LOKAY_HEALTH_LEASE"]
+    record = json.loads(path.read_text())
+
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "b" * 64)
+    preflight.revoke_health_lease()
+
+    assert path.exists()
+    assert json.loads(path.read_text()) == record
+    assert parent_token != "b" * 64
+
+
 def test_dead_owner_health_lease_fails(tmp_path, monkeypatch):
     import json
     monkeypatch.setenv("HOME", str(tmp_path))

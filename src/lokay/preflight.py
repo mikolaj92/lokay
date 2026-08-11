@@ -133,11 +133,17 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
 
 def revoke_health_lease() -> None:
     path = _lease_path()
-    os.environ.pop("LOKAY_HEALTH_LEASE", None)
+    token = os.environ.pop("LOKAY_HEALTH_LEASE", "")
     os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
     try:
-        path.unlink()
-    except FileNotFoundError:
+        record = json.loads(path.read_text(encoding="ascii"))
+        owned = len(token) == 64 and secrets.compare_digest(
+            str(record["token_sha256"]),
+            hashlib.sha256(token.encode("ascii")).hexdigest(),
+        )
+        if owned:
+            path.unlink()
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         pass
 
 
