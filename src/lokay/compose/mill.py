@@ -14,7 +14,7 @@ from typing import Any
 from lokay.compose.factory import compose_factory_pass
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live, load_cfg
-from lokay.preflight import revoke_health_lease, run_preflight
+from lokay.preflight import health_lease_status, revoke_health_lease, run_preflight
 
 
 def compose_mill(
@@ -33,6 +33,15 @@ def compose_mill(
         # repeats preflight and reports this process's lock as contention.
         preflight = run_preflight(config_path, remediate=True, issue_lease=True)
         owns_lease = not inherited_lease and bool(os.environ.get("LOKAY_HEALTH_LEASE"))
+        if preflight.get("ok") and owns_lease:
+            lease_ok, lease_reason = health_lease_status()
+            if not lease_ok:
+                preflight = {
+                    **preflight,
+                    "ok": False,
+                    "lease": False,
+                    "lease_reason": lease_reason,
+                }
     try:
         return _compose_mill(
             config_path=config_path,

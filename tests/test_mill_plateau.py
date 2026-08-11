@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
+import sys
+from pathlib import Path
 
+from lokay import preflight
 from lokay.compose import mill as mill_mod
 
 
@@ -39,6 +44,7 @@ state:
         os.environ.pop("LOKAY_HEALTH_LEASE", None)
 
     monkeypatch.setattr(mill_mod, "run_preflight", preflight)
+    monkeypatch.setattr(mill_mod, "health_lease_status", lambda: (True, "ok"))
     monkeypatch.setattr(mill_mod, "compose_factory_pass", factory_pass)
     monkeypatch.setattr(mill_mod, "revoke_health_lease", revoke)
 
@@ -46,6 +52,70 @@ state:
 
     assert result["ok"] is True
     assert calls == [("preflight", True), ("factory", True), ("revoke", True)]
+
+
+def test_direct_live_mill_lease_validates_for_custom_state_path(monkeypatch, tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    state_dir = tmp_path / "custom" / "state"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  command: omp
+  args: ["-p", "{{prompt}}"]
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {state_dir / "events.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.delenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}")
+    real_run = subprocess.run
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda *args, **kwargs: type("Completed", (), {"returncode": 0})()
+        if args[0][0] == "gh"
+        else real_run(*args, **kwargs),
+    )
+    observed: dict[str, object] = {}
+
+    def factory_pass(**kwargs):
+        child = real_run(
+            [
+                sys.executable,
+                "-c",
+                "from lokay.preflight import health_lease_status; "
+                "raise SystemExit(0 if health_lease_status() == (True, 'ok') else 9)",
+            ],
+            env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
+            check=False,
+        )
+        observed["status"] = child.returncode
+        observed["record"] = json.loads(
+            Path(os.environ["LOKAY_HEALTH_LEASE_PATH"]).read_text()
+        )
+        return {"ok": True, "idle": True, "health": "idle", "progress": 0}
+
+    monkeypatch.setattr(mill_mod, "compose_factory_pass", factory_pass)
+
+    result = mill_mod.compose_mill(config_path=str(cfg_path), live=True)
+
+    assert result["ok"] is True, result
+    assert observed["status"] == 0
+    assert observed["record"]["lock_path"] == str((state_dir / "mill.lock").absolute())
+    assert "LOKAY_HEALTH_LEASE" not in os.environ
+    assert "LOKAY_HEALTH_LEASE_PATH" not in os.environ
 
 
 def test_mill_plateau_stops_when_remaining_unchanged(monkeypatch, tmp_path):
