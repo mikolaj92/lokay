@@ -178,6 +178,55 @@ def test_validation_lease_is_bound_to_contended_custom_state_lock(tmp_path, monk
     preflight.revoke_health_lease()
 
 
+def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monkeypatch):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    cfg = _config(tmp_path)
+    state_dir = tmp_path / "runtime" / "state"
+    for path in (state_dir, tmp_path / "runtime" / "worktrees", tmp_path / "runtime" / "logs"):
+        path.mkdir(parents=True)
+    daemon_lock = tmp_path / ".lokay" / "mill.lock"
+    configured_lock = state_dir / "mill.lock"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    # The old daemon owns its HOME lock and acquired the configured lock while
+    # running preflight, but its lease record predates the lock_path field.
+    assert preflight.acquire_run_lock(daemon_lock)
+    assert preflight.acquire_run_lock(configured_lock)
+    preflight.issue_health_lease()
+    lease_path = Path(__import__("os").environ["LOKAY_HEALTH_LEASE_PATH"])
+    record = json.loads(lease_path.read_text())
+    record.pop("lock_path")
+    lease_path.write_text(json.dumps(record))
+    lease_path.chmod(0o600)
+
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; from lokay.preflight import health_lease_status; "
+            f"raise SystemExit(0 if health_lease_status(lock_path=Path({str(configured_lock)!r}))[0] else 9)",
+        ],
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
+        check=False,
+    )
+    assert child.returncode == 0
+
+    result = preflight.run_preflight(
+        str(cfg), remediate=False, validate_inherited_lease=True
+    )
+
+    assert result["ok"] is True, result
+    assert next(x for x in result["findings"] if x["name"] == "singleton_overlap")["ok"]
+    preflight.revoke_health_lease()
+
+
 def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))

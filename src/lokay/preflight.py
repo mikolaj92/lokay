@@ -208,6 +208,22 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
     """Validate the inherited capability and its exact bound run lock."""
     import time
 
+    def lock_is_held(candidate: Path, owner_pid: int) -> bool:
+        key = str(candidate)
+        if owner_pid == os.getpid() and key in _LOCKS:
+            os.fstat(_LOCKS[key].fileno())
+            return True
+        probe = candidate.open("a+")
+        try:
+            try:
+                fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+            except BlockingIOError:
+                return True
+            return False
+        finally:
+            probe.close()
+
     token = os.environ.get("LOKAY_HEALTH_LEASE", "")
     path = _lease_path()
     try:
@@ -215,24 +231,22 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
         record = json.loads(path.read_text(encoding="ascii"))
         owner_pid = int(record["owner_pid"])
         os.kill(owner_pid, 0)  # owner must still be alive
-        bound_lock = Path(str(record["lock_path"])).expanduser().absolute()
-        if lock_path is not None and bound_lock != lock_path.expanduser().absolute():
+        expected_lock = lock_path.expanduser().absolute() if lock_path is not None else None
+        recorded_lock = record.get("lock_path")
+        legacy_lock = (Path.home() / ".lokay" / "mill.lock").absolute()
+        # Leases issued by the pre-upgrade daemon implicitly used the HOME
+        # lock. During activation, also prove that daemon still holds the exact
+        # configured lock before allowing validation to run behind it.
+        bound_lock = (
+            Path(str(recorded_lock)).expanduser().absolute()
+            if recorded_lock is not None
+            else expected_lock or legacy_lock
+        )
+        if expected_lock is not None and recorded_lock is not None and bound_lock != expected_lock:
             return False, "lock_path_mismatch"
-        lock_key = str(bound_lock)
-        lock_held = False
-        if owner_pid == os.getpid() and lock_key in _LOCKS:
-            os.fstat(_LOCKS[lock_key].fileno())
-            lock_held = True
-        else:
-            probe = bound_lock.open("a+")
-            try:
-                try:
-                    fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
-                except BlockingIOError:
-                    lock_held = True
-            finally:
-                probe.close()
+        lock_held = lock_is_held(bound_lock, owner_pid)
+        if recorded_lock is None and bound_lock != legacy_lock:
+            lock_held = lock_held and lock_is_held(legacy_lock, owner_pid)
         now = int(time.time())
         checks = (
             (lock_held, "lock_not_held"),
