@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
         lock.parent / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
     )
     if not acquire_run_lock(lock):
-        payload = err("preflight failed; overlapping run", health="preflight_failed", code="overlap")
+        payload = err("mill skipped; overlapping run", health="overlap", code="overlap")
     else:
         try:
             health = run_preflight(args.config, remediate=True, issue_lease=True)
@@ -57,7 +57,10 @@ def main(argv: list[str] | None = None) -> int:
                     )
         finally:
             revoke_health_lease()
-    if not payload.get("ok"):
+    # A held singleton is an expected launchd overlap, not a preflight
+    # incident. Report it to the caller but do not feed it into the failure
+    # outbox where it can be mistaken for source health needing repair.
+    if not payload.get("ok") and payload.get("health") != "overlap":
         try:
             outbox = Path(args.outbox); outbox.parent.mkdir(parents=True, exist_ok=True)
             with outbox.open("a", encoding="utf-8") as handle:
