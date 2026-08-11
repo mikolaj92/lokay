@@ -337,6 +337,32 @@ def _github_incident(result: dict[str, Any]) -> str | None:
 
 
 def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[str, Any]:
+    inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    if inherited_lease:
+        healthy, reason = health_lease_status()
+        if healthy:
+            return {
+                "ok": True,
+                "carrier_ok": True,
+                "integrity_ok": True,
+                "health": "healthy",
+                "gate_released": True,
+                "lease": True,
+                "lease_reason": "ok",
+                "findings": [],
+                "repairs": [],
+            }
+        return {
+            "ok": False,
+            "carrier_ok": False,
+            "integrity_ok": False,
+            "health": "preflight_failed",
+            "gate_released": False,
+            "lease": False,
+            "lease_reason": reason,
+            "findings": [],
+            "repairs": [],
+        }
     repaired: set[str] = set()
     repairs: list[dict[str, Any]] = []
     initial, cfg = _check(config_path, repaired)

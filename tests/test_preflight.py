@@ -114,6 +114,36 @@ def test_inherited_lease_skips_duplicate_tick_preflight(monkeypatch):
         tick.compose_tick(config_path="config.yaml", live=True)
 
 
+def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(preflight, "health_lease_status", lambda: (True, "ok"))
+    monkeypatch.setattr(
+        preflight,
+        "_check",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested host checks")),
+    )
+
+    result = preflight.run_preflight("config.yaml")
+
+    assert result["ok"] is True
+    assert result["lease"] is True
+
+
+def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))
+    monkeypatch.setattr(
+        preflight,
+        "_check",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested host checks")),
+    )
+
+    result = preflight.run_preflight("config.yaml")
+
+    assert result["ok"] is False
+    assert result["lease_reason"] == "expired"
+
+
 def test_rejected_inherited_tick_lease_is_not_reissued(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(
