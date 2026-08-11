@@ -498,21 +498,15 @@ def run_preflight(
     if checked["ok"] and issue_lease:
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
     if not checked["ok"]:
-        # An older daemon can retain its lock while self-repair activates newer
-        # validation code. Suppress only that known recursive incident; every
-        # other validation failure must still be reported.
-        recursive_singleton = (
-            os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1"
-            and singleton_only
-        )
-        if recursive_singleton:
+        if singleton_only:
+            # Overlap is already represented by the structured result. Do not
+            # put it in either incident channel, where a consumer could mistake
+            # expected scheduler contention for a source-repair task.
             result.update(local_incident=None, incident_url=None)
         else:
             try: result["local_incident"] = str(_persist_incident(cfg, result))
             except OSError: result["local_incident"] = None
-            # Contention is an operational overlap, not a source repair task.
-            # Keep local evidence but do not feed it back into issue_to_pr.
-            result["incident_url"] = None if singleton_only else _github_incident(result)
+            result["incident_url"] = _github_incident(result)
     return result
 
 
