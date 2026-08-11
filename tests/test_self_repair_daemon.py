@@ -12,6 +12,19 @@ def test_daemon_selects_unique_health_lease_path(monkeypatch, tmp_path):
     assert path != str(tmp_path / ".lokay" / "health-lease")
 
 
+def test_daemon_lock_overlap_is_not_recorded_as_preflight_failure(monkeypatch, tmp_path, capsys):
+    outbox = tmp_path / "outbox.jsonl"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: False)
+
+    assert daemon.main(["--config", "x", "--outbox", str(outbox)]) == 1
+
+    assert not outbox.exists()
+    payload = capsys.readouterr().out
+    assert '"health": "overlap"' in payload
+    assert '"code": "overlap"' in payload
+
+
 def test_healthy_daemon_reuses_preflight_lease_for_product(monkeypatch, tmp_path):
     health = {"ok": True, "carrier_ok": True, "fingerprint": "healthy"}
     captured = []
