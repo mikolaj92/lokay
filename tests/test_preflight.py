@@ -806,6 +806,21 @@ def test_installed_manifest_ignores_unrelated_checkout_cwd(tmp_path, monkeypatch
     assert preflight.trusted_fala_manifest() == packaged
 
 
+def test_checkout_accepts_packaged_manifest_override(tmp_path, monkeypatch):
+    installed = tmp_path / "checkout" / "src" / "lokay"
+    packaged = installed / "data" / "lokay.fala-package.toml"
+    source = tmp_path / "checkout" / "fala" / "lokay.fala-package.toml"
+    packaged.parent.mkdir(parents=True)
+    source.parent.mkdir(parents=True)
+    content = '[[correlation_paths]]\nid = "factory_pass"\n'
+    packaged.write_text(content, encoding="utf-8")
+    source.write_text(content, encoding="utf-8")
+    monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
+    monkeypatch.setenv("LOKAY_FALA_PACKAGE", str(packaged))
+
+    assert preflight.trusted_fala_manifest() == packaged
+
+
 def test_trusted_manifest_rejects_checkout_mismatch(tmp_path, monkeypatch):
     installed = tmp_path / "checkout" / "src" / "lokay"
     packaged = installed / "data" / "lokay.fala-package.toml"
