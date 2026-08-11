@@ -129,36 +129,53 @@ def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
     assert result["lease"] is True
 
 
-def test_validation_reruns_checks_behind_valid_inherited_singleton(monkeypatch):
-    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
-    monkeypatch.setattr(preflight, "health_lease_status", lambda: (True, "ok"))
-    calls = []
+def test_validation_lease_is_bound_to_contended_custom_state_lock(tmp_path, monkeypatch):
+    import os
+    import subprocess
+    import sys
 
-    def checked(config_path, repaired, *, inherited_singleton=False):
-        calls.append(inherited_singleton)
-        return {
-            "ok": inherited_singleton,
-            "carrier_ok": inherited_singleton,
-            "integrity_ok": True,
-            "findings": [
-                preflight._finding(
-                    "singleton_overlap",
-                    inherited_singleton,
-                    "ok" if inherited_singleton else "contended",
-                )
-            ],
-        }, None
+    real_run = subprocess.run
+    cfg = _config(tmp_path)
+    state_dir = tmp_path / "runtime" / "state"
+    for path in (state_dir, tmp_path / "runtime" / "worktrees", tmp_path / "runtime" / "logs"):
+        path.mkdir(parents=True)
+    custom_lock = state_dir / "mill.lock"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
 
-    monkeypatch.setattr(preflight, "_check", checked)
+    assert preflight.acquire_run_lock(custom_lock)
+    preflight.issue_health_lease(lock_path=custom_lock)
+    competitor = real_run(
+        [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; from lokay.preflight import acquire_run_lock; "
+            f"raise SystemExit(0 if acquire_run_lock(Path({str(custom_lock)!r})) else 9)",
+        ],
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
+        check=False,
+    )
+    assert competitor.returncode == 9
 
     result = preflight.run_preflight(
-        "config.yaml", remediate=False, validate_inherited_lease=True
+        str(cfg), remediate=False, validate_inherited_lease=True
     )
+    assert result["ok"] is True, result
+    assert next(x for x in result["findings"] if x["name"] == "singleton_overlap")["ok"]
+    preflight.revoke_health_lease()
 
-    assert result["ok"] is True
-    assert calls == [True, True]
-    assert result["findings"][0]["name"] == "singleton_overlap"
-    assert result["findings"][0]["ok"] is True
+    # A lease for the legacy HOME lock must not bypass this config's lock.
+    home_lock = tmp_path / ".lokay" / "mill.lock"
+    assert preflight.acquire_run_lock(home_lock)
+    preflight.issue_health_lease(lock_path=home_lock)
+    mismatched = preflight.run_preflight(
+        str(cfg), remediate=False, validate_inherited_lease=True
+    )
+    assert mismatched["ok"] is False
+    assert mismatched["lease_reason"] == "lock_path_mismatch"
+    preflight.revoke_health_lease()
 
 
 def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
@@ -609,7 +626,7 @@ def test_only_lock_owning_daemon_preflight_issues_lease(tmp_path, monkeypatch):
     _host_ok(monkeypatch)
     assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
 
     assert preflight.run_preflight(str(cfg), issue_lease=True)["ok"] is True
     assert issued == [True]
@@ -623,7 +640,7 @@ def test_direct_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     _host_ok(monkeypatch)
     assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
 
     assert preflight.run_preflight(str(cfg))["ok"] is True
     assert issued == []
@@ -640,7 +657,7 @@ def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
         lambda command, **kwargs: None if command == "omp" else f"/usr/bin/{command}",
     )
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
 
     result = preflight.run_preflight(str(cfg))
 
@@ -660,7 +677,7 @@ def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypat
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     _host_ok(monkeypatch)
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
     result = preflight.run_preflight(str(cfg))
     assert result["carrier_ok"] is False
     assert issued == []
