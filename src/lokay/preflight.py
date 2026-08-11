@@ -52,8 +52,12 @@ def _repair_runtime_path(command: str) -> bool:
     additions = [str(path) for path in candidates if _safe_owned_path(path) and path.is_dir()]
     if not additions:
         return False
-    os.environ["PATH"] = os.pathsep.join((*additions, os.environ.get("PATH", "")))
-    return shutil.which(command) is not None
+    original = os.environ.get("PATH", "")
+    os.environ["PATH"] = os.pathsep.join((*additions, original))
+    if shutil.which(command) is not None:
+        return True
+    os.environ["PATH"] = original
+    return False
 
 
 def _safe_owned_path(path: Path) -> bool:

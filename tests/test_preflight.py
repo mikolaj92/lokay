@@ -193,6 +193,16 @@ def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, mo
     assert next(x for x in result["findings"] if x["name"] == "executor_availability")["ok"] is True
 
 
+def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".local" / "bin").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    assert preflight._repair_runtime_path("missing-executor") is False
+    assert __import__("os").environ["PATH"] == "/usr/bin:/bin"
+
+
 def test_fala_smoke_reports_bounded_exception_class(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     _host_ok(monkeypatch)
