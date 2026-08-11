@@ -482,19 +482,25 @@ def run_preflight(
     )  # complete rerun, always
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
-    result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
+    failed_findings = [x for x in checked["findings"] if not x["ok"]]
+    singleton_only = (
+        len(failed_findings) == 1
+        and failed_findings[0]["name"] == "singleton_overlap"
+        and failed_findings[0]["code"] == "contended"
+    )
+    # Contention means another healthy invocation owns the run slot. It still
+    # fails closed, but is an operational outcome rather than broken preflight
+    # health and must never enter the source-repair lane.
+    health = "overlap" if singleton_only else ("healthy" if checked["ok"] else "preflight_failed")
+    result = {**checked, "health": health, "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
+    if singleton_only:
+        result["operational_overlap"] = True
     if checked["ok"] and issue_lease:
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
     if not checked["ok"]:
         # An older daemon can retain its lock while self-repair activates newer
         # validation code. Suppress only that known recursive incident; every
         # other validation failure must still be reported.
-        failed_findings = [x for x in checked["findings"] if not x["ok"]]
-        singleton_only = (
-            len(failed_findings) == 1
-            and failed_findings[0]["name"] == "singleton_overlap"
-            and failed_findings[0]["code"] == "contended"
-        )
         recursive_singleton = (
             os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1"
             and singleton_only
