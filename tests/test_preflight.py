@@ -129,6 +129,104 @@ def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
     assert result["lease"] is True
 
 
+def test_validation_lease_is_bound_to_contended_custom_state_lock(tmp_path, monkeypatch):
+    import os
+    import subprocess
+    import sys
+
+    real_run = subprocess.run
+    cfg = _config(tmp_path)
+    state_dir = tmp_path / "runtime" / "state"
+    for path in (state_dir, tmp_path / "runtime" / "worktrees", tmp_path / "runtime" / "logs"):
+        path.mkdir(parents=True)
+    custom_lock = state_dir / "mill.lock"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    assert preflight.acquire_run_lock(custom_lock)
+    preflight.issue_health_lease(lock_path=custom_lock)
+    competitor = real_run(
+        [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; from lokay.preflight import acquire_run_lock; "
+            f"raise SystemExit(0 if acquire_run_lock(Path({str(custom_lock)!r})) else 9)",
+        ],
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
+        check=False,
+    )
+    assert competitor.returncode == 9
+
+    result = preflight.run_preflight(
+        str(cfg), remediate=False, validate_inherited_lease=True
+    )
+    assert result["ok"] is True, result
+    assert next(x for x in result["findings"] if x["name"] == "singleton_overlap")["ok"]
+    preflight.revoke_health_lease()
+
+    # A lease for the legacy HOME lock must not bypass this config's lock.
+    home_lock = tmp_path / ".lokay" / "mill.lock"
+    assert preflight.acquire_run_lock(home_lock)
+    preflight.issue_health_lease(lock_path=home_lock)
+    mismatched = preflight.run_preflight(
+        str(cfg), remediate=False, validate_inherited_lease=True
+    )
+    assert mismatched["ok"] is False
+    assert mismatched["lease_reason"] == "lock_path_mismatch"
+    preflight.revoke_health_lease()
+
+
+def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monkeypatch):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    cfg = _config(tmp_path)
+    state_dir = tmp_path / "runtime" / "state"
+    for path in (state_dir, tmp_path / "runtime" / "worktrees", tmp_path / "runtime" / "logs"):
+        path.mkdir(parents=True)
+    daemon_lock = tmp_path / ".lokay" / "mill.lock"
+    configured_lock = state_dir / "mill.lock"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    # The old daemon owns its HOME lock and acquired the configured lock while
+    # running preflight, but its lease record predates the lock_path field.
+    assert preflight.acquire_run_lock(daemon_lock)
+    assert preflight.acquire_run_lock(configured_lock)
+    preflight.issue_health_lease()
+    lease_path = Path(__import__("os").environ["LOKAY_HEALTH_LEASE_PATH"])
+    record = json.loads(lease_path.read_text())
+    record.pop("lock_path")
+    lease_path.write_text(json.dumps(record))
+    lease_path.chmod(0o600)
+
+    child = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from pathlib import Path; from lokay.preflight import health_lease_status; "
+            f"raise SystemExit(0 if health_lease_status(lock_path=Path({str(configured_lock)!r}))[0] else 9)",
+        ],
+        env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
+        check=False,
+    )
+    assert child.returncode == 0
+
+    result = preflight.run_preflight(
+        str(cfg), remediate=False, validate_inherited_lease=True
+    )
+
+    assert result["ok"] is True, result
+    assert next(x for x in result["findings"] if x["name"] == "singleton_overlap")["ok"]
+    preflight.revoke_health_lease()
+
+
 def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))
@@ -577,7 +675,7 @@ def test_only_lock_owning_daemon_preflight_issues_lease(tmp_path, monkeypatch):
     _host_ok(monkeypatch)
     assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
 
     assert preflight.run_preflight(str(cfg), issue_lease=True)["ok"] is True
     assert issued == [True]
@@ -591,7 +689,7 @@ def test_direct_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     _host_ok(monkeypatch)
     assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
 
     assert preflight.run_preflight(str(cfg))["ok"] is True
     assert issued == []
@@ -608,7 +706,7 @@ def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
         lambda command, **kwargs: None if command == "omp" else f"/usr/bin/{command}",
     )
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
 
     result = preflight.run_preflight(str(cfg))
 
@@ -628,7 +726,7 @@ def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypat
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     _host_ok(monkeypatch)
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
     result = preflight.run_preflight(str(cfg))
     assert result["carrier_ok"] is False
     assert issued == []

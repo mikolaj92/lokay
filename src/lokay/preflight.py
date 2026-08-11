@@ -121,8 +121,10 @@ def _lease_path() -> Path:
     )
 
 
-def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
-    """Issue a run-scoped process-tree capability without persisting its secret."""
+def issue_health_lease(
+    *, ttl_seconds: int = 7200, lock_path: Path | None = None
+) -> None:
+    """Issue a run-scoped capability bound to the lock retained by its owner."""
     import time
 
     if os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1":
@@ -140,9 +142,11 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
     if not _safe_owned_path(path.parent):
         raise RuntimeError("unsafe health lease directory")
     path.parent.mkdir(parents=True, exist_ok=True)
+    bound_lock = (lock_path or (Path.home() / ".lokay" / "mill.lock")).expanduser().absolute()
     record = {
         "token_sha256": hashlib.sha256(token.encode("ascii")).hexdigest(),
         "owner_pid": os.getpid(),
+        "lock_path": str(bound_lock),
         "issued_at": int(time.time()),
         # One factory pass may legitimately spend an hour in the real agent.
         # Owner liveness, the held mill lock, and explicit daemon revocation are
@@ -200,9 +204,25 @@ def revoke_health_lease() -> None:
         pass
 
 
-def health_lease_status() -> tuple[bool, str]:
-    """Validate the inherited run capability and return a bounded reason."""
+def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
+    """Validate the inherited capability and its exact bound run lock."""
     import time
+
+    def lock_is_held(candidate: Path, owner_pid: int) -> bool:
+        key = str(candidate)
+        if owner_pid == os.getpid() and key in _LOCKS:
+            os.fstat(_LOCKS[key].fileno())
+            return True
+        probe = candidate.open("a+")
+        try:
+            try:
+                fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+            except BlockingIOError:
+                return True
+            return False
+        finally:
+            probe.close()
 
     token = os.environ.get("LOKAY_HEALTH_LEASE", "")
     path = _lease_path()
@@ -211,22 +231,22 @@ def health_lease_status() -> tuple[bool, str]:
         record = json.loads(path.read_text(encoding="ascii"))
         owner_pid = int(record["owner_pid"])
         os.kill(owner_pid, 0)  # owner must still be alive
-        lock_path = Path.home() / ".lokay" / "mill.lock"
-        lock_key = str(lock_path.absolute())
-        lock_held = False
-        if owner_pid == os.getpid() and lock_key in _LOCKS:
-            os.fstat(_LOCKS[lock_key].fileno())
-            lock_held = True
-        else:
-            probe = lock_path.open("a+")
-            try:
-                try:
-                    fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
-                except BlockingIOError:
-                    lock_held = True
-            finally:
-                probe.close()
+        expected_lock = lock_path.expanduser().absolute() if lock_path is not None else None
+        recorded_lock = record.get("lock_path")
+        legacy_lock = (Path.home() / ".lokay" / "mill.lock").absolute()
+        # Leases issued by the pre-upgrade daemon implicitly used the HOME
+        # lock. During activation, also prove that daemon still holds the exact
+        # configured lock before allowing validation to run behind it.
+        bound_lock = (
+            Path(str(recorded_lock)).expanduser().absolute()
+            if recorded_lock is not None
+            else expected_lock or legacy_lock
+        )
+        if expected_lock is not None and recorded_lock is not None and bound_lock != expected_lock:
+            return False, "lock_path_mismatch"
+        lock_held = lock_is_held(bound_lock, owner_pid)
+        if recorded_lock is None and bound_lock != legacy_lock:
+            lock_held = lock_held and lock_is_held(legacy_lock, owner_pid)
         now = int(time.time())
         checks = (
             (lock_held, "lock_not_held"),
@@ -272,7 +292,12 @@ def acquire_run_lock(lock_path: Path) -> bool:
         return False
 
 
-def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any], Any | None]:
+def _check(
+    config_path: str | None,
+    repaired: set[str],
+    *,
+    inherited_singleton: Path | None = None,
+) -> tuple[dict[str, Any], Any | None]:
     try:
         cfg = load_config(config_path)
     except Exception as exc:
@@ -311,8 +336,8 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     executor_ok = not (cfg.live and cfg.executor_enabled) or shutil.which(cfg.agent_command) is not None
     findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable", repaired="executor_path" in repaired))
 
-    lock_path = cfg.state_path.parent / "mill.lock"
-    singleton_ok = acquire_run_lock(lock_path)
+    lock_path = (cfg.state_path.parent / "mill.lock").expanduser().absolute()
+    singleton_ok = inherited_singleton == lock_path or acquire_run_lock(lock_path)
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
 
     # Manifest provenance is a carrier prerequisite: never run Fala from an
@@ -377,12 +402,39 @@ def _github_incident(result: dict[str, Any]) -> str | None:
 
 
 def run_preflight(
-    config_path: str | None, *, remediate: bool = True, issue_lease: bool = False
+    config_path: str | None,
+    *,
+    remediate: bool = True,
+    issue_lease: bool = False,
+    validate_inherited_lease: bool = False,
 ) -> dict[str, Any]:
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    inherited_singleton: Path | None = None
     if inherited_lease:
-        healthy, reason = health_lease_status()
-        if healthy:
+        expected_lock: Path | None = None
+        if validate_inherited_lease:
+            try:
+                expected_lock = load_config(config_path).state_path.parent / "mill.lock"
+            except Exception:
+                expected_lock = None
+        healthy, reason = (
+            health_lease_status(lock_path=expected_lock)
+            if expected_lock is not None
+            else health_lease_status()
+        )
+        if not healthy:
+            return {
+                "ok": False,
+                "carrier_ok": False,
+                "integrity_ok": False,
+                "health": "preflight_failed",
+                "gate_released": False,
+                "lease": False,
+                "lease_reason": reason,
+                "findings": [],
+                "repairs": [],
+            }
+        if not validate_inherited_lease:
             return {
                 "ok": True,
                 "carrier_ok": True,
@@ -394,20 +446,15 @@ def run_preflight(
                 "findings": [],
                 "repairs": [],
             }
-        return {
-            "ok": False,
-            "carrier_ok": False,
-            "integrity_ok": False,
-            "health": "preflight_failed",
-            "gate_released": False,
-            "lease": False,
-            "lease_reason": reason,
-            "findings": [],
-            "repairs": [],
-        }
+        if expected_lock is not None:
+            # Self-repair validation reruns host checks while bypassing only
+            # the exact configured lock proven by the inherited lease.
+            inherited_singleton = expected_lock.expanduser().absolute()
     repaired: set[str] = set()
     repairs: list[dict[str, Any]] = []
-    initial, cfg = _check(config_path, repaired)
+    initial, cfg = _check(
+        config_path, repaired, inherited_singleton=inherited_singleton
+    )
     if remediate:
         if any(x["name"] == "required_environment" and not x["ok"] for x in initial["findings"]) and not os.environ.get("LANG"):
             os.environ["LANG"] = "C.UTF-8"; repaired.add("locale")
@@ -423,12 +470,14 @@ def run_preflight(
             if cfg.live and cfg.executor_enabled and _repair_runtime_path(cfg.agent_command):
                 repaired.add("executor_path")
                 repairs.append({"kind": "extend_runtime_path", "ok": True})
-    checked, cfg = _check(config_path, repaired)  # complete rerun, always
+    checked, cfg = _check(
+        config_path, repaired, inherited_singleton=inherited_singleton
+    )  # complete rerun, always
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
     if checked["ok"] and issue_lease:
-        issue_health_lease()
+        issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
     if not checked["ok"]:
         try: result["local_incident"] = str(_persist_incident(cfg, result))
         except OSError: result["local_incident"] = None
