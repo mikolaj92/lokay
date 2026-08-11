@@ -166,15 +166,24 @@ def run_path(
                 os.environ["FALA_HOME"] = str(candidate.resolve())
                 break
 
-    result = host_run_package(
-        db_path=db,
-        package_path=pkg_runtime,
-        path_id=path_id,
-        run_id=rid,
-        effector_inputs=effector_inputs,
-        max_ticks=max_ticks,
-        worker_id="lokay-graph",
-    )
+    previous_issue_guard = os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE")
+    if inherited_health_lease:
+        os.environ["LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] = "1"
+    try:
+        result = host_run_package(
+            db_path=db,
+            package_path=pkg_runtime,
+            path_id=path_id,
+            run_id=rid,
+            effector_inputs=effector_inputs,
+            max_ticks=max_ticks,
+            worker_id="lokay-graph",
+        )
+    finally:
+        if previous_issue_guard is None:
+            os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
+        else:
+            os.environ["LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] = previous_issue_guard
     envelope = {
         "ok": (
             bool(result.get("ok"))

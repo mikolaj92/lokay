@@ -295,6 +295,16 @@ def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):
     assert preflight.has_health_lease() is False
 
 
+def test_nested_issue_guard_never_mints_lease(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "1")
+
+    preflight.issue_health_lease()
+
+    assert not (tmp_path / ".lokay" / "health-lease").exists()
+    assert "LOKAY_HEALTH_LEASE" not in __import__("os").environ
+
+
 def test_child_cannot_replace_parent_health_lease(tmp_path, monkeypatch):
     import json
 

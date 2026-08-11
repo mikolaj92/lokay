@@ -80,6 +80,8 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
     """Issue a run-scoped process-tree capability without persisting its secret."""
     import time
 
+    if os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1":
+        return
     inherited = os.environ.get("LOKAY_HEALTH_LEASE", "")
     if inherited:
         healthy, reason = health_lease_status()
