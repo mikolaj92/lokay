@@ -245,7 +245,7 @@ def test_github_incident_refuses_singleton_only_failure(monkeypatch):
     assert preflight._github_incident(result) is None
 
 
-def test_singleton_contention_is_recorded_locally_without_opening_issue(monkeypatch):
+def test_singleton_contention_is_not_recorded_as_an_incident(monkeypatch):
     monkeypatch.setattr(
         preflight,
         "_check",
@@ -261,11 +261,10 @@ def test_singleton_contention_is_recorded_locally_without_opening_issue(monkeypa
             None,
         ),
     )
-    persisted = []
     monkeypatch.setattr(
         preflight,
         "_persist_incident",
-        lambda cfg, result: persisted.append(result) or Path("incident.json"),
+        lambda *args: (_ for _ in ()).throw(AssertionError("operational overlap incident")),
     )
     monkeypatch.setattr(
         preflight,
@@ -278,9 +277,8 @@ def test_singleton_contention_is_recorded_locally_without_opening_issue(monkeypa
     assert result["ok"] is False
     assert result["health"] == "overlap"
     assert result["operational_overlap"] is True
-    assert result["local_incident"] == "incident.json"
+    assert result["local_incident"] is None
     assert result["incident_url"] is None
-    assert persisted == [result]
 
 
 def test_self_repair_validation_does_not_open_recursive_incident(monkeypatch):
