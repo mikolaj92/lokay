@@ -145,6 +145,11 @@ def run_path(
         "issue_triage": ("get_issue", "triage_issue"),
         "pr_repair": ("pr_checks", "worktree_add", "run_agent", "commit_all", "push"),
         "pr_triage": ("pr_checks", "pr_review", "pr_merge", "close_issue"),
+        "self_repair": (
+            "self_repair_prepare", "self_repair_run_agent", "self_repair_validate",
+            "self_repair_commit", "self_repair_push_main", "self_repair_activate",
+            "self_repair_preflight", "self_repair_close",
+        ),
     }
     if path_id not in path_effectors:
         raise ValueError(f"unknown Fala correlation path: {path_id}")
@@ -394,6 +399,19 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             branch=terminal.get("make_branch", {}).get("branch"),
             pr=terminal.get("pr_label", {}).get("pr"),
         )
+    elif path_id == "self_repair":
+        fresh = terminal.get("self_repair_preflight", {})
+        pushed = terminal.get("self_repair_push_main", {})
+        closed = terminal.get("self_repair_close", {})
+        out.update(
+            validated=fresh.get("validated") is True,
+            restart_required=fresh.get("restart_required") is True,
+            commit=pushed.get("commit"),
+            incident_closed=closed.get("closed") is True,
+            gate_released=False,
+        )
+        if not out["validated"] or not out["restart_required"]:
+            out.update(ok=False, error="self-repair did not validate activated main")
     elif path_id == "factory_pass":
         factory = terminal.get("factory_tick", {})
         tick = factory.get("tick") if isinstance(factory.get("tick"), dict) else factory

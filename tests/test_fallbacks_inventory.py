@@ -92,6 +92,8 @@ merge:
         raise RuntimeError("fala host exploded")
 
     monkeypatch.setattr(tick_mod, "run_path", boom)
+    # This inventory test exercises Fala failure semantics, not host preflight.
+    monkeypatch.setattr(tick_mod, "run_preflight", lambda *a, **k: {"ok": True})
 
     atom_calls: list[str] = []
 

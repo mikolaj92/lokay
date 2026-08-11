@@ -215,6 +215,76 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "close_issue" }
 retry_policy = "none"
 
+# --- Emergency self-repair: direct validated fast-forward commit to main ---
+
+[[correlation_paths]]
+id = "self_repair"
+title = "Lokay emergency self-repair"
+description = "Recover stalled Lokay directly on main through bounded atomic gates."
+
+[[correlation_paths.effectors]]
+id = "self_repair_prepare"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_prepare" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_run_agent"
+capability = "lokay_atom"
+conduction = ["self_repair_prepare"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 3600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_run_agent" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_validate"
+capability = "lokay_atom"
+conduction = ["self_repair_prepare", "self_repair_run_agent"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 2100, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_validate" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_commit"
+capability = "lokay_atom"
+conduction = ["self_repair_prepare", "self_repair_validate"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_commit" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_push_main"
+capability = "lokay_atom"
+conduction = ["self_repair_prepare", "self_repair_validate", "self_repair_commit"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_push_main" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_activate"
+capability = "lokay_atom"
+conduction = ["self_repair_push_main"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_activate" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_preflight"
+capability = "lokay_atom"
+conduction = ["self_repair_activate"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_preflight" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "self_repair_close"
+capability = "lokay_atom"
+conduction = ["self_repair_preflight"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "self_repair_close" }
+retry_policy = "none"
+
 [runtime.backend]
 kind = "sqlite"
 path = ".fala/lokay-state.sqlite"

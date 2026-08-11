@@ -144,6 +144,23 @@ def test_fala_needs_human_contract():
     assert out["skipped"] and not out["repairable"]
 
 
+def test_self_repair_graph_orders_direct_main_recovery():
+    package = describe_package()
+    path = next(item for item in package["paths"] if item["id"] == "self_repair")
+    conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
+    assert conduction == {
+        "self_repair_prepare": [],
+        "self_repair_run_agent": ["self_repair_prepare"],
+        "self_repair_validate": ["self_repair_prepare", "self_repair_run_agent"],
+        "self_repair_commit": ["self_repair_prepare", "self_repair_validate"],
+        "self_repair_push_main": ["self_repair_prepare", "self_repair_validate", "self_repair_commit"],
+        "self_repair_activate": ["self_repair_push_main"],
+        "self_repair_preflight": ["self_repair_activate"],
+        "self_repair_close": ["self_repair_preflight"],
+    }
+    assert not any(node in {"pr_create", "pr_review", "pr_merge", "pr_repair"} for node in conduction)
+
+
 def test_fala_zero_diff_repair_contract():
     out = _host("pr_repair", {"commit_all": {"id": "commit_all", "status": "completed", "output": {"values": {"committed": False}}}})
     assert out["ok"] is False and out["error"] == "repair produced no commit"

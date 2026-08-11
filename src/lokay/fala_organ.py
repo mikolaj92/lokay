@@ -16,7 +16,7 @@ from fala import sdk
 from lokay.git_commit import branch_ahead_of_upstream
 from lokay.models import Issue
 from lokay.proc._common import runner
-from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt
+from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt, self_repair_prompt
 
 
 def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -77,6 +77,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         run_agent,
         triage_issue,
         worktree_add,
+        self_repair_activate,
+        self_repair_close,
+        self_repair_prepare,
+        self_repair_preflight,
+        self_repair_push_main,
+        self_repair_validate,
     )
     from lokay.stuck import issue_number_from_branch
 
@@ -103,6 +109,84 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         # result, not a corrupt Fala execution. Preserve the complete envelope
         # and let the parent path normalizer restore its public ok/error fields.
         return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
+
+    if atom == "self_repair_prepare":
+        fingerprint = str(inputs.get("fingerprint") or "")
+        assert fingerprint
+        return _run_atom_main(
+            self_repair_prepare.main,
+            [*cfg, *live, "--fingerprint", fingerprint],
+        )
+
+    if atom == "self_repair_run_agent":
+        worktree = str(up.get("self_repair_prepare", {}).get("worktree") or "")
+        issue_raw = inputs.get("incident") or {}
+        issue = Issue.from_dict(issue_raw) if isinstance(issue_raw, dict) else None
+        fingerprint = str(inputs.get("fingerprint") or "")
+        assert worktree and issue is not None and fingerprint
+        prompt = self_repair_prompt(issue=issue, fingerprint=fingerprint)
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+            fh.write(prompt)
+            prompt_path = fh.name
+        try:
+            return _run_atom_main(
+                run_agent.main,
+                [*cfg, *live, "--worktree", worktree, "--prompt-file", prompt_path],
+            )
+        finally:
+            Path(prompt_path).unlink(missing_ok=True)
+
+    if atom == "self_repair_validate":
+        worktree = str(up.get("self_repair_prepare", {}).get("worktree") or "")
+        assert worktree
+        return _run_atom_main(self_repair_validate.main, ["--worktree", worktree])
+
+    if atom == "self_repair_commit":
+        worktree = str(up.get("self_repair_prepare", {}).get("worktree") or "")
+        fingerprint = str(inputs.get("fingerprint") or "")
+        assert worktree and fingerprint
+        return _run_atom_main(
+            commit_all.main,
+            [*cfg, *live, "--worktree", worktree, "--message", f"self-repair: {fingerprint}"],
+        )
+
+    if atom == "self_repair_push_main":
+        prepared = up.get("self_repair_prepare", {})
+        validated = up.get("self_repair_validate", {})
+        worktree = str(prepared.get("worktree") or "")
+        base_sha = str(prepared.get("base_sha") or "")
+        assert worktree and base_sha and validated.get("validated") is True
+        return _run_atom_main(
+            self_repair_push_main.main,
+            [*cfg, *live, "--worktree", worktree, "--base-sha", base_sha, "--validated"],
+        )
+
+    if atom == "self_repair_activate":
+        commit = str(up.get("self_repair_push_main", {}).get("commit") or "")
+        assert commit
+        return _run_atom_main(
+            self_repair_activate.main,
+            [*cfg, *live, "--commit", commit],
+        )
+
+    if atom == "self_repair_preflight":
+        activated = up.get("self_repair_activate", {})
+        commit = str(activated.get("commit") or "")
+        project = str(activated.get("path") or "")
+        config_path = str(inputs.get("config_path") or inputs.get("config") or "")
+        assert commit and project and config_path
+        return _run_atom_main(
+            self_repair_preflight.main,
+            ["--config", config_path, "--project", project, "--commit", commit],
+        )
+
+    if atom == "self_repair_close":
+        commit = str(up.get("self_repair_preflight", {}).get("commit") or "")
+        assert issue_number is not None and commit
+        return _run_atom_main(
+            self_repair_close.main,
+            [*cfg, *live, "--issue", str(issue_number), "--commit", commit],
+        )
 
     if atom == "get_issue":
         assert repo and issue_number is not None

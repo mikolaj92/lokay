@@ -5,126 +5,87 @@ from lokay import self_repair
 
 
 def cfg(tmp_path, **kw):
-    base = dict(state_path=tmp_path / "state.jsonl", max_repairs_per_tick=2, max_self_repair_attempts=2, whole_run_deadline_seconds=3600,
-                executor_enabled=True, require_checks=False, merge_enabled=True, branch_prefix="ai/fix",
-                active_repos=lambda: [])
-    base.update(kw); return SimpleNamespace(**base)
+    base = dict(
+        state_path=tmp_path / "state.jsonl",
+        executor_enabled=True,
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
 
 
 def unhealthy(url="https://github.com/mikolaj92/lokay/issues/44"):
-    return {"ok": False, "carrier_ok": True, "integrity_ok": False, "fingerprint": "abc", "incident_url": url,
-            "findings": [{"name": "fala_smoke", "ok": False}]}
+    return {
+        "ok": False,
+        "carrier_ok": True,
+        "integrity_ok": False,
+        "fingerprint": "abc",
+        "incident_url": url,
+        "findings": [{"name": "fala_smoke", "ok": False}],
+    }
 
 
 def setup_lane(monkeypatch, tmp_path, **cfg_kw):
     monkeypatch.setattr(self_repair, "load_config", lambda p: cfg(tmp_path, **cfg_kw))
     monkeypatch.setattr(self_repair, "trusted_fala_manifest", lambda: tmp_path / "trusted.toml")
-    monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->", "mergeCommit": {"oid": "merge"}})
 
 
-def test_missing_deduplicated_incident_never_runs_executor(monkeypatch, tmp_path):
+def test_missing_deduplicated_incident_never_runs_fala(monkeypatch, tmp_path):
     setup_lane(monkeypatch, tmp_path)
-    monkeypatch.setattr(self_repair, "compose_issue_to_pr", lambda **k: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr(self_repair, "run_path", lambda **k: (_ for _ in ()).throw(AssertionError()))
     result = self_repair.run_self_repair("x", unhealthy(url=None))
     assert not result["ok"] and result["reason"] == "deduplicated_incident_unavailable"
 
 
 def test_bootstrap_dependency_failure_avoids_recursion(monkeypatch, tmp_path):
     setup_lane(monkeypatch, tmp_path)
-    value = unhealthy(); value["findings"] = [{"name": "executor_availability", "ok": False}]
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: (_ for _ in ()).throw(AssertionError()))
+    value = unhealthy()
+    value["findings"] = [{"name": "executor_availability", "ok": False}]
+    monkeypatch.setattr(self_repair, "run_path", lambda **k: (_ for _ in ()).throw(AssertionError()))
     result = self_repair.run_self_repair("x", value)
-    assert result["reason"] == "bootstrap_dependency_unavailable" and result["attempts"] == []
+    assert result["reason"] == "bootstrap_dependency_unavailable"
 
 
-def test_services_only_incident_without_product_intake(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path, max_self_repair_attempts=1)
+def test_carrier_unhealthy_never_runs_fala(monkeypatch, tmp_path):
+    setup_lane(monkeypatch, tmp_path)
+    value = unhealthy()
+    value["carrier_ok"] = False
+    monkeypatch.setattr(self_repair, "run_path", lambda **k: (_ for _ in ()).throw(AssertionError()))
+    result = self_repair.run_self_repair("x", value)
+    assert result["reason"] == "carrier_unhealthy"
+
+
+def test_self_repair_is_one_fala_path_and_returns_restart(monkeypatch, tmp_path):
+    setup_lane(monkeypatch, tmp_path)
     calls = []
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: calls.append(("discover", n)))
-    monkeypatch.setattr(self_repair, "compose_issue_to_pr", lambda **k: calls.append(("issue", k["repo"], k["issue_number"])) or {"ok": False})
+
+    def fake_path(**kwargs):
+        calls.append(kwargs)
+        return {
+            "ok": True,
+            "validated": True,
+            "restart_required": True,
+            "commit": "deadbeef",
+            "incident_closed": True,
+            "gate_released": False,
+        }
+
+    monkeypatch.setattr(self_repair, "run_path", fake_path)
     result = self_repair.run_self_repair("x", unhealthy())
-    assert calls == [("discover", 44), ("issue", "mikolaj92/lokay", 44)]
-    assert len(result["attempts"]) == 1
+
+    assert result["ok"] and result["health"] == "restart_required"
+    assert result["commit"] == "deadbeef" and not result["gate_released"]
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["path_id"] == "self_repair"
+    assert call["repo"] == "mikolaj92/lokay"
+    assert call["issue"] == 44 and call["live"] is True
+    assert call["extra_inputs"]["fingerprint"] == "abc"
 
 
-def test_zero_diff_does_not_claim_repair(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path, max_self_repair_attempts=1)
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: None)
-    monkeypatch.setattr(self_repair, "compose_issue_to_pr", lambda **k: {"ok": True, "branch": ""})
+def test_fala_failure_stays_closed(monkeypatch, tmp_path):
+    setup_lane(monkeypatch, tmp_path)
+    monkeypatch.setattr(self_repair, "run_path", lambda **k: {"ok": False, "error": "push rejected"})
     result = self_repair.run_self_repair("x", unhealthy())
     assert not result["ok"]
-    assert result["attempts"][0]["reason"] == "zero_diff_or_no_pr"
-
-
-def test_failed_checks_use_bounded_existing_pr_repair(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path, max_self_repair_attempts=2)
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: {"number": 7, "headRefName": "ai/fix/44-health"})
-    monkeypatch.setattr(self_repair, "_checks", lambda *a, **k: "failed")
-    calls = []
-    monkeypatch.setattr(self_repair, "compose_pr_repair", lambda **k: calls.append(k) or {"ok": True})
-    result = self_repair.run_self_repair("x", unhealthy())
-    assert len(calls) == 2 and len(result["attempts"]) == 2 and not result["ok"]
-
-
-def test_normal_policy_merge_activation_and_preflight_release(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path, max_self_repair_attempts=1)
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: {"number": 7, "headRefName": "ai/fix/44-health"})
-    monkeypatch.setattr(self_repair, "_checks", lambda *a, **k: "passed")
-    monkeypatch.setattr(self_repair, "compose_pr_triage", lambda **k: {"ok": True, "merged": True})
-    monkeypatch.setattr(self_repair, "_activate", lambda c, **kw: {"ok": True, "activated": True, "path": str(tmp_path)})
-    monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"mergeCommit": {"oid": "abc"}, "headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->"})
-    calls = []
-    monkeypatch.setattr(
-        self_repair.subprocess,
-        "run",
-        lambda *a, **k: calls.append((a, k))
-        or SimpleNamespace(returncode=0, stdout='{"ok": true, "health": "healthy"}\n', stderr=""),
-    )
-    result = self_repair.run_self_repair("x", unhealthy())
-    validation_args, validation_kwargs = calls[0]
-    assert "--validate-inherited-lease" in validation_args[0]
-    assert validation_kwargs["env"]["LOKAY_HEALTH_LEASE"] == __import__("os").environ.get("LOKAY_HEALTH_LEASE", "")
-    assert result["ok"] and result["validated"] and not result["gate_released"] and result["repaired_pr"] == 7
-
-
-def test_merge_policy_disabled_fails_closed(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path, max_self_repair_attempts=1, merge_enabled=False)
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda n, **kw: {"number": 7, "headRefName": "ai/fix/44-health"})
-    monkeypatch.setattr(self_repair, "_checks", lambda *a, **k: "passed")
-    monkeypatch.setattr(self_repair, "compose_pr_triage", lambda **k: (_ for _ in ()).throw(AssertionError()))
-    result = self_repair.run_self_repair("x", unhealthy())
-    assert result["attempts"][0]["reason"] == "merge_policy_disabled"
-
-
-def test_multiple_repair_prs_fail_closed(monkeypatch):
-    monkeypatch.setattr(self_repair, "_gh_json", lambda a: [
-        {"number": 1, "headRefName": "ai/fix/44-a", "baseRefName": "main", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "body": "<!-- lokay-preflight: -->"},
-        {"number": 2, "headRefName": "ai/fix/44-b", "baseRefName": "main", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "body": "<!-- lokay-preflight: -->"},
-    ])
-    import pytest
-    with pytest.raises(RuntimeError, match="ambiguous"):
-        self_repair._repair_pr(44, fingerprint="")
-
-
-def test_wrong_issue_branch_is_not_selected(monkeypatch):
-    monkeypatch.setattr(self_repair, "_gh_json", lambda a: [
-        {"number": 1, "headRefName": "ai/fix/144-not-this-issue"},
-    ])
-    assert self_repair._repair_pr(44, fingerprint="") is None
-
-
-def test_carrier_unhealthy_never_discovers_or_runs_agent(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path)
-    value = unhealthy(); value["carrier_ok"] = False
-    monkeypatch.setattr(self_repair, "_repair_pr", lambda *a, **k: (_ for _ in ()).throw(AssertionError("workflow ran")))
-    result = self_repair.run_self_repair("x", value)
-    assert result["reason"] == "carrier_unhealthy" and result["attempts"] == []
-
-
-def test_self_repair_pr_body_has_owned_marker_and_nonclosing_link():
-    from lokay.models import Issue
-    from lokay.prompts import pr_body
-    issue = Issue(repo="mikolaj92/lokay", number=44, title="health", body="", labels=[], assignees=[], url="")
-    body = pr_body(issue, agent_summary="untrusted", incident_fingerprint="abc")
-    assert body.startswith("<!-- lokay-preflight:abc -->")
-    assert "Refs #44" in body and "Closes #44" not in body
+    assert result["health"] == "self_repair_failed"
+    assert result["reason"] == "fala_self_repair_failed"

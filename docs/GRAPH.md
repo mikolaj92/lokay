@@ -23,6 +23,25 @@ pass and starts the smaller paths through `run_path`; the parent journal is
 `~/.lokay/fala/state.sqlite`. This follows Fala's subprocess/separate-journal
 parent-child boundary.
 
+### `self_repair` (emergency only)
+
+```text
+self_repair_prepare (detached exact origin/main)
+  → self_repair_run_agent
+    → self_repair_validate (full local suite)
+      → self_repair_commit
+        → self_repair_push_main (fast-forward only, exact unchanged base)
+          → self_repair_activate (exact commit)
+            → self_repair_preflight (fresh process)
+              → self_repair_close
+```
+
+This path is entered only when daemon preflight proves Lokay unhealthy while the
+minimal carrier remains healthy. It never creates a branch or PR. The coding
+agent can edit only the detached worktree; deterministic atoms alone commit and
+push directly to `main`. A successful path always returns `restart_required`;
+product work never resumes in the stale daemon process.
+
 ### `issue_to_pr`
 
 ```text
