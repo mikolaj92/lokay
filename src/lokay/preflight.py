@@ -81,7 +81,7 @@ def _repair_runtime_path(command: str) -> bool:
     if executor_dir is None:
         return False
     original = os.environ.get("PATH", "")
-    os.environ["PATH"] = os.pathsep.join((str(executor_dir), original))
+    os.environ["PATH"] = os.pathsep.join(part for part in (original, str(executor_dir)) if part)
     return True
 
 

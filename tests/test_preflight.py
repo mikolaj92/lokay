@@ -234,7 +234,36 @@ def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, m
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
 
     assert preflight._repair_runtime_path("omp") is True
-    assert __import__("os").environ["PATH"] == f"{shims}:/usr/bin:/bin"
+    assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{shims}"
+
+
+def test_executor_path_repair_preserves_existing_command_precedence(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    existing_bin = tmp_path / "existing"
+    user_bin = home / ".local" / "bin"
+    existing_bin.mkdir()
+    user_bin.mkdir(parents=True)
+    (existing_bin / "gh").touch(mode=0o755)
+    (user_bin / "gh").touch(mode=0o755)
+    (user_bin / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", str(existing_bin))
+
+    assert preflight._repair_runtime_path("omp") is True
+    assert preflight.shutil.which("gh") == str(existing_bin / "gh")
+
+
+def test_executor_path_repair_with_empty_path_has_no_empty_entry(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    user_bin = home / ".local" / "bin"
+    user_bin.mkdir(parents=True)
+    (user_bin / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "")
+
+    assert preflight._repair_runtime_path("omp") is True
+    assert __import__("os").environ["PATH"] == str(user_bin)
+    assert "" not in __import__("os").environ["PATH"].split(__import__("os").pathsep)
 
 
 def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch):
