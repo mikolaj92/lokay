@@ -436,6 +436,10 @@ def main() -> int:
         atom = str(config.get("atom") or manifest.get("process_id") or "")
         if not atom:
             raise RuntimeError("config.atom is required")
+        if atom == "commit_all" and not os.environ.get("LOKAY_HEALTH_LEASE_PATH"):
+            raise RuntimeError(
+                "health lease path missing at Fala mutation boundary"
+            )
         inputs = dict(sdk.declared_inputs(manifest))
         # path-level inputs often appear as empty declared; merge impulse-style keys from input
         for key, value in sdk.input_values(manifest).items():
