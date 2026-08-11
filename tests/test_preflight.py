@@ -782,7 +782,7 @@ def test_installed_manifest_ignores_unrelated_checkout_cwd(tmp_path, monkeypatch
     packaged.write_text('[[correlation_paths]]\nid = "installed"\n', encoding="utf-8")
     cwd_manifest.write_text('[[correlation_paths]]\nid = "upgrading"\n', encoding="utf-8")
     monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
-    monkeypatch.chdir(cwd_manifest.parents[2])
+    monkeypatch.chdir(cwd_manifest.parents[1])
     monkeypatch.delenv("LOKAY_FALA_PACKAGE", raising=False)
 
     assert preflight.trusted_fala_manifest() == packaged
