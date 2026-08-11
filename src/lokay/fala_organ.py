@@ -124,7 +124,11 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         issue = Issue.from_dict(issue_raw) if isinstance(issue_raw, dict) else None
         fingerprint = str(inputs.get("fingerprint") or "")
         assert worktree and issue is not None and fingerprint
-        prompt = self_repair_prompt(issue=issue, fingerprint=fingerprint)
+        prompt = self_repair_prompt(
+            issue=issue,
+            fingerprint=fingerprint,
+            evidence=str(inputs.get("failure_evidence") or ""),
+        )
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
             fh.write(prompt)
             prompt_path = fh.name

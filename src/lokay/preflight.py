@@ -474,6 +474,7 @@ def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
 
 
 def _github_incident(result: dict[str, Any]) -> str | None:
+    """Create or reuse the deduplicated Lokay recovery incident."""
     failed = [x for x in result["findings"] if not x["ok"]]
     # Lock contention is an expected overlap between scheduled runs, not a
     # source defect. Keep this guard at the mutation boundary as well as in
@@ -492,7 +493,9 @@ def _github_incident(result: dict[str, Any]) -> str | None:
         pages = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
         rows = [row for page in pages if isinstance(page, list) for row in page if isinstance(row, dict) and "pull_request" not in row]
         match = next((r for r in rows if marker in str(r.get("body") or "")), None)
-        summary = ", ".join(x["name"] for x in result["findings"] if not x["ok"])
+        summary = str(result.get("incident_summary") or "") or ", ".join(
+            x["name"] for x in result["findings"] if not x["ok"]
+        )
         if match:
             commented = subprocess.run(["gh", "issue", "comment", str(match["number"]), "--repo", "mikolaj92/lokay", "--body", f"Preflight failed again: {summary}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=False)
             return f"https://github.com/mikolaj92/lokay/issues/{match['number']}" if commented.returncode == 0 else None
@@ -500,6 +503,23 @@ def _github_incident(result: dict[str, Any]) -> str | None:
         return getattr(made, "stdout", "").strip()[:240] if made.returncode == 0 else None
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return None
+
+
+def report_recovery_incident(*, fingerprint: str, evidence: str) -> str | None:
+    """Report a confirmed product stall through the same deduplicated lane."""
+    return _github_incident(
+        {
+            "fingerprint": fingerprint,
+            "incident_summary": (
+                "Confirmed in 4 of 5 daemon runs. Repeated product failure evidence:\n\n"
+                + evidence[:6000]
+            ),
+            "findings": [
+                {"name": "github_authentication", "ok": True},
+                {"name": "confirmed_product_stall", "ok": False},
+            ],
+        }
+    )
 
 
 def run_preflight(

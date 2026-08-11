@@ -70,6 +70,7 @@ def run_self_repair(
                 db_path=cfg.state_path.parent / "fala" / "self-repair",
                 extra_inputs={
                     "fingerprint": fingerprint,
+                    "failure_evidence": str(preflight.get("failure_evidence") or ""),
                     "incident": {
                         "repo": SELF_REPAIR_REPO,
                         "number": issue,

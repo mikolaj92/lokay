@@ -28,12 +28,32 @@ def test_daemon_lock_overlap_is_not_recorded_as_preflight_failure(monkeypatch, t
 def test_healthy_daemon_reuses_preflight_lease_for_product(monkeypatch, tmp_path):
     health = {"ok": True, "carrier_ok": True, "fingerprint": "healthy"}
     captured = []
+    state = tmp_path / "state.jsonl"
     monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: True)
     monkeypatch.setattr(daemon, "run_preflight", lambda *a, **k: health)
+    monkeypatch.setattr(daemon, "load_config", lambda p: type("Cfg", (), {"state_path": state})())
     monkeypatch.setattr(daemon, "compose_mill", lambda **kwargs: captured.append(kwargs) or {"ok": True})
 
     assert daemon.main(["--config", "x", "--outbox", str(tmp_path / "out")]) == 0
     assert captured == [{"config_path": "x", "live": True, "max_passes": 8, "preflight": health}]
+
+
+def test_confirmed_product_stall_enters_self_repair(monkeypatch, tmp_path, capsys):
+    health = {"ok": True, "carrier_ok": True, "fingerprint": "healthy"}
+    state = tmp_path / "state.jsonl"
+    repairs = []
+    monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: True)
+    monkeypatch.setattr(daemon, "run_preflight", lambda *a, **k: health)
+    monkeypatch.setattr(daemon, "load_config", lambda p: type("Cfg", (), {"state_path": state})())
+    monkeypatch.setattr(daemon, "compose_mill", lambda **k: {"ok": False, "health": "stall"})
+    monkeypatch.setattr(daemon, "observe_run", lambda **k: {"fingerprint": "abc"})
+    monkeypatch.setattr(daemon, "record_observation", lambda *a, **k: {"fingerprint": "abc", "evidence": "push failed", "matches": 4, "window": 5})
+    monkeypatch.setattr(daemon, "report_recovery_incident", lambda **k: "https://github.com/mikolaj92/lokay/issues/9")
+    monkeypatch.setattr(daemon, "run_self_repair", lambda config, preflight: repairs.append(preflight) or {"ok": True})
+
+    assert daemon.main(["--config", "x", "--outbox", str(tmp_path / "out")]) == 1
+    assert repairs[0]["failure_evidence"] == "push failed"
+    assert "self_repair_restart_required" in capsys.readouterr().out
 
 
 def test_preflight_singleton_overlap_never_enters_self_repair(monkeypatch, tmp_path, capsys):
