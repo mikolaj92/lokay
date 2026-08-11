@@ -479,9 +479,16 @@ def run_preflight(
     if checked["ok"] and issue_lease:
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
     if not checked["ok"]:
-        try: result["local_incident"] = str(_persist_incident(cfg, result))
-        except OSError: result["local_incident"] = None
-        result["incident_url"] = _github_incident(result)
+        # Validation already belongs to the original incident's bounded repair
+        # lane. In particular, an older running daemon may retain its lock while
+        # activating newer validation code; do not recursively report that
+        # transitional check as a new incident.
+        if os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1":
+            result.update(local_incident=None, incident_url=None)
+        else:
+            try: result["local_incident"] = str(_persist_incident(cfg, result))
+            except OSError: result["local_incident"] = None
+            result["incident_url"] = _github_incident(result)
     return result
 
 

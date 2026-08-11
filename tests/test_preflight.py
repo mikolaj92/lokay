@@ -227,6 +227,37 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
     preflight.revoke_health_lease()
 
 
+def test_self_repair_validation_does_not_open_recursive_incident(monkeypatch):
+    monkeypatch.setenv("LOKAY_SELF_REPAIR_VALIDATION", "1")
+    monkeypatch.setattr(
+        preflight,
+        "_check",
+        lambda *args, **kwargs: (
+            {
+                "ok": False,
+                "carrier_ok": False,
+                "integrity_ok": True,
+                "findings": [
+                    preflight._finding(
+                        "singleton_overlap", False, "contended"
+                    )
+                ],
+            },
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        preflight,
+        "_github_incident",
+        lambda result: (_ for _ in ()).throw(AssertionError("recursive incident")),
+    )
+
+    result = preflight.run_preflight("config.yaml", remediate=False)
+
+    assert result["ok"] is False
+    assert result["incident_url"] is None
+
+
 def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))
