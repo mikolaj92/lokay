@@ -40,10 +40,65 @@ def test_quorum_requires_four_matching_failures_in_five(tmp_path):
 def test_successful_delivery_breaks_systemic_failure_evidence(tmp_path):
     state = tmp_path / "state.jsonl"
     state.write_text(
-        json.dumps({"kind": "issue_to_pr", "ok": True}) + "\n"
-        + json.dumps({"kind": "other", "ok": False, "error": "same failure"}) + "\n"
+        json.dumps(
+            {
+                "kind": "issue_to_pr",
+                "ok": True,
+                "terminal": {"pr_create": {"pr": {"url": "https://example.test/pr/1"}}},
+            }
+        )
+        + "\n"
+        + json.dumps({"kind": "other", "ok": False, "error": "same failure"})
+        + "\n"
     )
     row = observe_run(state_path=state, state_offset=0, mill={"ok": False, "health": "budget_exhausted", "progress": 9})
+    assert row["delivered"] is True
+    assert row["fingerprint"] is None
+
+
+def test_skipped_pr_merge_is_not_delivery(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text(
+        json.dumps(
+            {
+                "kind": "pr_triage",
+                "ok": True,
+                "skipped": True,
+                "reason": "llm_review_requested_changes",
+                "terminal": {
+                    "pr_merge": {"ok": True, "skipped": True, "reason": "llm_review_not_approved"}
+                },
+            }
+        )
+        + "\n"
+    )
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={"ok": False, "health": "budget_exhausted", "progress": 8},
+    )
+    assert row["delivered"] is False
+    assert row["fingerprint"] is not None
+    assert row["evidence"] == "budget_exhausted"
+
+
+def test_actual_pr_merge_is_delivery(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text(
+        json.dumps(
+            {
+                "kind": "pr_triage",
+                "ok": True,
+                "terminal": {"pr_merge": {"ok": True, "merged": True}},
+            }
+        )
+        + "\n"
+    )
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={"ok": False, "health": "budget_exhausted", "progress": 8},
+    )
     assert row["delivered"] is True
     assert row["fingerprint"] is None
 

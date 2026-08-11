@@ -40,6 +40,21 @@ def normalize_failure(text: str) -> str:
     return value[:1000]
 
 
+def _delivered(row: dict[str, Any]) -> bool:
+    if row.get("ok") is not True:
+        return False
+    terminal = row.get("terminal")
+    if not isinstance(terminal, dict):
+        return False
+    if row.get("kind") == "issue_to_pr":
+        created = terminal.get("pr_create")
+        return isinstance(created, dict) and isinstance(created.get("pr"), dict)
+    if row.get("kind") == "pr_triage":
+        merged = terminal.get("pr_merge")
+        return isinstance(merged, dict) and merged.get("merged") is True
+    return False
+
+
 def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) -> dict[str, Any]:
     """Describe one run using only events appended while that run held mill.lock."""
     events: list[dict[str, Any]] = []
@@ -56,10 +71,7 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
     except OSError:
         pass
 
-    delivered = any(
-        row.get("ok") is True and row.get("kind") in {"issue_to_pr", "pr_triage"}
-        for row in events
-    )
+    delivered = any(_delivered(row) for row in events)
     failures: list[str] = []
     evidence: dict[str, str] = {}
     for row in events:
