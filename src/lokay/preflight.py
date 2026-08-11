@@ -380,6 +380,12 @@ def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
 
 
 def _github_incident(result: dict[str, Any]) -> str | None:
+    failed = [x for x in result["findings"] if not x["ok"]]
+    # Lock contention is an expected overlap between scheduled runs, not a
+    # source defect. Keep this guard at the mutation boundary as well as in
+    # run_preflight so no caller can turn overlap into a recursive repair issue.
+    if len(failed) == 1 and failed[0]["name"] == "singleton_overlap":
+        return None
     if not any(x["name"] == "github_authentication" and x["ok"] for x in result["findings"]):
         return None
     fp = result["fingerprint"]
