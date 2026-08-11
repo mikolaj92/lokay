@@ -13,7 +13,9 @@ from typing import Any
 
 from fala import sdk
 
+from lokay.git_commit import branch_ahead_of_upstream
 from lokay.models import Issue
+from lokay.proc._common import runner
 from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt
 
 
@@ -364,14 +366,20 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         assert worktree and branch
         committed = up.get("commit_all", {}).get("committed")
         if inputs.get("live") and committed is not True:
-            return {
-                "ok": False,
-                "error": "refusing live push: upstream commit_all.committed is not true",
-                "reason": "zero_diff",
-                "committed": committed,
-                "worktree": worktree,
-                "branch": branch,
-            }
+            # Repair agents may create commits themselves. A clean worktree with
+            # unpublished commits is real progress and must still be pushed.
+            unpublished = branch_ahead_of_upstream(
+                runner(), Path(worktree), live=True
+            ) > 0
+            if not unpublished:
+                return {
+                    "ok": False,
+                    "error": "refusing live push: no new commit to publish",
+                    "reason": "zero_diff",
+                    "committed": committed,
+                    "worktree": worktree,
+                    "branch": branch,
+                }
         return _run_atom_main(
             push_branch.main,
             [*cfg, *live, "--worktree", worktree, "--branch", branch],

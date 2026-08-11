@@ -75,6 +75,43 @@ def test_required_review_with_disabled_executor_stays_blocked(tmp_path, monkeypa
     assert merged["reason"] == "executor_disabled"
 
 
+def test_push_accepts_agent_created_unpublished_commit(monkeypatch):
+    monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 2)
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda main, argv: {"ok": True, "pushed": True, "argv": argv},
+    )
+
+    result = fala_organ._handle(
+        "push",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "live": True},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "commit_all": {"committed": False},
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["pushed"] is True
+
+
+def test_push_rejects_true_zero_diff(monkeypatch):
+    monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 0)
+
+    result = fala_organ._handle(
+        "push",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "live": True},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "commit_all": {"committed": False},
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["reason"] == "zero_diff"
+
+
 def test_bundled_fala_manifest_is_ascii_safe():
     """Native TOML parsing must never land on a UTF-8 continuation byte."""
     from pathlib import Path

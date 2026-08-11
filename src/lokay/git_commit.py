@@ -32,6 +32,21 @@ def branch_ahead_of_main(
         return 0
 
 
+def branch_ahead_of_upstream(runner: Runner, worktree: Path, *, live: bool) -> int:
+    if not live:
+        return 0
+    ahead = runner.run(
+        git_spec(["rev-list", "--count", "@{upstream}..HEAD"], cwd=worktree),
+        live=True,
+    )
+    if ahead.returncode != 0:
+        return 0
+    try:
+        return int((ahead.stdout or "0").strip() or "0")
+    except ValueError:
+        return 0
+
+
 def commit_all(runner: Runner, worktree: Path, message: str, *, live: bool) -> bool:
     if not live:
         return False
