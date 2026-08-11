@@ -195,6 +195,34 @@ def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, mo
     assert finding["repaired"] is True
 
 
+def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monkeypatch):
+    """Issue #14: the mill daemon runs under a minimal launchd PATH while the
+    executor (pi) lives in mise shims; preflight must expose it and release
+    the gate with both incident findings healthy."""
+    cfg = _config(tmp_path)
+    shims = tmp_path / ".local" / "share" / "mise" / "shims"
+    shims.mkdir(parents=True)
+    (shims / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    real_which = preflight.shutil.which
+    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/gh" if command == "gh" else real_which(command))
+    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, result
+    assert result["gate_released"] is True
+    assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
+    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    assert executor["ok"] is True
+    assert executor["repaired"] is True
+    # The other half of the incident pair (fala_smoke) stays healthy against
+    # the real installed Fala and canonical manifest.
+    assert next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
+
+
 def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / ".local" / "bin").mkdir(parents=True)
