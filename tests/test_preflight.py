@@ -175,6 +175,15 @@ def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkey
     assert child.stdout.strip() == "mutated"
 
 
+def test_default_health_lease_covers_long_agent_pass(tmp_path, monkeypatch):
+    import json, time
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    preflight.issue_health_lease()
+    record = json.loads((tmp_path / ".lokay" / "health-lease").read_text())
+    assert record["expires_at"] - int(time.time()) >= 7198
+
+
 def test_health_lease_is_not_just_an_environment_flag(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
@@ -263,6 +272,28 @@ def test_trusted_manifest_rejects_checkout_mismatch(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="differ"):
         preflight.trusted_fala_manifest()
+
+
+def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+    monkeypatch.setattr(
+        preflight.shutil,
+        "which",
+        lambda command: None if command == "omp" else f"/usr/bin/{command}",
+    )
+    issued = []
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is False
+    assert next(
+        item for item in result["findings"] if item["name"] == "executor_availability"
+    )["ok"] is False
+    assert issued == []
 
 
 def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypatch):

@@ -114,6 +114,22 @@ def compose_mill(
                 last=tick,
             )
 
+        # A failed graph is never a successful wait, even when Fala could not
+        # expose the child health fields through the parent subprocess error.
+        if not tick.get("ok"):
+            return err(
+                "mill pass failed",
+                mode=cfg.mode,
+                live=live,
+                idle=False,
+                health=tick.get("health") or "failed",
+                passes=i + 1,
+                max_passes=max_passes,
+                progress=total_progress,
+                results=results,
+                last=tick,
+            )
+
         # Live pass made zero progress but not idle (e.g. waiting on CI).
         if int(tick.get("progress") or 0) == 0:
             return ok(

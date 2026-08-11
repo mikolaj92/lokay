@@ -71,8 +71,8 @@ def _lease_path() -> Path:
     return Path.home() / ".lokay" / "health-lease"
 
 
-def issue_health_lease(*, ttl_seconds: int = 300) -> None:
-    """Issue a short-lived process-tree capability without persisting its secret."""
+def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
+    """Issue a run-scoped process-tree capability without persisting its secret."""
     import time
 
     token = secrets.token_hex(32)
@@ -84,7 +84,10 @@ def issue_health_lease(*, ttl_seconds: int = 300) -> None:
         "token_sha256": hashlib.sha256(token.encode("ascii")).hexdigest(),
         "owner_pid": os.getpid(),
         "issued_at": int(time.time()),
-        "expires_at": int(time.time()) + max(1, min(int(ttl_seconds), 900)),
+        # One factory pass may legitimately spend an hour in the real agent.
+        # Owner liveness, the held mill lock, and explicit daemon revocation are
+        # the primary lifetime bounds; this cap only limits abandoned records.
+        "expires_at": int(time.time()) + max(1, min(int(ttl_seconds), 7200)),
     }
     # Publish through a same-directory exclusive regular temp. O_NOFOLLOW and
     # O_EXCL prevent symlink traversal; atomic replace closes the check/use gap.
@@ -318,7 +321,7 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
-    if checked.get("carrier_ok"):
+    if checked["ok"]:
         issue_health_lease()
     if not checked["ok"]:
         try: result["local_incident"] = str(_persist_incident(cfg, result))

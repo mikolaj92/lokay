@@ -58,6 +58,38 @@ state:
     assert out["passes"] == 2
 
 
+def test_mill_propagates_failed_parent_pass(monkeypatch, tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(
+        mill_mod,
+        "compose_factory_pass",
+        lambda **kwargs: {
+            "ok": False,
+            "error": {"code": "adapter_failed", "message": "child failed"},
+        },
+    )
+
+    out = mill_mod.compose_mill(config_path=str(cfg_path), live=True)
+
+    assert out["ok"] is False
+    assert out["health"] == "failed"
+    assert out["last"]["error"]["message"] == "child failed"
+
+
 def test_mill_stops_truthfully_after_non_progress_repair_attempt(monkeypatch, tmp_path):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
