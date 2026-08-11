@@ -121,6 +121,8 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
     """Issue a run-scoped process-tree capability without persisting its secret."""
     import time
 
+    if os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1":
+        return
     inherited = os.environ.get("LOKAY_HEALTH_LEASE", "")
     if inherited:
         healthy, reason = health_lease_status()
@@ -128,9 +130,9 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
             return
         raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
     token = secrets.token_hex(32)
-    # Issuers always choose their own HOME path; the explicit path variable is
-    # only an inherited locator for descendants whose HOME may differ.
-    path = Path.home() / ".lokay" / "health-lease"
+    # The daemon may preselect a per-run path. Standalone callers retain the
+    # conventional location for compatibility and tests.
+    path = _lease_path()
     if not _safe_owned_path(path.parent):
         raise RuntimeError("unsafe health lease directory")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -370,7 +372,35 @@ def _github_incident(result: dict[str, Any]) -> str | None:
         return None
 
 
-def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[str, Any]:
+def run_preflight(
+    config_path: str | None, *, remediate: bool = True, issue_lease: bool = False
+) -> dict[str, Any]:
+    inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    if inherited_lease:
+        healthy, reason = health_lease_status()
+        if healthy:
+            return {
+                "ok": True,
+                "carrier_ok": True,
+                "integrity_ok": True,
+                "health": "healthy",
+                "gate_released": True,
+                "lease": True,
+                "lease_reason": "ok",
+                "findings": [],
+                "repairs": [],
+            }
+        return {
+            "ok": False,
+            "carrier_ok": False,
+            "integrity_ok": False,
+            "health": "preflight_failed",
+            "gate_released": False,
+            "lease": False,
+            "lease_reason": reason,
+            "findings": [],
+            "repairs": [],
+        }
     repaired: set[str] = set()
     repairs: list[dict[str, Any]] = []
     initial, cfg = _check(config_path, repaired)
@@ -393,7 +423,7 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
-    if checked["ok"]:
+    if checked["ok"] and issue_lease:
         issue_health_lease()
     if not checked["ok"]:
         try: result["local_incident"] = str(_persist_incident(cfg, result))

@@ -46,6 +46,7 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     assert "FALA_HOME" in inherited
     assert "LOKAY_HEALTH_LEASE" in inherited
     assert "LOKAY_HEALTH_LEASE_PATH" in inherited
+    assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
 
 
 def test_describe_issue_to_pr_graph():
@@ -146,6 +147,25 @@ def test_fala_needs_human_contract():
 def test_fala_zero_diff_repair_contract():
     out = _host("pr_repair", {"commit_all": {"id": "commit_all", "status": "completed", "output": {"values": {"committed": False}}}})
     assert out["ok"] is False and out["error"] == "repair produced no commit"
+
+
+def test_fala_agent_committed_repair_contract():
+    out = _host(
+        "pr_repair",
+        {
+            "commit_all": {
+                "id": "commit_all",
+                "status": "completed",
+                "output": {"values": {"committed": False}},
+            },
+            "push": {
+                "id": "push",
+                "status": "completed",
+                "output": {"values": {"ok": True, "planned": False}},
+            },
+        },
+    )
+    assert out["ok"] is True
 
 
 def test_completed_path_without_effector_results_fails_closed():

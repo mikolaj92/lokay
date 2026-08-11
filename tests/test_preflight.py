@@ -114,6 +114,36 @@ def test_inherited_lease_skips_duplicate_tick_preflight(monkeypatch):
         tick.compose_tick(config_path="config.yaml", live=True)
 
 
+def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(preflight, "health_lease_status", lambda: (True, "ok"))
+    monkeypatch.setattr(
+        preflight,
+        "_check",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested host checks")),
+    )
+
+    result = preflight.run_preflight("config.yaml")
+
+    assert result["ok"] is True
+    assert result["lease"] is True
+
+
+def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))
+    monkeypatch.setattr(
+        preflight,
+        "_check",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested host checks")),
+    )
+
+    result = preflight.run_preflight("config.yaml")
+
+    assert result["ok"] is False
+    assert result["lease_reason"] == "expired"
+
+
 def test_rejected_inherited_tick_lease_is_not_reissued(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(
@@ -390,6 +420,16 @@ def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):
     assert preflight.has_health_lease() is False
 
 
+def test_nested_issue_guard_never_mints_lease(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "1")
+
+    preflight.issue_health_lease()
+
+    assert not (tmp_path / ".lokay" / "health-lease").exists()
+    assert "LOKAY_HEALTH_LEASE" not in __import__("os").environ
+
+
 def test_child_cannot_replace_parent_health_lease(tmp_path, monkeypatch):
     import json
 
@@ -491,6 +531,34 @@ def test_trusted_manifest_rejects_checkout_mismatch(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match="differ"):
         preflight.trusted_fala_manifest()
+
+
+def test_only_lock_owning_daemon_preflight_issues_lease(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _host_ok(monkeypatch)
+    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
+    issued = []
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+
+    assert preflight.run_preflight(str(cfg), issue_lease=True)["ok"] is True
+    assert issued == [True]
+
+
+def test_direct_preflight_does_not_issue_lease(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _host_ok(monkeypatch)
+    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
+    issued = []
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+
+    assert preflight.run_preflight(str(cfg))["ok"] is True
+    assert issued == []
 
 
 def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):

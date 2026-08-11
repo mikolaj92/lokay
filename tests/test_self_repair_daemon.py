@@ -1,6 +1,17 @@
 from lokay.proc import daemon
 
 
+def test_daemon_selects_unique_health_lease_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: False)
+
+    assert daemon.main(["--config", "x", "--outbox", str(tmp_path / "out")]) == 1
+
+    path = __import__("os").environ["LOKAY_HEALTH_LEASE_PATH"]
+    assert path.startswith(str(tmp_path / ".lokay" / "health-lease-"))
+    assert path != str(tmp_path / ".lokay" / "health-lease")
+
+
 def test_healthy_daemon_reuses_preflight_lease_for_product(monkeypatch, tmp_path):
     health = {"ok": True, "carrier_ok": True, "fingerprint": "healthy"}
     captured = []
