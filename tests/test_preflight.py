@@ -227,6 +227,42 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
     preflight.revoke_health_lease()
 
 
+def test_singleton_contention_is_recorded_locally_without_opening_issue(monkeypatch):
+    monkeypatch.setattr(
+        preflight,
+        "_check",
+        lambda *args, **kwargs: (
+            {
+                "ok": False,
+                "carrier_ok": False,
+                "integrity_ok": True,
+                "findings": [
+                    preflight._finding("singleton_overlap", False, "contended")
+                ],
+            },
+            None,
+        ),
+    )
+    persisted = []
+    monkeypatch.setattr(
+        preflight,
+        "_persist_incident",
+        lambda cfg, result: persisted.append(result) or Path("incident.json"),
+    )
+    monkeypatch.setattr(
+        preflight,
+        "_github_incident",
+        lambda result: (_ for _ in ()).throw(AssertionError("operational overlap issue")),
+    )
+
+    result = preflight.run_preflight("config.yaml", remediate=False)
+
+    assert result["ok"] is False
+    assert result["local_incident"] == "incident.json"
+    assert result["incident_url"] is None
+    assert persisted == [result]
+
+
 def test_self_repair_validation_does_not_open_recursive_incident(monkeypatch):
     monkeypatch.setenv("LOKAY_SELF_REPAIR_VALIDATION", "1")
     monkeypatch.setattr(
