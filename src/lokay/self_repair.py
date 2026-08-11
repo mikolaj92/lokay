@@ -195,10 +195,10 @@ def run_self_repair(
                 row.update(ok=False, phase="activation"); break
             check = subprocess.run(
                 ["uv", "run", "--project", str(activation["path"]), "lokay-preflight",
-                 "--config", str(config_path), "--no-repair"],
+                 "--config", str(config_path), "--no-repair", "--validate-inherited-lease"],
                 capture_output=True, text=True, stdin=subprocess.DEVNULL,
                 timeout=180, check=False,
-                env={**__import__("os").environ, "LOKAY_HEALTH_LEASE": "",
+                env={**__import__("os").environ,
                      "LOKAY_SELF_REPAIR_ATOM": "", "LOKAY_SELF_REPAIR_VALIDATION": "1"},
             )
             try: health = json.loads((check.stdout or "").strip().splitlines()[-1])

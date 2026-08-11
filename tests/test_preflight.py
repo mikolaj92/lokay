@@ -129,6 +129,38 @@ def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
     assert result["lease"] is True
 
 
+def test_validation_reruns_checks_behind_valid_inherited_singleton(monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(preflight, "health_lease_status", lambda: (True, "ok"))
+    calls = []
+
+    def checked(config_path, repaired, *, inherited_singleton=False):
+        calls.append(inherited_singleton)
+        return {
+            "ok": inherited_singleton,
+            "carrier_ok": inherited_singleton,
+            "integrity_ok": True,
+            "findings": [
+                preflight._finding(
+                    "singleton_overlap",
+                    inherited_singleton,
+                    "ok" if inherited_singleton else "contended",
+                )
+            ],
+        }, None
+
+    monkeypatch.setattr(preflight, "_check", checked)
+
+    result = preflight.run_preflight(
+        "config.yaml", remediate=False, validate_inherited_lease=True
+    )
+
+    assert result["ok"] is True
+    assert calls == [True, True]
+    assert result["findings"][0]["name"] == "singleton_overlap"
+    assert result["findings"][0]["ok"] is True
+
+
 def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))

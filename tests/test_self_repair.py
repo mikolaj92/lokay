@@ -73,8 +73,17 @@ def test_normal_policy_merge_activation_and_preflight_release(monkeypatch, tmp_p
     monkeypatch.setattr(self_repair, "compose_pr_triage", lambda **k: {"ok": True, "merged": True})
     monkeypatch.setattr(self_repair, "_activate", lambda c, **kw: {"ok": True, "activated": True, "path": str(tmp_path)})
     monkeypatch.setattr(self_repair, "_gh_json", lambda a: {"mergeCommit": {"oid": "abc"}, "headRefName": "ai/fix/44-health", "headRefOid": "head", "headRepository": {"nameWithOwner": "mikolaj92/lokay"}, "baseRefName": "main", "body": "<!-- lokay-preflight:abc -->"})
-    monkeypatch.setattr(self_repair.subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=0, stdout='{"ok": true, "health": "healthy"}\n', stderr=""))
+    calls = []
+    monkeypatch.setattr(
+        self_repair.subprocess,
+        "run",
+        lambda *a, **k: calls.append((a, k))
+        or SimpleNamespace(returncode=0, stdout='{"ok": true, "health": "healthy"}\n', stderr=""),
+    )
     result = self_repair.run_self_repair("x", unhealthy())
+    validation_args, validation_kwargs = calls[0]
+    assert "--validate-inherited-lease" in validation_args[0]
+    assert validation_kwargs["env"]["LOKAY_HEALTH_LEASE"] == __import__("os").environ.get("LOKAY_HEALTH_LEASE", "")
     assert result["ok"] and result["validated"] and not result["gate_released"] and result["repaired_pr"] == 7
 
 

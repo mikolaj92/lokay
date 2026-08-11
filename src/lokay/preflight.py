@@ -272,7 +272,12 @@ def acquire_run_lock(lock_path: Path) -> bool:
         return False
 
 
-def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any], Any | None]:
+def _check(
+    config_path: str | None,
+    repaired: set[str],
+    *,
+    inherited_singleton: bool = False,
+) -> tuple[dict[str, Any], Any | None]:
     try:
         cfg = load_config(config_path)
     except Exception as exc:
@@ -312,7 +317,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
     findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable", repaired="executor_path" in repaired))
 
     lock_path = cfg.state_path.parent / "mill.lock"
-    singleton_ok = acquire_run_lock(lock_path)
+    singleton_ok = inherited_singleton or acquire_run_lock(lock_path)
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
 
     # Manifest provenance is a carrier prerequisite: never run Fala from an
@@ -377,12 +382,22 @@ def _github_incident(result: dict[str, Any]) -> str | None:
 
 
 def run_preflight(
-    config_path: str | None, *, remediate: bool = True, issue_lease: bool = False
+    config_path: str | None,
+    *,
+    remediate: bool = True,
+    issue_lease: bool = False,
+    validate_inherited_lease: bool = False,
 ) -> dict[str, Any]:
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    inherited_singleton = False
     if inherited_lease:
         healthy, reason = health_lease_status()
-        if healthy:
+        if healthy and validate_inherited_lease:
+            # Self-repair validation must rerun every host check while the
+            # parent daemon retains the singleton lock.  The validated lease
+            # proves this process belongs to that lock-owning process tree.
+            inherited_singleton = True
+        elif healthy:
             return {
                 "ok": True,
                 "carrier_ok": True,
@@ -394,20 +409,23 @@ def run_preflight(
                 "findings": [],
                 "repairs": [],
             }
-        return {
-            "ok": False,
-            "carrier_ok": False,
-            "integrity_ok": False,
-            "health": "preflight_failed",
-            "gate_released": False,
-            "lease": False,
-            "lease_reason": reason,
-            "findings": [],
-            "repairs": [],
-        }
+        else:
+            return {
+                "ok": False,
+                "carrier_ok": False,
+                "integrity_ok": False,
+                "health": "preflight_failed",
+                "gate_released": False,
+                "lease": False,
+                "lease_reason": reason,
+                "findings": [],
+                "repairs": [],
+            }
     repaired: set[str] = set()
     repairs: list[dict[str, Any]] = []
-    initial, cfg = _check(config_path, repaired)
+    initial, cfg = _check(
+        config_path, repaired, inherited_singleton=inherited_singleton
+    )
     if remediate:
         if any(x["name"] == "required_environment" and not x["ok"] for x in initial["findings"]) and not os.environ.get("LANG"):
             os.environ["LANG"] = "C.UTF-8"; repaired.add("locale")
@@ -423,7 +441,9 @@ def run_preflight(
             if cfg.live and cfg.executor_enabled and _repair_runtime_path(cfg.agent_command):
                 repaired.add("executor_path")
                 repairs.append({"kind": "extend_runtime_path", "ok": True})
-    checked, cfg = _check(config_path, repaired)  # complete rerun, always
+    checked, cfg = _check(
+        config_path, repaired, inherited_singleton=inherited_singleton
+    )  # complete rerun, always
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
