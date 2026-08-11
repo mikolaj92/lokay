@@ -89,9 +89,9 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
             return
         raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
     token = secrets.token_hex(32)
-    # Issuers always choose their own HOME path; the explicit path variable is
-    # only an inherited locator for descendants whose HOME may differ.
-    path = Path.home() / ".lokay" / "health-lease"
+    # The daemon may preselect a per-run path. Standalone callers retain the
+    # conventional location for compatibility and tests.
+    path = _lease_path()
     if not _safe_owned_path(path.parent):
         raise RuntimeError("unsafe health lease directory")
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import secrets
 from pathlib import Path
 
 from lokay.compose.mill import compose_mill
@@ -17,6 +19,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--outbox", required=True)
     args = parser.parse_args(argv)
     lock = Path.home() / ".lokay" / "mill.lock"
+    os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(
+        lock.parent / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
+    )
     if not acquire_run_lock(lock):
         payload = err("preflight failed; overlapping run", health="preflight_failed", code="overlap")
     else:
