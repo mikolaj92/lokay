@@ -479,11 +479,17 @@ def run_preflight(
     if checked["ok"] and issue_lease:
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
     if not checked["ok"]:
-        # Validation already belongs to the original incident's bounded repair
-        # lane. In particular, an older running daemon may retain its lock while
-        # activating newer validation code; do not recursively report that
-        # transitional check as a new incident.
-        if os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1":
+        # An older daemon can retain its lock while self-repair activates newer
+        # validation code. Suppress only that known recursive incident; every
+        # other validation failure must still be reported.
+        failed_findings = [x for x in checked["findings"] if not x["ok"]]
+        recursive_singleton = (
+            os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1"
+            and len(failed_findings) == 1
+            and failed_findings[0]["name"] == "singleton_overlap"
+            and failed_findings[0]["code"] == "contended"
+        )
+        if recursive_singleton:
             result.update(local_incident=None, incident_url=None)
         else:
             try: result["local_incident"] = str(_persist_incident(cfg, result))
