@@ -61,11 +61,92 @@ def _fala_smoke() -> tuple[bool, str]:
             for item in manifest.get("correlation_paths", [])
             if isinstance(item, dict)
         }
-        required = {"factory_pass", "issue_to_pr", "issue_triage", "pr_repair", "pr_triage"}
+        required = {
+            "factory_pass", "issue_to_pr", "issue_triage", "pr_repair",
+            "pr_triage", "self_repair",
+        }
         ok = callable(host_run_package) and callable(sdk.conduction) and required <= paths
         return ok, "ok" if ok else "incompatible_api_or_manifest"
     except (ImportError, AttributeError, OSError, RuntimeError, tomllib.TOMLDecodeError) as exc:
         return False, f"unavailable_{type(exc).__name__}"
+
+
+def _canonical_github_ssh(repo_name: str) -> str:
+    return f"git@github.com:{repo_name}.git"
+
+
+def _github_git_transport(cfg: Any) -> tuple[bool, str]:
+    """Prove every managed checkout uses the authenticated SSH carrier."""
+    checked = 0
+    for repo in cfg.active_repos():
+        if not (repo.clone_path / ".git").exists():
+            continue
+        checked += 1
+        try:
+            remote = subprocess.run(
+                ["git", "-C", str(repo.clone_path), "remote", "get-url", "origin"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False, "origin_unavailable"
+        if remote.returncode != 0 or getattr(remote, "stdout", "").strip() != _canonical_github_ssh(repo.name):
+            return False, "non_ssh_origin"
+    if checked == 0:
+        return True, "ok"
+    probe = next(
+        repo for repo in cfg.active_repos() if (repo.clone_path / ".git").exists()
+    )
+    try:
+        authenticated = subprocess.run(
+            ["git", "-C", str(probe.clone_path), "ls-remote", "--exit-code", "origin", "HEAD"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+            check=False,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"},
+        ).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        authenticated = False
+    return authenticated, "ok" if authenticated else "ssh_auth_unavailable"
+
+
+def _repair_github_git_transport(cfg: Any) -> bool:
+    """Replace only exact canonical GitHub HTTPS origins with their SSH form."""
+    changed = False
+    for repo in cfg.active_repos():
+        if not (repo.clone_path / ".git").exists():
+            continue
+        try:
+            remote = subprocess.run(
+                ["git", "-C", str(repo.clone_path), "remote", "get-url", "origin"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+            )
+            current = getattr(remote, "stdout", "").strip()
+            expected_https = f"https://github.com/{repo.name}.git"
+            if remote.returncode == 0 and current == expected_https:
+                updated = subprocess.run(
+                    ["git", "-C", str(repo.clone_path), "remote", "set-url", "origin", _canonical_github_ssh(repo.name)],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                    check=False,
+                )
+                changed = updated.returncode == 0 or changed
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+    return changed
 
 
 def _repair_runtime_path(command: str) -> bool:
@@ -338,6 +419,15 @@ def _check(
         except (OSError, subprocess.TimeoutExpired):
             pass
     findings.append(_finding("github_authentication", gh_ok, "ok" if gh_ok else "unavailable"))
+    git_ok, git_code = _github_git_transport(cfg)
+    findings.append(
+        _finding(
+            "github_git_transport",
+            git_ok,
+            git_code,
+            repaired="github_git_transport" in repaired,
+        )
+    )
     executor_ok = not (cfg.live and cfg.executor_enabled) or shutil.which(cfg.agent_command) is not None
     findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable", repaired="executor_path" in repaired))
 
@@ -478,6 +568,12 @@ def run_preflight(
                     repaired.add("directories"); repairs.append({"kind": "create_runtime_directories", "ok": True})
                 except OSError:
                     repairs.append({"kind": "create_runtime_directories", "ok": False})
+            if any(
+                x["name"] == "github_git_transport" and not x["ok"]
+                for x in initial["findings"]
+            ) and _repair_github_git_transport(cfg):
+                repaired.add("github_git_transport")
+                repairs.append({"kind": "set_canonical_github_ssh_origins", "ok": True})
             if cfg.live and cfg.executor_enabled and _repair_runtime_path(cfg.agent_command):
                 repaired.add("executor_path")
                 repairs.append({"kind": "extend_runtime_path", "ok": True})
