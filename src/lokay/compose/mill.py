@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import secrets
 from typing import Any
 
 from lokay.compose.factory import compose_factory_pass
@@ -27,22 +28,34 @@ def compose_mill(
     """Run the mill under one process-tree health capability."""
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     owns_lease = False
-    if preflight is None and live:
-        # A direct lokay-mill invocation owns preflight and must delegate its
-        # result through the parent Fala subprocess. Otherwise factory_tick
-        # repeats preflight and reports this process's lock as contention.
-        preflight = run_preflight(config_path, remediate=True, issue_lease=True)
-        owns_lease = not inherited_lease and bool(os.environ.get("LOKAY_HEALTH_LEASE"))
-        if preflight.get("ok") and owns_lease:
-            lease_ok, lease_reason = health_lease_status()
-            if not lease_ok:
-                preflight = {
-                    **preflight,
-                    "ok": False,
-                    "lease": False,
-                    "lease_reason": lease_reason,
-                }
+    owns_lease_path = False
+    if preflight is None and live and not inherited_lease and not os.environ.get(
+        "LOKAY_HEALTH_LEASE_PATH"
+    ):
+        cfg = load_cfg(argparse.Namespace(config=config_path))
+        os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(
+            cfg.state_path.parent
+            / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
+        )
+        owns_lease_path = True
     try:
+        if preflight is None and live:
+            # A direct lokay-mill invocation owns preflight and must delegate its
+            # result through the parent Fala subprocess. Otherwise factory_tick
+            # repeats preflight and reports this process's lock as contention.
+            preflight = run_preflight(config_path, remediate=True, issue_lease=True)
+            owns_lease = not inherited_lease and bool(
+                os.environ.get("LOKAY_HEALTH_LEASE")
+            )
+            if preflight.get("ok") and owns_lease:
+                lease_ok, lease_reason = health_lease_status()
+                if not lease_ok:
+                    preflight = {
+                        **preflight,
+                        "ok": False,
+                        "lease": False,
+                        "lease_reason": lease_reason,
+                    }
         return _compose_mill(
             config_path=config_path,
             live=live,
@@ -52,6 +65,8 @@ def compose_mill(
     finally:
         if owns_lease:
             revoke_health_lease()
+        if owns_lease_path:
+            os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
 
 
 def _compose_mill(

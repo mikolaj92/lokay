@@ -54,6 +54,64 @@ state:
     assert calls == [("preflight", True), ("factory", True), ("revoke", True)]
 
 
+def test_direct_mills_with_distinct_state_paths_get_distinct_run_leases(
+    monkeypatch, tmp_path
+):
+    config_paths = []
+    state_dirs = [tmp_path / "first", tmp_path / "second"]
+    for index, state_dir in enumerate(state_dirs):
+        cfg_path = tmp_path / f"config-{index}.yaml"
+        cfg_path.write_text(
+            f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+worktrees:
+  root: {tmp_path / f"wt-{index}"}
+state:
+  path: {state_dir / "events.jsonl"}
+""",
+            encoding="utf-8",
+        )
+        config_paths.append(cfg_path)
+
+    lease_paths: list[Path] = []
+
+    def run_preflight(config_path, *, remediate, issue_lease=False):
+        lease_paths.append(Path(os.environ["LOKAY_HEALTH_LEASE_PATH"]))
+        monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+        return {"ok": True}
+
+    def revoke():
+        os.environ.pop("LOKAY_HEALTH_LEASE", None)
+        os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
+
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+    monkeypatch.setattr(mill_mod, "run_preflight", run_preflight)
+    monkeypatch.setattr(mill_mod, "health_lease_status", lambda: (True, "ok"))
+    monkeypatch.setattr(
+        mill_mod,
+        "compose_factory_pass",
+        lambda **kwargs: {
+            "ok": True,
+            "idle": True,
+            "health": "idle",
+            "progress": 0,
+        },
+    )
+    monkeypatch.setattr(mill_mod, "revoke_health_lease", revoke)
+
+    for cfg_path in config_paths:
+        assert mill_mod.compose_mill(config_path=str(cfg_path), live=True)["ok"] is True
+
+    assert len(set(lease_paths)) == 2
+    for lease_path, state_dir in zip(lease_paths, state_dirs, strict=True):
+        assert lease_path.parent == state_dir
+        assert lease_path.name.startswith("health-lease-")
+
+
 def test_direct_live_mill_lease_validates_for_custom_state_path(monkeypatch, tmp_path):
     cfg_path = tmp_path / "config.yaml"
     state_dir = tmp_path / "custom" / "state"
@@ -102,9 +160,8 @@ state:
             check=False,
         )
         observed["status"] = child.returncode
-        observed["record"] = json.loads(
-            Path(os.environ["LOKAY_HEALTH_LEASE_PATH"]).read_text()
-        )
+        observed["lease_path"] = os.environ["LOKAY_HEALTH_LEASE_PATH"]
+        observed["record"] = json.loads(Path(observed["lease_path"]).read_text())
         return {"ok": True, "idle": True, "health": "idle", "progress": 0}
 
     monkeypatch.setattr(mill_mod, "compose_factory_pass", factory_pass)
@@ -113,6 +170,8 @@ state:
 
     assert result["ok"] is True, result
     assert observed["status"] == 0
+    assert Path(observed["lease_path"]).parent == state_dir
+    assert Path(observed["lease_path"]).name.startswith("health-lease-")
     assert observed["record"]["lock_path"] == str((state_dir / "mill.lock").absolute())
     assert "LOKAY_HEALTH_LEASE" not in os.environ
     assert "LOKAY_HEALTH_LEASE_PATH" not in os.environ
