@@ -383,7 +383,10 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         if (
             result.get("live")
             and commit.get("committed") is not True
-            and push.get("pushed") is not True
+            and not (
+                push.get("ok") is True
+                and push.get("planned") is False
+            )
         ):
             out.update(ok=False, error="repair produced no commit")
     elif path_id == "issue_to_pr":

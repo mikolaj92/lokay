@@ -161,7 +161,7 @@ def test_fala_agent_committed_repair_contract():
             "push": {
                 "id": "push",
                 "status": "completed",
-                "output": {"values": {"pushed": True}},
+                "output": {"values": {"ok": True, "planned": False}},
             },
         },
     )
