@@ -45,6 +45,7 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     inherited = factory["effectors"][0]["adapter"]["inherit_env"]
     assert "FALA_HOME" in inherited
     assert "LOKAY_HEALTH_LEASE" in inherited
+    assert "LOKAY_HEALTH_LEASE_PATH" in inherited
 
 
 def test_describe_issue_to_pr_graph():

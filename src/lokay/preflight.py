@@ -68,7 +68,12 @@ def _safe_owned_path(path: Path) -> bool:
 
 
 def _lease_path() -> Path:
-    return Path.home() / ".lokay" / "health-lease"
+    configured = os.environ.get("LOKAY_HEALTH_LEASE_PATH", "").strip()
+    return (
+        Path(configured).expanduser()
+        if configured
+        else Path.home() / ".lokay" / "health-lease"
+    )
 
 
 def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
@@ -76,7 +81,9 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
     import time
 
     token = secrets.token_hex(32)
-    path = _lease_path()
+    # Issuers always choose their own HOME path; the explicit path variable is
+    # only an inherited locator for descendants whose HOME may differ.
+    path = Path.home() / ".lokay" / "health-lease"
     if not _safe_owned_path(path.parent):
         raise RuntimeError("unsafe health lease directory")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -121,12 +128,15 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
         except FileNotFoundError:
             pass
     os.environ["LOKAY_HEALTH_LEASE"] = token
+    os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(path.absolute())
 
 
 def revoke_health_lease() -> None:
+    path = _lease_path()
     os.environ.pop("LOKAY_HEALTH_LEASE", None)
+    os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
     try:
-        _lease_path().unlink()
+        path.unlink()
     except FileNotFoundError:
         pass
 

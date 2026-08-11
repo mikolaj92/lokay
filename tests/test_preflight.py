@@ -175,6 +175,18 @@ def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkey
     assert child.stdout.strip() == "mutated"
 
 
+def test_health_lease_path_survives_changed_home(tmp_path, monkeypatch):
+    original_home = tmp_path / "owner"
+    monkeypatch.setenv("HOME", str(original_home))
+    preflight.issue_health_lease()
+    lease_path = original_home / ".lokay" / "health-lease"
+    assert __import__("os").environ["LOKAY_HEALTH_LEASE_PATH"] == str(lease_path)
+
+    monkeypatch.setenv("HOME", str(tmp_path / "child-home"))
+
+    assert preflight._lease_path() == lease_path
+
+
 def test_default_health_lease_covers_long_agent_pass(tmp_path, monkeypatch):
     import json, time
 
