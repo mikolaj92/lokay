@@ -338,7 +338,9 @@ def _github_incident(result: dict[str, Any]) -> str | None:
         return None
 
 
-def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[str, Any]:
+def run_preflight(
+    config_path: str | None, *, remediate: bool = True, issue_lease: bool = False
+) -> dict[str, Any]:
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     if inherited_lease:
         healthy, reason = health_lease_status()
@@ -384,7 +386,7 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     result = {**checked, "health": "healthy" if checked["ok"] else "preflight_failed", "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
-    if checked["ok"]:
+    if checked["ok"] and issue_lease:
         issue_health_lease()
     if not checked["ok"]:
         try: result["local_incident"] = str(_persist_incident(cfg, result))

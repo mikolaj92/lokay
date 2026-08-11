@@ -408,6 +408,34 @@ def test_trusted_manifest_rejects_checkout_mismatch(tmp_path, monkeypatch):
         preflight.trusted_fala_manifest()
 
 
+def test_only_lock_owning_daemon_preflight_issues_lease(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _host_ok(monkeypatch)
+    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
+    issued = []
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+
+    assert preflight.run_preflight(str(cfg), issue_lease=True)["ok"] is True
+    assert issued == [True]
+
+
+def test_direct_preflight_does_not_issue_lease(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _host_ok(monkeypatch)
+    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
+    issued = []
+    monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
+
+    assert preflight.run_preflight(str(cfg))["ok"] is True
+    assert issued == []
+
+
 def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")

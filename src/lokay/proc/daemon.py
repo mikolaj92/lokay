@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = err("preflight failed; overlapping run", health="preflight_failed", code="overlap")
     else:
         try:
-            health = run_preflight(args.config, remediate=True)
+            health = run_preflight(args.config, remediate=True, issue_lease=True)
             if health.get("ok"):
                 payload = compose_mill(
                     config_path=args.config,
