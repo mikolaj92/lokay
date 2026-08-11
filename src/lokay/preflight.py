@@ -68,15 +68,21 @@ def _repair_runtime_path(command: str) -> bool:
     if shutil.which(command):
         return False
     candidates = (Path.home() / ".local" / "bin", Path.home() / ".local" / "share" / "mise" / "shims")
-    additions = [str(path) for path in candidates if _safe_owned_path(path) and path.is_dir()]
-    if not additions:
+    executor_dir = next(
+        (
+            path
+            for path in candidates
+            if _safe_owned_path(path)
+            and path.is_dir()
+            and shutil.which(command, path=str(path)) is not None
+        ),
+        None,
+    )
+    if executor_dir is None:
         return False
     original = os.environ.get("PATH", "")
-    os.environ["PATH"] = os.pathsep.join((*additions, original))
-    if shutil.which(command) is not None:
-        return True
-    os.environ["PATH"] = original
-    return False
+    os.environ["PATH"] = os.pathsep.join((str(executor_dir), original))
+    return True
 
 
 def _safe_owned_path(path: Path) -> bool:

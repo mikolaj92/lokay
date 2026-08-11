@@ -37,7 +37,7 @@ state:
 
 
 def _host_ok(monkeypatch):
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/usr/bin/gh")
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
     monkeypatch.setattr(
         preflight.subprocess,
         "run",
@@ -65,7 +65,7 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
 def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: None)
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: None)
 
     result = preflight.run_preflight(str(cfg))
 
@@ -166,7 +166,7 @@ def test_unsafe_symlink_runtime_path_is_not_repaired(tmp_path, monkeypatch):
 def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/gh" if command == "gh" else None)
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else None)
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is False
@@ -183,7 +183,7 @@ def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, mo
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("LANG", "C.UTF-8")
     real_which = preflight.shutil.which
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/gh" if command == "gh" else real_which(command))
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
 
     result = preflight.run_preflight(str(cfg))
@@ -207,7 +207,7 @@ def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monk
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("LANG", "C.UTF-8")
     real_which = preflight.shutil.which
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/gh" if command == "gh" else real_which(command))
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
 
     result = preflight.run_preflight(str(cfg))
@@ -221,6 +221,20 @@ def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monk
     # The other half of the incident pair (fala_smoke) stays healthy against
     # the real installed Fala and canonical manifest.
     assert next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
+
+
+def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    user_bin = home / ".local" / "bin"
+    shims = home / ".local" / "share" / "mise" / "shims"
+    user_bin.mkdir(parents=True)
+    shims.mkdir(parents=True)
+    (shims / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    assert preflight._repair_runtime_path("omp") is True
+    assert __import__("os").environ["PATH"] == f"{shims}:/usr/bin:/bin"
 
 
 def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch):
@@ -458,7 +472,7 @@ def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     monkeypatch.setattr(
         preflight.shutil,
         "which",
-        lambda command: None if command == "omp" else f"/usr/bin/{command}",
+        lambda command, **kwargs: None if command == "omp" else f"/usr/bin/{command}",
     )
     issued = []
     monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
