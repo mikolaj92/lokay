@@ -9,7 +9,7 @@ def test_catalog_loads_managed_source_repos():
     if not cfg_path.is_file():
         # CI without local config: synthesize
         cfg_path = root / "config.example.yaml"
-    cfg = load_config(cfg_path if (root / "config.yaml").is_file() else None)
+    cfg = load_config(cfg_path)
     # Prefer explicit catalog via example when needed
     if not cfg.repos:
         import yaml

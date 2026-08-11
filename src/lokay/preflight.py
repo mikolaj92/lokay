@@ -44,6 +44,18 @@ def _finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> d
     return {"name": name, "ok": passed, "code": code[:80], "detail": code[:80], "repaired": repaired}
 
 
+def _repair_runtime_path(command: str) -> bool:
+    """Expose user-installed executors when a service inherited a minimal PATH."""
+    if shutil.which(command):
+        return False
+    candidates = (Path.home() / ".local" / "bin", Path.home() / ".local" / "share" / "mise" / "shims")
+    additions = [str(path) for path in candidates if _safe_owned_path(path) and path.is_dir()]
+    if not additions:
+        return False
+    os.environ["PATH"] = os.pathsep.join((*additions, os.environ.get("PATH", "")))
+    return shutil.which(command) is not None
+
+
 def _safe_owned_path(path: Path) -> bool:
     """Reject roots, symlinks, foreign-owned existing ancestors, and traversal."""
     try:
@@ -251,15 +263,17 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
         disk_ok = False
     findings.append(_finding("disk_headroom", disk_ok, "ok" if disk_ok else "insufficient"))
 
+    fala_error = "unavailable"
     try:
         from fala import host_run_package
 
         package = trusted_fala_manifest()
         manifest = tomllib.loads(package.read_text(encoding="utf-8"))
         fala_ok = callable(host_run_package) and bool(manifest.get("correlation_paths"))
-    except (ImportError, OSError, RuntimeError, tomllib.TOMLDecodeError):
+    except (ImportError, OSError, RuntimeError, tomllib.TOMLDecodeError) as exc:
         fala_ok = False
-    findings.append(_finding("fala_smoke", fala_ok, "ok" if fala_ok else "unavailable"))
+        fala_error = f"unavailable_{type(exc).__name__}"
+    findings.append(_finding("fala_smoke", fala_ok, "ok" if fala_ok else fala_error))
 
     gh_ok = False
     if shutil.which("gh"):
@@ -352,6 +366,8 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
                     repaired.add("directories"); repairs.append({"kind": "create_runtime_directories", "ok": True})
                 except OSError:
                     repairs.append({"kind": "create_runtime_directories", "ok": False})
+            if cfg.live and cfg.executor_enabled and _repair_runtime_path(cfg.agent_command):
+                repairs.append({"kind": "extend_runtime_path", "ok": True})
     checked, cfg = _check(config_path, repaired)  # complete rerun, always
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]

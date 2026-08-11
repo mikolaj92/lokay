@@ -174,6 +174,37 @@ def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
     assert Path(result["local_incident"]).is_file()
 
 
+def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    user_bin = tmp_path / ".local" / "bin"
+    user_bin.mkdir(parents=True)
+    (user_bin / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    real_which = preflight.shutil.which
+    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/gh" if command == "gh" else real_which(command))
+    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, result
+    assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
+    assert next(x for x in result["findings"] if x["name"] == "executor_availability")["ok"] is True
+
+
+def test_fala_smoke_reports_bounded_exception_class(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    _host_ok(monkeypatch)
+    monkeypatch.setattr(preflight, "trusted_fala_manifest", lambda: (_ for _ in ()).throw(RuntimeError("secret detail")))
+
+    result = preflight.run_preflight(str(cfg), remediate=False)
+
+    finding = next(x for x in result["findings"] if x["name"] == "fala_smoke")
+    assert finding["code"] == "unavailable_RuntimeError"
+    assert "secret detail" not in finding["detail"]
+
+
 def test_direct_live_mutation_uses_health_gate(tmp_path, monkeypatch):
     from lokay.proc import _common
     from lokay.config import Config
