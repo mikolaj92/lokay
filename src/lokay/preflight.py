@@ -36,8 +36,12 @@ def trusted_fala_manifest() -> Path:
 
     trusted = source or packaged
     override = os.environ.get("LOKAY_FALA_PACKAGE")
-    if override and Path(override).expanduser().resolve() != trusted.resolve():
-        raise RuntimeError("untrusted LOKAY_FALA_PACKAGE override")
+    if override:
+        selected = Path(override).expanduser().resolve()
+        canonical = {packaged.resolve(), *(set() if source is None else {source.resolve()})}
+        if selected not in canonical:
+            raise RuntimeError("untrusted LOKAY_FALA_PACKAGE override")
+        return selected
     return trusted
 
 
