@@ -55,7 +55,7 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="${LOG_DIR}/mill-${STAMP}.log"
 LATEST="${LOG_DIR}/mill-latest.log"
 
-# Refresh Lokay itself before preflight so an existing uv environment cannot
-# keep running the carrier that just reported (and was repaired for) a failure.
+# Refresh the preflight carrier before starting: uv otherwise preserves stale
+# editable installs of Lokay or Fala after either checkout was repaired.
 # One Python process owns the crash-safe OS lock across preflight and all work.
-uv run --reinstall-package lokay lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" 2>&1 | tee "${LOG}" | tee "${LATEST}"
+uv run --reinstall-package lokay --reinstall-package fala lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" 2>&1 | tee "${LOG}" | tee "${LATEST}"
