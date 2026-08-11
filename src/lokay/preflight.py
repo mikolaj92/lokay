@@ -80,6 +80,12 @@ def issue_health_lease(*, ttl_seconds: int = 7200) -> None:
     """Issue a run-scoped process-tree capability without persisting its secret."""
     import time
 
+    inherited = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    if inherited:
+        healthy, reason = health_lease_status()
+        if healthy:
+            return
+        raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
     token = secrets.token_hex(32)
     # Issuers always choose their own HOME path; the explicit path variable is
     # only an inherited locator for descendants whose HOME may differ.

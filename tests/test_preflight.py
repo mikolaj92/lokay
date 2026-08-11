@@ -6,6 +6,12 @@ from lokay import preflight
 from lokay.compose import tick
 
 
+@pytest.fixture(autouse=True)
+def _clear_health_lease_environment(monkeypatch):
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+
+
 def _config(tmp_path: Path, *, min_free_gb: float = 0) -> Path:
     path = tmp_path / "config.yaml"
     path.write_text(
@@ -192,6 +198,7 @@ def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkey
     )
     assert child.returncode == 0, child.stderr
     assert child.stdout.strip() == "mutated"
+    preflight.revoke_health_lease()
 
 
 def test_health_lease_path_survives_changed_home(tmp_path, monkeypatch):
@@ -204,6 +211,7 @@ def test_health_lease_path_survives_changed_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "child-home"))
 
     assert preflight._lease_path() == lease_path
+    preflight.revoke_health_lease()
 
 
 def test_default_health_lease_covers_long_agent_pass(tmp_path, monkeypatch):
@@ -255,6 +263,29 @@ def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):
     preflight.revoke_health_lease()
     assert not path.exists()
     assert preflight.has_health_lease() is False
+
+
+def test_child_cannot_replace_parent_health_lease(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    preflight.issue_health_lease()
+    path = tmp_path / ".lokay" / "health-lease"
+    record = json.loads(path.read_text())
+
+    preflight.issue_health_lease()
+
+    assert json.loads(path.read_text()) == record
+    assert int(record["owner_pid"]) == __import__("os").getpid()
+
+
+def test_rejected_inherited_lease_cannot_be_replaced(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+
+    with pytest.raises(RuntimeError, match="refusing to replace inherited health lease"):
+        preflight.issue_health_lease()
 
 
 def test_child_cannot_revoke_parent_health_lease(tmp_path, monkeypatch):
