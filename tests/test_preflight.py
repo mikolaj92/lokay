@@ -190,6 +190,21 @@ def test_health_lease_is_not_just_an_environment_flag(tmp_path, monkeypatch):
     assert preflight.has_health_lease() is False
 
 
+def test_rejected_inherited_lease_does_not_run_or_replace_preflight(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(
+        preflight,
+        "run_preflight",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested preflight")),
+    )
+
+    with pytest.raises(RuntimeError, match="lease=lease_unavailable"):
+        preflight.require_healthy("config.yaml")
+
+    assert __import__("os").environ["LOKAY_HEALTH_LEASE"] == "a" * 64
+
+
 def test_commit_and_push_dry_run_do_not_require_config(tmp_path, monkeypatch, capsys):
     from lokay.proc import commit_all, push_branch
     monkeypatch.delenv("LOKAY_CONFIG", raising=False)

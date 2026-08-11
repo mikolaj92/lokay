@@ -347,6 +347,13 @@ def require_healthy(config_path: str | None) -> None:
     healthy, lease_reason = health_lease_status()
     if healthy:
         return
+    # An inherited token is a capability, not a request to mint another one.
+    # If its backing record/lock cannot be validated, fail closed immediately;
+    # a nested atom must never overwrite the daemon's process-tree lease.
+    if os.environ.get("LOKAY_HEALTH_LEASE"):
+        raise RuntimeError(
+            f"preflight failed; live mutation blocked (lease={lease_reason})"
+        )
     result = run_preflight(config_path, remediate=True)
     if not result["ok"]:
         raise RuntimeError(
