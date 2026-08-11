@@ -34,6 +34,13 @@ def main(argv: list[str] | None = None) -> int:
                     max_passes=args.max_passes,
                     preflight=health,
                 )
+            elif health.get("operational_overlap"):
+                payload = err(
+                    "preflight skipped; overlapping run",
+                    health="overlap",
+                    code="overlap",
+                    preflight=health,
+                )
             elif not health.get("carrier_ok"):
                 payload = err("carrier preflight failed; self-repair and product work blocked", health="carrier_failed", preflight=health)
             else:

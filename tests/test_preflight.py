@@ -276,6 +276,8 @@ def test_singleton_contention_is_recorded_locally_without_opening_issue(monkeypa
     result = preflight.run_preflight("config.yaml", remediate=False)
 
     assert result["ok"] is False
+    assert result["health"] == "overlap"
+    assert result["operational_overlap"] is True
     assert result["local_incident"] == "incident.json"
     assert result["incident_url"] is None
     assert persisted == [result]
