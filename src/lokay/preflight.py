@@ -25,11 +25,12 @@ def trusted_fala_manifest() -> Path:
     if not packaged.is_file():
         raise RuntimeError("packaged Fala manifest unavailable")
 
-    source_candidates = (
-        here.parents[2] / "fala" / "lokay.fala-package.toml",
-        Path.cwd() / "fala" / "lokay.fala-package.toml",
-    )
-    source = next((path for path in source_candidates if path.is_file()), None)
+    # Only compare against the checkout that owns this module. An installed
+    # wheel may be started with a checkout as its working directory while that
+    # checkout is being upgraded; treating that unrelated CWD as wheel
+    # provenance makes the otherwise self-contained carrier fail transiently.
+    source_candidate = here.parents[2] / "fala" / "lokay.fala-package.toml"
+    source = source_candidate if source_candidate.is_file() else None
     if source is not None and source.read_bytes() != packaged.read_bytes():
         raise RuntimeError("canonical Fala manifests differ")
 
