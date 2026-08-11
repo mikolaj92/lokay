@@ -44,6 +44,25 @@ def _finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> d
     return {"name": name, "ok": passed, "code": code[:80], "detail": code[:80], "repaired": repaired}
 
 
+def _fala_smoke() -> tuple[bool, str]:
+    """Validate the in-process Fala API and every workflow Lokay requires."""
+    try:
+        from fala import host_run_package, sdk
+
+        package = trusted_fala_manifest()
+        manifest = tomllib.loads(package.read_text(encoding="utf-8"))
+        paths = {
+            str(item.get("id"))
+            for item in manifest.get("correlation_paths", [])
+            if isinstance(item, dict)
+        }
+        required = {"factory_pass", "issue_to_pr", "issue_triage", "pr_repair", "pr_triage"}
+        ok = callable(host_run_package) and callable(sdk.conduction) and required <= paths
+        return ok, "ok" if ok else "incompatible_api_or_manifest"
+    except (ImportError, AttributeError, OSError, RuntimeError, tomllib.TOMLDecodeError) as exc:
+        return False, f"unavailable_{type(exc).__name__}"
+
+
 def _repair_runtime_path(command: str) -> bool:
     """Expose user-installed executors when a service inherited a minimal PATH."""
     if shutil.which(command):
@@ -267,17 +286,8 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
         disk_ok = False
     findings.append(_finding("disk_headroom", disk_ok, "ok" if disk_ok else "insufficient"))
 
-    fala_error = "unavailable"
-    try:
-        from fala import host_run_package
-
-        package = trusted_fala_manifest()
-        manifest = tomllib.loads(package.read_text(encoding="utf-8"))
-        fala_ok = callable(host_run_package) and bool(manifest.get("correlation_paths"))
-    except (ImportError, OSError, RuntimeError, tomllib.TOMLDecodeError) as exc:
-        fala_ok = False
-        fala_error = f"unavailable_{type(exc).__name__}"
-    findings.append(_finding("fala_smoke", fala_ok, "ok" if fala_ok else fala_error))
+    fala_ok, fala_code = _fala_smoke()
+    findings.append(_finding("fala_smoke", fala_ok, fala_code))
 
     gh_ok = False
     if shutil.which("gh"):
@@ -287,7 +297,7 @@ def _check(config_path: str | None, repaired: set[str]) -> tuple[dict[str, Any],
             pass
     findings.append(_finding("github_authentication", gh_ok, "ok" if gh_ok else "unavailable"))
     executor_ok = not (cfg.live and cfg.executor_enabled) or shutil.which(cfg.agent_command) is not None
-    findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable"))
+    findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable", repaired="executor_path" in repaired))
 
     lock_path = cfg.state_path.parent / "mill.lock"
     singleton_ok = acquire_run_lock(lock_path)
@@ -371,6 +381,7 @@ def run_preflight(config_path: str | None, *, remediate: bool = True) -> dict[st
                 except OSError:
                     repairs.append({"kind": "create_runtime_directories", "ok": False})
             if cfg.live and cfg.executor_enabled and _repair_runtime_path(cfg.agent_command):
+                repaired.add("executor_path")
                 repairs.append({"kind": "extend_runtime_path", "ok": True})
     checked, cfg = _check(config_path, repaired)  # complete rerun, always
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])

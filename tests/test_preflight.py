@@ -190,7 +190,9 @@ def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, mo
 
     assert result["ok"] is True, result
     assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
-    assert next(x for x in result["findings"] if x["name"] == "executor_availability")["ok"] is True
+    finding = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    assert finding["ok"] is True
+    assert finding["repaired"] is True
 
 
 def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch):
@@ -213,6 +215,17 @@ def test_fala_smoke_reports_bounded_exception_class(tmp_path, monkeypatch):
     finding = next(x for x in result["findings"] if x["name"] == "fala_smoke")
     assert finding["code"] == "unavailable_RuntimeError"
     assert "secret detail" not in finding["detail"]
+
+
+def test_fala_smoke_requires_the_complete_lokay_workflow_manifest(tmp_path, monkeypatch):
+    package = tmp_path / "incomplete.toml"
+    package.write_text('[[correlation_paths]]\nid = "issue_to_pr"\n', encoding="utf-8")
+    monkeypatch.setattr(preflight, "trusted_fala_manifest", lambda: package)
+
+    ok, code = preflight._fala_smoke()
+
+    assert ok is False
+    assert code == "incompatible_api_or_manifest"
 
 
 def test_direct_live_mutation_uses_health_gate(tmp_path, monkeypatch):
