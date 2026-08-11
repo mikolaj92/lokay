@@ -37,7 +37,7 @@ state:
 
 
 def _host_ok(monkeypatch):
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/usr/bin/gh")
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
     monkeypatch.setattr(
         preflight.subprocess,
         "run",
@@ -65,7 +65,7 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
 def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: None)
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: None)
 
     result = preflight.run_preflight(str(cfg))
 
@@ -196,12 +196,137 @@ def test_unsafe_symlink_runtime_path_is_not_repaired(tmp_path, monkeypatch):
 def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
-    monkeypatch.setattr(preflight.shutil, "which", lambda command: "/gh" if command == "gh" else None)
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else None)
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is False
     assert next(x for x in result["findings"] if x["name"] == "executor_availability")["ok"] is False
     assert Path(result["local_incident"]).is_file()
+
+
+def test_preflight_repairs_service_path_for_user_installed_executor(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    user_bin = tmp_path / ".local" / "bin"
+    user_bin.mkdir(parents=True)
+    (user_bin / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    real_which = preflight.shutil.which
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
+    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, result
+    assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
+    finding = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    assert finding["ok"] is True
+    assert finding["repaired"] is True
+
+
+def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monkeypatch):
+    """Issue #14: the mill daemon runs under a minimal launchd PATH while the
+    executor (pi) lives in mise shims; preflight must expose it and release
+    the gate with both incident findings healthy."""
+    cfg = _config(tmp_path)
+    shims = tmp_path / ".local" / "share" / "mise" / "shims"
+    shims.mkdir(parents=True)
+    (shims / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    real_which = preflight.shutil.which
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
+    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, result
+    assert result["gate_released"] is True
+    assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
+    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    assert executor["ok"] is True
+    assert executor["repaired"] is True
+    # The other half of the incident pair (fala_smoke) stays healthy against
+    # the real installed Fala and canonical manifest.
+    assert next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
+
+
+def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    user_bin = home / ".local" / "bin"
+    shims = home / ".local" / "share" / "mise" / "shims"
+    user_bin.mkdir(parents=True)
+    shims.mkdir(parents=True)
+    (shims / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    assert preflight._repair_runtime_path("omp") is True
+    assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{shims}"
+
+
+def test_executor_path_repair_preserves_existing_command_precedence(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    existing_bin = tmp_path / "existing"
+    user_bin = home / ".local" / "bin"
+    existing_bin.mkdir()
+    user_bin.mkdir(parents=True)
+    (existing_bin / "gh").touch(mode=0o755)
+    (user_bin / "gh").touch(mode=0o755)
+    (user_bin / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", str(existing_bin))
+
+    assert preflight._repair_runtime_path("omp") is True
+    assert preflight.shutil.which("gh") == str(existing_bin / "gh")
+
+
+def test_executor_path_repair_with_empty_path_has_no_empty_entry(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    user_bin = home / ".local" / "bin"
+    user_bin.mkdir(parents=True)
+    (user_bin / "omp").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "")
+
+    assert preflight._repair_runtime_path("omp") is True
+    assert __import__("os").environ["PATH"] == str(user_bin)
+    assert "" not in __import__("os").environ["PATH"].split(__import__("os").pathsep)
+
+
+def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".local" / "bin").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    assert preflight._repair_runtime_path("missing-executor") is False
+    assert __import__("os").environ["PATH"] == "/usr/bin:/bin"
+
+
+def test_fala_smoke_reports_bounded_exception_class(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    _host_ok(monkeypatch)
+    monkeypatch.setattr(preflight, "trusted_fala_manifest", lambda: (_ for _ in ()).throw(RuntimeError("secret detail")))
+
+    result = preflight.run_preflight(str(cfg), remediate=False)
+
+    finding = next(x for x in result["findings"] if x["name"] == "fala_smoke")
+    assert finding["code"] == "unavailable_RuntimeError"
+    assert "secret detail" not in finding["detail"]
+
+
+def test_fala_smoke_requires_the_complete_lokay_workflow_manifest(tmp_path, monkeypatch):
+    package = tmp_path / "incomplete.toml"
+    package.write_text('[[correlation_paths]]\nid = "issue_to_pr"\n', encoding="utf-8")
+    monkeypatch.setattr(preflight, "trusted_fala_manifest", lambda: package)
+
+    ok, code = preflight._fala_smoke()
+
+    assert ok is False
+    assert code == "incompatible_api_or_manifest"
 
 
 def test_direct_live_mutation_uses_health_gate(tmp_path, monkeypatch):
@@ -444,7 +569,7 @@ def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     monkeypatch.setattr(
         preflight.shutil,
         "which",
-        lambda command: None if command == "omp" else f"/usr/bin/{command}",
+        lambda command, **kwargs: None if command == "omp" else f"/usr/bin/{command}",
     )
     issued = []
     monkeypatch.setattr(preflight, "issue_health_lease", lambda: issued.append(True))
