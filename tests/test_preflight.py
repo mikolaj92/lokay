@@ -257,6 +257,38 @@ def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monk
     assert next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
 
 
+def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypatch):
+    """Issue #15: find an executor installed by Pi's agent runtime."""
+    cfg = _config(tmp_path)
+    cfg.write_text(cfg.read_text().replace("command: omp", "command: pi"))
+    agent_bin = tmp_path / ".pi" / "agent" / "bin"
+    agent_bin.mkdir(parents=True)
+    (agent_bin / "pi").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    real_which = preflight.shutil.which
+    monkeypatch.setattr(
+        preflight.shutil,
+        "which",
+        lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs),
+    )
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda *a, **kw: type("C", (), {"returncode": 0})(),
+    )
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, result
+    assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{agent_bin}"
+    assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
+    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    assert executor["ok"] is True
+    assert executor["repaired"] is True
+
+
 def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, monkeypatch):
     home = tmp_path / "home"
     user_bin = home / ".local" / "bin"

@@ -67,7 +67,11 @@ def _repair_runtime_path(command: str) -> bool:
     """Expose user-installed executors when a service inherited a minimal PATH."""
     if shutil.which(command):
         return False
-    candidates = (Path.home() / ".local" / "bin", Path.home() / ".local" / "share" / "mise" / "shims")
+    candidates = (
+        Path.home() / ".local" / "bin",
+        Path.home() / ".local" / "share" / "mise" / "shims",
+        Path.home() / ".pi" / "agent" / "bin",
+    )
     executor_dir = next(
         (
             path
