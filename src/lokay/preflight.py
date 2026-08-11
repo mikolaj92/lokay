@@ -483,18 +483,23 @@ def run_preflight(
         # validation code. Suppress only that known recursive incident; every
         # other validation failure must still be reported.
         failed_findings = [x for x in checked["findings"] if not x["ok"]]
-        recursive_singleton = (
-            os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1"
-            and len(failed_findings) == 1
+        singleton_only = (
+            len(failed_findings) == 1
             and failed_findings[0]["name"] == "singleton_overlap"
             and failed_findings[0]["code"] == "contended"
+        )
+        recursive_singleton = (
+            os.environ.get("LOKAY_SELF_REPAIR_VALIDATION") == "1"
+            and singleton_only
         )
         if recursive_singleton:
             result.update(local_incident=None, incident_url=None)
         else:
             try: result["local_incident"] = str(_persist_incident(cfg, result))
             except OSError: result["local_incident"] = None
-            result["incident_url"] = _github_incident(result)
+            # Contention is an operational overlap, not a source repair task.
+            # Keep local evidence but do not feed it back into issue_to_pr.
+            result["incident_url"] = None if singleton_only else _github_incident(result)
     return result
 
 
