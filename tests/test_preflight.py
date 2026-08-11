@@ -211,7 +211,7 @@ def test_rejected_inherited_lease_does_not_run_or_replace_preflight(tmp_path, mo
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested preflight")),
     )
 
-    with pytest.raises(RuntimeError, match="lease=lease_unavailable"):
+    with pytest.raises(RuntimeError, match="lease=lease_unavailable_"):
         preflight.require_healthy("config.yaml")
 
     assert __import__("os").environ["LOKAY_HEALTH_LEASE"] == "a" * 64

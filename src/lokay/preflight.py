@@ -188,8 +188,8 @@ def health_lease_status() -> tuple[bool, str]:
             if not passed:
                 return False, reason
         return True, "ok"
-    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-        return False, "lease_unavailable"
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        return False, f"lease_unavailable_{type(exc).__name__}"
 
 
 def has_health_lease() -> bool:
