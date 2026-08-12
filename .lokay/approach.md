@@ -1,47 +1,31 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=serial-step-3 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=66 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: serial step 3 — plan atom before run_agent
+Issue: #66 — Preflight failure 6bbe372b6ef4befe
 
 ## Goal
 
-Before the coding `run_agent` in `issue_to_pr`, write a short deterministic approach plan onto the branch (`.lokay/approach.md`) so later `pr_review` can compare the diff to the plan as soft evidence. Trust-with-evidence for intentional issues — not a human approval gate and not NEEDS_HUMAN by default.
+<!-- lokay-preflight:6bbe372b6ef4befe -->
+Bounded checks failed: github_git_transport
 
 ## Files likely touched
 
-- `src/lokay/approach_plan.py`
-- `src/lokay/proc/plan_issue.py`
-- `src/lokay/fala_organ.py`
-- `src/lokay/graph_run.py`
-- `fala/lokay.fala-package.toml`
-- `src/lokay/data/lokay.fala-package.toml`
-- `src/lokay/pr_review.py`
-- `src/lokay/proc/pr_review.py`
-- `src/lokay/prompts.py`
-- `tests/test_plan_issue.py`
-- `tests/test_graph.py`
-- `docs/GRAPH.md`
-- `docs/AUTONOMY.md`
-- `docs/WORKING.md`
-- `docs/UNIX.md`
+- `src/lokay/preflight.py`
+- `tests/test_git_transport_preflight.py`
 
 ## Test plan
 
-- Hermetic atom tests for deterministic extraction + live write
-- Graph order: `plan_issue` before `run_agent` in `issue_to_pr`
-- Soft approach signal in `review_prompt` (missing = nit only)
-- Full `uv run pytest -q` green
+- Exercise transport validation, including transient failure retry and bounded persistent failure
 
 ## Non-goals
 
-- Merge-disabled → waiting health fix (serial step 4)
-- Live smoke
-- Parallel agents
-- Wiring `plan_issue` into `pr_repair` (optional; deferred)
+- Weakening canonical SSH-origin validation or allowing interactive authentication
+- Increasing the existing 20-second transport-check budget
 
 ## Notes
 
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
+- No explicit file paths in issue; infer from repo inspection.

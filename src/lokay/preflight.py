@@ -106,18 +106,25 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
     probe = next(
         repo for repo in cfg.active_repos() if (repo.clone_path / ".git").exists()
     )
-    try:
-        authenticated = subprocess.run(
-            ["git", "-C", str(probe.clone_path), "ls-remote", "--exit-code", "origin", "HEAD"],
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=20,
-            check=False,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"},
-        ).returncode == 0
-    except (OSError, subprocess.TimeoutExpired):
-        authenticated = False
+    authenticated = False
+    # Keep the original 20-second bound, but do not stop the mill for a single
+    # transient SSH/network failure.  Both attempts remain non-interactive and
+    # must prove access to the canonical origin.
+    for _attempt in range(2):
+        try:
+            authenticated = subprocess.run(
+                ["git", "-C", str(probe.clone_path), "ls-remote", "--exit-code", "origin", "HEAD"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "ssh -o BatchMode=yes"},
+            ).returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            authenticated = False
+        if authenticated:
+            break
     return authenticated, "ok" if authenticated else "ssh_auth_unavailable"
 
 
