@@ -6,8 +6,11 @@ without freezing clean repos behind a busy peer, and without treating honest wai
 as recovery stalls.
 
 Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
-here is additive (tests / fixtures / docs / config profile). Tick scheduling may
-move into Fala later; the promises below are the public surface that must remain.
+here is additive (tests / fixtures / docs / config profile). Fleet pass order
+lives in parent Fala ``factory_pass`` (`survey_prs → survey_inbox → survey_ready
+→ plan → triage → conflicts → closeout → select → implement → health → receipt`).
+`compose_tick` is a thin in-process bridge for canaries/CLI — not the multi-repo
+brain. The promises below are the public surface that must remain.
 
 ## Product law: trust the issue author
 

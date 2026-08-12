@@ -147,7 +147,16 @@ May no-op **only** after a full multi-repo survey with **no** remaining actionab
 
 See [`GRAPH.md`](GRAPH.md).
 
-- `factory_pass` is the parent Fala run used by the mill; it composes the smaller workflow Falas through a separate journal boundary.
+**Law:** order lives in Fala; work is small Unix one-job processes; no Hermes
+Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
+
+- `factory_pass` is the parent Fala run used by the mill. It conducts
+  `factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
+  dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
+  dispatch_implement → compute_health → record_pass`. Dispatch atoms start the
+  smaller workflow Falas through a separate journal boundary.
+  `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy
+  canaries — not the multi-repo brain.
 - `pr_review`: structured LLM gate before auto-merge when `merge.require_llm_review`.
   Comments carry a durable `<!-- lokay-review head=… -->` marker for idempotency.
 - Env knobs (see `config.example.yaml`): `LOKAY_MERGE_ENABLED`, `LOKAY_REQUIRE_CHECKS`,

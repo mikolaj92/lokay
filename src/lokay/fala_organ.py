@@ -64,23 +64,36 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         assign_issue,
         close_issue,
         commit_all,
+        closeout_prs,
+        compute_health,
+        dispatch_implement,
+        dispatch_triage,
+        factory_begin,
         factory_tick,
         get_issue,
         list_prs,
         make_branch,
+        plan_pass,
         pr_checks,
         pr_create,
         pr_label,
         pr_merge,
         pr_review,
         push_branch,
+        record_pass,
         recovery_begin,
         recovery_incident,
         recovery_mill,
         recovery_observe,
         recovery_record,
         recovery_run_self_repair,
+        resolve_conflicts,
         run_agent,
+        select_implement,
+        survey_inbox,
+        survey_prs,
+        survey_ready,
+        survey_repos,
         triage_issue,
         intake_issue,
         issue_split,
@@ -175,10 +188,100 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
 
     if atom == "factory_tick":
-        # Domain health (work_remaining/stall) is a successful parent effector
-        # result, not a corrupt Fala execution. Preserve the complete envelope
-        # and let the parent path normalizer restore its public ok/error fields.
+        # Legacy thin bridge (in-process spine). Parent factory_pass no longer
+        # conducts this node — prefer the survey→plan→dispatch atoms below.
         return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
+
+    if atom == "factory_begin":
+        return _run_atom_main(factory_begin.main, [*cfg, *live])
+
+    if atom == "survey_repos":
+        # Legacy bridge atom (not in parent factory_pass graph).
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_repos.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "survey_prs":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_prs.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "survey_inbox":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_inbox.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "survey_ready":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_ready.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "plan_pass":
+        pass_dir = str(
+            up.get("factory_begin", {}).get("pass_dir")
+            or up.get("survey_ready", {}).get("pass_dir")
+            or up.get("survey_repos", {}).get("pass_dir")
+            or ""
+        )
+        assert pass_dir
+        return _run_atom_main(plan_pass.main, [*cfg, *live, "--pass-dir", pass_dir])
+
+    if atom == "dispatch_triage":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            dispatch_triage.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "resolve_conflicts":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            resolve_conflicts.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "closeout_prs":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            closeout_prs.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "select_implement":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            select_implement.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "dispatch_implement":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            dispatch_implement.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "compute_health":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            compute_health.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "record_pass":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        # Domain health (stall/work_remaining) is successful conduction; the
+        # tick envelope inside may still set ok=false for the mill.
+        return _run_atom_main(record_pass.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "self_repair_prepare":
         fingerprint = str(inputs.get("fingerprint") or "")

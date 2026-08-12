@@ -7,7 +7,16 @@
 - See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
-- Do **not** grow `compose/*` with GitHub/git/agent logic beyond wiring.
+- **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
+  (`factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
+  dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
+  dispatch_implement → compute_health → record_pass`), not a fat
+  `compose/tick.py`.
+- **Trust intentional issues.** Owner / configured-assignee tickets are
+  purposeful; no new human-approval gates in the pass spine. Intake CLOSE only
+  for clear obsolete / wrong-shape / superseded. Human writes → mill delivers.
+- Do **not** grow `compose/*` with GitHub/git/agent / fleet-scheduling logic
+  beyond CLI wiring + `graph_run.run_path`.
 - JSON on stdout (`envelope.ok` / `envelope.err`).
 
 ## Hard bans
@@ -16,6 +25,8 @@
 - **No** canary-only “fixes” (`LOKAY_CANARY.md` style).
 - **No** bare `python3` for product CLI — use **`uv run`**.
 - **No** Hermes Kanban as execution ledger.
+- **No** re-implementing `factory_pass` order inside Python composers.
+- **No** new human-approval / “distrust every ticket” gates in the pass spine.
 - **No** hidden SPA / JSON+client-render chrome — server HTML fragments if UI exists (`docs/HTMX.md`).
 - **No** app-wide Alpine store / server-state mirrors — local UI only (`docs/ALPINE.md`).
 - **No** CDN forks for Basecoat/HTMX/Alpine — product_shell + `/static/platform` if auth UI exists (`docs/PLATFORM_UI.md`).

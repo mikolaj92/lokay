@@ -37,19 +37,52 @@ incidents reuse the preflight cooldown ledger (`github.incident_cooldown_hours`)
 
 ### `factory_pass` (parent)
 
+**Order lives in Fala.** Fleet scheduling is not a fat Python tick. The parent
+path conducts one-job atoms; child workflow Falas are started from dispatch
+atoms via `run_path`.
+
 ```text
-factory_tick
-  ├─→ issue_triage child Fala
-  ├─→ pr_repair child Fala
-  ├─→ pr_triage child Fala
-  └─→ issue_to_pr child Fala
+factory_begin
+  → survey_prs
+    → survey_inbox
+      → survey_ready
+        → plan_pass
+          → dispatch_triage          → issue_triage child Fala
+            → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
+              → closeout_prs         → pr_repair / pr_triage child Falas
+                → select_implement
+                  → dispatch_implement → issue_to_pr child Fala
+                    → compute_health
+                      → record_pass    → last-pass.json
 ```
 
-The mill invokes this parent path. `factory_tick` owns one bounded multi-repo
-pass and starts the smaller paths through `run_path`; the parent journal is
-`~/.lokay/fala/factory/state.sqlite`, while child paths use
-`~/.lokay/fala/state.sqlite`. This follows Fala's subprocess/separate-journal
-parent-child boundary.
+| Atom | One job |
+| --- | --- |
+| `factory_begin` | preflight + pass workspace + budgets |
+| `survey_prs` | list open AI PRs for all repos |
+| `survey_inbox` | list undecided inbox issues |
+| `survey_ready` | list ai:ready; unready issues covered by open AI PRs |
+| `plan_pass` | triage targets + closeout set (per-repo PR-first) |
+| `dispatch_triage` | run planned `issue_triage` children |
+| `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
+| `closeout_prs` | checks / repair / merge / wait remaining open AI PRs |
+| `select_implement` | clean repos eligible for up to K `issue_to_pr` |
+| `dispatch_implement` | intake gate + `issue_to_pr` (serial within repo) |
+| `compute_health` | remaining counters + honest mill health |
+| `record_pass` | write `last-pass.json` + terminal tick envelope |
+
+**Trust intentional issues:** fleet flow assumes issues from the repo owner /
+configured assignee are purposeful. Do not invent new human-approval gates in
+the pass spine. Intake `CLOSE` remains for clear obsolete / wrong-shape /
+superseded cases only — never bias toward “distrust every ticket.” Goal:
+human writes issue → mill delivers.
+
+The mill invokes this parent path (`compose_factory_pass` → `run_path`). Parent
+journal: `~/.lokay/fala/factory/state.sqlite`. Child paths:
+`~/.lokay/fala/state.sqlite`. Python `compose/*` may validate CLI contracts and
+call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
+grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
+the ledger for step order.
 
 ### `self_repair` (emergency only)
 
@@ -117,7 +150,7 @@ triage/intake/split mutations skip a repo that still has actionable open AI PRs
 (or a failed PR survey for that repo); other clean repos continue. Intake still
 runs inside `issue_triage` whenever triage is allowed; the mill also re-runs
 `intake_issue` with `--require-ready` before every `issue_to_pr`. Up to K
-`issue_to_pr` child runs per `factory_tick` across different clean repos
+`issue_to_pr` child runs per `factory_pass` across different clean repos
 (`limits.max_issue_to_pr_per_pass`).
 
 ### `pr_repair` (red checks on open ai/fix PR)
@@ -147,7 +180,7 @@ Soft documentation nits must not route to `ai:needs-review`.
 Config: `merge.require_llm_review` (default true), `merge.require_checks` (default false).
 Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
-Tick also handles **merge conflicts** outside this path: `mergeable=CONFLICTING|DIRTY`
+`resolve_conflicts` handles **merge conflicts**: `mergeable=CONFLICTING|DIRTY`
 → `lokay-pr-close` + re-label linked issue `ai:ready` so the next pass re-runs
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 

@@ -1,8 +1,8 @@
 """Parent Fala composition for one complete Lokay factory pass.
 
-The parent owns top-level pass ordering and invokes ``factory_tick`` as a
-subprocess effector.  The tick selects work and starts the existing child Fala
-paths, each in the separate child journal configured by ``graph_run``.
+The parent path ``factory_pass`` owns pass order (survey → plan → triage →
+closeout → select → implement → health → receipt). Python only validates the
+CLI contract and invokes ``graph_run.run_path``.
 """
 
 from __future__ import annotations

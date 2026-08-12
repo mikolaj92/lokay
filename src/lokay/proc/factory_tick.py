@@ -1,4 +1,9 @@
-"""Atomic parent-Fala effector: execute one complete Lokay tick policy."""
+"""Thin bridge atom: in-process factory-pass spine (not in parent Fala graph).
+
+Parent ``factory_pass`` conducts survey/plan/dispatch atoms directly. This CLI
+remains for ``lokay-factory-tick`` and any caller that wants one process that
+runs the same spine without hosting Fala.
+"""
 
 from __future__ import annotations
 

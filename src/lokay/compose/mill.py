@@ -1,8 +1,8 @@
-"""Composer: run ticks until true idle or budget exhausted.
+"""Composer: run factory_pass until true idle or budget exhausted.
 
-Continuous miller for the factory: keep calling compose_tick until idle,
-stall, or max_passes. Does not sleep/poll forever — one fire runs a bounded
-pass budget (external schedulers re-invoke mill/tick).
+Continuous miller for the factory: keep calling compose_factory_pass (parent
+Fala) until idle, stall, or max_passes. Does not sleep/poll forever — one fire
+runs a bounded pass budget (external schedulers re-invoke mill).
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def compose_mill(
     try:
         if preflight is None and live:
             # A direct lokay-mill invocation owns preflight and must delegate its
-            # result through the parent Fala subprocess. Otherwise factory_tick
+            # result through the parent Fala subprocess. Otherwise factory_begin
             # repeats preflight and reports this process's lock as contention.
             preflight = run_preflight(config_path, remediate=True, issue_lease=True)
             owns_lease = not inherited_lease and bool(

@@ -6,8 +6,10 @@ eligible for `issue_to_pr`. Pure rules first; no coding harness.
 Product law: humans author intentional issues; the mill consumes. Trust the
 operator/assignee — prefer READY+implement autonomy; do not invent distrustful
 human gates. CLOSE / SPLIT / READY+implement are the default exits.
-NEEDS_HUMAN is a rare residual after rules fail closed — never the escape
-hatch for oversized work that can be auto-split.
+CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
+bias toward distrusting every ticket. NEEDS_HUMAN is a rare residual after
+rules fail closed — never the escape hatch for oversized work that can be
+auto-split.
 """
 
 from __future__ import annotations
