@@ -29,9 +29,11 @@ confirm fingerprints only for true product-mill / carrier-class failures
 Mill envelopes (and their run-tail events) with `waiting`, `repairing`, `idle`,
 `progress`, `offline`, or `overlap` never confirm a stall — so review limbo,
 pending CI, and `ai:needs-review` parked PRs cannot steal cycles into
-`recovery_run_self_repair`. Soft rows dilute the 4-of-5 window; they do not fill
-it. `recovery_incident` is skipped until quorum; incidents reuse the preflight
-cooldown ledger (`github.incident_cooldown_hours`).
+`recovery_run_self_repair`. merge_policy `waiting` / `repair` / `needs_review`
+reasons (and nested `pr_merge` soft skips) are never stall evidence either —
+trusted auto-merge decisions stay product-side. Soft rows dilute the 4-of-5
+window; they do not fill it. `recovery_incident` is skipped until quorum;
+incidents reuse the preflight cooldown ledger (`github.incident_cooldown_hours`).
 
 ### `factory_pass` (parent)
 

@@ -177,6 +177,130 @@ def test_pending_ci_and_needs_review_triage_events_do_not_fingerprint(tmp_path):
     assert row["health"] == "waiting"
 
 
+def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
+    """#56 waiting/repair/needs-review reasons must not fill quorum under hard mill."""
+    from lokay.merge_policy import decide_auto_merge
+
+    # Sanity: merge_policy matrix unchanged by recovery work.
+    pending = decide_auto_merge(
+        merge_enabled=True,
+        checks={"status": "pending"},
+        review={"merge_ok": True, "decision": {"verdict": "approve", "secrets": False}},
+    )
+    assert pending.action == "waiting" and pending.reason == "checks_pending"
+    repair = decide_auto_merge(
+        merge_enabled=True,
+        checks={"status": "failed"},
+        review={"merge_ok": True, "decision": {"verdict": "approve", "secrets": False}},
+    )
+    assert repair.action == "repair" and repair.repairable is True
+    parked = decide_auto_merge(
+        merge_enabled=True,
+        checks={"status": "passed", "merge_ok": True},
+        review={
+            "merge_ok": False,
+            "escalated": True,
+            "reason": "llm_review_escalated_needs_review",
+            "decision": {"verdict": "request_changes", "secrets": False},
+        },
+    )
+    assert parked.needs_review is True
+
+    state = tmp_path / "state.jsonl"
+    # ok:false with nested soft merge_policy reasons only (no hard stderr/error).
+    soft_rows = [
+        {
+            "kind": "pr_triage",
+            "ok": False,
+            "reason": "checks_pending",
+            "waiting": True,
+            "terminal": {
+                "pr_merge": {
+                    "ok": True,
+                    "skipped": True,
+                    "waiting": True,
+                    "reason": "checks_pending",
+                    "merge_policy": {
+                        "action": "waiting",
+                        "reason": "checks_pending",
+                        "waiting": True,
+                    },
+                }
+            },
+        },
+        {
+            "kind": "pr_triage",
+            "ok": False,
+            "reason": "llm_review_requested_changes",
+            "repairable": True,
+            "terminal": {
+                "pr_merge": {
+                    "ok": True,
+                    "skipped": True,
+                    "repairable": True,
+                    "reason": "llm_review_requested_changes",
+                }
+            },
+        },
+        {
+            "kind": "pr_triage",
+            "ok": False,
+            "reason": "llm_review_escalated_needs_review",
+            "needs_review": True,
+            "escalated": True,
+            "terminal": {
+                "pr_merge": {
+                    "ok": True,
+                    "skipped": True,
+                    "needs_review": True,
+                    "reason": "llm_review_escalated_needs_review",
+                }
+            },
+        },
+    ]
+    state.write_text(
+        "\n".join(json.dumps(row) for row in soft_rows) + "\n",
+        encoding="utf-8",
+    )
+    history = history_path_for(state)
+    soft_tokens = (
+        "checks_pending",
+        "llm_review_requested_changes",
+        "llm_review_escalated_needs_review",
+        "checks_failed",
+    )
+    for mill_health in ("stall", "budget_exhausted", "failed"):
+        observation = observe_run(
+            state_path=state,
+            state_offset=0,
+            mill={
+                "ok": False,
+                "health": mill_health,
+                "error": f"mill {mill_health}: actionable work remains",
+                "progress": 0,
+            },
+        )
+        evidence = str(observation.get("evidence") or "")
+        assert all(token not in evidence for token in soft_tokens), (
+            mill_health,
+            evidence,
+        )
+        # Soft-only event text must not dominate; envelope may still fingerprint.
+        if observation["fingerprint"] is not None:
+            assert mill_health in evidence or "actionable work" in evidence
+
+    # Five soft-reason-only observations must not confirm self-repair quorum.
+    for _ in range(5):
+        observation = observe_run(
+            state_path=state,
+            state_offset=0,
+            # Soft mill health is the honest #56 product wait path.
+            mill={"ok": True, "health": "waiting", "progress": 0},
+        )
+        assert observation["fingerprint"] is None
+        assert record_observation(history, observation) is None
+
+
 def test_event_failures_under_waiting_or_repairing_do_not_fingerprint(tmp_path):
     """Per-event pr_repair/issue_to_pr failures during soft wait must not escalate."""
     state = tmp_path / "state.jsonl"
