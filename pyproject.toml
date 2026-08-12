@@ -84,6 +84,7 @@ lokay-pr-triage = "lokay.compose.pr_triage:main"
 lokay-tick = "lokay.compose.tick:main"
 lokay-mill = "lokay.compose.mill:main"
 lokay-status = "lokay.compose.status:main"
+lokay-wake = "lokay.proc.wake:main"
 
 [build-system]
 requires = ["hatchling"]

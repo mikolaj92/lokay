@@ -53,6 +53,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-compute-health` | remaining + honest mill health |
 | `lokay-record-pass` | write last-pass.json receipt |
 | `lokay-mill` / `lokay-status` | continuous factory |
+| `lokay-wake` | event wake: reason → `issue_triage` / `pr_triage` / bounded `factory_pass` |
 | `lokay status --human` | residual human mailbox (exception report; not a mill brake) |
 
 **Factory-pass law:** Fala owns pass order (`factory_pass` conduction). Atoms
