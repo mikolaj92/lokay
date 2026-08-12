@@ -34,6 +34,42 @@ for oversized work (auto-`SPLIT`) or obsolete playbooks (`CLOSE`).
 Residual mailbox (`lokay status --human`) is exception reporting, not a
 workflow step and not a mill brake.
 
+## Issue ledger = chat with the mill
+
+The issue is the conversation. Each major Fala/mill stage updates **one
+exclusive ledger label** (optional short receipt via `lokay-stage-label
+--receipt`) so an operator can read state without chat.
+
+| Stage | Label | Set by |
+| --- | --- | --- |
+| ready | `ai:ready` | intake READY (existing) |
+| implementing | `ai:in-progress` | `issue_to_pr` → `stage_implementing` |
+| pr-open | `ai:pr-open` | after `pr_create` / survey unready-with-PR |
+| ci-waiting | `ai:ci-waiting` | closeout when checks `pending` |
+| repairing | `ai:repairing` | `pr_repair` → `stage_repairing` |
+| clear | (removes ledger labels) | `pr_triage` → `stage_clear` then `close_issue` |
+
+Reuse (not new stages): `ai:blocked`, `ai:needs-feedback`, `ai:needs-review`,
+`ai:tracker`. PR chrome `ai:pr-opened` / `ai:generated` stay on the **PR**, not
+the issue ledger. New issue labels are only `ai:pr-open`, `ai:ci-waiting`,
+`ai:repairing` (≤6).
+
+```mermaid
+stateDiagram-v2
+  [*] --> ready: intake READY
+  ready --> implementing: issue_to_pr
+  implementing --> pr_open: pr_create
+  pr_open --> ci_waiting: checks pending
+  ci_waiting --> repairing: checks failed
+  repairing --> ci_waiting: repair pushed
+  ci_waiting --> [*]: merge + close
+  pr_open --> [*]: merge + close
+  ready --> [*]: CLOSE / conflict re-ready loop
+```
+
+Atom: `lokay-stage-label --stage <name>`. Fala owns flow; the atom does one
+exclusive swap.
+
 ## Product promises (mill pass)
 
 1. **Per-repo PR-first** — An actionable `ai/fix/*` PR in repo A does **not**

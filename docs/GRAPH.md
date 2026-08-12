@@ -116,14 +116,16 @@ the stale daemon process.
 ```text
 get_issue
   ├─→ assign_issue
+  ├─→ stage_implementing   ← issue ledger: ai:in-progress
   └─→ make_branch
         └─→ worktree_add
               └─→ run_agent     ← only non-deterministic node
                     └─→ commit_all
                           └─→ push
                                 └─→ pr_create
-                                      └─→ list_prs
-                                            └─→ pr_label
+                                      └─→ stage_pr_open   ← issue ledger: ai:pr-open
+                                            └─→ list_prs
+                                                  └─→ pr_label
 ```
 
 ### `issue_triage` (inbox → labels / split)
@@ -160,10 +162,11 @@ ticket). K is an optional pass budget, not concurrent worktrees/Pi/tmux.
 
 ```text
 pr_checks
-  └─→ worktree_add
-        └─→ run_agent   ← repair prompt (only non-deterministic node)
-              └─→ commit_all
-                    └─→ push
+  └─→ stage_repairing   ← issue ledger: ai:repairing
+        └─→ worktree_add
+              └─→ run_agent   ← repair prompt (only non-deterministic node)
+                    └─→ commit_all
+                          └─→ push
 ```
 
 ### `pr_triage` (merge policy → close issue)
@@ -172,7 +175,8 @@ pr_checks
 pr_checks
   └─→ pr_review    ← structured harness review via run_agent (fail closed)
         └─→ pr_merge     ← skipped when checks not mergeable / review not approve / merge disabled
-              └─→ close_issue   ← issue# from ai/fix/N-* branch when known
+              └─→ stage_clear   ← clear issue ledger labels after merge
+                    └─→ close_issue   ← issue# from ai/fix/N-* branch when known
 ```
 
 `pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.

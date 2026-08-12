@@ -157,12 +157,18 @@ def run_path(
             "record_pass",
         ),
         "issue_to_pr": (
-            "get_issue", "assign_issue", "make_branch", "worktree_add",
-            "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label",
+            "get_issue", "assign_issue", "stage_implementing", "make_branch",
+            "worktree_add", "run_agent", "commit_all", "push", "pr_create",
+            "stage_pr_open", "list_prs", "pr_label",
         ),
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
-        "pr_repair": ("pr_checks", "worktree_add", "run_agent", "commit_all", "push"),
-        "pr_triage": ("pr_checks", "pr_review", "pr_merge", "close_issue"),
+        "pr_repair": (
+            "pr_checks", "stage_repairing", "worktree_add", "run_agent",
+            "commit_all", "push",
+        ),
+        "pr_triage": (
+            "pr_checks", "pr_review", "pr_merge", "stage_clear", "close_issue",
+        ),
         "self_repair": (
             "self_repair_prepare", "self_repair_run_agent", "self_repair_validate",
             "self_repair_commit", "self_repair_push_main", "self_repair_activate",

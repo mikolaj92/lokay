@@ -13,8 +13,8 @@ from lokay.passkit.working import (
     save_begin_working,
     stuck_path_of,
 )
-from lokay.proc import label_issue as p_label
 from lokay.proc import pr_close as p_pr_close
+from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 
@@ -28,7 +28,6 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
     stuck = dict(working.get("stuck") or {})
     stuck_path = stuck_path_of(begin)
     branch_prefix = str(begin.get("branch_prefix") or "ai/fix/")
-    ready_label = str(begin.get("ready_label") or "ai:ready")
     prs_by_repo: dict[str, list[dict[str, Any]]] = {
         k: list(v) for k, v in dict(working.get("prs_by_repo") or {}).items()
     }
@@ -106,7 +105,7 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
                 clear_issue(stuck, repo_name, issue_n)
                 save_stuck(stuck_path, stuck)
                 ready_again = run_proc(
-                    p_label.main,
+                    p_stage.main,
                     [
                         *cfg_flag,
                         *live_flag,
@@ -114,8 +113,8 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
                         repo_name,
                         "--issue",
                         str(issue_n),
-                        "--label",
-                        ready_label,
+                        "--stage",
+                        "ready",
                     ],
                 )
                 actions.append(
@@ -124,6 +123,7 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
                         "repo": repo_name,
                         "issue": issue_n,
                         "pr": pr_num,
+                        "stage": "ready",
                         **ready_again,
                     }
                 )

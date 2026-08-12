@@ -91,6 +91,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         run_agent,
         select_implement,
         queue_conflict,
+        stage_label,
         survey_inbox,
         survey_prs,
         survey_ready,
@@ -552,6 +553,53 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             ],
         )
 
+    if atom == "stage_label":
+        stage = str(inputs.get("stage") or "").strip().lower()
+        if not stage:
+            return {"ok": False, "error": "stage_label requires config/input stage"}
+        if issue_number is None and branch:
+            prefix = str(inputs.get("branch_prefix") or "ai/fix")
+            issue_number = issue_number_from_branch(branch, branch_prefix=prefix)
+        if issue_number is None:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "issue_number_unknown",
+                "stage": stage,
+                "branch": branch,
+                "pr": pr_number,
+            }
+        # clear/merged only after a real (or planned) merge in pr_triage.
+        if stage in {"clear", "merged"}:
+            merged = up.get("pr_merge") or {}
+            if merged.get("skipped") or not (
+                merged.get("merged") or merged.get("planned")
+            ):
+                return {
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "pr_not_merged",
+                    "stage": stage,
+                    "repo": repo,
+                    "pr": pr_number,
+                }
+        argv = [
+            *cfg,
+            *live,
+            "--repo",
+            repo,
+            "--issue",
+            str(issue_number),
+            "--stage",
+            stage,
+        ]
+        if inputs.get("receipt"):
+            argv.append("--receipt")
+        comment = str(inputs.get("comment") or "").strip()
+        if comment:
+            argv.extend(["--comment", comment])
+        return _run_atom_main(stage_label.main, argv)
+
     if atom == "assign_issue":
         assert repo and issue_number is not None
         return _run_atom_main(
@@ -746,6 +794,11 @@ def main() -> int:
         for key, value in sdk.input_values(manifest).items():
             if key not in sdk.INJECTED_INPUT_KEYS and key not in inputs:
                 inputs[key] = value
+        # Effector config may carry stage/receipt for lokay-stage-label nodes.
+        for key, value in config.items():
+            if key == "atom":
+                continue
+            inputs.setdefault(key, value)
         up = _conduction_values(manifest)
         result = _handle(atom, inputs, up)
         # fail-closed: atom ok=false or exit!=0

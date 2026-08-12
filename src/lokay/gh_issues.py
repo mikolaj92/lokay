@@ -18,7 +18,10 @@ _LABEL_META: dict[str, tuple[str, str]] = {
     "ai:needs-review": ("D93F0B", "LLM PR review requests human judgment"),
     "ai:request-changes": ("FBCA04", "LLM PR review requested changes"),
     "ai:pr-opened": ("5319E7", "AI-generated PR opened"),
-    "ai:in-progress": ("1D76DB", "AI agent work in progress"),
+    "ai:in-progress": ("1D76DB", "Issue ledger: implementing (issue_to_pr)"),
+    "ai:pr-open": ("5319E7", "Issue ledger: PR open for this issue"),
+    "ai:ci-waiting": ("FBCA04", "Issue ledger: waiting on CI checks"),
+    "ai:repairing": ("D93F0B", "Issue ledger: PR repair in flight"),
     "frozen": ("BFD4F2", "Intentionally paused for now"),
     "ai:frozen": ("BFD4F2", "Intentionally paused for now"),
 }
