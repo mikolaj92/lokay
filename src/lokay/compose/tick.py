@@ -23,7 +23,9 @@ from lokay.proc.plan_pass import run_plan_pass
 from lokay.proc.record_pass import run_record_pass
 from lokay.proc.resolve_conflicts import run_resolve_conflicts
 from lokay.proc.select_implement import run_select_implement
-from lokay.proc.survey_repos import run_survey_repos
+from lokay.proc.survey_inbox import run_survey_inbox
+from lokay.proc.survey_prs import run_survey_prs
+from lokay.proc.survey_ready import run_survey_ready
 from lokay.passkit import io as pass_io
 
 # Re-exports for tests that still patch tick.* symbols while the spine migrates.
@@ -59,13 +61,17 @@ def _bind_test_patches() -> None:
     import lokay.proc.factory_begin as factory_begin
     import lokay.proc.plan_pass as plan_pass
     import lokay.proc.resolve_conflicts as resolve_conflicts
-    import lokay.proc.survey_repos as survey_repos
+    import lokay.proc.survey_inbox as survey_inbox
+    import lokay.proc.survey_prs as survey_prs
+    import lokay.proc.survey_ready as survey_ready
 
     factory_begin.run_preflight = run_preflight
     factory_begin.health_lease_status = health_lease_status
     factory_begin.load_cfg = load_cfg
-    survey_repos.run_proc = _run
-    survey_repos.is_manual_pr = _is_manual_pr
+    survey_prs.run_proc = _run
+    survey_prs.is_manual_pr = _is_manual_pr
+    survey_inbox.run_proc = _run
+    survey_ready.run_proc = _run
     plan_pass.is_manual_pr = _is_manual_pr
     resolve_conflicts.run_proc = _run
     resolve_conflicts.is_manual_pr = _is_manual_pr
@@ -89,7 +95,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     if begin.get("offline"):
         return begin
     pass_dir = str(begin["pass_dir"])
-    run_survey_repos(pass_dir=pass_dir, config_path=config_path, live=live)
+    run_survey_prs(pass_dir=pass_dir, config_path=config_path, live=live)
+    run_survey_inbox(pass_dir=pass_dir, config_path=config_path, live=live)
+    run_survey_ready(pass_dir=pass_dir, config_path=config_path, live=live)
     run_plan_pass(pass_dir=pass_dir)
     run_dispatch_triage(pass_dir=pass_dir, config_path=config_path, live=live)
     run_resolve_conflicts(pass_dir=pass_dir, config_path=config_path, live=live)

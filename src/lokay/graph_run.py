@@ -143,7 +143,9 @@ def run_path(
         ),
         "factory_pass": (
             "factory_begin",
-            "survey_repos",
+            "survey_prs",
+            "survey_inbox",
+            "survey_ready",
             "plan_pass",
             "dispatch_triage",
             "resolve_conflicts",

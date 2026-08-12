@@ -37,7 +37,10 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
 | `lokay-repos` | list managed repos |
 | `lokay-factory-begin` | preflight + open pass workspace |
-| `lokay-survey-repos` | survey PRs / inbox / ready (all repos) |
+| `lokay-survey-prs` | list open AI PRs (all repos) |
+| `lokay-survey-inbox` | list undecided inbox issues |
+| `lokay-survey-ready` | list ai:ready; unready covered-by-PR issues |
+| `lokay-survey-repos` | thin bridge: survey_prs + inbox + ready |
 | `lokay-plan-pass` | select triage / closeout targets (per-repo PR-first) |
 | `lokay-dispatch-triage` | run planned inbox triage children |
 | `lokay-resolve-conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready |

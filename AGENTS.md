@@ -8,9 +8,10 @@
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
 - **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
-  (`factory_begin → survey_repos → plan_pass → dispatch_triage →
-  resolve_conflicts → closeout_prs → select_implement → dispatch_implement →
-  compute_health → record_pass`), not a fat `compose/tick.py`.
+  (`factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
+  dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
+  dispatch_implement → compute_health → record_pass`), not a fat
+  `compose/tick.py`.
 - **Trust intentional issues.** Owner / configured-assignee tickets are
   purposeful; no new human-approval gates in the pass spine. Intake CLOSE only
   for clear obsolete / wrong-shape / superseded. Human writes → mill delivers.

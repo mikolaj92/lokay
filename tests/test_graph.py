@@ -11,7 +11,9 @@ def test_describe_parent_factory_graph():
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
         "factory_begin",
-        "survey_repos",
+        "survey_prs",
+        "survey_inbox",
+        "survey_ready",
         "plan_pass",
         "dispatch_triage",
         "resolve_conflicts",
@@ -22,8 +24,10 @@ def test_describe_parent_factory_graph():
         "record_pass",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
-    assert conduction["survey_repos"] == ["factory_begin"]
-    assert "survey_repos" in conduction["plan_pass"]
+    assert conduction["survey_prs"] == ["factory_begin"]
+    assert "survey_prs" in conduction["survey_inbox"]
+    assert "survey_inbox" in conduction["survey_ready"]
+    assert "survey_ready" in conduction["plan_pass"]
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
@@ -31,8 +35,9 @@ def test_describe_parent_factory_graph():
     assert "select_implement" in conduction["dispatch_implement"]
     assert "dispatch_implement" in conduction["compute_health"]
     assert "compute_health" in conduction["record_pass"]
-    # Mega factory_tick / dispatch_closeout must not hide pass policy in the graph.
+    # Mega factory_tick / survey_repos / dispatch_closeout must not hide policy.
     assert "factory_tick" not in ids
+    assert "survey_repos" not in ids
     assert "dispatch_closeout" not in ids
 
 
@@ -281,7 +286,9 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
     expected = {
         "factory_pass": {
             "factory_begin",
-            "survey_repos",
+            "survey_prs",
+            "survey_inbox",
+            "survey_ready",
             "plan_pass",
             "dispatch_triage",
             "resolve_conflicts",

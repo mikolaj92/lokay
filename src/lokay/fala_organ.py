@@ -90,6 +90,9 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         resolve_conflicts,
         run_agent,
         select_implement,
+        survey_inbox,
+        survey_prs,
+        survey_ready,
         survey_repos,
         triage_issue,
         intake_issue,
@@ -193,15 +196,38 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         return _run_atom_main(factory_begin.main, [*cfg, *live])
 
     if atom == "survey_repos":
+        # Legacy bridge atom (not in parent factory_pass graph).
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
         return _run_atom_main(
             survey_repos.main, [*cfg, *live, "--pass-dir", pass_dir]
         )
 
+    if atom == "survey_prs":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_prs.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "survey_inbox":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_inbox.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "survey_ready":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            survey_ready.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
     if atom == "plan_pass":
         pass_dir = str(
             up.get("factory_begin", {}).get("pass_dir")
+            or up.get("survey_ready", {}).get("pass_dir")
             or up.get("survey_repos", {}).get("pass_dir")
             or ""
         )

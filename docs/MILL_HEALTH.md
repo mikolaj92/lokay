@@ -38,8 +38,8 @@ uv run lokay status --config config.yaml --local
 
 ## Pass receipt (LaunchAgent)
 
-After each `factory_tick` / tick survey, Lokay writes a small JSON receipt next to
-the state file (default `~/.lokay/last-pass.json`):
+After each `factory_pass` (`lokay-record-pass`), Lokay writes a small JSON receipt
+next to the state file (default `~/.lokay/last-pass.json`):
 
 ```bash
 jq '{health, idle, progress, merge_enabled, require_checks, require_llm_review, k: .max_issue_to_pr_per_pass, remaining, by_repo}' \

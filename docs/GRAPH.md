@@ -43,21 +43,25 @@ atoms via `run_path`.
 
 ```text
 factory_begin
-  → survey_repos
-    → plan_pass
-      → dispatch_triage          → issue_triage child Fala
-        → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
-          → closeout_prs         → pr_repair / pr_triage child Falas
-            → select_implement
-              → dispatch_implement → issue_to_pr child Fala
-                → compute_health
-                  → record_pass    → last-pass.json
+  → survey_prs
+    → survey_inbox
+      → survey_ready
+        → plan_pass
+          → dispatch_triage          → issue_triage child Fala
+            → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
+              → closeout_prs         → pr_repair / pr_triage child Falas
+                → select_implement
+                  → dispatch_implement → issue_to_pr child Fala
+                    → compute_health
+                      → record_pass    → last-pass.json
 ```
 
 | Atom | One job |
 | --- | --- |
 | `factory_begin` | preflight + pass workspace + budgets |
-| `survey_repos` | list PRs / inbox / ready for all repos |
+| `survey_prs` | list open AI PRs for all repos |
+| `survey_inbox` | list undecided inbox issues |
+| `survey_ready` | list ai:ready; unready issues covered by open AI PRs |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |

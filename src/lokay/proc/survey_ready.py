@@ -1,0 +1,153 @@
+"""One job: list ai:ready issues; unready those already covered by open AI PRs."""
+
+from __future__ import annotations
+
+import argparse
+from typing import Any
+
+from lokay.envelope import emit_exit, err, ok
+from lokay.passkit import io as pass_io
+from lokay.passkit.support import run_proc
+from lokay.passkit.working import load_begin_working, save_begin_working
+from lokay.proc import label_issue as p_label
+from lokay.proc import list_issues as p_list_issues
+from lokay.proc._common import add_config_live
+from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
+
+
+def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
+    begin, working = load_begin_working(pass_dir)
+    cfg_flag = ["--config", config_path] if config_path else []
+    live_flag = ["--live"] if live else []
+    actions: list[dict[str, Any]] = list(working.get("actions") or [])
+    progress = int(working.get("progress") or 0)
+    stuck = dict(working.get("stuck") or begin.get("stuck") or {})
+    branch_prefix = str(begin.get("branch_prefix") or "ai/fix/")
+    ready_label = str(begin.get("ready_label") or "ai:ready")
+    prs_by_repo = dict(working.get("prs_by_repo") or {})
+    ready_by_repo: dict[str, list[dict[str, Any]]] = {}
+    ready_survey_failed: list[str] = []
+    remaining_ready = 0
+    remaining_ready_with_pr = 0
+    survey_errors = int(working.get("survey_errors") or 0)
+
+    for repo_name in list(begin.get("repos") or []):
+        listed = run_proc(p_list_issues.main, [*cfg_flag, "--repo", repo_name])
+        actions.append({"step": "list_issues", "repo": repo_name, **listed})
+        if not listed.get("ok"):
+            survey_errors += 1
+            ready_survey_failed.append(repo_name)
+            ready_by_repo[repo_name] = []
+            continue
+        issues = list(listed.get("issues") or [])
+        covered = issue_numbers_covered_by_prs(
+            prs_by_repo.get(repo_name) or [],
+            branch_prefix=branch_prefix,
+        )
+        skip = excluded_numbers(stuck, repo_name) | covered
+        if covered:
+            actions.append(
+                {
+                    "step": "skip_ready_with_open_pr",
+                    "repo": repo_name,
+                    "issues": sorted(covered),
+                }
+            )
+            covered_ready = [i for i in issues if int(i.get("number", -1)) in covered]
+            remaining_ready_with_pr += len(covered_ready)
+            # Live: drop ai:ready so PR triage owns the work (no re-implement).
+            if live and covered_ready:
+                for issue in covered_ready:
+                    num = int(issue["number"])
+                    unlab = run_proc(
+                        p_label.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            repo_name,
+                            "--issue",
+                            str(num),
+                            "--label",
+                            ready_label,
+                            "--remove",
+                        ],
+                    )
+                    actions.append(
+                        {
+                            "step": "unready_with_open_pr",
+                            "repo": repo_name,
+                            "issue": num,
+                            **unlab,
+                        }
+                    )
+                    if unlab.get("ok") and unlab.get("applied"):
+                        progress += 1
+                        remaining_ready_with_pr = max(0, remaining_ready_with_pr - 1)
+        if excluded_numbers(stuck, repo_name):
+            actions.append(
+                {
+                    "step": "skip_stuck",
+                    "repo": repo_name,
+                    "exclude": sorted(excluded_numbers(stuck, repo_name)),
+                }
+            )
+        implementable = [i for i in issues if int(i.get("number", -1)) not in skip]
+        ready_by_repo[repo_name] = implementable
+        remaining_ready += len(implementable)
+
+    survey = {
+        "prs_by_repo": prs_by_repo,
+        "inbox_by_repo": dict(working.get("inbox_by_repo") or {}),
+        "inbox_issues_by_repo": dict(working.get("inbox_issues_by_repo") or {}),
+        "ready_by_repo": ready_by_repo,
+        "pr_survey_failed": list(working.get("pr_survey_failed") or []),
+        "inbox_survey_failed": list(working.get("inbox_survey_failed") or []),
+        "ready_survey_failed": sorted(ready_survey_failed),
+        "remaining_inbox": int(working.get("remaining_inbox") or 0),
+        "remaining_ready": remaining_ready,
+        "remaining_ready_with_pr": remaining_ready_with_pr,
+        "remaining_prs": int(working.get("remaining_prs") or 0),
+        "actionable_prs": int(working.get("actionable_prs") or 0),
+        "manual_prs": int(working.get("manual_prs") or 0),
+        "survey_errors": survey_errors,
+    }
+    pass_io.write_json(pass_io.survey_path(pass_dir), survey)
+    working.update(
+        {
+            "actions": actions,
+            "progress": progress,
+            "ready_by_repo": ready_by_repo,
+            "ready_survey_failed": sorted(ready_survey_failed),
+            "remaining_ready": remaining_ready,
+            "remaining_ready_with_pr": remaining_ready_with_pr,
+            "survey_errors": survey_errors,
+            "stuck": stuck,
+        }
+    )
+    save_begin_working(pass_dir, begin, working)
+    return ok(
+        pass_dir=pass_dir,
+        remaining_ready=remaining_ready,
+        survey_errors=survey_errors,
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="lokay-survey-ready")
+    add_config_live(parser)
+    parser.add_argument("--pass-dir", required=True)
+    args = parser.parse_args(argv)
+    if not args.pass_dir:
+        return emit_exit(err("pass-dir required"))
+    return emit_exit(
+        run_survey_ready(
+            pass_dir=str(args.pass_dir),
+            config_path=args.config,
+            live=bool(args.live),
+        )
+    )
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
