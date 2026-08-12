@@ -1,0 +1,57 @@
+# Hermetic CI for Lokay.
+#
+# Fala is a path dependency (`pyproject.toml` → `../Fala`). Strategy:
+# checkout lokay and mikolaj92/Fala as siblings under the runner workspace so
+# `uv sync` resolves the editable path without a git submodule. Prefer this
+# clone-in-workflow approach so PRs stay green on GitHub without local sibling
+# layout. (Submodule is an alternative for local clones; not required here.)
+#
+# Honest / hermetic: only sync + pytest. No Hermes path hygiene that fails on
+# absent files. No network gh survey in unit tests (tests use LOKAY_OFFLINE /
+# mocks where needed).
+
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    env:
+      # Preflight carrier checks require a non-empty TMPDIR in some hosts.
+      TMPDIR: /tmp
+    defaults:
+      run:
+        working-directory: lokay
+    steps:
+      - name: Checkout Lokay
+        uses: actions/checkout@v4
+        with:
+          path: lokay
+
+      - name: Checkout Fala (path dependency sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: mikolaj92/Fala
+          path: Fala
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Python + sync
+        run: |
+          uv python install 3.12
+          uv sync --extra dev
+
+      - name: Pytest
+        run: uv run pytest -q

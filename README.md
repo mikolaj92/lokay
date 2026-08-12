@@ -24,7 +24,7 @@ There is no alternate Python fallback graph and no Hermes/Kanban execution ledge
 
 ## Quick start
 
-Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), authenticated GitHub CLI `gh`, and a local Fala checkout at `../Fala` as configured in `pyproject.toml`.
+Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), authenticated GitHub CLI `gh`, and a local Fala checkout at `../Fala` as configured in `pyproject.toml`. CI clones that sibling automatically (see `.github/workflows/checks.yml` and [`docs/MILL_HEALTH.md`](docs/MILL_HEALTH.md)).
 
 ```bash
 uv sync
@@ -85,7 +85,8 @@ nodes are deterministic GitHub, Git, or pure operations.
 | --- | --- |
 | `uv run lokay validate --config config.yaml` | Validate configuration |
 | `uv run lokay-repos --config config.yaml` | List managed repositories |
-| `uv run lokay status --config config.yaml` | Read-only readiness and remaining work (`--local` skips survey) |
+| `uv run lokay status --config config.yaml` | Readiness, health, K, per-repo work, human residuals (`--local` / `--human`) |
+| `~/.lokay/last-pass.json` | Compact pass receipt after each tick (LaunchAgent-friendly) |
 | `uv run lokay path --describe` | Inspect materialized workflow paths |
 | `uv run lokay mill --config config.yaml --live --max-passes 8` | Run a bounded live mill |
 | `src/lokay/proc/` | Unix atoms |
@@ -96,6 +97,7 @@ nodes are deterministic GitHub, Git, or pure operations.
 ## Binding documentation
 
 - [`docs/WORKING.md`](docs/WORKING.md) — working-machine contract and tick order
+- [`docs/MILL_HEALTH.md`](docs/MILL_HEALTH.md) — mill health without watching GitHub
 - [`docs/GRAPH.md`](docs/GRAPH.md) — Fala paths and conduction
 - [`docs/UNIX.md`](docs/UNIX.md) — process boundaries and JSON envelopes
 - [`docs/NO_STUBS.md`](docs/NO_STUBS.md) — real-agent requirement

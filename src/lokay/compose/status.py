@@ -5,19 +5,95 @@ Exit ok=false when work remains or mill is not configured for live progress.
 
 Default path surveys all repos. Use --local / --skip-survey for a cheap
 readiness/config/lease/preflight summary without the multi-repo gh survey.
+One command surfaces: mill_ready, merge_enabled, K limit, health, per-repo
+actionable PRs / ready / inbox, and a compact human_residuals count.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Any
 
 from lokay.compose.human_mailbox import compose_human_mailbox
 from lokay.compose.tick import compose_tick
 from lokay.envelope import emit_exit, ok
 from lokay.graph_run import describe_package
+from lokay.pass_receipt import read_pass_receipt
 from lokay.preflight import health_lease_status, run_preflight
 from lokay.proc._common import add_config, load_cfg
+
+
+def _offline() -> bool:
+    return os.environ.get("LOKAY_OFFLINE", "").strip() in {"1", "true", "yes"}
+
+
+def _human_residuals_compact(config_path: str | None) -> dict[str, Any]:
+    """Survey residual mailbox; never a mill brake."""
+    if _offline():
+        return {
+            "count": 0,
+            "ok": True,
+            "items": [],
+            "note": "offline — human mailbox survey skipped",
+            "mill_blocked": False,
+        }
+    try:
+        mailbox = compose_human_mailbox(config_path=config_path, live=True)
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "count": 0,
+            "ok": False,
+            "error": str(exc),
+            "items": [],
+            "note": "human mailbox survey failed — mill is not blocked",
+            "mill_blocked": False,
+        }
+    items = list(mailbox.get("items") or [])
+    # Compact: keep short rows for the operator glance; full list via --human.
+    compact_items = [
+        {
+            "kind": it.get("kind"),
+            "repo": it.get("repo"),
+            "number": it.get("number"),
+            "label": it.get("label"),
+            "title": it.get("title"),
+        }
+        for it in items
+    ]
+    return {
+        "count": int(mailbox.get("count") or len(items)),
+        "ok": bool(mailbox.get("ok")),
+        "items": compact_items,
+        "errors": list(mailbox.get("errors") or []),
+        "mill_blocked": False,
+        "note": mailbox.get("note")
+        or "Human queue is exception reporting only — use --human for mailbox detail",
+    }
+
+
+def _autonomy_fields(
+    cfg: Any,
+    *,
+    health: Any,
+    remaining: Any,
+    human_residuals: dict[str, Any] | None,
+    last_pass: dict[str, Any] | None,
+) -> dict[str, Any]:
+    by_repo: list[dict[str, Any]] = []
+    if isinstance(remaining, dict):
+        raw = remaining.get("by_repo")
+        if isinstance(raw, list):
+            by_repo = list(raw)
+    return {
+        "merge_enabled": bool(cfg.merge_enabled),
+        "max_issue_to_pr_per_pass": int(cfg.max_issue_to_pr_per_pass),
+        "k": int(cfg.max_issue_to_pr_per_pass),
+        "health": health,
+        "by_repo": by_repo,
+        "human_residuals": human_residuals,
+        "last_pass": last_pass,
+    }
 
 
 def compose_status(
@@ -73,6 +149,7 @@ def compose_status(
         "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=1 "
         "uv run lokay-mill --config config.yaml --live"
     )
+    last_pass = read_pass_receipt(state_path=cfg.state_path)
 
     if not survey:
         preflight_summary: dict[str, Any] | None = None
@@ -80,13 +157,30 @@ def compose_status(
             preflight_summary = run_preflight(
                 config_path, remediate=False, issue_lease=False
             )
+        # Local: surface last receipt health so operators need not re-survey.
+        health = (last_pass or {}).get("health") or "local"
+        remaining_local: dict[str, Any] = {"note": "survey_skipped"}
+        if isinstance(last_pass, dict) and isinstance(last_pass.get("remaining"), dict):
+            remaining_local = {
+                "note": "survey_skipped",
+                "from_last_pass": last_pass.get("remaining"),
+            }
+        human_local = None
+        if isinstance(last_pass, dict) and isinstance(last_pass.get("human_residuals"), dict):
+            human_local = last_pass.get("human_residuals")
+        autonomy = _autonomy_fields(
+            cfg,
+            health=health,
+            remaining=(last_pass or {}).get("remaining") if last_pass else remaining_local,
+            human_residuals=human_local,
+            last_pass=last_pass,
+        )
         payload = ok(
             kind="status",
             config=str(cfg.config_path),
             mode=cfg.mode,
             executor_enabled=cfg.executor_enabled,
             agent=cfg.agent,
-            merge_enabled=cfg.merge_enabled,
             require_checks=cfg.require_checks,
             incident_repo=cfg.incident_repo,
             repos=[r.name for r in cfg.active_repos()],
@@ -98,16 +192,19 @@ def compose_status(
             blockers=blockers,
             policy_notes=policy_notes,
             survey=False,
-            idle=None,
-            health="local",
-            remaining={"note": "survey_skipped"},
+            idle=None if last_pass is None else last_pass.get("idle"),
+            remaining=remaining_local,
             survey_ok=None,
             work_units=None,
             lease_ok=lease_ok,
             lease_reason=lease_reason,
             preflight=preflight_summary,
             live_env_hint=live_env_hint if not mill_ready else None,
-            note="local status (survey skipped) — use --full for remaining work",
+            note=(
+                "local status (survey skipped) — health/by_repo from last_pass when present; "
+                "use --full for live remaining work"
+            ),
+            **autonomy,
         )
         if not mill_ready:
             payload["ok"] = False
@@ -130,13 +227,37 @@ def compose_status(
             + survey_errors  # unknown work is still work — refuse green noop
         )
 
+    human_residuals = _human_residuals_compact(config_path)
+    # Refresh receipt with human residual count so --local sees it next time.
+    last_pass = read_pass_receipt(state_path=cfg.state_path)
+    if isinstance(last_pass, dict):
+        last_pass = {
+            **last_pass,
+            "human_residuals": {
+                "count": int(human_residuals.get("count") or 0),
+                "note": human_residuals.get("note"),
+            },
+        }
+        try:
+            from lokay.pass_receipt import write_pass_receipt
+
+            write_pass_receipt(last_pass, state_path=cfg.state_path)
+        except OSError:
+            pass
+
+    autonomy = _autonomy_fields(
+        cfg,
+        health=survey_result.get("health"),
+        remaining=remaining,
+        human_residuals=human_residuals,
+        last_pass=last_pass,
+    )
     payload = ok(
         kind="status",
         config=str(cfg.config_path),
         mode=cfg.mode,
         executor_enabled=cfg.executor_enabled,
         agent=cfg.agent,
-        merge_enabled=cfg.merge_enabled,
         require_checks=cfg.require_checks,
         incident_repo=cfg.incident_repo,
         repos=[r.name for r in cfg.active_repos()],
@@ -149,13 +270,14 @@ def compose_status(
         policy_notes=policy_notes,
         survey=True,
         idle=idle,
-        health=survey_result.get("health"),
         remaining=remaining,
         survey_ok=survey_result.get("ok"),
         work_units=work,
         lease_ok=lease_ok,
         lease_reason=lease_reason,
         live_env_hint=live_env_hint if not mill_ready else None,
+        pass_receipt_path=survey_result.get("pass_receipt_path"),
+        **autonomy,
     )
     if not idle and not mill_ready:
         payload["ok"] = False
