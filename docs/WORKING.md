@@ -99,6 +99,32 @@ writes `~/.lokay/last-pass.json` (or `<state_dir>/last-pass.json`). See
 `repairing` / `waiting` are ok (honest wait), not recovery thrash.
 `--human` does not set mill not-working; it only lists residuals.
 
+## Self-repair / recovery (narrow)
+
+Self-repair must **not** steal cycles from normal review limbo or per-repo waiting.
+Product mill time wins over emergency recovery.
+
+**Self-repair may run only when:**
+
+1. **Preflight lane** — daemon preflight proves Lokay unhealthy while the
+   minimal carrier remains healthy (not overlap, not carrier-down). Or
+2. **Product-stall quorum** — `daemon_cycle` observes a true product-mill /
+   carrier-class failure fingerprint in **4 of the last 5** runs
+   (`recovery-history.json`), then files one deduplicated incident and enters
+   the `self_repair` child Fala.
+
+**Never mint a systemic stall fingerprint / never fill the 4-of-5 quorum for:**
+
+- mill `health=waiting` (pending CI, review limbo, only manual/`ai:needs-review` PRs)
+- mill `health=repairing` (active repair / request_changes cycle)
+- other honest soft outcomes (`idle`, `progress`, `offline`, `overlap`)
+- per-event `pr_repair` / `issue_to_pr` / `pr_triage` failures while the mill
+  envelope itself is still a soft wait above
+
+Soft observations may sit in the rolling window (they **dilute** quorum) but
+cannot count as matching failure fingerprints. Confirmed-stall incidents share
+the same `github.incident_cooldown_hours` / ledger as preflight incidents.
+
 ## Idle rule
 
 May no-op **only** after a full multi-repo survey with **no** remaining actionable work.

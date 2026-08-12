@@ -23,6 +23,16 @@ preflight. Fala owns product/recovery order. Every node above is a separate
 `lokay-recovery-*` Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
 
+**Quorum law (narrow recovery):** `recovery_observe` / `recovery_record` mint and
+confirm fingerprints only for true product-mill / carrier-class failures
+(`stall`, `survey_error`, `plateau`, `budget_exhausted`, hard pass failures).
+Mill envelopes (and their run-tail events) with `waiting`, `repairing`, `idle`,
+`progress`, `offline`, or `overlap` never confirm a stall — so review limbo,
+pending CI, and `ai:needs-review` parked PRs cannot steal cycles into
+`recovery_run_self_repair`. Soft rows dilute the 4-of-5 window; they do not fill
+it. `recovery_incident` is skipped until quorum; incidents reuse the preflight
+cooldown ledger (`github.incident_cooldown_hours`).
+
 ### `factory_pass` (parent)
 
 ```text
@@ -52,11 +62,17 @@ self_repair_prepare (detached exact origin/main)
               → self_repair_close
 ```
 
-This path is entered only when daemon preflight proves Lokay unhealthy while the
-minimal carrier remains healthy. It never creates a branch or PR. The coding
-agent can edit only the detached worktree; deterministic atoms alone commit and
-push directly to `main`. A successful path always returns `restart_required`;
-product work never resumes in the stale daemon process.
+Entered only from:
+
+1. **Daemon preflight lane** — Lokay unhealthy, minimal carrier healthy (not
+   overlap / not carrier-down); or
+2. **`daemon_cycle` stall quorum** — confirmed 4-of-5 hard product-mill failure
+   after `recovery_incident` (never from waiting/repairing/review limbo).
+
+It never creates a branch or PR. The coding agent can edit only the detached
+worktree; deterministic atoms alone commit and push directly to `main`. A
+successful path always returns `restart_required`; product work never resumes in
+the stale daemon process.
 
 ### `issue_to_pr`
 
