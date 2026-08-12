@@ -37,6 +37,7 @@ from lokay.proc import pr_checks as p_checks
 from lokay.proc import pr_close as p_pr_close
 from lokay.proc import select_issue as p_select
 from lokay.proc._common import add_config_live, load_cfg
+from lokay.pass_receipt import build_pass_receipt, write_pass_receipt
 from lokay.preflight import health_lease_status, run_preflight
 from lokay.stuck import (
     clear_issue,
@@ -258,7 +259,10 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     # --- 0) PR heads first (filter ready issues already covered by open AI PRs) ---
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
+    inbox_by_repo: dict[str, int] = {}
     pr_survey_failed: set[str] = set()
+    inbox_survey_failed: set[str] = set()
+    ready_survey_failed: set[str] = set()
     for repo in cfg.active_repos():
         prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_prs", "repo": repo.name, **prs})
@@ -279,8 +283,11 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         actions.append({"step": "list_inbox", "repo": repo.name, **listed})
         if not listed.get("ok"):
             survey_errors += 1
+            inbox_survey_failed.add(repo.name)
+            inbox_by_repo[repo.name] = 0
             continue
         inbox = list(listed.get("issues") or [])
+        inbox_by_repo[repo.name] = len(inbox)
         remaining_inbox += len(inbox)
         if not live:
             continue
@@ -339,6 +346,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 if tri.get("ok") and tri.get("applied") is True and not skipped:
                     progress += 1
                     remaining_inbox = max(0, remaining_inbox - 1)
+                    inbox_by_repo[repo.name] = max(
+                        0, int(inbox_by_repo.get(repo.name) or 0) - 1
+                    )
             except Exception as exc:
                 actions.append(
                     {
@@ -360,6 +370,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         actions.append({"step": "list_issues", "repo": repo.name, **listed})
         if not listed.get("ok"):
             survey_errors += 1
+            ready_survey_failed.add(repo.name)
             ready_by_repo[repo.name] = []
             continue
         issues = list(listed.get("issues") or [])
@@ -846,6 +857,29 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     if live:
         save_stuck(stuck_path, stuck)
 
+    by_repo: list[dict[str, Any]] = []
+    for repo in cfg.active_repos():
+        name = repo.name
+        pr_list = list(prs_by_repo.get(name) or [])
+        ready_list = list(ready_by_repo.get(name) or [])
+        by_repo.append(
+            {
+                "repo": name,
+                "inbox": int(inbox_by_repo.get(name) or 0),
+                "ready": len(ready_list),
+                "open_ai_prs": len(pr_list),
+                "actionable_open_ai_prs": sum(
+                    not _is_manual_pr(pr) for pr in pr_list
+                ),
+                "manual_open_ai_prs": sum(_is_manual_pr(pr) for pr in pr_list),
+                "survey_error": bool(
+                    name in pr_survey_failed
+                    or name in inbox_survey_failed
+                    or name in ready_survey_failed
+                ),
+            }
+        )
+
     remaining = {
         "inbox": remaining_inbox,
         "ready": remaining_ready,
@@ -864,8 +898,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "merge_conflicts": merge_conflicts,
         "blocked_this_pass": blocked_this_pass,
         "survey_errors": survey_errors,
+        "by_repo": by_repo,
     }
-    return _health_payload(
+    payload = _health_payload(
         cfg_mode=cfg.mode,
         live=live,
         executed=live,
@@ -876,6 +911,19 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         stuck_path=str(stuck_path),
         executor_enabled=cfg.executor_enabled,
     )
+    # Compact receipt for LaunchAgent logs / lokay status --local last_pass.
+    try:
+        receipt = build_pass_receipt(
+            tick=payload,
+            merge_enabled=bool(cfg.merge_enabled),
+            max_issue_to_pr_per_pass=int(cfg.max_issue_to_pr_per_pass),
+            config_path=str(cfg.config_path) if cfg.config_path else config_path,
+        )
+        written = write_pass_receipt(receipt, state_path=cfg.state_path)
+        payload["pass_receipt_path"] = str(written)
+    except OSError as exc:
+        payload["pass_receipt_error"] = str(exc)
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:

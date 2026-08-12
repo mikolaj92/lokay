@@ -4,9 +4,17 @@ from pathlib import Path
 
 from lokay.cli import build_parser
 from lokay.compose.status import compose_status
+from lokay.pass_receipt import write_pass_receipt
 
 
-def _write_cfg(tmp_path: Path, *, mode: str, executor: bool, merge: bool) -> Path:
+def _write_cfg(
+    tmp_path: Path,
+    *,
+    mode: str,
+    executor: bool,
+    merge: bool,
+    k: int = 3,
+) -> Path:
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -20,6 +28,8 @@ executor:
 merge:
   enabled: {str(merge).lower()}
   require_checks: true
+limits:
+  max_issue_to_pr_per_pass: {k}
 worktrees:
   root: {tmp_path / "wt"}
 state:
@@ -39,6 +49,9 @@ def test_status_reports_blockers_when_dry(tmp_path: Path, monkeypatch):
     assert any("executor.enabled" in b for b in result["blockers"])
     assert any("merge.enabled" in b for b in result["blockers"])
     assert "LOKAY_AGENT" not in result["live_env_hint"]
+    assert result["merge_enabled"] is False
+    assert result["k"] == 3
+    assert result["max_issue_to_pr_per_pass"] == 3
 
 
 def test_require_checks_is_policy_not_hard_blocker(tmp_path: Path, monkeypatch):
@@ -67,6 +80,101 @@ def test_local_status_skips_survey(tmp_path: Path, monkeypatch):
     assert result["idle"] is None
     assert "lease_ok" in result
     assert "lease_reason" in result
+    assert result["merge_enabled"] is True
+    assert result["k"] == 3
+
+
+def test_local_status_uses_last_pass_health(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    cfg_path = _write_cfg(tmp_path, mode="live", executor=True, merge=True, k=5)
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    write_pass_receipt(
+        {
+            "kind": "pass_receipt",
+            "health": "repairing",
+            "idle": False,
+            "merge_enabled": True,
+            "max_issue_to_pr_per_pass": 5,
+            "remaining": {
+                "ready": 1,
+                "by_repo": [{"repo": "a/b", "ready": 1, "actionable_open_ai_prs": 0}],
+            },
+            "human_residuals": {"count": 2},
+            "by_repo": [{"repo": "a/b", "ready": 1, "actionable_open_ai_prs": 0}],
+        },
+        state_path=state,
+    )
+    monkeypatch.setattr(
+        "lokay.compose.status.compose_tick",
+        lambda **k: (_ for _ in ()).throw(AssertionError("survey")),
+    )
+    result = compose_status(config_path=str(cfg_path), survey=False)
+    assert result["health"] == "repairing"
+    assert result["k"] == 5
+    assert result["last_pass"]["health"] == "repairing"
+    assert result["by_repo"][0]["repo"] == "a/b"
+    assert result["human_residuals"]["count"] == 2
+
+
+def test_status_survey_exposes_by_repo_and_human(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    cfg_path = _write_cfg(tmp_path, mode="live", executor=True, merge=True, k=4)
+
+    def fake_tick(*, config_path, live=False):
+        return {
+            "ok": True,
+            "idle": False,
+            "health": "waiting",
+            "remaining": {
+                "inbox": 1,
+                "ready": 2,
+                "open_ai_prs": 1,
+                "actionable_open_ai_prs": 1,
+                "survey_errors": 0,
+                "max_issue_to_pr_per_pass": 4,
+                "by_repo": [
+                    {
+                        "repo": "a/b",
+                        "inbox": 1,
+                        "ready": 2,
+                        "open_ai_prs": 1,
+                        "actionable_open_ai_prs": 1,
+                        "manual_open_ai_prs": 0,
+                        "survey_error": False,
+                    }
+                ],
+            },
+            "pass_receipt_path": str(tmp_path / "last-pass.json"),
+        }
+
+    monkeypatch.setattr("lokay.compose.status.compose_tick", fake_tick)
+    monkeypatch.setattr(
+        "lokay.compose.status.compose_human_mailbox",
+        lambda **k: {
+            "ok": True,
+            "count": 1,
+            "items": [
+                {
+                    "kind": "issue",
+                    "repo": "a/b",
+                    "number": 9,
+                    "title": "eyes",
+                    "label": "ai:needs-feedback",
+                }
+            ],
+            "errors": [],
+            "note": "Human queue is exception reporting only",
+        },
+    )
+    result = compose_status(config_path=str(cfg_path), survey=True)
+    assert result["ok"] is True
+    assert result["health"] == "waiting"
+    assert result["merge_enabled"] is True
+    assert result["k"] == 4
+    assert result["by_repo"][0]["actionable_open_ai_prs"] == 1
+    assert result["human_residuals"]["count"] == 1
+    assert result["human_residuals"]["mill_blocked"] is False
 
 
 def test_local_status_still_fails_when_not_mill_ready(tmp_path: Path, monkeypatch):
