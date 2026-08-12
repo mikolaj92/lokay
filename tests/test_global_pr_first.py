@@ -3,6 +3,15 @@ from __future__ import annotations
 from lokay.compose import tick
 
 
+def _intake_ok():
+    return {
+        "ok": True,
+        "implementable": True,
+        "applied": False,
+        "decision": {"decision": "ready", "reason": "intake_ok"},
+    }
+
+
 def _config(tmp_path, repos=("a/one", "a/two")):
     path = tmp_path / "config.yaml"
     rows = "\n".join(
@@ -55,6 +64,8 @@ def test_actionable_pr_in_other_repo_blocks_intake(tmp_path, monkeypatch):
             return {"ok": True, "issues": [{"number": 2, "repo": repo}] if repo == "a/two" else []}
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "pending"}
+        if fn is tick.p_intake.main:
+            return _intake_ok()
         raise AssertionError(fn)
 
     monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
@@ -80,6 +91,8 @@ def test_merge_then_intake_when_global_queue_is_clear(tmp_path, monkeypatch):
             return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}] if repo == "a/two" else []}
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "none", "merge_ok": True}
+        if fn is tick.p_intake.main:
+            return _intake_ok()
         raise AssertionError(fn)
 
     intake = []
@@ -105,6 +118,8 @@ def test_manual_only_pr_allows_unrelated_repo_intake(tmp_path, monkeypatch):
             return {"ok": True, "issues": []}
         if fn is tick.p_list_issues.main:
             return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}]}
+        if fn is tick.p_intake.main:
+            return _intake_ok()
         raise AssertionError(fn)
 
     intake = []
@@ -178,6 +193,8 @@ def test_needs_human_discovered_this_pass_becomes_manual(tmp_path, monkeypatch):
             return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}] if repo == "a/two" else []}
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "none", "merge_ok": True}
+        if fn is tick.p_intake.main:
+            return _intake_ok()
         raise AssertionError(fn)
 
     intake = []

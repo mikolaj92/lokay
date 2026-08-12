@@ -82,6 +82,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         recovery_run_self_repair,
         run_agent,
         triage_issue,
+        intake_issue,
         worktree_add,
         self_repair_activate,
         self_repair_close,
@@ -273,6 +274,17 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             triage_issue.main,
             [*cfg, *live, "--repo", repo, "--issue", str(issue_number)],
         )
+
+    if atom == "intake_issue":
+        assert repo and issue_number is not None
+        argv = [*cfg, *live, "--repo", repo, "--issue", str(issue_number)]
+        triage = up.get("triage_issue") or {}
+        triage_decision = triage.get("decision")
+        if isinstance(triage_decision, dict) and triage_decision.get("decision") == "ready":
+            argv.append("--candidate-ready")
+        if inputs.get("require_ready"):
+            argv.append("--require-ready")
+        return _run_atom_main(intake_issue.main, argv)
 
     if atom == "pr_checks":
         assert repo and pr_number is not None

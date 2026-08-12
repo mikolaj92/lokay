@@ -146,7 +146,7 @@ def run_path(
             "get_issue", "assign_issue", "make_branch", "worktree_add",
             "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label",
         ),
-        "issue_triage": ("get_issue", "triage_issue"),
+        "issue_triage": ("get_issue", "triage_issue", "intake_issue"),
         "pr_repair": ("pr_checks", "worktree_add", "run_agent", "commit_all", "push"),
         "pr_triage": ("pr_checks", "pr_review", "pr_merge", "close_issue"),
         "self_repair": (
@@ -379,17 +379,49 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             )
     elif path_id == "issue_triage":
         triage = terminal.get("triage_issue", {})
-        decision = triage.get("decision")
-        out.update(
-            applied=triage.get("applied") is True,
-            decision=decision if isinstance(decision, dict) else {},
-            skipped=(
-                bool(triage.get("skipped"))
-                or (isinstance(decision, dict) and decision.get("decision") == "skip")
-            ),
+        intake = terminal.get("intake_issue", {})
+        triage_decision = triage.get("decision")
+        intake_decision = intake.get("decision")
+        # Intake is the final gate for ready; prefer its decision when present.
+        if isinstance(intake_decision, dict) and intake_decision.get("decision") not in {
+            None,
+            "",
+            "skip",
+        }:
+            decision = intake_decision
+        elif isinstance(intake_decision, dict) and intake.get("skipped"):
+            decision = triage_decision if isinstance(triage_decision, dict) else {}
+        else:
+            decision = (
+                intake_decision
+                if isinstance(intake_decision, dict)
+                else triage_decision if isinstance(triage_decision, dict) else {}
+            )
+        applied = triage.get("applied") is True or intake.get("applied") is True
+        triage_skip = bool(triage.get("skipped")) or (
+            isinstance(triage_decision, dict) and triage_decision.get("decision") == "skip"
         )
-        if triage.get("reason"):
-            out["reason"] = triage.get("reason")
+        intake_skip = bool(intake.get("skipped")) or (
+            isinstance(intake_decision, dict) and intake_decision.get("decision") == "skip"
+        )
+        # Path is a no-op only when both stages skipped (or intake absent and triage skipped).
+        skipped = triage_skip and (not intake or intake_skip)
+        # Demotion after a ready triage still counts as a real decision.
+        if (
+            isinstance(intake_decision, dict)
+            and intake_decision.get("decision") in {"close", "needs_human"}
+        ):
+            skipped = False
+        out.update(
+            applied=applied,
+            decision=decision if isinstance(decision, dict) else {},
+            skipped=skipped,
+            implementable=bool(intake.get("implementable")),
+            intake=intake_decision if isinstance(intake_decision, dict) else {},
+        )
+        reason = intake.get("reason") or triage.get("reason")
+        if reason:
+            out["reason"] = reason
     elif path_id == "pr_repair":
         commit = terminal.get("commit_all", {})
         push = terminal.get("push", {})

@@ -228,13 +228,16 @@ def test_fala_review_not_required_contract_allows_merge():
 def test_fala_issue_triage_applied_contract():
     out = _host("issue_triage", {
         "triage_issue": {"id": "triage_issue", "status": "completed", "output": {"values": {"applied": True, "decision": {"decision": "ready"}}}},
+        "intake_issue": {"id": "intake_issue", "status": "completed", "output": {"values": {"applied": False, "implementable": True, "decision": {"decision": "ready"}, "skipped": False}}},
     })
     assert out["ok"] and out["applied"] and not out["skipped"]
+    assert out["implementable"] is True
 
 
 def test_fala_issue_triage_skip_contract_is_not_applied():
     out = _host("issue_triage", {
         "triage_issue": {"id": "triage_issue", "status": "completed", "output": {"values": {"applied": False, "decision": {"decision": "skip"}}}},
+        "intake_issue": {"id": "intake_issue", "status": "completed", "output": {"values": {"applied": False, "implementable": False, "decision": {"decision": "skip"}, "skipped": True}}},
     })
     assert out["ok"] and not out["applied"] and out["skipped"]
 
@@ -253,7 +256,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
     expected = {
         "factory_pass": {"factory_tick"},
         "issue_to_pr": {"get_issue", "assign_issue", "make_branch", "worktree_add", "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label"},
-        "issue_triage": {"get_issue", "triage_issue"},
+        "issue_triage": {"get_issue", "triage_issue", "intake_issue"},
         "pr_repair": {"pr_checks", "worktree_add", "run_agent", "commit_all", "push"},
         "pr_triage": {"pr_checks", "pr_review", "pr_merge", "close_issue"},
     }

@@ -98,6 +98,7 @@ def _issue_from_row(repo_name: str, row: dict) -> Issue:
         labels=labels,
         assignees=assignees,
         url=str(row.get("url") or ""),
+        state=str(row.get("state") or "OPEN").upper(),
     )
 
 
@@ -253,6 +254,7 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
             labels=[config.ready_label],
             assignees=[config.assignee],
             url=f"https://github.com/{repo}/issues/{number}",
+            state="OPEN",
         )
     if result.returncode != 0:
         return None
@@ -265,6 +267,7 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
         labels=[lbl.get("name", "") for lbl in row.get("labels") or []],
         assignees=[a.get("login", "") for a in row.get("assignees") or []],
         url=str(row.get("url") or ""),
+        state=str(row.get("state") or "OPEN").upper(),
     )
 
 
