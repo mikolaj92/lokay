@@ -189,7 +189,12 @@ def test_manual_only_pr_allows_unrelated_repo_intake(tmp_path, monkeypatch):
         if fn is tick.p_list_inbox.main:
             return {"ok": True, "issues": []}
         if fn is tick.p_list_issues.main:
-            return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}]}
+            return {
+                "ok": True,
+                "issues": [{"number": 2, "repo": repo, "title": "next"}]
+                if repo == "a/two"
+                else [],
+            }
         if fn is tick.p_intake.main:
             return _intake_ok()
         raise AssertionError(fn)
@@ -210,6 +215,46 @@ def test_manual_only_pr_allows_unrelated_repo_intake(tmp_path, monkeypatch):
     assert result["remaining"]["actionable_open_ai_prs"] == 1  # newly opened PR
     assert result["remaining"]["manual_open_ai_prs"] == 1
     assert result["remaining"]["intake_skip_reason"] is None
+
+
+def test_manual_only_pr_does_not_block_same_repo_intake(tmp_path, monkeypatch):
+    """Parked human work must not stall intentional ready work in that repo."""
+    config = _config(tmp_path, repos=("a/one",))
+
+    def fake_run(fn, argv):
+        repo = argv[argv.index("--repo") + 1]
+        if fn is tick.p_list_prs.main:
+            return {"ok": True, "prs": [_pr(labels=["ai:needs-review"])]}
+        if fn is tick.p_list_inbox.main:
+            return {"ok": True, "issues": []}
+        if fn is tick.p_list_issues.main:
+            return {
+                "ok": True,
+                "issues": [{"number": 2, "repo": repo, "title": "next"}],
+            }
+        if fn is tick.p_intake.main:
+            return _intake_ok()
+        raise AssertionError(fn)
+
+    intake = []
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(
+        tick,
+        "compose_issue_to_pr",
+        lambda **kw: intake.append(kw)
+        or {"ok": True, "pr": 2, "branch": "ai/fix/2-next"},
+    )
+
+    result = tick.compose_tick(config_path=config, live=True)
+
+    assert [item["repo"] for item in intake] == ["a/one"]
+    assert result["health"] == "progress"
+    assert result["remaining"]["manual_open_ai_prs"] == 1
+    assert not any(
+        action.get("step") == "skip_ready_open_ai_pr"
+        for action in result["actions"]
+    )
 
 
 def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
