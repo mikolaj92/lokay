@@ -4,7 +4,13 @@ import pytest
 
 from lokay.pr_review import (
     PrReviewError,
+    build_review_comment_body,
+    count_request_changes_reviews,
+    find_review_for_head,
+    format_review_marker,
+    parse_review_markers,
     parse_review_output,
+    should_escalate_request_changes,
     should_merge,
     should_repair,
 )
@@ -91,3 +97,33 @@ def test_approve_rejects_false_safety_field(field):
 def test_boolean_strings_fail_closed():
     with pytest.raises(PrReviewError):
         parse_review_output('{"verdict":"approve","secrets":"false"}')
+
+
+def test_review_marker_roundtrip_and_head_lookup():
+    body = build_review_comment_body(
+        parse_review_output(
+            '{"verdict":"request_changes","secrets":false,"blocking":["x"],'
+            '"summary":"fix"}'
+        ),
+        head_sha="abcDEF12",
+        merge_ok=False,
+    )
+    markers = parse_review_markers([body])
+    assert len(markers) == 1
+    assert markers[0]["head_sha"] == "abcdef12"
+    assert markers[0]["verdict"] == "request_changes"
+    assert find_review_for_head(markers, "ABCDEF12")["merge_ok"] is False
+
+
+def test_request_changes_escalation_cap():
+    assert should_escalate_request_changes(0, max_request_changes=2) is False
+    assert should_escalate_request_changes(1, max_request_changes=2) is True
+    markers = parse_review_markers(
+        [
+            format_review_marker(head_sha="a" * 40, verdict="request_changes", merge_ok=False),
+            format_review_marker(head_sha="b" * 40, verdict="approve", merge_ok=True),
+            format_review_marker(head_sha="c" * 40, verdict="request_changes", merge_ok=False),
+        ]
+    )
+    assert count_request_changes_reviews(markers) == 2
+    assert should_escalate_request_changes(2, max_request_changes=2) is True

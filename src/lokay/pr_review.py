@@ -120,6 +120,105 @@ def should_repair(decision: PrReviewDecision) -> bool:
     return decision.verdict == "request_changes" and not decision.secrets
 
 
+# Durable marker embedded in published PR review comments.
+# Used for head-SHA idempotency and request_changes escalation counts.
+REVIEW_MARKER_RE = re.compile(
+    r"<!--\s*lokay-review\s+head=(?P<head>[0-9a-fA-F]+)\s+"
+    r"verdict=(?P<verdict>[a-z_]+)\s+merge_ok=(?P<merge_ok>[01])\s*-->"
+)
+
+
+def format_review_marker(*, head_sha: str, verdict: str, merge_ok: bool) -> str:
+    sha = (head_sha or "").strip()
+    verd = (verdict or "").strip().lower() or "needs_human"
+    return f"<!-- lokay-review head={sha} verdict={verd} merge_ok={1 if merge_ok else 0} -->"
+
+
+def parse_review_markers(comment_bodies: list[str] | tuple[str, ...]) -> list[dict[str, Any]]:
+    """Extract lokay-review markers from PR comment bodies (oldest → newest)."""
+    out: list[dict[str, Any]] = []
+    for body in comment_bodies or []:
+        if not isinstance(body, str):
+            continue
+        for match in REVIEW_MARKER_RE.finditer(body):
+            verd = match.group("verdict").strip().lower()
+            out.append(
+                {
+                    "head_sha": match.group("head").strip().lower(),
+                    "verdict": verd,
+                    "merge_ok": match.group("merge_ok") == "1",
+                }
+            )
+    return out
+
+
+def find_review_for_head(
+    markers: list[dict[str, Any]], head_sha: str
+) -> dict[str, Any] | None:
+    """Return the newest marker for this head SHA, if any."""
+    want = (head_sha or "").strip().lower()
+    if not want:
+        return None
+    for marker in reversed(markers):
+        if str(marker.get("head_sha") or "") == want:
+            return marker
+    return None
+
+
+def count_request_changes_reviews(markers: list[dict[str, Any]]) -> int:
+    return sum(1 for m in markers if m.get("verdict") == "request_changes")
+
+
+def should_escalate_request_changes(
+    prior_request_changes: int, *, max_request_changes: int
+) -> bool:
+    """True when this additional request_changes would reach/exceed the cap."""
+    limit = max(1, int(max_request_changes))
+    return int(prior_request_changes) + 1 >= limit
+
+
+def build_review_comment_body(
+    decision: PrReviewDecision,
+    *,
+    head_sha: str,
+    merge_ok: bool,
+    escalated: bool = False,
+) -> str:
+    lines = [
+        format_review_marker(
+            head_sha=head_sha, verdict=decision.verdict, merge_ok=merge_ok
+        ),
+        f"## Lokay LLM PR review: **{decision.verdict}** (risk={decision.risk})",
+        "",
+        decision.summary or "(no summary)",
+        "",
+    ]
+    if escalated:
+        lines.extend(
+            [
+                "### Escalation",
+                "- Repeated `request_changes` reached the configured cap; "
+                "labeled `ai:needs-review` and stopped auto repair/re-review.",
+                "",
+            ]
+        )
+    if decision.blocking:
+        lines.append("### Blocking")
+        lines.extend(f"- {b}" for b in decision.blocking)
+        lines.append("")
+    if decision.nits:
+        lines.append("### Nits")
+        lines.extend(f"- {n}" for n in decision.nits)
+        lines.append("")
+    lines.append(
+        f"scope_ok={decision.scope_ok} secrets={decision.secrets} "
+        f"tests_adequate={decision.tests_adequate}"
+    )
+    if head_sha:
+        lines.append(f"head={head_sha}")
+    return "\n".join(lines)
+
+
 def review_prompt(
     *,
     repo: str,

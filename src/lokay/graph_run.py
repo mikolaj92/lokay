@@ -343,18 +343,25 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                     closed_issue=close.get("issue"),
                 )
         elif str(decision.get("verdict") or "") != "approve":
+            # Escalated request_changes (cap) is terminal/manual — not another repair.
             repairable = (
                 decision.get("verdict") == "request_changes"
                 and not bool(decision.get("secrets"))
+                and not bool(review.get("escalated"))
             )
             out.update(
                 skipped=True,
                 reason=(
-                    "llm_review_requested_changes"
-                    if repairable
-                    else "llm_review_not_approved"
+                    "llm_review_escalated_needs_review"
+                    if review.get("escalated")
+                    else (
+                        "llm_review_requested_changes"
+                        if repairable
+                        else "llm_review_not_approved"
+                    )
                 ),
                 repairable=repairable,
+                escalated=bool(review.get("escalated")),
                 review=decision,
             )
         elif merge.get("skipped"):

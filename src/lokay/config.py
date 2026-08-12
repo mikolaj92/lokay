@@ -55,14 +55,13 @@ class Config:
     merge_enabled: bool = False
     require_checks: bool = False
     require_llm_review: bool = True  # structured executor review before auto-merge
-    require_test_evidence: bool = True
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
     max_issues_per_tick: int = 1
     max_triage_per_tick: int = 5
     max_repairs_per_tick: int = 1
+    max_request_changes_per_pr: int = 2  # then escalate to ai:needs-review
     max_self_repair_attempts: int = 2
-    whole_run_deadline_seconds: int = 3600
     max_failures_before_block: int = 2
     min_free_gb: float = 2.0
     config_path: Path | None = None
@@ -270,14 +269,13 @@ def load_config(path: str | Path | None = None) -> Config:
         merge_enabled=bool(mg.get("enabled", False)),
         require_checks=bool(mg.get("require_checks", False)),
         require_llm_review=bool(mg.get("require_llm_review", True)),
-        require_test_evidence=bool(mg.get("require_test_evidence", True)),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issues_per_tick=int(lim.get("max_issues_per_tick", 1)),
         max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
         max_repairs_per_tick=int(lim.get("max_repairs_per_tick", 1)),
+        max_request_changes_per_pr=int(lim.get("max_request_changes_per_pr", 2)),
         max_self_repair_attempts=int(lim.get("max_self_repair_attempts", 2)),
-        whole_run_deadline_seconds=int(lim.get("whole_run_deadline_seconds", 3600)),
         max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
         config_path=cfg_path,
