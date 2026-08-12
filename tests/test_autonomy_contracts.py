@@ -3,6 +3,9 @@
 Pins product promises without live gh. Prefer policy atoms / pure functions /
 envelopes. Where tick still owns scheduling until Fala extraction, assert the
 public compose_tick surface that must remain.
+
+Product law in these canaries: trust the issue author (prefer READY); maximize
+autonomy / minimize NEEDS_HUMAN; last-pass glance ratios stay light observability.
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ from lokay.config import load_config
 from lokay.intake import decide_intake
 from lokay.merge_policy import decide_auto_merge
 from lokay.models import Issue
+from lokay.pass_receipt import build_pass_receipt
 from lokay.recovery_history import observe_run, record_observation, history_path_for
 
 from fixtures.autonomy import (
@@ -32,12 +36,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _issue(**kwargs) -> Issue:
+    # Default: trusted operator-owned intentional issue (prefer READY).
     base = {
         "number": 1,
         "title": "Fix parser edge case",
         "body": "Handle empty input in parse().\n",
         "labels": [],
-        "assignees": [],
+        "assignees": ["mikolaj92"],
         "state": "OPEN",
         "url": "https://example.test/1",
         "repo": "a/lib",
@@ -210,20 +215,27 @@ def test_contract_soft_merge_policy_reasons_not_stall_evidence(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 4) Intake CLOSE / SPLIT / READY gates implement
+# 4) Intake CLOSE / SPLIT / READY gates implement (+ trust author / max autonomy)
 # ---------------------------------------------------------------------------
 
 
-def test_contract_intake_ready_is_implementable(tmp_path: Path):
+def test_contract_trusted_author_ordinary_issue_prefers_ready(tmp_path: Path):
+    """Operator-owned intentional work → READY+implement; no NEEDS_HUMAN gate."""
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
     (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\n', encoding="utf-8")
-    d = decide_intake(_issue(), clone_path=tmp_path, state="OPEN")
+    d = decide_intake(
+        _issue(assignees=["mikolaj92"]),
+        clone_path=tmp_path,
+        state="OPEN",
+    )
     assert d.decision == "ready"
     assert d.implementable is True
+    assert d.decision != "needs_human"
 
 
 def test_contract_intake_close_not_implementable(tmp_path: Path):
+    """Wrong-shape playbook closes — does not park NEEDS_HUMAN."""
     (tmp_path / "README.md").write_text("A pure library kit.\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
     (tmp_path / "pyproject.toml").write_text('[project]\nname="kit"\n', encoding="utf-8")
@@ -237,9 +249,11 @@ def test_contract_intake_close_not_implementable(tmp_path: Path):
     )
     assert d.decision == "close"
     assert d.implementable is False
+    assert d.decision != "needs_human"
 
 
-def test_contract_intake_split_not_implementable(tmp_path: Path):
+def test_contract_intake_split_not_needs_human(tmp_path: Path):
+    """Oversized / inventory → SPLIT (autonomy), never NEEDS_HUMAN escape hatch."""
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
     d = decide_intake(
@@ -251,6 +265,23 @@ def test_contract_intake_split_not_implementable(tmp_path: Path):
     )
     assert d.decision == "split"
     assert d.implementable is False
+    assert d.decision != "needs_human"
+
+
+def test_contract_needs_human_is_rare_residual_only(tmp_path: Path):
+    """NEEDS_HUMAN only when evidence is missing — not distrust of the author."""
+    # Removal paths named but clone missing → fail closed residual.
+    d = decide_intake(
+        _issue(
+            title="Remove legacy shim file",
+            body="Please remove `src/legacy/shim.py` from the tree now.",
+            assignees=["mikolaj92"],
+        ),
+        clone_path=None,
+    )
+    assert d.decision == "needs_human"
+    assert d.implementable is False
+    assert d.reason.startswith("inconclusive_")
 
 
 @pytest.mark.parametrize(
@@ -400,6 +431,54 @@ def test_contract_merge_policy_matrix_smoke(kwargs, action, reason):
 
 
 # ---------------------------------------------------------------------------
+# 6) Light last-pass observability (not a metrics product)
+# ---------------------------------------------------------------------------
+
+
+def test_contract_last_pass_light_glance_fields():
+    """Receipt exposes ready/PR/mergeable counters for jq glances — keep it light."""
+    receipt = build_pass_receipt(
+        tick={
+            "ok": True,
+            "health": "progress",
+            "idle": False,
+            "live": True,
+            "progress": 2,
+            "remaining": {
+                "ready": 4,
+                "open_ai_prs": 2,
+                "actionable_open_ai_prs": 1,
+                "mergeable_green": 1,
+                "issue_to_pr_started": 1,
+                "max_issue_to_pr_per_pass": 3,
+                "by_repo": [],
+            },
+            "human_residuals": {"count": 0},
+        },
+        merge_enabled=True,
+        require_checks=True,
+        require_llm_review=True,
+        max_issue_to_pr_per_pass=3,
+    )
+    rem = receipt["remaining"]
+    # Ratio inputs exist; do not invent a metrics subsystem around them.
+    assert rem["ready"] == 4
+    assert rem["open_ai_prs"] == 2
+    assert rem["actionable_open_ai_prs"] == 1
+    assert rem["mergeable_green"] == 1
+    assert rem["issue_to_pr_started"] == 1
+    assert receipt["progress"] == 2
+    assert receipt["human_residuals"]["count"] == 0
+    glance = {
+        "ready": rem["ready"],
+        "prs": rem["open_ai_prs"],
+        "mergeable": rem["mergeable_green"],
+        "started": rem["issue_to_pr_started"],
+    }
+    assert glance["ready"] >= glance["started"]
+
+
+# ---------------------------------------------------------------------------
 # Live autonomous profile (not the dry-run default)
 # ---------------------------------------------------------------------------
 
@@ -414,6 +493,7 @@ def test_live_autonomous_example_profile_knobs():
     assert data["merge"]["require_checks"] is True
     assert data["merge"]["require_llm_review"] is True
     assert data["limits"]["max_issue_to_pr_per_pass"] == 3
+    assert data["github"]["assignee"] == "mikolaj92"
 
     # Default example stays dry-run / merge-off (do not swap defaults).
     default = yaml.safe_load(
@@ -431,3 +511,4 @@ def test_live_autonomous_example_profile_knobs():
     assert cfg.require_checks is True
     assert cfg.require_llm_review is True
     assert cfg.max_issue_to_pr_per_pass == 3
+    assert cfg.assignee == "mikolaj92"

@@ -1,12 +1,16 @@
 # Lokay — night / live autonomous mill profile (NOT the default).
 #
 # Copy to config.yaml (or a dedicated path) only on an intentionally live host.
-# Humans author issues; the mill consumes them to merged results.
+# Humans author intentional issues; the mill consumes them to merged results.
 # Do not use this as the shared dry-run example — keep config.example.yaml
 # (mode: dry-run, executor off, merge off) for local copies.
 #
-# Product law: minimize human in the loop. CLOSE / SPLIT / READY+implement
-# are the default exits. NEEDS_HUMAN is a rare residual mailbox, not a brake.
+# Product law:
+#   - Trust the issue author (github.assignee / mikolaj92): prefer READY+implement.
+#     Do not add distrustful human gates for operator-authored work.
+#   - Maximize autonomy. CLOSE / SPLIT / READY+implement are the default exits.
+#     NEEDS_HUMAN is a rare residual mailbox, not a brake.
+#   - last-pass.json glance ratios are light observability — not a metrics product.
 #
 # See docs/AUTONOMY.md and docs/WORKING.md.
 
@@ -16,6 +20,7 @@ mode: live  # Env override still honored: LOKAY_MODE=live|dry-run
 repos_file: repos.mikolaj92.yaml
 
 github:
+  # Trusted operator: issues owned/assigned here are intentional — mill consumes.
   assignee: mikolaj92
   allow_unassigned: false
   ready_label: ai:ready

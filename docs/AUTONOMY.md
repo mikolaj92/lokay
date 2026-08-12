@@ -9,6 +9,27 @@ Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Tick scheduling may
 move into Fala later; the promises below are the public surface that must remain.
 
+## Product law: trust the issue author
+
+**Humans author intentional issues; the mill consumes.**
+
+When an issue is created or owned by the trusted operator (`github.assignee`,
+default **mikolaj92**), assume it makes sense. Prefer **READY → implement**
+autonomy. Do **not** invent distrustful human gates, clarification loops, or
+“are you sure?” parking for ordinary intentional work.
+
+Deeper skepticism — if distinguished at all — is for foreign/external authors,
+not for the operator’s own issues. Deterministic intake still applies
+shape/superseded/duplicate/size rules (`CLOSE` / `SPLIT` / `READY`), but those
+are fitness checks, not author distrust.
+
+Maximize autonomy. Minimize `NEEDS_HUMAN` / `ai:needs-feedback`: it is a **rare
+residual** after rules fail closed (missing evidence), never the default exit
+for oversized work (auto-`SPLIT`) or obsolete playbooks (`CLOSE`).
+
+Residual mailbox (`lokay status --human`) is exception reporting, not a
+workflow step and not a mill brake.
+
 ## Product promises (mill pass)
 
 1. **Per-repo PR-first** — An actionable `ai/fix/*` PR in repo A does **not**
@@ -18,16 +39,14 @@ move into Fala later; the promises below are the public surface that must remain
    `issue_to_pr` runs per factory pass across **different** clean repos.
 3. **Intake gates implement** — Deterministic intake yields `CLOSE` | `SPLIT` |
    `READY` (rare `NEEDS_HUMAN`). Only `READY` + `--require-ready` may call
-   `issue_to_pr`. CLOSE/SPLIT never implement.
+   `issue_to_pr`. CLOSE/SPLIT never implement. Trusted-author ordinary work
+   prefers READY.
 4. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
    red checks → `repair`; approve + green → merge; secrets / needs_human /
    escalated `ai:needs-review` → fail closed.
 5. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
    merge_policy reasons) never mint recovery stall fingerprints or fill the
    4-of-5 self-repair quorum.
-
-Humans **author issues**. The mill consumes them. Residual mailbox
-(`lokay status --human`) is exception reporting, not a workflow step.
 
 ## Night mill profile
 
@@ -82,6 +101,28 @@ Each tick writes a compact receipt (default `~/.lokay/last-pass.json`):
 jq '{health, idle, progress, merge_enabled, require_checks, require_llm_review, k: .max_issue_to_pr_per_pass, remaining, by_repo}' \
   ~/.lokay/last-pass.json
 ```
+
+### Light observability (not a metrics product)
+
+Glance ratios from the receipt are fine — ready / open AI PRs / mergeable-green /
+progress / residual human count. Do **not** grow a heavy metrics subsystem,
+dashboards, or second ledger around them.
+
+```bash
+jq '{
+  health,
+  progress,
+  ready: .remaining.ready,
+  open_ai_prs: .remaining.open_ai_prs,
+  actionable_prs: .remaining.actionable_open_ai_prs,
+  mergeable_green: .remaining.mergeable_green,
+  issue_to_pr_started: .remaining.issue_to_pr_started,
+  human_residuals: .human_residuals.count
+}' ~/.lokay/last-pass.json
+```
+
+Intake `CLOSE` / `SPLIT` show up as pass `progress` + action steps in the tick
+envelope (and daemon logs), not as a separate time-series product. Keep it light.
 
 | `health` | Meaning for autonomy |
 | --- | --- |
