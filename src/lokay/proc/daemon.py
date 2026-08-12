@@ -7,9 +7,20 @@ import secrets
 from pathlib import Path
 
 from lokay.compose.daemon_cycle import compose_daemon_cycle
+from lokay.config import load_config
 from lokay.envelope import emit_exit, err
 from lokay.preflight import acquire_run_lock, revoke_health_lease, run_preflight
 from lokay.self_repair import run_self_repair
+
+
+def _mill_lock_path(config_path: str) -> Path:
+    """Same OS advisory lock as preflight: beside configured state.path."""
+    try:
+        cfg = load_config(config_path)
+        return (cfg.state_path.parent / "mill.lock").expanduser().absolute()
+    except (OSError, ValueError, FileNotFoundError):
+        # Overlap short-circuit before a readable config still needs a lock path.
+        return (Path.home() / ".lokay" / "mill.lock").expanduser().absolute()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-passes", type=int, default=8)
     parser.add_argument("--outbox", required=True)
     args = parser.parse_args(argv)
-    lock = Path.home() / ".lokay" / "mill.lock"
+    lock = _mill_lock_path(args.config)
     os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(
         lock.parent / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
     )
