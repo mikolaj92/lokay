@@ -89,6 +89,52 @@ def test_cli_status_local_flag_wiring():
     assert args_skip.local is True
 
 
+def test_cli_status_human_flag_wiring():
+    parser = build_parser()
+    args = parser.parse_args(["status", "--human", "--config", "c.yaml"])
+    assert args.human is True
+
+
+def test_status_human_mailbox_not_mill_brake(tmp_path: Path, monkeypatch):
+    cfg_path = _write_cfg(tmp_path, mode="live", executor=True, merge=True)
+
+    def fake_mailbox(*, config_path, live=True):
+        return {
+            "ok": True,
+            "kind": "human_mailbox",
+            "mill_blocked": False,
+            "count": 2,
+            "items": [
+                {
+                    "kind": "issue",
+                    "repo": "a/b",
+                    "number": 1,
+                    "title": "needs eyes",
+                    "label": "ai:needs-feedback",
+                },
+                {
+                    "kind": "pr",
+                    "repo": "a/b",
+                    "number": 2,
+                    "title": "review me",
+                    "label": "ai:needs-review",
+                },
+            ],
+            "note": "Human queue is exception reporting only",
+            "errors": [],
+        }
+
+    monkeypatch.setattr(
+        "lokay.compose.status.compose_human_mailbox",
+        fake_mailbox,
+    )
+    result = compose_status(config_path=str(cfg_path), human=True)
+    assert result["ok"] is True
+    assert result["mill_blocked"] is False
+    assert result["count"] == 2
+    assert "exception" in (result.get("note") or "").lower()
+
+
 def test_mill_daemon_does_not_override_configured_executor_metadata():
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")

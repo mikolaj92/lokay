@@ -50,7 +50,7 @@ MAX_CHECKBOXES = 5
 class TriageDecision:
     """Result of pure triage for one issue."""
 
-    decision: str  # ready | needs_feedback | out_of_scope | blocked | skip
+    decision: str  # ready | needs_feedback | split | out_of_scope | blocked | skip
     reason: str
     add_labels: tuple[str, ...] = ()
     close: bool = False
@@ -61,7 +61,8 @@ class TriageDecision:
 
 
 # Parking labels: not inbox, not implementable (factory keeps milling elsewhere).
-PARK_LABELS = frozenset({"frozen", "ai:frozen"})
+# ai:tracker = auto-split parent; mill continues other work (human mailbox only).
+PARK_LABELS = frozenset({"frozen", "ai:frozen", "ai:tracker"})
 
 
 def decision_labels(
@@ -197,18 +198,14 @@ def decide_issue(
     # "epic" only in TITLE means the whole issue is an epic tracker.
     # Body phrases like "Parent epic" / "child of epic" must NOT block implementable issues
     # (Pad Audit wave: 362 false needs-feedback from "## Parent epic" footers).
+    # Oversized work → SPLIT (auto child issues), not needs-feedback brake.
     title_is_epic = bool(re.search(r"\bepic\b", title.lower()))
     if boxes > MAX_CHECKBOXES or title_is_epic:
         return TriageDecision(
-            decision="needs_feedback",
+            decision="split",
             reason="too_large_split",
-            add_labels=(needs_feedback_label,),
-            comment=(
-                "Needs feedback: issue looks too large for one AI pass "
-                f"(checkboxes={boxes}"
-                + ("; title contains epic" if title_is_epic else "")
-                + "). Please split into smaller issues."
-            ),
+            add_labels=(),
+            comment=None,
         )
 
     return TriageDecision(

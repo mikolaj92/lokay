@@ -57,7 +57,7 @@ This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill
 
 ```text
 factory_pass:  factory_tick → composes one or more child path runs
-issue_triage: get_issue → triage_issue → intake_issue
+issue_triage: get_issue → triage_issue → intake_issue → issue_split
 pr_repair:    pr_checks → worktree_add → run_agent → commit_all → push
 pr_triage:    pr_checks → pr_review → pr_merge → close_issue
 issue_to_pr:  get_issue → assign_issue / make_branch → worktree_add
@@ -65,7 +65,9 @@ issue_to_pr:  get_issue → assign_issue / make_branch → worktree_add
 ```
 
 `run_agent` is the only nondeterministic path node. Intake is deterministic (CLOSE /
-READY / NEEDS_HUMAN) and the mill re-checks it before `issue_to_pr`. All other
+READY / SPLIT / rare NEEDS_HUMAN); oversized work auto-splits via `issue_split`.
+The mill re-checks intake before `issue_to_pr`. Humans are a residual mailbox
+(`lokay status --human`), not a brake. All other
 nodes are deterministic GitHub, Git, or pure operations.
 
 ## Safety

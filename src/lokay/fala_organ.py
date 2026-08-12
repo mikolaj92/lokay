@@ -83,6 +83,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         run_agent,
         triage_issue,
         intake_issue,
+        issue_split,
         worktree_add,
         self_repair_activate,
         self_repair_close,
@@ -282,9 +283,33 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         triage_decision = triage.get("decision")
         if isinstance(triage_decision, dict) and triage_decision.get("decision") == "ready":
             argv.append("--candidate-ready")
+        if isinstance(triage_decision, dict) and triage_decision.get("decision") == "split":
+            argv.append("--candidate-split")
         if inputs.get("require_ready"):
             argv.append("--require-ready")
         return _run_atom_main(intake_issue.main, argv)
+
+    if atom == "issue_split":
+        assert repo and issue_number is not None
+        argv = [*cfg, *live, "--repo", repo, "--issue", str(issue_number)]
+        intake = up.get("intake_issue") or {}
+        intake_decision = intake.get("decision")
+        if isinstance(intake_decision, dict):
+            argv.extend(["--intake-decision", json.dumps(intake_decision, separators=(",", ":"))])
+            if intake_decision.get("reason"):
+                argv.extend(["--reason", str(intake_decision.get("reason"))])
+        elif intake_decision:
+            argv.extend(["--intake-decision", str(intake_decision)])
+        # Also honor triage split when intake skipped after already-decided tracker demotion.
+        triage = up.get("triage_issue") or {}
+        triage_decision = triage.get("decision")
+        if (
+            isinstance(triage_decision, dict)
+            and triage_decision.get("decision") == "split"
+            and not (isinstance(intake_decision, dict) and intake_decision.get("decision"))
+        ):
+            argv.extend(["--intake-decision", "split", "--reason", str(triage_decision.get("reason") or "too_large_split")])
+        return _run_atom_main(issue_split.main, argv)
 
     if atom == "pr_checks":
         assert repo and pr_number is not None

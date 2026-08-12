@@ -12,6 +12,7 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.gh_issues import get_issue
 from lokay.intake import (
     check_ambiguity,
+    check_duplicate_ai_pr,
     check_open,
     check_satisfied,
     check_shape,
@@ -22,7 +23,7 @@ from lokay.intake import (
 from lokay.proc._common import add_config_read, load_cfg, read_live, resolve_repo_clone, runner
 
 
-_CHECKS = ("open", "superseded", "shape", "satisfied", "ambiguity")
+_CHECKS = ("open", "superseded", "shape", "satisfied", "ambiguity", "duplicate_ai_pr")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,6 +43,12 @@ def main(argv: list[str] | None = None) -> int:
         "--tracker-done",
         action="store_true",
         help="linked epic/tracker is closed/done (superseded evidence)",
+    )
+    p.add_argument(
+        "--covering-pr",
+        action="append",
+        default=[],
+        help="covering AI PR evidence as N[:merged|open] (repeatable)",
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
@@ -72,6 +79,22 @@ def main(argv: list[str] | None = None) -> int:
         result = check_shape(issue, probe_repo_shape(clone))
     elif name == "satisfied":
         result = check_satisfied(issue, clone_path=clone)
+    elif name == "duplicate_ai_pr":
+        covering = []
+        for raw in args.covering_pr or []:
+            text = str(raw)
+            if ":" in text:
+                num_s, state_s = text.split(":", 1)
+                covering.append(
+                    {
+                        "number": int(num_s),
+                        "state": state_s.upper(),
+                        "merged": state_s.lower() == "merged",
+                    }
+                )
+            else:
+                covering.append({"number": int(text), "state": "OPEN", "merged": False})
+        result = check_duplicate_ai_pr(issue, covering_prs=covering)
     else:
         result = check_ambiguity(issue)
 

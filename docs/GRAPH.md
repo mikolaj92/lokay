@@ -73,25 +73,34 @@ get_issue
                                             └─→ pr_label
 ```
 
-### `issue_triage` (inbox → labels)
+### `issue_triage` (inbox → labels / split)
 
 ```text
 get_issue
-  └─→ triage_issue   ← pure rules → ready candidate | ai:needs-feedback | OOS close
-        └─→ intake_issue  ← deterministic intake → CLOSE | READY | NEEDS_HUMAN
+  └─→ triage_issue   ← pure rules → ready | split | rare needs-feedback | OOS close
+        └─→ intake_issue  ← deterministic intake → CLOSE | READY | SPLIT | NEEDS_HUMAN
+              └─→ issue_split  ← when SPLIT: create bounded children (gh + rules)
 ```
 
+**Minimize human in the loop:** CLOSE / SPLIT / READY+implement are the exits.
+`NEEDS_HUMAN` / `ai:needs-feedback` is residual after rules fail closed — not the
+default for oversized work.
+
 `ai:ready` is an **outcome** of triage **plus intake**, not the start of the universe.
-Intake runs cheap checks first (still-open, superseded/merged PR, playbook/shape
-fitness, already-satisfied paths, size/ambiguity). CLOSE posts a short rationale
-comment (and drops `ai:ready` when present). NEEDS_HUMAN applies
-`ai:needs-feedback`. Inconclusive evidence fails closed to NEEDS_HUMAN (no stub
-LLM required). Per-repo PR-first: triage/intake mutations skip a repo that still
-has actionable open AI PRs (or a failed PR survey for that repo); other clean
-repos continue. Intake still runs inside `issue_triage` whenever triage is
-allowed; the mill also re-runs `intake_issue` with `--require-ready` before every
-`issue_to_pr`. Up to K `issue_to_pr` child runs per `factory_tick` across
-different clean repos (`limits.max_issue_to_pr_per_pass`).
+Intake runs cheap checks first (still-open, superseded/merged PR, duplicate AI PR
+for the same issue, playbook/shape fitness on library/kit/empty/Swift-only,
+already-satisfied / feature-present paths, size → SPLIT). CLOSE posts a short
+actionable receipt (and drops `ai:ready`). SPLIT queues `issue_split`, which
+creates bounded child issues, labels the parent `ai:tracker`, and closes the
+parent as a tracker — parent is never left `ai:ready`. Children re-enter
+inbox/intake on later passes. NEEDS_HUMAN applies `ai:needs-feedback` only when
+split is impossible or evidence is inconclusive. Per-repo PR-first:
+triage/intake/split mutations skip a repo that still has actionable open AI PRs
+(or a failed PR survey for that repo); other clean repos continue. Intake still
+runs inside `issue_triage` whenever triage is allowed; the mill also re-runs
+`intake_issue` with `--require-ready` before every `issue_to_pr`. Up to K
+`issue_to_pr` child runs per `factory_tick` across different clean repos
+(`limits.max_issue_to_pr_per_pass`).
 
 ### `pr_repair` (red checks on open ai/fix PR)
 

@@ -1,7 +1,11 @@
-"""Deterministic issue intake: CLOSE | READY | NEEDS_HUMAN.
+"""Deterministic issue intake: CLOSE | READY | SPLIT | NEEDS_HUMAN.
 
-Cheap, testable checks that harden inbox triage before `ai:ready` stays
+Cheap, testable checks that harden inbox triage before `ai:ready` sticks
 eligible for `issue_to_pr`. Pure rules first; no coding harness.
+
+Product law: minimize human in the loop. CLOSE / SPLIT / READY+implement are
+the default exits. NEEDS_HUMAN is a rare residual after rules fail closed —
+never the escape hatch for oversized work that can be auto-split.
 """
 
 from __future__ import annotations
@@ -16,8 +20,11 @@ from lokay.models import Issue
 # --- Verdicts for one check ---
 PASS = "pass"
 CLOSE = "close"
+SPLIT = "split"
 NEEDS_HUMAN = "needs_human"
 INCONCLUSIVE = "inconclusive"
+
+MAX_CHECKBOXES_ONE_PASS = 5
 
 # Issue text that asks for platform-host playbooks (wrong on libraries/kits).
 _PLATFORM_HOST_WORK = re.compile(
@@ -41,6 +48,7 @@ _INVENTORY_BLOB = re.compile(
 )
 
 _MULTI_EPIC = re.compile(r"(?i)\bepic\b")
+_TRACKER_TITLE = re.compile(r"(?i)\b(?:tracker|epic)\b")
 _TITLE_ONLY_BODY = re.compile(
     r"(?i)^\s*(?:(?:todo|tbd|see\s+title|as\s+title)\.?)\s*$"
 )
@@ -55,6 +63,25 @@ _REMOVE_PATH = re.compile(
     r"[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+\.[A-Za-z0-9]+)"
 )
 
+# Concrete add/create of a path (feature already present when file exists).
+_ADD_QUOTED = re.compile(
+    r"(?i)\b(?:add|create|introduce|restore)\s+[`'\"]([^`'\"]+)[`'\"]"
+)
+_ADD_PATH = re.compile(
+    r"(?i)\b(?:add|create|introduce)\s+"
+    r"((?:src/|tests/|docs/|scripts/|fala/)?"
+    r"[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+\.[A-Za-z0-9]+)"
+)
+
+_ALREADY_ON_MAIN = re.compile(
+    r"(?i)\b("
+    r"already\s+on\s+main"
+    r"|already\s+(?:merged|implemented|present|landed|shipped)"
+    r"|landed\s+on\s+main"
+    r"|present\s+on\s+main"
+    r")\b"
+)
+
 _PR_URL = re.compile(
     r"(?i)https?://github\.com/[^/\s]+/[^/\s]+/pull/(\d+)"
 )
@@ -63,6 +90,7 @@ _ISSUE_HASH = re.compile(r"(?:^|[\s(,])#(\d+)\b")
 _SUPERSEDED_MARKERS = re.compile(
     r"(?i)\b(superseded\s+by|already\s+(?:done|fixed|merged)|duplicate\s+of)\b"
 )
+_CHECKBOX = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s*(.+)$")
 
 _HOST_FILE_MARKERS = (
     "product_shell",
@@ -97,7 +125,7 @@ class CheckResult:
     """One deterministic intake check."""
 
     check: str
-    verdict: str  # pass | close | needs_human | inconclusive
+    verdict: str  # pass | close | split | needs_human | inconclusive
     reason: str
     detail: dict[str, Any] = field(default_factory=dict)
 
@@ -109,7 +137,7 @@ class CheckResult:
 class IntakeDecision:
     """Aggregated intake outcome for one issue."""
 
-    decision: str  # close | ready | needs_human | skip
+    decision: str  # close | ready | split | needs_human | skip
     reason: str
     checks: tuple[CheckResult, ...] = ()
     add_labels: tuple[str, ...] = ()
@@ -213,11 +241,12 @@ def probe_repo_shape(clone_path: Path | None) -> RepoShape:
     if host_hits >= 2 or (host_hits >= 1 and web_dep):
         return RepoShape(kind="host", signals=uniq)
 
+    swift_only = (root / "Package.swift").is_file() and not html_templates and not web_dep
     lib_hint = any(h in joined for h in _LIBRARY_NAME_HINTS)
     name_hint = any(h in root.name.lower() for h in ("kit", "lib", "sdk", "crate"))
     has_src_pkg = (root / "src").is_dir() or (root / "Package.swift").is_file()
     no_web = not html_templates and not web_dep and "product_shell" not in joined
-    if no_web and (lib_hint or name_hint or has_src_pkg):
+    if no_web and (lib_hint or name_hint or has_src_pkg or swift_only):
         extra = list(uniq)
         if lib_hint:
             extra.append("readme_library_hint")
@@ -225,6 +254,8 @@ def probe_repo_shape(clone_path: Path | None) -> RepoShape:
             extra.append("name_library_hint")
         if has_src_pkg:
             extra.append("src_or_swift_package")
+        if swift_only:
+            extra.append("swift_only")
         return RepoShape(kind="library", signals=tuple(dict.fromkeys(extra)))
 
     if len(entries) <= 2 and not html_templates:
@@ -245,7 +276,16 @@ def named_removal_paths(issue: Issue) -> list[str]:
         found.append(match.group(1).strip())
     for match in _REMOVE_PATH.finditer(blob):
         found.append(match.group(1).strip())
-    # de-dupe, keep order
+    return list(dict.fromkeys(p for p in found if p and ".." not in p and not p.startswith("/")))
+
+
+def named_add_paths(issue: Issue) -> list[str]:
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    found: list[str] = []
+    for match in _ADD_QUOTED.finditer(blob):
+        found.append(match.group(1).strip())
+    for match in _ADD_PATH.finditer(blob):
+        found.append(match.group(1).strip())
     return list(dict.fromkeys(p for p in found if p and ".." not in p and not p.startswith("/")))
 
 
@@ -254,6 +294,10 @@ def referenced_pr_numbers(issue: Issue) -> list[int]:
     nums = [int(x) for x in _PR_URL.findall(blob)]
     nums.extend(int(x) for x in _PR_HASH.findall(blob))
     return list(dict.fromkeys(nums))
+
+
+def checkbox_count(body: str) -> int:
+    return len(_CHECKBOX.findall(body or ""))
 
 
 def check_open(*, state: str | None) -> CheckResult:
@@ -276,7 +320,7 @@ def check_superseded(
     closed_tracker_done: bool = False,
     tracker_refs: Iterable[str] = (),
 ) -> CheckResult:
-    """Superseding evidence: merged linked PR or closed done tracker."""
+    """Superseding evidence: merged linked PR or closed/done tracker/epic."""
     merged = sorted({int(x) for x in merged_prs})
     if merged:
         return CheckResult(
@@ -285,26 +329,58 @@ def check_superseded(
             reason="linked_pr_merged",
             detail={"merged_prs": merged},
         )
-    blob = f"{issue.title or ''}\n{issue.body or ''}"
-    if closed_tracker_done and (_SUPERSEDED_MARKERS.search(blob) or _MULTI_EPIC.search(issue.title or "")):
+    title = issue.title or ""
+    blob = f"{title}\n{issue.body or ''}"
+    trackerish = bool(_TRACKER_TITLE.search(title))
+    if closed_tracker_done and (
+        trackerish or _SUPERSEDED_MARKERS.search(blob) or _MULTI_EPIC.search(title)
+    ):
         return CheckResult(
             check="superseded",
             verdict=CLOSE,
             reason="tracker_already_done",
             detail={"tracker_refs": list(tracker_refs)},
         )
-    if closed_tracker_done and _SUPERSEDED_MARKERS.search(blob):
+    if _SUPERSEDED_MARKERS.search(blob) and merged:
         return CheckResult(
             check="superseded",
             verdict=CLOSE,
             reason="explicit_superseded_marker",
-            detail={"tracker_refs": list(tracker_refs)},
+            detail={"tracker_refs": list(tracker_refs), "merged_prs": merged},
         )
     return CheckResult(check="superseded", verdict=PASS, reason="no_supersede_evidence")
 
 
+def check_duplicate_ai_pr(
+    issue: Issue,
+    *,
+    covering_prs: Iterable[dict[str, Any]] = (),
+) -> CheckResult:
+    """CLOSE when an open or merged ai/fix PR already covers this issue."""
+    rows = [p for p in covering_prs if isinstance(p, dict) and p.get("number")]
+    if not rows:
+        return CheckResult(check="duplicate_ai_pr", verdict=PASS, reason="no_covering_ai_pr")
+    detail = {
+        "prs": [
+            {
+                "number": int(p["number"]),
+                "state": str(p.get("state") or "OPEN").upper(),
+                "merged": bool(p.get("merged")),
+            }
+            for p in rows
+        ],
+        "issue": int(issue.number),
+    }
+    return CheckResult(
+        check="duplicate_ai_pr",
+        verdict=CLOSE,
+        reason="duplicate_ai_pr_for_issue",
+        detail=detail,
+    )
+
+
 def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
-    """Playbook fitness: reject platform-host work on libraries/kits/empty trees."""
+    """Playbook fitness: reject platform-host work on libraries/kits/empty/Swift-only."""
     wants_host = issue_requests_platform_host(issue)
     detail = {"repo_kind": shape.kind, "signals": list(shape.signals), "platform_host_work": wants_host}
     if not wants_host:
@@ -328,33 +404,66 @@ def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
 
 
 def check_satisfied(issue: Issue, *, clone_path: Path | None) -> CheckResult:
-    """Already-satisfied: concrete removal targets already absent on main."""
-    paths = named_removal_paths(issue)
-    if not paths:
-        return CheckResult(check="satisfied", verdict=PASS, reason="no_concrete_removal_paths")
+    """Already-satisfied: removals absent, adds present, or explicit already-on-main."""
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    if _ALREADY_ON_MAIN.search(blob):
+        return CheckResult(
+            check="satisfied",
+            verdict=CLOSE,
+            reason="already_on_main_marker",
+            detail={},
+        )
+
+    remove_paths = named_removal_paths(issue)
+    add_paths = named_add_paths(issue)
+    if not remove_paths and not add_paths:
+        return CheckResult(check="satisfied", verdict=PASS, reason="no_concrete_paths")
+
     if clone_path is None or not Path(clone_path).is_dir():
         return CheckResult(
             check="satisfied",
             verdict=INCONCLUSIVE,
             reason="clone_unavailable_for_path_check",
-            detail={"paths": paths},
+            detail={"remove_paths": remove_paths, "add_paths": add_paths},
         )
+
     root = Path(clone_path)
-    missing = [p for p in paths if not (root / p).exists()]
-    present = [p for p in paths if (root / p).exists()]
-    detail = {"paths": paths, "already_absent": missing, "still_present": present}
-    if present:
-        return CheckResult(check="satisfied", verdict=PASS, reason="targets_still_present", detail=detail)
-    return CheckResult(
-        check="satisfied",
-        verdict=CLOSE,
-        reason="already_satisfied_on_main",
-        detail=detail,
-    )
+    detail: dict[str, Any] = {
+        "remove_paths": remove_paths,
+        "add_paths": add_paths,
+    }
+
+    if remove_paths:
+        missing = [p for p in remove_paths if not (root / p).exists()]
+        present = [p for p in remove_paths if (root / p).exists()]
+        detail["already_absent"] = missing
+        detail["still_present"] = present
+        if not present:
+            return CheckResult(
+                check="satisfied",
+                verdict=CLOSE,
+                reason="already_satisfied_on_main",
+                detail=detail,
+            )
+
+    if add_paths:
+        present_adds = [p for p in add_paths if (root / p).exists()]
+        missing_adds = [p for p in add_paths if not (root / p).exists()]
+        detail["feature_present"] = present_adds
+        detail["feature_missing"] = missing_adds
+        if present_adds and not missing_adds:
+            return CheckResult(
+                check="satisfied",
+                verdict=CLOSE,
+                reason="feature_already_present",
+                detail=detail,
+            )
+
+    return CheckResult(check="satisfied", verdict=PASS, reason="work_still_needed", detail=detail)
 
 
 def check_ambiguity(issue: Issue) -> CheckResult:
-    """Size/ambiguity → NEEDS_HUMAN rather than READY."""
+    """Oversized/multi-part → SPLIT when possible; residual ambiguity → NEEDS_HUMAN."""
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
     blob = f"{title}\n{body}"
@@ -362,18 +471,28 @@ def check_ambiguity(issue: Issue) -> CheckResult:
     if _INVENTORY_BLOB.search(blob):
         return CheckResult(
             check="ambiguity",
-            verdict=NEEDS_HUMAN,
+            verdict=SPLIT,
             reason="inventory_everything",
             detail={},
         )
 
     epic_hits = len(_MULTI_EPIC.findall(blob))
-    if epic_hits >= 3 or (epic_hits >= 2 and " and " in title.lower()):
+    title_is_epic = bool(re.search(r"(?i)\bepic\b", title))
+    if title_is_epic or epic_hits >= 3 or (epic_hits >= 2 and " and " in title.lower()):
         return CheckResult(
             check="ambiguity",
-            verdict=NEEDS_HUMAN,
+            verdict=SPLIT,
             reason="multi_epic_blob",
-            detail={"epic_mentions": epic_hits},
+            detail={"epic_mentions": epic_hits, "title_is_epic": title_is_epic},
+        )
+
+    boxes = checkbox_count(body)
+    if boxes > MAX_CHECKBOXES_ONE_PASS:
+        return CheckResult(
+            check="ambiguity",
+            verdict=SPLIT,
+            reason="too_many_checkboxes",
+            detail={"checkboxes": boxes},
         )
 
     if body and _TITLE_ONLY_BODY.match(body):
@@ -384,7 +503,7 @@ def check_ambiguity(issue: Issue) -> CheckResult:
             detail={},
         )
 
-    # Very wide "audit all" without acceptance criteria bullets
+    # Very wide "audit all" without acceptance criteria bullets — cannot auto-split.
     if re.search(r"(?i)\baudit\b", title) and not re.search(r"(?m)^\s*[-*]\s*\[[ xX]\]", body):
         if len(body) < 120:
             return CheckResult(
@@ -404,8 +523,9 @@ def aggregate_intake(
     needs_feedback_label: str = "ai:needs-feedback",
     skip: bool = False,
     skip_reason: str = "",
+    force_split: bool = False,
 ) -> IntakeDecision:
-    """Aggregate check verdicts → CLOSE | READY | NEEDS_HUMAN | skip."""
+    """Aggregate check verdicts → CLOSE | READY | SPLIT | NEEDS_HUMAN | skip."""
     checked = tuple(checks)
     if skip:
         return IntakeDecision(
@@ -428,6 +548,23 @@ def aggregate_intake(
             implementable=False,
         )
 
+    split_hit = next((c for c in checked if c.verdict == SPLIT), None)
+    if split_hit is not None or force_split:
+        hit = split_hit or CheckResult(
+            check="ambiguity",
+            verdict=SPLIT,
+            reason="triage_split_candidate",
+            detail={},
+        )
+        return IntakeDecision(
+            decision="split",
+            reason=hit.reason,
+            checks=checked,
+            remove_labels=(ready_label,),
+            comment=_split_comment(hit),
+            implementable=False,
+        )
+
     human_hit = next((c for c in checked if c.verdict == NEEDS_HUMAN), None)
     if human_hit is not None:
         return IntakeDecision(
@@ -442,7 +579,7 @@ def aggregate_intake(
 
     inconclusive = [c for c in checked if c.verdict == INCONCLUSIVE]
     if inconclusive:
-        # Fail closed without an LLM slot: do not READY when evidence is missing.
+        # Fail closed: do not READY when evidence is missing.
         hit = inconclusive[0]
         return IntakeDecision(
             decision="needs_human",
@@ -451,9 +588,8 @@ def aggregate_intake(
             add_labels=(needs_feedback_label,),
             remove_labels=(ready_label,),
             comment=(
-                "Needs feedback: Lokay intake could not finish a deterministic check "
-                f"({hit.check}: {hit.reason}). Clarify the ask or ensure the repo clone "
-                "is available, then remove this label to re-enter triage."
+                f"Needs feedback: intake check incomplete ({hit.check}: {hit.reason}). "
+                "Clarify paths or ensure clone is available, then drop this label."
             ),
             implementable=False,
         )
@@ -473,32 +609,43 @@ def _close_comment(hit: CheckResult, checks: tuple[CheckResult, ...]) -> str:
     if hit.reason == "wrong_product_shape":
         kind = (hit.detail or {}).get("repo_kind", "non-host")
         return (
-            "Closed by Lokay intake: this looks like platform-host / product_shell / "
-            f"Basecoat adoption work, but the repository shape is {kind!r} "
-            "(library, kit, or empty — not a web host). "
-            "Reopen on a real host app if the playbook applies."
+            f"Closed (intake): platform-host/Basecoat playbook on {kind!r} repo "
+            "(library/kit/empty/Swift-only). Reopen on a real web host if needed."
         )
     if hit.reason == "already_satisfied_on_main":
         absent = ", ".join((hit.detail or {}).get("already_absent") or []) or "named paths"
-        return (
-            "Closed by Lokay intake: the concrete removal/file targets are already "
-            f"absent on main ({absent})."
-        )
+        return f"Closed (intake): removal targets already absent on main ({absent})."
+    if hit.reason == "feature_already_present":
+        present = ", ".join((hit.detail or {}).get("feature_present") or []) or "named paths"
+        return f"Closed (intake): add targets already present on main ({present})."
+    if hit.reason == "already_on_main_marker":
+        return "Closed (intake): issue states work is already on main / implemented."
     if hit.reason == "linked_pr_merged":
         prs = ", ".join(f"#{n}" for n in (hit.detail or {}).get("merged_prs") or [])
-        return (
-            f"Closed by Lokay intake: linked PR(s) already merged ({prs or 'see body'})."
+        return f"Closed (intake): linked PR(s) merged ({prs or 'see body'})."
+    if hit.reason == "tracker_already_done":
+        return "Closed (intake): tracker/epic already closed or superseded by merged work."
+    if hit.reason == "duplicate_ai_pr_for_issue":
+        prs = ", ".join(
+            f"#{p.get('number')}" for p in (hit.detail or {}).get("prs") or [] if p.get("number")
         )
+        return f"Closed (intake): duplicate of existing AI PR ({prs or 'see branch'})."
     if hit.reason == "issue_already_closed":
-        return "Closed by Lokay intake: issue is already closed upstream."
-    return f"Closed by Lokay intake ({reasons or hit.reason})."
+        return "Closed (intake): already closed upstream."
+    return f"Closed (intake): {reasons or hit.reason}."
+
+
+def _split_comment(hit: CheckResult) -> str:
+    return (
+        f"Split queued (intake: {hit.reason}). "
+        "Parent will become a tracker; child issues get the implementable slices."
+    )
 
 
 def _needs_human_comment(hit: CheckResult) -> str:
     return (
-        "Needs feedback: Lokay intake will not mark this ai:ready "
-        f"({hit.check}: {hit.reason}). Split/clarify the ask, then remove this label "
-        "to re-enter triage."
+        f"Needs feedback (rare): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
+        "Clarify a single implementable ask, then remove this label."
     )
 
 
@@ -508,12 +655,14 @@ def decide_intake(
     state: str | None = "OPEN",
     clone_path: Path | None = None,
     merged_prs: Iterable[int] = (),
+    covering_prs: Iterable[dict[str, Any]] = (),
     closed_tracker_done: bool = False,
     tracker_refs: Iterable[str] = (),
     ready_label: str = "ai:ready",
     needs_feedback_label: str = "ai:needs-feedback",
     run: bool = True,
     skip_reason: str = "",
+    force_split: bool = False,
 ) -> IntakeDecision:
     """Run all deterministic checks and aggregate (pure aside from provided evidence)."""
     if not run:
@@ -533,6 +682,7 @@ def decide_intake(
             closed_tracker_done=closed_tracker_done,
             tracker_refs=tracker_refs,
         ),
+        check_duplicate_ai_pr(issue, covering_prs=covering_prs),
         check_shape(issue, shape),
         check_satisfied(issue, clone_path=clone_path),
         check_ambiguity(issue),
@@ -541,4 +691,5 @@ def decide_intake(
         checks,
         ready_label=ready_label,
         needs_feedback_label=needs_feedback_label,
+        force_split=force_split,
     )

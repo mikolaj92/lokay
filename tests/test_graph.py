@@ -256,7 +256,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
     expected = {
         "factory_pass": {"factory_tick"},
         "issue_to_pr": {"get_issue", "assign_issue", "make_branch", "worktree_add", "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label"},
-        "issue_triage": {"get_issue", "triage_issue", "intake_issue"},
+        "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {"pr_checks", "worktree_add", "run_agent", "commit_all", "push"},
         "pr_triage": {"pr_checks", "pr_review", "pr_merge", "close_issue"},
     }
