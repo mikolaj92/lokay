@@ -28,6 +28,13 @@ WAITING_REASONS = frozenset(
     }
 )
 
+# Tick / status remaining fields for WAITING_REASONS — one matrix for organ + fleet.
+WAITING_REMAINING_FIELDS: Mapping[str, str] = {
+    "checks_pending": "pending_checks",
+    "checks_none_require_checks": "no_checks_blocked",
+    "merge_disabled": "merge_disabled",
+}
+
 NEEDS_REVIEW_REASONS = frozenset(
     {
         "secrets",
@@ -37,6 +44,35 @@ NEEDS_REVIEW_REASONS = frozenset(
         "invalid_review_json",
     }
 )
+
+
+def soft_waiting_remaining(remaining: Mapping[str, Any]) -> int:
+    """Sum soft merge_policy wait counters from a tick remaining map."""
+    total = 0
+    for reason in WAITING_REASONS:
+        field = WAITING_REMAINING_FIELDS.get(reason)
+        if field is None:
+            continue
+        total += int(remaining.get(field) or 0)
+    return total
+
+
+def actionable_mergeable_green(
+    remaining: Mapping[str, Any], *, merge_enabled: bool
+) -> int:
+    """Green PRs the mill can merge this pass (excludes merge_disabled soft wait).
+
+    When ``merge.enabled`` is false, green PRs are honest waiting — not stall
+    actionable. Prefer an explicit ``merge_disabled`` remaining count; fall back
+    to treating all ``mergeable_green`` as waiting when merge is disarmed.
+    """
+    green = int(remaining.get("mergeable_green") or 0)
+    if green <= 0:
+        return 0
+    if not merge_enabled:
+        return 0
+    disabled = int(remaining.get("merge_disabled") or 0)
+    return max(0, green - disabled)
 
 
 @dataclass(frozen=True)

@@ -106,6 +106,7 @@ def _compose_mill(
             int(remaining.get("ready") or 0),
             int(remaining.get("open_ai_prs") or 0),
             int(remaining.get("mergeable_green") or 0),
+            int(remaining.get("merge_disabled") or 0),
             int(remaining.get("needs_repair") or 0),
             int(remaining.get("no_checks_blocked") or 0),
             int(remaining.get("merge_conflicts") or 0),

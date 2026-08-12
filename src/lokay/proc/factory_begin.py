@@ -118,6 +118,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
             "merge_conflicts": 0,
             "needs_repair": 0,
             "mergeable_green": 0,
+            "merge_disabled": 0,
             "review_limbo": 0,
             "remaining_inbox": 0,
             "remaining_ready": 0,

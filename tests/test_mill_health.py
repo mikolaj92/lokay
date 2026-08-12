@@ -1,5 +1,12 @@
 """Health rules: no green noop while work remains."""
 
+from lokay.merge_policy import (
+    WAITING_REASONS,
+    WAITING_REMAINING_FIELDS,
+    actionable_mergeable_green,
+    decide_auto_merge,
+    soft_waiting_remaining,
+)
 from lokay.passkit.health import health_payload as _health_payload
 
 
@@ -160,6 +167,109 @@ def test_live_waiting_when_review_limbo_only():
         planned=[],
         stuck_path=None,
         executor_enabled=True,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+
+
+def test_live_waiting_when_green_but_merge_disabled():
+    """Green + merge.enabled false is mill ok-stop waiting, not false stall."""
+    remaining = {
+        "inbox": 0,
+        "ready": 0,
+        "open_ai_prs": 1,
+        "actionable_open_ai_prs": 1,
+        "mergeable_green": 1,
+        "merge_disabled": 1,
+        "needs_repair": 0,
+        "pending_checks": 0,
+        "review_limbo": 0,
+    }
+    gate = decide_auto_merge(
+        merge_enabled=False,
+        checks={"status": "passed", "merge_ok": True},
+    )
+    assert gate.action == "disabled"
+    assert gate.reason == "merge_disabled"
+    assert gate.waiting is True
+    assert actionable_mergeable_green(remaining, merge_enabled=False) == 0
+    assert soft_waiting_remaining(remaining) >= 1
+
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining=remaining,
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+        merge_enabled=False,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+    assert payload["idle"] is False
+    assert payload["merge_enabled"] is False
+
+
+def test_live_waiting_merge_disabled_legacy_remaining_without_counter():
+    """Older receipts may lack merge_disabled; merge_enabled=false still waits."""
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "mergeable_green": 2,
+            "needs_repair": 0,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+        merge_enabled=False,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+
+
+def test_soft_waiting_remaining_maps_merge_policy_matrix():
+    assert set(WAITING_REMAINING_FIELDS) == set(WAITING_REASONS)
+    remaining = {
+        "pending_checks": 1,
+        "no_checks_blocked": 2,
+        "merge_disabled": 3,
+    }
+    assert soft_waiting_remaining(remaining) == 6
+    assert actionable_mergeable_green(
+        {"mergeable_green": 3, "merge_disabled": 3}, merge_enabled=True
+    ) == 0
+
+
+def test_live_waiting_when_no_checks_blocked_only():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+            "no_checks_blocked": 1,
+            "pending_checks": 0,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+        merge_enabled=True,
     )
     assert payload["health"] == "waiting"
     assert payload["ok"] is True
