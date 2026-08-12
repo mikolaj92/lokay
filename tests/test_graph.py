@@ -89,10 +89,16 @@ def test_describe_issue_to_pr_graph():
     assert ids[0] == "get_issue"
     assert "run_agent" in ids
     assert "pr_create" in ids
+    assert "stage_implementing" in ids
+    assert "stage_pr_open" in ids
     # agent depends on worktree
     agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
     assert "worktree_add" in agent["conduction"]
     assert "get_issue" in agent["conduction"]
+    worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
+    assert "stage_implementing" in worktree["conduction"]
+    pr_open = next(n for n in path["nodes"] if n["id"] == "stage_pr_open")
+    assert "pr_create" in pr_open["conduction"]
 
 
 def test_describe_includes_pr_repair():
@@ -301,10 +307,19 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "compute_health",
             "record_pass",
         },
-        "issue_to_pr": {"get_issue", "assign_issue", "make_branch", "worktree_add", "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label"},
+        "issue_to_pr": {
+            "get_issue", "assign_issue", "stage_implementing", "make_branch",
+            "worktree_add", "run_agent", "commit_all", "push", "pr_create",
+            "stage_pr_open", "list_prs", "pr_label",
+        },
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
-        "pr_repair": {"pr_checks", "worktree_add", "run_agent", "commit_all", "push"},
-        "pr_triage": {"pr_checks", "pr_review", "pr_merge", "close_issue"},
+        "pr_repair": {
+            "pr_checks", "stage_repairing", "worktree_add", "run_agent",
+            "commit_all", "push",
+        },
+        "pr_triage": {
+            "pr_checks", "pr_review", "pr_merge", "stage_clear", "close_issue",
+        },
     }
     for path_id, effectors in expected.items():
         graph_run.run_path(path_id=path_id, repo="a/b", issue=1, pr=2, branch="ai/fix/1-x", live=False, package_path=str(package), db_path=str(tmp_path / path_id))

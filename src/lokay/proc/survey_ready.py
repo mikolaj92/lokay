@@ -9,8 +9,8 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
-from lokay.proc import label_issue as p_label
 from lokay.proc import list_issues as p_list_issues
+from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 
@@ -23,7 +23,6 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     progress = int(working.get("progress") or 0)
     stuck = dict(working.get("stuck") or begin.get("stuck") or {})
     branch_prefix = str(begin.get("branch_prefix") or "ai/fix/")
-    ready_label = str(begin.get("ready_label") or "ai:ready")
     prs_by_repo = dict(working.get("prs_by_repo") or {})
     ready_by_repo: dict[str, list[dict[str, Any]]] = {}
     ready_survey_failed: list[str] = []
@@ -55,12 +54,12 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             )
             covered_ready = [i for i in issues if int(i.get("number", -1)) in covered]
             remaining_ready_with_pr += len(covered_ready)
-            # Live: drop ai:ready so PR triage owns the work (no re-implement).
+            # Live: swap ready → pr-open so PR triage owns the work (ledger).
             if live and covered_ready:
                 for issue in covered_ready:
                     num = int(issue["number"])
-                    unlab = run_proc(
-                        p_label.main,
+                    staged = run_proc(
+                        p_stage.main,
                         [
                             *cfg_flag,
                             *live_flag,
@@ -68,9 +67,8 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
                             repo_name,
                             "--issue",
                             str(num),
-                            "--label",
-                            ready_label,
-                            "--remove",
+                            "--stage",
+                            "pr-open",
                         ],
                     )
                     actions.append(
@@ -78,10 +76,11 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
                             "step": "unready_with_open_pr",
                             "repo": repo_name,
                             "issue": num,
-                            **unlab,
+                            "stage": "pr-open",
+                            **staged,
                         }
                     )
-                    if unlab.get("ok") and unlab.get("applied"):
+                    if staged.get("ok") and staged.get("applied"):
                         progress += 1
                         remaining_ready_with_pr = max(0, remaining_ready_with_pr - 1)
         if excluded_numbers(stuck, repo_name):

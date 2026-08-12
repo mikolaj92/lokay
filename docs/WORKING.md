@@ -10,6 +10,24 @@ For the autonomous mill Definition of Working (pass promises, night profile,
 hermetic canaries, how to read `lokay status` / `last-pass.json`), see
 [`AUTONOMY.md`](AUTONOMY.md).
 
+## Issue ledger = chat with the mill
+
+Operators should read **GitHub Issues** (labels + optional short receipts), not
+chat, to see where Lokay is. Exclusive stage labels:
+
+| Stage | Label | When |
+| --- | --- | --- |
+| ready | `ai:ready` | Intake READY (implementable) |
+| implementing | `ai:in-progress` | `issue_to_pr` running |
+| pr-open | `ai:pr-open` | PR created / covering open AI PR |
+| ci-waiting | `ai:ci-waiting` | Checks pending |
+| repairing | `ai:repairing` | `pr_repair` in flight |
+| (terminal) | clear + close | After merge — issue closed |
+
+Reuse parking / residual labels unchanged: `ai:blocked`, `ai:needs-feedback`,
+`ai:needs-review`, `ai:tracker`. Atom: `lokay-stage-label`. Diagram:
+[`AUTONOMY.md`](AUTONOMY.md#issue-ledger--chat-with-the-mill).
+
 ## Product law: minimize human in the loop
 
 **Humans author intentional issues; the mill consumes.** Trust the issue author:

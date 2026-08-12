@@ -62,10 +62,10 @@ This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill
 ```text
 factory_pass:  factory_tick → composes one or more child path runs
 issue_triage: get_issue → triage_issue → intake_issue → issue_split
-pr_repair:    pr_checks → worktree_add → run_agent → commit_all → push
-pr_triage:    pr_checks → pr_review → pr_merge → close_issue
-issue_to_pr:  get_issue → assign_issue / make_branch → worktree_add
-              → run_agent → commit_all → push → pr_create → list_prs → pr_label
+pr_repair:    pr_checks → stage_repairing → worktree_add → run_agent → commit_all → push
+pr_triage:    pr_checks → pr_review → pr_merge → stage_clear → close_issue
+issue_to_pr:  get_issue → assign_issue / stage_implementing / make_branch → worktree_add
+              → run_agent → commit_all → push → pr_create → stage_pr_open → list_prs → pr_label
 ```
 
 `run_agent` is the only nondeterministic path node. Intake is deterministic (CLOSE /

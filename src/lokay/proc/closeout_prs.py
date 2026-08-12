@@ -16,6 +16,7 @@ from lokay.passkit.working import (
     stuck_path_of,
 )
 from lokay.proc import pr_checks as p_checks
+from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 
@@ -23,6 +24,7 @@ from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     begin, working = load_begin_working(pass_dir)
     cfg_flag = ["--config", config_path] if config_path else []
+    live_flag = ["--live"] if live else []
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
     progress = int(working.get("progress") or 0)
     stuck = dict(working.get("stuck") or {})
@@ -93,6 +95,30 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 continue
             if status == "pending":
                 pending_checks += 1
+                issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
+                if live and issue_n is not None:
+                    staged = run_proc(
+                        p_stage.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            repo_name,
+                            "--issue",
+                            str(issue_n),
+                            "--stage",
+                            "ci-waiting",
+                        ],
+                    )
+                    actions.append(
+                        {
+                            "step": "stage_ci_waiting",
+                            "repo": repo_name,
+                            "issue": issue_n,
+                            "pr": pr_num,
+                            **staged,
+                        }
+                    )
                 still_open.append(pr)
                 continue
             if status == "none":

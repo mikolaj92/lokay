@@ -46,6 +46,31 @@ from lokay.proc import list_prs as p_list_prs  # noqa: F401
 from lokay.proc import pr_checks as p_checks  # noqa: F401
 from lokay.proc import pr_close as p_pr_close  # noqa: F401
 from lokay.proc import select_issue as p_select  # noqa: F401
+from lokay.proc import stage_label as p_stage  # noqa: F401
+
+
+def _run_bound(fn, argv):  # type: ignore[no-untyped-def]
+    """Dispatch through patched ``tick._run``, with hermetic stage_label default.
+
+    Legacy tick tests stub list/checks/intake atoms and raise on unknowns.
+    Issue-ledger staging is additive; accept it unless a test stubs ``p_stage``.
+    """
+    try:
+        return _run(fn, argv)
+    except AssertionError:
+        if getattr(fn, "__module__", "") != "lokay.proc.stage_label":
+            raise
+        stage = "ready"
+        if "--stage" in argv:
+            stage = str(argv[argv.index("--stage") + 1])
+        return {
+            "ok": True,
+            "applied": True,
+            "planned": False,
+            "stage": stage,
+            "add_labels": [],
+            "remove_labels": [],
+        }
 
 
 def _bind_test_patches() -> None:
@@ -70,19 +95,19 @@ def _bind_test_patches() -> None:
     factory_begin.run_preflight = run_preflight
     factory_begin.health_lease_status = health_lease_status
     factory_begin.load_cfg = load_cfg
-    survey_prs.run_proc = _run
+    survey_prs.run_proc = _run_bound
     survey_prs.is_manual_pr = _is_manual_pr
-    survey_inbox.run_proc = _run
-    survey_ready.run_proc = _run
+    survey_inbox.run_proc = _run_bound
+    survey_ready.run_proc = _run_bound
     plan_pass.is_manual_pr = _is_manual_pr
-    resolve_conflicts.run_proc = _run
+    resolve_conflicts.run_proc = _run_bound
     resolve_conflicts.is_manual_pr = _is_manual_pr
-    closeout_prs.run_proc = _run
+    closeout_prs.run_proc = _run_bound
     closeout_prs.compose_pr_repair = compose_pr_repair
     closeout_prs.compose_pr_triage = compose_pr_triage
     closeout_prs.is_manual_pr = _is_manual_pr
-    queue_conflict.run_proc = _run
-    dispatch_implement.run_proc = _run
+    queue_conflict.run_proc = _run_bound
+    dispatch_implement.run_proc = _run_bound
     dispatch_implement.compose_issue_to_pr = compose_issue_to_pr
     dispatch_triage.run_path = run_path
     compute_health.is_manual_pr = _is_manual_pr

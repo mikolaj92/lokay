@@ -194,6 +194,14 @@ config = { atom = "assign_issue" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
+id = "stage_implementing"
+capability = "lokay_atom"
+conduction = ["get_issue"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "stage_label", stage = "implementing" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
 id = "make_branch"
 capability = "lokay_atom"
 conduction = ["get_issue"]
@@ -204,7 +212,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "worktree_add"
 capability = "lokay_atom"
-conduction = ["get_issue", "make_branch"]
+conduction = ["get_issue", "make_branch", "stage_implementing"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "worktree_add" }
 retry_policy = "none"
@@ -242,9 +250,17 @@ config = { atom = "pr_create" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "list_prs"
+id = "stage_pr_open"
 capability = "lokay_atom"
 conduction = ["get_issue", "pr_create"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "stage_label", stage = "pr-open" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "list_prs"
+capability = "lokay_atom"
+conduction = ["get_issue", "pr_create", "stage_pr_open"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "list_prs" }
 retry_policy = "none"
@@ -310,9 +326,17 @@ config = { atom = "pr_checks" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "worktree_add"
+id = "stage_repairing"
 capability = "lokay_atom"
 conduction = ["pr_checks"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "stage_label", stage = "repairing" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "worktree_add"
+capability = "lokay_atom"
+conduction = ["pr_checks", "stage_repairing"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "worktree_add" }
 retry_policy = "none"
@@ -372,9 +396,17 @@ config = { atom = "pr_merge" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "close_issue"
+id = "stage_clear"
 capability = "lokay_atom"
 conduction = ["pr_checks", "pr_review", "pr_merge"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "stage_label", stage = "clear" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "close_issue"
+capability = "lokay_atom"
+conduction = ["pr_checks", "pr_review", "pr_merge", "stage_clear"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "close_issue" }
 retry_policy = "none"

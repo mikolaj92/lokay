@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 from lokay.models import Issue
+from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
 # Title markers for whole-issue OOS (substring match on title only).
 OOS_TITLE_MARKERS = (
@@ -73,7 +74,13 @@ def decision_labels(
     park_labels: Iterable[str] = PARK_LABELS,
 ) -> frozenset[str]:
     """Labels that mean the issue already left the undecided inbox."""
-    return frozenset({ready_label, blocked_label, needs_feedback_label}) | frozenset(park_labels)
+    # Ledger in-flight stages (ai:in-progress / pr-open / ci-waiting / repairing)
+    # must not bounce the issue back into undecided inbox.
+    return (
+        frozenset({ready_label, blocked_label, needs_feedback_label})
+        | frozenset(park_labels)
+        | LEDGER_ACTIVE_LABELS
+    )
 
 
 def is_undecided(

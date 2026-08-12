@@ -27,6 +27,10 @@ def test_is_undecided():
     assert not is_undecided(["ai:ready"])
     assert not is_undecided(["ai:blocked"])
     assert not is_undecided(["ai:needs-feedback"])
+    assert not is_undecided(["ai:in-progress"])
+    assert not is_undecided(["ai:pr-open"])
+    assert not is_undecided(["ai:ci-waiting"])
+    assert not is_undecided(["ai:repairing"])
     assert not is_undecided(["frozen"])
     assert is_parked(["frozen"])
     assert is_parked(["ai:frozen"])
@@ -179,10 +183,19 @@ def test_pr_repair_path_in_package():
     assert "pr_repair" in ids
     path = next(p for p in desc["paths"] if p["id"] == "pr_repair")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["pr_checks", "worktree_add", "run_agent", "commit_all", "push"]
+    assert node_ids == [
+        "pr_checks",
+        "stage_repairing",
+        "worktree_add",
+        "run_agent",
+        "commit_all",
+        "push",
+    ]
     agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
     assert "worktree_add" in agent["conduction"]
     assert "pr_checks" in agent["conduction"]
+    stage = next(n for n in path["nodes"] if n["id"] == "stage_repairing")
+    assert "pr_checks" in stage["conduction"]
 
 
 def test_pr_triage_path_in_package():
@@ -191,14 +204,23 @@ def test_pr_triage_path_in_package():
     assert "pr_triage" in ids
     path = next(p for p in desc["paths"] if p["id"] == "pr_triage")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["pr_checks", "pr_review", "pr_merge", "close_issue"]
+    assert node_ids == [
+        "pr_checks",
+        "pr_review",
+        "pr_merge",
+        "stage_clear",
+        "close_issue",
+    ]
     review = next(n for n in path["nodes"] if n["id"] == "pr_review")
     assert "pr_checks" in review["conduction"]
     merge = next(n for n in path["nodes"] if n["id"] == "pr_merge")
     assert "pr_checks" in merge["conduction"]
     assert "pr_review" in merge["conduction"]
+    clear = next(n for n in path["nodes"] if n["id"] == "stage_clear")
+    assert "pr_merge" in clear["conduction"]
     close = next(n for n in path["nodes"] if n["id"] == "close_issue")
     assert "pr_merge" in close["conduction"]
+    assert "stage_clear" in close["conduction"]
     assert "pr_review" in close["conduction"]
 
 
