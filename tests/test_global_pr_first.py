@@ -378,6 +378,10 @@ def test_parallel_k_implements_across_clean_repos(tmp_path, monkeypatch):
     assert result["remaining"]["issue_to_pr_started"] == 3
     assert result["remaining"]["max_issue_to_pr_per_pass"] == 3
     assert result["remaining"]["open_ai_prs"] == 3
+    by_repo = {row["repo"]: row for row in result["remaining"]["by_repo"]}
+    assert by_repo["a/one"]["actionable_open_ai_prs"] == 1
+    assert by_repo["a/two"]["ready"] == 1  # K exhausted; still ready
+    assert result.get("pass_receipt_path")
 
 
 def test_stuck_repo_does_not_block_ready_repo_under_k(tmp_path, monkeypatch):

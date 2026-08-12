@@ -853,6 +853,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         progress += 1
                         remaining_ready = max(0, remaining_ready - 1)
             implementable = [i for i in implementable if int(i.get("number", -1)) != num]
+        # Keep per-repo ready rows aligned with remaining.ready after implement.
+        ready_by_repo[repo.name] = list(implementable)
 
     if live:
         save_stuck(stuck_path, stuck)
