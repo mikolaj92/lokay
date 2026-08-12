@@ -118,6 +118,53 @@ def test_live_waiting_when_only_open_prs_not_actionable():
     assert payload["idle"] is False
 
 
+def test_live_repairing_when_needs_repair_not_stall():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "mergeable_green": 1,
+            "needs_repair": 1,
+        },
+        actions=[{"step": "pr_review_repair"}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "repairing"
+    assert payload["ok"] is True
+    assert payload["idle"] is False
+
+
+def test_live_waiting_when_review_limbo_only():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+            "review_limbo": 1,
+            "pending_checks": 0,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+
+
 def test_progress_after_conflict_close():
     payload = _health_payload(
         cfg_mode="live",

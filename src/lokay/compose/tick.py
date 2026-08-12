@@ -93,10 +93,18 @@ def _health_payload(
     mergeable_green = int(remaining.get("mergeable_green") or 0)
     needs_repair = int(remaining.get("needs_repair") or 0)
     survey_errors = int(remaining.get("survey_errors") or 0)
+    pending_checks = int(remaining.get("pending_checks") or 0)
+    review_limbo = int(remaining.get("review_limbo") or 0)
     repair_actionable = needs_repair if executor_enabled else 0
     # Ready issues need the agent slot when live.
     ready_actionable = ready if (not live or executor_enabled) else 0
     agent_blocked = bool(live and ready > 0 and not executor_enabled)
+    # Active repair / CI wait / review limbo are honest non-error waiting states.
+    # They must not fingerprint as mill stall → recovery thrash.
+    actively_repairing = bool(needs_repair > 0 and (not live or executor_enabled))
+    honestly_waiting = bool(
+        pending_checks > 0 or review_limbo > 0
+    ) and inbox == 0 and ready_actionable == 0 and mergeable_green == 0
 
     if live:
         actionable_now = inbox + ready_actionable + mergeable_green + repair_actionable
@@ -116,6 +124,11 @@ def _health_payload(
     elif agent_blocked and progress == 0 and inbox == 0 and mergeable_green == 0:
         # NOT WORKING: ready work exists but agent never runs.
         health = "stall"
+    elif actively_repairing and progress == 0:
+        # Repair / re-review cycle in flight — waiting on next CI/head move.
+        health = "repairing"
+    elif honestly_waiting and progress == 0:
+        health = "waiting"
     elif actionable_now > 0:
         health = "stall"
     else:
@@ -229,6 +242,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     manual_prs = 0
     needs_repair = 0
     mergeable_green = 0
+    review_limbo = 0
     survey_errors = 0
     triage_budget = max(0, int(cfg.max_triage_per_tick)) if live else 0
     issue_budget = max(0, int(cfg.max_issues_per_tick)) if live else 0
@@ -579,7 +593,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 continue
             if tri.get("skipped"):
                 # An actionable structured review goes back to the coding executor on
-                # this existing PR branch. Human/security/invalid decisions stay closed.
+                # this existing PR branch. Human/security/invalid/escalated stay closed.
                 if tri.get("repairable"):
                     needs_repair += 1
                     if repair_budget > 0 and cfg.executor_enabled:
@@ -603,13 +617,24 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                         repair_budget -= 1
                         # Repair success is not queue progress.  Keep the observed
                         # repair need until fresh checks/review prove state movement.
+                else:
+                    # Not mergeable under policy this pass (human, secrets, escalated
+                    # request_changes cap, or same-head review already recorded).
+                    mergeable_green = max(0, mergeable_green - 1)
+                    review_limbo += 1
                 # PR remains open after repair. Fresh checks and review happen next pass.
                 if tri.get("reason") == "merge_conflicts":
                     merge_conflicts += 1
                 review = tri.get("review")
-                if isinstance(review, dict) and (
-                    review.get("verdict") == "needs_human"
-                    or review.get("secrets") is True
+                if (
+                    tri.get("escalated")
+                    or (
+                        isinstance(review, dict)
+                        and (
+                            review.get("verdict") == "needs_human"
+                            or review.get("secrets") is True
+                        )
+                    )
                 ):
                     # pr_review applied ai:needs-review; reflect that mutation in
                     # this pass rather than waiting for the next survey.
@@ -790,6 +815,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "intake_skip_reason": intake_skip_reason,
         "mergeable_green": mergeable_green,
         "needs_repair": needs_repair,
+        "review_limbo": review_limbo,
         "pending_checks": pending_checks,
         "no_checks_blocked": no_checks_blocked,
         "merge_conflicts": merge_conflicts,

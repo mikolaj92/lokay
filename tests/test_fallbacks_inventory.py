@@ -166,6 +166,7 @@ state:
             return {"ok": True, "prs": []}
         return {"ok": True}
 
+    monkeypatch.setattr(tick_mod, "run_preflight", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(tick_mod, "_run", fake_atom)
     monkeypatch.setattr(tick_mod, "run_path", lambda **kwargs: {
         "ok": True,

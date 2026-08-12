@@ -13,8 +13,13 @@ from lokay.gh_issues import ensure_labels
 from lokay.gh_prs import add_pr_labels
 from lokay.pr_review import (
     PrReviewError,
+    build_review_comment_body,
+    count_request_changes_reviews,
+    find_review_for_head,
+    parse_review_markers,
     parse_review_output,
     review_prompt,
+    should_escalate_request_changes,
     should_merge,
 )
 from lokay.proc._common import (
@@ -40,6 +45,19 @@ def _gh_text(runner_, args: list[str], *, live: bool) -> str:
     if not live:
         return ""
     return ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+
+
+def _comment_bodies(view: dict) -> list[str]:
+    comments = view.get("comments") or []
+    if not isinstance(comments, list):
+        return []
+    bodies: list[str] = []
+    for row in comments:
+        if isinstance(row, dict) and isinstance(row.get("body"), str):
+            bodies.append(row["body"])
+        elif isinstance(row, str):
+            bodies.append(row)
+    return bodies
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -84,13 +102,39 @@ def main(argv: list[str] | None = None) -> int:
             "--repo",
             args.repo,
             "--json",
-            "number,title,body,headRefName,url,isDraft,mergeable",
+            "number,title,body,headRefName,headRefOid,url,isDraft,mergeable,comments",
         ],
         live=live,
     )
     title = str(view.get("title") or "")
     body = str(view.get("body") or "")
     head = str(args.branch or view.get("headRefName") or "")
+    head_sha = str(view.get("headRefOid") or "").strip().lower()
+    markers = parse_review_markers(_comment_bodies(view))
+    prior_for_head = find_review_for_head(markers, head_sha)
+    prior_request_changes = count_request_changes_reviews(markers)
+    max_rc = max(1, int(getattr(cfg, "max_request_changes_per_pr", 2)))
+
+    # Idempotent: do not re-run the LLM or re-post for the same head SHA.
+    if live and head_sha and prior_for_head is not None:
+        prior_verdict = str(prior_for_head.get("verdict") or "")
+        prior_merge_ok = bool(prior_for_head.get("merge_ok"))
+        return emit_exit(
+            ok(
+                offline=False,
+                skipped=True,
+                reason="already_reviewed_head",
+                repo=args.repo,
+                pr=args.pr,
+                branch=head,
+                head_sha=head_sha,
+                decision={"verdict": prior_verdict},
+                merge_ok=prior_merge_ok,
+                applied=False,
+                request_changes_count=prior_request_changes,
+            )
+        )
+
     diff = _gh_text(
         r,
         ["pr", "diff", str(args.pr), "--repo", args.repo],
@@ -138,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
                 repo=args.repo,
                 pr=args.pr,
                 branch=head,
+                head_sha=head_sha,
                 merge_ok=False,
                 agent=agent_out,
             )
@@ -208,28 +253,25 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     merge_ok = should_merge(decision)
+    escalated = False
+    if (
+        decision.verdict == "request_changes"
+        and not decision.secrets
+        and should_escalate_request_changes(prior_request_changes, max_request_changes=max_rc)
+    ):
+        escalated = True
+        # Cap reached: fail closed to human review; never auto-merge / auto-repair.
+        merge_ok = False
+
     applied = False
     if mutations_allowed(live_flag=args.live, cfg=cfg):
         try:
-            lines = [
-                f"## Lokay LLM PR review: **{decision.verdict}** (risk={decision.risk})",
-                "",
-                decision.summary or "(no summary)",
-                "",
-            ]
-            if decision.blocking:
-                lines.append("### Blocking")
-                lines.extend(f"- {b}" for b in decision.blocking)
-                lines.append("")
-            if decision.nits:
-                lines.append("### Nits")
-                lines.extend(f"- {n}" for n in decision.nits)
-                lines.append("")
-            lines.append(
-                f"scope_ok={decision.scope_ok} secrets={decision.secrets} "
-                f"tests_adequate={decision.tests_adequate}"
+            body = build_review_comment_body(
+                decision,
+                head_sha=head_sha,
+                merge_ok=merge_ok and not escalated,
+                escalated=escalated,
             )
-            body = "\n".join(lines)
             r.run_checked(
                 gh_spec(
                     [
@@ -246,9 +288,9 @@ def main(argv: list[str] | None = None) -> int:
                 live=True,
             )
             labels: list[str] = []
-            if decision.verdict == "needs_human" or decision.secrets:
+            if escalated or decision.verdict == "needs_human" or decision.secrets:
                 labels.append("ai:needs-review")
-            if decision.verdict == "request_changes":
+            if decision.verdict == "request_changes" and not escalated:
                 labels.append("ai:request-changes")
             if labels:
                 ensure_labels(r, args.repo, labels, live=True)
@@ -260,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"failed to publish review comment: {exc}",
                     decision=decision.to_dict(),
                     merge_ok=merge_ok,
+                    escalated=escalated,
                 )
             )
 
@@ -269,9 +312,14 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             pr=args.pr,
             branch=head,
+            head_sha=head_sha,
             decision=decision.to_dict(),
-            merge_ok=merge_ok,
+            merge_ok=merge_ok and not escalated,
+            escalated=escalated,
             applied=applied,
+            request_changes_count=prior_request_changes + (
+                1 if decision.verdict == "request_changes" else 0
+            ),
             agent_status=agent_out.get("status"),
         )
     )

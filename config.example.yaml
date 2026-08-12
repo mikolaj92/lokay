@@ -1,7 +1,11 @@
 # Lokay — multi-repo mill for mikolaj92 source libraries.
 # Stubs/fake agents are FORBIDDEN — docs/NO_STUBS.md
+#
+# Code default is dry-run (no mutations). Set mode: live (or LOKAY_MODE=live)
+# only on an intentionally live machine profile.
 
-mode: live  # dry-run | live  (dry-run = no mutations; still real agent if invoked)
+mode: dry-run  # dry-run | live  (dry-run = no mutations; still real agent if invoked)
+# Env override: LOKAY_MODE=live|dry-run
 
 # Catalog = which repos we manage (not a denylist).
 repos_file: repos.mikolaj92.yaml
@@ -25,7 +29,7 @@ github:
 #     enabled: true
 
 executor:
-  enabled: true
+  enabled: false  # set true (or LOKAY_EXECUTOR_ENABLED=1) for live milling
   agent: pi                  # log label only
   command: pi               # harness binary — swap to change implementation
   model: omniroute/pi
@@ -45,9 +49,15 @@ executor:
 # Dedicated self-repair uses its own bounded agent-attempt budget.
 limits:
   max_self_repair_attempts: 2
-  whole_run_deadline_seconds: 3600
+  # After this many request_changes reviews on one PR, label ai:needs-review
+  # and stop auto repair/re-review thrash (default 2).
+  max_request_changes_per_pr: 2
+  max_repairs_per_tick: 1
+  max_triage_per_tick: 5
+  max_issues_per_tick: 1
 
-# Automatic self-repair obeys this normal merge policy and blocks when disabled.
+# Merge knobs (code defaults: enabled=false, require_checks=false, require_llm_review=true).
+# Env overrides: LOKAY_MERGE_ENABLED, LOKAY_REQUIRE_CHECKS, LOKAY_REQUIRE_LLM_REVIEW.
 merge:
   enabled: false
   require_checks: false

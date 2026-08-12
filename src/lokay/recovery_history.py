@@ -14,6 +14,10 @@ _WINDOW = 5
 _QUORUM = 4
 _VOLATILE = re.compile(r"(?i)(?:0x)?[0-9a-f]{8,}|\b\d+\b")
 _SPACE = re.compile(r"\s+")
+# Honest wait / repair limbo must not confirm as mill failure for recovery.
+_NON_FAILURE_HEALTH = frozenset(
+    {"waiting", "repairing", "idle", "progress", "offline", "overlap"}
+)
 
 
 def history_path_for(state_path: Path) -> Path:
@@ -84,7 +88,14 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
             fingerprint = hashlib.sha256(normalized.encode()).hexdigest()[:16]
             failures.append(fingerprint)
             evidence.setdefault(fingerprint, raw[:4000])
-    if not failures and not mill.get("ok"):
+    mill_health = str(mill.get("health") or "")
+    # Waiting/repairing/review limbo are honest non-error outcomes — do not mint a
+    # systemic stall fingerprint from the mill envelope alone.
+    if (
+        not failures
+        and not mill.get("ok")
+        and mill_health not in _NON_FAILURE_HEALTH
+    ):
         raw = str(mill.get("error") or mill.get("health") or "mill failed")
         normalized = normalize_failure(raw)
         fingerprint = hashlib.sha256(normalized.encode()).hexdigest()[:16]
