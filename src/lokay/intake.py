@@ -3,21 +3,13 @@
 Cheap, testable checks that harden inbox triage before `ai:ready` sticks
 eligible for `issue_to_pr`. Pure rules first; no coding harness.
 
-<<<<<<< HEAD
 Product law: humans author intentional issues; the mill consumes. Trust the
 operator/assignee — prefer READY+implement autonomy; do not invent distrustful
 human gates. CLOSE / SPLIT / READY+implement are the default exits.
-NEEDS_HUMAN is a rare residual after rules fail closed — never the escape
-hatch for oversized work that can be auto-split.
-=======
-Product law: minimize human in the loop. CLOSE / SPLIT / READY+implement are
-the default exits. NEEDS_HUMAN is a rare residual after rules fail closed —
-never the escape hatch for oversized work that can be auto-split.
-
-Trust intentional issues: tickets from the repo owner / configured assignee are
-purposeful. CLOSE is for clear obsolete / wrong-shape / superseded cases only —
-do not bias toward distrusting every ticket.
->>>>>>> b9252f7 (refactor(factory_pass): split closeout; trust intentional issues)
+CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
+bias toward distrusting every ticket. NEEDS_HUMAN is a rare residual after
+rules fail closed — never the escape hatch for oversized work that can be
+auto-split.
 """
 
 from __future__ import annotations
