@@ -486,11 +486,16 @@ def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
 def _github_incident(result: dict[str, Any]) -> str | None:
     """Create or reuse the deduplicated Lokay recovery incident."""
     failed = [x for x in result["findings"] if not x["ok"]]
-    # Lock contention and missing managed clones are operational inventory,
-    # not source defects. Keep this guard at the mutation boundary as well as
-    # in run_preflight so stale or external callers cannot turn their
-    # combination into a recursive repair issue.
-    non_source_failures = {"repository_catalog_clones", "singleton_overlap"}
+    # Lock contention, missing clones, and unusable host runtime directories
+    # are operational inventory, not source defects. Keep this guard at the
+    # mutation boundary so a config/permission problem (or a bounded probe
+    # using an intentionally unsafe path) cannot create recursive source work.
+    non_source_failures = {
+        "repository_catalog_clones",
+        "singleton_overlap",
+        "writable_runtime_paths",
+        "disk_headroom",
+    }
     if failed and {item["name"] for item in failed} <= non_source_failures:
         return None
     if not any(x["name"] == "github_authentication" and x["ok"] for x in result["findings"]):

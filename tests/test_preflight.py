@@ -257,6 +257,11 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
         [preflight._finding("singleton_overlap", False, "contended")],
         [
             preflight._finding(
+                "writable_runtime_paths", False, "unsafe_or_unwritable"
+            )
+        ],
+        [
+            preflight._finding(
                 "repository_catalog_clones", False, "missing_clone"
             ),
             preflight._finding("singleton_overlap", False, "contended"),
@@ -477,6 +482,38 @@ def test_unsafe_symlink_runtime_path_is_not_repaired(tmp_path, monkeypatch):
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is False
     assert not (target / "worktrees").exists()
+
+
+def test_unavailable_runtime_path_does_not_open_github_issue(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    state_dir = tmp_path / "runtime" / "state"
+    worktrees = tmp_path / "runtime" / "worktrees"
+    state_dir.mkdir(parents=True)
+    worktrees.mkdir(parents=True)
+    target = tmp_path / "log-target"
+    target.mkdir()
+    unsafe_log_dir = tmp_path / "linked-logs"
+    unsafe_log_dir.symlink_to(target, target_is_directory=True)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(unsafe_log_dir / "unavailable"))
+    monkeypatch.setattr(
+        preflight.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}"
+    )
+
+    def allow_auth_only(args, **kwargs):
+        if args == ["gh", "api", "user", "--silent"]:
+            return type("Completed", (), {"returncode": 0})()
+        raise AssertionError("GitHub mutation attempted for runtime-path failure")
+
+    monkeypatch.setattr(preflight.subprocess, "run", allow_auth_only)
+
+    result = preflight.run_preflight(str(cfg), remediate=False)
+
+    assert result["ok"] is False
+    assert {
+        item["name"] for item in result["findings"] if not item["ok"]
+    } == {"writable_runtime_paths", "disk_headroom"}
+    assert result["incident_url"] is None
 
 
 def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
