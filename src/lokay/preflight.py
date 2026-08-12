@@ -494,6 +494,7 @@ def _github_incident(result: dict[str, Any]) -> str | None:
         "repository_catalog_clones",
         "singleton_overlap",
         "writable_runtime_paths",
+        "disk_headroom",
     }
     if failed and {item["name"] for item in failed} <= non_source_failures:
         return None
