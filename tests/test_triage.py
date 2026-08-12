@@ -162,9 +162,11 @@ def test_issue_triage_path_in_package():
     assert "issue_triage" in ids
     path = next(p for p in desc["paths"] if p["id"] == "issue_triage")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["get_issue", "triage_issue"]
+    assert node_ids == ["get_issue", "triage_issue", "intake_issue"]
     triage = path["nodes"][1]
     assert "get_issue" in triage["conduction"]
+    intake = path["nodes"][2]
+    assert "triage_issue" in intake["conduction"]
 
 
 def test_pr_repair_path_in_package():

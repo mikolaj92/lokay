@@ -13,6 +13,7 @@ class Issue:
     labels: list[str]
     assignees: list[str]
     url: str
+    state: str = "OPEN"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -27,6 +28,7 @@ class Issue:
             labels=list(data.get("labels") or []),
             assignees=list(data.get("assignees") or []),
             url=str(data.get("url") or ""),
+            state=str(data.get("state") or "OPEN").upper(),
         )
 
 

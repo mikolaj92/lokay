@@ -161,12 +161,12 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "pr_label" }
 retry_policy = "none"
 
-# --- Inbox triage: undecided issue -> labels (ai:ready is an outcome) ---
+# --- Inbox triage: undecided issue -> labels (ai:ready is an outcome of intake) ---
 
 [[correlation_paths]]
 id = "issue_triage"
 title = "Issue triage"
-description = "Load one open issue and apply deterministic inbox triage labels."
+description = "Load one open issue, apply inbox triage, then deterministic intake before ai:ready sticks."
 
 [[correlation_paths.effectors]]
 id = "get_issue"
@@ -181,6 +181,14 @@ capability = "lokay_atom"
 conduction = ["get_issue"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "triage_issue" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "intake_issue"
+capability = "lokay_atom"
+conduction = ["get_issue", "triage_issue"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "intake_issue" }
 retry_policy = "none"
 
 # --- PR repair: red checks -> agent fix on existing branch -> push ---

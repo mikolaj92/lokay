@@ -24,6 +24,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-list-inbox` | undecided open issues |
 | `lokay-list-issues` | `ai:ready` issues |
 | `lokay-triage-issue` | apply triage decision |
+| `lokay-intake-check` | one deterministic intake check (JSON) |
+| `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| NEEDS_HUMAN |
 | `lokay-select-issue` | pick one issue |
 | `lokay-assign-issue` | assign maintainer |
 | `lokay-make-branch` | pure branch name |

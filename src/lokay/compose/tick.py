@@ -25,6 +25,7 @@ from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
+from lokay.proc import intake_issue as p_intake
 from lokay.proc import label_issue as p_label
 from lokay.proc import list_inbox as p_list_inbox
 from lokay.proc import list_issues as p_list_issues
@@ -32,7 +33,6 @@ from lokay.proc import list_prs as p_list_prs
 from lokay.proc import pr_checks as p_checks
 from lokay.proc import pr_close as p_pr_close
 from lokay.proc import select_issue as p_select
-from lokay.proc import triage_issue as p_triage
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.preflight import health_lease_status, run_preflight
 from lokay.stuck import (
@@ -206,9 +206,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     pipeline = [
         "survey: list-prs + list-inbox + list-issues (all repos)",
-        "triage inbox (may mark several ai:ready; does not open PRs)",
+        "triage inbox + deterministic intake (ai:ready only after intake; does not open PRs)",
         "PR-first: conflict close / repair / merge open AI PRs (land code before new work)",
-        "implement at most one ready issue, only in repos with zero open AI PRs",
+        "intake gate then implement at most one ready issue (repos with zero open AI PRs)",
         "on failure: stuck ledger → ai:blocked",
     ]
     planned.append(
@@ -731,6 +731,36 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if not selected:
                 break
             num = int(selected["number"])
+            # Deterministic intake gate: never call issue_to_pr unless intake READY.
+            gate = _run(
+                p_intake.main,
+                [
+                    *cfg_flag,
+                    *live_flag,
+                    "--repo",
+                    selected["repo"],
+                    "--issue",
+                    str(num),
+                    "--require-ready",
+                ],
+            )
+            actions.append(
+                {
+                    "step": "intake_issue",
+                    "repo": selected["repo"],
+                    "issue": num,
+                    **gate,
+                }
+            )
+            if gate.get("applied"):
+                progress += 1
+            if not (gate.get("ok") and gate.get("implementable")):
+                # Demoted/closed/needs-human: drop from ready queue; do not stuck-ledger.
+                remaining_ready = max(0, remaining_ready - 1)
+                implementable = [
+                    i for i in implementable if int(i.get("number", -1)) != num
+                ]
+                continue
             result = compose_issue_to_pr(
                 config_path=config_path,
                 repo=selected["repo"],

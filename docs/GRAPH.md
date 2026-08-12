@@ -77,10 +77,18 @@ get_issue
 
 ```text
 get_issue
-  └─→ triage_issue   ← pure rules → ai:ready | ai:needs-feedback | OOS close
+  └─→ triage_issue   ← pure rules → ready candidate | ai:needs-feedback | OOS close
+        └─→ intake_issue  ← deterministic intake → CLOSE | READY | NEEDS_HUMAN
 ```
 
-`ai:ready` is an **outcome** of triage, not the start of the universe.
+`ai:ready` is an **outcome** of triage **plus intake**, not the start of the universe.
+Intake runs cheap checks first (still-open, superseded/merged PR, playbook/shape
+fitness, already-satisfied paths, size/ambiguity). CLOSE posts a short rationale
+comment (and drops `ai:ready` when present). NEEDS_HUMAN applies
+`ai:needs-feedback`. Inconclusive evidence fails closed to NEEDS_HUMAN (no stub
+LLM required). Global PR-first freeze is unchanged: intake still runs inside
+`issue_triage` whenever triage is allowed; the mill also re-runs `intake_issue`
+with `--require-ready` before every `issue_to_pr`.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 
