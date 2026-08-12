@@ -57,6 +57,7 @@ def test_actionable_pr_in_other_repo_blocks_intake(tmp_path, monkeypatch):
             return {"ok": True, "status": "pending"}
         raise AssertionError(fn)
 
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "compose_issue_to_pr", lambda **_: (_ for _ in ()).throw(AssertionError("intake ran")))
     result = tick.compose_tick(config_path=config, live=True)
@@ -82,6 +83,7 @@ def test_merge_then_intake_when_global_queue_is_clear(tmp_path, monkeypatch):
         raise AssertionError(fn)
 
     intake = []
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "compose_pr_triage", lambda **_: {"ok": True, "merged": True})
     monkeypatch.setattr(tick, "compose_issue_to_pr", lambda **kw: intake.append(kw) or {"ok": True, "pr": 2, "branch": "ai/fix/2-next"})
@@ -106,6 +108,7 @@ def test_manual_only_pr_allows_unrelated_repo_intake(tmp_path, monkeypatch):
         raise AssertionError(fn)
 
     intake = []
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "compose_issue_to_pr", lambda **kw: intake.append(kw) or {"ok": True, "pr": 2, "branch": "ai/fix/2-next"})
     result = tick.compose_tick(config_path=config, live=True)
@@ -131,6 +134,7 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
             return {"ok": True, "status": "pending"}
         raise AssertionError(fn)
 
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
@@ -151,6 +155,7 @@ def test_pr_survey_failure_blocks_triage_and_intake(tmp_path, monkeypatch):
             return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}]}
         raise AssertionError(fn)
 
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "run_path", lambda **kw: triage.append(kw))
     monkeypatch.setattr(tick, "compose_issue_to_pr", lambda **_: (_ for _ in ()).throw(AssertionError("intake ran")))
@@ -176,6 +181,7 @@ def test_needs_human_discovered_this_pass_becomes_manual(tmp_path, monkeypatch):
         raise AssertionError(fn)
 
     intake = []
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "compose_pr_triage", lambda **_: {
         "ok": True, "skipped": True, "repairable": False,
