@@ -120,13 +120,61 @@ def test_waiting_or_repairing_mill_envelope_is_not_failure_fingerprint(tmp_path)
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
     for health in ("waiting", "repairing"):
-        row = observe_run(
-            state_path=state,
-            state_offset=0,
-            mill={"ok": False, "health": health, "error": f"mill {health}", "progress": 0},
+        # Both ok=false (defensive) and ok=true (mill early-exit / #55 receipt shape).
+        for ok_flag in (False, True):
+            row = observe_run(
+                state_path=state,
+                state_offset=0,
+                mill={
+                    "ok": ok_flag,
+                    "health": health,
+                    "error": f"mill {health}",
+                    "progress": 0,
+                },
+            )
+            assert row["fingerprint"] is None
+            assert row["health"] == health
+
+
+def test_pending_ci_and_needs_review_triage_events_do_not_fingerprint(tmp_path):
+    """Review limbo / pending CI / parked needs-review are soft product waits."""
+    state = tmp_path / "state.jsonl"
+    state.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in (
+                {
+                    "kind": "pr_triage",
+                    "ok": True,
+                    "skipped": True,
+                    "waiting": True,
+                    "reason": "checks_pending",
+                },
+                {
+                    "kind": "pr_triage",
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "llm_review_escalated_needs_review",
+                    "needs_review": True,
+                    "escalated": True,
+                },
+                {
+                    "kind": "pr_repair",
+                    "ok": False,
+                    "error": "repair while waiting on CI",
+                },
+            )
         )
-        assert row["fingerprint"] is None
-        assert row["health"] == health
+        + "\n",
+        encoding="utf-8",
+    )
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={"ok": True, "health": "waiting", "progress": 0},
+    )
+    assert row["fingerprint"] is None
+    assert row["health"] == "waiting"
 
 
 def test_event_failures_under_waiting_or_repairing_do_not_fingerprint(tmp_path):

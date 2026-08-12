@@ -64,6 +64,13 @@ the transcript.
 `ok=false` on status means **not working** (work remains but mill not live-ready,
 or survey errors). `waiting` / `repairing` with `ok=true` is not a failure.
 
+**Recovery boundary:** `waiting` / `repairing` (and other soft mill health) must
+not mint systemic stall fingerprints or fill the daemon 4-of-5 quorum into
+`self_repair`. Pass receipts and `lokay status` keep reporting those honest
+waits; recovery only enters on carrier/preflight failure or confirmed hard
+product-mill stalls. See [`WORKING.md`](WORKING.md) (Self-repair / recovery) and
+[`GRAPH.md`](GRAPH.md) (`daemon_cycle` / `self_repair`).
+
 Human residuals never freeze other repos. High `human_residuals.count` is an
 exception mailbox signal, not a mill brake.
 
