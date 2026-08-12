@@ -24,6 +24,14 @@ autonomy. `NEEDS_HUMAN` / `ai:needs-feedback` is a **rare residual** after
 deterministic rules fail closed — never the default escape hatch for oversized
 or ambiguous work that can be auto-split.
 
+### Trust intentional issues
+
+Fleet flow assumes issues from the repo owner / configured assignee
+(`github.assignee`, e.g. `mikolaj92`) are **purposeful**. Do **not** invent new
+human-approval gates in the pass spine or bias architecture toward “distrust
+every ticket.” Intake `CLOSE` stays for clear obsolete / wrong-shape /
+superseded cases. Maximum autonomy: human writes issue → mill delivers.
+
 `lokay status --human` lists that residual mailbox across managed repos. It is
 **exception reporting**, not a workflow step. The mill does **not** wait on a
 human digest and does **not** freeze other repos because one issue is parked
@@ -152,10 +160,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
 - `factory_pass` is the parent Fala run used by the mill. It conducts
   `factory_begin → survey_repos → plan_pass → dispatch_triage →
-  dispatch_closeout → select_implement → dispatch_implement → compute_health →
-  record_pass`. Dispatch atoms start the smaller workflow Falas through a
-  separate journal boundary. `compose/tick.py` is a thin in-process bridge for
-  `lokay-tick` / tests — not the multi-repo brain.
+  resolve_conflicts → closeout_prs → select_implement → dispatch_implement →
+  compute_health → record_pass`. Dispatch atoms start the smaller workflow
+  Falas through a separate journal boundary. `compose/tick.py` is a thin
+  in-process bridge for `lokay-tick` / tests — not the multi-repo brain.
 - `pr_review`: structured LLM gate before auto-merge when `merge.require_llm_review`.
   Comments carry a durable `<!-- lokay-review head=… -->` marker for idempotency.
 - Env knobs (see `config.example.yaml`): `LOKAY_MERGE_ENABLED`, `LOKAY_REQUIRE_CHECKS`,

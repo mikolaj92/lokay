@@ -46,11 +46,12 @@ factory_begin
   → survey_repos
     → plan_pass
       → dispatch_triage          → issue_triage child Fala
-        → dispatch_closeout      → pr_repair / pr_triage child Falas
-          → select_implement
-            → dispatch_implement → issue_to_pr child Fala
-              → compute_health
-                → record_pass    → last-pass.json
+        → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
+          → closeout_prs         → pr_repair / pr_triage child Falas
+            → select_implement
+              → dispatch_implement → issue_to_pr child Fala
+                → compute_health
+                  → record_pass    → last-pass.json
 ```
 
 | Atom | One job |
@@ -59,11 +60,18 @@ factory_begin
 | `survey_repos` | list PRs / inbox / ready for all repos |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children |
-| `dispatch_closeout` | conflict / repair / merge / wait open AI PRs |
+| `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
+| `closeout_prs` | checks / repair / merge / wait remaining open AI PRs |
 | `select_implement` | clean repos eligible for up to K `issue_to_pr` |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial within repo) |
 | `compute_health` | remaining counters + honest mill health |
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
+
+**Trust intentional issues:** fleet flow assumes issues from the repo owner /
+configured assignee are purposeful. Do not invent new human-approval gates in
+the pass spine. Intake `CLOSE` remains for clear obsolete / wrong-shape /
+superseded cases only — never bias toward “distrust every ticket.” Goal:
+human writes issue → mill delivers.
 
 The mill invokes this parent path (`compose_factory_pass` → `run_path`). Parent
 journal: `~/.lokay/fala/factory/state.sqlite`. Child paths:
@@ -168,7 +176,7 @@ Soft documentation nits must not route to `ai:needs-review`.
 Config: `merge.require_llm_review` (default true), `merge.require_checks` (default false).
 Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
-`dispatch_closeout` also handles **merge conflicts**: `mergeable=CONFLICTING|DIRTY`
+`resolve_conflicts` handles **merge conflicts**: `mergeable=CONFLICTING|DIRTY`
 → `lokay-pr-close` + re-label linked issue `ai:ready` so the next pass re-runs
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 

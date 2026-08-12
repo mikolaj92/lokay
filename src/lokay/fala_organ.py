@@ -64,8 +64,8 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         assign_issue,
         close_issue,
         commit_all,
+        closeout_prs,
         compute_health,
-        dispatch_closeout,
         dispatch_implement,
         dispatch_triage,
         factory_begin,
@@ -87,6 +87,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         recovery_observe,
         recovery_record,
         recovery_run_self_repair,
+        resolve_conflicts,
         run_agent,
         select_implement,
         survey_repos,
@@ -214,11 +215,18 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             dispatch_triage.main, [*cfg, *live, "--pass-dir", pass_dir]
         )
 
-    if atom == "dispatch_closeout":
+    if atom == "resolve_conflicts":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
         return _run_atom_main(
-            dispatch_closeout.main, [*cfg, *live, "--pass-dir", pass_dir]
+            resolve_conflicts.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "closeout_prs":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            closeout_prs.main, [*cfg, *live, "--pass-dir", pass_dir]
         )
 
     if atom == "select_implement":

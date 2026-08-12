@@ -14,13 +14,14 @@ from typing import Any
 
 from lokay.envelope import emit_exit
 from lokay.proc._common import add_config_live, load_cfg  # noqa: F401
+from lokay.proc.closeout_prs import run_closeout_prs
 from lokay.proc.compute_health import run_compute_health
-from lokay.proc.dispatch_closeout import run_dispatch_closeout
 from lokay.proc.dispatch_implement import run_dispatch_implement
 from lokay.proc.dispatch_triage import run_dispatch_triage
 from lokay.proc.factory_begin import run_factory_begin
 from lokay.proc.plan_pass import run_plan_pass
 from lokay.proc.record_pass import run_record_pass
+from lokay.proc.resolve_conflicts import run_resolve_conflicts
 from lokay.proc.select_implement import run_select_implement
 from lokay.proc.survey_repos import run_survey_repos
 from lokay.passkit import io as pass_io
@@ -51,12 +52,13 @@ def _bind_test_patches() -> None:
     collaborators by module attribute; rebind those attributes to this module's
     names so patches on ``tick._run`` / ``tick.run_path`` / composers still apply.
     """
+    import lokay.proc.closeout_prs as closeout_prs
     import lokay.proc.compute_health as compute_health
-    import lokay.proc.dispatch_closeout as dispatch_closeout
     import lokay.proc.dispatch_implement as dispatch_implement
     import lokay.proc.dispatch_triage as dispatch_triage
     import lokay.proc.factory_begin as factory_begin
     import lokay.proc.plan_pass as plan_pass
+    import lokay.proc.resolve_conflicts as resolve_conflicts
     import lokay.proc.survey_repos as survey_repos
 
     factory_begin.run_preflight = run_preflight
@@ -65,10 +67,12 @@ def _bind_test_patches() -> None:
     survey_repos.run_proc = _run
     survey_repos.is_manual_pr = _is_manual_pr
     plan_pass.is_manual_pr = _is_manual_pr
-    dispatch_closeout.run_proc = _run
-    dispatch_closeout.compose_pr_repair = compose_pr_repair
-    dispatch_closeout.compose_pr_triage = compose_pr_triage
-    dispatch_closeout.is_manual_pr = _is_manual_pr
+    resolve_conflicts.run_proc = _run
+    resolve_conflicts.is_manual_pr = _is_manual_pr
+    closeout_prs.run_proc = _run
+    closeout_prs.compose_pr_repair = compose_pr_repair
+    closeout_prs.compose_pr_triage = compose_pr_triage
+    closeout_prs.is_manual_pr = _is_manual_pr
     dispatch_implement.run_proc = _run
     dispatch_implement.compose_issue_to_pr = compose_issue_to_pr
     dispatch_triage.run_path = run_path
@@ -88,7 +92,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     run_survey_repos(pass_dir=pass_dir, config_path=config_path, live=live)
     run_plan_pass(pass_dir=pass_dir)
     run_dispatch_triage(pass_dir=pass_dir, config_path=config_path, live=live)
-    run_dispatch_closeout(pass_dir=pass_dir, config_path=config_path, live=live)
+    run_resolve_conflicts(pass_dir=pass_dir, config_path=config_path, live=live)
+    run_closeout_prs(pass_dir=pass_dir, config_path=config_path, live=live)
     run_select_implement(pass_dir=pass_dir)
     run_dispatch_implement(pass_dir=pass_dir, config_path=config_path, live=live)
     run_compute_health(pass_dir=pass_dir)

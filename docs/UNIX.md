@@ -40,7 +40,9 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-survey-repos` | survey PRs / inbox / ready (all repos) |
 | `lokay-plan-pass` | select triage / closeout targets (per-repo PR-first) |
 | `lokay-dispatch-triage` | run planned inbox triage children |
-| `lokay-dispatch-closeout` | PR conflict / repair / merge / wait |
+| `lokay-resolve-conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready |
+| `lokay-closeout-prs` | checks / repair / merge / wait open AI PRs |
+| `lokay-dispatch-closeout` | thin bridge: resolve_conflicts then closeout_prs |
 | `lokay-select-implement` | clean repos eligible for issue_to_pr |
 | `lokay-dispatch-implement` | intake gate + up to K issue_to_pr |
 | `lokay-compute-health` | remaining + honest mill health |

@@ -68,7 +68,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "factory_pass"
 title = "Lokay factory pass"
-description = "Parent Fala conducts one multi-repo pass: survey -> plan -> triage -> closeout -> select -> implement -> health -> receipt."
+description = "Parent Fala conducts one multi-repo pass: survey -> plan -> triage -> conflicts -> closeout -> select -> implement -> health -> receipt. Trust intentional owner/assignee issues; no new human gates in the spine."
 
 [[correlation_paths.effectors]]
 id = "factory_begin"
@@ -102,17 +102,25 @@ config = { atom = "dispatch_triage" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "dispatch_closeout"
+id = "resolve_conflicts"
 capability = "lokay_atom"
 conduction = ["factory_begin", "dispatch_triage"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "resolve_conflicts" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "closeout_prs"
+capability = "lokay_atom"
+conduction = ["factory_begin", "resolve_conflicts"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "dispatch_closeout" }
+config = { atom = "closeout_prs" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
 id = "select_implement"
 capability = "lokay_atom"
-conduction = ["factory_begin", "dispatch_closeout"]
+conduction = ["factory_begin", "closeout_prs"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_implement" }
 retry_policy = "none"

@@ -14,7 +14,8 @@ def test_describe_parent_factory_graph():
         "survey_repos",
         "plan_pass",
         "dispatch_triage",
-        "dispatch_closeout",
+        "resolve_conflicts",
+        "closeout_prs",
         "select_implement",
         "dispatch_implement",
         "compute_health",
@@ -24,13 +25,15 @@ def test_describe_parent_factory_graph():
     assert conduction["survey_repos"] == ["factory_begin"]
     assert "survey_repos" in conduction["plan_pass"]
     assert "plan_pass" in conduction["dispatch_triage"]
-    assert "dispatch_triage" in conduction["dispatch_closeout"]
-    assert "dispatch_closeout" in conduction["select_implement"]
+    assert "dispatch_triage" in conduction["resolve_conflicts"]
+    assert "resolve_conflicts" in conduction["closeout_prs"]
+    assert "closeout_prs" in conduction["select_implement"]
     assert "select_implement" in conduction["dispatch_implement"]
     assert "dispatch_implement" in conduction["compute_health"]
     assert "compute_health" in conduction["record_pass"]
-    # Mega factory_tick must not hide pass policy in the parent graph.
+    # Mega factory_tick / dispatch_closeout must not hide pass policy in the graph.
     assert "factory_tick" not in ids
+    assert "dispatch_closeout" not in ids
 
 
 def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
@@ -281,7 +284,8 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "survey_repos",
             "plan_pass",
             "dispatch_triage",
-            "dispatch_closeout",
+            "resolve_conflicts",
+            "closeout_prs",
             "select_implement",
             "dispatch_implement",
             "compute_health",
