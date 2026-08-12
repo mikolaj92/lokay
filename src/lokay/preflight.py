@@ -486,10 +486,12 @@ def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
 def _github_incident(result: dict[str, Any]) -> str | None:
     """Create or reuse the deduplicated Lokay recovery incident."""
     failed = [x for x in result["findings"] if not x["ok"]]
-    # Lock contention is an expected overlap between scheduled runs, not a
-    # source defect. Keep this guard at the mutation boundary as well as in
-    # run_preflight so no caller can turn overlap into a recursive repair issue.
-    if len(failed) == 1 and failed[0]["name"] == "singleton_overlap":
+    # Lock contention and missing managed clones are operational inventory,
+    # not source defects. Keep this guard at the mutation boundary as well as
+    # in run_preflight so stale or external callers cannot turn their
+    # combination into a recursive repair issue.
+    non_source_failures = {"repository_catalog_clones", "singleton_overlap"}
+    if failed and {item["name"] for item in failed} <= non_source_failures:
         return None
     if not any(x["name"] == "github_authentication" and x["ok"] for x in result["findings"]):
         return None
@@ -613,22 +615,26 @@ def run_preflight(
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     failed_findings = [x for x in checked["findings"] if not x["ok"]]
-    singleton_only = (
-        len(failed_findings) == 1
-        and failed_findings[0]["name"] == "singleton_overlap"
-        and failed_findings[0]["code"] == "contended"
+    operational_names = {"repository_catalog_clones", "singleton_overlap"}
+    operational_overlap = (
+        any(
+            item["name"] == "singleton_overlap" and item["code"] == "contended"
+            for item in failed_findings
+        )
+        and {item["name"] for item in failed_findings} <= operational_names
     )
     # Contention means another healthy invocation owns the run slot. It still
     # fails closed, but is an operational outcome rather than broken preflight
-    # health and must never enter the source-repair lane.
-    health = "overlap" if singleton_only else ("healthy" if checked["ok"] else "preflight_failed")
+    # health and must never enter the source-repair lane. Accept the legacy
+    # missing-clone finding here so an upgrading daemon cannot report #30 again.
+    health = "overlap" if operational_overlap else ("healthy" if checked["ok"] else "preflight_failed")
     result = {**checked, "health": health, "fingerprint": fp, "gate_released": checked["ok"], "repairs": repairs}
-    if singleton_only:
+    if operational_overlap:
         result["operational_overlap"] = True
     if checked["ok"] and issue_lease:
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
     if not checked["ok"]:
-        if singleton_only:
+        if operational_overlap:
             # Overlap is already represented by the structured result. Do not
             # put it in either incident channel, where a consumer could mistake
             # expected scheduler contention for a source-repair task.

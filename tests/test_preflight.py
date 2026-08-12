@@ -251,25 +251,53 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
     preflight.revoke_health_lease()
 
 
-def test_github_incident_refuses_singleton_only_failure(monkeypatch):
+@pytest.mark.parametrize(
+    "failed",
+    [
+        [preflight._finding("singleton_overlap", False, "contended")],
+        [
+            preflight._finding(
+                "repository_catalog_clones", False, "missing_clone"
+            ),
+            preflight._finding("singleton_overlap", False, "contended"),
+        ],
+    ],
+)
+def test_github_incident_refuses_operational_inventory_failures(
+    monkeypatch, failed
+):
     monkeypatch.setattr(
         preflight.subprocess,
         "run",
         lambda *args, **kwargs: (_ for _ in ()).throw(
-            AssertionError("GitHub mutation attempted for operational overlap")
+            AssertionError("GitHub mutation attempted for operational inventory")
         ),
     )
     result = {
         "findings": [
             preflight._finding("github_authentication", True, "ok"),
-            preflight._finding("singleton_overlap", False, "contended"),
+            *failed,
         ]
     }
 
     assert preflight._github_incident(result) is None
 
 
-def test_singleton_contention_is_not_recorded_as_an_incident(monkeypatch):
+@pytest.mark.parametrize(
+    "findings",
+    [
+        [preflight._finding("singleton_overlap", False, "contended")],
+        [
+            preflight._finding(
+                "repository_catalog_clones", False, "missing_clone"
+            ),
+            preflight._finding("singleton_overlap", False, "contended"),
+        ],
+    ],
+)
+def test_singleton_contention_is_not_recorded_as_an_incident(
+    monkeypatch, findings
+):
     monkeypatch.setattr(
         preflight,
         "_check",
@@ -278,9 +306,7 @@ def test_singleton_contention_is_not_recorded_as_an_incident(monkeypatch):
                 "ok": False,
                 "carrier_ok": False,
                 "integrity_ok": True,
-                "findings": [
-                    preflight._finding("singleton_overlap", False, "contended")
-                ],
+                "findings": findings,
             },
             None,
         ),
