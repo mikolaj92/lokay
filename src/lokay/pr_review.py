@@ -273,7 +273,29 @@ def review_prompt(
     head_ref: str,
     diff_text: str,
     checks_text: str,
+    approach_present: bool | None = None,
+    approach_excerpt: str = "",
 ) -> str:
+    from lokay.approach_plan import (
+        approach_excerpt_from_diff,
+        approach_present_in_diff,
+    )
+
+    if approach_present is None:
+        approach_present = approach_present_in_diff(diff_text or "")
+    excerpt = (approach_excerpt or "").strip() or approach_excerpt_from_diff(diff_text or "")
+    if approach_present:
+        approach_note = (
+            "Approach evidence: `.lokay/approach.md` appears in this PR diff. "
+            "Compare the implementation lightly to that plan as a soft signal "
+            "(misalignment → `nits` unless scope/safety is actually wrong)."
+        )
+    else:
+        approach_note = (
+            "Approach evidence: `.lokay/approach.md` not found in the PR diff. "
+            "Missing plan is a soft nit only — never needs_human / secrets / blocking "
+            "solely for a missing approach file."
+        )
     schema = """{
   "verdict": "approve" | "request_changes" | "needs_human",
   "risk": "low" | "medium" | "high",
@@ -304,6 +326,9 @@ Rules:
 8. Soft / documentation-only / style nits belong in `nits` with verdict=approve.
    Do NOT use needs_human or request_changes for docs-only typos, wording, or comment polish.
    `ai:needs-review` is reserved for secrets, product/security judgment, or repeated request_changes cap.
+9. Approach plan (`.lokay/approach.md`) is trust-with-evidence, not a human gate.
+   {approach_note}
+   Fail-closed rules for secrets / needs_human are unchanged.
 
 CI / checks context (evidence):
 {(checks_text or "(none)")[:4000]}
@@ -313,6 +338,9 @@ PR title:
 
 PR body:
 {(body or "")[:4000]}
+
+Approach excerpt (evidence only; may be empty):
+{(excerpt or "(none)")[:2000]}
 
 Diff (may be truncated):
 {(diff_text or "(no diff)")[:12000]}

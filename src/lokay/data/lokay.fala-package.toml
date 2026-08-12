@@ -218,9 +218,17 @@ config = { atom = "worktree_add" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "run_agent"
+id = "plan_issue"
 capability = "lokay_atom"
 conduction = ["get_issue", "make_branch", "worktree_add"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "plan_issue" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "run_agent"
+capability = "lokay_atom"
+conduction = ["get_issue", "make_branch", "worktree_add", "plan_issue"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 3600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "run_agent" }
 retry_policy = "none"
@@ -228,7 +236,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "commit_all"
 capability = "lokay_atom"
-conduction = ["get_issue", "worktree_add", "run_agent"]
+conduction = ["get_issue", "worktree_add", "plan_issue", "run_agent"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "commit_all" }
 retry_policy = "none"

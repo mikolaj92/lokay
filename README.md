@@ -65,14 +65,16 @@ issue_triage: get_issue → triage_issue → intake_issue → issue_split
 pr_repair:    pr_checks → stage_repairing → worktree_add → run_agent → commit_all → push
 pr_triage:    pr_checks → pr_review → pr_merge → stage_clear → close_issue
 issue_to_pr:  get_issue → assign_issue / stage_implementing / make_branch → worktree_add
-              → run_agent → commit_all → push → pr_create → stage_pr_open → list_prs → pr_label
+              → plan_issue → run_agent → commit_all → push → pr_create → stage_pr_open
+              → list_prs → pr_label
 ```
 
-`run_agent` is the only nondeterministic path node. Intake is deterministic (CLOSE /
-READY / SPLIT / rare NEEDS_HUMAN); oversized work auto-splits via `issue_split`.
-The mill re-checks intake before `issue_to_pr`. Humans are a residual mailbox
-(`lokay status --human`), not a brake. All other
-nodes are deterministic GitHub, Git, or pure operations.
+`run_agent` is the only nondeterministic coding node. `plan_issue` writes
+`.lokay/approach.md` beforehand (deterministic evidence, not a human gate).
+Intake is deterministic (CLOSE / READY / SPLIT / rare NEEDS_HUMAN); oversized
+work auto-splits via `issue_split`. The mill re-checks intake before
+`issue_to_pr`. Humans are a residual mailbox (`lokay status --human`), not a
+brake. All other nodes are deterministic GitHub, Git, or pure operations.
 
 ## Safety
 

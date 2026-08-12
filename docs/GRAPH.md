@@ -119,14 +119,23 @@ get_issue
   ├─→ stage_implementing   ← issue ledger: ai:in-progress
   └─→ make_branch
         └─→ worktree_add
-              └─→ run_agent     ← only non-deterministic node
-                    └─→ commit_all
-                          └─→ push
-                                └─→ pr_create
-                                      └─→ stage_pr_open   ← issue ledger: ai:pr-open
-                                            └─→ list_prs
-                                                  └─→ pr_label
+              └─→ plan_issue   ← deterministic approach.md (trust-with-evidence)
+                    └─→ run_agent     ← only non-deterministic coding node
+                          └─→ commit_all
+                                └─→ push
+                                      └─→ pr_create
+                                            └─→ stage_pr_open   ← issue ledger: ai:pr-open
+                                                  └─→ list_prs
+                                                        └─→ pr_label
 ```
+
+`plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree
+**before** `run_agent`: goal, files likely touched, test plan, non-goals.
+Mostly deterministic extraction from the issue body (+ path hints). Optional
+`--llm` assist is skippable and fail-closed when requested without a configured
+slot. This is **evidence for intentional issues**, not a human approval gate and
+not `NEEDS_HUMAN` by default. Later `pr_review` may compare the diff to the plan
+as a soft signal (missing/misaligned approach → `nits` only).
 
 ### `issue_triage` (inbox → labels / split)
 
@@ -184,6 +193,8 @@ Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_E
 approve + green checks → `pr_merge` + `close_issue` in one path; pending → waiting;
 red → repair; secrets / `needs_human` / escalated `ai:needs-review` never merge.
 Soft documentation nits must not route to `ai:needs-review`.
+Presence / light alignment of `.lokay/approach.md` is a soft review signal only —
+never invent a human gate from a missing plan file.
 Config: `merge.require_llm_review` (default true), `merge.require_checks` (default false).
 Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
@@ -193,6 +204,8 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md).
+- **plan_issue** is deterministic evidence before that coding slot (serial path:
+  `worktree_add → plan_issue → run_agent`).
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run
