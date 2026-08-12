@@ -1,28 +1,29 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=66 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=68 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #66 — Preflight failure 6bbe372b6ef4befe
+Issue: #68 — Preflight failure 3c656f93985e9107
 
 ## Goal
 
-<!-- lokay-preflight:6bbe372b6ef4befe -->
-Bounded checks failed: github_git_transport
+<!-- lokay-preflight:3c656f93985e9107 -->
+Bounded checks failed: Confirmed in 4 of 5 daemon runs. Repeated product failure evidence:
 
 ## Files likely touched
 
-- `src/lokay/preflight.py`
-- `tests/test_git_transport_preflight.py`
+- `src/lokay/proc/select_implement.py`
+- `tests/test_global_pr_first.py`
 
 ## Test plan
 
-- Exercise transport validation, including transient failure retry and bounded persistent failure
+- Verify a manual-only PR does not block ready work in the same repository
+- Run global PR-first and mill-health tests
 
 ## Non-goals
 
-- Weakening canonical SSH-origin validation or allowing interactive authentication
-- Increasing the existing 20-second transport-check budget
+- Changing backpressure from actionable AI PRs
+- Treating manual / `ai:needs-review` PRs as automatic work
 
 ## Notes
 

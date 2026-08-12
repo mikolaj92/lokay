@@ -7,6 +7,7 @@ from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
+from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
 
 
@@ -40,13 +41,14 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
             )
             continue
         open_prs = prs_by_repo.get(repo_name) or []
-        if open_prs:
+        actionable_prs = [pr for pr in open_prs if not is_manual_pr(pr)]
+        if actionable_prs:
             actions.append(
                 {
                     "step": "skip_ready_open_ai_pr",
                     "repo": repo_name,
-                    "open_ai_prs": len(open_prs),
-                    "note": "per-repo PR-first: finish open AI PR before new issue_to_pr",
+                    "open_ai_prs": len(actionable_prs),
+                    "note": "per-repo PR-first: finish actionable AI PR before new issue_to_pr",
                 }
             )
             continue
