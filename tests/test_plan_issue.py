@@ -227,8 +227,8 @@ def test_commit_all_force_adds_approach_md(tmp_path: Path, monkeypatch):
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
         def run(self, spec, *, live):
-            # First cached-diff check after adds → dirty; keep simple.
-            if spec.argv[:3] == ["git", "diff", "--cached"]:
+            # cached-diff --quiet → nonzero means dirty index (something to commit).
+            if tuple(spec.argv[:3]) == ("git", "diff", "--cached"):
                 return type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
