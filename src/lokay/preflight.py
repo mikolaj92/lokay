@@ -397,7 +397,17 @@ def _check(
     errors = cfg.validate()
     findings.append(_finding("config", not errors, "ok" if not errors else "invalid"))
     clones = [repo for repo in cfg.active_repos() if not repo.clone_path.is_dir()]
-    findings.append(_finding("repository_catalog_clones", not clones, "ok" if not clones else "missing_clone"))
+    # A missing managed checkout blocks worktree operations for that repository,
+    # not GitHub-only triage or work in every other repository.  Status reports
+    # the actionable clone inventory; global preflight must not deadlock the
+    # mill before `lokay-repos-clone-missing` can repair it.
+    findings.append(
+        _finding(
+            "repository_catalog_clones",
+            True,
+            "ok" if not clones else "missing_clones_allowed",
+        )
+    )
 
     runtime_dirs = (cfg.state_path.parent, cfg.worktrees_root, Path(os.environ.get("LOKAY_LOG_DIR", str(Path.home() / ".lokay" / "logs"))))
     paths_ok = all(_safe_owned_path(path) and path.is_dir() and os.access(path, os.W_OK) for path in runtime_dirs)
