@@ -89,10 +89,11 @@ uv run lokay status --config config.yaml --human   # residual mailbox only
 uv run lokay status --config config.yaml --local   # readiness + last_pass
 ```
 
-Status JSON includes `health`, `merge_enabled`, `k` /
-`max_issue_to_pr_per_pass`, per-repo `by_repo` (actionable PRs / ready / inbox),
-and compact `human_residuals`. Each tick also writes `~/.lokay/last-pass.json`
-(or `<state_dir>/last-pass.json`). See [`MILL_HEALTH.md`](MILL_HEALTH.md).
+Status JSON includes `health`, merge knobs (`merge_enabled`, `require_checks`,
+`require_llm_review`), `k` / `max_issue_to_pr_per_pass`, per-repo `by_repo`
+(actionable PRs / ready / inbox), and compact `human_residuals`. Each tick also
+writes `~/.lokay/last-pass.json` (or `<state_dir>/last-pass.json`). See
+[`MILL_HEALTH.md`](MILL_HEALTH.md).
 
 **ok=false** when work remains but mill is not live-ready → NOT WORKING.
 `repairing` / `waiting` are ok (honest wait), not recovery thrash.

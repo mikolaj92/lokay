@@ -50,6 +50,8 @@ def test_status_reports_blockers_when_dry(tmp_path: Path, monkeypatch):
     assert any("merge.enabled" in b for b in result["blockers"])
     assert "LOKAY_AGENT" not in result["live_env_hint"]
     assert result["merge_enabled"] is False
+    assert result["require_checks"] is True
+    assert result["require_llm_review"] is True
     assert result["k"] == 3
     assert result["max_issue_to_pr_per_pass"] == 3
 
@@ -81,6 +83,8 @@ def test_local_status_skips_survey(tmp_path: Path, monkeypatch):
     assert "lease_ok" in result
     assert "lease_reason" in result
     assert result["merge_enabled"] is True
+    assert result["require_checks"] is True
+    assert result["require_llm_review"] is True
     assert result["k"] == 3
 
 

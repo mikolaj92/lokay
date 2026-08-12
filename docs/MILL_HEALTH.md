@@ -14,7 +14,9 @@ The JSON envelope includes:
 | Field | Meaning |
 | --- | --- |
 | `mill_ready` | Config can mill live (mode/executor/merge gates) |
-| `merge_enabled` | Whether PR merge is armed |
+| `merge_enabled` | Whether trusted auto-merge is armed |
+| `require_checks` | No-CI PRs wait when true; green CI still merges |
+| `require_llm_review` | Structured approve/`merge_ok` required before merge |
 | `max_issue_to_pr_per_pass` / `k` | Parallel `issue_to_pr` budget per factory pass |
 | `health` | `idle` / `progress` / `waiting` / `repairing` / `stall` / `survey_error` |
 | `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, … |
@@ -40,7 +42,7 @@ After each `factory_tick` / tick survey, Lokay writes a small JSON receipt next 
 the state file (default `~/.lokay/last-pass.json`):
 
 ```bash
-jq '{health, idle, progress, merge_enabled, k: .max_issue_to_pr_per_pass, remaining, by_repo}' \
+jq '{health, idle, progress, merge_enabled, require_checks, require_llm_review, k: .max_issue_to_pr_per_pass, remaining, by_repo}' \
   ~/.lokay/last-pass.json
 ```
 

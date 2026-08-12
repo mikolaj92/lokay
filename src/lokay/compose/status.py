@@ -87,6 +87,8 @@ def _autonomy_fields(
             by_repo = list(raw)
     return {
         "merge_enabled": bool(cfg.merge_enabled),
+        "require_checks": bool(cfg.require_checks),
+        "require_llm_review": bool(cfg.require_llm_review),
         "max_issue_to_pr_per_pass": int(cfg.max_issue_to_pr_per_pass),
         "k": int(cfg.max_issue_to_pr_per_pass),
         "health": health,
@@ -121,6 +123,10 @@ def compose_status(
     if cfg.require_checks:
         policy_notes.append(
             "merge.require_checks=true: no-CI PRs wait (no_checks_blocked); green CI still merges"
+        )
+    if not cfg.require_llm_review:
+        policy_notes.append(
+            "merge.require_llm_review=false: merge without structured LLM review"
         )
     missing_clones = [
         f"{repo.name} → {repo.clone_path}"
@@ -182,7 +188,6 @@ def compose_status(
             mode=cfg.mode,
             executor_enabled=cfg.executor_enabled,
             agent=cfg.agent,
-            require_checks=cfg.require_checks,
             incident_repo=cfg.incident_repo,
             repos=[r.name for r in cfg.active_repos()],
             repos_disabled=[r.name for r in cfg.repos if not r.enabled],
@@ -259,7 +264,6 @@ def compose_status(
         mode=cfg.mode,
         executor_enabled=cfg.executor_enabled,
         agent=cfg.agent,
-        require_checks=cfg.require_checks,
         incident_repo=cfg.incident_repo,
         repos=[r.name for r in cfg.active_repos()],
         repos_disabled=[r.name for r in cfg.repos if not r.enabled],

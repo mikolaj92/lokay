@@ -932,6 +932,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         receipt = build_pass_receipt(
             tick=payload,
             merge_enabled=bool(cfg.merge_enabled),
+            require_checks=bool(cfg.require_checks),
+            require_llm_review=bool(cfg.require_llm_review),
             max_issue_to_pr_per_pass=int(cfg.max_issue_to_pr_per_pass),
             config_path=str(cfg.config_path) if cfg.config_path else config_path,
         )
