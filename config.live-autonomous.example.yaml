@@ -1,0 +1,61 @@
+# Lokay — night / live autonomous mill profile (NOT the default).
+#
+# Copy to config.yaml (or a dedicated path) only on an intentionally live host.
+# Humans author issues; the mill consumes them to merged results.
+# Do not use this as the shared dry-run example — keep config.example.yaml
+# (mode: dry-run, executor off, merge off) for local copies.
+#
+# Product law: minimize human in the loop. CLOSE / SPLIT / READY+implement
+# are the default exits. NEEDS_HUMAN is a rare residual mailbox, not a brake.
+#
+# See docs/AUTONOMY.md and docs/WORKING.md.
+
+mode: live  # Env override still honored: LOKAY_MODE=live|dry-run
+
+# Catalog = which repos we manage (not a denylist).
+repos_file: repos.mikolaj92.yaml
+
+github:
+  assignee: mikolaj92
+  allow_unassigned: false
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  needs_feedback_label: ai:needs-feedback
+  branch_prefix: ai/fix
+  pr_labels:
+    - ai:generated
+    - ai:pr-opened
+
+executor:
+  enabled: true  # real agent only — docs/NO_STUBS.md
+  agent: pi                  # log label only
+  command: pi               # harness binary — swap to change implementation
+  model: omniroute/pi
+  # args after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
+  args:
+    - -p
+    - "{prompt}"
+    - --model
+    - "{model}"
+    - --approve
+    - --no-session
+  max_turns: 40
+  timeout_seconds: 1800
+  always_approve: true
+
+limits:
+  max_self_repair_attempts: 2
+  max_request_changes_per_pr: 2
+  max_repairs_per_tick: 1
+  max_triage_per_tick: 5
+  # K: issue_to_pr runs per factory pass across different clean repos.
+  # Still one open ai/fix/* PR per repo.
+  max_issue_to_pr_per_pass: 3
+
+# Trusted auto-merge: green checks + structured LLM approve/merge_ok.
+# Pending checks → waiting (not stall). Red → repair. Secrets / needs_human /
+# escalated ai:needs-review → fail closed (never auto-merge).
+merge:
+  enabled: true
+  require_checks: true
+  require_llm_review: true

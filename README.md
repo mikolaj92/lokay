@@ -42,6 +42,10 @@ uv run lokay tick --config config.yaml
 uv run lokay mill --config config.yaml --live --max-passes 8
 ```
 
+For a documented night / live autonomous profile (merge on, checks required,
+K=3 — not the default example), see `config.live-autonomous.example.yaml` and
+[`docs/AUTONOMY.md`](docs/AUTONOMY.md).
+
 ## Continuous operation
 
 The product daemon entrypoint owns one OS advisory lock across preflight and work:
@@ -97,6 +101,7 @@ nodes are deterministic GitHub, Git, or pure operations.
 ## Binding documentation
 
 - [`docs/WORKING.md`](docs/WORKING.md) — working-machine contract and tick order
+- [`docs/AUTONOMY.md`](docs/AUTONOMY.md) — autonomous mill Definition of Working, night profile, canaries
 - [`docs/MILL_HEALTH.md`](docs/MILL_HEALTH.md) — mill health without watching GitHub
 - [`docs/GRAPH.md`](docs/GRAPH.md) — Fala paths and conduction
 - [`docs/UNIX.md`](docs/UNIX.md) — process boundaries and JSON envelopes

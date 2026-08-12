@@ -6,6 +6,10 @@ configured repos (`repos.mikolaj92.yaml`). Order: survey → **per-repo PR-first
 be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize human: humans write issues;
 the mill consumes them to merged results — do not add new human gates.
 
+For the autonomous mill Definition of Working (pass promises, night profile,
+hermetic canaries, how to read `lokay status` / `last-pass.json`), see
+[`AUTONOMY.md`](AUTONOMY.md).
+
 ## Product law: minimize human in the loop
 
 Humans **author issues**. The system should **CLOSE**, **SPLIT**, or
