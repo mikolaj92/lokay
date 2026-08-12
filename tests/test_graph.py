@@ -8,7 +8,29 @@ from lokay.graph_run import _materialize_package, describe_package, find_default
 def test_describe_parent_factory_graph():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
-    assert [node["id"] for node in path["nodes"]] == ["factory_tick"]
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "factory_begin",
+        "survey_repos",
+        "plan_pass",
+        "dispatch_triage",
+        "dispatch_closeout",
+        "select_implement",
+        "dispatch_implement",
+        "compute_health",
+        "record_pass",
+    ]
+    conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
+    assert conduction["survey_repos"] == ["factory_begin"]
+    assert "survey_repos" in conduction["plan_pass"]
+    assert "plan_pass" in conduction["dispatch_triage"]
+    assert "dispatch_triage" in conduction["dispatch_closeout"]
+    assert "dispatch_closeout" in conduction["select_implement"]
+    assert "select_implement" in conduction["dispatch_implement"]
+    assert "dispatch_implement" in conduction["compute_health"]
+    assert "compute_health" in conduction["record_pass"]
+    # Mega factory_tick must not hide pass policy in the parent graph.
+    assert "factory_tick" not in ids
 
 
 def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
@@ -254,7 +276,17 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
 
     monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
     expected = {
-        "factory_pass": {"factory_tick"},
+        "factory_pass": {
+            "factory_begin",
+            "survey_repos",
+            "plan_pass",
+            "dispatch_triage",
+            "dispatch_closeout",
+            "select_implement",
+            "dispatch_implement",
+            "compute_health",
+            "record_pass",
+        },
         "issue_to_pr": {"get_issue", "assign_issue", "make_branch", "worktree_add", "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label"},
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {"pr_checks", "worktree_add", "run_agent", "commit_all", "push"},
@@ -267,8 +299,8 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
 
 def test_factory_path_normalizes_tick_contract():
     out = _host("factory_pass", {
-        "factory_tick": {
-            "id": "factory_tick",
+        "record_pass": {
+            "id": "record_pass",
             "status": "completed",
             "output": {"values": {
                 "ok": True,
@@ -285,6 +317,26 @@ def test_factory_path_normalizes_tick_contract():
     assert out["health"] == "progress"
     assert out["progress"] == 1
     assert out["remaining"] == {"ready": 2}
+
+
+def test_factory_path_normalizes_legacy_factory_tick_contract():
+    out = _host("factory_pass", {
+        "factory_tick": {
+            "id": "factory_tick",
+            "status": "completed",
+            "output": {"values": {
+                "ok": True,
+                "tick": {
+                    "ok": False,
+                    "health": "stall",
+                    "progress": 0,
+                    "error": "stall: actionable work remains but no progress this pass",
+                },
+            }},
+        },
+    })
+    assert out["ok"] is False
+    assert out["health"] == "stall"
 
 
 def test_run_path_rejects_unknown_path_before_fala(tmp_path, monkeypatch):

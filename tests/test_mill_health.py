@@ -1,6 +1,6 @@
 """Health rules: no green noop while work remains."""
 
-from lokay.compose.tick import _health_payload
+from lokay.passkit.health import health_payload as _health_payload
 
 
 def test_survey_work_remaining_fails_ok():

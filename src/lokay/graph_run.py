@@ -141,7 +141,17 @@ def run_path(
             "recovery_begin", "recovery_mill", "recovery_observe",
             "recovery_record", "recovery_incident", "recovery_run_self_repair",
         ),
-        "factory_pass": ("factory_tick",),
+        "factory_pass": (
+            "factory_begin",
+            "survey_repos",
+            "plan_pass",
+            "dispatch_triage",
+            "dispatch_closeout",
+            "select_implement",
+            "dispatch_implement",
+            "compute_health",
+            "record_pass",
+        ),
         "issue_to_pr": (
             "get_issue", "assign_issue", "make_branch", "worktree_add",
             "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label",
@@ -504,12 +514,19 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             else:
                 out.update(mill)
     elif path_id == "factory_pass":
+        # Terminal receipt atom carries the full tick envelope. Fall back to
+        # legacy factory_tick wrapper if an old journal/result is normalized.
+        recorded = terminal.get("record_pass", {})
         factory = terminal.get("factory_tick", {})
-        tick = factory.get("tick") if isinstance(factory.get("tick"), dict) else factory
+        tick = recorded.get("tick") if isinstance(recorded.get("tick"), dict) else None
+        if tick is None:
+            tick = factory.get("tick") if isinstance(factory.get("tick"), dict) else factory
+        if not isinstance(tick, dict):
+            tick = {}
         out.update({key: value for key, value in tick.items() if key not in {"step", "status", "atom", "_exit"}})
         out["ok"] = bool(tick.get("ok", True))
         if not out["ok"]:
-            out["error"] = tick.get("error") or "factory tick failed"
+            out["error"] = tick.get("error") or "factory pass failed"
     return out
 
 

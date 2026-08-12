@@ -36,8 +36,21 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-push` | push (never force) |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
 | `lokay-repos` | list managed repos |
+| `lokay-factory-begin` | preflight + open pass workspace |
+| `lokay-survey-repos` | survey PRs / inbox / ready (all repos) |
+| `lokay-plan-pass` | select triage / closeout targets (per-repo PR-first) |
+| `lokay-dispatch-triage` | run planned inbox triage children |
+| `lokay-dispatch-closeout` | PR conflict / repair / merge / wait |
+| `lokay-select-implement` | clean repos eligible for issue_to_pr |
+| `lokay-dispatch-implement` | intake gate + up to K issue_to_pr |
+| `lokay-compute-health` | remaining + honest mill health |
+| `lokay-record-pass` | write last-pass.json receipt |
 | `lokay-mill` / `lokay-status` | continuous factory |
 | `lokay status --human` | residual human mailbox (exception report; not a mill brake) |
+
+**Factory-pass law:** Fala owns pass order (`factory_pass` conduction). Atoms
+above each do one job and return a JSON envelope. `compose/tick.py` must not
+grow back into a multi-repo brain — use new `proc/` atoms + Fala edges.
 
 **Minimize human:** humans author issues; atoms CLOSE / SPLIT / READY+implement.
 `ai:needs-feedback` is rare residual — mill keeps other repos moving.
@@ -45,6 +58,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 ## Anti-patterns
 
 - One 300-line module that does intake + worktree + agent + PR.
+- A fat `compose/tick.py` that owns multi-repo scheduling (order belongs in Fala).
 - Shared mutable “session” that skips process boundaries.
 - Stub/fake coding agents or canary marker files as “success”.
 - Hermes Kanban as the ledger for step order.

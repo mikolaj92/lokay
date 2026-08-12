@@ -1,8 +1,8 @@
 """Compact factory-pass receipt for LaunchAgent / operator logs.
 
 Written under the config state directory (default ``~/.lokay/last-pass.json``)
-after each ``compose_tick`` that produces a real remaining survey. Small,
-structured JSON — not a second execution ledger.
+by ``lokay-record-pass`` after each factory pass that produces a real remaining
+survey. Small, structured JSON — not a second execution ledger.
 """
 
 from __future__ import annotations
