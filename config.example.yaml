@@ -3,6 +3,8 @@
 #
 # Code default is dry-run (no mutations). Set mode: live (or LOKAY_MODE=live)
 # only on an intentionally live machine profile.
+# Night / live autonomous knobs live in config.live-autonomous.example.yaml
+# (do not make that the shared default).
 
 mode: dry-run  # dry-run | live  (dry-run = no mutations; still real agent if invoked)
 # Env override: LOKAY_MODE=live|dry-run

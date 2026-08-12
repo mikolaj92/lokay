@@ -6,17 +6,31 @@ configured repos (`repos.mikolaj92.yaml`). Order: survey → **per-repo PR-first
 be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize human: humans write issues;
 the mill consumes them to merged results — do not add new human gates.
 
+For the autonomous mill Definition of Working (pass promises, night profile,
+hermetic canaries, how to read `lokay status` / `last-pass.json`), see
+[`AUTONOMY.md`](AUTONOMY.md).
+
 ## Product law: minimize human in the loop
 
-Humans **author issues**. The system should **CLOSE**, **SPLIT**, or
-**READY+implement**. `NEEDS_HUMAN` / `ai:needs-feedback` is a **rare residual**
-after deterministic rules fail closed — never the default escape hatch for
-oversized or ambiguous work that can be auto-split.
+**Humans author intentional issues; the mill consumes.** Trust the issue author:
+when the issue is created or owned by the trusted operator (`github.assignee`,
+default mikolaj92), assume it makes sense — prefer **READY+implement** autonomy.
+Do not add distrustful human gates or clarification parking for ordinary
+operator-authored work. Deeper skepticism is for foreign/external authors if
+distinguished at all.
+
+The system should **CLOSE**, **SPLIT**, or **READY+implement**. Maximize
+autonomy. `NEEDS_HUMAN` / `ai:needs-feedback` is a **rare residual** after
+deterministic rules fail closed — never the default escape hatch for oversized
+or ambiguous work that can be auto-split.
 
 `lokay status --human` lists that residual mailbox across managed repos. It is
 **exception reporting**, not a workflow step. The mill does **not** wait on a
 human digest and does **not** freeze other repos because one issue is parked
 `ai:needs-feedback` or a PR is `ai:needs-review`.
+
+Light glance metrics from `last-pass.json` (ready / PR / mergeable / progress)
+are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.md).
 
 ## Full pass (one tick)
 

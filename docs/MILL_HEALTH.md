@@ -46,6 +46,10 @@ jq '{health, idle, progress, merge_enabled, require_checks, require_llm_review, 
   ~/.lokay/last-pass.json
 ```
 
+Light glance ratios (ready / open AI PRs / mergeable_green / progress /
+`human_residuals.count`) are fine. Do not grow a heavy metrics product around
+the receipt — see [`AUTONOMY.md`](AUTONOMY.md).
+
 Daemon logs remain under `~/.lokay/logs/mill-latest.log` (see
 `scripts/lokay-mill-daemon.sh`). The receipt is the structured signal; logs are
 the transcript.

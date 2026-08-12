@@ -4,7 +4,7 @@
 
 **Unix small programs + Fala graph for order + real agent only.**
 
-- See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
+- See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
 - Do **not** grow `compose/*` with GitHub/git/agent logic beyond wiring.
