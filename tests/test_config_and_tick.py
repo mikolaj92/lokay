@@ -62,8 +62,8 @@ executor:
         encoding="utf-8",
     )
     cfg = load_config(bare)
-    assert cfg.max_issue_to_pr_per_pass == 3
-    assert cfg.max_issues_per_tick == 3
+    assert cfg.max_issue_to_pr_per_pass == 1
+    assert cfg.max_issues_per_tick == 1
 
     legacy = tmp_path / "legacy.yaml"
     legacy.write_text(

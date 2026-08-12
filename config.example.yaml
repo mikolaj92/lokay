@@ -56,9 +56,11 @@ limits:
   max_request_changes_per_pr: 2
   max_repairs_per_tick: 1
   max_triage_per_tick: 5
-  # K: issue_to_pr runs per factory pass across different clean repos (default 3).
+  # K: optional pass budget for issue_to_pr (serial by design; default 1).
+  # Ticket after ticket — not concurrent worktrees / Pi / tmux.
+  # K>1 is rare breadth across already-isolated clean repos (not recommended).
   # Still one open ai/fix/* PR per repo. Legacy alias: max_issues_per_tick.
-  max_issue_to_pr_per_pass: 3
+  max_issue_to_pr_per_pass: 1
 
 # Trusted auto-merge (humans write issues; mill closes the loop to main).
 #

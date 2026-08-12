@@ -13,7 +13,7 @@ def _write_cfg(
     mode: str,
     executor: bool,
     merge: bool,
-    k: int = 3,
+    k: int = 1,
 ) -> Path:
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
@@ -52,8 +52,8 @@ def test_status_reports_blockers_when_dry(tmp_path: Path, monkeypatch):
     assert result["merge_enabled"] is False
     assert result["require_checks"] is True
     assert result["require_llm_review"] is True
-    assert result["k"] == 3
-    assert result["max_issue_to_pr_per_pass"] == 3
+    assert result["k"] == 1
+    assert result["max_issue_to_pr_per_pass"] == 1
 
 
 def test_require_checks_is_policy_not_hard_blocker(tmp_path: Path, monkeypatch):

@@ -151,6 +151,7 @@ def run_path(
             "resolve_conflicts",
             "closeout_prs",
             "select_implement",
+            "queue_conflict",
             "dispatch_implement",
             "compute_health",
             "record_pass",

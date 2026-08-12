@@ -90,6 +90,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         resolve_conflicts,
         run_agent,
         select_implement,
+        queue_conflict,
         survey_inbox,
         survey_prs,
         survey_ready,
@@ -260,6 +261,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         assert pass_dir
         return _run_atom_main(
             select_implement.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
+
+    if atom == "queue_conflict":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            queue_conflict.main, [*cfg, *live, "--pass-dir", pass_dir]
         )
 
     if atom == "dispatch_implement":

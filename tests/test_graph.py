@@ -19,6 +19,7 @@ def test_describe_parent_factory_graph():
         "resolve_conflicts",
         "closeout_prs",
         "select_implement",
+        "queue_conflict",
         "dispatch_implement",
         "compute_health",
         "record_pass",
@@ -32,7 +33,8 @@ def test_describe_parent_factory_graph():
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
     assert "closeout_prs" in conduction["select_implement"]
-    assert "select_implement" in conduction["dispatch_implement"]
+    assert "select_implement" in conduction["queue_conflict"]
+    assert "queue_conflict" in conduction["dispatch_implement"]
     assert "dispatch_implement" in conduction["compute_health"]
     assert "compute_health" in conduction["record_pass"]
     # Mega factory_tick / survey_repos / dispatch_closeout must not hide policy.
@@ -294,6 +296,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "resolve_conflicts",
             "closeout_prs",
             "select_implement",
+            "queue_conflict",
             "dispatch_implement",
             "compute_health",
             "record_pass",

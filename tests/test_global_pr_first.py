@@ -338,7 +338,8 @@ def test_needs_human_discovered_this_pass_becomes_manual(tmp_path, monkeypatch):
     assert result["remaining"]["manual_open_ai_prs"] == 1
 
 
-def test_parallel_k_implements_across_clean_repos(tmp_path, monkeypatch):
+def test_configured_k_budget_honors_breadth_across_clean_repos(tmp_path, monkeypatch):
+    """K>1 is a rare pass breadth budget across clean repos — not concurrency."""
     repos = ("a/one", "a/two", "a/three", "a/four")
     config = _config(tmp_path, repos=repos, max_issue_to_pr_per_pass=3)
 

@@ -1,4 +1,4 @@
-"""One job: intake gate + issue_to_pr up to K across selected clean repos."""
+"""One job: intake gate + issue_to_pr up to K (serial budget) across clean repos."""
 
 from __future__ import annotations
 

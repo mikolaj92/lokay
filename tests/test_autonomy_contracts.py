@@ -129,7 +129,49 @@ def test_contract_busy_repo_a_does_not_block_clean_repo_b(tmp_path, monkeypatch)
 # ---------------------------------------------------------------------------
 
 
+def test_contract_default_k_is_serial_one(tmp_path, monkeypatch):
+    """Serial by design: default K=1 starts one issue_to_pr per pass."""
+    repos = ("a/one", "a/two", "a/three")
+    config = write_mill_config(tmp_path, repos=repos)  # fixture default K=1
+    implemented: list[dict] = []
+
+    def fake_run(fn, argv):
+        repo = argv[argv.index("--repo") + 1]
+        if fn is tick.p_list_prs.main:
+            return {"ok": True, "prs": []}
+        if fn is tick.p_list_inbox.main:
+            return {"ok": True, "issues": []}
+        if fn is tick.p_list_issues.main:
+            return {
+                "ok": True,
+                "issues": [{"number": 2, "repo": repo, "title": f"work-{repo}"}],
+            }
+        if fn is tick.p_intake.main:
+            return intake_ready_envelope()
+        raise AssertionError(fn)
+
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(
+        tick,
+        "compose_issue_to_pr",
+        lambda **kw: implemented.append(kw)
+        or {
+            "ok": True,
+            "pr": 10 + len(implemented),
+            "branch": f"ai/fix/2-{kw['repo'].replace('/', '-')}",
+        },
+    )
+
+    result = tick.compose_tick(config_path=config, live=True)
+
+    assert len(implemented) == 1
+    assert result["remaining"]["issue_to_pr_started"] == 1
+    assert result["remaining"]["max_issue_to_pr_per_pass"] == 1
+
+
 def test_contract_k_caps_issue_to_pr_across_repos(tmp_path, monkeypatch):
+    """Configured K>1 still honored as a rare pass breadth budget (not concurrency)."""
     repos = ("a/one", "a/two", "a/three", "a/four")
     config = write_mill_config(
         tmp_path, repos=repos, max_issue_to_pr_per_pass=3
@@ -492,7 +534,7 @@ def test_live_autonomous_example_profile_knobs():
     assert data["merge"]["enabled"] is True
     assert data["merge"]["require_checks"] is True
     assert data["merge"]["require_llm_review"] is True
-    assert data["limits"]["max_issue_to_pr_per_pass"] == 3
+    assert data["limits"]["max_issue_to_pr_per_pass"] == 1
     assert data["github"]["assignee"] == "mikolaj92"
 
     # Default example stays dry-run / merge-off (do not swap defaults).
@@ -502,6 +544,7 @@ def test_live_autonomous_example_profile_knobs():
     assert default["mode"] == "dry-run"
     assert default["executor"]["enabled"] is False
     assert default["merge"]["enabled"] is False
+    assert default["limits"]["max_issue_to_pr_per_pass"] == 1
 
     # Profile must load (repos_file relative to config path).
     cfg = load_config(path)
@@ -510,5 +553,5 @@ def test_live_autonomous_example_profile_knobs():
     assert cfg.merge_enabled is True
     assert cfg.require_checks is True
     assert cfg.require_llm_review is True
-    assert cfg.max_issue_to_pr_per_pass == 3
+    assert cfg.max_issue_to_pr_per_pass == 1
     assert cfg.assignee == "mikolaj92"

@@ -17,7 +17,7 @@ The JSON envelope includes:
 | `merge_enabled` | Whether trusted auto-merge is armed |
 | `require_checks` | No-CI PRs wait when true; green CI still merges |
 | `require_llm_review` | Structured approve/`merge_ok` required before merge |
-| `max_issue_to_pr_per_pass` / `k` | Parallel `issue_to_pr` budget per factory pass |
+| `max_issue_to_pr_per_pass` / `k` | Serial pass budget for `issue_to_pr` (default 1; not concurrency) |
 | `health` | `idle` / `progress` / `waiting` / `repairing` / `stall` / `survey_error` |
 | `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, … |
 | `by_repo` | Per-repo inbox / ready / actionable open AI PRs |

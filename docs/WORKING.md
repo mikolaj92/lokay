@@ -59,15 +59,18 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    - `request_changes` may auto-repair a few times (`limits.max_request_changes_per_pr`,
      default 2); then escalate to `ai:needs-review` (manual terminal).
    - `ai:request-changes` alone is **not** a terminal label; only `ai:needs-review` is.
-5. **Implement ready (parallel K)**: up to **K** `issue_to_pr` runs per factory
-   pass across **different** clean repos (`limits.max_issue_to_pr_per_pass`,
-   default 3; legacy alias `max_issues_per_tick`). Still **serial within a
-   repo** (at most one attempt / one open AI PR per repo). A stuck or PR-busy
-   repo must not block ready work in other clean repos. Before `issue_to_pr`,
-   re-run `lokay-intake-issue --require-ready` so READY-without-intake cannot
-   implement (demote/close/split instead). Then configured executor → commit/push →
-   PR. Worktree from `origin/main`. Stuck → ledger → `ai:blocked`. Live ready
-   with `executor.enabled: false` is a **stall**.
+5. **Implement ready (serial by design)**: one ticket after another. `K` /
+   `limits.max_issue_to_pr_per_pass` (default **1**; legacy alias
+   `max_issues_per_tick`) is an **optional pass budget**, not concurrent
+   worktrees / Pi / tmux. At most one attempt / one open AI PR per repo.
+   `K>1` remains configurable as rare breadth across already-isolated clean
+   repos — not the recommended default. Before `issue_to_pr`,
+   `lokay-queue-conflict` demotes/defers clear contradictions (open AI PR
+   covering the same issue, epic with children, unmet Depends on / Blocked by,
+   obvious path overlap), then `lokay-intake-issue --require-ready` so
+   READY-without-intake cannot implement. Then configured executor →
+   commit/push → PR. Worktree from `origin/main`. Stuck → ledger →
+   `ai:blocked`. Live ready with `executor.enabled: false` is a **stall**.
 6. **Health** (honest):
    - `idle` — survey finds no remaining work
    - `progress` — mutations moved the queue this pass
@@ -153,8 +156,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 - `factory_pass` is the parent Fala run used by the mill. It conducts
   `factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
   dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
-  dispatch_implement → compute_health → record_pass`. Dispatch atoms start the
-  smaller workflow Falas through a separate journal boundary.
+  queue_conflict → dispatch_implement → compute_health → record_pass`.
+  Dispatch atoms start the smaller workflow Falas through a separate journal
+  boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy
   canaries — not the multi-repo brain.
 - `pr_review`: structured LLM gate before auto-merge when `merge.require_llm_review`.
