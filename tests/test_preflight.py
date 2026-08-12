@@ -62,6 +62,30 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
     assert result["repairs"][0]["value"] == "[redacted]"
 
 
+def test_missing_catalog_clone_does_not_block_global_preflight(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    cfg.write_text(
+        cfg.read_text().replace(
+            f"clone_path: {tmp_path}", f"clone_path: {tmp_path / 'missing-clone'}"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, result
+    finding = next(
+        item
+        for item in result["findings"]
+        if item["name"] == "repository_catalog_clones"
+    )
+    assert finding["ok"] is True
+    assert finding["code"] == "missing_clones_allowed"
+
+
 def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
