@@ -8,6 +8,7 @@ from typing import Any
 from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit, err, ok
+from lokay.merge_policy import WAITING_REASONS, decide_auto_merge
 from lokay.passkit.support import is_manual_pr, run_proc
 from lokay.passkit.working import (
     load_begin_working,
@@ -44,7 +45,9 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     merge_conflicts = int(working.get("merge_conflicts") or 0)
     needs_repair = int(working.get("needs_repair") or 0)
     mergeable_green = int(working.get("mergeable_green") or 0)
+    merge_disabled = int(working.get("merge_disabled") or 0)
     review_limbo = int(working.get("review_limbo") or 0)
+    require_llm_review = bool(begin.get("require_llm_review", True))
 
     for repo_name in list(begin.get("repos") or []):
         pr_list = list(prs_by_repo.get(repo_name) or [])
@@ -136,7 +139,18 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 still_open.append(pr)
                 continue
             if not merge_enabled:
+                # Same decide_auto_merge matrix as pr_merge organ — soft wait.
+                gate = decide_auto_merge(
+                    merge_enabled=False,
+                    require_checks=require_checks,
+                    require_llm_review=require_llm_review,
+                    checks=chk,
+                    pr_labels=pr.get("labels"),
+                )
                 mergeable_green += 1
+                if gate.waiting and gate.reason in WAITING_REASONS:
+                    if gate.reason == "merge_disabled":
+                        merge_disabled += 1
                 still_open.append(pr)
                 continue
             mergeable_green += 1
@@ -158,14 +172,13 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 continue
             if tri.get("skipped"):
                 tri_reason = str(tri.get("reason") or "")
-                if tri.get("waiting") or tri_reason in {
-                    "checks_pending",
-                    "checks_none_require_checks",
-                }:
+                if tri.get("waiting") or tri_reason in WAITING_REASONS:
                     if tri_reason == "checks_pending":
                         pending_checks += 1
                     elif tri_reason == "checks_none_require_checks":
                         no_checks_blocked += 1
+                    elif tri_reason == "merge_disabled":
+                        merge_disabled += 1
                     mergeable_green = max(0, mergeable_green - 1)
                 elif tri.get("repairable") or tri_reason == "checks_failed":
                     needs_repair += 1
@@ -234,6 +247,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
             "merge_conflicts": merge_conflicts,
             "needs_repair": needs_repair,
             "mergeable_green": mergeable_green,
+            "merge_disabled": merge_disabled,
             "review_limbo": review_limbo,
         }
     )
@@ -245,6 +259,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
         actionable_prs=int(working.get("actionable_prs") or 0),
         needs_repair=needs_repair,
         mergeable_green=mergeable_green,
+        merge_disabled=merge_disabled,
     )
 
 

@@ -205,6 +205,13 @@ def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
         },
     )
     assert parked.needs_review is True
+    disarmed = decide_auto_merge(
+        merge_enabled=False,
+        checks={"status": "passed", "merge_ok": True},
+        review={"merge_ok": True, "decision": {"verdict": "approve", "secrets": False}},
+    )
+    assert disarmed.action == "disabled" and disarmed.reason == "merge_disabled"
+    assert disarmed.waiting is True
 
     state = tmp_path / "state.jsonl"
     # ok:false with nested soft merge_policy reasons only (no hard stderr/error).
@@ -257,6 +264,25 @@ def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
                 }
             },
         },
+        {
+            "kind": "pr_triage",
+            "ok": False,
+            "reason": "merge_disabled",
+            "waiting": True,
+            "terminal": {
+                "pr_merge": {
+                    "ok": True,
+                    "skipped": True,
+                    "waiting": True,
+                    "reason": "merge_disabled",
+                    "merge_policy": {
+                        "action": "disabled",
+                        "reason": "merge_disabled",
+                        "waiting": True,
+                    },
+                }
+            },
+        },
     ]
     state.write_text(
         "\n".join(json.dumps(row) for row in soft_rows) + "\n",
@@ -268,6 +294,7 @@ def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
         "llm_review_requested_changes",
         "llm_review_escalated_needs_review",
         "checks_failed",
+        "merge_disabled",
     )
     for mill_health in ("stall", "budget_exhausted", "failed"):
         observation = observe_run(

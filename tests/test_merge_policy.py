@@ -186,7 +186,7 @@ def test_decide_auto_merge_matrix(kwargs, action, reason):
     assert got.reason == reason
     if action == "merge":
         assert got.merge_ok is True
-    if action == "waiting":
+    if action == "waiting" or reason == "merge_disabled":
         assert got.waiting is True
     if reason in {"secrets", "needs_human", "llm_review_escalated_needs_review", "ai_needs_review_label"}:
         assert got.needs_review is True

@@ -45,6 +45,7 @@ def build_pass_receipt(
             "actionable_open_ai_prs",
             "manual_open_ai_prs",
             "mergeable_green",
+            "merge_disabled",
             "needs_repair",
             "review_limbo",
             "pending_checks",

@@ -19,7 +19,7 @@ The JSON envelope includes:
 | `require_llm_review` | Structured approve/`merge_ok` required before merge |
 | `max_issue_to_pr_per_pass` / `k` | Serial pass budget for `issue_to_pr` (default 1; not concurrency) |
 | `health` | `idle` / `progress` / `waiting` / `repairing` / `stall` / `survey_error` |
-| `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, … |
+| `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, `merge_disabled`, … |
 | `by_repo` | Per-repo inbox / ready / actionable open AI PRs |
 | `human_residuals` | Compact needs-feedback / needs-review count (not a mill brake) |
 | `last_pass` | Prior compact pass receipt (also refreshed by this survey) |
@@ -60,13 +60,19 @@ the transcript.
 | --- | --- |
 | `idle` | No remaining actionable work — mill may sleep until new issues |
 | `progress` | Last pass moved the queue — healthy |
-| `waiting` | Pending CI / review limbo / only manual PRs — honest wait |
+| `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / only manual PRs — honest wait |
 | `repairing` | Repair / request_changes cycle in flight — honest wait |
-| `stall` | Actionable work with no progress — investigate agent/merge/config |
+| `stall` | Actionable work with no progress — investigate agent/config (not merge-disarmed green) |
 | `survey_error` | `gh` list atoms failed — fix network/auth before trusting idle |
 
 `ok=false` on status means **not working** (work remains but mill not live-ready,
 or survey errors). `waiting` / `repairing` with `ok=true` is not a failure.
+
+**Merge wait vs stall:** tick/fleet health and `merge_policy` share one soft-wait
+matrix (`WAITING_REASONS` → `pending_checks` / `no_checks_blocked` /
+`merge_disabled`). Green checks with `merge.enabled` false are `waiting` (mill
+ok-stop), never false `stall`. Arm merge to proceed; do not treat this as
+recovery.
 
 **Recovery boundary:** `waiting` / `repairing` (and other soft mill health) must
 not mint systemic stall fingerprints or fill the daemon 4-of-5 quorum into

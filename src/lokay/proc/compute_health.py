@@ -54,6 +54,7 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         "issue_to_pr_started": int(working.get("issue_to_pr_started") or 0),
         "max_issue_to_pr_per_pass": int(begin.get("max_issue_to_pr_per_pass") or 0),
         "mergeable_green": int(working.get("mergeable_green") or 0),
+        "merge_disabled": int(working.get("merge_disabled") or 0),
         "needs_repair": int(working.get("needs_repair") or 0),
         "review_limbo": int(working.get("review_limbo") or 0),
         "pending_checks": int(working.get("pending_checks") or 0),
@@ -73,6 +74,7 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         planned=list(begin.get("planned") or []),
         stuck_path=str(begin.get("stuck_path") or "") or None,
         executor_enabled=bool(begin.get("executor_enabled")),
+        merge_enabled=bool(begin.get("merge_enabled")),
     )
     pass_io.write_json(pass_io.tick_path(pass_dir), payload)
     # Domain health is data for the mill; effector itself succeeds for conduction.

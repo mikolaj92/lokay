@@ -95,8 +95,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    - `idle` — survey finds no remaining work
    - `progress` — mutations moved the queue this pass
    - `repairing` — active repair / request_changes cycle (not mill-failing)
-   - `waiting` — pending CI, review limbo, or only manual PRs
-   - `stall` — actionable work with no progress (true stuck / agent disabled)
+   - `waiting` — pending CI, no-CI while `require_checks`, review limbo,
+     green PRs while `merge.enabled` false (`remaining.merge_disabled`), or
+     only manual PRs (same soft matrix as `merge_policy`)
+   - `stall` — actionable work with no progress (true stuck / agent disabled;
+     not merge-disarmed green)
    - `survey_error` — list atoms failed (refuse false idle)
 
 ## Continuous mill
@@ -122,7 +125,8 @@ uv run lokay-mill --config config.yaml --live --max-passes 8
 Merge policy (fail closed): with `merge.enabled` / `LOKAY_MERGE_ENABLED`, the mill
 merges in the same `pr_triage` pass when checks are green (honoring `require_checks`),
 LLM review is `approve` / `merge_ok`, and there are no secrets, `needs_human`, or
-escalated `ai:needs-review`. Pending checks → `waiting` (not stall). Red checks →
+escalated `ai:needs-review`. Pending checks → `waiting` (not stall). Merge disabled
+while green → `waiting` / `remaining.merge_disabled` (not stall). Red checks →
 repair. Soft documentation nits stay on the approve path — they must not park a PR
 for a person.
 
@@ -158,7 +162,8 @@ Product mill time wins over emergency recovery.
 
 **Never mint a systemic stall fingerprint / never fill the 4-of-5 quorum for:**
 
-- mill `health=waiting` (pending CI, review limbo, only manual/`ai:needs-review` PRs)
+- mill `health=waiting` (pending CI, merge-disarmed green, review limbo, only
+  manual/`ai:needs-review` PRs)
 - mill `health=repairing` (active repair / request_changes cycle)
 - other honest soft outcomes (`idle`, `progress`, `offline`, `overlap`)
 - per-event `pr_repair` / `issue_to_pr` / `pr_triage` failures while the mill
