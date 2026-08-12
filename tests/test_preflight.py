@@ -257,6 +257,11 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
         [preflight._finding("singleton_overlap", False, "contended")],
         [
             preflight._finding(
+                "writable_runtime_paths", False, "unsafe_or_unwritable"
+            )
+        ],
+        [
+            preflight._finding(
                 "repository_catalog_clones", False, "missing_clone"
             ),
             preflight._finding("singleton_overlap", False, "contended"),
