@@ -86,9 +86,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    `lokay-queue-conflict` demotes/defers clear contradictions (open AI PR
    covering the same issue, epic with children, unmet Depends on / Blocked by,
    obvious path overlap), then `lokay-intake-issue --require-ready` so
-   READY-without-intake cannot implement. Then configured executor →
-   commit/push → PR. Worktree from `origin/main`. Stuck → ledger →
-   `ai:blocked`. Live ready with `executor.enabled: false` is a **stall**.
+   READY-without-intake cannot implement. Inside `issue_to_pr`: worktree from
+   `origin/main` → **`plan_issue`** (`.lokay/approach.md` evidence) →
+   configured executor → commit/push → PR. The plan atom is trust-with-evidence,
+   not a human gate. Stuck → ledger → `ai:blocked`. Live ready with
+   `executor.enabled: false` is a **stall**.
 6. **Health** (honest):
    - `idle` — survey finds no remaining work
    - `progress` — mutations moved the queue this pass

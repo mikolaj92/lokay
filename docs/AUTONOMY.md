@@ -85,10 +85,16 @@ exclusive swap.
    `READY` (rare `NEEDS_HUMAN`). Only `READY` + `--require-ready` may call
    `issue_to_pr`. CLOSE/SPLIT never implement. Trusted-author ordinary work
    prefers READY.
-5. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
+5. **Plan before agent (evidence)** — On the serial `issue_to_pr` path,
+   `lokay-plan-issue` writes `.lokay/approach.md` after `worktree_add` and
+   **before** `run_agent` (goal / likely files / test plan / non-goals).
+   Trust-with-evidence for intentional issues — **not** a human approval gate
+   and not `NEEDS_HUMAN` by default. `pr_review` may note plan presence /
+   light alignment as a soft signal only.
+6. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
    red checks → `repair`; approve + green → merge; secrets / needs_human /
    escalated `ai:needs-review` → fail closed.
-6. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
+7. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
    merge_policy reasons) never mint recovery stall fingerprints or fill the
    4-of-5 self-repair quorum.
 

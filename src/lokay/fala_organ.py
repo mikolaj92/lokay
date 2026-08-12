@@ -73,6 +73,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         get_issue,
         list_prs,
         make_branch,
+        plan_issue,
         plan_pass,
         pr_checks,
         pr_create,
@@ -641,6 +642,32 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             if "make_branch" in up:
                 argv.append("--reset-base")
         return _run_atom_main(worktree_add.main, argv)
+
+    if atom == "plan_issue":
+        worktree = str(up.get("worktree_add", {}).get("worktree") or inputs.get("worktree") or "")
+        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        assert worktree
+        if not issue_raw and issue_number is not None and repo:
+            issue_raw = {
+                "repo": repo,
+                "number": issue_number,
+                "title": str(inputs.get("title") or ""),
+                "body": str(inputs.get("body") or ""),
+                "labels": [],
+                "assignees": [],
+                "url": str(inputs.get("url") or ""),
+            }
+        assert issue_raw
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as fh:
+            json.dump(issue_raw, fh, ensure_ascii=False)
+            issue_path = fh.name
+        try:
+            return _run_atom_main(
+                plan_issue.main,
+                [*cfg, *live, "--worktree", worktree, "--issue-json", issue_path],
+            )
+        finally:
+            Path(issue_path).unlink(missing_ok=True)
 
     if atom == "run_agent":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")

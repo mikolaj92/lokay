@@ -150,6 +150,12 @@ def main(argv: list[str] | None = None) -> int:
             live=live,
         )
 
+    from lokay.approach_plan import (
+        approach_excerpt_from_diff,
+        approach_present_in_diff,
+    )
+
+    approach_present = approach_present_in_diff(diff)
     prompt = review_prompt(
         repo=args.repo,
         pr_number=int(args.pr),
@@ -158,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
         head_ref=head,
         diff_text=diff,
         checks_text=checks_text,
+        approach_present=approach_present,
+        approach_excerpt=approach_excerpt_from_diff(diff),
     )
 
     # The executor requires a cwd; prefer configured clone, else temp dir (review is read-only)
