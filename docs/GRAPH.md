@@ -86,9 +86,12 @@ Intake runs cheap checks first (still-open, superseded/merged PR, playbook/shape
 fitness, already-satisfied paths, size/ambiguity). CLOSE posts a short rationale
 comment (and drops `ai:ready` when present). NEEDS_HUMAN applies
 `ai:needs-feedback`. Inconclusive evidence fails closed to NEEDS_HUMAN (no stub
-LLM required). Global PR-first freeze is unchanged: intake still runs inside
-`issue_triage` whenever triage is allowed; the mill also re-runs `intake_issue`
-with `--require-ready` before every `issue_to_pr`.
+LLM required). Per-repo PR-first: triage/intake mutations skip a repo that still
+has actionable open AI PRs (or a failed PR survey for that repo); other clean
+repos continue. Intake still runs inside `issue_triage` whenever triage is
+allowed; the mill also re-runs `intake_issue` with `--require-ready` before every
+`issue_to_pr`. Up to K `issue_to_pr` child runs per `factory_tick` across
+different clean repos (`limits.max_issue_to_pr_per_pass`).
 
 ### `pr_repair` (red checks on open ai/fix PR)
 
