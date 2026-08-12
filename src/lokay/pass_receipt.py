@@ -29,6 +29,8 @@ def build_pass_receipt(
     merge_enabled: bool,
     max_issue_to_pr_per_pass: int,
     config_path: str | None = None,
+    require_checks: bool = False,
+    require_llm_review: bool = True,
 ) -> dict[str, Any]:
     """Build a compact receipt from a tick/status survey payload."""
     remaining = tick.get("remaining") if isinstance(tick.get("remaining"), dict) else {}
@@ -68,6 +70,8 @@ def build_pass_receipt(
         "live": tick.get("live"),
         "progress": int(tick.get("progress") or 0),
         "merge_enabled": bool(merge_enabled),
+        "require_checks": bool(require_checks),
+        "require_llm_review": bool(require_llm_review),
         "max_issue_to_pr_per_pass": int(max_issue_to_pr_per_pass),
         "remaining": compact_remaining,
         "by_repo": list(remaining.get("by_repo") or tick.get("by_repo") or []),

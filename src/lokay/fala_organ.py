@@ -353,49 +353,38 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "pr_merge":
         assert repo and pr_number is not None
+        from lokay.config import load_config
+        from lokay.merge_policy import decide_auto_merge
+
+        merge_cfg = load_config(
+            str(inputs.get("config_path") or inputs.get("config") or "") or None
+        )
         checks = up.get("pr_checks") or {}
-        # Skip cleanly when checks are not mergeable under policy.
-        if checks and not (
-            checks.get("merge_ok")
-            or checks.get("green")
-            or checks.get("status") == "passed"
-        ):
+        review = up.get("pr_review") or {}
+        # Trusted auto-merge gate (fail closed). Pending → waiting; red → repair;
+        # secrets / needs_human / escalated needs-review never merge.
+        gate = decide_auto_merge(
+            merge_enabled=bool(merge_cfg.merge_enabled),
+            require_checks=bool(merge_cfg.require_checks),
+            require_llm_review=bool(merge_cfg.require_llm_review),
+            checks=checks,
+            review=review,
+            pr_labels=inputs.get("pr_labels") or inputs.get("labels"),
+        )
+        if gate.action != "merge":
             return {
                 "ok": True,
                 "skipped": True,
-                "reason": "checks_not_mergeable",
+                "reason": gate.reason,
                 "status": checks.get("status"),
                 "repo": repo,
                 "pr": pr_number,
+                "review": review.get("decision") if isinstance(review, dict) else None,
+                "repairable": gate.repairable,
+                "waiting": gate.waiting,
+                "needs_review": gate.needs_review,
+                "merge_policy": gate.to_dict(),
             }
-        review = up.get("pr_review") or {}
-        if review:
-            if (
-                not review.get("merge_ok")
-                and review.get("skipped")
-                and review.get("reason") in {
-                    "executor_disabled",
-                    "invalid_review_json",
-                    "llm_review_requires_executor",
-                }
-            ):
-                return {
-                    "ok": True,
-                    "skipped": True,
-                    "reason": str(review.get("reason") or "pr_review_skipped"),
-                    "repo": repo,
-                    "pr": pr_number,
-                    "review": review.get("decision"),
-                }
-            if not review.get("merge_ok"):
-                return {
-                    "ok": True,
-                    "skipped": True,
-                    "reason": "llm_review_not_approved",
-                    "repo": repo,
-                    "pr": pr_number,
-                    "review": review.get("decision"),
-                }
         return _run_atom_main(
             pr_merge.main,
             [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],

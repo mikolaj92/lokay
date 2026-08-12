@@ -14,12 +14,14 @@ from lokay.gh_prs import add_pr_labels
 from lokay.pr_review import (
     PrReviewError,
     build_review_comment_body,
+    coerce_soft_nits,
     count_request_changes_reviews,
     find_review_for_head,
     parse_review_markers,
     parse_review_output,
     review_prompt,
     should_escalate_request_changes,
+    should_label_needs_review,
     should_merge,
 )
 from lokay.proc._common import (
@@ -201,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
 
     stdout = str(agent_out.get("stdout_tail") or "")
     try:
-        decision = parse_review_output(stdout)
+        decision = coerce_soft_nits(parse_review_output(stdout))
     except PrReviewError as exc:
         # Fail closed: never approve on parse failure
         comment = (
@@ -288,7 +290,9 @@ def main(argv: list[str] | None = None) -> int:
                 live=True,
             )
             labels: list[str] = []
-            if escalated or decision.verdict == "needs_human" or decision.secrets:
+            # Fail closed: secrets / needs_human / request_changes cap only.
+            # Soft documentation nits never park a PR for humans.
+            if should_label_needs_review(decision, escalated=escalated):
                 labels.append("ai:needs-review")
             if decision.verdict == "request_changes" and not escalated:
                 labels.append("ai:request-changes")

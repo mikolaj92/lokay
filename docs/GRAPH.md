@@ -122,7 +122,12 @@ pr_checks
 ```
 
 `pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
-Config: `merge.require_llm_review` (default true). Env: `LOKAY_REQUIRE_LLM_REVIEW`.
+Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_ENABLED`,
+approve + green checks → `pr_merge` + `close_issue` in one path; pending → waiting;
+red → repair; secrets / `needs_human` / escalated `ai:needs-review` never merge.
+Soft documentation nits must not route to `ai:needs-review`.
+Config: `merge.require_llm_review` (default true), `merge.require_checks` (default false).
+Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
 Tick also handles **merge conflicts** outside this path: `mergeable=CONFLICTING|DIRTY`
 → `lokay-pr-close` + re-label linked issue `ai:ready` so the next pass re-runs

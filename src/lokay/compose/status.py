@@ -87,6 +87,8 @@ def _autonomy_fields(
             by_repo = list(raw)
     return {
         "merge_enabled": bool(cfg.merge_enabled),
+        "require_checks": bool(cfg.require_checks),
+        "require_llm_review": bool(cfg.require_llm_review),
         "max_issue_to_pr_per_pass": int(cfg.max_issue_to_pr_per_pass),
         "k": int(cfg.max_issue_to_pr_per_pass),
         "health": health,
@@ -122,6 +124,10 @@ def compose_status(
         policy_notes.append(
             "merge.require_checks=true: no-CI PRs wait (no_checks_blocked); green CI still merges"
         )
+    if not cfg.require_llm_review:
+        policy_notes.append(
+            "merge.require_llm_review=false: merge without structured LLM review"
+        )
     missing_clones = [
         f"{repo.name} → {repo.clone_path}"
         for repo in cfg.active_repos()
@@ -147,6 +153,7 @@ def compose_status(
     live_env_hint = (
         "LOKAY_MODE=live LOKAY_EXECUTOR_ENABLED=1 "
         "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=1 "
+        "LOKAY_REQUIRE_LLM_REVIEW=1 "
         "uv run lokay-mill --config config.yaml --live"
     )
     last_pass = read_pass_receipt(state_path=cfg.state_path)
@@ -181,7 +188,6 @@ def compose_status(
             mode=cfg.mode,
             executor_enabled=cfg.executor_enabled,
             agent=cfg.agent,
-            require_checks=cfg.require_checks,
             incident_repo=cfg.incident_repo,
             repos=[r.name for r in cfg.active_repos()],
             repos_disabled=[r.name for r in cfg.repos if not r.enabled],
@@ -258,7 +264,6 @@ def compose_status(
         mode=cfg.mode,
         executor_enabled=cfg.executor_enabled,
         agent=cfg.agent,
-        require_checks=cfg.require_checks,
         incident_repo=cfg.incident_repo,
         repos=[r.name for r in cfg.active_repos()],
         repos_disabled=[r.name for r in cfg.repos if not r.enabled],

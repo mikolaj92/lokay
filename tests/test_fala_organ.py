@@ -75,6 +75,54 @@ def test_required_review_with_disabled_executor_stays_blocked(tmp_path, monkeypa
     assert merged["reason"] == "executor_disabled"
 
 
+def test_pr_merge_pending_checks_wait_not_merge(tmp_path, monkeypatch):
+    cfg = _config(tmp_path, required=True, executor=True)
+
+    def boom(main, argv):
+        raise AssertionError("pr_merge atom must not run while checks pending")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    merged = fala_organ._handle(
+        "pr_merge",
+        {"config_path": cfg, "repo": "a/b", "pr": 9, "live": True},
+        {
+            "pr_checks": {"ok": True, "status": "pending", "merge_ok": False},
+            "pr_review": {
+                "ok": True,
+                "merge_ok": True,
+                "decision": {"verdict": "approve", "secrets": False},
+            },
+        },
+    )
+    assert merged["skipped"] is True
+    assert merged["reason"] == "checks_pending"
+    assert merged["waiting"] is True
+
+
+def test_pr_merge_secrets_fail_closed(tmp_path, monkeypatch):
+    cfg = _config(tmp_path, required=True, executor=True)
+
+    def boom(main, argv):
+        raise AssertionError("pr_merge atom must not run on secrets")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    merged = fala_organ._handle(
+        "pr_merge",
+        {"config_path": cfg, "repo": "a/b", "pr": 10, "live": True},
+        {
+            "pr_checks": {"ok": True, "status": "passed", "merge_ok": True},
+            "pr_review": {
+                "ok": True,
+                "merge_ok": False,
+                "decision": {"verdict": "approve", "secrets": True},
+            },
+        },
+    )
+    assert merged["skipped"] is True
+    assert merged["reason"] == "secrets"
+    assert merged["needs_review"] is True
+
+
 def test_push_accepts_agent_created_unpublished_commit(monkeypatch):
     monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 2)
     monkeypatch.setattr(

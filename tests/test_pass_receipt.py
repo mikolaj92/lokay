@@ -44,12 +44,16 @@ def test_build_and_write_pass_receipt_roundtrip(tmp_path: Path):
     receipt = build_pass_receipt(
         tick=tick,
         merge_enabled=True,
+        require_checks=True,
+        require_llm_review=True,
         max_issue_to_pr_per_pass=3,
         config_path=str(tmp_path / "config.yaml"),
     )
     assert receipt["kind"] == "pass_receipt"
     assert receipt["health"] == "waiting"
     assert receipt["merge_enabled"] is True
+    assert receipt["require_checks"] is True
+    assert receipt["require_llm_review"] is True
     assert receipt["max_issue_to_pr_per_pass"] == 3
     assert receipt["by_repo"][0]["repo"] == "a/b"
     assert "intake_skip_reason" not in receipt["remaining"]

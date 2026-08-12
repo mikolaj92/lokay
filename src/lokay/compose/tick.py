@@ -618,8 +618,21 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if tri.get("skipped"):
                 # An actionable structured review goes back to the coding executor on
                 # this existing PR branch. Human/security/invalid/escalated stay closed.
-                if tri.get("repairable"):
+                # Pending CI / require_checks none → waiting (not stall, not human).
+                tri_reason = str(tri.get("reason") or "")
+                if tri.get("waiting") or tri_reason in {
+                    "checks_pending",
+                    "checks_none_require_checks",
+                }:
+                    if tri_reason == "checks_pending":
+                        pending_checks += 1
+                    elif tri_reason == "checks_none_require_checks":
+                        no_checks_blocked += 1
+                    mergeable_green = max(0, mergeable_green - 1)
+                elif tri.get("repairable") or tri_reason == "checks_failed":
                     needs_repair += 1
+                    if tri_reason == "checks_failed":
+                        mergeable_green = max(0, mergeable_green - 1)
                     if repair_budget > 0 and cfg.executor_enabled:
                         repair = compose_pr_repair(
                             config_path=config_path,
@@ -652,6 +665,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 review = tri.get("review")
                 if (
                     tri.get("escalated")
+                    or tri.get("needs_review")
                     or (
                         isinstance(review, dict)
                         and (
@@ -918,6 +932,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         receipt = build_pass_receipt(
             tick=payload,
             merge_enabled=bool(cfg.merge_enabled),
+            require_checks=bool(cfg.require_checks),
+            require_llm_review=bool(cfg.require_llm_review),
             max_issue_to_pr_per_pass=int(cfg.max_issue_to_pr_per_pass),
             config_path=str(cfg.config_path) if cfg.config_path else config_path,
         )
