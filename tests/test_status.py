@@ -85,7 +85,7 @@ def test_local_status_skips_survey(tmp_path: Path, monkeypatch):
     assert result["merge_enabled"] is True
     assert result["require_checks"] is True
     assert result["require_llm_review"] is True
-    assert result["k"] == 3
+    assert result["k"] == 1
 
 
 def test_local_status_uses_last_pass_health(tmp_path: Path, monkeypatch):
