@@ -209,3 +209,31 @@ def test_review_prompt_notes_present_approach():
         checks_text="",
     )
     assert "appears in this PR diff" in text
+
+
+def test_commit_all_force_adds_approach_md(tmp_path: Path, monkeypatch):
+    """Approach evidence must stage even when `.lokay/` is gitignored."""
+    from lokay import git_commit
+
+    wt = tmp_path / "wt"
+    approach = wt / ".lokay" / "approach.md"
+    approach.parent.mkdir(parents=True)
+    approach.write_text("# Approach plan\n", encoding="utf-8")
+    seen: list[list[str]] = []
+
+    class FakeRunner:
+        def run_checked(self, spec, *, live):
+            seen.append(list(spec.argv))
+            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        def run(self, spec, *, live):
+            # First cached-diff check after adds → dirty; keep simple.
+            if spec.argv[:3] == ["git", "diff", "--cached"]:
+                return type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
+            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    did = git_commit.commit_all(FakeRunner(), wt, "msg", live=True)
+    assert did is True
+    assert ["git", "add", "-A"] in seen
+    assert ["git", "add", "-f", "--", ".lokay/approach.md"] in seen
+    assert any(a[:2] == ["git", "commit"] for a in seen)
