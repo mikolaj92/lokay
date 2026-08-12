@@ -132,22 +132,24 @@ Adopt full Basecoat + HTMX + Alpine stack via product_shell.
     assert "ai:ready" in d.add_labels
 
 
-def test_decide_needs_feedback_title_epic():
+def test_decide_split_title_epic():
     d = decide_issue(
         _issue(
             title="[Pad Audit] Platform UI + Fala unix processes + no-legacy epic (app-factory)",
             body="## Goal\nTrack child issues for platform audit.\n\n## Done means\n- [ ] children filed\n",
         )
     )
-    assert d.decision == "needs_feedback"
+    assert d.decision == "split"
     assert d.reason == "too_large_split"
+    assert d.add_labels == ()
 
 
-def test_decide_too_large():
+def test_decide_too_large_splits():
     body = "\n".join(f"- [ ] task {i} more text here" for i in range(8))
     d = decide_issue(_issue(body=body))
-    assert d.decision == "needs_feedback"
+    assert d.decision == "split"
     assert d.reason == "too_large_split"
+    assert d.add_labels == ()
 
 
 def test_decide_skip_already_ready():
@@ -162,11 +164,13 @@ def test_issue_triage_path_in_package():
     assert "issue_triage" in ids
     path = next(p for p in desc["paths"] if p["id"] == "issue_triage")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["get_issue", "triage_issue", "intake_issue"]
+    assert node_ids == ["get_issue", "triage_issue", "intake_issue", "issue_split"]
     triage = path["nodes"][1]
     assert "get_issue" in triage["conduction"]
     intake = path["nodes"][2]
     assert "triage_issue" in intake["conduction"]
+    split = path["nodes"][3]
+    assert "intake_issue" in split["conduction"]
 
 
 def test_pr_repair_path_in_package():

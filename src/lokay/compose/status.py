@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from typing import Any
 
+from lokay.compose.human_mailbox import compose_human_mailbox
 from lokay.compose.tick import compose_tick
 from lokay.envelope import emit_exit, ok
 from lokay.graph_run import describe_package
@@ -24,7 +25,11 @@ def compose_status(
     config_path: str | None,
     survey: bool = True,
     preflight_check: bool = False,
+    human: bool = False,
 ) -> dict[str, Any]:
+    if human:
+        # Residual mailbox — never implies mill stuck / not-working.
+        return compose_human_mailbox(config_path=config_path, live=True)
     cfg = load_cfg(argparse.Namespace(config=config_path))
     # Hard blockers: mill cannot act at all (not policy tradeoffs).
     blockers: list[str] = []
@@ -186,12 +191,19 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="full multi-repo remaining-work survey (default)",
     )
+    mode.add_argument(
+        "--human",
+        action="store_true",
+        help="list residual human mailbox items (needs-feedback / needs-review); not a mill brake",
+    )
     p.add_argument(
         "--preflight",
         action="store_true",
         help="with --local, also run host preflight checks (no lease issue)",
     )
     args = p.parse_args(argv)
+    if args.human:
+        return emit_exit(compose_status(config_path=args.config, human=True))
     survey = not bool(args.local)
     return emit_exit(
         compose_status(

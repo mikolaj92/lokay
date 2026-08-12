@@ -461,3 +461,37 @@ def test_never_second_ai_pr_in_same_repo(tmp_path, monkeypatch):
     assert len(intake) == 1
     assert result["remaining"]["issue_to_pr_started"] == 1
     assert result["remaining"]["open_ai_prs"] == 1
+
+
+def test_needs_feedback_issue_does_not_block_other_repo_intake(tmp_path, monkeypatch):
+    """ai:needs-feedback is a residual mailbox — mill continues other repos."""
+    config = _config(tmp_path)
+
+    def fake_run(fn, argv):
+        repo = argv[argv.index("--repo") + 1]
+        if fn is tick.p_list_prs.main:
+            return {"ok": True, "prs": []}
+        if fn is tick.p_list_inbox.main:
+            # Parked feedback issues are not inbox; empty undecided is fine.
+            return {"ok": True, "issues": []}
+        if fn is tick.p_list_issues.main:
+            if repo == "a/one":
+                # Ready survey never returns needs-feedback; simulate empty ready there.
+                return {"ok": True, "issues": []}
+            return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}]}
+        if fn is tick.p_intake.main:
+            return _intake_ok()
+        raise AssertionError(fn)
+
+    intake = []
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(
+        tick,
+        "compose_issue_to_pr",
+        lambda **kw: intake.append(kw) or {"ok": True, "pr": 2, "branch": "ai/fix/2-next"},
+    )
+    result = tick.compose_tick(config_path=config, live=True)
+    assert len(intake) == 1
+    assert intake[0]["repo"] == "a/two"
+    assert result["remaining"]["intake_skip_reason"] is None

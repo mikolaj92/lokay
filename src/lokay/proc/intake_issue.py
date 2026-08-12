@@ -1,4 +1,4 @@
-"""Atomic: aggregate intake checks → CLOSE | READY | NEEDS_HUMAN + receipt.
+"""Atomic: aggregate intake checks → CLOSE | READY | SPLIT | NEEDS_HUMAN + receipt.
 
 Hardens triage / ready issues before `issue_to_pr`. Mutates only with --live.
 """
@@ -28,6 +28,7 @@ from lokay.proc._common import (
     runner,
 )
 from lokay.runner import gh_spec
+from lokay.stuck import issue_number_from_branch
 from lokay.triage import is_parked, is_undecided
 
 
@@ -69,6 +70,71 @@ def _merged_prs(repo: str, numbers: list[int], *, live: bool) -> list[int]:
     return merged
 
 
+def _covering_ai_prs(
+    repo: str,
+    issue_number: int,
+    *,
+    branch_prefix: str,
+    live: bool,
+) -> list[dict]:
+    """Open or recently merged ai/fix PRs whose branch embeds this issue number."""
+    if not live:
+        return []
+    r = runner()
+    prefix = branch_prefix.rstrip("/") + "/"
+    out: list[dict] = []
+    for state in ("open", "merged"):
+        result = r.run(
+            gh_spec(
+                [
+                    "pr",
+                    "list",
+                    "--repo",
+                    repo,
+                    "--state",
+                    state,
+                    "--json",
+                    "number,state,mergedAt,headRefName",
+                    "--limit",
+                    "50",
+                ],
+                timeout_seconds=60,
+            ),
+            live=True,
+        )
+        if result.returncode != 0:
+            continue
+        try:
+            rows = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError:
+            continue
+        for row in rows:
+            head = str(row.get("headRefName") or "")
+            if not head.startswith(prefix):
+                continue
+            covered = issue_number_from_branch(head, branch_prefix=branch_prefix)
+            if covered != int(issue_number):
+                continue
+            out.append(
+                {
+                    "number": int(row.get("number") or 0),
+                    "state": str(row.get("state") or state).upper(),
+                    "merged": bool(row.get("mergedAt")) or state == "merged",
+                    "head_ref": head,
+                }
+            )
+    # de-dupe by number
+    seen: set[int] = set()
+    uniq: list[dict] = []
+    for row in out:
+        n = int(row["number"])
+        if n in seen or n <= 0:
+            continue
+        seen.add(n)
+        uniq.append(row)
+    return uniq
+
+
 def _should_run_intake(
     issue_labels: list[str],
     *,
@@ -76,13 +142,16 @@ def _should_run_intake(
     needs_feedback_label: str,
     blocked_label: str,
     candidate_ready: bool = False,
+    candidate_split: bool = False,
 ) -> tuple[bool, str]:
-    """Intake runs for ready candidates; skips parked / undecided / human-parked."""
+    """Intake runs for ready/split candidates; skips parked / undecided / human-parked."""
     if is_parked(issue_labels):
         return False, "parked_frozen"
     labels = set(issue_labels)
     if ready_label in labels:
         return True, "already_ready"
+    if candidate_split:
+        return True, "triage_split_candidate"
     if candidate_ready:
         # Upstream triage decided ready (including dry-run where labels are not applied).
         return True, "triage_ready_candidate"
@@ -117,6 +186,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="upstream triage decided ready (label may not be applied yet)",
     )
+    p.add_argument(
+        "--candidate-split",
+        action="store_true",
+        help="upstream triage decided oversized work should auto-split",
+    )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live_mut = mutations_allowed(live_flag=args.live, cfg=cfg)
@@ -134,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         needs_feedback_label=cfg.needs_feedback_label,
         blocked_label=cfg.blocked_label,
         candidate_ready=bool(args.candidate_ready),
+        candidate_split=bool(args.candidate_split),
     )
 
     clone: Path | None
@@ -143,25 +218,33 @@ def main(argv: list[str] | None = None) -> int:
         clone = None
 
     merged: list[int] = []
+    covering: list[dict] = []
     if run:
         merged = _merged_prs(args.repo, referenced_pr_numbers(issue), live=fetch)
+        covering = _covering_ai_prs(
+            args.repo,
+            int(args.issue),
+            branch_prefix=cfg.branch_prefix,
+            live=fetch,
+        )
 
     decision = decide_intake(
         issue,
         state=issue.state,
         clone_path=clone,
         merged_prs=merged,
+        covering_prs=covering,
         ready_label=cfg.ready_label,
         needs_feedback_label=cfg.needs_feedback_label,
         run=run,
         skip_reason=skip_reason,
+        force_split=bool(args.candidate_split) and run,
     )
 
     applied = False
     if live_mut and decision.decision not in {"skip", "ready"}:
         try:
             if decision.remove_labels:
-                # Only remove labels that are present.
                 to_remove = [x for x in decision.remove_labels if x in (issue.labels or [])]
                 if to_remove:
                     remove_issue_labels(runner(), args.repo, args.issue, to_remove, live=True)
@@ -173,7 +256,10 @@ def main(argv: list[str] | None = None) -> int:
                     list(decision.add_labels),
                     live=True,
                 )
-            if decision.comment:
+            # Split receipts are finalized by issue_split; still drop ready + short note.
+            if decision.comment and decision.decision != "split":
+                comment_issue(runner(), args.repo, args.issue, decision.comment, live=True)
+            elif decision.decision == "split" and decision.comment:
                 comment_issue(runner(), args.repo, args.issue, decision.comment, live=True)
             if decision.close and (issue.state or "OPEN").upper() == "OPEN":
                 close_issue(runner(), args.repo, args.issue, live=True)
@@ -212,7 +298,6 @@ def main(argv: list[str] | None = None) -> int:
 
     implementable = bool(decision.implementable and decision.decision == "ready")
     if args.require_ready and not implementable and decision.decision != "skip":
-        # Explicit implement gate outcome (not a process failure).
         implementable = False
 
     return emit_exit(

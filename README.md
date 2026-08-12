@@ -5,7 +5,7 @@ Lokay continuously mills work across configured GitHub repositories: survey, per
 ## What one tick does
 
 1. Surveys every enabled repository for inbox issues, `ai:ready` issues, and open `ai/fix/*` pull requests.
-2. Triages undecided issues through the `issue_triage` Fala path (triage rules + deterministic intake before `ai:ready` sticks), skipping only repos that still have actionable open AI PRs.
+2. Triages undecided issues through the `issue_triage` Fala path (triage + deterministic intake CLOSE/READY/SPLIT + optional auto-split before `ai:ready` sticks), skipping only repos that still have actionable open AI PRs.
 3. Applies per-repo PR-first close-out: conflicts are closed and re-readied, failed work enters `pr_repair`, and approved mergeable work enters `pr_triage`.
 4. Implements up to K ready issues through `issue_to_pr` across different repositories with zero open AI PRs (`limits.max_issue_to_pr_per_pass`, default 3); never a second AI PR in the same repo.
 5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes.
@@ -57,7 +57,7 @@ This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill
 
 ```text
 factory_pass:  factory_tick → composes one or more child path runs
-issue_triage: get_issue → triage_issue → intake_issue
+issue_triage: get_issue → triage_issue → intake_issue → issue_split
 pr_repair:    pr_checks → worktree_add → run_agent → commit_all → push
 pr_triage:    pr_checks → pr_review → pr_merge → close_issue
 issue_to_pr:  get_issue → assign_issue / make_branch → worktree_add
@@ -65,7 +65,9 @@ issue_to_pr:  get_issue → assign_issue / make_branch → worktree_add
 ```
 
 `run_agent` is the only nondeterministic path node. Intake is deterministic (CLOSE /
-READY / NEEDS_HUMAN) and the mill re-checks it before `issue_to_pr`. All other
+READY / SPLIT / rare NEEDS_HUMAN); oversized work auto-splits via `issue_split`.
+The mill re-checks intake before `issue_to_pr`. Humans are a residual mailbox
+(`lokay status --human`), not a brake. All other
 nodes are deterministic GitHub, Git, or pure operations.
 
 ## Safety

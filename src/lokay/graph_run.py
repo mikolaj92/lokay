@@ -146,7 +146,7 @@ def run_path(
             "get_issue", "assign_issue", "make_branch", "worktree_add",
             "run_agent", "commit_all", "push", "pr_create", "list_prs", "pr_label",
         ),
-        "issue_triage": ("get_issue", "triage_issue", "intake_issue"),
+        "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": ("pr_checks", "worktree_add", "run_agent", "commit_all", "push"),
         "pr_triage": ("pr_checks", "pr_review", "pr_merge", "close_issue"),
         "self_repair": (
@@ -380,10 +380,22 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     elif path_id == "issue_triage":
         triage = terminal.get("triage_issue", {})
         intake = terminal.get("intake_issue", {})
+        split = terminal.get("issue_split", {})
         triage_decision = triage.get("decision")
         intake_decision = intake.get("decision")
         # Intake is the final gate for ready; prefer its decision when present.
-        if isinstance(intake_decision, dict) and intake_decision.get("decision") not in {
+        # Successful split overrides to decision=split with children.
+        if (
+            isinstance(split, dict)
+            and not split.get("skipped")
+            and (split.get("applied") or split.get("children"))
+        ):
+            decision = {
+                "decision": "split",
+                "reason": split.get("reason") or "split",
+                "children": split.get("children") or [],
+            }
+        elif isinstance(intake_decision, dict) and intake_decision.get("decision") not in {
             None,
             "",
             "skip",
@@ -397,20 +409,27 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(intake_decision, dict)
                 else triage_decision if isinstance(triage_decision, dict) else {}
             )
-        applied = triage.get("applied") is True or intake.get("applied") is True
+        applied = (
+            triage.get("applied") is True
+            or intake.get("applied") is True
+            or split.get("applied") is True
+        )
         triage_skip = bool(triage.get("skipped")) or (
             isinstance(triage_decision, dict) and triage_decision.get("decision") == "skip"
         )
         intake_skip = bool(intake.get("skipped")) or (
             isinstance(intake_decision, dict) and intake_decision.get("decision") == "skip"
         )
-        # Path is a no-op only when both stages skipped (or intake absent and triage skipped).
-        skipped = triage_skip and (not intake or intake_skip)
+        split_skip = bool(split.get("skipped")) if split else True
+        # Path is a no-op only when triage+intake skipped and split did nothing.
+        skipped = triage_skip and (not intake or intake_skip) and split_skip
         # Demotion after a ready triage still counts as a real decision.
         if (
             isinstance(intake_decision, dict)
-            and intake_decision.get("decision") in {"close", "needs_human"}
+            and intake_decision.get("decision") in {"close", "needs_human", "split"}
         ):
+            skipped = False
+        if split.get("applied"):
             skipped = False
         out.update(
             applied=applied,
@@ -418,8 +437,9 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             skipped=skipped,
             implementable=bool(intake.get("implementable")),
             intake=intake_decision if isinstance(intake_decision, dict) else {},
+            split=split if isinstance(split, dict) else {},
         )
-        reason = intake.get("reason") or triage.get("reason")
+        reason = split.get("reason") or intake.get("reason") or triage.get("reason")
         if reason:
             out["reason"] = reason
     elif path_id == "pr_repair":

@@ -69,6 +69,10 @@ def cmd_mill(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
+    if bool(getattr(args, "human", False)):
+        payload = compose_status(config_path=args.config, human=True)
+        _print(payload)
+        return 0 if payload.get("ok") else 1
     survey = not bool(getattr(args, "local", False))
     payload = compose_status(
         config_path=args.config,
@@ -158,6 +162,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--full",
         action="store_true",
         help="full multi-repo remaining-work survey (default)",
+    )
+    st_mode.add_argument(
+        "--human",
+        action="store_true",
+        help="residual human mailbox (needs-feedback / needs-review); mill is not stuck",
     )
     st.add_argument(
         "--preflight",

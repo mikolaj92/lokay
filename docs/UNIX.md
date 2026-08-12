@@ -23,9 +23,10 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | --- | --- |
 | `lokay-list-inbox` | undecided open issues |
 | `lokay-list-issues` | `ai:ready` issues |
-| `lokay-triage-issue` | apply triage decision |
+| `lokay-triage-issue` | apply triage decision (ready \| split \| rare needs-feedback \| OOS) |
 | `lokay-intake-check` | one deterministic intake check (JSON) |
-| `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| NEEDS_HUMAN |
+| `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| SPLIT \| NEEDS_HUMAN |
+| `lokay-issue-split` | auto-split oversized issue → bounded child issues (gh + rules) |
 | `lokay-select-issue` | pick one issue |
 | `lokay-assign-issue` | assign maintainer |
 | `lokay-make-branch` | pure branch name |
@@ -36,6 +37,10 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
 | `lokay-repos` | list managed repos |
 | `lokay-mill` / `lokay-status` | continuous factory |
+| `lokay status --human` | residual human mailbox (exception report; not a mill brake) |
+
+**Minimize human:** humans author issues; atoms CLOSE / SPLIT / READY+implement.
+`ai:needs-feedback` is rare residual — mill keeps other repos moving.
 
 ## Anti-patterns
 

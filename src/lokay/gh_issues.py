@@ -12,7 +12,8 @@ from lokay.triage import is_parked, is_undecided
 _LABEL_META: dict[str, tuple[str, str]] = {
     "ai:ready": ("0E8A16", "Ready for AI agent work"),
     "ai:blocked": ("D73A4A", "AI agent work is blocked"),
-    "ai:needs-feedback": ("B60205", "Needs human feedback before AI work"),
+    "ai:needs-feedback": ("B60205", "Rare residual — needs human feedback"),
+    "ai:tracker": ("5319E7", "Parent tracker after auto-split (not implementable)"),
     "ai:generated": ("C5DEF5", "Generated or assisted by AI agent"),
     "ai:needs-review": ("D93F0B", "LLM PR review requests human judgment"),
     "ai:request-changes": ("FBCA04", "LLM PR review requested changes"),
@@ -295,3 +296,106 @@ def close_issue(runner: Runner, repo: str, number: int, *, live: bool) -> None:
         gh_spec(["issue", "close", str(number), "--repo", repo]),
         live=live,
     )
+
+
+def create_issue(
+    runner: Runner,
+    *,
+    repo: str,
+    title: str,
+    body: str,
+    labels: list[str] | None = None,
+    live: bool,
+) -> dict:
+    """Create one GitHub issue. Returns {number, url} (or planned stub when dry)."""
+    label_list = [x for x in (labels or []) if x]
+    if label_list:
+        ensure_labels(runner, repo, label_list, live=live)
+    args = [
+        "issue",
+        "create",
+        "--repo",
+        repo,
+        "--title",
+        title,
+        "--body",
+        body,
+    ]
+    for label in label_list:
+        args.extend(["--label", label])
+    result = runner.run_checked(gh_spec(args, timeout_seconds=120), live=live)
+    if not live:
+        return {"planned": True, "title": title, "repo": repo}
+    # gh prints URL on stdout
+    url = (result.stdout or "").strip().splitlines()[-1] if (result.stdout or "").strip() else ""
+    number = 0
+    if "/issues/" in url:
+        try:
+            number = int(url.rstrip("/").rsplit("/", 1)[-1])
+        except ValueError:
+            number = 0
+    if number <= 0:
+        # Fallback: view by URL search is fragile; re-list latest open matching title.
+        listed = runner.run(
+            gh_spec(
+                [
+                    "issue",
+                    "list",
+                    "--repo",
+                    repo,
+                    "--state",
+                    "open",
+                    "--json",
+                    "number,title,url",
+                    "--limit",
+                    "5",
+                ],
+                timeout_seconds=60,
+            ),
+            live=True,
+        )
+        if listed.returncode == 0:
+            for row in json.loads(listed.stdout or "[]"):
+                if str(row.get("title") or "") == title:
+                    return {
+                        "number": int(row["number"]),
+                        "url": str(row.get("url") or ""),
+                        "title": title,
+                        "repo": repo,
+                    }
+        raise RuntimeError(f"create issue on {repo} succeeded but number unknown: {url!r}")
+    return {"number": number, "url": url, "title": title, "repo": repo}
+
+
+def list_issues_with_label(
+    runner: Runner,
+    config: Config,
+    repo: RepoConfig,
+    *,
+    label: str,
+    live: bool,
+    limit: int = 50,
+) -> list[Issue]:
+    """Open issues carrying a label (read-only survey helper)."""
+    if not label:
+        return []
+    if live:
+        survey_pace(config)
+    args = [
+        "issue",
+        "list",
+        "--repo",
+        repo.name,
+        "--state",
+        "open",
+        "--label",
+        label,
+        "--json",
+        "number,title,body,labels,assignees,url",
+        "--limit",
+        str(max(1, min(int(limit), 100))),
+    ]
+    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
+    if not live:
+        return []
+    return [_issue_from_row(repo.name, row) for row in json.loads(result.stdout or "[]")]
