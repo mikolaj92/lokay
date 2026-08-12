@@ -228,3 +228,55 @@ def test_open_match_within_cooldown_skips_comment_spam(monkeypatch, tmp_path):
     url = preflight._github_incident(_source_fail(), cfg=cfg)
     assert url.endswith("/issues/7")
     assert comments == 0
+
+
+def test_recovery_incident_respects_same_cooldown(monkeypatch, tmp_path):
+    """Confirmed-stall filing shares preflight ledger + cooldown (no spam)."""
+    cfg = _cfg(tmp_path)
+    fp = "stalldeadbeef001"
+    (tmp_path / "preflight-incidents.json").write_text(
+        json.dumps(
+            {
+                fp: {
+                    "fingerprint": fp,
+                    "incident_url": "https://github.com/mikolaj92/lokay/issues/41",
+                    "number": 41,
+                    "last_incident_at": 1_700_000_000.0,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    mutates: list[list[str]] = []
+
+    def fake_run(argv, **kwargs):
+        argv = list(argv)
+
+        class R:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        if argv[:3] == ["gh", "api", "--method"]:
+            R.stdout = "[]"
+            return R()
+        if argv[:3] in (
+            ["gh", "issue", "create"],
+            ["gh", "issue", "comment"],
+            ["gh", "issue", "reopen"],
+        ):
+            mutates.append(argv)
+            raise AssertionError("recovery incident must not spam during cooldown")
+        return R()
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    monkeypatch.setattr(preflight.time, "time", lambda: 1_700_000_000.0 + 120)
+    # report_recovery_incident loads config from path; stub load_config.
+    monkeypatch.setattr(preflight, "load_config", lambda _p: cfg)
+    url = preflight.report_recovery_incident(
+        fingerprint=fp,
+        evidence="Confirmed in 4 of 5 daemon runs. push failed",
+        config_path=str(tmp_path / "config.yaml"),
+    )
+    assert url == "https://github.com/mikolaj92/lokay/issues/41"
+    assert mutates == []
