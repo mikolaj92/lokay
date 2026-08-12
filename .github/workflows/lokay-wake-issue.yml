@@ -56,7 +56,7 @@ jobs:
           EVENT_ACTION: ${{ github.event.action || '' }}
           EVENT_ISSUE: ${{ github.event.issue.number || inputs.issue }}
           EVENT_LABEL: ${{ github.event.label.name || '' }}
-          ISSUE_LABELS: ${{ join(github.event.issue.labels.*.name, ',') }}
+          ISSUE_LABELS: ${{ github.event_name == 'issues' && join(github.event.issue.labels.*.name, ',') || '' }}
           DISPATCH_REASON: ${{ inputs.reason || '' }}
           DISPATCH_LIVE: ${{ inputs.live || false }}
           WAKE_LIVE_VAR: ${{ vars.LOKAY_WAKE_LIVE || 'false' }}
