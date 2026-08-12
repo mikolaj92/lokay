@@ -70,10 +70,18 @@ LaunchAgent or:
 export LOKAY_MODE=live
 export LOKAY_EXECUTOR_ENABLED=1
 export LOKAY_AGENT=pi    # log label only; binary is executor.command in config
-export LOKAY_MERGE_ENABLED=1
-# LOKAY_REQUIRE_CHECKS=1 default (set 0 only if you accept merge without CI)
+export LOKAY_MERGE_ENABLED=1          # trusted auto-merge when green + approved
+export LOKAY_REQUIRE_CHECKS=1         # pending/none wait; red → repair (recommended live)
+export LOKAY_REQUIRE_LLM_REVIEW=1     # default; approve/merge_ok before merge
 uv run lokay-mill --config config.yaml --live --max-passes 8
 ```
+
+Merge policy (fail closed): with `merge.enabled` / `LOKAY_MERGE_ENABLED`, the mill
+merges in the same `pr_triage` pass when checks are green (honoring `require_checks`),
+LLM review is `approve` / `merge_ok`, and there are no secrets, `needs_human`, or
+escalated `ai:needs-review`. Pending checks → `waiting` (not stall). Red checks →
+repair. Soft documentation nits stay on the approve path — they must not park a PR
+for a person.
 
 ```bash
 uv run lokay status --config config.yaml
@@ -101,3 +109,6 @@ See [`GRAPH.md`](GRAPH.md).
 - `factory_pass` is the parent Fala run used by the mill; it composes the smaller workflow Falas through a separate journal boundary.
 - `pr_review`: structured LLM gate before auto-merge when `merge.require_llm_review`.
   Comments carry a durable `<!-- lokay-review head=… -->` marker for idempotency.
+- Env knobs (see `config.example.yaml`): `LOKAY_MERGE_ENABLED`, `LOKAY_REQUIRE_CHECKS`,
+  `LOKAY_REQUIRE_LLM_REVIEW`. Keep `merge.enabled: false` in dry-run configs; enable
+  merge on the live mill via env.

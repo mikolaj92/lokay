@@ -147,6 +147,7 @@ def compose_status(
     live_env_hint = (
         "LOKAY_MODE=live LOKAY_EXECUTOR_ENABLED=1 "
         "LOKAY_MERGE_ENABLED=1 LOKAY_REQUIRE_CHECKS=1 "
+        "LOKAY_REQUIRE_LLM_REVIEW=1 "
         "uv run lokay-mill --config config.yaml --live"
     )
     last_pass = read_pass_receipt(state_path=cfg.state_path)

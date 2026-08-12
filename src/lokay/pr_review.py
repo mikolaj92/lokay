@@ -120,6 +120,51 @@ def should_repair(decision: PrReviewDecision) -> bool:
     return decision.verdict == "request_changes" and not decision.secrets
 
 
+def is_soft_nits_only(decision: PrReviewDecision) -> bool:
+    """True when findings are non-blocking nits only (docs/style), not product/security."""
+    if decision.secrets or decision.blocking:
+        return False
+    if not decision.scope_ok or not decision.tests_adequate:
+        return False
+    if not decision.nits:
+        return False
+    return decision.verdict in {"approve", "request_changes", "needs_human"}
+
+
+def coerce_soft_nits(decision: PrReviewDecision) -> PrReviewDecision:
+    """Documentation/style-only nits must not park PRs for humans or thrash repair.
+
+    Keep ``needs_human`` for product/security judgment and ``request_changes`` for
+    real blocking work. Soft nits alone become ``approve`` (nits preserved).
+    """
+    if not is_soft_nits_only(decision):
+        return decision
+    if decision.verdict == "approve":
+        return decision
+    # needs_human with only soft nits: only coerce low-risk (product/high stays human).
+    if decision.verdict == "needs_human" and decision.risk != "low":
+        return decision
+    return PrReviewDecision(
+        verdict="approve",
+        risk=decision.risk,
+        scope_ok=decision.scope_ok,
+        secrets=False,
+        tests_adequate=decision.tests_adequate,
+        blocking=(),
+        nits=decision.nits,
+        summary=decision.summary or "soft nits only; approve",
+    )
+
+
+def should_label_needs_review(
+    decision: PrReviewDecision, *, escalated: bool = False
+) -> bool:
+    """``ai:needs-review`` only for secrets, product/human, or request_changes cap."""
+    if escalated or decision.secrets:
+        return True
+    return decision.verdict == "needs_human"
+
+
 # Durable marker embedded in published PR review comments.
 # Used for head-SHA idempotency and request_changes escalation counts.
 REVIEW_MARKER_RE = re.compile(
@@ -255,7 +300,10 @@ Rules:
 4. verdict=needs_human if policy/security/product judgment requires a person.
 5. secrets=true if credentials, tokens, private keys, or .env material appear.
 6. Do NOT edit files. Do NOT run git commit/push. Review only.
-7. Prefer fail-closed: if unsure between approve and needs_human, choose needs_human.
+7. Prefer fail-closed: if unsure between approve and needs_human for security/product, choose needs_human.
+8. Soft / documentation-only / style nits belong in `nits` with verdict=approve.
+   Do NOT use needs_human or request_changes for docs-only typos, wording, or comment polish.
+   `ai:needs-review` is reserved for secrets, product/security judgment, or repeated request_changes cap.
 
 CI / checks context (evidence):
 {(checks_text or "(none)")[:4000]}

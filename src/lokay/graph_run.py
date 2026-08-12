@@ -332,10 +332,14 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             )
         elif review.get("merge_ok") and review.get("reason") == "llm_review_not_required":
             if merge.get("skipped"):
+                reason = str(merge.get("reason") or "pr_merge_skipped")
                 out.update(
                     skipped=True,
-                    reason=merge.get("reason") or "pr_merge_skipped",
-                    repairable=False,
+                    reason=reason,
+                    repairable=bool(merge.get("repairable")),
+                    waiting=bool(merge.get("waiting"))
+                    or reason in {"checks_pending", "checks_none_require_checks", "merge_disabled"},
+                    needs_review=bool(merge.get("needs_review")),
                 )
             else:
                 out.update(
@@ -362,13 +366,22 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                 ),
                 repairable=repairable,
                 escalated=bool(review.get("escalated")),
+                needs_review=bool(
+                    review.get("escalated")
+                    or decision.get("secrets")
+                    or decision.get("verdict") == "needs_human"
+                ),
                 review=decision,
             )
         elif merge.get("skipped"):
+            reason = str(merge.get("reason") or "pr_merge_skipped")
             out.update(
                 skipped=True,
-                reason=merge.get("reason") or "pr_merge_skipped",
-                repairable=False,
+                reason=reason,
+                repairable=bool(merge.get("repairable")),
+                waiting=bool(merge.get("waiting"))
+                or reason in {"checks_pending", "checks_none_require_checks", "merge_disabled"},
+                needs_review=bool(merge.get("needs_review")),
                 review=decision,
             )
         else:
