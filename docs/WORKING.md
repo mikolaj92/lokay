@@ -99,6 +99,12 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
 
 ## Continuous mill
 
+LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
+the mill turning; event wake (`lokay-wake` on a self-hosted `lokay-mill`
+runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
+complete. Same serial mill (K=1), same lock — not a parallel fleet. Details:
+[`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
+
 LaunchAgent or:
 
 ```bash

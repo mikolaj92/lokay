@@ -92,6 +92,43 @@ exclusive swap.
    merge_policy reasons) never mint recovery stall fingerprints or fill the
    4-of-5 self-repair quorum.
 
+## Event wake vs cron
+
+The LaunchAgent cron (`ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`)
+remains the steady heartbeat. **Event wake** nudges the same mill host sooner
+when GitHub signals new work — it does **not** start a second parallel coding
+fleet. Serial by design (default K=1) is unchanged; the mill lock still
+serializes overlap.
+
+| Signal | Workflow | `lokay-wake` path |
+| --- | --- | --- |
+| Issue opened / labeled `ai:ready` | `.github/workflows/lokay-wake-issue.yml` | `issue_triage` |
+| PR checks complete (`workflow_run` / AI-PR `check_*`) | `.github/workflows/lokay-wake-checks.yml` | `pr_triage` (pr+branch) or bounded `factory_pass` (max-passes 1) |
+| Manual / factory nudge | `workflow_dispatch` or `--reason factory` | bounded `factory_pass` |
+
+**Design B (preferred):** run wake jobs on a **self-hosted** Actions runner on
+the mill Mac, labeled `lokay-mill`. The job calls `uv run lokay-wake` against
+the existing checkout (`LOKAY_ROOT`, default `~/Developer/OSS/lokay`) — same
+`gh` auth, clones, and Pi executor as the LaunchAgent.
+
+Enable:
+
+1. Install/register a GitHub self-hosted runner on the mill host; add labels
+   `self-hosted` and `lokay-mill`.
+2. Set repository variables: `LOKAY_ROOT` (optional), `LOKAY_CONFIG` (optional),
+   `LOKAY_WAKE_LIVE=true` only when live mutations are intended (default omits
+   `--live` → planned / dry-run path).
+3. Copy or mirror the wake workflows into managed catalog repos that should
+   wake this runner (org-level runner registration makes `runs-on:
+   [self-hosted, lokay-mill]` available fleet-wide).
+
+Atom: `lokay-wake --reason …` (JSON envelope). `--plan-only` prints routing
+without invoking Fala. Spam / `invalid` / `wontfix` labels skip; labeled
+events only wake on `ai:ready`.
+
+**Residual risk:** live wake uses the mill host credentials; prefer host-local
+`gh` over putting long-lived PATs in Actions secrets.
+
 ## Night mill profile
 
 Default example stays dry-run (`config.example.yaml`). For a live night mill,
