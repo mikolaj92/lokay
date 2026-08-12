@@ -9,4 +9,6 @@ dist/
 build/
 .uv/
 config.yaml
-.lokay/
+# Host/runtime under checkout — keep approach plan evidence trackable.
+.lokay/*
+!.lokay/approach.md
