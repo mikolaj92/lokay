@@ -1,5 +1,13 @@
 # Lokay agent notes
 
+## Composition (non-negotiable)
+
+- Prefer small Unix-style modules/processes; compose them. No fat god-files.
+- Multi-step flows: compose with Fala when the work is Python/Mojo process
+  orchestration. Multiple Fala runtimes OK.
+- Domain engines stay separate; Fala orchestrates.
+- Nested Fala OK.
+
 ## Design law
 
 **Unix small programs + Fala graph for order + real agent only.**
