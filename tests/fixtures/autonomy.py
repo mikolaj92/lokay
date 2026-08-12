@@ -19,7 +19,7 @@ def write_mill_config(
     merge_enabled: bool = True,
     require_checks: bool = False,
     require_llm_review: bool = True,
-    max_issue_to_pr_per_pass: int = 3,
+    max_issue_to_pr_per_pass: int = 1,
     max_triage_per_tick: int = 0,
     max_repairs_per_tick: int = 0,
     name: str = "config.yaml",

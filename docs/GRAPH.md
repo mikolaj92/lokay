@@ -51,9 +51,10 @@ factory_begin
             → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
               → closeout_prs         → pr_repair / pr_triage child Falas
                 → select_implement
-                  → dispatch_implement → issue_to_pr child Fala
-                    → compute_health
-                      → record_pass    → last-pass.json
+                  → queue_conflict   → SKIP/CLOSE/READY queue hygiene
+                    → dispatch_implement → issue_to_pr child Fala
+                      → compute_health
+                        → record_pass    → last-pass.json
 ```
 
 | Atom | One job |
@@ -66,8 +67,9 @@ factory_begin
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | checks / repair / merge / wait remaining open AI PRs |
-| `select_implement` | clean repos eligible for up to K `issue_to_pr` |
-| `dispatch_implement` | intake gate + `issue_to_pr` (serial within repo) |
+| `select_implement` | clean repos eligible for issue_to_pr (serial K budget) |
+| `queue_conflict` | contradiction gate before implement (queue hygiene) |
+| `dispatch_implement` | intake gate + `issue_to_pr` (serial by design) |
 | `compute_health` | remaining counters + honest mill health |
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
 
@@ -148,10 +150,11 @@ inbox/intake on later passes. NEEDS_HUMAN applies `ai:needs-feedback` only when
 split is impossible or evidence is inconclusive. Per-repo PR-first:
 triage/intake/split mutations skip a repo that still has actionable open AI PRs
 (or a failed PR survey for that repo); other clean repos continue. Intake still
-runs inside `issue_triage` whenever triage is allowed; the mill also re-runs
-`intake_issue` with `--require-ready` before every `issue_to_pr`. Up to K
-`issue_to_pr` child runs per `factory_pass` across different clean repos
-(`limits.max_issue_to_pr_per_pass`).
+runs inside `issue_triage` whenever triage is allowed; the mill also runs
+`queue_conflict` (queue hygiene — not a parallel scheduler) then re-runs
+`intake_issue` with `--require-ready` before every `issue_to_pr`. **Serial by
+design:** default `limits.max_issue_to_pr_per_pass` is **1** (ticket after
+ticket). K is an optional pass budget, not concurrent worktrees/Pi/tmux.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 

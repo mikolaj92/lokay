@@ -22,6 +22,7 @@ from lokay.proc.factory_begin import run_factory_begin
 from lokay.proc.plan_pass import run_plan_pass
 from lokay.proc.record_pass import run_record_pass
 from lokay.proc.resolve_conflicts import run_resolve_conflicts
+from lokay.proc.queue_conflict import run_queue_conflict
 from lokay.proc.select_implement import run_select_implement
 from lokay.proc.survey_inbox import run_survey_inbox
 from lokay.proc.survey_prs import run_survey_prs
@@ -60,6 +61,7 @@ def _bind_test_patches() -> None:
     import lokay.proc.dispatch_triage as dispatch_triage
     import lokay.proc.factory_begin as factory_begin
     import lokay.proc.plan_pass as plan_pass
+    import lokay.proc.queue_conflict as queue_conflict
     import lokay.proc.resolve_conflicts as resolve_conflicts
     import lokay.proc.survey_inbox as survey_inbox
     import lokay.proc.survey_prs as survey_prs
@@ -79,6 +81,7 @@ def _bind_test_patches() -> None:
     closeout_prs.compose_pr_repair = compose_pr_repair
     closeout_prs.compose_pr_triage = compose_pr_triage
     closeout_prs.is_manual_pr = _is_manual_pr
+    queue_conflict.run_proc = _run
     dispatch_implement.run_proc = _run
     dispatch_implement.compose_issue_to_pr = compose_issue_to_pr
     dispatch_triage.run_path = run_path
@@ -103,6 +106,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     run_resolve_conflicts(pass_dir=pass_dir, config_path=config_path, live=live)
     run_closeout_prs(pass_dir=pass_dir, config_path=config_path, live=live)
     run_select_implement(pass_dir=pass_dir)
+    run_queue_conflict(pass_dir=pass_dir, config_path=config_path, live=live)
     run_dispatch_implement(pass_dir=pass_dir, config_path=config_path, live=live)
     run_compute_health(pass_dir=pass_dir)
     recorded = run_record_pass(pass_dir=pass_dir)

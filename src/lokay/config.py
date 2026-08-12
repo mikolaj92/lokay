@@ -57,10 +57,11 @@ class Config:
     require_llm_review: bool = True  # structured executor review before auto-merge
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
-    # K: max issue_to_pr runs per factory pass across different clean repos.
-    max_issue_to_pr_per_pass: int = 3
+    # K: optional pass budget for issue_to_pr (serial by design; default 1).
+    # Not concurrent worktrees / Pi / tmux — ticket after ticket.
+    max_issue_to_pr_per_pass: int = 1
     # Legacy alias kept in sync with max_issue_to_pr_per_pass on load.
-    max_issues_per_tick: int = 3
+    max_issues_per_tick: int = 1
     max_triage_per_tick: int = 5
     max_repairs_per_tick: int = 1
     max_request_changes_per_pr: int = 2  # then escalate to ai:needs-review
@@ -115,15 +116,17 @@ def _expand(path: str | Path) -> Path:
 
 
 def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
-    """Resolve K for parallel issue_to_pr across clean repos (default 3).
+    """Resolve K pass budget for issue_to_pr (default 1; serial by design).
 
     Prefer ``max_issue_to_pr_per_pass``; fall back to legacy ``max_issues_per_tick``.
+    K>1 is a rare breadth knob across already-isolated clean repos — not
+    concurrent worktrees/Pi/tmux.
     """
     if "max_issue_to_pr_per_pass" in lim:
         return int(lim["max_issue_to_pr_per_pass"])
     if "max_issues_per_tick" in lim:
         return int(lim["max_issues_per_tick"])
-    return 3
+    return 1
 
 
 def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:

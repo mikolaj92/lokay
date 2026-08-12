@@ -8,7 +8,8 @@ as recovery stalls.
 Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Fleet pass order
 lives in parent Fala ``factory_pass`` (`survey_prs → survey_inbox → survey_ready
-→ plan → triage → conflicts → closeout → select → implement → health → receipt`).
+→ plan → triage → conflicts → closeout → select → queue_conflict → implement →
+health → receipt`). Serial by design (default K=1).
 `compose_tick` is a thin in-process bridge for canaries/CLI — not the multi-repo
 brain. The promises below are the public surface that must remain.
 
@@ -38,16 +39,20 @@ workflow step and not a mill brake.
 1. **Per-repo PR-first** — An actionable `ai/fix/*` PR in repo A does **not**
    block inbox triage or `issue_to_pr` in clean repo B. Never open a second AI PR
    in a repo that already has one.
-2. **Parallel K** — Up to `limits.max_issue_to_pr_per_pass` (default **3**)
-   `issue_to_pr` runs per factory pass across **different** clean repos.
-3. **Intake gates implement** — Deterministic intake yields `CLOSE` | `SPLIT` |
+2. **Serial by design** — Ticket after ticket. `limits.max_issue_to_pr_per_pass`
+   (default **1**) is an optional pass budget, **not** concurrent worktrees /
+   Pi / tmux. `K>1` is rare breadth across already-isolated clean repos.
+3. **Contradiction gate** — `lokay-queue-conflict` is queue hygiene before
+   `issue_to_pr` (SKIP/defer or CLOSE/demote on clear conflicts). Not a
+   parallel scheduler; does not invent NEEDS_HUMAN for intentional tickets.
+4. **Intake gates implement** — Deterministic intake yields `CLOSE` | `SPLIT` |
    `READY` (rare `NEEDS_HUMAN`). Only `READY` + `--require-ready` may call
    `issue_to_pr`. CLOSE/SPLIT never implement. Trusted-author ordinary work
    prefers READY.
-4. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
+5. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
    red checks → `repair`; approve + green → merge; secrets / needs_human /
    escalated `ai:needs-review` → fail closed.
-5. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
+6. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
    merge_policy reasons) never mint recovery stall fingerprints or fill the
    4-of-5 self-repair quorum.
 
@@ -73,7 +78,7 @@ Profile knobs (also overridable via env):
 | `merge.enabled` | `true` (`LOKAY_MERGE_ENABLED=1`) |
 | `merge.require_checks` | `true` (`LOKAY_REQUIRE_CHECKS=1`) |
 | `merge.require_llm_review` | `true` (`LOKAY_REQUIRE_LLM_REVIEW=1`) |
-| `limits.max_issue_to_pr_per_pass` | `3` |
+| `limits.max_issue_to_pr_per_pass` | `1` (serial by design) |
 
 ## Hermetic canaries
 

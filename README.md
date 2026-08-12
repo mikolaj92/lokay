@@ -1,13 +1,13 @@
 # Lokay
 
-Lokay continuously mills work across configured GitHub repositories: survey, per-repo PR close-out, then triage and up to K `issue_to_pr` runs across clean repos with a real configured coding executor.
+Lokay continuously mills work across configured GitHub repositories: survey, per-repo PR close-out, then triage and **serial** `issue_to_pr` (ticket after ticket; default K=1) with a real configured coding executor.
 
 ## What one tick does
 
 1. Surveys every enabled repository for inbox issues, `ai:ready` issues, and open `ai/fix/*` pull requests.
 2. Triages undecided issues through the `issue_triage` Fala path (triage + deterministic intake CLOSE/READY/SPLIT + optional auto-split before `ai:ready` sticks), skipping only repos that still have actionable open AI PRs.
 3. Applies per-repo PR-first close-out: conflicts are closed and re-readied, failed work enters `pr_repair`, and approved mergeable work enters `pr_triage`.
-4. Implements up to K ready issues through `issue_to_pr` across different repositories with zero open AI PRs (`limits.max_issue_to_pr_per_pass`, default 3); never a second AI PR in the same repo.
+4. Implements ready issues through `issue_to_pr` **serially by design** (`limits.max_issue_to_pr_per_pass`, default **1** — an optional pass budget, not concurrent worktrees/Pi/tmux). Never a second AI PR in the same repo. A contradiction gate demotes/defers clear queue conflicts before implement.
 5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes.
 
 The top-level mill runs the parent `factory_pass` Fala. Its `factory_tick` effector applies the multi-repo pass policy and composes the smaller `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr` child Falas. Parent and child runs use separate journals.
@@ -43,7 +43,7 @@ uv run lokay mill --config config.yaml --live --max-passes 8
 ```
 
 For a documented night / live autonomous profile (merge on, checks required,
-K=3 — not the default example), see `config.live-autonomous.example.yaml` and
+serial K=1), see `config.live-autonomous.example.yaml` and
 [`docs/AUTONOMY.md`](docs/AUTONOMY.md).
 
 ## Continuous operation
