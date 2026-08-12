@@ -44,6 +44,55 @@ executor:
     assert len(cfg.active_repos()) == 1
 
 
+def test_max_issue_to_pr_per_pass_default_and_legacy_alias(tmp_path: Path, monkeypatch):
+    for key in ("LOKAY_MODE", "LOKAY_EXECUTOR_ENABLED", "LOKAY_AGENT", "LOKAY_CONFIG"):
+        monkeypatch.delenv(key, raising=False)
+    bare = tmp_path / "bare.yaml"
+    bare.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: false
+  command: true
+  args: ["{{prompt}}"]
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(bare)
+    assert cfg.max_issue_to_pr_per_pass == 3
+    assert cfg.max_issues_per_tick == 3
+
+    legacy = tmp_path / "legacy.yaml"
+    legacy.write_text(
+        bare.read_text()
+        + """
+limits:
+  max_issues_per_tick: 2
+""",
+        encoding="utf-8",
+    )
+    cfg_legacy = load_config(legacy)
+    assert cfg_legacy.max_issue_to_pr_per_pass == 2
+    assert cfg_legacy.max_issues_per_tick == 2
+
+    explicit = tmp_path / "explicit.yaml"
+    explicit.write_text(
+        bare.read_text()
+        + """
+limits:
+  max_issue_to_pr_per_pass: 5
+  max_issues_per_tick: 1
+""",
+        encoding="utf-8",
+    )
+    cfg_explicit = load_config(explicit)
+    assert cfg_explicit.max_issue_to_pr_per_pass == 5
+    assert cfg_explicit.max_issues_per_tick == 5
+
+
 def test_env_overrides_enable_live_mill(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(

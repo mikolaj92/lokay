@@ -1,7 +1,10 @@
 """Composer: full multi-repo pass — inbox triage → PR close-out → ready implement.
 
-Serial work policy: finish open AI PRs (merge/repair/close) before opening new ones.
-At most one new issue_to_pr per tick, and never in a repo that still has an open AI PR.
+Per-repo PR-first: finish open AI PRs (merge/repair/close) in a repository
+before triage/intake/implement *in that same repository*. Other repos with
+zero open AI PRs may still triage and implement. Up to K ``issue_to_pr`` runs
+per pass across different clean repos (``limits.max_issue_to_pr_per_pass``);
+still serial within a repo (never a second open ``ai/fix/*`` PR there).
 
 Always **surveys** all configured repos (read-only network) so a tick cannot
 report green/planned while work remains. Mutations require --live + mode:live.
@@ -206,9 +209,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     pipeline = [
         "survey: list-prs + list-inbox + list-issues (all repos)",
-        "triage inbox + deterministic intake (ai:ready only after intake; does not open PRs)",
-        "PR-first: conflict close / repair / merge open AI PRs (land code before new work)",
-        "intake gate then implement at most one ready issue (repos with zero open AI PRs)",
+        "per-repo PR-first: conflict close / repair / merge open AI PRs",
+        "inbox triage + deterministic intake (skip repos with actionable open AI PRs)",
+        "intake gate then issue_to_pr up to K across clean repos (zero open AI PRs)",
         "on failure: stuck ledger → ai:blocked",
     ]
     planned.append(
@@ -245,7 +248,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     review_limbo = 0
     survey_errors = 0
     triage_budget = max(0, int(cfg.max_triage_per_tick)) if live else 0
-    issue_budget = max(0, int(cfg.max_issues_per_tick)) if live else 0
+    # K parallel issue_to_pr across different clean repos (serial within a repo).
+    issue_budget = max(0, int(cfg.max_issue_to_pr_per_pass)) if live else 0
     repair_budget = max(0, int(cfg.max_repairs_per_tick)) if live else 0
     max_fail = max(1, int(cfg.max_failures_before_block))
 
@@ -254,11 +258,13 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     # --- 0) PR heads first (filter ready issues already covered by open AI PRs) ---
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
+    pr_survey_failed: set[str] = set()
     for repo in cfg.active_repos():
         prs = _run(p_list_prs.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_prs", "repo": repo.name, **prs})
         if not prs.get("ok"):
             survey_errors += 1
+            pr_survey_failed.add(repo.name)
             prs_by_repo[repo.name] = []
             continue
         pr_list = list(prs.get("prs") or [])
@@ -267,16 +273,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         actionable_prs += sum(not _is_manual_pr(pr) for pr in pr_list)
         manual_prs += sum(_is_manual_pr(pr) for pr in pr_list)
 
-    triage_block_reason: str | None = None
-    if survey_errors:
-        triage_block_reason = "PR survey failed closed; refuse inbox triage mutations"
-    elif actionable_prs:
-        triage_block_reason = (
-            f"global PR-first backpressure: {actionable_prs} actionable AI PR(s) "
-            "block inbox triage mutations"
-        )
-
-    # --- 1) Inbox: always survey; triage only when live ---
+    # --- 1) Inbox: always survey; triage only when live (per-repo PR-first) ---
     for repo in cfg.active_repos():
         listed = _run(p_list_inbox.main, [*cfg_flag, "--repo", repo.name])
         actions.append({"step": "list_inbox", "repo": repo.name, **listed})
@@ -287,13 +284,30 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         remaining_inbox += len(inbox)
         if not live:
             continue
-        if triage_block_reason:
+        if repo.name in pr_survey_failed:
             actions.append(
                 {
-                    "step": "skip_inbox_triage_global_backpressure",
+                    "step": "skip_inbox_triage_survey_failed",
                     "repo": repo.name,
                     "count": len(inbox),
-                    "reason": triage_block_reason,
+                    "reason": "PR survey failed closed for this repo; refuse inbox triage",
+                }
+            )
+            continue
+        repo_actionable = sum(
+            not _is_manual_pr(pr) for pr in (prs_by_repo.get(repo.name) or [])
+        )
+        if repo_actionable:
+            actions.append(
+                {
+                    "step": "skip_inbox_triage_repo_backpressure",
+                    "repo": repo.name,
+                    "count": len(inbox),
+                    "actionable_open_ai_prs": repo_actionable,
+                    "reason": (
+                        f"per-repo PR-first: {repo_actionable} actionable AI PR(s) "
+                        "in this repo block inbox triage"
+                    ),
                 }
             )
             continue
@@ -339,8 +353,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             triage_budget -= 1
 
     # --- 2) Ready survey only: unready issues covered by open AI PRs; do NOT implement yet ---
-    # Serial policy: land/repair open PRs before starting new issue_to_pr (avoids PR pile-up
-    # and cross-issue conflicts on the same repo).
+    # Per-repo PR-first: land/repair open PRs in a repo before new issue_to_pr there.
     ready_by_repo: dict[str, list[dict[str, Any]]] = {}
     for repo in cfg.active_repos():
         listed = _run(p_list_issues.main, [*cfg_flag, "--repo", repo.name])
@@ -655,35 +668,32 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     if live:
         save_stuck(stuck_path, stuck)
 
-    # Recount from the post-processing queue. Intake is globally PR-first: an
-    # actionable PR in any managed repository blocks issue_to_pr everywhere.
+    # Recount from the post-processing queue. PR-first is per repository: an
+    # open AI PR only blocks issue_to_pr in that same repo (never a second
+    # ai/fix/* PR there). Other clean repos may still implement up to K.
     remaining_prs = sum(len(prs) for prs in prs_by_repo.values())
     actionable_prs = sum(
         not _is_manual_pr(pr) for prs in prs_by_repo.values() for pr in prs
     )
     manual_prs = sum(_is_manual_pr(pr) for prs in prs_by_repo.values() for pr in prs)
+    # No fleet-wide freeze. Per-repo skip reasons land in actions; this field
+    # stays None unless every candidate was refused by a shared hard gate.
     intake_skip_reason: str | None = None
-    if survey_errors:
-        intake_skip_reason = "PR survey failed closed; refuse issue_to_pr"
-    elif actionable_prs:
-        intake_skip_reason = (
-            f"global PR-first backpressure: {actionable_prs} actionable AI PR(s) remain open"
-        )
-        actions.append(
-            {
-                "step": "skip_issue_to_pr_global_backpressure",
-                "actionable_open_ai_prs": actionable_prs,
-                "manual_open_ai_prs": manual_prs,
-                "reason": intake_skip_reason,
-            }
-        )
+    issue_to_pr_started = 0
 
-    # --- 4) Implement at most one ready issue, only when no actionable AI PR is open ---
+    # --- 4) Implement up to K ready issues across different clean repos ---
     for repo in cfg.active_repos():
-        if intake_skip_reason:
-            break
         if not live or issue_budget <= 0:
             break
+        if repo.name in pr_survey_failed:
+            actions.append(
+                {
+                    "step": "skip_issue_to_pr_survey_failed",
+                    "repo": repo.name,
+                    "reason": "PR survey failed closed for this repo; refuse issue_to_pr",
+                }
+            )
+            continue
         open_prs = prs_by_repo.get(repo.name) or []
         if open_prs:
             actions.append(
@@ -691,7 +701,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     "step": "skip_ready_open_ai_pr",
                     "repo": repo.name,
                     "open_ai_prs": len(open_prs),
-                    "note": "serial policy: finish open AI PR before new issue_to_pr",
+                    "note": "per-repo PR-first: finish open AI PR before new issue_to_pr",
                 }
             )
             continue
@@ -709,7 +719,10 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
             )
             continue
         skip = excluded_numbers(stuck, repo.name)
-        while implementable and issue_budget > 0:
+        # At most one issue_to_pr attempt per repo per pass (serial within repo;
+        # frees remaining K budget for other clean repos).
+        attempted_here = False
+        while implementable and issue_budget > 0 and not attempted_here:
             buf_in = json.dumps(
                 {
                     "issues": implementable,
@@ -768,6 +781,9 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 live=True,
             )
             actions.append({"step": "issue_to_pr", **result})
+            issue_budget -= 1
+            issue_to_pr_started += 1
+            attempted_here = True
             if result.get("ok"):
                 progress += 1
                 remaining_ready = max(0, remaining_ready - 1)
@@ -788,7 +804,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                             ),
                         }
                     )
-                # Serial: one new PR per tick globally (issue_budget usually 1).
             else:
                 row = record_failure(
                     stuck,
@@ -826,11 +841,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
                     if lab.get("ok") and lab.get("applied"):
                         progress += 1
                         remaining_ready = max(0, remaining_ready - 1)
-            issue_budget -= 1
             implementable = [i for i in implementable if int(i.get("number", -1)) != num]
-            # After opening a PR for this repo, stop implementing more here.
-            if prs_by_repo.get(repo.name):
-                break
 
     if live:
         save_stuck(stuck_path, stuck)
@@ -843,6 +854,8 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "actionable_open_ai_prs": actionable_prs,
         "manual_open_ai_prs": manual_prs,
         "intake_skip_reason": intake_skip_reason,
+        "issue_to_pr_started": issue_to_pr_started,
+        "max_issue_to_pr_per_pass": int(cfg.max_issue_to_pr_per_pass),
         "mergeable_green": mergeable_green,
         "needs_repair": needs_repair,
         "review_limbo": review_limbo,

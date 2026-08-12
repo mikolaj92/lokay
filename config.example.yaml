@@ -54,7 +54,9 @@ limits:
   max_request_changes_per_pr: 2
   max_repairs_per_tick: 1
   max_triage_per_tick: 5
-  max_issues_per_tick: 1
+  # K: issue_to_pr runs per factory pass across different clean repos (default 3).
+  # Still one open ai/fix/* PR per repo. Legacy alias: max_issues_per_tick.
+  max_issue_to_pr_per_pass: 3
 
 # Merge knobs (code defaults: enabled=false, require_checks=false, require_llm_review=true).
 # Env overrides: LOKAY_MERGE_ENABLED, LOKAY_REQUIRE_CHECKS, LOKAY_REQUIRE_LLM_REVIEW.

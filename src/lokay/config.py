@@ -57,7 +57,10 @@ class Config:
     require_llm_review: bool = True  # structured executor review before auto-merge
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
-    max_issues_per_tick: int = 1
+    # K: max issue_to_pr runs per factory pass across different clean repos.
+    max_issue_to_pr_per_pass: int = 3
+    # Legacy alias kept in sync with max_issue_to_pr_per_pass on load.
+    max_issues_per_tick: int = 3
     max_triage_per_tick: int = 5
     max_repairs_per_tick: int = 1
     max_request_changes_per_pr: int = 2  # then escalate to ai:needs-review
@@ -109,6 +112,18 @@ class Config:
 
 def _expand(path: str | Path) -> Path:
     return Path(os.path.expanduser(str(path))).resolve()
+
+
+def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
+    """Resolve K for parallel issue_to_pr across clean repos (default 3).
+
+    Prefer ``max_issue_to_pr_per_pass``; fall back to legacy ``max_issues_per_tick``.
+    """
+    if "max_issue_to_pr_per_pass" in lim:
+        return int(lim["max_issue_to_pr_per_pass"])
+    if "max_issues_per_tick" in lim:
+        return int(lim["max_issues_per_tick"])
+    return 3
 
 
 def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
@@ -277,7 +292,12 @@ def load_config(path: str | Path | None = None) -> Config:
         require_llm_review=bool(mg.get("require_llm_review", True)),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
-        max_issues_per_tick=int(lim.get("max_issues_per_tick", 1)),
+        max_issue_to_pr_per_pass=(
+            _limit_issue_to_pr_per_pass(lim)
+        ),
+        max_issues_per_tick=(
+            _limit_issue_to_pr_per_pass(lim)
+        ),
         max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
         max_repairs_per_tick=int(lim.get("max_repairs_per_tick", 1)),
         max_request_changes_per_pr=int(lim.get("max_request_changes_per_pr", 2)),
