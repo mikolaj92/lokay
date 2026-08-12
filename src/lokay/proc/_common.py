@@ -63,8 +63,9 @@ def agent_execute_allowed(cfg: Config, *, live_flag: bool) -> bool:
     return bool(live_flag and cfg.mode == "live" and cfg.executor_enabled)
 
 
-def runner() -> Runner:
-    return Runner()
+def runner(cfg: Config | None = None) -> Runner:
+    retry = int(getattr(cfg, "gh_retry_max", 3) or 3) if cfg is not None else 3
+    return Runner(gh_retry_max=retry)
 
 
 def resolve_repo_clone(cfg: Config, repo_name: str) -> Path:

@@ -5,9 +5,11 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import subprocess
+import time
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,9 @@ from lokay.config import load_config
 
 _REDACTED = "[redacted]"
 _LOCKS: dict[str, Any] = {}
+_DEFAULT_INCIDENT_REPO = "mikolaj92/lokay"
+_DEFAULT_INCIDENT_COOLDOWN_HOURS = 12.0
+_ISSUE_NUMBER_RE = re.compile(r"/issues/(\d+)(?:\s|$)")
 
 
 def trusted_fala_manifest() -> Path:
@@ -463,28 +468,164 @@ def _check(
     return {"ok": all(x["ok"] for x in findings), "carrier_ok": all(x["ok"] for x in carrier), "integrity_ok": integrity_ok, "findings": findings}, cfg
 
 
-def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
-    base = cfg.state_path.parent if cfg is not None and _safe_owned_path(cfg.state_path.parent) else Path.home() / ".lokay"
+def _incident_repo(cfg: Any | None) -> str:
+    raw = getattr(cfg, "incident_repo", None) if cfg is not None else None
+    repo = str(raw or _DEFAULT_INCIDENT_REPO).strip()
+    return repo if "/" in repo else _DEFAULT_INCIDENT_REPO
+
+
+def _incident_cooldown_hours(cfg: Any | None) -> float:
+    raw = getattr(cfg, "incident_cooldown_hours", None) if cfg is not None else None
+    try:
+        hours = float(raw if raw is not None else _DEFAULT_INCIDENT_COOLDOWN_HOURS)
+    except (TypeError, ValueError):
+        hours = _DEFAULT_INCIDENT_COOLDOWN_HOURS
+    return max(0.0, min(hours, 24.0 * 7))
+
+
+def _incident_ledger_path(cfg: Any | None) -> Path:
+    base = (
+        cfg.state_path.parent
+        if cfg is not None and _safe_owned_path(cfg.state_path.parent)
+        else Path.home() / ".lokay"
+    )
     if not _safe_owned_path(base):
         base = Path("/tmp") / f"lokay-{os.getuid()}"
     base.mkdir(parents=True, exist_ok=True)
-    path = base / "preflight-incidents.json"
-    data: dict[str, Any] = {}
+    return base / "preflight-incidents.json"
+
+
+def _read_incident_ledger(cfg: Any | None) -> dict[str, Any]:
+    path = _incident_ledger_path(cfg)
     try:
-        loaded = json.loads(path.read_text())
-        if isinstance(loaded, dict): data = loaded
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            return loaded
     except (OSError, ValueError):
         pass
-    fp = result["fingerprint"]
-    data[fp] = {"fingerprint": fp, "failed": [x["name"] for x in result["findings"] if not x["ok"]]}
+    return {}
+
+
+def _write_incident_ledger(cfg: Any | None, data: dict[str, Any]) -> Path:
+    path = _incident_ledger_path(cfg)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, sort_keys=True)[:16384], encoding="utf-8")
     tmp.replace(path)
     return path
 
 
-def _github_incident(result: dict[str, Any]) -> str | None:
-    """Create or reuse the deduplicated Lokay recovery incident."""
+def _within_cooldown(entry: dict[str, Any], *, hours: float, now: float) -> bool:
+    if hours <= 0:
+        return False
+    stamp = entry.get("last_incident_at", entry.get("created_at"))
+    try:
+        last = float(stamp)
+    except (TypeError, ValueError):
+        return False
+    return (now - last) < (hours * 3600.0)
+
+
+def _issue_url(repo: str, number: int) -> str:
+    return f"https://github.com/{repo}/issues/{int(number)}"
+
+
+def _parse_issue_number(url: str) -> int | None:
+    match = _ISSUE_NUMBER_RE.search(str(url or ""))
+    return int(match.group(1)) if match else None
+
+
+def _list_open_incidents(repo: str) -> list[dict[str, Any]]:
+    listed = subprocess.run(
+        [
+            "gh",
+            "api",
+            "--method",
+            "GET",
+            "--paginate",
+            f"repos/{repo}/issues",
+            "-f",
+            "state=open",
+            "-f",
+            "per_page=100",
+            "--slurp",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    if listed.returncode != 0:
+        return []
+    pages = json.loads(getattr(listed, "stdout", "") or "[]")
+    return [
+        row
+        for page in pages
+        if isinstance(page, list)
+        for row in page
+        if isinstance(row, dict) and "pull_request" not in row
+    ]
+
+
+def _reopen_issue(repo: str, number: int, summary: str) -> bool:
+    reopened = subprocess.run(
+        ["gh", "issue", "reopen", str(number), "--repo", repo],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=15,
+        check=False,
+    )
+    if reopened.returncode != 0:
+        # Already open is fine; continue to comment.
+        view = subprocess.run(
+            ["gh", "issue", "view", str(number), "--repo", repo, "--json", "state"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if view.returncode != 0:
+            return False
+        try:
+            state = str(json.loads(view.stdout or "{}").get("state") or "").upper()
+        except ValueError:
+            return False
+        if state != "OPEN":
+            return False
+    commented = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "comment",
+            str(number),
+            "--repo",
+            repo,
+            "--body",
+            f"Preflight failed again: {summary}",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=15,
+        check=False,
+    )
+    return commented.returncode == 0
+
+
+def _persist_incident(cfg: Any | None, result: dict[str, Any]) -> Path:
+    data = _read_incident_ledger(cfg)
+    fp = result["fingerprint"]
+    prev = dict(data.get(fp) or {}) if isinstance(data.get(fp), dict) else {}
+    prev.update(
+        {
+            "fingerprint": fp,
+            "failed": [x["name"] for x in result["findings"] if not x["ok"]],
+        }
+    )
+    data[fp] = prev
+    return _write_incident_ledger(cfg, data)
+
+
+def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | None:
+    """Create or reuse the deduplicated Lokay recovery incident (cooldown-aware)."""
     failed = [x for x in result["findings"] if not x["ok"]]
     # Lock contention, missing clones, and unusable host runtime directories
     # are operational inventory, not source defects. Keep this guard at the
@@ -500,30 +641,140 @@ def _github_incident(result: dict[str, Any]) -> str | None:
         return None
     if not any(x["name"] == "github_authentication" and x["ok"] for x in result["findings"]):
         return None
-    fp = result["fingerprint"]
+    fp = str(result["fingerprint"])
     marker = f"<!-- lokay-preflight:{fp} -->"
+    repo = _incident_repo(cfg)
+    cooldown_h = _incident_cooldown_hours(cfg)
+    now = time.time()
+    ledger = _read_incident_ledger(cfg)
+    entry = dict(ledger.get(fp) or {}) if isinstance(ledger.get(fp), dict) else {}
+    summary = str(result.get("incident_summary") or "") or ", ".join(
+        x["name"] for x in result["findings"] if not x["ok"]
+    )
     try:
-        listed = subprocess.run([
-            "gh", "api", "--method", "GET", "--paginate", "repos/mikolaj92/lokay/issues",
-            "-f", "state=open", "-f", "per_page=100", "--slurp",
-        ], capture_output=True, text=True, timeout=30, check=False)
-        pages = json.loads(getattr(listed, "stdout", "") or "[]") if listed.returncode == 0 else []
-        rows = [row for page in pages if isinstance(page, list) for row in page if isinstance(row, dict) and "pull_request" not in row]
+        rows = _list_open_incidents(repo)
         match = next((r for r in rows if marker in str(r.get("body") or "")), None)
-        summary = str(result.get("incident_summary") or "") or ", ".join(
-            x["name"] for x in result["findings"] if not x["ok"]
-        )
         if match:
-            commented = subprocess.run(["gh", "issue", "comment", str(match["number"]), "--repo", "mikolaj92/lokay", "--body", f"Preflight failed again: {summary}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15, check=False)
-            return f"https://github.com/mikolaj92/lokay/issues/{match['number']}" if commented.returncode == 0 else None
-        made = subprocess.run(["gh", "issue", "create", "--repo", "mikolaj92/lokay", "--title", f"Preflight failure {fp}", "--body", f"{marker}\nBounded checks failed: {summary}"], capture_output=True, text=True, timeout=15, check=False)
-        return getattr(made, "stdout", "").strip()[:240] if made.returncode == 0 else None
+            number = int(match["number"])
+            url = _issue_url(repo, number)
+            if not _within_cooldown(entry, hours=cooldown_h, now=now):
+                commented = subprocess.run(
+                    [
+                        "gh",
+                        "issue",
+                        "comment",
+                        str(number),
+                        "--repo",
+                        repo,
+                        "--body",
+                        f"Preflight failed again: {summary}",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=15,
+                    check=False,
+                )
+                if commented.returncode != 0:
+                    return None
+                entry["last_incident_at"] = now
+            entry.update(
+                {
+                    "fingerprint": fp,
+                    "incident_url": url,
+                    "number": number,
+                    "repo": repo,
+                    "state": "open",
+                }
+            )
+            if "created_at" not in entry:
+                entry["created_at"] = now
+            ledger[fp] = entry
+            _write_incident_ledger(cfg, ledger)
+            return url
+
+        cached_url = str(entry.get("incident_url") or "")
+        cached_number = entry.get("number")
+        if cached_number is None and cached_url:
+            cached_number = _parse_issue_number(cached_url)
+        # Skip create/comment while cooldown holds for this fingerprint.
+        if cached_url and _within_cooldown(entry, hours=cooldown_h, now=now):
+            return cached_url[:240]
+
+        if cached_number is not None and _reopen_issue(
+            repo, int(cached_number), summary
+        ):
+            url = _issue_url(repo, int(cached_number))
+            entry.update(
+                {
+                    "fingerprint": fp,
+                    "incident_url": url,
+                    "number": int(cached_number),
+                    "repo": repo,
+                    "state": "open",
+                    "last_incident_at": now,
+                }
+            )
+            if "created_at" not in entry:
+                entry["created_at"] = now
+            ledger[fp] = entry
+            _write_incident_ledger(cfg, ledger)
+            return url
+
+        made = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "create",
+                "--repo",
+                repo,
+                "--title",
+                f"Preflight failure {fp}",
+                "--body",
+                f"{marker}\nBounded checks failed: {summary}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if made.returncode != 0:
+            return None
+        url = getattr(made, "stdout", "").strip()[:240]
+        if not url:
+            return None
+        number = _parse_issue_number(url)
+        entry.update(
+            {
+                "fingerprint": fp,
+                "incident_url": url,
+                "number": number,
+                "repo": repo,
+                "state": "open",
+                "created_at": now,
+                "last_incident_at": now,
+                "failed": [x["name"] for x in result["findings"] if not x["ok"]],
+            }
+        )
+        ledger[fp] = entry
+        _write_incident_ledger(cfg, ledger)
+        return url
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return None
 
 
-def report_recovery_incident(*, fingerprint: str, evidence: str) -> str | None:
+def report_recovery_incident(
+    *,
+    fingerprint: str,
+    evidence: str,
+    config_path: str | None = None,
+) -> str | None:
     """Report a confirmed product stall through the same deduplicated lane."""
+    cfg = None
+    if config_path:
+        try:
+            cfg = load_config(config_path)
+        except Exception:
+            cfg = None
     return _github_incident(
         {
             "fingerprint": fingerprint,
@@ -535,7 +786,8 @@ def report_recovery_incident(*, fingerprint: str, evidence: str) -> str | None:
                 {"name": "github_authentication", "ok": True},
                 {"name": "confirmed_product_stall", "ok": False},
             ],
-        }
+        },
+        cfg=cfg,
     )
 
 
@@ -647,7 +899,7 @@ def run_preflight(
         else:
             try: result["local_incident"] = str(_persist_incident(cfg, result))
             except OSError: result["local_incident"] = None
-            result["incident_url"] = _github_incident(result)
+            result["incident_url"] = _github_incident(result, cfg=cfg)
     return result
 
 

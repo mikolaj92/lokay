@@ -65,6 +65,12 @@ class Config:
     whole_run_deadline_seconds: int = 3600
     max_failures_before_block: int = 2
     min_free_gb: float = 2.0
+    # Incident filing target + spam control (preflight / recovery).
+    incident_repo: str = "mikolaj92/lokay"
+    incident_cooldown_hours: float = 12.0
+    # Survey / gh budget: bounded 429 retries and optional inter-call pacing.
+    gh_retry_max: int = 3
+    gh_survey_pace_ms: int = 50
     config_path: Path | None = None
 
     @property
@@ -280,6 +286,11 @@ def load_config(path: str | Path | None = None) -> Config:
         whole_run_deadline_seconds=int(lim.get("whole_run_deadline_seconds", 3600)),
         max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
+        incident_repo=str(gh.get("incident_repo") or "mikolaj92/lokay").strip()
+        or "mikolaj92/lokay",
+        incident_cooldown_hours=float(gh.get("incident_cooldown_hours", 12)),
+        gh_retry_max=int(lim.get("gh_retry_max", 3)),
+        gh_survey_pace_ms=int(lim.get("gh_survey_pace_ms", 50)),
         config_path=cfg_path,
     )
     return apply_env_overrides(cfg)

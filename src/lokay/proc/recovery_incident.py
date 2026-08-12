@@ -6,16 +6,19 @@ import argparse
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.preflight import report_recovery_incident
+from lokay.proc._common import add_config
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-recovery-incident")
+    add_config(parser)
     parser.add_argument("--fingerprint", required=True)
     parser.add_argument("--evidence", default="")
     args = parser.parse_args(argv)
     incident_url = report_recovery_incident(
         fingerprint=args.fingerprint,
         evidence=args.evidence,
+        config_path=args.config,
     )
     if not incident_url:
         return emit_exit(err("deduplicated recovery incident unavailable"))

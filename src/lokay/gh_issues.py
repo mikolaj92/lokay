@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from lokay.config import Config, RepoConfig
+from lokay.gh_rate import survey_pace
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
 from lokay.triage import is_parked, is_undecided
@@ -101,6 +102,8 @@ def _issue_from_row(repo_name: str, row: dict) -> Issue:
 
 
 def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
+    if live:
+        survey_pace(config)
     args = [
         "issue",
         "list",
@@ -133,6 +136,8 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
 
 def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
     """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
+    if live:
+        survey_pace(config)
     args = [
         "issue",
         "list",
