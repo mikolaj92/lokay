@@ -113,3 +113,16 @@ def test_observation_reads_only_current_run_tail(tmp_path):
     assert "new failure" in row["evidence"]
     assert "old failure" not in row["evidence"]
     assert history_path_for(state) == tmp_path / "recovery-history.json"
+
+
+def test_waiting_or_repairing_mill_envelope_is_not_failure_fingerprint(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    for health in ("waiting", "repairing"):
+        row = observe_run(
+            state_path=state,
+            state_offset=0,
+            mill={"ok": False, "health": health, "error": f"mill {health}", "progress": 0},
+        )
+        assert row["fingerprint"] is None
+        assert row["health"] == health
