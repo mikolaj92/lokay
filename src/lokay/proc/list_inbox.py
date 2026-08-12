@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     if repo is None:
         repo = RepoConfig(name=args.repo, clone_path=cfg.worktrees_root / "unused")
     try:
-        issues = list_inbox_issues(runner(), cfg, repo, live=live)
+        issues = list_inbox_issues(runner(cfg), cfg, repo, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc), repo=args.repo))
     return emit_exit(

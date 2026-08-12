@@ -69,7 +69,12 @@ def cmd_mill(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    payload = compose_status(config_path=args.config)
+    survey = not bool(getattr(args, "local", False))
+    payload = compose_status(
+        config_path=args.config,
+        survey=survey,
+        preflight_check=bool(getattr(args, "preflight", False) and not survey),
+    )
     _print(payload)
     return 0 if payload.get("ok") else 1
 
@@ -141,6 +146,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     st = sub.add_parser("status", help="DoD readiness + remaining work (read-only)")
     add_config(st)
+    st_mode = st.add_mutually_exclusive_group()
+    st_mode.add_argument(
+        "--local",
+        "--skip-survey",
+        action="store_true",
+        dest="local",
+        help="cheap readiness/config/lease summary (skip multi-repo survey)",
+    )
+    st_mode.add_argument(
+        "--full",
+        action="store_true",
+        help="full multi-repo remaining-work survey (default)",
+    )
+    st.add_argument(
+        "--preflight",
+        action="store_true",
+        help="with --local, also run host preflight checks (no lease issue)",
+    )
     st.set_defaults(func=cmd_status)
 
     r = sub.add_parser("run", help="Run Fala issue_to_pr graph for one issue")

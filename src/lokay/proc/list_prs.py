@@ -21,7 +21,7 @@ def main(argv: list[str] | None = None) -> int:
     if repo is None:
         repo = RepoConfig(name=args.repo, clone_path=cfg.worktrees_root / "unused")
     try:
-        prs = list_open_ai_prs(runner(), cfg, repo, live=live)
+        prs = list_open_ai_prs(runner(cfg), cfg, repo, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(

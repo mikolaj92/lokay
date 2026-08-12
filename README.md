@@ -81,7 +81,7 @@ issue_to_pr:  get_issue → assign_issue / make_branch → worktree_add
 | --- | --- |
 | `uv run lokay validate --config config.yaml` | Validate configuration |
 | `uv run lokay-repos --config config.yaml` | List managed repositories |
-| `uv run lokay status --config config.yaml` | Read-only readiness and remaining work |
+| `uv run lokay status --config config.yaml` | Read-only readiness and remaining work (`--local` skips survey) |
 | `uv run lokay path --describe` | Inspect materialized workflow paths |
 | `uv run lokay mill --config config.yaml --live --max-passes 8` | Run a bounded live mill |
 | `src/lokay/proc/` | Unix atoms |

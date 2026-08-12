@@ -8,6 +8,7 @@ def cfg(tmp_path, **kw):
     base = dict(
         state_path=tmp_path / "state.jsonl",
         executor_enabled=True,
+        incident_repo="mikolaj92/lokay",
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -89,3 +90,21 @@ def test_fala_failure_stays_closed(monkeypatch, tmp_path):
     assert not result["ok"]
     assert result["health"] == "self_repair_failed"
     assert result["reason"] == "fala_self_repair_failed"
+
+
+def test_self_repair_honors_configured_incident_repo(monkeypatch, tmp_path):
+    setup_lane(monkeypatch, tmp_path, incident_repo="acme/ops")
+    calls = []
+
+    def fake_path(**kwargs):
+        calls.append(kwargs)
+        return {"ok": True, "validated": True, "restart_required": True, "commit": "abc"}
+
+    monkeypatch.setattr(self_repair, "run_path", fake_path)
+    result = self_repair.run_self_repair(
+        "x",
+        unhealthy(url="https://github.com/acme/ops/issues/44"),
+    )
+    assert result["ok"]
+    assert calls[0]["repo"] == "acme/ops"
+    assert calls[0]["issue"] == 44

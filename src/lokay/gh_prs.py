@@ -5,6 +5,7 @@ from typing import Any
 
 from lokay.config import Config, RepoConfig
 from lokay.gh_issues import ensure_labels
+from lokay.gh_rate import survey_pace
 from lokay.models import PullRequest
 from lokay.runner import CommandResult, Runner, gh_spec
 
@@ -21,6 +22,8 @@ def _label_names(value: Any) -> list[str] | None:
 
 
 def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[PullRequest]:
+    if live:
+        survey_pace(config)
     args = [
         "pr",
         "list",

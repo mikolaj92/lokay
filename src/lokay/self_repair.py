@@ -10,8 +10,13 @@ from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 from lokay.state import append_event
 
-SELF_REPAIR_REPO = "mikolaj92/lokay"
-_ISSUE_URL = re.compile(r"^https://github\.com/mikolaj92/lokay/issues/(\d+)$")
+_DEFAULT_INCIDENT_REPO = "mikolaj92/lokay"
+
+
+def _incident_repo(cfg: Any) -> str:
+    raw = getattr(cfg, "incident_repo", None)
+    repo = str(raw or _DEFAULT_INCIDENT_REPO).strip()
+    return repo if "/" in repo else _DEFAULT_INCIDENT_REPO
 
 
 def _event(cfg: Any, **event: Any) -> None:
@@ -21,8 +26,11 @@ def _event(cfg: Any, **event: Any) -> None:
         pass
 
 
-def _incident_number(preflight: dict[str, Any]) -> int | None:
-    match = _ISSUE_URL.fullmatch(str(preflight.get("incident_url") or ""))
+def _incident_number(preflight: dict[str, Any], repo: str) -> int | None:
+    pattern = re.compile(
+        rf"^https://github\.com/{re.escape(repo)}/issues/(\d+)$"
+    )
+    match = pattern.fullmatch(str(preflight.get("incident_url") or ""))
     return int(match.group(1)) if match else None
 
 
@@ -35,7 +43,8 @@ def run_self_repair(
     """Run exactly one bounded emergency Fala path, or fail closed."""
     del max_attempts  # Fala path is deliberately one bounded recovery attempt.
     cfg = load_config(config_path)
-    issue = _incident_number(preflight)
+    repo = _incident_repo(cfg)
+    issue = _incident_number(preflight, repo)
     result: dict[str, Any] = {
         "ok": False,
         "health": "self_repair_failed",
@@ -62,7 +71,7 @@ def run_self_repair(
         try:
             path = run_path(
                 path_id="self_repair",
-                repo=SELF_REPAIR_REPO,
+                repo=repo,
                 issue=issue,
                 config_path=config_path,
                 live=True,
@@ -72,7 +81,7 @@ def run_self_repair(
                     "fingerprint": fingerprint,
                     "failure_evidence": str(preflight.get("failure_evidence") or ""),
                     "incident": {
-                        "repo": SELF_REPAIR_REPO,
+                        "repo": repo,
                         "number": issue,
                         "title": f"Preflight failure {fingerprint}",
                         "body": "Deterministic preflight incident; inspect current findings.",

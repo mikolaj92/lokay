@@ -7,9 +7,22 @@ from lokay.compose import tick
 
 
 @pytest.fixture(autouse=True)
-def _clear_health_lease_environment(monkeypatch):
-    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
-    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+def _clear_health_lease_environment(request):
+    """Keep lease env hermetic across tests.
+
+    ``issue_health_lease`` writes ``os.environ`` directly, and tests also use
+    ``monkeypatch.setenv`` for lease tokens. Clear before and after every test,
+    after monkeypatch teardown, so nothing leaks into later modules.
+    """
+    import os
+
+    def _clear() -> None:
+        os.environ.pop("LOKAY_HEALTH_LEASE", None)
+        os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
+
+    _clear()
+    # Run after function-scoped monkeypatch undos for this test.
+    request.addfinalizer(_clear)
 
 
 def _config(tmp_path: Path, *, min_free_gb: float = 0) -> Path:
@@ -324,7 +337,9 @@ def test_singleton_contention_is_not_recorded_as_an_incident(
     monkeypatch.setattr(
         preflight,
         "_github_incident",
-        lambda result: (_ for _ in ()).throw(AssertionError("operational overlap issue")),
+        lambda result, cfg=None: (_ for _ in ()).throw(
+            AssertionError("operational overlap issue")
+        ),
     )
 
     result = preflight.run_preflight("config.yaml", remediate=False)
@@ -363,7 +378,9 @@ def test_self_repair_validation_does_not_open_recursive_incident(monkeypatch):
     monkeypatch.setattr(
         preflight,
         "_github_incident",
-        lambda result: (_ for _ in ()).throw(AssertionError("recursive GitHub incident")),
+        lambda result, cfg=None: (_ for _ in ()).throw(
+            AssertionError("recursive GitHub incident")
+        ),
     )
 
     result = preflight.run_preflight("config.yaml", remediate=False)
@@ -408,7 +425,8 @@ def test_self_repair_validation_reports_non_singleton_failures(monkeypatch, find
     monkeypatch.setattr(
         preflight,
         "_github_incident",
-        lambda result: published.append(result) or "https://example.test/issues/1",
+        lambda result, cfg=None: published.append(result)
+        or "https://example.test/issues/1",
     )
 
     result = preflight.run_preflight("config.yaml", remediate=False)

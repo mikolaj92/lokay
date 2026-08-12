@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from lokay.safety import SafetyError, validate_argv
+from lokay.gh_rate import backoff_seconds, is_rate_limit_text
+from lokay.safety import validate_argv
 
 # Force machine-readable CLI output. Host shells often export CLICOLOR_FORCE /
 # FORCE_COLOR which make modern `gh --json` emit ANSI and break json.loads.
@@ -64,6 +66,15 @@ def gh_spec(args: Sequence[str], timeout_seconds: int = 120) -> CommandSpec:
 
 
 class Runner:
+    def __init__(
+        self,
+        *,
+        gh_retry_max: int = 3,
+        sleep_fn=time.sleep,
+    ) -> None:
+        self.gh_retry_max = max(0, int(gh_retry_max))
+        self._sleep = sleep_fn
+
     def run(self, spec: CommandSpec, *, live: bool) -> CommandResult:
         validate_argv(spec.argv)
         if not live:
@@ -79,26 +90,47 @@ class Runner:
         env["CLICOLOR_FORCE"] = "0"
         env["FORCE_COLOR"] = "0"
         env["GH_FORCE_TTY"] = "0"
-        completed = subprocess.run(
-            list(spec.argv),
-            cwd=spec.cwd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=spec.timeout_seconds,
-            check=False,
-        )
-        return CommandResult(
-            spec=spec,
-            executed=True,
-            returncode=completed.returncode,
-            stdout=strip_ansi(completed.stdout or ""),
-            stderr=strip_ansi(completed.stderr or ""),
-        )
+
+        attempts = 1
+        if spec.argv and spec.argv[0] == "gh":
+            attempts = 1 + self.gh_retry_max
+
+        last = CommandResult(spec=spec, executed=True, returncode=1)
+        for attempt in range(attempts):
+            completed = subprocess.run(
+                list(spec.argv),
+                cwd=spec.cwd,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=spec.timeout_seconds,
+                check=False,
+            )
+            last = CommandResult(
+                spec=spec,
+                executed=True,
+                returncode=completed.returncode,
+                stdout=strip_ansi(completed.stdout or ""),
+                stderr=strip_ansi(completed.stderr or ""),
+            )
+            if last.returncode == 0:
+                return last
+            if not is_rate_limit_text(last.stdout, last.stderr):
+                return last
+            if attempt + 1 >= attempts:
+                break
+            self._sleep(backoff_seconds(attempt))
+        return last
 
     def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:
         result = self.run(spec, live=live)
         if live and result.returncode != 0:
+            detail = f"{result.stdout[-2000:]}\n{result.stderr[-2000:]}".strip()
+            if is_rate_limit_text(result.stdout, result.stderr):
+                raise RuntimeError(
+                    f"gh rate limit exhausted after retries ({result.returncode}): "
+                    f"{spec.display()}\n{detail}"
+                )
             raise RuntimeError(
                 f"command failed ({result.returncode}): {spec.display()}\n"
                 f"stdout: {result.stdout[-2000:]}\nstderr: {result.stderr[-2000:]}"
