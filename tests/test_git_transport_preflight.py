@@ -45,6 +45,39 @@ def test_git_transport_proves_ssh_remote_non_interactively(tmp_path, monkeypatch
     assert "BatchMode=yes" in calls[-1][1]["GIT_SSH_COMMAND"]
 
 
+def test_git_transport_retries_transient_ssh_failure_within_bound(tmp_path, monkeypatch):
+    item = repo(tmp_path)
+    probes = 0
+
+    def run(argv, **kwargs):
+        nonlocal probes
+        if "get-url" in argv:
+            return completed(stdout="git@github.com:owner/repo.git\n")
+        probes += 1
+        return completed(code=1 if probes == 1 else 0)
+
+    monkeypatch.setattr(preflight.subprocess, "run", run)
+    assert preflight._github_git_transport(cfg(item)) == (True, "ok")
+    assert probes == 2
+
+
+def test_git_transport_fails_after_two_ssh_attempts(tmp_path, monkeypatch):
+    item = repo(tmp_path)
+    probes = 0
+
+    def run(argv, **kwargs):
+        nonlocal probes
+        if "get-url" in argv:
+            return completed(stdout="git@github.com:owner/repo.git\n")
+        probes += 1
+        assert kwargs["timeout"] == 10
+        return completed(code=1)
+
+    monkeypatch.setattr(preflight.subprocess, "run", run)
+    assert preflight._github_git_transport(cfg(item)) == (False, "ssh_auth_unavailable")
+    assert probes == 2
+
+
 def test_repair_changes_only_exact_canonical_https_origin(tmp_path, monkeypatch):
     item = repo(tmp_path)
     calls = []
