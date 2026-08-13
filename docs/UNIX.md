@@ -36,12 +36,14 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-localize` | deterministic edit-path list before coding (Agentless; fail-closed if empty) |
 | `lokay-run-agent` | **coding harness slot** (binary + args from config only) |
 | `lokay-commit-all` | commit if dirty |
+| `lokay-assert-real-diff` | refuse plan/localize-only diffs (not progress; no pr_create) |
 | `lokay-test-local` | local pytest gate (skip if no suite; fail-closed if red) |
 | `lokay-push` | push (never force) |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
 | `lokay-pr-route` | fail-closed closeout route: wait \| repair \| merge \| skip |
 | `lokay-repos` | list managed repos |
 | `lokay-factory-begin` | preflight + open pass workspace |
+| `lokay-host-ff` | mill host fetch + ff-only onto origin/main (fail-closed if behind/dirty) |
 | `lokay-survey-prs` | list open AI PRs (all repos) |
 | `lokay-survey-inbox` | list undecided inbox issues |
 | `lokay-survey-ready` | list ai:ready; unready covered-by-PR issues |

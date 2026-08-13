@@ -7,6 +7,10 @@ def _ok_test_local() -> dict:
     return {"ok": True, "tested": True, "skipped": False}
 
 
+def _ok_real_diff() -> dict:
+    return {"ok": True, "real": True, "kind": "real"}
+
+
 def _skip_test_local() -> dict:
     return {"ok": True, "skipped": True, "reason": "no_python_test_suite", "tested": False}
 
@@ -156,6 +160,7 @@ def test_push_accepts_agent_created_unpublished_commit(monkeypatch):
             "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
             "commit_all": {"committed": False},
             "test_local": _ok_test_local(),
+            "assert_real_diff": _ok_real_diff(),
         },
     )
 
@@ -173,6 +178,7 @@ def test_push_rejects_true_zero_diff(monkeypatch):
             "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
             "commit_all": {"committed": False},
             "test_local": _ok_test_local(),
+            "assert_real_diff": _ok_real_diff(),
         },
     )
 
@@ -210,6 +216,7 @@ def test_push_skipped_suite_still_pushes(monkeypatch):
             "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
             "commit_all": {"committed": True},
             "test_local": _skip_test_local(),
+            "assert_real_diff": _ok_real_diff(),
         },
     )
     assert result["ok"] is True
@@ -326,6 +333,7 @@ def _pr_create_up() -> dict:
         "make_branch": {"branch": "ai/fix/7-x"},
         "run_agent": {"ok": True, "stdout_tail": "done"},
         "test_local": _ok_test_local(),
+        "assert_real_diff": _ok_real_diff(),
         "push": {"ok": True, "planned": True},
     }
 
@@ -436,6 +444,7 @@ def test_push_green_recheck_pushes(monkeypatch):
             "commit_all": {"committed": True},
             "test_local": _red_test_local(),
             "test_local_recheck": _ok_test_local(),
+            "assert_real_diff": _ok_real_diff(),
         },
     )
     assert result["ok"] is True

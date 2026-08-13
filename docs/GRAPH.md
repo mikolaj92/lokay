@@ -42,23 +42,25 @@ path conducts one-job atoms; child workflow Falas are started from dispatch
 atoms via `run_path`.
 
 ```text
-factory_begin
-  → survey_prs
-    → survey_inbox
-      → survey_ready
-        → plan_pass
-          → dispatch_triage          → issue_triage child Fala
-            → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
-              → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
-                → select_implement
-                  → queue_conflict   → SKIP/CLOSE/READY queue hygiene
-                    → dispatch_implement → issue_to_pr child Fala
-                      → compute_health
-                        → record_pass    → last-pass.json
+host_ff
+  → factory_begin
+    → survey_prs
+      → survey_inbox
+        → survey_ready
+          → plan_pass
+            → dispatch_triage          → issue_triage child Fala
+              → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
+                → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
+                  → select_implement
+                    → queue_conflict   → SKIP/CLOSE/READY queue hygiene
+                      → dispatch_implement → issue_to_pr child Fala
+                        → compute_health
+                          → record_pass    → last-pass.json
 ```
 
 | Atom | One job |
 | --- | --- |
+| `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / skip-worktree would overwrite |
 | `factory_begin` | preflight + pass workspace + budgets |
 | `survey_prs` | list open AI PRs for all repos |
 | `survey_inbox` | list undecided inbox issues |
@@ -127,11 +129,12 @@ get_issue
                                       └─→ test_local   ← local pytest; skip if no suite
                                             ├─ (red, recorded) → repair_agent   ← ONE patch from the test log (K=1)
                                             │                      └─→ test_local_recheck
-                                            └─→ push            ← only after green / honest skip (recheck if nest ran)
-                                                  └─→ pr_create   ← only after successful push; never off a red suite
-                                                        └─→ stage_pr_open   ← issue ledger: ai:pr-open
-                                                              └─→ list_prs
-                                                                    └─→ pr_label
+                                            └─→ assert_real_diff ← refuse plan/localize-only diffs
+                                                  └─→ push            ← only after green / honest skip (recheck if nest ran)
+                                                        └─→ pr_create   ← only after successful push; never off a red suite or plan-only diff
+                                                              └─→ stage_pr_open   ← issue ledger: ai:pr-open
+                                                                    └─→ list_prs
+                                                                          └─→ pr_label
 ```
 
 `plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree
@@ -190,7 +193,8 @@ pr_checks
                     └─→ run_agent   ← repair prompt (only non-deterministic node)
                           └─→ commit_all
                                 └─→ test_local   ← local pytest; skip if no suite
-                                      └─→ push
+                                      └─→ assert_real_diff
+                                            └─→ push
 ```
 
 ### `pr_triage` (merge policy → close issue)
@@ -220,7 +224,7 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
-- **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts). `pr_create` additionally requires a successful `push`.
+- **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts). `pr_create` additionally requires a successful `push`. `push` / `pr_create` also require `assert_real_diff`: a diff that is only `.lokay/approach.md` / `.lokay/localize.json` is not progress and never opens a PR.
 - **issue_to_pr red suite** does **not** open a PR. One bounded AlphaCodium nest runs instead: `test_local` (first probe, records red so Fala can continue) → `repair_agent` (K=1 patch from the test log) → `test_local_recheck`. Recheck green → push → pr_create. Recheck red / zero-diff / agent fail → path fails closed (`local_repair_exhausted`); the mill marks that seed stuck and takes the next one. There is no third attempt and no `gh pr create` off a red suite.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the mill do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.

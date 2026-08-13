@@ -10,6 +10,7 @@ def test_describe_parent_factory_graph():
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
+        "host_ff",
         "factory_begin",
         "survey_prs",
         "survey_inbox",
@@ -25,6 +26,7 @@ def test_describe_parent_factory_graph():
         "record_pass",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
+    assert conduction["factory_begin"] == ["host_ff"]
     assert conduction["survey_prs"] == ["factory_begin"]
     assert "survey_prs" in conduction["survey_inbox"]
     assert "survey_inbox" in conduction["survey_ready"]
@@ -115,6 +117,7 @@ def test_describe_issue_to_pr_graph():
     assert "repair_agent" in recheck["conduction"]
     push = next(n for n in path["nodes"] if n["id"] == "push")
     assert "test_local_recheck" in push["conduction"]
+    assert "assert_real_diff" in push["conduction"]
 
 
 def test_issue_to_pr_plan_issue_before_run_agent():
@@ -325,6 +328,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
     monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
     expected = {
         "factory_pass": {
+            "host_ff",
             "factory_begin",
             "survey_prs",
             "survey_inbox",
@@ -342,13 +346,13 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
         "issue_to_pr": {
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
-            "test_local", "repair_agent", "test_local_recheck",
+            "test_local", "repair_agent", "test_local_recheck", "assert_real_diff",
             "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
         },
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {
             "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "test_local", "push",
+            "commit_all", "test_local", "assert_real_diff", "push",
         },
         "pr_triage": {
             "pr_checks", "pr_review", "worktree_add", "test_local",

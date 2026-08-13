@@ -191,7 +191,9 @@ def test_issue_to_pr_push_and_pr_create_conduct_through_test_local():
     assert "commit_all" in by_id["test_local"]["conduction"]
     assert "worktree_add" in by_id["test_local"]["conduction"]
     assert "test_local" in by_id["push"]["conduction"]
+    assert "assert_real_diff" in by_id["push"]["conduction"]
     assert "test_local" in by_id["pr_create"]["conduction"]
+    assert "assert_real_diff" in by_id["pr_create"]["conduction"]
     assert "push" in by_id["pr_create"]["conduction"]
     # Bounded AlphaCodium loop: one repair nest, then one recheck, then push.
     assert "repair_agent" in by_id
@@ -210,6 +212,7 @@ def test_pr_repair_push_conducts_through_test_local():
     assert "test_local" in by_id
     assert "commit_all" in by_id["test_local"]["conduction"]
     assert "test_local" in by_id["push"]["conduction"]
+    assert "assert_real_diff" in by_id["push"]["conduction"]
     assert "push" not in by_id["test_local"]["conduction"]
 
 
@@ -241,6 +244,7 @@ def test_issue_to_pr_red_test_local_never_reaches_pr_create():
     assert "repair_agent" in after_red_recheck or "test_local" in by_id["repair_agent"]["conduction"]
     assert "push" not in after_red_recheck
     assert "pr_create" not in after_red_recheck
+    assert "assert_real_diff" not in after_red_recheck
     assert "stage_pr_open" not in after_red_recheck
     assert "list_prs" not in after_red_recheck
     assert "pr_label" not in after_red_recheck
