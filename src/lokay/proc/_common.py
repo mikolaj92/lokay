@@ -23,12 +23,22 @@ def add_config_live(p: argparse.ArgumentParser) -> None:
 
 
 def add_config_read(p: argparse.ArgumentParser) -> None:
-    """Read-only tools: hit network by default; --offline plans empty."""
+    """Read-only tools: hit network by default; --offline plans empty.
+
+    ``--live`` is accepted as a no-op so factory-pass survey atoms can
+    forward the mill live flag. Network is already the default; ``--offline``
+    still wins in ``read_live``.
+    """
     add_config(p)
     p.add_argument(
         "--offline",
         action="store_true",
         help="do not call GitHub (return empty/planned)",
+    )
+    p.add_argument(
+        "--live",
+        action="store_true",
+        help="accepted for factory-pass compatibility (network is default)",
     )
 
 
