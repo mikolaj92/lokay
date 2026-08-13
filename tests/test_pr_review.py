@@ -15,6 +15,7 @@ from lokay.pr_review import (
     should_escalate_request_changes,
     should_merge,
     should_repair,
+    review_prompt,
 )
 
 
@@ -99,6 +100,21 @@ def test_approve_rejects_false_safety_field(field):
 def test_boolean_strings_fail_closed():
     with pytest.raises(PrReviewError):
         parse_review_output('{"verdict":"approve","secrets":"false"}')
+
+
+def test_review_prompt_sets_collector_execution_boundary():
+    prompt = review_prompt(
+        repo="a/b",
+        pr_number=7,
+        title="collector patch",
+        body="",
+        head_ref="ai/fix/7-collector",
+        diff_text="diff --git a/x.py b/x.py\n",
+        checks_text="",
+    )
+    assert "Collector boundary" in prompt
+    assert "must not use Pi or the mill to populate data" in prompt
+    assert "wait for collection to finish" in prompt
 
 
 def test_review_marker_roundtrip_and_head_lookup():

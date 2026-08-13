@@ -145,7 +145,9 @@ fi
 
 cd "${ROOT}"
 
-# Live factory (override with env in the plist if needed)
+# Live factory (override with env in the plist if needed). This LaunchAgent
+# runs the PR mill only; collector patches own their post-merge durable
+# background startup. Never use this loop to populate collector data or wait.
 export LOKAY_MODE="${LOKAY_MODE:-live}"
 export LOKAY_EXECUTOR_ENABLED="${LOKAY_EXECUTOR_ENABLED:-1}"
 export LOKAY_MERGE_ENABLED="${LOKAY_MERGE_ENABLED:-1}"

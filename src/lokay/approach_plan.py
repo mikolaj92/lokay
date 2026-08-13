@@ -14,6 +14,12 @@ from typing import Any, Iterable
 from lokay.models import Issue
 
 APPROACH_REL_PATH = ".lokay/approach.md"
+COLLECTOR_BOUNDARY_NOTE = (
+    "Collector boundary: if implementation introduces unbounded collection, "
+    "ship only a bounded collector patch that starts durably in the background "
+    "after merge. The coding agent and mill must not populate data or wait for "
+    "collection to finish."
+)
 
 _HEADING = re.compile(r"(?m)^(#{1,6})\s+(.+?)\s*$")
 _PATH_TICK = re.compile(
@@ -194,6 +200,7 @@ def build_approach(
     notes: list[str] = [
         "Trust intentional issue; this plan is evidence for later review, not a human gate.",
         "Coding agent may refine details but should stay on the stated goal and non-goals.",
+        COLLECTOR_BOUNDARY_NOTE,
     ]
     if not paths:
         notes.append("No explicit file paths in issue; infer from repo inspection.")

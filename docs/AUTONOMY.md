@@ -97,6 +97,11 @@ exclusive swap.
 7. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
    merge_policy reasons) never mint recovery stall fingerprints or fill the
    4-of-5 self-repair quorum.
+8. **Collector boundary** — When the separate intake gate classifies a seed as
+   unbounded collection work, the coding task is only a bounded collector
+   bootstrap patch. Its destination deployment starts the collector durably in
+   the background after merge; Pi and the mill neither populate collection data
+   nor wait for completion. A later issue evaluates collection progress.
 
 ## Event wake vs cron
 

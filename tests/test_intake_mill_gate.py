@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from lokay.agent import COLLECTOR_BOUNDARY, run_agent
 from lokay.compose import tick
+from lokay.config import Config
+from lokay.runner import CommandSpec
 
 
 def _config(tmp_path):
@@ -76,6 +81,38 @@ def test_ready_without_intake_pass_cannot_implement(tmp_path, monkeypatch):
     assert implemented == []
     assert any(a.get("step") == "intake_issue" for a in result["actions"])
     assert result["progress"] >= 1
+
+
+def test_agent_collector_boundary_never_executes_collection(tmp_path: Path):
+    """The coding slot may patch a collector, never run or await collection."""
+    seen: list[CommandSpec] = []
+
+    class Runner:
+        def run(self, spec: CommandSpec, *, live: bool):
+            seen.append(spec)
+            return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    result = run_agent(
+        Runner(),
+        Config(
+            agent="real-agent",
+            agent_command="real-agent",
+            agent_args=["--prompt", "{prompt}"],
+            executor_enabled=True,
+        ),
+        worktree=tmp_path,
+        prompt="Implement the bounded collector bootstrap patch.",
+        execute=True,
+    )
+
+    assert result["status"] == "completed"
+    assert result["collector_boundary"] is True
+    assert len(seen) == 1
+    prompt = seen[0].argv[-1]
+    assert COLLECTOR_BOUNDARY in prompt
+    assert "do not start a collection" in prompt
+    assert "must not populate collection data" in prompt
+    assert "wait for collection completion" in prompt
 
 
 def test_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):

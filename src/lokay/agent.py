@@ -22,6 +22,25 @@ from lokay.runner import CommandSpec, Runner
 STUB_AGENTS = frozenset({"fake", "stub", "mock", "noop"})
 _PLACEHOLDER_RE = re.compile(r"\{([a-z_]+)\}")
 
+# This is an execution boundary, not an intake classifier (#94 owns detection).
+# It is appended to every harness prompt so a collector-shaped task cannot turn
+# Pi into a long-running data-population worker.
+COLLECTOR_BOUNDARY = """
+Collector boundary (applies only when the task involves unbounded collection):
+- Work only on a bounded collector/bootstrap patch. Its durable background
+  startup hook is activated after merge/deployment; do not start a collection
+  job from this coding session.
+- Pi and the Lokay mill must not populate collection data, poll collection
+  progress, or wait for collection completion.
+- A later, separate issue evaluates whether the background collector produced
+  useful results. Do not claim that result from this task.
+""".strip()
+
+
+def with_collector_boundary(prompt: str) -> str:
+    """Attach the collector execution boundary without classifying the task."""
+    return f"{(prompt or '').rstrip()}\n\n{COLLECTOR_BOUNDARY}\n"
+
 
 class AgentError(RuntimeError):
     pass
@@ -122,15 +141,17 @@ def run_agent(
 ) -> dict:
     """Run configured harness. execute=False → plan only."""
     kind = resolve_agent_kind(config)
-    argv = build_agent_argv(config, worktree=worktree, prompt=prompt)
-    display = [("<prompt>" if p == prompt else p) for p in argv]
+    effective_prompt = with_collector_boundary(prompt)
+    argv = build_agent_argv(config, worktree=worktree, prompt=effective_prompt)
+    display = [("<prompt>" if p == effective_prompt else p) for p in argv]
 
     if not execute:
         return {
             "status": "planned",
             "agent": kind,
             "command": display,
-            "prompt_len": len(prompt),
+            "prompt_len": len(effective_prompt),
+            "collector_boundary": True,
             "worktree": str(worktree),
             "executor_enabled": config.executor_enabled,
             "execute": execute,
@@ -158,5 +179,6 @@ def run_agent(
         "returncode": result.returncode,
         "stdout_tail": (result.stdout or "")[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],
+        "collector_boundary": True,
         "worktree": str(worktree),
     }

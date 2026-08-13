@@ -15,6 +15,11 @@ Risk = Literal["low", "medium", "high"]
 
 VALID_VERDICTS = frozenset({"approve", "request_changes", "needs_human"})
 VALID_RISKS = frozenset({"low", "medium", "high"})
+COLLECTOR_BOUNDARY = (
+    "Collector boundary: a collector change may install/start durable background "
+    "work after merge, but this PR must not use Pi or the mill to populate data "
+    "or wait for collection to finish."
+)
 
 
 @dataclass(frozen=True)
@@ -360,6 +365,7 @@ Rules:
 9. Approach plan (`.lokay/approach.md`) is trust-with-evidence, not a human gate.
    {approach_note}
    Fail-closed rules for secrets / needs_human are unchanged.
+10. {COLLECTOR_BOUNDARY} Treat violating this boundary as blocking / request_changes.
 
 CI / checks context (evidence):
 {(checks_text or "(none)")[:4000]}
