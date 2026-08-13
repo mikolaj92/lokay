@@ -1,13 +1,13 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=90 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=91 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #90 — LaunchAgent tyka co 60s (dziś 600)
+Issue: #91 — Równe taski równolegle: 2–4, jeden na repo, nie jeden globalnie
 
 ## Goal
 
-Na 0 `ai.mikolaj.lokay-mill` ma `StartInterval` 600. Ma być 60: mniejsza tarcie, kolejka sama. Plist nie jest w repo (tylko na hoście).
+Lokaj jedzie serialnie: jeden `pi` globalnie. Jedna sprawa w jednym repo (np. cały korpus Sejmu) zjada kolejkę wszystkich innych. Mini M4 uniesie 2–4 równe taski naraz — **w różnych repo**.
 
 ## Files likely touched
 
