@@ -59,6 +59,30 @@ def _live_flags(inputs: dict[str, Any]) -> list[str]:
     return ["--live"] if inputs.get("live") else []
 
 
+def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed gate: push/pr_merge need successful test_local conduction.
+
+    Honest skip (skipped / no_python_test_suite) counts as success. Missing
+    key, ok:false, or a red suite returns an error envelope. None means go.
+    """
+    if "test_local" not in up:
+        return {
+            "ok": False,
+            "error": "refusing: test_local conduction missing",
+            "reason": "test_local_missing",
+        }
+    tl = up["test_local"]
+    if tl.get("skipped") or tl.get("reason") == "no_python_test_suite":
+        return None
+    if tl.get("ok") is True:
+        return None
+    return {
+        "ok": False,
+        "error": str(tl.get("error") or "refusing: test_local did not succeed"),
+        "reason": "test_local_failed",
+    }
+
+
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     from lokay.proc import (
         assign_issue,
@@ -499,6 +523,9 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
                 "needs_review": gate.needs_review,
                 "merge_policy": gate.to_dict(),
             }
+        refused = _require_test_local(up)
+        if refused is not None:
+            return refused
         return _run_atom_main(
             pr_merge.main,
             [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],
@@ -736,6 +763,9 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             or ""
         )
         assert worktree and branch
+        refused = _require_test_local(up)
+        if refused is not None:
+            return refused
         committed = up.get("commit_all", {}).get("committed")
         if inputs.get("live") and committed is not True:
             # Repair agents may create commits themselves. A clean worktree with

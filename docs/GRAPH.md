@@ -207,6 +207,7 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
+- **push** / **pr_merge** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts).
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md).
 - **plan_issue** is deterministic evidence before that coding slot (serial path:
   `worktree_add → plan_issue → run_agent`).
