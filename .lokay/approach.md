@@ -1,17 +1,17 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=94 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=97 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #94 — Brama na zadanie bez stropu: nie rzucać się
+Issue: #97 — Tick z aktualnego main, albo fail-closed gdy host z tyłu
 
 ## Goal
 
-Objawienie: issue bez stropu (korpus Sejmu, napełnij historię, zbierz wszystko) zjada mill. To nie niszowe. Złożoność nie mieści się w cykl, dzień, tydzień, miesiąc. Inne, skończalne, stoją.
+Lokaj na mini jedzie starym `main` po merge. Merge wstał, host nadal na starym HEAD — bramki z merga nie żyją (pr_create po czerwonym `test_local`, jak #89/#96).
 
 ## Files likely touched
 
-- (infer from repo inspection)
+- `repos.mikolaj92.yaml`
 
 ## Test plan
 
@@ -25,4 +25,4 @@ Objawienie: issue bez stropu (korpus Sejmu, napełnij historię, zbierz wszystko
 
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
-- No explicit file paths in issue; infer from repo inspection.
+- Collector boundary: if implementation introduces unbounded collection, ship only a bounded collector patch that starts durably in the background after merge. The coding agent and mill must not populate data or wait for collection to finish.
