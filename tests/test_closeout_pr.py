@@ -201,6 +201,18 @@ def test_console_script_wired():
     assert "lokay.proc.closeout_pr:main" in text
 
 
+def test_closeout_pr_is_thin_glue():
+    src = (ROOT / "src/lokay/proc/closeout_pr.py").read_text(encoding="utf-8")
+    assert len(src.splitlines()) <= 100
+    assert "run_pr_route" in src
+    assert "compose_pr_triage" in src
+    assert "compose_pr_repair" in src
+    assert "decide_auto_merge" not in src
+    effects = (ROOT / "src/lokay/closeout.py").read_text(encoding="utf-8")
+    assert "compose_pr_" not in effects
+    assert "fala" not in effects.lower()
+
+
 def test_closeout_prs_is_thin_foreach():
     src = (ROOT / "src/lokay/proc/closeout_prs.py").read_text(encoding="utf-8")
     assert "run_closeout_pr" in src
@@ -208,8 +220,7 @@ def test_closeout_prs_is_thin_foreach():
     assert "compose_pr_repair" not in src
     assert "run_pr_route" not in src
     assert "decide_auto_merge" not in src
-    atom = (ROOT / "src/lokay/proc/closeout_pr.py").read_text(encoding="utf-8")
-    assert len(src.splitlines()) < len(atom.splitlines())
+    assert len(src.splitlines()) <= 110
 
 
 def test_closeout_prs_foreach_recounts(tmp_path, monkeypatch):

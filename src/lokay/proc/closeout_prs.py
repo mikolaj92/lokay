@@ -12,8 +12,9 @@ from lokay.passkit.working import (
     save_begin_working,
     stuck_path_of,
 )
+from lokay.closeout import COUNTERS
 from lokay.proc._common import add_config_live
-from lokay.proc.closeout_pr import _COUNTERS, run_closeout_pr
+from lokay.proc.closeout_pr import run_closeout_pr
 from lokay.stuck import save_stuck
 
 
@@ -28,7 +29,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
         k: list(v) for k, v in dict(working.get("prs_by_repo") or {}).items()
     }
     remaining_prs = int(working.get("remaining_prs") or 0)
-    totals = {key: int(working.get(key) or 0) for key in _COUNTERS}
+    totals = {key: int(working.get(key) or 0) for key in COUNTERS}
 
     for repo_name in list(begin.get("repos") or []):
         still_open: list[dict[str, Any]] = []
@@ -50,7 +51,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
             repair_budget = int(out.get("repair_budget") or 0)
             progress += int(out.get("progress") or 0)
             remaining_prs = max(0, remaining_prs - int(out.get("remaining_closed") or 0))
-            for key in _COUNTERS:
+            for key in COUNTERS:
                 totals[key] += int(out.get(key) or 0)
             if out.get("still_open"):
                 still_open.append(pr)
