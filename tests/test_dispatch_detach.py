@@ -59,9 +59,19 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
     monkeypatch.setattr(d, "save_stuck", lambda *a, **k: None)
     monkeypatch.setattr(d, "_live_ps_text", lambda: "")
     monkeypatch.setattr(d, "inspect_mutex", lambda **k: {"ok": True, "busy": False})
+    monkeypatch.setenv("HOME", str(tmp_path))
     out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
     assert out.get("ok") is True
     assert out.get("detached") is True
     assert out.get("started") == 2
     assert len(seen) == 2
     assert all(flag is True for _, flag in seen)
+    argv0, _ = seen[0]
+    # FakePopen only stored argv + start_new_session; log path is on the action.
+    working = __import__("json").loads((tmp_path / "working.json").read_text())
+    launched = [a for a in working["actions"] if a.get("step") == "issue_to_pr"]
+    assert len(launched) == 2
+    for row in launched:
+        log = row.get("log") or ""
+        assert "issue-to-pr-" in log
+        assert log.endswith(".log")

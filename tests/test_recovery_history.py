@@ -136,6 +136,36 @@ def test_waiting_or_repairing_mill_envelope_is_not_failure_fingerprint(tmp_path)
             assert row["health"] == health
 
 
+def test_running_health_is_not_failure_fingerprint(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={"ok": False, "health": "running", "error": "mill stall", "progress": 0},
+    )
+    assert row["fingerprint"] is None
+    assert row["health"] == "running"
+
+
+def test_detached_issue_to_pr_started_is_not_stall_fingerprint(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={
+            "ok": False,
+            "health": "stall",
+            "error": "stall: actionable work remains but no progress this pass",
+            "progress": 0,
+            "remaining": {"ready": 131, "issue_to_pr_started": 4},
+        },
+    )
+    assert row["fingerprint"] is None
+    assert row["progress"] == 4
+
+
 def test_pending_ci_and_needs_review_triage_events_do_not_fingerprint(tmp_path):
     """Review limbo / pending CI / parked needs-review are soft product waits."""
     state = tmp_path / "state.jsonl"

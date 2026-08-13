@@ -118,7 +118,18 @@ def run_queue_conflict(
     demoted = 0
     kept = 0
 
-    for repo_name in list(begin.get("repos") or []):
+    implement_preview: dict[str, Any] = {}
+    impl_path = pass_io.implement_path(pass_dir)
+    if impl_path.is_file():
+        implement_preview = pass_io.read_json(impl_path)
+    clean_only = list(implement_preview.get("clean_repos") or [])
+    scan_repos = clean_only or list(begin.get("repos") or [])
+    # Dispatch starts at most one issue per repo. Gate that candidate (and a
+    # few replacements if it is SKIP/CLOSE), not the whole ready catalog.
+    per_repo_cap = 1
+    hard_cap = 8
+
+    for repo_name in scan_repos:
         ready = list(ready_by_repo.get(repo_name) or [])
         if not ready:
             ready_by_repo[repo_name] = []
@@ -126,7 +137,12 @@ def run_queue_conflict(
         peers = list(ready) + list(inbox_issues_by_repo.get(repo_name) or [])
         open_prs = list(prs_by_repo.get(repo_name) or [])
         kept_ready: list[dict[str, Any]] = []
+        examined = 0
         for issue in ready:
+            if (kept_ready and examined >= per_repo_cap) or examined >= hard_cap:
+                kept_ready.extend(ready[ready.index(issue) :])
+                break
+            examined += 1
             num = int(issue.get("number") or 0)
             verdict = evaluate_queue_conflict(
                 issue,
@@ -176,10 +192,8 @@ def run_queue_conflict(
             actions.append(row)
         ready_by_repo[repo_name] = kept_ready
 
-    implement: dict[str, Any] = {}
-    impl_path = pass_io.implement_path(pass_dir)
+    implement: dict[str, Any] = implement_preview
     if impl_path.is_file():
-        implement = pass_io.read_json(impl_path)
         clean = [
             r for r in list(implement.get("clean_repos") or []) if ready_by_repo.get(r)
         ]
