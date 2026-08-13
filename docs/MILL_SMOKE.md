@@ -45,6 +45,11 @@
 
 7. Optionally configure event wake on a self-hosted Actions runner labeled `lokay-mill`; do not start a second coding fleet.
 
+For a separately classified unbounded collector seed, this smoke run remains a
+PR mill only: it must not populate collection data or wait for the collector.
+The destination collector patch starts its durable background process after
+merge; assess whether it accrues in a later issue.
+
 [`AUTONOMY.md`](AUTONOMY.md) documents live operation, event wake, and the serial mill guarantees.
 
 [`WORKING.md`](WORKING.md) defines healthy pass outcomes and the operator-visible status contract.

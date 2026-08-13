@@ -53,6 +53,12 @@ def test_build_approach_extracts_sections_and_paths():
     assert "fala/lokay.fala-package.toml" in plan.files_likely
     assert any("hermetic" in t.lower() for t in plan.test_plan)
     assert any("merge" in n.lower() or "parallel" in n.lower() for n in plan.non_goals)
+    assert any(
+        "collector boundary" in note.lower()
+        and "background" in note.lower()
+        and "must not populate data" in note.lower()
+        for note in plan.notes
+    )
 
 
 def test_render_and_write_approach_file(tmp_path: Path):
@@ -191,6 +197,8 @@ def test_review_prompt_notes_missing_approach_as_soft():
     assert "soft nit" in text.lower() or "soft signal" in text.lower()
     assert "not a human gate" in text.lower() or "never needs_human" in text.lower()
     assert "Approach plan" in text or "approach.md" in text
+    assert "Collector boundary" in text
+    assert "must not use Pi or the mill to populate data" in text
 
 
 def test_review_prompt_notes_present_approach():

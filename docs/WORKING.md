@@ -89,7 +89,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    READY-without-intake cannot implement. Inside `issue_to_pr`: worktree from
    `origin/main` → **`plan_issue`** (`.lokay/approach.md` evidence) →
    configured executor → commit/push → PR. The plan atom is trust-with-evidence,
-   not a human gate. Stuck → ledger → `ai:blocked`. Live ready with
+   not a human gate. For a seed classified separately as unbounded collection
+   work, the executor may make only the bounded collector/bootstrap patch: the
+   deployed collector starts durably in the background after merge. Pi and the
+   mill never populate its data or wait for it to finish; a later issue observes
+   whether it is accruing. Stuck → ledger → `ai:blocked`. Live ready with
    `executor.enabled: false` is a **stall**.
 6. **Health** (honest):
    - `idle` — survey finds no remaining work
