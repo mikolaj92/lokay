@@ -28,6 +28,7 @@ Related: issue #17 (graph_run placeholders), issue #18 (AI agent fail-closed),
 ## Enforcement tests
 
 - `tests/test_fallbacks_inventory.py` — locks deletions and Fala fail-closed.
+- `tests/test_fala_package_lock.py` — checkout `fala/` and packaged `data/` are byte-identical.
 - `tests/test_graph.py` — no `PLACEHOLDER_PYTHON` rewrite.
 - `tests/test_agent_no_stub.py` — no silent agent defaults.
 
