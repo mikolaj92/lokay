@@ -31,7 +31,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     survey_errors = int(working.get("survey_errors") or 0)
 
     for repo_name in list(begin.get("repos") or []):
-        listed = run_proc(p_list_issues.main, [*cfg_flag, "--repo", repo_name])
+        listed = run_proc(p_list_issues.main, [*cfg_flag, *live_flag, "--repo", repo_name])
         actions.append({"step": "list_issues", "repo": repo_name, **listed})
         if not listed.get("ok"):
             survey_errors += 1

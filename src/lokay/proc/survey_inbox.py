@@ -13,7 +13,7 @@ from lokay.proc._common import add_config_live
 
 
 def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
-    del live  # read-only survey
+    live_flag = ["--live"] if live else []
     begin, working = load_begin_working(pass_dir)
     cfg_flag = ["--config", config_path] if config_path else []
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
@@ -24,7 +24,7 @@ def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> d
     survey_errors = int(working.get("survey_errors") or 0)
 
     for repo_name in list(begin.get("repos") or []):
-        listed = run_proc(p_list_inbox.main, [*cfg_flag, "--repo", repo_name])
+        listed = run_proc(p_list_inbox.main, [*cfg_flag, *live_flag, "--repo", repo_name])
         actions.append({"step": "list_inbox", "repo": repo_name, **listed})
         if not listed.get("ok"):
             survey_errors += 1
