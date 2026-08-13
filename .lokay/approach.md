@@ -1,32 +1,32 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=68 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=70 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #68 — Preflight failure 3c656f93985e9107
+Issue: #70 — [canary] mill smoke: add docs/MILL_SMOKE.md with operator live commands
 
 ## Goal
 
-<!-- lokay-preflight:3c656f93985e9107 -->
-Bounded checks failed: Confirmed in 4 of 5 daemon runs. Repeated product failure evidence:
+Operator-authored smoke ticket. Trust this issue: implement it; do not park as NEEDS_HUMAN.
 
 ## Files likely touched
 
-- `src/lokay/proc/select_implement.py`
-- `tests/test_global_pr_first.py`
+- `docs/MILL_SMOKE.md`
+- `config.live-autonomous.example.yaml`
+- `config.yaml`
+- `scripts/lokay-mill-daemon.sh`
+- `docs/AUTONOMY.md`
+- `docs/WORKING.md`
 
 ## Test plan
 
-- Verify a manual-only PR does not block ready work in the same repository
-- Run global PR-first and mill-health tests
+- Run the smallest useful tests for files touched
 
 ## Non-goals
 
-- Changing backpressure from actionable AI PRs
-- Treating manual / `ai:needs-review` PRs as automatic work
+- (none stated)
 
 ## Notes
 
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
-- No explicit file paths in issue; infer from repo inspection.
