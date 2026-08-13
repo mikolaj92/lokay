@@ -23,6 +23,11 @@ def health_payload(
 ) -> dict[str, Any]:
     inbox = int(remaining.get("inbox") or 0)
     ready = int(remaining.get("ready") or 0)  # implementable (no open AI PR yet)
+    started = int(remaining.get("issue_to_pr_started") or 0)
+    # Detached issue_to_pr is real work this pass. Count it even when the
+    # progress counter was snapshotted before dispatch wrote working.json.
+    if started > 0:
+        progress = max(int(progress), started)
     prs = int(
         remaining.get("actionable_open_ai_prs")
         if remaining.get("actionable_open_ai_prs") is not None

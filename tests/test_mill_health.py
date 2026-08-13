@@ -237,6 +237,32 @@ def test_live_waiting_merge_disabled_legacy_remaining_without_counter():
     assert payload["ok"] is True
 
 
+def test_detached_issue_to_pr_is_progress_not_stall():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 131,
+            "open_ai_prs": 0,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+            "issue_to_pr_started": 4,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "progress"
+    assert payload["ok"] is True
+    assert payload["progress"] == 4
+    assert payload["idle"] is False
+
+
+
 def test_soft_waiting_remaining_maps_merge_policy_matrix():
     assert set(WAITING_REMAINING_FIELDS) == set(WAITING_REASONS)
     remaining = {

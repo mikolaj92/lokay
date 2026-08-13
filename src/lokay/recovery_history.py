@@ -18,7 +18,7 @@ _VOLATILE = re.compile(r"(?i)(?:0x)?[0-9a-f]{8,}|\b\d+\b")
 _SPACE = re.compile(r"\s+")
 # Honest wait / repair limbo must not confirm as mill failure for recovery.
 _NON_FAILURE_HEALTH = frozenset(
-    {"waiting", "repairing", "idle", "progress", "offline", "overlap"}
+    {"waiting", "repairing", "idle", "progress", "running", "offline", "overlap"}
 )
 # merge_policy / pr_triage soft product reasons — never systemic stall evidence.
 # Keep aligned with WAITING_REASONS / NEEDS_REVIEW_REASONS; do not alter those sets.
@@ -157,14 +157,18 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
     # parked needs-review → waiting/idle) must not mint recovery fingerprints
     # from either the mill envelope or per-event repair/triage failures.
     # Those cycles belong to the product mill, not self-repair.
-    if delivered or _soft_mill_health(mill):
+    remaining = mill.get("remaining") if isinstance(mill.get("remaining"), dict) else {}
+    detached_started = int(remaining.get("issue_to_pr_started") or 0)
+    if delivered or _soft_mill_health(mill) or detached_started > 0:
         return {
             "ts": datetime.now(timezone.utc).isoformat(),
             "fingerprint": None,
             "evidence": "",
             "delivered": delivered,
-            "health": mill.get("health"),
-            "progress": int(mill.get("progress") or 0),
+            "health": mill.get("health") if detached_started == 0 else (
+                mill.get("health") or "running"
+            ),
+            "progress": max(int(mill.get("progress") or 0), detached_started),
         }
 
     failures: list[str] = []
