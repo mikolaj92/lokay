@@ -1,5 +1,6 @@
 {
   "paths": [
+    "src/lokay/proc/test_local.py",
     "src/lokay/approach_plan.py",
     "src/lokay/pr_review.py",
     "src/lokay/pr_review_io.py",
@@ -7,9 +8,11 @@
     "src/lokay/proc/plan_pass.py",
     "src/lokay/proc/pr_review.py",
     "tests/test_intake_mill_gate.py",
+    "tests/test_localize.py",
     "tests/test_plan_issue.py",
     "tests/test_pr_review.py",
     "tests/test_pr_review_idempotency.py",
+    "tests/test_test_local.py",
     "repos.mikolaj92.yaml",
     "docs/ALPINE.md",
     "docs/AUTONOMY.md",
@@ -36,14 +39,12 @@
     "src/lokay/compose/human_mailbox.py",
     "src/lokay/compose/issue_to_pr.py",
     "src/lokay/compose/mill.py",
-    "src/lokay/compose/pr_repair.py",
-    "src/lokay/compose/pr_triage.py",
-    "src/lokay/compose/status.py",
-    "src/lokay/compose/tick.py"
+    "src/lokay/compose/pr_repair.py"
   ],
   "source": "deterministic",
   "seed_paths": [],
   "matched_tokens": [
+    "Test_local",
     "plan",
     "mikolaj92",
     "review",
@@ -54,7 +55,7 @@
     "Empty path list fails closed — run_agent must not start.",
     "Repo tree entries considered: 207."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__93-zbi-r-bez-stropu-zbieracz-w-tle-nie-pi-2ed9e600",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__94-brama-na-zadanie-bez-stropu-nie-rzuca-si-de2a0080",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
