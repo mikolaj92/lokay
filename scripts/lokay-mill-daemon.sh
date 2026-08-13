@@ -11,8 +11,11 @@ export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bi
 export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
 
-ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
-CFG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"
+export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
+export FALA_HOME="${FALA_HOME:-${HOME}/Developer/OSS/Fala}"
+ROOT="${LOKAY_ROOT}"
+export LOKAY_CONFIG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"
+CFG="${LOKAY_CONFIG}"
 LOKAY_HOME="${HOME}/.lokay"
 LOG_DIR="${LOKAY_LOG_DIR:-${LOKAY_HOME}/logs}"
 OUTBOX="${LOKAY_HOME}/preflight-bootstrap-incidents.log"
