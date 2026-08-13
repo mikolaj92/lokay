@@ -1,0 +1,137 @@
+"""select_implement: parked needs-review must not PR-first-block ready work."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from lokay.passkit import io as pass_io
+from lokay.proc.compute_health import run_compute_health
+from lokay.proc.select_implement import run_select_implement
+
+
+def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | None = None) -> str:
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    base_begin = {
+        "live": True,
+        "issue_budget": 1,
+        "executor_enabled": True,
+        "merge_enabled": True,
+        "mode": "live",
+        "repos": ["a/one"],
+        "planned": [],
+        "stuck_path": "",
+    }
+    if begin:
+        base_begin.update(begin)
+    pass_io.write_json(pass_io.begin_path(pass_dir), base_begin)
+    base_working = {
+        "actions": [],
+        "progress": 0,
+        "prs_by_repo": {},
+        "ready_by_repo": {},
+        "pr_survey_failed": [],
+        "remaining_inbox": 0,
+        "remaining_ready": 0,
+        "remaining_prs": 0,
+        "actionable_prs": 0,
+        "manual_prs": 0,
+        "mergeable_green": 0,
+        "needs_repair": 0,
+        "review_limbo": 0,
+        "pending_checks": 0,
+        "survey_errors": 0,
+    }
+    base_working.update(working)
+    pass_io.write_json(pass_io.working_path(pass_dir), base_working)
+    return str(pass_dir)
+
+
+def test_manual_needs_review_does_not_block_same_repo_ready(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "prs_by_repo": {
+                "a/one": [
+                    {
+                        "number": 69,
+                        "head_ref": "ai/fix/68-x",
+                        "labels": ["ai:needs-review"],
+                    }
+                ]
+            },
+            "ready_by_repo": {
+                "a/one": [{"number": 70, "title": "next ready"}]
+            },
+            "remaining_ready": 1,
+            "remaining_prs": 1,
+            "actionable_prs": 0,
+            "manual_prs": 1,
+        },
+    )
+    result = run_select_implement(pass_dir=pass_dir)
+    assert result["ok"] is True
+    assert result["selected"] == 1
+    implement = pass_io.read_json(pass_io.implement_path(pass_dir))
+    assert implement["clean_repos"] == ["a/one"]
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert not any(
+        row.get("step") == "skip_ready_open_ai_pr" for row in working.get("actions") or []
+    )
+
+
+def test_actionable_ai_pr_still_blocks_same_repo_ready(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "prs_by_repo": {
+                "a/one": [{"number": 1, "head_ref": "ai/fix/1-x", "labels": ["ai:generated"]}]
+            },
+            "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
+            "remaining_ready": 1,
+            "actionable_prs": 1,
+        },
+    )
+    result = run_select_implement(pass_dir=pass_dir)
+    assert result["ok"] is True
+    assert result["selected"] == 0
+    implement = pass_io.read_json(pass_io.implement_path(pass_dir))
+    assert implement["clean_repos"] == []
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert any(
+        row.get("step") == "skip_ready_open_ai_pr" for row in working.get("actions") or []
+    )
+
+
+def test_compute_health_parked_needs_review_only_is_waiting_not_stall(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "prs_by_repo": {
+                "a/one": [
+                    {
+                        "number": 69,
+                        "head_ref": "ai/fix/68-x",
+                        "labels": ["ai:needs-review"],
+                    }
+                ]
+            },
+            "ready_by_repo": {},
+            "remaining_ready": 0,
+            "remaining_prs": 1,
+            "actionable_prs": 0,
+            "manual_prs": 1,
+            "actions": [{"step": "skip_manual_pr", "pr": 69}],
+        },
+    )
+    result = run_compute_health(pass_dir=pass_dir)
+    assert result["ok"] is True
+    assert result["health"] == "waiting"
+    assert result["idle"] is False
+    assert result["tick_ok"] is True
+    tick = pass_io.read_json(pass_io.tick_path(pass_dir))
+    assert tick["health"] == "waiting"
+    assert tick["ok"] is True
+    assert tick["remaining"]["manual_open_ai_prs"] == 1
+    assert tick["remaining"]["actionable_open_ai_prs"] == 0

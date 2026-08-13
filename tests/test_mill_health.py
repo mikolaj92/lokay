@@ -320,3 +320,85 @@ def test_survey_errors_refuse_idle():
     assert payload["idle"] is False
     assert payload["health"] == "survey_error"
     assert payload["ok"] is False
+
+
+def test_live_waiting_when_only_parked_needs_review_prs():
+    """Parked ai:needs-review is mailbox residual — waiting, never idle or stall."""
+    remaining = {
+        "inbox": 0,
+        "ready": 0,
+        "open_ai_prs": 1,
+        "actionable_open_ai_prs": 0,
+        "manual_open_ai_prs": 1,
+        "mergeable_green": 0,
+        "needs_repair": 0,
+        "pending_checks": 0,
+        "review_limbo": 0,
+    }
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining=remaining,
+        actions=[{"step": "skip_manual_pr"}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+    assert payload["idle"] is False
+
+
+def test_live_waiting_legacy_open_ai_prs_without_manual_counter():
+    """Older receipts without manual_open_ai_prs still wait, not idle."""
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "actionable_open_ai_prs": 0,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+        },
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+    assert payload["idle"] is False
+
+
+def test_live_waiting_when_executor_off_and_failed_checks_only():
+    """Executor-off + red checks is honest wait, not stall (repair cannot run)."""
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "actionable_open_ai_prs": 1,
+            "manual_open_ai_prs": 0,
+            "mergeable_green": 0,
+            "needs_repair": 1,
+            "pending_checks": 0,
+            "review_limbo": 0,
+        },
+        actions=[{"step": "pr_checks", "status": "failed"}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=False,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+    assert payload["idle"] is False

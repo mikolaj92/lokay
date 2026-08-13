@@ -545,3 +545,30 @@ def test_needs_feedback_issue_does_not_block_other_repo_intake(tmp_path, monkeyp
     assert len(intake) == 1
     assert intake[0]["repo"] == "a/two"
     assert result["remaining"]["intake_skip_reason"] is None
+
+
+def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
+    """No ready work + parked mailbox PR → waiting, never stall/recovery bait."""
+    config = _config(tmp_path, repos=("a/one",))
+
+    def fake_run(fn, argv):
+        if fn is tick.p_list_prs.main:
+            return {"ok": True, "prs": [_pr(labels=["ai:needs-review"])]}
+        if fn in {tick.p_list_inbox.main, tick.p_list_issues.main}:
+            return {"ok": True, "issues": []}
+        raise AssertionError(fn)
+
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(
+        tick,
+        "compose_issue_to_pr",
+        lambda **_: (_ for _ in ()).throw(AssertionError("intake ran")),
+    )
+    result = tick.compose_tick(config_path=config, live=True)
+    assert result["health"] == "waiting"
+    assert result["ok"] is True
+    assert result["idle"] is False
+    assert result["remaining"]["manual_open_ai_prs"] == 1
+    assert result["remaining"]["actionable_open_ai_prs"] == 0
+    assert result["remaining"]["ready"] == 0

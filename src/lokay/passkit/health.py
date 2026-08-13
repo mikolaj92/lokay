@@ -31,6 +31,12 @@ def health_payload(
     needs_repair = int(remaining.get("needs_repair") or 0)
     survey_errors = int(remaining.get("survey_errors") or 0)
     review_limbo = int(remaining.get("review_limbo") or 0)
+    if remaining.get("manual_open_ai_prs") is not None:
+        manual_prs = int(remaining.get("manual_open_ai_prs") or 0)
+    else:
+        # Legacy receipts: parked PRs were folded into open_ai_prs.
+        open_all = int(remaining.get("open_ai_prs") or 0)
+        manual_prs = max(0, open_all - prs)
     # Same matrix as merge_policy WAITING_REASONS (pending / no-CI / merge off).
     mergeable_now = actionable_mergeable_green(
         remaining, merge_enabled=merge_enabled
@@ -45,11 +51,11 @@ def health_payload(
     # Ready issues need the agent slot when live.
     ready_actionable = ready if (not live or executor_enabled) else 0
     agent_blocked = bool(live and ready > 0 and not executor_enabled)
-    # Active repair / CI wait / review limbo / merge-disarmed green are honest
-    # non-error waiting states. They must not fingerprint as mill stall.
+    # Active repair / CI wait / review limbo / parked needs-review / merge-disarmed
+    # green are honest non-error waiting states. They must not fingerprint as stall.
     actively_repairing = bool(needs_repair > 0 and (not live or executor_enabled))
     honestly_waiting = bool(
-        soft_waits > 0 or review_limbo > 0
+        soft_waits > 0 or review_limbo > 0 or manual_prs > 0
     ) and inbox == 0 and ready_actionable == 0 and mergeable_now == 0
 
     if live:
@@ -58,7 +64,15 @@ def health_payload(
         actionable_now = inbox + ready + prs
 
     # Fail-closed: any survey atom failure means we do not know remaining work → not idle.
-    idle = inbox == 0 and ready == 0 and prs == 0 and survey_errors == 0
+    # Parked ai:needs-review PRs are a human mailbox, not empty-queue idle.
+    idle = (
+        inbox == 0
+        and ready == 0
+        and prs == 0
+        and manual_prs == 0
+        and review_limbo == 0
+        and survey_errors == 0
+    )
     if survey_errors > 0 and progress == 0:
         health = "survey_error"
     elif idle:

@@ -449,3 +449,41 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
             )
             assert repair.get("skipped") is True
             assert repair_calls == []
+
+
+def test_parked_needs_review_waiting_mill_never_fingerprints(tmp_path):
+    """Mailbox residual (only ai:needs-review) must not confirm self-repair."""
+    state = tmp_path / "state.jsonl"
+    state.write_text(
+        json.dumps(
+            {
+                "kind": "pr_triage",
+                "ok": True,
+                "skipped": True,
+                "needs_review": True,
+                "reason": "ai_needs_review_label",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    history = history_path_for(state)
+    for _ in range(5):
+        observation = observe_run(
+            state_path=state,
+            state_offset=0,
+            mill={
+                "ok": True,
+                "health": "waiting",
+                "progress": 0,
+                "error": "mill stall: actionable work remains but no real progress",
+                "remaining": {
+                    "ready": 0,
+                    "actionable_open_ai_prs": 0,
+                    "manual_open_ai_prs": 1,
+                },
+            },
+        )
+        assert observation["fingerprint"] is None
+        assert observation["health"] == "waiting"
+        assert record_observation(history, observation) is None

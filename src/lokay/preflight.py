@@ -99,7 +99,11 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
             )
         except (OSError, subprocess.TimeoutExpired):
             return False, "origin_unavailable"
-        if remote.returncode != 0 or getattr(remote, "stdout", "").strip() != _canonical_github_ssh(repo.name):
+        if remote.returncode != 0:
+            # Missing origin is not a protocol mismatch — fail closed honestly.
+            return False, "origin_unavailable"
+        current = getattr(remote, "stdout", "").strip()
+        if current != _canonical_github_ssh(repo.name):
             return False, "non_ssh_origin"
     if checked == 0:
         return True, "ok"
