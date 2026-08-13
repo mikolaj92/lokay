@@ -62,17 +62,19 @@ This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill
 ```text
 factory_pass:  factory_tick → composes one or more child path runs
 issue_triage: get_issue → triage_issue → intake_issue → issue_split
-pr_repair:    pr_checks → stage_repairing → worktree_add → run_agent → commit_all
-              → test_local → push
+pr_repair:    pr_checks → stage_repairing → worktree_add → localize → run_agent
+              → commit_all → test_local → push
 pr_triage:    pr_checks → pr_review → worktree_add → test_local → pr_merge
               → stage_clear → close_issue
 issue_to_pr:  get_issue → assign_issue / stage_implementing / make_branch → worktree_add
-              → plan_issue → run_agent → commit_all → test_local → push → pr_create
-              → stage_pr_open → list_prs → pr_label
+              → plan_issue → localize → run_agent → commit_all → test_local → push
+              → pr_create → stage_pr_open → list_prs → pr_label
 ```
 
 `run_agent` is the only nondeterministic coding node. `plan_issue` writes
 `.lokay/approach.md` beforehand (deterministic evidence, not a human gate).
+`localize` then produces a non-empty edit-path list (Agentless file-before-patch;
+empty list fails closed so the agent does not start).
 Intake is deterministic (CLOSE / READY / SPLIT / rare NEEDS_HUMAN); oversized
 work auto-splits via `issue_split`. The mill re-checks intake before
 `issue_to_pr`. Humans are a residual mailbox (`lokay status --human`), not a

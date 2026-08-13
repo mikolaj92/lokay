@@ -33,6 +33,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-make-branch` | pure branch name |
 | `lokay-worktree-add` | git worktree |
 | `lokay-plan-issue` | write `.lokay/approach.md` before coding (deterministic evidence) |
+| `lokay-localize` | deterministic edit-path list before coding (Agentless; fail-closed if empty) |
 | `lokay-run-agent` | **coding harness slot** (binary + args from config only) |
 | `lokay-commit-all` | commit if dirty |
 | `lokay-test-local` | local pytest gate (skip if no suite; fail-closed if red) |

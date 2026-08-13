@@ -1,29 +1,44 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=85 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=88 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #85 — Dodać mikolaj92/heimdall do katalogu Lokaya
+Issue: #88 — Atom localize przed run_agent (Agentless: plik zanim patch)
 
 ## Goal
 
-heimdall nie jest w katalogu Lokaya. Kod Heimdala ma iść przez Lokaya, jak reszta. Bez wpisu Lokay nie weźmie ziaren Heimdala.
+Przed `run_agent` Fala woła mały atom `localize`: lista plików/katalogów do edycji (drzewo repo + treść ziarna). Agent pisze patch tylko tam. LLM nie wybiera kroku linii.
 
 ## Files likely touched
 
-- `repos.mikolaj92.yaml`
-- `tests/test_repos_catalog.py`
+- `src/lokay/localize.py`
+- `src/lokay/proc/localize.py`
+- `src/lokay/fala_organ.py`
+- `src/lokay/prompts.py`
+- `src/lokay/graph_run.py`
+- `src/lokay/git_commit.py`
+- `fala/lokay.fala-package.toml`
+- `src/lokay/data/lokay.fala-package.toml`
+- `pyproject.toml`
+- `docs/GRAPH.md`
+- `docs/UNIX.md`
+- `tests/test_localize.py`
+- `tests/test_graph.py`
+- `tests/test_triage.py`
+- `tests/test_plan_issue.py`
 
 ## Test plan
 
-- Run `uv run pytest -q tests/test_repos_catalog.py`
+- `uv run pytest -q tests/test_localize.py tests/test_graph.py tests/test_plan_issue.py tests/test_triage.py tests/test_fala_package_lock.py`
 
 ## Non-goals
 
-- (none stated)
+- Embedding service / second planner LLM
+- Parallel agents or concurrent worktrees
+- Changing self_repair path (separate emergency lane)
 
 ## Notes
 
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
-- No explicit file paths in issue; infer from repo inspection.
+- Order: `plan_issue → localize → run_agent`; empty localize fails closed.

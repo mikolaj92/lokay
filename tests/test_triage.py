@@ -187,6 +187,7 @@ def test_pr_repair_path_in_package():
         "pr_checks",
         "stage_repairing",
         "worktree_add",
+        "localize",
         "run_agent",
         "commit_all",
         "test_local",
@@ -194,7 +195,11 @@ def test_pr_repair_path_in_package():
     ]
     agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
     assert "worktree_add" in agent["conduction"]
+    assert "localize" in agent["conduction"]
     assert "pr_checks" in agent["conduction"]
+    localize = next(n for n in path["nodes"] if n["id"] == "localize")
+    assert "worktree_add" in localize["conduction"]
+    assert "pr_checks" in localize["conduction"]
     stage = next(n for n in path["nodes"] if n["id"] == "stage_repairing")
     assert "pr_checks" in stage["conduction"]
 
