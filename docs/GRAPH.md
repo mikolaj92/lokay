@@ -79,8 +79,9 @@ the pass spine. Intake `CLOSE` remains for clear obsolete / wrong-shape /
 superseded cases only — never bias toward “distrust every ticket.” Goal:
 human writes issue → mill delivers.
 
-The mill invokes this parent path (`compose_factory_pass` → `run_path`). Parent
-journal: `~/.lokay/fala/factory/state.sqlite`. Child paths:
+The mill invokes this parent path (`compose_factory_pass` → `run_path`).
+`lokay-factory-tick` is the same parent Fala path — not a second in-process
+mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Child paths:
 `~/.lokay/fala/state.sqlite`. Python `compose/*` may validate CLI contracts and
 call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
