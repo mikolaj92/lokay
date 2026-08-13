@@ -17,6 +17,7 @@ def _clear_health_lease_environment(request):
     import os
 
     def _clear() -> None:
+        os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
         os.environ.pop("LOKAY_HEALTH_LEASE", None)
         os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
 
