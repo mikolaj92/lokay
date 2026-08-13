@@ -389,12 +389,12 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "push" }
 retry_policy = "none"
 
-# --- PR triage: checks -> merge (policy) -> close linked issue ---
+# --- PR triage: checks -> review -> local tests -> merge (policy) -> close ---
 
 [[correlation_paths]]
 id = "pr_triage"
 title = "PR triage"
-description = "Merge a ready AI PR when checks/policy allow, then close the linked issue."
+description = "Merge a ready AI PR when checks/policy/local tests allow, then close the linked issue."
 
 [[correlation_paths.effectors]]
 id = "pr_checks"
@@ -412,9 +412,25 @@ config = { atom = "pr_review" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "pr_merge"
+id = "worktree_add"
 capability = "lokay_atom"
 conduction = ["pr_checks", "pr_review"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "worktree_add" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "test_local"
+capability = "lokay_atom"
+conduction = ["worktree_add"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 2100, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "test_local" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "pr_merge"
+capability = "lokay_atom"
+conduction = ["pr_checks", "pr_review", "test_local"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "pr_merge" }
 retry_policy = "none"

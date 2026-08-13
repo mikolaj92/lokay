@@ -64,7 +64,8 @@ factory_pass:  factory_tick → composes one or more child path runs
 issue_triage: get_issue → triage_issue → intake_issue → issue_split
 pr_repair:    pr_checks → stage_repairing → worktree_add → run_agent → commit_all
               → test_local → push
-pr_triage:    pr_checks → pr_review → pr_merge → stage_clear → close_issue
+pr_triage:    pr_checks → pr_review → worktree_add → test_local → pr_merge
+              → stage_clear → close_issue
 issue_to_pr:  get_issue → assign_issue / stage_implementing / make_branch → worktree_add
               → plan_issue → run_agent → commit_all → test_local → push → pr_create
               → stage_pr_open → list_prs → pr_label

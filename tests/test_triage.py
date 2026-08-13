@@ -208,15 +208,21 @@ def test_pr_triage_path_in_package():
     assert node_ids == [
         "pr_checks",
         "pr_review",
+        "worktree_add",
+        "test_local",
         "pr_merge",
         "stage_clear",
         "close_issue",
     ]
+    assert "run_agent" not in node_ids
     review = next(n for n in path["nodes"] if n["id"] == "pr_review")
     assert "pr_checks" in review["conduction"]
+    worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
+    assert "pr_review" in worktree["conduction"]
     merge = next(n for n in path["nodes"] if n["id"] == "pr_merge")
     assert "pr_checks" in merge["conduction"]
     assert "pr_review" in merge["conduction"]
+    assert "test_local" in merge["conduction"]
     clear = next(n for n in path["nodes"] if n["id"] == "stage_clear")
     assert "pr_merge" in clear["conduction"]
     close = next(n for n in path["nodes"] if n["id"] == "close_issue")

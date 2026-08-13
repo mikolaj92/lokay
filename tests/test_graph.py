@@ -335,7 +335,8 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "commit_all", "test_local", "push",
         },
         "pr_triage": {
-            "pr_checks", "pr_review", "pr_merge", "stage_clear", "close_issue",
+            "pr_checks", "pr_review", "worktree_add", "test_local",
+            "pr_merge", "stage_clear", "close_issue",
         },
     }
     for path_id, effectors in expected.items():

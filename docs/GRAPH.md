@@ -185,14 +185,16 @@ pr_checks
 ```text
 pr_checks
   └─→ pr_review    ← structured harness review via run_agent (fail closed)
-        └─→ pr_merge     ← skipped when checks not mergeable / review not approve / merge disabled
-              └─→ stage_clear   ← clear issue ledger labels after merge
-                    └─→ close_issue   ← issue# from ai/fix/N-* branch when known
+        └─→ worktree_add   ← PR branch tip (no reset onto main; no coding agent)
+              └─→ test_local   ← local pytest; skip if no suite; red fails closed
+                    └─→ pr_merge     ← skipped when checks not mergeable / review not approve / merge disabled
+                          └─→ stage_clear   ← clear issue ledger labels after merge
+                                └─→ close_issue   ← issue# from ai/fix/N-* branch when known
 ```
 
 `pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
 Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_ENABLED`,
-approve + green checks → `pr_merge` + `close_issue` in one path; pending → waiting;
+approve + green checks + local tests → `pr_merge` + `close_issue` in one path; pending → waiting;
 red → repair; secrets / `needs_human` / escalated `ai:needs-review` never merge.
 Soft documentation nits must not route to `ai:needs-review`.
 Presence / light alignment of `.lokay/approach.md` is a soft review signal only —

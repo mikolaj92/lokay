@@ -167,7 +167,8 @@ def run_path(
             "commit_all", "test_local", "push",
         ),
         "pr_triage": (
-            "pr_checks", "pr_review", "pr_merge", "stage_clear", "close_issue",
+            "pr_checks", "pr_review", "worktree_add", "test_local",
+            "pr_merge", "stage_clear", "close_issue",
         ),
         "self_repair": (
             "self_repair_prepare", "self_repair_run_agent", "self_repair_validate",

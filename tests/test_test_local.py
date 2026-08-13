@@ -145,3 +145,111 @@ def test_pr_repair_push_conducts_through_test_local():
     assert "commit_all" in by_id["test_local"]["conduction"]
     assert "test_local" in by_id["push"]["conduction"]
     assert "push" not in by_id["test_local"]["conduction"]
+
+
+def test_pr_triage_merge_conducts_through_test_local():
+    by_id = _path_nodes("pr_triage")
+    assert "run_agent" not in by_id
+    assert "worktree_add" in by_id
+    assert "pr_review" in by_id["worktree_add"]["conduction"]
+    assert "worktree_add" in by_id["test_local"]["conduction"]
+    assert "test_local" in by_id["pr_merge"]["conduction"]
+    assert "pr_merge" not in by_id["test_local"]["conduction"]
+
+
+def _ready_after_failure(path_id: str, failed_id: str) -> set[str]:
+    """Nodes Fala can ready if `failed_id` never succeeds (direct conduction)."""
+    by_id = _path_nodes(path_id)
+    ready: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for node_id, node in by_id.items():
+            if node_id in ready or node_id == failed_id:
+                continue
+            conduction = node["conduction"]
+            if failed_id in conduction:
+                continue
+            if all(upstream in ready for upstream in conduction):
+                ready.add(node_id)
+                changed = True
+    return ready
+
+
+def test_pr_triage_red_test_local_does_not_reach_merge():
+    reached = _ready_after_failure("pr_triage", "test_local")
+    assert "pr_checks" in reached
+    assert "pr_review" in reached
+    assert "worktree_add" in reached
+    assert "test_local" not in reached
+    assert "pr_merge" not in reached
+    assert "stage_clear" not in reached
+    assert "close_issue" not in reached
+
+
+def test_organ_worktree_add_pr_triage_uses_branch_tip(monkeypatch):
+    captured: list[list[str]] = []
+
+    def fake_run(main, argv):
+        captured.append(argv)
+        return {"ok": True, "worktree": "/tmp/wt", "branch": "ai/fix/9-x"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "worktree_add",
+        {
+            "repo": "a/b",
+            "branch": "ai/fix/9-x",
+            "live": False,
+            "config_path": "/tmp/c.yaml",
+        },
+        {"pr_checks": {"ok": True}, "pr_review": {"ok": True, "merge_ok": True}},
+    )
+    assert result["ok"] is True
+    argv = captured[0]
+    assert "--branch" in argv
+    assert "ai/fix/9-x" in argv
+    assert "--reset-base" not in argv
+
+
+def test_organ_worktree_add_issue_to_pr_still_resets_base(monkeypatch):
+    captured: list[list[str]] = []
+
+    def fake_run(main, argv):
+        captured.append(argv)
+        return {"ok": True, "worktree": "/tmp/wt"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    fala_organ._handle(
+        "worktree_add",
+        {"repo": "a/b", "live": False, "config_path": "/tmp/c.yaml"},
+        {"make_branch": {"branch": "ai/fix/1-x"}},
+    )
+    assert "--reset-base" in captured[0]
+    assert "ai/fix/1-x" in captured[0]
+
+
+def test_organ_red_gate_does_not_reach_pr_merge(monkeypatch):
+    """Fail-closed atom result: Fala would raise before conducting pr_merge."""
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda main, argv: {"ok": False, "error": "local test suite failed", "_exit": 1},
+    )
+    result = fala_organ._handle(
+        "test_local",
+        {},
+        {"worktree_add": {"worktree": "/tmp/wt"}},
+    )
+    assert result["ok"] is False
+    assert result["_exit"] == 1
+    assert not result.get("skipped")
+
+    called = []
+
+    def boom(main, argv):
+        called.append(argv)
+        raise AssertionError("pr_merge must not run after red local tests")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    assert called == []
