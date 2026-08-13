@@ -189,3 +189,46 @@ executor:
     assert argv[0] == "pi"
     assert argv[argv.index("--model") + 1] == "omniroute/pi"
     assert "-p" in argv
+
+
+def test_load_config_omitted_command_live_does_not_invent_pi(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  agent: pi
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="command omitted"):
+        load_config(cfg_path)
+
+
+def test_load_config_live_command_without_agent_uses_binary_label(
+    tmp_path: Path, monkeypatch
+):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  command: omp
+  args: ["-p", "{{prompt}}"]
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.agent_command == "omp"
+    assert cfg.agent == "omp"
+

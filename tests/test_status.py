@@ -25,6 +25,7 @@ repos:
 executor:
   enabled: {str(executor).lower()}
   agent: grok
+  command: grok
 merge:
   enabled: {str(merge).lower()}
   require_checks: true

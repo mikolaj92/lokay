@@ -6,7 +6,7 @@ code paths (and rejected by tests):
 | Pattern | Why |
 |---------|-----|
 | `fake` / `stub` / `mock` / `noop` agent labels | Pretend work |
-| Silent agent inventing (empty → default name) | Hides misconfig |
+| Silent agent inventing (empty/omitted → default name) | Hides misconfig |
 | `execute=True` while `executor.enabled=false` treated as success | Silent no-op |
 | Plan-as-success when live execute was requested | Lies about work done |
 
@@ -34,6 +34,11 @@ The goal passed to the harness is always the same: implement the issue (or repai
 - Empty `executor.agent` / `LOKAY_AGENT` → error (no silent default).
 - `LOKAY_AGENT=fake|stub|mock|noop` → error.
 - Empty `executor.command` or `executor.args` → error.
+- Omitted `executor.command` when `mode=live` or `executor.enabled` → error
+  (no silent `pi` invent). Dry-run + executor off may still document Pi.
+- YAML/env flags (`executor.enabled`, `merge.*`, `github.allow_unassigned`,
+  repo `enabled`) parse `false`/`true`/`0`/`1`/actual bool. `bool("false")`
+  is True in Python — the loader does not use that.
 - `lokay-run-agent --live` without live mode + executor enabled → `ok: false` / refused.
 - `run_agent(execute=True)` with executor off → raise.
 

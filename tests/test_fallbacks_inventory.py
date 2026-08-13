@@ -146,6 +146,8 @@ repos:
     clone_path: {tmp_path}
 executor:
   enabled: false
+  command: true
+  args: ["{{prompt}}"]
 limits:
   max_triage_per_tick: 1
   max_issues_per_tick: 0

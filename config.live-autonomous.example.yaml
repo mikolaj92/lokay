@@ -46,10 +46,12 @@ executor:
     - --no-session
   max_turns: 40
   timeout_seconds: 1800
-  always_approve: true
+  # Approval flags belong in args above (Pi: --approve). No always_approve knob.
 
+# Live + executor.enabled requires an explicit command (this file sets pi).
+# Quoted "false"/"true" parse as booleans. Self-repair is one Fala path
+# (no limits.max_self_repair_attempts retry knob).
 limits:
-  max_self_repair_attempts: 2
   max_request_changes_per_pr: 2
   max_repairs_per_tick: 1
   max_triage_per_tick: 5

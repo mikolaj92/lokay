@@ -45,12 +45,16 @@ executor:
     - --no-session
   max_turns: 40
   timeout_seconds: 1800
-  always_approve: true
+  # Approval flags belong in args above (Pi: --approve). No always_approve knob —
+  # that would be unused vendor-specific lying config.
 
+# Quoted YAML strings like "false" are parsed as false (not Python bool("false")).
+# Empty/omitted executor.command fails closed when mode=live or executor.enabled
+# (no silent pi invent). Dry-run + executor off may still document Pi as here.
 
-# Dedicated self-repair uses its own bounded agent-attempt budget.
+# Self-repair is one bounded Fala path — not a config retry loop.
+# Do not add limits.max_self_repair_attempts (unused knobs are lies).
 limits:
-  max_self_repair_attempts: 2
   # After this many request_changes reviews on one PR, label ai:needs-review
   # and stop auto repair/re-review thrash (default 2).
   max_request_changes_per_pr: 2

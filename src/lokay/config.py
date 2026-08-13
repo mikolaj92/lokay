@@ -12,6 +12,61 @@ DEFAULT_CONFIG_CANDIDATES = (
     Path(os.path.expanduser("~/.lokay/config.yaml")),
 )
 
+_TRUE = frozenset({"1", "true", "yes", "on"})
+_FALSE = frozenset({"0", "false", "no", "off"})
+_STUB_AGENTS = frozenset({"fake", "stub", "mock", "noop"})
+# Documented example harness for dry-run + executor off only — never invented
+# when mode=live or executor.enabled (NO_STUBS / fail closed).
+_PI_EXAMPLE_AGENT = "pi"
+_PI_EXAMPLE_COMMAND = "pi"
+
+
+def parse_bool(value: Any, *, default: bool | None = None) -> bool:
+    """Parse YAML/env booleans fail-closed.
+
+    ``bool("false")`` is True in Python — never use that for config flags.
+    Accepts actual bool, ``0``/``1``, and strings
+    ``true``/``false``/``yes``/``no``/``on``/``off`` (any case).
+    """
+    if value is None:
+        if default is None:
+            raise ValueError("missing boolean")
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text in _TRUE:
+        return True
+    if text in _FALSE:
+        return False
+    raise ValueError(f"invalid boolean {value!r}")
+
+
+def _yaml_flag(data: dict[str, Any], key: str, default: bool) -> bool:
+    if key not in data:
+        return default
+    return parse_bool(data[key])
+
+
+def _mapping(raw: Any, name: str) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{name} must be a mapping")
+    return raw
+
+
+def _optional_text(data: dict[str, Any], key: str) -> tuple[bool, str]:
+    """Return ``(omitted, stripped_text)``. Explicit null/empty is not omitted."""
+    if key not in data:
+        return True, ""
+    raw = data[key]
+    if raw is None:
+        return False, ""
+    return False, str(raw).strip()
+
 
 @dataclass
 class RepoConfig:
@@ -34,11 +89,12 @@ class Config:
     pr_labels: list[str] = field(default_factory=lambda: ["ai:generated", "ai:pr-opened"])
     repos: list[RepoConfig] = field(default_factory=list)
     executor_enabled: bool = False
-    agent: str = "pi"  # log label only
-    agent_command: str = "pi"  # harness binary on PATH (executor.command)
+    agent: str = "pi"  # log label; YAML omitted invents this only in dry-run + executor off
+    agent_command: str = "pi"  # harness binary; same: no silent pi when live / enabled
     agent_model: str | None = "omniroute/pi"
     # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
     # Empty {model} drops a preceding flag + {model} pair.
+    # Harness flags such as Pi ``--approve`` belong here — there is no always_approve knob.
     agent_args: list[str] = field(
         default_factory=lambda: [
             "-p",
@@ -51,7 +107,6 @@ class Config:
     )
     max_turns: int = 40
     timeout_seconds: int = 1800
-    always_approve: bool = True  # kept for harness templates that care
     merge_enabled: bool = False
     require_checks: bool = False
     require_llm_review: bool = True  # structured executor review before auto-merge
@@ -65,7 +120,6 @@ class Config:
     max_triage_per_tick: int = 5
     max_repairs_per_tick: int = 1
     max_request_changes_per_pr: int = 2  # then escalate to ai:needs-review
-    max_self_repair_attempts: int = 2
     max_failures_before_block: int = 2
     min_free_gb: float = 2.0
     # Incident filing target + spam control (preflight / recovery).
@@ -139,7 +193,7 @@ def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
                 name=str(raw["name"]),
                 clone_path=_expand(raw["clone_path"]),
                 priority=int(raw.get("priority", 10)),
-                enabled=bool(raw.get("enabled", True)),
+                enabled=_yaml_flag(raw, "enabled", True),
                 note=str(raw.get("note") or ""),
             )
         )
@@ -178,15 +232,23 @@ def _load_repos(data: dict[str, Any], cfg_path: Path) -> list[RepoConfig]:
     return repos
 
 
-def _env_truthy(name: str) -> bool | None:
+def _env_bool(name: str) -> bool | None:
     """Return True/False if env is set, else None (leave config file value)."""
     raw = os.environ.get(name)
     if raw is None or not str(raw).strip():
         return None
-    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        return parse_bool(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name}={raw!r} is not a boolean") from exc
 
 
-def apply_env_overrides(cfg: Config) -> Config:
+def apply_env_overrides(
+    cfg: Config,
+    *,
+    agent_omitted: bool = False,
+    command_omitted: bool = False,
+) -> Config:
     """Apply optional process env overrides for continuous/live mill.
 
     Safe defaults stay in config.yaml; the factory can enable live milling
@@ -202,37 +264,74 @@ def apply_env_overrides(cfg: Config) -> Config:
     mode = (os.environ.get("LOKAY_MODE") or "").strip().lower()
     if mode in {"live", "dry-run"}:
         cfg.mode = mode
-    v = _env_truthy("LOKAY_EXECUTOR_ENABLED")
+    v = _env_bool("LOKAY_EXECUTOR_ENABLED")
     if v is not None:
         cfg.executor_enabled = v
-    agent = (os.environ.get("LOKAY_AGENT") or "").strip().lower()
-    if agent:
-        if agent in {"fake", "stub", "mock", "noop"}:
+    agent_env = (os.environ.get("LOKAY_AGENT") or "").strip().lower()
+    if agent_env:
+        if agent_env in _STUB_AGENTS:
             raise ValueError(
-                f"LOKAY_AGENT={agent!r} forbidden — no stubs"
+                f"LOKAY_AGENT={agent_env!r} forbidden — no stubs"
             )
-        cfg.agent = agent
-    # Empty agent is misconfig — never re-fill with a silent default.
-    if not (cfg.agent or "").strip():
-        raise ValueError(
-            "executor.agent / LOKAY_AGENT empty — set a non-empty harness label"
-        )
-    if cfg.agent in {"fake", "stub", "mock", "noop"}:
-        raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs")
-    if not (cfg.agent_command or "").strip():
-        raise ValueError("executor.command empty — set harness binary")
-    if not (cfg.agent_args or []):
-        raise ValueError("executor.args empty — set argv template")
-    v = _env_truthy("LOKAY_MERGE_ENABLED")
+        cfg.agent = agent_env
+        agent_omitted = False
+    _resolve_harness(
+        cfg, agent_omitted=agent_omitted, command_omitted=command_omitted
+    )
+    v = _env_bool("LOKAY_MERGE_ENABLED")
     if v is not None:
         cfg.merge_enabled = v
-    v = _env_truthy("LOKAY_REQUIRE_CHECKS")
+    v = _env_bool("LOKAY_REQUIRE_CHECKS")
     if v is not None:
         cfg.require_checks = v
-    v = _env_truthy("LOKAY_REQUIRE_LLM_REVIEW")
+    v = _env_bool("LOKAY_REQUIRE_LLM_REVIEW")
     if v is not None:
         cfg.require_llm_review = v
     return cfg
+
+
+def _resolve_harness(
+    cfg: Config, *, agent_omitted: bool, command_omitted: bool
+) -> None:
+    """Fail closed on empty/omitted harness when live milling or executor is on.
+
+    Dry-run with executor off may keep the documented Pi example. Explicit
+    empty agent/command always fails (you set nothing).
+    """
+    live_or_exec = cfg.live or cfg.executor_enabled
+    command = (cfg.agent_command or "").strip()
+    if not command:
+        if not command_omitted:
+            raise ValueError("executor.command empty — set harness binary")
+        if live_or_exec:
+            raise ValueError(
+                "executor.command omitted — set harness binary "
+                "(no silent pi default when mode=live or executor.enabled)"
+            )
+        command = _PI_EXAMPLE_COMMAND
+    cfg.agent_command = command
+
+    agent = (cfg.agent or "").strip().lower()
+    if not agent:
+        if not agent_omitted:
+            raise ValueError(
+                "executor.agent / LOKAY_AGENT empty — set a non-empty harness label"
+            )
+        if live_or_exec:
+            # Do not invent "pi"; the log label follows the configured binary.
+            agent = Path(command).name.strip().lower()
+            if not agent:
+                raise ValueError(
+                    "executor.agent omitted — set a non-empty harness label "
+                    "(no silent pi default when mode=live or executor.enabled)"
+                )
+        else:
+            agent = _PI_EXAMPLE_AGENT
+    if agent in _STUB_AGENTS:
+        raise ValueError(f"agent={agent!r} forbidden — no stubs")
+    cfg.agent = agent
+    if not (cfg.agent_args or []):
+        raise ValueError("executor.args empty — set argv template")
 
 
 def load_config(path: str | Path | None = None) -> Config:
@@ -253,29 +352,32 @@ def load_config(path: str | Path | None = None) -> Config:
             )
 
     data: dict[str, Any] = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-    gh = data.get("github") or {}
-    ex = data.get("executor") or {}
-    mg = data.get("merge") or {}
-    wt = data.get("worktrees") or {}
-    st = data.get("state") or {}
-    lim = data.get("limits") or {}
+    gh = _mapping(data.get("github"), "github")
+    ex = _mapping(data.get("executor"), "executor")
+    mg = _mapping(data.get("merge"), "merge")
+    wt = _mapping(data.get("worktrees"), "worktrees")
+    st = _mapping(data.get("state"), "state")
+    lim = _mapping(data.get("limits"), "limits")
 
     repos = _load_repos(data, cfg_path)
+    agent_omitted, agent_text = _optional_text(ex, "agent")
+    command_omitted, command_text = _optional_text(ex, "command")
 
     cfg = Config(
         mode=str(data.get("mode", "dry-run")),
         assignee=str(gh.get("assignee", "mikolaj92")),
-        allow_unassigned=bool(gh.get("allow_unassigned", False)),
+        allow_unassigned=_yaml_flag(gh, "allow_unassigned", False),
         ready_label=str(gh.get("ready_label", "ai:ready")),
         blocked_label=str(gh.get("blocked_label", "ai:blocked")),
         needs_feedback_label=str(gh.get("needs_feedback_label", "ai:needs-feedback")),
         branch_prefix=str(gh.get("branch_prefix", "ai/fix")),
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
-        executor_enabled=bool(ex.get("enabled", False)),
-        # Label + binary + argv template. Empty agent/command/args fail closed.
-        agent=str(ex.get("agent", "pi")).strip().lower(),
-        agent_command=str(ex.get("command", "pi")).strip(),
+        executor_enabled=_yaml_flag(ex, "enabled", False),
+        # Label + binary. Omitted command/agent invent Pi only in dry-run +
+        # executor off; live / enabled fail closed (NO_STUBS).
+        agent=agent_text.lower(),
+        agent_command=command_text,
         agent_model=(
             str(ex["model"]) if ex.get("model") not in (None, "") else "omniroute/pi"
         ),
@@ -289,10 +391,9 @@ def load_config(path: str | Path | None = None) -> Config:
         ],
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
-        always_approve=bool(ex.get("always_approve", True)),
-        merge_enabled=bool(mg.get("enabled", False)),
-        require_checks=bool(mg.get("require_checks", False)),
-        require_llm_review=bool(mg.get("require_llm_review", True)),
+        merge_enabled=_yaml_flag(mg, "enabled", False),
+        require_checks=_yaml_flag(mg, "require_checks", False),
+        require_llm_review=_yaml_flag(mg, "require_llm_review", True),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issue_to_pr_per_pass=(
@@ -304,7 +405,6 @@ def load_config(path: str | Path | None = None) -> Config:
         max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
         max_repairs_per_tick=int(lim.get("max_repairs_per_tick", 1)),
         max_request_changes_per_pr=int(lim.get("max_request_changes_per_pr", 2)),
-        max_self_repair_attempts=int(lim.get("max_self_repair_attempts", 2)),
         max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
         incident_repo=str(gh.get("incident_repo") or "mikolaj92/lokay").strip()
@@ -314,7 +414,9 @@ def load_config(path: str | Path | None = None) -> Config:
         gh_survey_pace_ms=int(lim.get("gh_survey_pace_ms", 50)),
         config_path=cfg_path,
     )
-    return apply_env_overrides(cfg)
+    return apply_env_overrides(
+        cfg, agent_omitted=agent_omitted, command_omitted=command_omitted
+    )
 
 
 def starter_config_text(*, assignee: str = "mikolaj92", repo: str | None = None, clone: str | None = None) -> str:

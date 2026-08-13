@@ -555,3 +555,9 @@ def test_live_autonomous_example_profile_knobs():
     assert cfg.require_llm_review is True
     assert cfg.max_issue_to_pr_per_pass == 1
     assert cfg.assignee == "mikolaj92"
+    assert not hasattr(cfg, "always_approve")
+    assert not hasattr(cfg, "max_self_repair_attempts")
+    assert "always_approve" not in data.get("executor", {})
+    assert "max_self_repair_attempts" not in data.get("limits", {})
+    assert "always_approve" not in default.get("executor", {})
+    assert "max_self_repair_attempts" not in default.get("limits", {})

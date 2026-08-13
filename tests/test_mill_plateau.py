@@ -20,6 +20,10 @@ mode: live
 repos:
   - name: a/b
     clone_path: {tmp_path}
+executor:
+  enabled: false
+  command: true
+  args: ["{{prompt}}"]
 worktrees:
   root: {tmp_path / "wt"}
 state:
@@ -67,6 +71,10 @@ mode: live
 repos:
   - name: a/b
     clone_path: {tmp_path}
+executor:
+  enabled: false
+  command: true
+  args: ["{{prompt}}"]
 worktrees:
   root: {tmp_path / f"wt-{index}"}
 state:
@@ -188,6 +196,7 @@ repos:
 executor:
   enabled: true
   agent: grok
+  command: grok
 merge:
   enabled: true
   require_checks: false
@@ -238,6 +247,10 @@ mode: live
 repos:
   - name: a/b
     clone_path: {tmp_path}
+executor:
+  enabled: false
+  command: true
+  args: ["{{prompt}}"]
 worktrees:
   root: {tmp_path / "wt"}
 state:
@@ -272,6 +285,8 @@ repos:
     clone_path: {tmp_path}
 executor:
   enabled: true
+  command: true
+  args: ["{{prompt}}"]
 merge:
   enabled: true
 worktrees:

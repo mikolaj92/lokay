@@ -37,11 +37,11 @@ def _incident_number(preflight: dict[str, Any], repo: str) -> int | None:
 def run_self_repair(
     config_path: str | None,
     preflight: dict[str, Any],
-    *,
-    max_attempts: int | None = None,
 ) -> dict[str, Any]:
-    """Run exactly one bounded emergency Fala path, or fail closed."""
-    del max_attempts  # Fala path is deliberately one bounded recovery attempt.
+    """Run exactly one bounded emergency Fala path, or fail closed.
+
+    Attempt budget is the Fala path itself — not ``limits.max_self_repair_attempts``.
+    """
     cfg = load_config(config_path)
     repo = _incident_repo(cfg)
     issue = _incident_number(preflight, repo)

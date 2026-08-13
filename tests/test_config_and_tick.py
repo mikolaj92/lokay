@@ -1,10 +1,25 @@
 from pathlib import Path
 
+import pytest
+
 from lokay.agent import build_agent_argv
 from lokay.compose.tick import compose_tick
-from lokay.config import Config, RepoConfig, load_config
+from lokay.config import Config, RepoConfig, load_config, parse_bool
 from lokay.git_branch import branch_for_issue
 from lokay.proc.make_branch import main as make_branch_main
+
+
+def _clear_mill_env(monkeypatch):
+    for key in (
+        "LOKAY_MODE",
+        "LOKAY_EXECUTOR_ENABLED",
+        "LOKAY_AGENT",
+        "LOKAY_MERGE_ENABLED",
+        "LOKAY_REQUIRE_CHECKS",
+        "LOKAY_REQUIRE_LLM_REVIEW",
+        "LOKAY_CONFIG",
+    ):
+        monkeypatch.delenv(key, raising=False)
 
 
 def test_load_example(tmp_path: Path, monkeypatch):
@@ -104,6 +119,7 @@ repos:
 executor:
   enabled: false
   agent: grok
+  command: grok
 merge:
   enabled: false
   require_checks: true
@@ -179,6 +195,7 @@ def test_make_branch_atomic(capsys):
 
 def test_tick_offline_survey(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    _clear_mill_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -207,6 +224,7 @@ def test_mill_offline_one_pass(tmp_path: Path, monkeypatch):
     from lokay.compose.mill import compose_mill
 
     monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    _clear_mill_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -226,7 +244,8 @@ state:
     assert result.get("passes") == 1
 
 
-def test_tick_refuses_live_when_mode_dry(tmp_path: Path):
+def test_tick_refuses_live_when_mode_dry(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -341,3 +360,211 @@ def test_agent_executor_environment_strips_health_lease(tmp_path):
     runner = CapturingRunner()
     run_agent(runner, cfg, worktree=tmp_path, prompt="x", execute=True)
     assert runner.spec.env["LOKAY_HEALTH_LEASE"] == ""
+
+
+def test_parse_bool_string_false_is_false():
+    assert parse_bool("false") is False
+    assert parse_bool("FALSE") is False
+    assert parse_bool("0") is False
+    assert parse_bool(0) is False
+    assert parse_bool(False) is False
+    assert parse_bool("true") is True
+    assert parse_bool("1") is True
+    assert parse_bool(1) is True
+    assert parse_bool(True) is True
+    assert parse_bool(None, default=False) is False
+    assert parse_bool(None, default=True) is True
+    with pytest.raises(ValueError, match="invalid boolean"):
+        parse_bool("maybe")
+
+
+def test_yaml_quoted_false_does_not_enable_flags(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+github:
+  allow_unassigned: "false"
+repos:
+  - name: a/off
+    clone_path: {tmp_path}
+    enabled: "false"
+  - name: a/on
+    clone_path: {tmp_path}
+    enabled: "true"
+executor:
+  enabled: "false"
+  agent: grok
+  command: grok
+  args: ["{{prompt}}"]
+merge:
+  enabled: "false"
+  require_checks: "false"
+  require_llm_review: "false"
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.allow_unassigned is False
+    assert cfg.executor_enabled is False
+    assert cfg.merge_enabled is False
+    assert cfg.require_checks is False
+    assert cfg.require_llm_review is False
+    by_name = {r.name: r.enabled for r in cfg.repos}
+    assert by_name["a/off"] is False
+    assert by_name["a/on"] is True
+    assert [r.name for r in cfg.active_repos()] == ["a/on"]
+
+
+def test_yaml_quoted_true_enables_flags(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+github:
+  allow_unassigned: "true"
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: "true"
+  agent: grok
+  command: grok
+  args: ["{{prompt}}"]
+merge:
+  enabled: "true"
+  require_checks: "1"
+  require_llm_review: "yes"
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.allow_unassigned is True
+    assert cfg.executor_enabled is True
+    assert cfg.merge_enabled is True
+    assert cfg.require_checks is True
+    assert cfg.require_llm_review is True
+
+
+def test_invalid_yaml_boolean_fails_closed(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: maybe
+  command: true
+  args: ["{{prompt}}"]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="invalid boolean"):
+        load_config(cfg_path)
+
+
+def test_omitted_command_dry_run_disabled_documents_pi(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert cfg.executor_enabled is False
+    assert cfg.agent_command == "pi"
+    assert cfg.agent == "pi"
+
+
+def test_omitted_command_fails_when_live(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: false
+  agent: grok
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="command omitted"):
+        load_config(cfg_path)
+
+
+def test_omitted_command_fails_when_executor_enabled(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  agent: pi
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="command omitted"):
+        load_config(cfg_path)
+
+
+def test_env_enable_without_command_fails_closed(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: false
+  agent: grok
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LOKAY_MODE", "live")
+    monkeypatch.setenv("LOKAY_EXECUTOR_ENABLED", "1")
+    with pytest.raises(ValueError, match="command omitted"):
+        load_config(cfg_path)
+
+
+def test_dead_knobs_are_not_loaded(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: false
+  command: true
+  args: ["{{prompt}}"]
+  always_approve: true
+limits:
+  max_self_repair_attempts: 9
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(cfg_path)
+    assert not hasattr(cfg, "always_approve")
+    assert not hasattr(cfg, "max_self_repair_attempts")
+
