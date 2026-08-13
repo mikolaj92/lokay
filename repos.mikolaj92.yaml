@@ -21,6 +21,9 @@ repos:
   - name: mikolaj92/reviewkit
     clone_path: /Users/mikomac/Developer/OSS/reviewkit
     priority: 80
+  - name: mikolaj92/heimdall
+    clone_path: /Users/mikomac/Developer/OSS/heimdall
+    priority: 80
   - name: mikolaj92/Docxtor
     clone_path: /Users/mikomac/Developer/OSS/Docxtor
     priority: 80
