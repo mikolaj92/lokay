@@ -8,13 +8,18 @@ CLI contract and invokes ``graph_run.run_path``.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any
 
 from lokay.compose.tick import compose_tick
-from lokay.envelope import emit_exit
+from lokay.envelope import emit_exit, err
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
+
+
+def _offline() -> bool:
+    return os.environ.get("LOKAY_OFFLINE", "").strip() in {"1", "true", "yes"}
 
 
 def compose_factory_pass(
@@ -24,8 +29,20 @@ def compose_factory_pass(
     db_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Run one parent Fala pass; child workflow paths use another journal."""
-    if __import__("os").environ.get("LOKAY_OFFLINE", "").strip() in {"1", "true", "yes"}:
-        return compose_tick(config_path=config_path, live=live)
+    if live and _offline():
+        # Fail closed: a production --live mill must not skip Fala.
+        return err(
+            "live mill cannot skip Fala (LOKAY_OFFLINE is set)",
+            health="offline",
+            live=True,
+            offline=True,
+            engine="fala",
+            kind="factory_pass",
+        )
+    if _offline():
+        # Test-only escape: hermetic compose_tick (factory_begin returns the
+        # offline envelope immediately — not a second live policy brain).
+        return compose_tick(config_path=config_path, live=False)
     parent_db = Path(db_path) if db_path else Path.home() / ".lokay" / "fala" / "factory"
     result = run_path(
         path_id="factory_pass",

@@ -216,8 +216,8 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
 
     if atom == "factory_tick":
-        # Legacy thin bridge (in-process spine). Parent factory_pass no longer
-        # conducts this node — prefer the survey→plan→dispatch atoms below.
+        # Legacy alias (not in parent factory_pass). Invokes the same Fala
+        # factory_pass mill as lokay-factory-pass — not an in-process spine.
         return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
 
     if atom == "factory_begin":

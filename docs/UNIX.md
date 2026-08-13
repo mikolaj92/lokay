@@ -55,13 +55,16 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-dispatch-implement` | intake gate + up to K issue_to_pr (serial budget) |
 | `lokay-compute-health` | remaining + honest mill health |
 | `lokay-record-pass` | write last-pass.json receipt |
+| `lokay-factory-pass` / `lokay-factory-tick` | parent Fala `factory_pass` (one mill) |
 | `lokay-mill` / `lokay-status` | continuous factory |
 | `lokay-wake` | event wake: reason → `issue_triage` / `pr_triage` / bounded `factory_pass` |
 | `lokay status --human` | residual human mailbox (exception report; not a mill brake) |
 
 **Factory-pass law:** Fala owns pass order (`factory_pass` conduction). Atoms
-above each do one job and return a JSON envelope. `compose/tick.py` must not
-grow back into a multi-repo brain — use new `proc/` atoms + Fala edges.
+above each do one job and return a JSON envelope. `lokay-factory-tick` and
+`lokay-factory-pass` both invoke that parent path — not a second in-process
+mill. `compose/tick.py` is the hermetic test spine only; do not grow it back
+into a multi-repo brain — use new `proc/` atoms + Fala edges.
 
 **Minimize human:** humans author issues; atoms CLOSE / SPLIT / READY+implement.
 `ai:needs-feedback` is rare residual — mill keeps other repos moving.
