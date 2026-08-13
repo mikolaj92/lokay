@@ -17,10 +17,20 @@ def is_manual_pr(pr: dict[str, Any]) -> bool:
 
 
 def run_proc(main_fn: Callable[..., int], argv: list[str]) -> dict[str, Any]:
-    """Run one atom main, capture the last JSON envelope on stdout."""
+    """Run one atom main, capture the last JSON envelope on stdout.
+
+    Argparse ``SystemExit`` becomes ``ok: false`` so one bad flag cannot
+    kill a factory-pass survey organ (and skip survey.json / plan.json).
+    """
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        code = main_fn(argv)
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            code = main_fn(argv)
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 1
+        msg = (err.getvalue() or buf.getvalue() or f"exited {exc.code}").strip()
+        return {"ok": False, "error": msg or "process SystemExit", "_exit": code}
     lines = buf.getvalue().strip().splitlines()
     if not lines:
         return {"ok": False, "error": "empty process output", "_exit": code}
