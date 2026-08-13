@@ -158,12 +158,12 @@ def run_path(
         ),
         "issue_to_pr": (
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
-            "worktree_add", "plan_issue", "run_agent", "commit_all", "test_local",
-            "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
+            "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
+            "test_local", "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
         ),
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": (
-            "pr_checks", "stage_repairing", "worktree_add", "run_agent",
+            "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
             "commit_all", "test_local", "push",
         ),
         "pr_triage": (

@@ -89,16 +89,21 @@ def test_describe_issue_to_pr_graph():
     assert ids[0] == "get_issue"
     assert "run_agent" in ids
     assert "plan_issue" in ids
+    assert "localize" in ids
     assert "pr_create" in ids
     assert "stage_implementing" in ids
     assert "stage_pr_open" in ids
-    # plan before agent; agent depends on plan + worktree
+    # plan before localize before agent; agent depends on plan + localize + worktree
     plan = next(n for n in path["nodes"] if n["id"] == "plan_issue")
     assert "worktree_add" in plan["conduction"]
     assert "get_issue" in plan["conduction"]
+    localize = next(n for n in path["nodes"] if n["id"] == "localize")
+    assert "plan_issue" in localize["conduction"]
+    assert "worktree_add" in localize["conduction"]
     agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
     assert "worktree_add" in agent["conduction"]
     assert "plan_issue" in agent["conduction"]
+    assert "localize" in agent["conduction"]
     assert "get_issue" in agent["conduction"]
     worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
     assert "stage_implementing" in worktree["conduction"]
@@ -107,15 +112,19 @@ def test_describe_issue_to_pr_graph():
 
 
 def test_issue_to_pr_plan_issue_before_run_agent():
-    """Serial evidence path: worktree_add → plan_issue → run_agent."""
+    """Serial evidence path: worktree_add → plan_issue → localize → run_agent."""
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
     by_id = {n["id"]: n for n in path["nodes"]}
     assert "plan_issue" in by_id
+    assert "localize" in by_id
     assert "plan_issue" in by_id["run_agent"]["conduction"]
+    assert "localize" in by_id["run_agent"]["conduction"]
+    assert "plan_issue" in by_id["localize"]["conduction"]
     assert "worktree_add" in by_id["plan_issue"]["conduction"]
-    # plan_issue must not depend on run_agent (ordering: plan before agent)
+    # plan_issue / localize must not depend on run_agent (ordering before agent)
     assert "run_agent" not in by_id["plan_issue"]["conduction"]
+    assert "run_agent" not in by_id["localize"]["conduction"]
 
 
 def test_describe_includes_pr_repair():
@@ -326,12 +335,12 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
         },
         "issue_to_pr": {
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
-            "worktree_add", "plan_issue", "run_agent", "commit_all", "test_local",
-            "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
+            "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
+            "test_local", "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
         },
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {
-            "pr_checks", "stage_repairing", "worktree_add", "run_agent",
+            "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
             "commit_all", "test_local", "push",
         },
         "pr_triage": {

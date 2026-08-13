@@ -19,6 +19,19 @@ from lokay.proc._common import runner
 from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt, self_repair_prompt
 
 
+def _localize_paths(up: dict[str, dict[str, Any]]) -> list[str]:
+    """Paths from localize conduction; empty means fail-closed before agent."""
+    raw = up.get("localize", {}).get("paths") or []
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        rel = str(item or "").strip()
+        if rel:
+            out.append(rel)
+    return out
+
+
 def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Map upstream step id → its values dict."""
     raw = sdk.conduction(manifest)
@@ -98,6 +111,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         list_prs,
         make_branch,
         plan_issue,
+        localize,
         plan_pass,
         pr_checks,
         pr_create,
@@ -695,6 +709,61 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         finally:
             Path(issue_path).unlink(missing_ok=True)
 
+    if atom == "localize":
+        worktree = str(up.get("worktree_add", {}).get("worktree") or inputs.get("worktree") or "")
+        assert worktree
+        argv = [*cfg, *live, "--worktree", worktree]
+        issue_path = ""
+        checks_path = ""
+        try:
+            if repair_mode:
+                checks_text = str(
+                    up.get("pr_checks", {}).get("text")
+                    or inputs.get("checks_text")
+                    or ""
+                )
+                review_text = json.dumps(
+                    inputs.get("review") or {}, ensure_ascii=False, sort_keys=True
+                )
+                seed = "\n\n".join(
+                    part for part in (checks_text, review_text) if part and str(part).strip()
+                )
+                if not seed.strip():
+                    seed = f"repair PR #{pr_number} in {repo}" if pr_number else f"repair in {repo}"
+                with tempfile.NamedTemporaryFile(
+                    "w", suffix=".md", delete=False, encoding="utf-8"
+                ) as fh:
+                    fh.write(seed)
+                    checks_path = fh.name
+                argv.extend(["--seed-file", checks_path])
+                if repo:
+                    argv.extend(["--repo", repo])
+            else:
+                issue_raw = up.get("get_issue", {}).get("issue") or {}
+                if not issue_raw and issue_number is not None and repo:
+                    issue_raw = {
+                        "repo": repo,
+                        "number": issue_number,
+                        "title": str(inputs.get("title") or ""),
+                        "body": str(inputs.get("body") or ""),
+                        "labels": [],
+                        "assignees": [],
+                        "url": str(inputs.get("url") or ""),
+                    }
+                assert issue_raw
+                with tempfile.NamedTemporaryFile(
+                    "w", suffix=".json", delete=False, encoding="utf-8"
+                ) as fh:
+                    json.dump(issue_raw, fh, ensure_ascii=False)
+                    issue_path = fh.name
+                argv.extend(["--issue-json", issue_path])
+            return _run_atom_main(localize.main, argv)
+        finally:
+            if issue_path:
+                Path(issue_path).unlink(missing_ok=True)
+            if checks_path:
+                Path(checks_path).unlink(missing_ok=True)
+
     if atom == "run_agent":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         branch = str(
@@ -704,6 +773,21 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             or ""
         )
         assert worktree
+        # Fail-closed: localize must produce a non-empty path list before agent.
+        if "localize" not in up:
+            return {
+                "ok": False,
+                "error": "refusing run_agent: localize conduction missing",
+                "reason": "localize_missing",
+            }
+        paths = _localize_paths(up)
+        if not paths:
+            return {
+                "ok": False,
+                "error": "refusing run_agent: localize produced no edit paths",
+                "reason": "localize_empty",
+                "localize": up.get("localize") or {},
+            }
         if repair_mode:
             assert pr_number is not None and branch
             checks_text = str(
@@ -717,12 +801,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
                 branch=branch,
                 checks_text=checks_text,
                 review_text=json.dumps(inputs.get("review") or {}, ensure_ascii=False, sort_keys=True),
+                paths=paths,
             )
         else:
             issue_raw = up.get("get_issue", {}).get("issue") or {}
             issue = Issue.from_dict(issue_raw) if issue_raw else None
             assert issue is not None
-            prompt = issue_fix_prompt(issue, branch=branch)
+            prompt = issue_fix_prompt(issue, branch=branch, paths=paths)
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
             fh.write(prompt)
             prompt_path = fh.name

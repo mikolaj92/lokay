@@ -51,13 +51,13 @@ def commit_all(runner: Runner, worktree: Path, message: str, *, live: bool) -> b
     if not live:
         return False
     runner.run_checked(git_spec(["add", "-A"], cwd=worktree), live=True)
-    # Plan evidence must land on the branch even when a repo gitignores `.lokay/`.
-    approach = worktree / ".lokay" / "approach.md"
-    if approach.is_file():
-        runner.run_checked(
-            git_spec(["add", "-f", "--", ".lokay/approach.md"], cwd=worktree),
-            live=True,
-        )
+    # Plan / localization evidence must land even when a repo gitignores `.lokay/`.
+    for rel in (".lokay/approach.md", ".lokay/localize.json"):
+        if (worktree / rel).is_file():
+            runner.run_checked(
+                git_spec(["add", "-f", "--", rel], cwd=worktree),
+                live=True,
+            )
     status = runner.run(git_spec(["diff", "--cached", "--quiet"], cwd=worktree), live=True)
     if status.returncode == 0:
         return False

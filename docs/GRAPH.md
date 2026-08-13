@@ -121,14 +121,15 @@ get_issue
   └─→ make_branch
         └─→ worktree_add
               └─→ plan_issue   ← deterministic approach.md (trust-with-evidence)
-                    └─→ run_agent     ← only non-deterministic coding node
-                          └─→ commit_all
-                                └─→ test_local   ← local pytest; skip if no suite
-                                      └─→ push
-                                            └─→ pr_create
-                                                  └─→ stage_pr_open   ← issue ledger: ai:pr-open
-                                                        └─→ list_prs
-                                                              └─→ pr_label
+                    └─→ localize     ← Agentless file-before-patch path list
+                          └─→ run_agent     ← only non-deterministic coding node
+                                └─→ commit_all
+                                      └─→ test_local   ← local pytest; skip if no suite
+                                            └─→ push
+                                                  └─→ pr_create
+                                                        └─→ stage_pr_open   ← issue ledger: ai:pr-open
+                                                              └─→ list_prs
+                                                                    └─→ pr_label
 ```
 
 `plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree
@@ -138,6 +139,14 @@ Mostly deterministic extraction from the issue body (+ path hints). Optional
 slot. This is **evidence for intentional issues**, not a human approval gate and
 not `NEEDS_HUMAN` by default. Later `pr_review` may compare the diff to the plan
 as a soft signal (missing/misaligned approach → `nits` only).
+
+`localize` (`lokay-localize`) is a separate deterministic atom (Agentless
+localization → repair → validation): seed text (issue + approach.md) plus the
+worktree tree → non-empty edit path list (written to `.lokay/localize.json`).
+Fala conducts it **before** `run_agent`. Empty list fails closed — the agent
+does not start. Not an embedding service and not a second planner; one job:
+paths. The agent prompt receives that scope so patches stay on listed files/
+directories instead of roaming the full checkout.
 
 ### `issue_triage` (inbox → labels / split)
 
@@ -175,10 +184,11 @@ ticket). K is an optional pass budget, not concurrent worktrees/Pi/tmux.
 pr_checks
   └─→ stage_repairing   ← issue ledger: ai:repairing
         └─→ worktree_add
-              └─→ run_agent   ← repair prompt (only non-deterministic node)
-                    └─→ commit_all
-                          └─→ test_local   ← local pytest; skip if no suite
-                                └─→ push
+              └─→ localize    ← paths from checks/review seed + tree
+                    └─→ run_agent   ← repair prompt (only non-deterministic node)
+                          └─→ commit_all
+                                └─→ test_local   ← local pytest; skip if no suite
+                                      └─→ push
 ```
 
 ### `pr_triage` (merge policy → close issue)
@@ -210,8 +220,10 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **push** / **pr_merge** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts).
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md).
-- **plan_issue** is deterministic evidence before that coding slot (serial path:
-  `worktree_add → plan_issue → run_agent`).
+- **plan_issue** is deterministic evidence before that coding slot.
+- **localize** is deterministic Agentless path selection immediately before the
+  coding slot (serial path: `worktree_add → plan_issue → localize → run_agent`).
+  Missing/empty localize fails closed in the organ — agent does not start.
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run
