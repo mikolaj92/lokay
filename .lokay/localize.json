@@ -1,28 +1,28 @@
 {
   "paths": [
-    "repos.mikolaj92.yaml",
-    "src/lokay/compose/issue_to_pr.py",
-    "src/lokay/proc/pr_create.py",
     "src/lokay/proc/test_local.py",
-    "tests/test_repos_catalog.py",
-    "tests/test_worktree_reset.py",
+    "src/lokay/proc/unbounded_detect.py",
+    "src/lokay/proc/unbounded_park.py",
+    "tests/test_unbounded_detect.py",
+    "tests/test_unbounded_park.py",
     "src/lokay/approach_plan.py",
-    "src/lokay/git_worktree.py",
+    "src/lokay/git_host_ff.py",
     "src/lokay/pr_review.py",
     "src/lokay/pr_review_io.py",
+    "src/lokay/proc/host_ff.py",
     "src/lokay/proc/plan_issue.py",
     "src/lokay/proc/plan_pass.py",
     "src/lokay/proc/pr_review.py",
-    "src/lokay/proc/repos_clone_missing.py",
-    "src/lokay/proc/repos_list.py",
-    "src/lokay/proc/survey_repos.py",
-    "src/lokay/proc/worktree_add.py",
+    "src/lokay/proc/repo_mutex.py",
+    "tests/test_host_ff.py",
     "tests/test_intake_mill_gate.py",
     "tests/test_localize.py",
     "tests/test_plan_issue.py",
     "tests/test_pr_review.py",
     "tests/test_pr_review_idempotency.py",
+    "tests/test_repo_mutex.py",
     "tests/test_test_local.py",
+    "repos.mikolaj92.yaml",
     "docs/ALPINE.md",
     "docs/AUTONOMY.md",
     "docs/FALLBACKS.md",
@@ -42,28 +42,26 @@
     "src/lokay/agent.py"
   ],
   "source": "deterministic",
-  "seed_paths": [
-    "repos.mikolaj92.yaml"
-  ],
+  "seed_paths": [],
   "matched_tokens": [
-    "pr_create",
-    "test_local",
-    "worktree",
-    "issue_to_pr",
-    "log",
-    "repos",
     "mikolaj92",
-    "reset",
+    "Mutex",
+    "host",
+    "test_local",
+    "Host",
+    "mutex",
     "plan",
     "review",
-    "gate"
+    "gate",
+    "unbounded",
+    "bounded"
   ],
   "notes": [
     "Agentless-style localization: deterministic paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 207."
+    "Repo tree entries considered: 237."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__97-tick-z-aktualnego-main-albo-fail-closed-43c1d380",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__103-cykl-issue-pr-5-10-min-na-ca-ym-katalogu-ace8f041",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
