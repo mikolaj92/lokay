@@ -97,6 +97,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         survey_prs,
         survey_ready,
         survey_repos,
+        test_local,
         triage_issue,
         intake_issue,
         issue_split,
@@ -722,6 +723,11 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             commit_all.main,
             [*cfg, *live, "--worktree", worktree, "--message", msg],
         )
+
+    if atom == "test_local":
+        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        assert worktree
+        return _run_atom_main(test_local.main, ["--worktree", worktree])
 
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")

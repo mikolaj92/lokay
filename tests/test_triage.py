@@ -189,6 +189,7 @@ def test_pr_repair_path_in_package():
         "worktree_add",
         "run_agent",
         "commit_all",
+        "test_local",
         "push",
     ]
     agent = next(n for n in path["nodes"] if n["id"] == "run_agent")

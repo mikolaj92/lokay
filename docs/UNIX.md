@@ -35,6 +35,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-plan-issue` | write `.lokay/approach.md` before coding (deterministic evidence) |
 | `lokay-run-agent` | **coding harness slot** (binary + args from config only) |
 | `lokay-commit-all` | commit if dirty |
+| `lokay-test-local` | local pytest gate (skip if no suite; fail-closed if red) |
 | `lokay-push` | push (never force) |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
 | `lokay-repos` | list managed repos |
