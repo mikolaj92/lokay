@@ -100,7 +100,7 @@ def test_console_script_wired():
 
 
 def test_closeout_calls_route_atom_not_inline_matrix():
-    src = (ROOT / "src/lokay/proc/closeout_prs.py").read_text(encoding="utf-8")
+    src = (ROOT / "src/lokay/proc/closeout_pr.py").read_text(encoding="utf-8")
     assert "run_pr_route" in src
     assert "decide_auto_merge" not in src
     assert "can_merge" not in src

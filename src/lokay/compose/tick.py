@@ -80,7 +80,7 @@ def _bind_test_patches() -> None:
     collaborators by module attribute; rebind those attributes to this module's
     names so patches on ``tick._run`` / ``tick.run_path`` / composers still apply.
     """
-    import lokay.proc.closeout_prs as closeout_prs
+    import lokay.proc.closeout_pr as closeout_pr
     import lokay.proc.compute_health as compute_health
     import lokay.proc.dispatch_implement as dispatch_implement
     import lokay.proc.dispatch_triage as dispatch_triage
@@ -102,10 +102,10 @@ def _bind_test_patches() -> None:
     plan_pass.is_manual_pr = _is_manual_pr
     resolve_conflicts.run_proc = _run_bound
     resolve_conflicts.is_manual_pr = _is_manual_pr
-    closeout_prs.run_proc = _run_bound
-    closeout_prs.compose_pr_repair = compose_pr_repair
-    closeout_prs.compose_pr_triage = compose_pr_triage
-    closeout_prs.is_manual_pr = _is_manual_pr
+    closeout_pr.run_proc = _run_bound
+    closeout_pr.compose_pr_repair = compose_pr_repair
+    closeout_pr.compose_pr_triage = compose_pr_triage
+    closeout_pr.is_manual_pr = _is_manual_pr
     queue_conflict.run_proc = _run_bound
     dispatch_implement.run_proc = _run_bound
     dispatch_implement.compose_issue_to_pr = compose_issue_to_pr
