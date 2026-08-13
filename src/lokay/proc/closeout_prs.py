@@ -8,7 +8,7 @@ from typing import Any
 from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit, err, ok
-from lokay.merge_policy import WAITING_REASONS, decide_auto_merge
+from lokay.merge_policy import WAITING_REASONS
 from lokay.passkit.support import is_manual_pr, run_proc
 from lokay.passkit.working import (
     load_begin_working,
@@ -19,6 +19,7 @@ from lokay.passkit.working import (
 from lokay.proc import pr_checks as p_checks
 from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live
+from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 
 
@@ -35,7 +36,6 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     executor_enabled = bool(begin.get("executor_enabled"))
     merge_enabled = bool(begin.get("merge_enabled"))
     require_checks = bool(begin.get("require_checks"))
-
     prs_by_repo: dict[str, list[dict[str, Any]]] = {
         k: list(v) for k, v in dict(working.get("prs_by_repo") or {}).items()
     }
@@ -47,12 +47,10 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     mergeable_green = int(working.get("mergeable_green") or 0)
     merge_disabled = int(working.get("merge_disabled") or 0)
     review_limbo = int(working.get("review_limbo") or 0)
-    require_llm_review = bool(begin.get("require_llm_review", True))
 
     for repo_name in list(begin.get("repos") or []):
-        pr_list = list(prs_by_repo.get(repo_name) or [])
         still_open: list[dict[str, Any]] = []
-        for pr in pr_list:
+        for pr in list(prs_by_repo.get(repo_name) or []):
             if is_manual_pr(pr):
                 still_open.append(pr)
                 actions.append(
@@ -67,20 +65,25 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
             pr_num = int(pr["number"])
             head = str(pr.get("head_ref") or "")
             # Conflicts are handled by resolve_conflicts (upstream Fala atom).
-            mergeable = str(pr.get("mergeable") or "").upper()
-            if mergeable in {"CONFLICTING", "DIRTY"}:
+            if str(pr.get("mergeable") or "").upper() in {"CONFLICTING", "DIRTY"}:
                 still_open.append(pr)
                 continue
             chk = run_proc(
-                p_checks.main,
-                [*cfg_flag, "--repo", repo_name, "--pr", str(pr_num)],
+                p_checks.main, [*cfg_flag, "--repo", repo_name, "--pr", str(pr_num)]
             )
             actions.append({"step": "pr_checks", "pr": pr_num, **chk})
             if not chk.get("ok"):
                 still_open.append(pr)
                 continue
-            status = str(chk.get("status") or ("passed" if chk.get("green") else "failed"))
-            if status == "failed":
+            routed = run_pr_route(
+                checks=chk,
+                merge_enabled=merge_enabled,
+                require_checks=require_checks,
+                labels=pr.get("labels"),
+            )
+            route = str(routed.get("route") or "skip")
+            reason = str(routed.get("reason") or "")
+            if route == "repair":
                 needs_repair += 1
                 if live and repair_budget > 0 and executor_enabled and head:
                     repair = compose_pr_repair(
@@ -96,61 +99,41 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                     repair_budget -= 1
                 still_open.append(pr)
                 continue
-            if status == "pending":
-                pending_checks += 1
-                issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
-                if live and issue_n is not None:
-                    staged = run_proc(
-                        p_stage.main,
-                        [
-                            *cfg_flag,
-                            *live_flag,
-                            "--repo",
-                            repo_name,
-                            "--issue",
-                            str(issue_n),
-                            "--stage",
-                            "ci-waiting",
-                        ],
-                    )
-                    actions.append(
-                        {
-                            "step": "stage_ci_waiting",
-                            "repo": repo_name,
-                            "issue": issue_n,
-                            "pr": pr_num,
-                            **staged,
-                        }
-                    )
-                still_open.append(pr)
-                continue
-            if status == "none":
-                if require_checks:
+            if route == "wait":
+                if reason == "checks_pending":
+                    pending_checks += 1
+                    issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
+                    if live and issue_n is not None:
+                        staged = run_proc(
+                            p_stage.main,
+                            [
+                                *cfg_flag,
+                                *live_flag,
+                                "--repo",
+                                repo_name,
+                                "--issue",
+                                str(issue_n),
+                                "--stage",
+                                "ci-waiting",
+                            ],
+                        )
+                        actions.append(
+                            {
+                                "step": "stage_ci_waiting",
+                                "repo": repo_name,
+                                "issue": issue_n,
+                                "pr": pr_num,
+                                **staged,
+                            }
+                        )
+                elif reason == "checks_none_require_checks":
                     no_checks_blocked += 1
-                    still_open.append(pr)
-                    continue
-            elif status not in {"passed", "offline"} and not chk.get("merge_ok"):
+                elif reason == "merge_disabled":
+                    mergeable_green += 1
+                    merge_disabled += 1
                 still_open.append(pr)
                 continue
-            can_merge = bool(chk.get("merge_ok")) or status == "passed" or (
-                status == "none" and not require_checks
-            )
-            if not can_merge:
-                still_open.append(pr)
-                continue
-            if not merge_enabled:
-                # Same decide_auto_merge matrix as pr_merge organ — soft wait.
-                gate = decide_auto_merge(
-                    merge_enabled=False,
-                    require_checks=require_checks,
-                    require_llm_review=require_llm_review,
-                    checks=chk,
-                    pr_labels=pr.get("labels"),
-                )
-                mergeable_green += 1
-                if gate.waiting and gate.reason in WAITING_REASONS:
-                    if gate.reason == "merge_disabled":
-                        merge_disabled += 1
+            if route != "merge":
                 still_open.append(pr)
                 continue
             mergeable_green += 1
@@ -164,9 +147,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 branch=head,
                 live=True,
             )
-            actions.append(
-                {"step": "pr_triage", "pr": pr_num, "branch": head, **tri}
-            )
+            actions.append({"step": "pr_triage", "pr": pr_num, "branch": head, **tri})
             if not tri.get("ok"):
                 still_open.append(pr)
                 continue
