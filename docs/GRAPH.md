@@ -122,11 +122,12 @@ get_issue
               └─→ plan_issue   ← deterministic approach.md (trust-with-evidence)
                     └─→ run_agent     ← only non-deterministic coding node
                           └─→ commit_all
-                                └─→ push
-                                      └─→ pr_create
-                                            └─→ stage_pr_open   ← issue ledger: ai:pr-open
-                                                  └─→ list_prs
-                                                        └─→ pr_label
+                                └─→ test_local   ← local pytest; skip if no suite
+                                      └─→ push
+                                            └─→ pr_create
+                                                  └─→ stage_pr_open   ← issue ledger: ai:pr-open
+                                                        └─→ list_prs
+                                                              └─→ pr_label
 ```
 
 `plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree
@@ -175,7 +176,8 @@ pr_checks
         └─→ worktree_add
               └─→ run_agent   ← repair prompt (only non-deterministic node)
                     └─→ commit_all
-                          └─→ push
+                          └─→ test_local   ← local pytest; skip if no suite
+                                └─→ push
 ```
 
 ### `pr_triage` (merge policy → close issue)
