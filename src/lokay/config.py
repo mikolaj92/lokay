@@ -51,7 +51,6 @@ class Config:
     )
     max_turns: int = 40
     timeout_seconds: int = 1800
-    always_approve: bool = True  # kept for harness templates that care
     merge_enabled: bool = False
     require_checks: bool = False
     require_llm_review: bool = True  # structured executor review before auto-merge
@@ -65,7 +64,6 @@ class Config:
     max_triage_per_tick: int = 5
     max_repairs_per_tick: int = 1
     max_request_changes_per_pr: int = 2  # then escalate to ai:needs-review
-    max_self_repair_attempts: int = 2
     max_failures_before_block: int = 2
     min_free_gb: float = 2.0
     # Incident filing target + spam control (preflight / recovery).
@@ -99,13 +97,14 @@ class Config:
             # Live implement skips or fails per-repo when worktree is needed.
         if self.live and self.executor_enabled and self.max_turns < 1:
             errors.append("executor.max_turns must be >= 1")
-        # AI path: empty agent/command is misconfig — fail closed (no invent).
-        if not (self.agent or "").strip():
-            errors.append("executor.agent must be non-empty (log label for the harness slot)")
-        if not (self.agent_command or "").strip():
-            errors.append("executor.command must be non-empty")
-        if not (self.agent_args or []):
-            errors.append("executor.args must be a non-empty argv template")
+        # Identity is required only when the harness can run — no silent Pi invent.
+        if self.executor_enabled:
+            if not (self.agent or "").strip():
+                errors.append("executor.agent must be non-empty (log label for the harness slot)")
+            if not (self.agent_command or "").strip():
+                errors.append("executor.command must be non-empty")
+            if not (self.agent_args or []):
+                errors.append("executor.args must be a non-empty argv template")
         # require_checks=false by default: local trust only. Do not gate merges on
         # GitHub Actions / remote CI providers (cost + free-tier limits).
         return errors
@@ -113,6 +112,31 @@ class Config:
 
 def _expand(path: str | Path) -> Path:
     return Path(os.path.expanduser(str(path))).resolve()
+
+
+_TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})
+_FALSE_TOKENS = frozenset({"0", "false", "no", "off"})
+
+
+def _yaml_bool(value: Any, default: bool, *, field: str) -> bool:
+    """Parse a YAML/JSON boolean fail-closed.
+
+    ``bool("false")`` is True in Python — quoted ``enabled: "false"`` must not
+    arm the mill. Accept real bools, 0/1, and the usual truthy/falsy tokens.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and not isinstance(value, bool) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in _TRUE_TOKENS:
+            return True
+        if token in _FALSE_TOKENS:
+            return False
+    raise ValueError(f"{field} must be a boolean, got {value!r}")
 
 
 def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
@@ -139,7 +163,7 @@ def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
                 name=str(raw["name"]),
                 clone_path=_expand(raw["clone_path"]),
                 priority=int(raw.get("priority", 10)),
-                enabled=bool(raw.get("enabled", True)),
+                enabled=_yaml_bool(raw.get("enabled", True), True, field=f"repos[{raw.get('name')}].enabled"),
                 note=str(raw.get("note") or ""),
             )
         )
@@ -212,17 +236,22 @@ def apply_env_overrides(cfg: Config) -> Config:
                 f"LOKAY_AGENT={agent!r} forbidden — no stubs"
             )
         cfg.agent = agent
-    # Empty agent is misconfig — never re-fill with a silent default.
-    if not (cfg.agent or "").strip():
-        raise ValueError(
-            "executor.agent / LOKAY_AGENT empty — set a non-empty harness label"
-        )
-    if cfg.agent in {"fake", "stub", "mock", "noop"}:
+    # Empty identity is misconfig only when the harness can run — no silent Pi.
+    if cfg.executor_enabled:
+        if not (cfg.agent or "").strip() and (cfg.agent_command or "").strip():
+            cfg.agent = str(cfg.agent_command).strip().lower()
+        if not (cfg.agent or "").strip():
+            raise ValueError(
+                "executor.agent / LOKAY_AGENT empty — set a non-empty harness label"
+            )
+        if cfg.agent in {"fake", "stub", "mock", "noop"}:
+            raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs")
+        if not (cfg.agent_command or "").strip():
+            raise ValueError("executor.command empty — set harness binary")
+        if not (cfg.agent_args or []):
+            raise ValueError("executor.args empty — set argv template")
+    elif (cfg.agent or "").strip() in {"fake", "stub", "mock", "noop"}:
         raise ValueError(f"agent={cfg.agent!r} forbidden — no stubs")
-    if not (cfg.agent_command or "").strip():
-        raise ValueError("executor.command empty — set harness binary")
-    if not (cfg.agent_args or []):
-        raise ValueError("executor.args empty — set argv template")
     v = _env_truthy("LOKAY_MERGE_ENABLED")
     if v is not None:
         cfg.merge_enabled = v
@@ -262,37 +291,45 @@ def load_config(path: str | Path | None = None) -> Config:
 
     repos = _load_repos(data, cfg_path)
 
+    raw_args = ex.get("args")
+    if raw_args is None:
+        agent_args: list[str] = []
+    elif not isinstance(raw_args, list):
+        raise ValueError("executor.args must be a YAML list")
+    else:
+        agent_args = [str(item) for item in raw_args]
+
     cfg = Config(
         mode=str(data.get("mode", "dry-run")),
         assignee=str(gh.get("assignee", "mikolaj92")),
-        allow_unassigned=bool(gh.get("allow_unassigned", False)),
+        allow_unassigned=_yaml_bool(
+            gh.get("allow_unassigned", False), False, field="github.allow_unassigned"
+        ),
         ready_label=str(gh.get("ready_label", "ai:ready")),
         blocked_label=str(gh.get("blocked_label", "ai:blocked")),
         needs_feedback_label=str(gh.get("needs_feedback_label", "ai:needs-feedback")),
         branch_prefix=str(gh.get("branch_prefix", "ai/fix")),
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
-        executor_enabled=bool(ex.get("enabled", False)),
-        # Label + binary + argv template. Empty agent/command/args fail closed.
-        agent=str(ex.get("agent", "pi")).strip().lower(),
-        agent_command=str(ex.get("command", "pi")).strip(),
-        agent_model=(
-            str(ex["model"]) if ex.get("model") not in (None, "") else "omniroute/pi"
+        executor_enabled=_yaml_bool(
+            ex.get("enabled", False), False, field="executor.enabled"
         ),
-        agent_args=list(ex["args"]) if ex.get("args") is not None else [
-            "-p",
-            "{prompt}",
-            "--model",
-            "{model}",
-            "--approve",
-            "--no-session",
-        ],
+        # Omit identity → empty (fail closed when enabled). Never invent Pi.
+        agent=str(ex["agent"]).strip().lower() if ex.get("agent") not in (None, "") else "",
+        agent_command=str(ex["command"]).strip() if ex.get("command") not in (None, "") else "",
+        agent_model=(
+            str(ex["model"]).strip() if ex.get("model") not in (None, "") else None
+        ),
+        agent_args=agent_args,
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
-        always_approve=bool(ex.get("always_approve", True)),
-        merge_enabled=bool(mg.get("enabled", False)),
-        require_checks=bool(mg.get("require_checks", False)),
-        require_llm_review=bool(mg.get("require_llm_review", True)),
+        merge_enabled=_yaml_bool(mg.get("enabled", False), False, field="merge.enabled"),
+        require_checks=_yaml_bool(
+            mg.get("require_checks", False), False, field="merge.require_checks"
+        ),
+        require_llm_review=_yaml_bool(
+            mg.get("require_llm_review", True), True, field="merge.require_llm_review"
+        ),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issue_to_pr_per_pass=(
@@ -304,7 +341,6 @@ def load_config(path: str | Path | None = None) -> Config:
         max_triage_per_tick=int(lim.get("max_triage_per_tick", 5)),
         max_repairs_per_tick=int(lim.get("max_repairs_per_tick", 1)),
         max_request_changes_per_pr=int(lim.get("max_request_changes_per_pr", 2)),
-        max_self_repair_attempts=int(lim.get("max_self_repair_attempts", 2)),
         max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
         incident_repo=str(gh.get("incident_repo") or "mikolaj92/lokay").strip()

@@ -15,6 +15,7 @@ repos:
 executor:
   enabled: true
   command: true
+  args: ["{{prompt}}"]
 merge:
   enabled: false
   require_checks: false

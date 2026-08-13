@@ -33,6 +33,7 @@ repos:
 executor:
   enabled: true
   command: true
+  args: ["{{prompt}}"]
 merge:
   enabled: true
   require_checks: false
