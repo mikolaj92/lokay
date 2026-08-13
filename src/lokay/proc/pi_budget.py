@@ -14,12 +14,42 @@ DEFAULT_BUDGET_S = 480
 OVER_BUDGET_EXIT = 2
 
 
+def _etime_to_seconds(raw: str) -> float | None:
+    text = raw.strip()
+    if not text:
+        return None
+    days = 0
+    if "-" in text:
+        day_s, text = text.split("-", 1)
+        days = int(day_s)
+    parts = [int(x) for x in text.split(":")]
+    if len(parts) == 2:
+        minutes, seconds = parts
+        hours = 0
+    elif len(parts) == 3:
+        hours, minutes, seconds = parts
+    else:
+        return None
+    return float(days * 86400 + hours * 3600 + minutes * 60 + seconds)
+
+
 def process_started_at(pid: int) -> float | None:
     """Return start epoch seconds, or None if pid is not running. Never signals."""
     if pid <= 0:
         return None
+    proc = Path(f"/proc/{pid}/stat")
+    if not proc.is_file():
+        try:
+            import subprocess
+            out = subprocess.check_output(["ps", "-o", "etime=", "-p", str(pid)], text=True)
+        except (OSError, subprocess.CalledProcessError):
+            return None
+        elapsed = _etime_to_seconds(out)
+        if elapsed is None:
+            return None
+        return time.time() - elapsed
     try:
-        raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        raw = proc.read_text(encoding="utf-8")
         uptime_raw = Path("/proc/uptime").read_text(encoding="utf-8")
     except OSError:
         return None

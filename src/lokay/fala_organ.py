@@ -182,6 +182,8 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         commit_all,
         closeout_prs,
         compute_health,
+        cycle_end,
+        cycle_start,
         dispatch_implement,
         dispatch_triage,
         factory_begin,
@@ -192,6 +194,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         make_branch,
         plan_issue,
         localize,
+        pi_budget,
         plan_pass,
         pr_checks,
         pr_create,
@@ -851,6 +854,26 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
                 Path(issue_path).unlink(missing_ok=True)
             if checks_path:
                 Path(checks_path).unlink(missing_ok=True)
+
+
+    if atom == "cycle_start":
+        assert repo and issue_number is not None
+        return _run_atom_main(
+            cycle_start.main, ["--repo", repo, "--issue", str(issue_number)]
+        )
+
+    if atom == "cycle_end":
+        assert repo and issue_number is not None
+        return _run_atom_main(
+            cycle_end.main, ["--repo", repo, "--issue", str(issue_number)]
+        )
+
+    if atom == "pi_budget":
+        pid = int(inputs.get("pid") or 0)
+        budget = int(inputs.get("budget") or 480)
+        return _run_atom_main(
+            pi_budget.main, ["--pid", str(pid), "--budget", str(budget)]
+        )
 
     if atom == "run_agent":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
