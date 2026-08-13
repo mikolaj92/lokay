@@ -143,6 +143,7 @@ def run_path(
             "recovery_record", "recovery_incident", "recovery_run_self_repair",
         ),
         "factory_pass": (
+            "host_ff",
             "factory_begin",
             "survey_prs",
             "survey_inbox",
@@ -160,13 +161,13 @@ def run_path(
         "issue_to_pr": (
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
-            "test_local", "repair_agent", "test_local_recheck",
+            "test_local", "repair_agent", "test_local_recheck", "assert_real_diff",
             "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
         ),
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": (
             "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "test_local", "push",
+            "commit_all", "test_local", "assert_real_diff", "push",
         ),
         "pr_triage": (
             "pr_checks", "pr_review", "worktree_add", "test_local",

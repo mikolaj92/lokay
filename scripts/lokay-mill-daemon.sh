@@ -144,6 +144,13 @@ if [[ ! -d "${ROOT}" || ! -f "${CFG}" ]]; then
 fi
 
 cd "${ROOT}"
+export LOKAY_ROOT="${ROOT}"
+
+# Tick starts on current origin/main or fail-closed (do not mill on stale host code).
+if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}"; then
+  bootstrap_incident "host_behind"
+  exit 78
+fi
 
 # Live factory (override with env in the plist if needed). This LaunchAgent
 # runs the PR mill only; collector patches own their post-merge durable

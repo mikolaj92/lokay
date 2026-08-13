@@ -7,7 +7,7 @@ as recovery stalls.
 
 Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Fleet pass order
-lives in parent Fala ``factory_pass`` (`survey_prs → survey_inbox → survey_ready
+lives in parent Fala ``factory_pass`` (`host_ff → survey_prs → survey_inbox → survey_ready
 → plan → triage → conflicts → closeout → select → queue_conflict → implement →
 health → receipt`). Serial by design (default K=1).
 `compose_tick` is a thin in-process bridge for canaries/CLI — not the multi-repo

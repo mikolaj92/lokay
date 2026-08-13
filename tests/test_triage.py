@@ -191,6 +191,7 @@ def test_pr_repair_path_in_package():
         "run_agent",
         "commit_all",
         "test_local",
+        "assert_real_diff",
         "push",
     ]
     agent = next(n for n in path["nodes"] if n["id"] == "run_agent")

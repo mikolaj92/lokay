@@ -152,6 +152,29 @@ def _require_push(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     return None
 
 
+def _require_real_diff(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed gate: push/pr_create need a real (non-plan-only) diff.
+
+    Plan/localize evidence (``.lokay/approach.md``, ``.lokay/localize.json``)
+    is not progress. Missing key or ok:false returns an error envelope.
+    None means go.
+    """
+    env = up.get("assert_real_diff")
+    if env is None:
+        return {
+            "ok": False,
+            "error": "refusing: assert_real_diff conduction missing",
+            "reason": "real_diff_missing",
+        }
+    if env.get("ok") is not True:
+        return {
+            "ok": False,
+            "error": str(env.get("error") or "refusing: diff is not real progress"),
+            "reason": str(env.get("reason") or "plan_only"),
+        }
+    return None
+
+
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     from lokay.proc import (
         assign_issue,
@@ -164,6 +187,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         factory_begin,
         factory_tick,
         get_issue,
+        host_ff,
         list_prs,
         make_branch,
         plan_issue,
@@ -196,6 +220,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         intake_issue,
         issue_split,
         worktree_add,
+        assert_real_diff,
         self_repair_activate,
         self_repair_close,
         self_repair_prepare,
@@ -289,6 +314,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         # Legacy alias (not in parent factory_pass). Invokes the same Fala
         # factory_pass mill as lokay-factory-pass — not an in-process spine.
         return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
+
+    if atom == "host_ff":
+        argv = [*cfg, *live]
+        checkout = inputs.get("checkout") or os.environ.get("LOKAY_ROOT")
+        if checkout:
+            argv.extend(["--checkout", str(checkout)])
+        return _run_atom_main(host_ff.main, argv)
 
     if atom == "factory_begin":
         return _run_atom_main(factory_begin.main, [*cfg, *live])
@@ -1037,6 +1069,11 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             return recorded
         return out
 
+    if atom == "assert_real_diff":
+        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        assert worktree
+        return _run_atom_main(assert_real_diff.main, ["--worktree", worktree])
+
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         branch = str(
@@ -1047,6 +1084,9 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
         assert worktree and branch
         refused = _require_test_local(up)
+        if refused is not None:
+            return refused
+        refused = _require_real_diff(up)
         if refused is not None:
             return refused
         committed = up.get("commit_all", {}).get("committed")
@@ -1071,8 +1111,12 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
 
     if atom == "pr_create":
-        # Never open a PR off a red local suite or a missing/failed push.
+        # Never open a PR off a red local suite, a plan-only diff, or a
+        # missing/failed push.
         refused = _require_test_local(up)
+        if refused is not None:
+            return refused
+        refused = _require_real_diff(up)
         if refused is not None:
             return refused
         refused = _require_push(up)
