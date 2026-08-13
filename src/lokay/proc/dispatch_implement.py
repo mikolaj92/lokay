@@ -133,6 +133,12 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     ),
                     max_failures=max_fail,
                 )
+                # Bounded repair already ran and the suite is still red
+                # (AlphaCodium K=1 exhausted): this seed is deterministically
+                # stuck — block it now so the mill takes the next seed instead
+                # of burning later passes on an identical failing path.
+                if str(result.get("reason") or "") == "local_repair_exhausted":
+                    row["blocked"] = True
                 actions.append(
                     {
                         "step": "record_stuck",

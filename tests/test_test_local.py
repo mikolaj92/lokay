@@ -51,7 +51,13 @@ def test_red_pytest_fails_closed(tmp_path: Path, monkeypatch, capsys):
     monkeypatch.setattr(
         test_local,
         "runner",
-        lambda: _fake_runner(CommandResult(spec=spec, executed=True, returncode=1)),
+        lambda: _fake_runner(CommandResult(
+            spec=spec,
+            executed=True,
+            returncode=1,
+            stdout="FAILED tests/test_x.py::test_y - assert 1 == 2\n",
+            stderr="1 failed\n",
+        )),
     )
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 1
@@ -59,6 +65,8 @@ def test_red_pytest_fails_closed(tmp_path: Path, monkeypatch, capsys):
     assert payload["ok"] is False
     assert payload["error"] == "local test suite failed"
     assert payload["returncode"] == 1
+    assert "FAILED tests/test_x.py::test_y" in payload["stdout_tail"]
+    assert payload["stderr_tail"] == "1 failed\n"
 
 
 def test_tests_dir_without_pyproject_still_runs(tmp_path: Path, monkeypatch, capsys):
@@ -76,6 +84,54 @@ def test_tests_dir_without_pyproject_still_runs(tmp_path: Path, monkeypatch, cap
     assert payload["tested"] is True
     assert payload["skipped"] is False
     assert payload["tests"] == "uv run --extra dev pytest -q"
+
+
+def test_organ_record_red_first_probe_does_not_raise(monkeypatch):
+    """issue_to_pr first probe records a red suite so the nest can run."""
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda main, argv: {
+            "ok": False,
+            "error": "local test suite failed",
+            "stdout_tail": "FAILED tests/test_x.py::test_y",
+            "_exit": 1,
+        },
+    )
+    result = fala_organ._handle(
+        "test_local",
+        {"record_red": True},
+        {"worktree_add": {"worktree": "/tmp/wt"}},
+    )
+    assert result["ok"] is True
+    assert result["passed"] is False
+    assert result["recorded_red"] is True
+    assert result["_exit"] == 0
+    assert result["stdout_tail"] == "FAILED tests/test_x.py::test_y"
+    # Publish atoms still refuse this envelope.
+    refused = fala_organ._require_test_local({"test_local": result})
+    assert refused is not None
+    assert refused["reason"] == "test_local_failed"
+
+
+def test_organ_default_test_local_still_fails_closed(monkeypatch):
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda main, argv: {
+            "ok": False,
+            "error": "local test suite failed",
+            "_exit": 1,
+        },
+    )
+    result = fala_organ._handle(
+        "test_local",
+        {},
+        {"worktree_add": {"worktree": "/tmp/wt"}},
+    )
+    assert result["ok"] is False
+    assert result["_exit"] == 1
+    assert not result.get("recorded_red")
 
 
 def test_organ_dispatches_worktree_from_worktree_add(monkeypatch):
@@ -137,6 +193,16 @@ def test_issue_to_pr_push_and_pr_create_conduct_through_test_local():
     assert "test_local" in by_id["push"]["conduction"]
     assert "test_local" in by_id["pr_create"]["conduction"]
     assert "push" in by_id["pr_create"]["conduction"]
+    # Bounded AlphaCodium loop: one repair nest, then one recheck, then push.
+    assert "repair_agent" in by_id
+    assert "test_local_recheck" in by_id
+    assert "test_local" in by_id["repair_agent"]["conduction"]
+    assert "repair_agent" in by_id["test_local_recheck"]["conduction"]
+    assert "test_local_recheck" in by_id["push"]["conduction"]
+    assert "test_local_recheck" in by_id["pr_create"]["conduction"]
+    # Recheck must not depend on push/pr_create (order: tests then publish).
+    assert "push" not in by_id["test_local_recheck"]["conduction"]
+    assert "pr_create" not in by_id["test_local_recheck"]["conduction"]
 
 
 def test_pr_repair_push_conducts_through_test_local():
@@ -155,6 +221,36 @@ def test_pr_triage_merge_conducts_through_test_local():
     assert "worktree_add" in by_id["test_local"]["conduction"]
     assert "test_local" in by_id["pr_merge"]["conduction"]
     assert "pr_merge" not in by_id["test_local"]["conduction"]
+
+
+def test_issue_to_pr_red_test_local_never_reaches_pr_create():
+    """Conduction: a failed first probe still reaches the one-shot nest.
+
+    The nest itself (repair_agent, test_local_recheck) is allowed; publish
+    nodes (push, pr_create, stage_pr_open, …) stay unreachable until the
+    bounded recheck succeeds.
+    """
+    by_id = _path_nodes("issue_to_pr")
+    # After a red first probe, Fala will not ready nodes that list test_local
+    # as a hard conduction. The nest atoms list it, so they *do* wait for the
+    # first probe to complete — but they skip-or-run based on its values, not
+    # on its success. That skip-or-run is organ-owned (see test_fala_organ).
+    # Publish nodes also list test_local AND test_local_recheck, so a red
+    # recheck never readies them.
+    after_red_recheck = _ready_after_failure("issue_to_pr", "test_local_recheck")
+    assert "repair_agent" in after_red_recheck or "test_local" in by_id["repair_agent"]["conduction"]
+    assert "push" not in after_red_recheck
+    assert "pr_create" not in after_red_recheck
+    assert "stage_pr_open" not in after_red_recheck
+    assert "list_prs" not in after_red_recheck
+    assert "pr_label" not in after_red_recheck
+    after_red_first = _ready_after_failure("issue_to_pr", "test_local")
+    assert "push" not in after_red_first
+    assert "pr_create" not in after_red_first
+    assert "stage_pr_open" not in after_red_first
+    # The nest atoms themselves wait on test_local (they must not start early).
+    assert "repair_agent" not in after_red_first
+    assert "test_local_recheck" not in after_red_first
 
 
 def _ready_after_failure(path_id: str, failed_id: str) -> set[str]:

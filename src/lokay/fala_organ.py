@@ -16,7 +16,13 @@ from fala import sdk
 from lokay.git_commit import branch_ahead_of_upstream
 from lokay.models import Issue
 from lokay.proc._common import runner
-from lokay.prompts import issue_fix_prompt, pr_body, repair_pr_prompt, self_repair_prompt
+from lokay.prompts import (
+    issue_fix_prompt,
+    local_test_repair_prompt,
+    pr_body,
+    repair_pr_prompt,
+    self_repair_prompt,
+)
 
 
 def _localize_paths(up: dict[str, dict[str, Any]]) -> list[str]:
@@ -72,11 +78,29 @@ def _live_flags(inputs: dict[str, Any]) -> list[str]:
     return ["--live"] if inputs.get("live") else []
 
 
-def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
-    """Fail-closed gate: push/pr_merge need successful test_local conduction.
+def _test_local_ok(env: dict[str, Any] | None) -> bool:
+    """Green suite, or an honest skip (no Python suite), counts as success.
 
-    Honest skip (skipped / no_python_test_suite) counts as success. Missing
-    key, ok:false, or a red suite returns an error envelope. None means go.
+    A recorded-red first probe (`ok: true, passed: false`) is NOT success —
+    that envelope exists only so Fala can conduct the one-shot repair nest.
+    """
+    if not isinstance(env, dict) or not env:
+        return False
+    if env.get("passed") is False:
+        return False
+    if env.get("skipped") or env.get("reason") == "no_python_test_suite":
+        return True
+    return env.get("ok") is True
+
+
+def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
+
+    The issue_to_pr lane adds one bounded recheck (test_local_recheck) after
+    the single repair patch. When that conduction exists, it is the verdict
+    (a recorded-red first probe is expected — that is why the nest ran).
+    pr_repair/pr_triage have no recheck node, so the first probe still gates.
+    Missing key, ok:false, or a red suite returns an error envelope. None means go.
     """
     if "test_local" not in up:
         return {
@@ -84,16 +108,48 @@ def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             "error": "refusing: test_local conduction missing",
             "reason": "test_local_missing",
         }
+    recheck = up.get("test_local_recheck")
+    if recheck is not None:
+        if _test_local_ok(recheck):
+            return None
+        return {
+            "ok": False,
+            "error": str(
+                recheck.get("error")
+                or "refusing: test_local_recheck did not succeed"
+            ),
+            "reason": "test_local_recheck_failed",
+        }
     tl = up["test_local"]
-    if tl.get("skipped") or tl.get("reason") == "no_python_test_suite":
-        return None
-    if tl.get("ok") is True:
-        return None
-    return {
-        "ok": False,
-        "error": str(tl.get("error") or "refusing: test_local did not succeed"),
-        "reason": "test_local_failed",
-    }
+    if not _test_local_ok(tl):
+        return {
+            "ok": False,
+            "error": str(tl.get("error") or "refusing: test_local did not succeed"),
+            "reason": "test_local_failed",
+        }
+    return None
+
+
+def _require_push(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed gate: pr_create only after a successful push conduction.
+
+    A red local suite or a refused/failed push must never reach
+    `gh pr create`. None means go.
+    """
+    push = up.get("push")
+    if push is None:
+        return {
+            "ok": False,
+            "error": "refusing: push conduction missing",
+            "reason": "push_missing",
+        }
+    if push.get("ok") is not True:
+        return {
+            "ok": False,
+            "error": str(push.get("error") or "refusing: push did not succeed"),
+            "reason": "push_failed",
+        }
+    return None
 
 
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -819,6 +875,112 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         finally:
             Path(prompt_path).unlink(missing_ok=True)
 
+    if atom == "repair_agent":
+        # AlphaCodium bounded loop, K=1: exactly one extra patch after a red
+        # local suite. Any other state is a no-op; test_local_recheck reruns
+        # pytest once after this, and push/pr_create never see a red suite.
+        if repair_mode:
+            # pr_repair already IS the repair lane — no nested repair session.
+            return {
+                "ok": False,
+                "error": "refusing: repair_agent is issue_to_pr-only",
+                "reason": "repair_agent_not_allowed",
+            }
+        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        assert worktree
+        first = up.get("test_local")
+        if first is None:
+            return {
+                "ok": False,
+                "error": "refusing: test_local conduction missing",
+                "reason": "test_local_missing",
+            }
+        if _test_local_ok(first):
+            return {"ok": True, "skipped": True, "reason": "test_local_ok"}
+        log_text = "\n".join(
+            tail
+            for tail in (
+                str(first.get("stdout_tail") or ""),
+                str(first.get("stderr_tail") or ""),
+            )
+            if tail.strip()
+        ) or str(first.get("error") or "")
+        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        prompt = local_test_repair_prompt(
+            repo=repo,
+            branch=branch,
+            issue_number=issue_number,
+            issue_title=str(issue_raw.get("title") or ""),
+            log_text=log_text,
+        )
+        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+            fh.write(prompt)
+            prompt_path = fh.name
+        try:
+            out = _run_atom_main(
+                run_agent.main,
+                [*cfg, *live, "--worktree", worktree, "--prompt-file", prompt_path],
+            )
+        finally:
+            Path(prompt_path).unlink(missing_ok=True)
+        if isinstance(out, dict):
+            out["attempted"] = True
+        return out
+
+    if atom == "test_local_recheck":
+        # Second (final) probe of the bounded loop: rerun pytest only after a
+        # red first probe. A red recheck fails closed here — there is no third
+        # attempt, so push/pr_create downstream stay unreachable.
+        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        assert worktree
+        first = up.get("test_local")
+        if first is None:
+            return {
+                "ok": False,
+                "error": "refusing: test_local conduction missing",
+                "reason": "test_local_missing",
+            }
+        if _test_local_ok(first):
+            return {"ok": True, "skipped": True, "reason": "test_local_ok"}
+        repair = up.get("repair_agent") or {}
+        if repair.get("ok") is False:
+            return {
+                "ok": False,
+                "error": str(repair.get("error") or "repair agent failed"),
+                "reason": "repair_agent_failed",
+            }
+        if inputs.get("live"):
+            unpublished = branch_ahead_of_upstream(
+                runner(), Path(worktree), live=True
+            ) > 0
+            committed = bool(up.get("commit_all", {}).get("committed"))
+            if not (committed or unpublished):
+                # Zero-diff repair: the patch nest produced nothing to test.
+                return {
+                    "ok": False,
+                    "error": "refusing recheck: repair patch produced no commit",
+                    "reason": "zero_diff",
+                }
+        out = _run_atom_main(test_local.main, ["--worktree", worktree])
+        if isinstance(out, dict):
+            if out.get("ok") is False and not out.get("skipped"):
+                # Bounded loop exhausted: mark with a machine reason first, so
+                # it survives the organ's truncated failure raise (the log
+                # tails in this envelope can exceed the 2000-char raise cap).
+                out = {
+                    "ok": False,
+                    "reason": "local_repair_exhausted",
+                    "recheck": True,
+                    **{
+                        k: v
+                        for k, v in out.items()
+                        if k not in {"ok", "reason", "recheck"}
+                    },
+                }
+            else:
+                out["recheck"] = True
+        return out
+
     if atom == "commit_all":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         issue_raw = up.get("get_issue", {}).get("issue") or {}
@@ -829,15 +991,51 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
             title = str(issue_raw.get("title") or "")[:60]
             msg = str(inputs.get("message") or f"fix: {repo}#{n} {title}")
         assert worktree
-        return _run_atom_main(
+        out = _run_atom_main(
             commit_all.main,
             [*cfg, *live, "--worktree", worktree, "--message", msg],
         )
+        # The coding agent may commit directly (no staged diff left for the
+        # deterministic commit). A clean tree with unpublished commits is real
+        # progress — report it truthfully so test_local/push see the patch.
+        if (
+            isinstance(out, dict)
+            and out.get("ok") is True
+            and inputs.get("live")
+            and out.get("committed") is not True
+            and branch_ahead_of_upstream(runner(), Path(worktree), live=True) > 0
+        ):
+            out["committed"] = True
+            out["committed_by"] = "agent"
+        return out
 
     if atom == "test_local":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        return _run_atom_main(test_local.main, ["--worktree", worktree])
+        out = _run_atom_main(test_local.main, ["--worktree", worktree])
+        # issue_to_pr first probe: record a red suite without failing the
+        # effector so Fala can conduct the one-shot repair nest. Publish
+        # atoms still fail closed via _require_test_local (passed=false).
+        if (
+            inputs.get("record_red")
+            and isinstance(out, dict)
+            and out.get("ok") is False
+            and not out.get("skipped")
+        ):
+            recorded = {
+                "ok": True,
+                "passed": False,
+                "tested": True,
+                "recorded_red": True,
+                **{
+                    k: v
+                    for k, v in out.items()
+                    if k not in {"ok", "passed", "tested", "recorded_red", "_exit"}
+                },
+                "_exit": 0,
+            }
+            return recorded
+        return out
 
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
@@ -873,6 +1071,13 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         )
 
     if atom == "pr_create":
+        # Never open a PR off a red local suite or a missing/failed push.
+        refused = _require_test_local(up)
+        if refused is not None:
+            return refused
+        refused = _require_push(up)
+        if refused is not None:
+            return refused
         branch = str(up.get("make_branch", {}).get("branch") or "")
         issue_raw = up.get("get_issue", {}).get("issue") or {}
         issue = Issue.from_dict(issue_raw)

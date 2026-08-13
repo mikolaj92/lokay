@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -159,7 +160,8 @@ def run_path(
         "issue_to_pr": (
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
-            "test_local", "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
+            "test_local", "repair_agent", "test_local_recheck",
+            "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
         ),
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": (
@@ -251,6 +253,26 @@ def _process_payload(process: dict[str, Any]) -> dict[str, Any]:
     return dict(values if isinstance(values, dict) else raw)
 
 
+_FAILED_REASON_RE = re.compile(r'"reason":\s*"([A-Za-z0-9_.:-]+)"')
+
+
+def _failure_reason(item: dict[str, Any]) -> str | None:
+    """Machine reason for a failed atom, when the organ supplied one.
+
+    The organ raises failed atom values as a JSON string (truncated), so the
+    reason may live inside the error text rather than in structured values.
+    """
+    reason = item.get("reason")
+    if isinstance(reason, str) and reason:
+        return reason
+    error = item.get("error")
+    if isinstance(error, str) and error.startswith("{"):
+        match = _FAILED_REASON_RE.search(error[:2000])
+        if match:
+            return match.group(1)
+    return None
+
+
 def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize Fala's ``id/status/output/error`` process entries.
 
@@ -335,6 +357,10 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         out["error"] = failed[0].get("error") if failed else result.get("error")
         if not out.get("error"):
             out["error"] = "Fala path failed"
+        if failed:
+            reason = _failure_reason(failed[0])
+            if reason:
+                out["reason"] = reason
         return out
 
     out["ok"] = True

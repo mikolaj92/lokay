@@ -1,5 +1,6 @@
 # Approach plan
 
+<<<<<<< HEAD
 <!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=88 -->
 
 Repository: `mikolaj92/lokay`  
@@ -30,6 +31,24 @@ Przed `run_agent` Fala woła mały atom `localize`: lista plików/katalogów do 
 ## Test plan
 
 - `uv run pytest -q tests/test_localize.py tests/test_graph.py tests/test_plan_issue.py tests/test_triage.py tests/test_fala_package_lock.py`
+=======
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=89 -->
+
+Repository: `mikolaj92/lokay`  
+Issue: #89 — Po czerwonym test_local: jedna naprawa, nigdy pr_create (AlphaCodium)
+
+## Goal
+
+Czerwony `test_local` nie woła `gh pr create` i nie zatrzymuje młyna. Jedna bounded pętla: log testu → agent (gniazdo patcha) → `test_local` znowu. Potem push albo stuck i następne ziarno.
+
+## Files likely touched
+
+- (infer from repo inspection)
+
+## Test plan
+
+- Run the smallest useful tests for files touched
+>>>>>>> d92ea7d (fix: mikolaj92/lokay#89 Po czerwonym test_local: jedna naprawa, nigdy pr_create (Alp)
 
 ## Non-goals
 
