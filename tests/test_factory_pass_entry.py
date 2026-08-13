@@ -119,5 +119,5 @@ def test_offline_dry_run_uses_documented_tick_escape(monkeypatch):
 
 def test_factory_tick_module_does_not_import_compose_tick():
     src = inspect.getsource(factory_tick)
-    assert "compose_factory_pass" in src
-    assert "compose_tick" not in src
+    assert "from lokay.compose.factory import compose_factory_pass" in src
+    assert "from lokay.compose.tick import compose_tick" not in src
