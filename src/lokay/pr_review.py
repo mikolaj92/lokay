@@ -165,6 +165,37 @@ def should_label_needs_review(
     return decision.verdict == "needs_human"
 
 
+def labels_for_review(
+    decision: PrReviewDecision, *, escalated: bool = False
+) -> list[str]:
+    labels: list[str] = []
+    if should_label_needs_review(decision, escalated=escalated):
+        labels.append("ai:needs-review")
+    if decision.verdict == "request_changes" and not escalated:
+        labels.append("ai:request-changes")
+    return labels
+
+
+def decide_review_merge(
+    decision: PrReviewDecision,
+    prior_request_changes: int,
+    *,
+    max_request_changes: int,
+) -> tuple[bool, bool]:
+    """Return ``(merge_ok, escalated)``. Cap fail-closes; never auto-merge."""
+    merge_ok = should_merge(decision)
+    escalated = (
+        decision.verdict == "request_changes"
+        and not decision.secrets
+        and should_escalate_request_changes(
+            prior_request_changes, max_request_changes=max_request_changes
+        )
+    )
+    if escalated:
+        merge_ok = False
+    return merge_ok, escalated
+
+
 # Durable marker embedded in published PR review comments.
 # Used for head-SHA idempotency and request_changes escalation counts.
 REVIEW_MARKER_RE = re.compile(
