@@ -17,6 +17,7 @@ Related: issue #17 (graph_run placeholders), issue #18 (AI agent fail-closed),
 | Python `_atomic_*` compose graphs / `LOKAY_USE_FALA` | super-fallback | **Deleted** | Fala is the sole composer; terminal outputs normalize public results |
 | `PLACEHOLDER_PYTHON` / tomli shim | legacy | **Deleted** (#17) | Only `PLACEHOLDER_PROJECT` remains |
 | Agent `or "grok"` / plan-as-success | silent invent | **Deleted** (#18) | Fail closed; see `NO_STUBS.md` |
+| `always_approve` / `max_self_repair_attempts` knobs | unused lying config | **Deleted** | `--approve` lives in `executor.args`; recovery is one Fala path + 4-of-5 quorum |
 | `lokay-run-grok` | named alias | **Deleted** | Use `lokay-run-agent` only |
 | `LOKAY_USE_FALA` dual engine | runtime fallback | **Deleted** | Fala is always the composer |
 | `find_default_package` candidates | package discover | **Promote** | env → repo `fala/` → packaged `data/` |

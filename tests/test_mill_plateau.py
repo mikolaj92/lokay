@@ -188,6 +188,8 @@ repos:
 executor:
   enabled: true
   agent: grok
+  command: grok
+  args: ["{{prompt}}"]
 merge:
   enabled: true
   require_checks: false
@@ -272,6 +274,8 @@ repos:
     clone_path: {tmp_path}
 executor:
   enabled: true
+  command: true
+  args: ["{{prompt}}"]
 merge:
   enabled: true
 worktrees:

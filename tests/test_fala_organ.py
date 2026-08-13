@@ -13,6 +13,8 @@ repos:
     clone_path: {tmp_path}
 executor:
   enabled: {str(executor).lower()}
+  command: true
+  args: ["{{prompt}}"]
 merge:
   enabled: true
   require_checks: false

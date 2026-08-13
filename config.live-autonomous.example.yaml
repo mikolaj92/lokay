@@ -46,10 +46,8 @@ executor:
     - --no-session
   max_turns: 40
   timeout_seconds: 1800
-  always_approve: true
 
 limits:
-  max_self_repair_attempts: 2
   max_request_changes_per_pr: 2
   max_repairs_per_tick: 1
   max_triage_per_tick: 5

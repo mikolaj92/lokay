@@ -32,6 +32,7 @@ The goal passed to the harness is always the same: implement the issue (or repai
 ## Fail closed
 
 - Empty `executor.agent` / `LOKAY_AGENT` → error (no silent default).
+- Omitting `executor.agent` / `command` / `args` while `executor.enabled` is true → error (no silent Pi invent).
 - `LOKAY_AGENT=fake|stub|mock|noop` → error.
 - Empty `executor.command` or `executor.args` → error.
 - `lokay-run-agent --live` without live mode + executor enabled → `ok: false` / refused.

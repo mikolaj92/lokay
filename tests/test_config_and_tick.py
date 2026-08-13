@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from lokay.agent import build_agent_argv
 from lokay.compose.tick import compose_tick
 from lokay.config import Config, RepoConfig, load_config
@@ -93,6 +95,62 @@ limits:
     assert cfg_explicit.max_issues_per_tick == 5
 
 
+def test_quoted_yaml_false_does_not_enable_executor(tmp_path: Path, monkeypatch):
+    """bool('false') is True in Python — quoted YAML must not arm the mill."""
+    for key in ("LOKAY_MODE", "LOKAY_EXECUTOR_ENABLED", "LOKAY_AGENT", "LOKAY_CONFIG"):
+        monkeypatch.delenv(key, raising=False)
+    path = tmp_path / "quoted.yaml"
+    path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+    enabled: "false"
+executor:
+  enabled: "false"
+  agent: pi
+  command: pi
+  args: ["{{prompt}}"]
+merge:
+  enabled: "false"
+  require_checks: "false"
+  require_llm_review: "true"
+""",
+        encoding="utf-8",
+    )
+    cfg = load_config(path)
+    assert cfg.executor_enabled is False
+    assert cfg.merge_enabled is False
+    assert cfg.require_checks is False
+    assert cfg.require_llm_review is True
+    assert cfg.active_repos() == []
+
+
+def test_garbage_yaml_bool_fails_closed(tmp_path: Path, monkeypatch):
+    for key in ("LOKAY_MODE", "LOKAY_EXECUTOR_ENABLED", "LOKAY_AGENT", "LOKAY_CONFIG"):
+        monkeypatch.delenv(key, raising=False)
+    path = tmp_path / "bad.yaml"
+    path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: maybe
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="executor.enabled"):
+        load_config(path)
+
+
+def test_unused_self_repair_and_approve_knobs_are_gone():
+    assert "always_approve" not in Config.__dataclass_fields__
+    assert "max_self_repair_attempts" not in Config.__dataclass_fields__
+
+
 def test_env_overrides_enable_live_mill(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
@@ -104,6 +162,8 @@ repos:
 executor:
   enabled: false
   agent: grok
+  command: grok
+  args: ["{{prompt}}"]
 merge:
   enabled: false
   require_checks: true

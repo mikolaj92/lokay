@@ -65,6 +65,7 @@ repos:
 executor:
   enabled: true
   command: true
+  args: ["{{prompt}}"]
 merge:
   enabled: true
 worktrees:

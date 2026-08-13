@@ -137,8 +137,8 @@ repos:
   - name: a/b
     clone_path: {tmp_path}
 executor:
+  enabled: true
   agent: ""
-  command: pi
   args: ["-p", "{{prompt}}"]
 """,
         encoding="utf-8",
@@ -157,6 +157,7 @@ repos:
   - name: a/b
     clone_path: {tmp_path}
 executor:
+  enabled: true
   agent: pi
   command: ""
   args: ["-p", "{{prompt}}"]
@@ -167,7 +168,8 @@ executor:
         load_config(cfg_path)
 
 
-def test_default_config_args_use_pi_model(tmp_path: Path, monkeypatch):
+def test_enabled_executor_omitted_args_fails_closed(tmp_path: Path, monkeypatch):
+    """No silent Pi argv when executor.enabled and args are omitted."""
     _clear_mill_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
@@ -183,9 +185,25 @@ executor:
 """,
         encoding="utf-8",
     )
-    c = load_config(cfg_path)
-    assert c.agent_model == "omniroute/pi"
-    argv = build_agent_argv(c, worktree=Path("/tmp/wt"), prompt="goal")
-    assert argv[0] == "pi"
-    assert argv[argv.index("--model") + 1] == "omniroute/pi"
-    assert "-p" in argv
+    with pytest.raises(ValueError, match="args"):
+        load_config(cfg_path)
+
+
+def test_enabled_executor_omitted_command_fails_closed(tmp_path: Path, monkeypatch):
+    _clear_mill_env(monkeypatch)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: dry-run
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  agent: pi
+  args: ["-p", "{{prompt}}"]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="command"):
+        load_config(cfg_path)
