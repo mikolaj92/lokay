@@ -5,7 +5,7 @@ which jobs run after which.
 
 ## Source of truth
 
-[`fala/lokay.fala-package.toml`](../fala/lokay.fala-package.toml)
+[`fala/lokay.fala-package.toml`](../fala/lokay.fala-package.toml) — `src/lokay/data/lokay.fala-package.toml` is a packaged copy of `fala/` (byte-identical; CI fails if they drift).
 
 ### `daemon_cycle` (top-level parent)
 
