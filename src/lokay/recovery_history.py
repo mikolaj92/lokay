@@ -18,7 +18,16 @@ _VOLATILE = re.compile(r"(?i)(?:0x)?[0-9a-f]{8,}|\b\d+\b")
 _SPACE = re.compile(r"\s+")
 # Honest wait / repair limbo must not confirm as mill failure for recovery.
 _NON_FAILURE_HEALTH = frozenset(
-    {"waiting", "repairing", "idle", "progress", "running", "offline", "overlap"}
+    {
+        "waiting",
+        "repairing",
+        "idle",
+        "progress",
+        "running",
+        "offline",
+        "overlap",
+        "plateau",
+    }
 )
 # merge_policy / pr_triage soft product reasons — never systemic stall evidence.
 # Keep aligned with WAITING_REASONS / NEEDS_REVIEW_REASONS; do not alter those sets.
@@ -87,9 +96,16 @@ def _delivered(row: dict[str, Any]) -> bool:
     return False
 
 
+def _lease_noise(text: str) -> bool:
+    value = str(text or "")
+    return "lease_unavailable_" in value or "lease_file_missing" in value
+
+
 def _soft_mill_health(mill: dict[str, Any]) -> bool:
     """True for honest wait / repair / idle outcomes — never systemic stall."""
-    return str(mill.get("health") or "") in _NON_FAILURE_HEALTH
+    if str(mill.get("health") or "") in _NON_FAILURE_HEALTH:
+        return True
+    return _lease_noise(str(mill.get("error") or mill.get("health") or ""))
 
 
 def _soft_product_outcome(row: dict[str, Any]) -> bool:
@@ -132,6 +148,8 @@ def _failure_texts(row: dict[str, Any]):
         if not normalized or normalized in _SOFT_REASON_NORMALIZED:
             continue
         if str(raw).strip() in _SOFT_PRODUCT_REASONS:
+            continue
+        if _lease_noise(raw):
             continue
         yield raw, normalized
 

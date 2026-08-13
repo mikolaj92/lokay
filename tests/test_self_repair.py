@@ -74,7 +74,7 @@ def test_self_repair_is_one_fala_path_and_returns_restart(monkeypatch, tmp_path)
     result = self_repair.run_self_repair("x", unhealthy())
 
     assert result["ok"] and result["health"] == "restart_required"
-    assert result["commit"] == "deadbeef" and not result["gate_released"]
+    assert result["commit"] == "deadbeef" and result["gate_released"]
     assert len(calls) == 1
     call = calls[0]
     assert call["path_id"] == "self_repair"

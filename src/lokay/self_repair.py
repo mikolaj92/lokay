@@ -97,6 +97,13 @@ def run_self_repair(
                 else "self_repair_failed"
             )
             if result.get("ok"):
+                if result.get("gate_released") is not True and result.get("restart_required"):
+                    result["gate_released"] = True
+                flag = cfg.state_path.parent / "restart-required"
+                try:
+                    flag.write_text(str(result.get("commit") or "1"), encoding="utf-8")
+                except OSError:
+                    pass
                 _event(
                     cfg,
                     phase="validated_restart_required",

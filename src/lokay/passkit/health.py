@@ -129,3 +129,41 @@ def health_payload(
         else:
             payload["error"] = "stall: actionable work remains but no progress this pass"
     return payload
+
+
+def evaluate_mill_stop(tick: dict[str, Any]) -> dict[str, Any]:
+    """Stop rules for compose_mill. Lives with health, not the mill loop.
+
+    ``hard`` means the mill envelope is ok=false (stall/survey_error).
+    ``plateau`` stops the loop but is not a stall fingerprint.
+    """
+    health = str(tick.get("health") or "")
+    if health in {"stall", "survey_error"}:
+        return {
+            "stop": True,
+            "hard": True,
+            "health": health,
+            "error": f"mill {health}: actionable work remains but no real progress",
+        }
+    if health == "plateau":
+        return {
+            "stop": True,
+            "hard": True,
+            "health": "plateau",
+            "error": "mill plateau: progress claimed but remaining work unchanged (green noop)",
+        }
+    if not tick.get("ok") and health not in {"waiting", "repairing", "progress", "running", "idle"}:
+        return {
+            "stop": True,
+            "hard": True,
+            "health": health or "failed",
+            "error": str(tick.get("error") or "mill pass failed"),
+        }
+    if int(tick.get("progress") or 0) == 0 and not tick.get("idle"):
+        return {
+            "stop": True,
+            "hard": False,
+            "health": health or "waiting",
+            "error": "",
+        }
+    return {"stop": False, "hard": False, "health": health, "error": ""}

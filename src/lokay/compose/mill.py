@@ -14,6 +14,7 @@ from typing import Any
 
 from lokay.compose.factory import compose_factory_pass
 from lokay.envelope import emit_exit, err, ok
+from lokay.passkit.health import evaluate_mill_stop
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.preflight import health_lease_status, revoke_health_lease, run_preflight
 
@@ -154,55 +155,12 @@ def _compose_mill(
                 "results": results,
             }
 
-        if tick.get("health") in {"stall", "survey_error"}:
-            return err(
-                f"mill {tick.get('health')}: actionable work remains but no real progress",
-                mode=cfg.mode,
-                live=live,
-                idle=False,
-                health=tick.get("health"),
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-            )
-
-        # A failed graph is never a successful wait, even when Fala could not
-        # expose the child health fields through the parent subprocess error.
-        if not tick.get("ok"):
-            return err(
-                "mill pass failed",
-                mode=cfg.mode,
-                live=live,
-                idle=False,
-                health=tick.get("health") or "failed",
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-            )
-
-        # Live pass made zero progress but not idle (e.g. waiting on CI).
-        if int(tick.get("progress") or 0) == 0:
-            return ok(
-                mode=cfg.mode,
-                live=live,
-                idle=False,
-                health=tick.get("health") or "waiting",
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-                note="stopped: zero progress this pass (waiting or blocked)",
-            )
-
-        # Green-noop guard: claimed progress but remaining work fingerprint unchanged.
         if prev_work_key is not None and work_key == prev_work_key:
+            tick = {**tick, "health": "plateau"}
+        decision = evaluate_mill_stop(tick)
+        if decision["stop"] and decision["health"] == "plateau":
             return err(
-                "mill plateau: progress claimed but remaining work unchanged (green noop)",
+                decision["error"],
                 mode=cfg.mode,
                 live=live,
                 idle=False,
@@ -213,6 +171,32 @@ def _compose_mill(
                 results=results,
                 last=tick,
                 remaining=remaining,
+            )
+        if decision["stop"] and decision["hard"]:
+            return err(
+                decision["error"],
+                mode=cfg.mode,
+                live=live,
+                idle=False,
+                health=decision["health"],
+                passes=i + 1,
+                max_passes=max_passes,
+                progress=total_progress,
+                results=results,
+                last=tick,
+            )
+        if decision["stop"] and not decision["hard"]:
+            return ok(
+                mode=cfg.mode,
+                live=live,
+                idle=False,
+                health=decision["health"],
+                passes=i + 1,
+                max_passes=max_passes,
+                progress=total_progress,
+                results=results,
+                last=tick,
+                note="stopped: zero progress this pass (waiting or blocked)",
             )
         prev_work_key = work_key
 

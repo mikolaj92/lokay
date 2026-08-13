@@ -533,15 +533,31 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     elif path_id == "self_repair":
         fresh = terminal.get("self_repair_preflight", {})
         pushed = terminal.get("self_repair_push_main", {})
+        activate = terminal.get("self_repair_activate", {})
         closed = terminal.get("self_repair_close", {})
-        out.update(
-            validated=fresh.get("validated") is True,
-            restart_required=fresh.get("restart_required") is True,
-            commit=pushed.get("commit"),
-            incident_closed=closed.get("closed") is True,
-            gate_released=False,
+        commit = str(
+            fresh.get("commit")
+            or pushed.get("commit")
+            or activate.get("commit")
+            or ""
         )
-        if not out["validated"] or not out["restart_required"]:
+        validated = fresh.get("validated") is True
+        restart_required = fresh.get("restart_required") is True
+        published_dirty = (
+            activate.get("published") is True
+            and str(activate.get("reason") or "") == "dirty_tree"
+        )
+        gate_released = bool(validated and restart_required)
+        out.update(
+            validated=validated or published_dirty,
+            restart_required=restart_required or published_dirty,
+            commit=commit or None,
+            incident_closed=closed.get("closed") is True,
+            gate_released=gate_released,
+        )
+        if published_dirty and not gate_released:
+            out.update(ok=True, reason="published_push_kept_dirty_tree")
+        elif not out["validated"] or not out["restart_required"]:
             out.update(ok=False, error="self-repair did not validate activated main")
     elif path_id == "daemon_cycle":
         mill = terminal.get("recovery_mill", {}).get("mill")

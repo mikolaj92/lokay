@@ -29,6 +29,22 @@ def main(argv: list[str] | None = None) -> int:
             capture_output=True, text=True, timeout=30, check=False,
         )
         if status.returncode or status.stdout.strip():
+            # Do not undo a push that already landed on origin/main.
+            contains = subprocess.run(
+                ["git", "-C", str(repo.clone_path), "merge-base", "--is-ancestor", args.commit, "origin/main"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            if contains.returncode == 0:
+                return emit_exit(
+                    ok(
+                        planned=False,
+                        activated=False,
+                        published=True,
+                        reason="dirty_tree",
+                        path=str(repo.clone_path),
+                        commit=args.commit,
+                    )
+                )
             raise RuntimeError("canonical Lokay checkout is not clean")
         for command in (
             ["git", "-C", str(repo.clone_path), "fetch", "origin", "main"],
