@@ -1038,6 +1038,16 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
 
     if atom == "commit_all":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        assert worktree
+        gate = _run_atom_main(assert_real_diff.main, ["--worktree", worktree])
+        if not (isinstance(gate, dict) and gate.get("real") is True):
+            return {
+                "ok": False,
+                "error": str((gate or {}).get("error") or "refusing commit: not a real diff"),
+                "reason": str((gate or {}).get("reason") or "plan_only"),
+                "committed": False,
+                "kind": (gate or {}).get("kind"),
+            }
         issue_raw = up.get("get_issue", {}).get("issue") or {}
         if repair_mode and pr_number is not None:
             msg = str(inputs.get("message") or f"repair: {repo} PR #{pr_number} checks")

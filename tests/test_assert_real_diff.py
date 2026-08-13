@@ -177,7 +177,7 @@ def test_organ_push_without_real_diff_fails(monkeypatch):
     assert "assert_real_diff" in by_id
     assert "assert_real_diff" in by_id["push"]["conduction"]
     assert "assert_real_diff" in by_id["pr_create"]["conduction"]
-    assert "test_local" in by_id["assert_real_diff"]["conduction"]
-    assert "commit_all" in by_id["assert_real_diff"]["conduction"]
+    assert "run_agent" in by_id["assert_real_diff"]["conduction"]
+    assert "assert_real_diff" in by_id["commit_all"]["conduction"]
     assert "push" not in by_id["assert_real_diff"]["conduction"]
     assert "pr_create" not in by_id["assert_real_diff"]["conduction"]

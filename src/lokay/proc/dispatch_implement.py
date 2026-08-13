@@ -1,4 +1,4 @@
-"""One job: intake gate + issue_to_pr up to K (serial budget) across clean repos."""
+"""One job: intake gate + detach up to K issue_to_pr (one per repo, parallel)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,11 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from lokay.compose.issue_to_pr import compose_issue_to_pr
+import os
+import subprocess
+import sys
+
+from lokay.pass_receipt import build_pass_receipt, write_pass_receipt
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc, run_select
@@ -93,12 +97,25 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     i for i in implementable if int(i.get("number", -1)) != num
                 ]
                 continue
-            result = compose_issue_to_pr(
-                config_path=config_path,
-                repo=selected["repo"],
-                issue_number=num,
-                live=True,
+            argv = [sys.executable, "-m", "lokay.compose.issue_to_pr"]
+            if config_path:
+                argv.extend(["--config", str(config_path)])
+            argv.extend(["--live", "--repo", str(selected["repo"]), "--issue", str(num)])
+            root = os.environ.get("LOKAY_ROOT") or str(Path.cwd())
+            proc = subprocess.Popen(
+                argv,
+                cwd=root,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
+            result = {
+                "ok": True,
+                "detached": True,
+                "pid": int(proc.pid),
+                "repo": selected["repo"],
+                "issue": num,
+            }
             actions.append({"step": "issue_to_pr", **result})
             issue_budget -= 1
             issue_to_pr_started += 1
@@ -188,7 +205,34 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
         }
     )
     pass_io.write_json(pass_io.working_path(pass_dir), working)
-    return ok(pass_dir=pass_dir, started=issue_to_pr_started)
+    try:
+        state_path = Path(str(begin.get("state_path") or Path.home() / ".lokay" / "state.jsonl"))
+        receipt = build_pass_receipt(
+            tick={
+                "ok": True,
+                "health": "running",
+                "progress": progress,
+                "live": True,
+                "remaining": {
+                    "issue_to_pr_started": issue_to_pr_started,
+                    "max_issue_to_pr_per_pass": int(
+                        begin.get("max_issue_to_pr_per_pass") or issue_budget
+                    ),
+                    "ready": remaining_ready,
+                    "actionable_open_ai_prs": actionable_prs,
+                },
+                "note": "implement detached; last-pass does not wait on pi",
+            },
+            merge_enabled=bool(begin.get("merge_enabled")),
+            require_checks=bool(begin.get("require_checks")),
+            require_llm_review=bool(begin.get("require_llm_review")),
+            max_issue_to_pr_per_pass=int(begin.get("max_issue_to_pr_per_pass") or 0),
+            config_path=begin.get("config_path") or config_path,
+        )
+        write_pass_receipt(receipt, state_path=state_path)
+    except OSError:
+        pass
+    return ok(pass_dir=pass_dir, started=issue_to_pr_started, detached=True)
 
 
 def main(argv: list[str] | None = None) -> int:
