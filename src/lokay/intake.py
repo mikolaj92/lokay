@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from lokay.models import Issue
+from lokay.triage import is_parked, is_undecided
 
 # --- Verdicts for one check ---
 PASS = "pass"
@@ -651,6 +652,42 @@ def _needs_human_comment(hit: CheckResult) -> str:
         f"Needs feedback (rare): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
         "Clarify a single implementable ask, then remove this label."
     )
+
+
+def should_run_intake(
+    issue_labels: list[str],
+    *,
+    ready_label: str,
+    needs_feedback_label: str,
+    blocked_label: str,
+    candidate_ready: bool = False,
+    candidate_split: bool = False,
+) -> tuple[bool, str]:
+    """Intake runs for ready/split candidates; skips parked / undecided / human-parked."""
+    if is_parked(issue_labels):
+        return False, "parked_frozen"
+    labels = set(issue_labels)
+    if ready_label in labels:
+        return True, "already_ready"
+    if candidate_split:
+        return True, "triage_split_candidate"
+    if candidate_ready:
+        # Upstream triage decided ready (including dry-run where labels are not applied).
+        return True, "triage_ready_candidate"
+    if blocked_label in labels:
+        return False, "blocked"
+    if needs_feedback_label in labels:
+        return False, "needs_feedback"
+    # Undecided inbox: triage_issue should have run first in issue_triage.
+    # If somehow still undecided, skip (do not READY from intake alone).
+    if is_undecided(
+        issue_labels,
+        ready_label=ready_label,
+        blocked_label=blocked_label,
+        needs_feedback_label=needs_feedback_label,
+    ):
+        return False, "undecided_await_triage"
+    return False, "not_ready_candidate"
 
 
 def decide_intake(

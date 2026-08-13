@@ -14,6 +14,7 @@ from lokay.intake import (
     check_superseded,
     decide_intake,
     probe_repo_shape,
+    should_run_intake,
 )
 from lokay.models import Issue
 
@@ -335,3 +336,27 @@ def test_normalize_issue_triage_split_applied():
     assert out["decision"]["decision"] == "split"
     assert out["applied"] is True
     assert out["skipped"] is False
+
+
+def _gate(**kwargs):
+    kw = dict(
+        ready_label="ai:ready",
+        needs_feedback_label="ai:needs-feedback",
+        blocked_label="ai:blocked",
+    )
+    kw.update(kwargs)
+    return should_run_intake(**kw)
+
+
+def test_should_run_intake_ready_and_candidates():
+    assert _gate(issue_labels=["ai:ready"]) == (True, "already_ready")
+    assert _gate(issue_labels=[], candidate_split=True) == (True, "triage_split_candidate")
+    assert _gate(issue_labels=[], candidate_ready=True) == (True, "triage_ready_candidate")
+
+
+def test_should_run_intake_skips_parked_blocked_undecided():
+    assert _gate(issue_labels=["frozen"]) == (False, "parked_frozen")
+    assert _gate(issue_labels=["ai:blocked"]) == (False, "blocked")
+    assert _gate(issue_labels=["ai:needs-feedback"]) == (False, "needs_feedback")
+    assert _gate(issue_labels=[]) == (False, "undecided_await_triage")
+    assert _gate(issue_labels=["ai:in-progress"]) == (False, "not_ready_candidate")
