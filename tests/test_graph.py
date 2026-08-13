@@ -109,6 +109,12 @@ def test_describe_issue_to_pr_graph():
     assert "stage_implementing" in worktree["conduction"]
     pr_open = next(n for n in path["nodes"] if n["id"] == "stage_pr_open")
     assert "pr_create" in pr_open["conduction"]
+    repair = next(n for n in path["nodes"] if n["id"] == "repair_agent")
+    assert "test_local" in repair["conduction"]
+    recheck = next(n for n in path["nodes"] if n["id"] == "test_local_recheck")
+    assert "repair_agent" in recheck["conduction"]
+    push = next(n for n in path["nodes"] if n["id"] == "push")
+    assert "test_local_recheck" in push["conduction"]
 
 
 def test_issue_to_pr_plan_issue_before_run_agent():
@@ -336,7 +342,8 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
         "issue_to_pr": {
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
-            "test_local", "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
+            "test_local", "repair_agent", "test_local_recheck",
+            "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
         },
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {

@@ -45,11 +45,15 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc), worktree=str(worktree)))
     if tests.returncode != 0:
+        # Bounded failure log for the one-shot repair patch nest (AlphaCodium:
+        # the test log drives exactly one repair attempt, never a PR).
         return emit_exit(
             err(
                 "local test suite failed",
                 returncode=tests.returncode,
                 worktree=str(worktree),
+                stdout_tail=(tests.stdout or "")[-4000:],
+                stderr_tail=(tests.stderr or "")[-2000:],
             )
         )
     return emit_exit(
