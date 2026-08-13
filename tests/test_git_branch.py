@@ -1,0 +1,39 @@
+"""Title slugs must not nest git refs (GitHub PR head is one branch)."""
+
+from __future__ import annotations
+
+from lokay.git_branch import branch_for_issue
+
+
+def _assert_single_head(prefix: str, branch: str) -> None:
+    assert branch.startswith(f"{prefix}/")
+    assert "/" not in branch[len(prefix) + 1 :]
+
+
+def test_slash_in_title_is_not_a_nested_ref():
+    branch = branch_for_issue(
+        "ai/fix",
+        "mikolaj92/lokay",
+        85,
+        "Dodać mikolaj92/heimdall do katalogu Lokaya",
+    )
+    _assert_single_head("ai/fix", branch)
+    assert "mikolaj92-heimdall" in branch
+    assert branch.startswith("ai/fix/85-")
+
+
+def test_docs_path_in_title_is_not_a_nested_ref():
+    branch = branch_for_issue(
+        "ai/fix",
+        "mikolaj92/lokay",
+        70,
+        "canary mill smoke add docs/MILL_SMOKE.md",
+    )
+    _assert_single_head("ai/fix", branch)
+    assert "docs-mill_smoke.md" in branch
+
+
+def test_plain_title_keeps_prefix_slash():
+    branch = branch_for_issue("ai/fix", "a/b", 3, "Hello World")
+    _assert_single_head("ai/fix", branch)
+    assert branch.startswith("ai/fix/3-hello-world-")
