@@ -6,8 +6,10 @@ from lokay.pr_review import (
     PrReviewError,
     build_review_comment_body,
     count_request_changes_reviews,
+    decide_review_merge,
     find_review_for_head,
     format_review_marker,
+    labels_for_review,
     parse_review_markers,
     parse_review_output,
     should_escalate_request_changes,
@@ -127,3 +129,14 @@ def test_request_changes_escalation_cap():
     )
     assert count_request_changes_reviews(markers) == 2
     assert should_escalate_request_changes(2, max_request_changes=2) is True
+
+
+def test_labels_and_merge_decision_helpers():
+    d = parse_review_output(
+        '{"verdict":"request_changes","secrets":false,"blocking":["x"]}'
+    )
+    assert labels_for_review(d, escalated=False) == ["ai:request-changes"]
+    assert labels_for_review(d, escalated=True) == ["ai:needs-review"]
+    merge_ok, escalated = decide_review_merge(d, 1, max_request_changes=2)
+    assert merge_ok is False
+    assert escalated is True

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from lokay.pr_review import format_review_marker
+from lokay import pr_review_io
 from lokay.proc import pr_review as pr_review_mod
 from lokay.runner import CommandResult, CommandSpec
 
@@ -86,11 +87,9 @@ def test_same_head_skips_llm_and_does_not_repost(tmp_path, monkeypatch, capsys):
         "run_agent",
         lambda *a, **k: agent_calls.append(1) or {"status": "ok", "stdout_tail": "{}"},
     )
-    monkeypatch.setattr(pr_review_mod, "ensure_labels", lambda *a, **k: None)
-    monkeypatch.setattr(pr_review_mod, "add_pr_labels", lambda *a, **k: None)
-    monkeypatch.setattr(
-        pr_review_mod, "resolve_repo_clone", lambda *a, **k: tmp_path
-    )
+    monkeypatch.setattr(pr_review_io, "ensure_labels", lambda *a, **k: None)
+    monkeypatch.setattr(pr_review_io, "add_pr_labels", lambda *a, **k: None)
+    monkeypatch.setattr(pr_review_io, "review_worktree", lambda *a, **k: tmp_path)
 
     code = pr_review_mod.main(
         ["--config", _cfg(tmp_path), "--live", "--repo", "a/b", "--pr", "7"]
@@ -135,15 +134,13 @@ def test_request_changes_cap_escalates_to_needs_review(tmp_path, monkeypatch, ca
             ),
         },
     )
-    monkeypatch.setattr(pr_review_mod, "ensure_labels", lambda *a, **k: None)
+    monkeypatch.setattr(pr_review_io, "ensure_labels", lambda *a, **k: None)
 
     def _add_labels(r, repo, pr, labels, *, live):
         labels_added.extend(labels)
 
-    monkeypatch.setattr(pr_review_mod, "add_pr_labels", _add_labels)
-    monkeypatch.setattr(
-        pr_review_mod, "resolve_repo_clone", lambda *a, **k: tmp_path
-    )
+    monkeypatch.setattr(pr_review_io, "add_pr_labels", _add_labels)
+    monkeypatch.setattr(pr_review_io, "review_worktree", lambda *a, **k: tmp_path)
 
     code = pr_review_mod.main(
         ["--config", _cfg(tmp_path, max_rc=2), "--live", "--repo", "a/b", "--pr", "7"]

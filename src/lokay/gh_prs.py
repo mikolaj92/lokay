@@ -10,6 +10,47 @@ from lokay.models import PullRequest
 from lokay.runner import CommandResult, Runner, gh_spec
 
 
+def gh_json(
+    runner: Runner, args: list[str], *, live: bool, timeout_seconds: int = 120
+) -> dict[str, Any]:
+    result = runner.run_checked(gh_spec(args, timeout_seconds=timeout_seconds), live=live)
+    if not live:
+        return {}
+    return json.loads(result.stdout or "{}")
+
+
+def gh_text(
+    runner: Runner, args: list[str], *, live: bool, timeout_seconds: int = 120
+) -> str:
+    result = runner.run(gh_spec(args, timeout_seconds=timeout_seconds), live=live)
+    if not live:
+        return ""
+    return ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+
+
+def comment_bodies(view: dict[str, Any]) -> list[str]:
+    comments = view.get("comments") or []
+    if not isinstance(comments, list):
+        return []
+    bodies: list[str] = []
+    for row in comments:
+        if isinstance(row, dict) and isinstance(row.get("body"), str):
+            bodies.append(row["body"])
+        elif isinstance(row, str):
+            bodies.append(row)
+    return bodies
+
+
+def comment_pr(runner: Runner, repo: str, number: int, body: str, *, live: bool) -> None:
+    runner.run_checked(
+        gh_spec(
+            ["pr", "comment", str(number), "--repo", repo, "--body", body],
+            timeout_seconds=60,
+        ),
+        live=live,
+    )
+
+
 def _label_names(value: Any) -> list[str] | None:
     if not isinstance(value, list):
         return None
@@ -200,21 +241,17 @@ def close_pr(
 
 
 def view_pr(runner: Runner, repo: str, number: int, *, live: bool) -> dict[str, Any]:
-    result = runner.run_checked(
-        gh_spec(
-            [
-                "pr",
-                "view",
-                str(number),
-                "--repo",
-                repo,
-                "--json",
-                "number,title,body,comments,commits,statusCheckRollup,headRefName,url",
-            ],
-            timeout_seconds=60,
-        ),
+    return gh_json(
+        runner,
+        [
+            "pr",
+            "view",
+            str(number),
+            "--repo",
+            repo,
+            "--json",
+            "number,title,body,comments,commits,statusCheckRollup,headRefName,url",
+        ],
         live=live,
+        timeout_seconds=60,
     )
-    if not live:
-        return {}
-    return json.loads(result.stdout or "{}")
