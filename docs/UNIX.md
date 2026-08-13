@@ -48,7 +48,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-plan-pass` | select triage / closeout targets (per-repo PR-first) |
 | `lokay-dispatch-triage` | run planned inbox triage children |
 | `lokay-resolve-conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready |
-| `lokay-closeout-prs` | checks / repair / merge / wait open AI PRs |
+| `lokay-closeout-pr` | one open AI PR: checks → route → triage/repair/ci-waiting |
+| `lokay-closeout-prs` | for-each remaining AI PRs via lokay-closeout-pr |
 | `lokay-dispatch-closeout` | thin bridge: resolve_conflicts then closeout_prs |
 | `lokay-select-implement` | clean repos eligible for issue_to_pr |
 | `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement |

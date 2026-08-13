@@ -1,215 +1,60 @@
-"""One job: checks / repair / merge / wait for remaining open AI PRs."""
+"""Thin for-each: remaining open AI PRs via lokay-closeout-pr + recount."""
 
 from __future__ import annotations
 
 import argparse
 from typing import Any
 
-from lokay.compose.pr_repair import compose_pr_repair
-from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit, err, ok
-from lokay.merge_policy import WAITING_REASONS
-from lokay.passkit.support import is_manual_pr, run_proc
 from lokay.passkit.working import (
     load_begin_working,
     recount_prs,
     save_begin_working,
     stuck_path_of,
 )
-from lokay.proc import pr_checks as p_checks
-from lokay.proc import stage_label as p_stage
+from lokay.closeout import COUNTERS
 from lokay.proc._common import add_config_live
-from lokay.proc.pr_route import run_pr_route
-from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
+from lokay.proc.closeout_pr import run_closeout_pr
+from lokay.stuck import save_stuck
 
 
 def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     begin, working = load_begin_working(pass_dir)
-    cfg_flag = ["--config", config_path] if config_path else []
-    live_flag = ["--live"] if live else []
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
     progress = int(working.get("progress") or 0)
     stuck = dict(working.get("stuck") or {})
     stuck_path = stuck_path_of(begin)
-    branch_prefix = str(begin.get("branch_prefix") or "ai/fix/")
     repair_budget = int(begin.get("repair_budget") or 0)
-    executor_enabled = bool(begin.get("executor_enabled"))
-    merge_enabled = bool(begin.get("merge_enabled"))
-    require_checks = bool(begin.get("require_checks"))
     prs_by_repo: dict[str, list[dict[str, Any]]] = {
         k: list(v) for k, v in dict(working.get("prs_by_repo") or {}).items()
     }
     remaining_prs = int(working.get("remaining_prs") or 0)
-    pending_checks = int(working.get("pending_checks") or 0)
-    no_checks_blocked = int(working.get("no_checks_blocked") or 0)
-    merge_conflicts = int(working.get("merge_conflicts") or 0)
-    needs_repair = int(working.get("needs_repair") or 0)
-    mergeable_green = int(working.get("mergeable_green") or 0)
-    merge_disabled = int(working.get("merge_disabled") or 0)
-    review_limbo = int(working.get("review_limbo") or 0)
+    totals = {key: int(working.get(key) or 0) for key in COUNTERS}
 
     for repo_name in list(begin.get("repos") or []):
         still_open: list[dict[str, Any]] = []
         for pr in list(prs_by_repo.get(repo_name) or []):
-            if is_manual_pr(pr):
-                still_open.append(pr)
-                actions.append(
-                    {
-                        "step": "skip_manual_pr",
-                        "repo": repo_name,
-                        "pr": int(pr["number"]),
-                        "reason": "ai:needs-review is terminal/manual",
-                    }
-                )
-                continue
-            pr_num = int(pr["number"])
-            head = str(pr.get("head_ref") or "")
-            # Conflicts are handled by resolve_conflicts (upstream Fala atom).
-            if str(pr.get("mergeable") or "").upper() in {"CONFLICTING", "DIRTY"}:
-                still_open.append(pr)
-                continue
-            chk = run_proc(
-                p_checks.main, [*cfg_flag, "--repo", repo_name, "--pr", str(pr_num)]
-            )
-            actions.append({"step": "pr_checks", "pr": pr_num, **chk})
-            if not chk.get("ok"):
-                still_open.append(pr)
-                continue
-            routed = run_pr_route(
-                checks=chk,
-                merge_enabled=merge_enabled,
-                require_checks=require_checks,
-                labels=pr.get("labels"),
-            )
-            route = str(routed.get("route") or "skip")
-            reason = str(routed.get("reason") or "")
-            if route == "repair":
-                needs_repair += 1
-                if live and repair_budget > 0 and executor_enabled and head:
-                    repair = compose_pr_repair(
-                        config_path=config_path,
-                        repo=repo_name,
-                        pr_number=pr_num,
-                        branch=head,
-                        live=True,
-                    )
-                    actions.append(
-                        {"step": "pr_repair", "pr": pr_num, "branch": head, **repair}
-                    )
-                    repair_budget -= 1
-                still_open.append(pr)
-                continue
-            if route == "wait":
-                if reason == "checks_pending":
-                    pending_checks += 1
-                    issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
-                    if live and issue_n is not None:
-                        staged = run_proc(
-                            p_stage.main,
-                            [
-                                *cfg_flag,
-                                *live_flag,
-                                "--repo",
-                                repo_name,
-                                "--issue",
-                                str(issue_n),
-                                "--stage",
-                                "ci-waiting",
-                            ],
-                        )
-                        actions.append(
-                            {
-                                "step": "stage_ci_waiting",
-                                "repo": repo_name,
-                                "issue": issue_n,
-                                "pr": pr_num,
-                                **staged,
-                            }
-                        )
-                elif reason == "checks_none_require_checks":
-                    no_checks_blocked += 1
-                elif reason == "merge_disabled":
-                    mergeable_green += 1
-                    merge_disabled += 1
-                still_open.append(pr)
-                continue
-            if route != "merge":
-                still_open.append(pr)
-                continue
-            mergeable_green += 1
-            if not live or not head:
-                still_open.append(pr)
-                continue
-            tri = compose_pr_triage(
-                config_path=config_path,
+            out = run_closeout_pr(
                 repo=repo_name,
-                pr_number=pr_num,
-                branch=head,
-                live=True,
+                pr=pr,
+                config_path=config_path,
+                live=live,
+                merge_enabled=bool(begin.get("merge_enabled")),
+                require_checks=bool(begin.get("require_checks")),
+                repair_budget=repair_budget,
+                executor_enabled=bool(begin.get("executor_enabled")),
+                branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
+                stuck=stuck,
+                stuck_path=stuck_path,
             )
-            actions.append({"step": "pr_triage", "pr": pr_num, "branch": head, **tri})
-            if not tri.get("ok"):
+            actions.extend(out.get("actions") or [])
+            repair_budget = int(out.get("repair_budget") or 0)
+            progress += int(out.get("progress") or 0)
+            remaining_prs = max(0, remaining_prs - int(out.get("remaining_closed") or 0))
+            for key in COUNTERS:
+                totals[key] += int(out.get(key) or 0)
+            if out.get("still_open"):
                 still_open.append(pr)
-                continue
-            if tri.get("skipped"):
-                tri_reason = str(tri.get("reason") or "")
-                if tri.get("waiting") or tri_reason in WAITING_REASONS:
-                    if tri_reason == "checks_pending":
-                        pending_checks += 1
-                    elif tri_reason == "checks_none_require_checks":
-                        no_checks_blocked += 1
-                    elif tri_reason == "merge_disabled":
-                        merge_disabled += 1
-                    mergeable_green = max(0, mergeable_green - 1)
-                elif tri.get("repairable") or tri_reason == "checks_failed":
-                    needs_repair += 1
-                    if tri_reason == "checks_failed":
-                        mergeable_green = max(0, mergeable_green - 1)
-                    if repair_budget > 0 and executor_enabled:
-                        repair = compose_pr_repair(
-                            config_path=config_path,
-                            repo=repo_name,
-                            pr_number=pr_num,
-                            branch=head,
-                            live=True,
-                            review=dict(tri.get("review") or {}),
-                        )
-                        actions.append(
-                            {
-                                "step": "pr_review_repair",
-                                "pr": pr_num,
-                                "branch": head,
-                                **repair,
-                            }
-                        )
-                        repair_budget -= 1
-                else:
-                    mergeable_green = max(0, mergeable_green - 1)
-                    review_limbo += 1
-                if tri.get("reason") == "merge_conflicts":
-                    merge_conflicts += 1
-                review = tri.get("review")
-                if (
-                    tri.get("escalated")
-                    or tri.get("needs_review")
-                    or (
-                        isinstance(review, dict)
-                        and (
-                            review.get("verdict") == "needs_human"
-                            or review.get("secrets") is True
-                        )
-                    )
-                ):
-                    pr["labels"] = ["ai:needs-review"]
-                still_open.append(pr)
-                continue
-            progress += 1
-            remaining_prs = max(0, remaining_prs - 1)
-            mergeable_green = max(0, mergeable_green - 1)
-            issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
-            if issue_n is not None:
-                clear_issue(stuck, repo_name, issue_n)
-                save_stuck(stuck_path, stuck)
         prs_by_repo[repo_name] = still_open
 
     if live:
@@ -223,13 +68,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
             "stuck": stuck,
             "prs_by_repo": prs_by_repo,
             "remaining_prs": remaining_prs,
-            "pending_checks": pending_checks,
-            "no_checks_blocked": no_checks_blocked,
-            "merge_conflicts": merge_conflicts,
-            "needs_repair": needs_repair,
-            "mergeable_green": mergeable_green,
-            "merge_disabled": merge_disabled,
-            "review_limbo": review_limbo,
+            **totals,
         }
     )
     recount_prs(working)
@@ -238,9 +77,9 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
         pass_dir=pass_dir,
         remaining_prs=int(working.get("remaining_prs") or 0),
         actionable_prs=int(working.get("actionable_prs") or 0),
-        needs_repair=needs_repair,
-        mergeable_green=mergeable_green,
-        merge_disabled=merge_disabled,
+        needs_repair=totals["needs_repair"],
+        mergeable_green=totals["mergeable_green"],
+        merge_disabled=totals["merge_disabled"],
     )
 
 
