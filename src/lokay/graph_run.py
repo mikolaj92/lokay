@@ -98,7 +98,13 @@ def run_path(
     if not pkg_src.is_file():
         raise FileNotFoundError(f"Fala package not found: {pkg_src}")
 
-    work = Path(db_path) if db_path else Path.home() / ".lokay" / "fala"
+    if db_path:
+        work = Path(db_path)
+    elif path_id == "issue_to_pr" and issue is not None and "/" in str(repo):
+        owner, name = str(repo).split("/", 1)
+        work = Path.home() / ".lokay" / "fala" / "i2pr" / f"{owner}__{name}__{int(issue)}"
+    else:
+        work = Path.home() / ".lokay" / "fala"
     work.mkdir(parents=True, exist_ok=True)
     pkg_runtime = work / "lokay.fala-package.toml"
     project = _project_root()
@@ -160,9 +166,10 @@ def run_path(
         ),
         "issue_to_pr": (
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
-            "worktree_add", "plan_issue", "localize", "run_agent", "commit_all",
-            "test_local", "repair_agent", "test_local_recheck", "assert_real_diff",
-            "push", "pr_create", "stage_pr_open", "list_prs", "pr_label",
+            "worktree_add", "plan_issue", "localize", "cycle_start", "run_agent",
+            "commit_all", "test_local", "repair_agent", "test_local_recheck",
+            "assert_real_diff", "push", "pr_create", "cycle_end", "stage_pr_open",
+            "list_prs", "pr_label",
         ),
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": (

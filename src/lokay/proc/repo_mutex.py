@@ -69,6 +69,16 @@ def _is_pi_command(command: str) -> bool:
     return argv0.rsplit("/", 1)[-1] == "pi"
 
 
+
+def _is_issue_to_pr_command(command: str) -> bool:
+    return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
+
+
+def _holds_repo(command: str, repo: str) -> bool:
+    if not _mentions_repo(command, repo):
+        return False
+    return _is_pi_command(command) or _is_issue_to_pr_command(command)
+
 def _mentions_repo(command: str, repo: str) -> bool:
     owner, name = repo.split("/", 1)
     for needle in (f"{owner}/{name}", f"{owner}__{name}"):
@@ -84,7 +94,7 @@ def pids_for_repo(ps_text: str, repo: str) -> list[int]:
     for pid, command in parse_ps(ps_text):
         if pid <= 0 or pid in seen:
             continue
-        if _is_pi_command(command) and _mentions_repo(command, repo):
+        if _holds_repo(command, repo):
             seen.add(pid)
             found.append(pid)
     found.sort()

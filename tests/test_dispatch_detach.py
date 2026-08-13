@@ -57,6 +57,8 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
     monkeypatch.setattr(d, "run_select", fake_select)
     monkeypatch.setattr(d, "run_proc", fake_proc)
     monkeypatch.setattr(d, "save_stuck", lambda *a, **k: None)
+    monkeypatch.setattr(d, "_live_ps_text", lambda: "")
+    monkeypatch.setattr(d, "inspect_mutex", lambda **k: {"ok": True, "busy": False})
     out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
     assert out.get("ok") is True
     assert out.get("detached") is True

@@ -18,6 +18,7 @@ from lokay.proc import intake_issue as p_intake
 from lokay.proc import label_issue as p_label
 from lokay.proc import select_issue as p_select
 from lokay.proc._common import add_config_live
+from lokay.proc.repo_mutex import inspect_mutex, _live_ps_text
 from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuck
 
 
@@ -49,9 +50,17 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
     if not live or issue_budget <= 0:
         return ok(pass_dir=pass_dir, started=0, skipped=True, reason="dry_run")
 
+    try:
+        ps_text = _live_ps_text()
+    except Exception:
+        ps_text = ""
     for repo_name in list(implement.get("clean_repos") or []):
         if issue_budget <= 0:
             break
+        mutex = inspect_mutex(repo=str(repo_name), ps_text=ps_text)
+        if mutex.get("busy"):
+            actions.append({"step": "skip_repo_mutex", "repo": repo_name, "pids": mutex.get("pids")})
+            continue
         implementable = list(ready_by_repo.get(repo_name) or [])
         if not implementable:
             continue
