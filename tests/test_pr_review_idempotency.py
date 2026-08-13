@@ -229,4 +229,6 @@ state:
     assert result["remaining"]["needs_repair"] == 0
     assert result["remaining"]["manual_open_ai_prs"] == 1
     assert result["remaining"]["review_limbo"] == 1
-    assert result["health"] in {"waiting", "idle"} or result["ok"] is True
+    assert result["health"] == "waiting"
+    assert result["ok"] is True
+    assert result["idle"] is False

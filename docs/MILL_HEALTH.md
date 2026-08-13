@@ -60,7 +60,7 @@ the transcript.
 | --- | --- |
 | `idle` | No remaining actionable work — mill may sleep until new issues |
 | `progress` | Last pass moved the queue — healthy |
-| `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / only manual PRs — honest wait |
+| `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox — honest wait |
 | `repairing` | Repair / request_changes cycle in flight — honest wait |
 | `stall` | Actionable work with no progress — investigate agent/config (not merge-disarmed green) |
 | `survey_error` | `gh` list atoms failed — fix network/auth before trusting idle |
@@ -73,6 +73,11 @@ matrix (`WAITING_REASONS` → `pending_checks` / `no_checks_blocked` /
 `merge_disabled`). Green checks with `merge.enabled` false are `waiting` (mill
 ok-stop), never false `stall`. Arm merge to proceed; do not treat this as
 recovery.
+
+**Needs-review is mailbox, not stall:** parked `ai:needs-review` PRs are human
+mailbox residual (`waiting` / `human_residuals`). They must not count as mill
+`stall`, must not mint a recovery fingerprint, and must not PR-first-block
+implement of *other* ready issues in that repo.
 
 **Recovery boundary:** `waiting` / `repairing` (and other soft mill health) must
 not mint systemic stall fingerprints or fill the daemon 4-of-5 quorum into
