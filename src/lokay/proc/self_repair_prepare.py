@@ -13,6 +13,21 @@ from lokay.runner import git_spec
 REPO = "mikolaj92/lokay"
 
 
+def published_self_repair_commit(*, clone: Path, fingerprint: str, run) -> str:
+    """Return origin/main SHA that already contains this fingerprint, or ''."""
+    needle = f"self-repair: {fingerprint}"
+    listed = run.run(
+        git_spec(
+            ["log", "origin/main", "--grep", needle, "-1", "--format=%H"],
+            cwd=clone,
+            timeout_seconds=60,
+        ),
+        live=True,
+    )
+    sha = (listed.stdout or "").strip().splitlines()
+    return sha[0] if sha and len(sha[0]) >= 7 else ""
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-self-repair-prepare")
     add_config_live(p)
@@ -40,6 +55,20 @@ def main(argv: list[str] | None = None) -> int:
             git_spec(["fetch", "origin", "main"], cwd=repo.clone_path, timeout_seconds=300),
             live=True,
         )
+        existing = published_self_repair_commit(
+            clone=repo.clone_path, fingerprint=args.fingerprint, run=run
+        )
+        if existing:
+            return emit_exit(
+                ok(
+                    planned=False,
+                    repo=REPO,
+                    worktree="",
+                    base_sha=existing,
+                    commit=existing,
+                    already_on_main=True,
+                )
+            )
         if worktree.exists():
             run.run(
                 git_spec(["worktree", "remove", "--force", str(worktree)], cwd=repo.clone_path),

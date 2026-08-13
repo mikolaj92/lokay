@@ -771,10 +771,19 @@ def test_rejected_inherited_lease_does_not_run_or_replace_preflight(tmp_path, mo
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested preflight")),
     )
 
-    with pytest.raises(RuntimeError, match="lease=lease_unavailable_"):
-        preflight.require_healthy("config.yaml")
-
+    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    # Missing file + inherited token: restore the record, then mutate.
+    preflight.require_healthy("config.yaml")
+    assert preflight.has_health_lease() is True
     assert __import__("os").environ["LOKAY_HEALTH_LEASE"] == "a" * 64
+
+
+def test_expired_inherited_lease_still_fail_closed(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
+    monkeypatch.setattr(preflight, "health_lease_status", lambda: (False, "expired"))
+    with pytest.raises(RuntimeError, match="lease=expired"):
+        preflight.require_healthy("config.yaml")
 
 
 def test_commit_and_push_dry_run_do_not_require_config(tmp_path, monkeypatch, capsys):
@@ -824,7 +833,17 @@ def test_child_cannot_replace_parent_health_lease(tmp_path, monkeypatch):
 
 
 def test_rejected_inherited_lease_cannot_be_replaced(tmp_path, monkeypatch):
+    import json
+    import time
+
     monkeypatch.setenv("HOME", str(tmp_path))
+    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    preflight.issue_health_lease()
+    path = tmp_path / ".lokay" / "health-lease"
+    record = json.loads(path.read_text())
+    record["expires_at"] = int(time.time()) - 1
+    path.write_text(json.dumps(record))
+    path.chmod(0o600)
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
 
     with pytest.raises(RuntimeError, match="refusing to replace inherited health lease"):

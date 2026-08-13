@@ -1,4 +1,5 @@
 from lokay.proc import dispatch_implement as d
+from lokay.proc import detach_issue_to_pr as detach_mod
 
 
 def test_detach_does_not_wait(monkeypatch, tmp_path):
@@ -9,7 +10,7 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
             seen.append((argv, kwargs.get("start_new_session")))
             self.pid = 4242
 
-    monkeypatch.setattr(d.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(d, "detach_issue_to_pr", lambda **k: detach_mod.detach_issue_to_pr(**k, popen=FakePopen))
     begin = {
         "live": True,
         "issue_budget": 4,

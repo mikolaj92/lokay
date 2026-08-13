@@ -179,3 +179,10 @@ LATEST="${LOG_DIR}/mill-latest.log"
 # editable installs of Lokay or Fala after either checkout was repaired.
 # One Python process owns the crash-safe OS lock across preflight and all work.
 uv run --reinstall-package lokay --reinstall-package fala lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" 2>&1 | tee "${LOG}" | tee "${LATEST}"
+# Self-repair writes this flag when activate+preflight released the gate.
+if [[ -f "${LOKAY_HOME}/restart-required" ]]; then
+  rm -f "${LOKAY_HOME}/restart-required" || true
+  if ! mill_lock_busy; then
+    reload_launchagent "${LOKAY_LAUNCHD_PLIST}" "${LOKAY_LAUNCHD_LABEL}" || true
+  fi
+fi

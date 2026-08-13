@@ -22,8 +22,16 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     # Re-running here would mistake the parent's singleton lock for contention.
     lease_ok, lease_reason = health_lease_status()
     if live and os.environ.get("LOKAY_HEALTH_LEASE"):
-        # A delegated capability must validate as-is. Never let nested Fala mint
-        # a replacement lease owned by a short-lived begin atom.
+        # A delegated capability must validate as-is. Restore only a missing
+        # file for the same token — never mint a replacement for expired/mismatch.
+        if not lease_ok and str(lease_reason).startswith("lease_unavailable_FileNotFound"):
+            from lokay.preflight import issue_health_lease
+
+            try:
+                issue_health_lease()
+            except RuntimeError:
+                pass
+            lease_ok, lease_reason = health_lease_status()
         preflight = (
             {"ok": True, "lease": True}
             if lease_ok

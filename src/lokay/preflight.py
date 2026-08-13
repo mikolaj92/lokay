@@ -236,8 +236,15 @@ def issue_health_lease(
         healthy, reason = health_lease_status()
         if healthy:
             return
-        raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
-    token = secrets.token_hex(32)
+        # File gone: rewrite the record for the same token so nested atoms can
+        # still mutate. Never overwrite an expired/mismatched/present record.
+        if not str(reason).startswith("lease_unavailable_FileNotFound"):
+            raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
+        if len(inherited) != 64:
+            raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
+        token = inherited
+    else:
+        token = secrets.token_hex(32)
     # The daemon may preselect a per-run path. Standalone callers retain the
     # conventional location for compatibility and tests.
     path = _lease_path()
@@ -406,24 +413,22 @@ def _check(
         finding = _finding("config", False, type(exc).__name__)
         return {"ok": False, "carrier_ok": False, "integrity_ok": False, "findings": [finding]}, None
 
+    from lokay.preflight_checks import (
+        check_config,
+        check_executor_availability,
+        check_github_authentication,
+        check_repository_catalog_clones,
+        check_required_environment,
+    )
+
     findings: list[dict[str, Any]] = []
-    required = ("PATH", "HOME", "USER", "TMPDIR", "LANG")
-    missing = [name for name in required if not os.environ.get(name, "").strip()]
-    findings.append(_finding("required_environment", not missing, "ok" if not missing else "missing_required", repaired="locale" in repaired))
-    errors = cfg.validate()
-    findings.append(_finding("config", not errors, "ok" if not errors else "invalid"))
-    clones = [repo for repo in cfg.active_repos() if not repo.clone_path.is_dir()]
+    findings.append(check_required_environment(repaired=repaired))
+    findings.append(check_config(cfg=cfg))
     # A missing managed checkout blocks worktree operations for that repository,
     # not GitHub-only triage or work in every other repository.  Status reports
     # the actionable clone inventory; global preflight must not deadlock the
     # mill before `lokay-repos-clone-missing` can repair it.
-    findings.append(
-        _finding(
-            "repository_catalog_clones",
-            True,
-            "ok" if not clones else "missing_clones_allowed",
-        )
-    )
+    findings.append(check_repository_catalog_clones(cfg=cfg))
 
     runtime_dirs = (cfg.state_path.parent, cfg.worktrees_root, Path(os.environ.get("LOKAY_LOG_DIR", str(Path.home() / ".lokay" / "logs"))))
     paths_ok = all(_safe_owned_path(path) and path.is_dir() and os.access(path, os.W_OK) for path in runtime_dirs)
@@ -438,13 +443,7 @@ def _check(
     fala_ok, fala_code = _fala_smoke()
     findings.append(_finding("fala_smoke", fala_ok, fala_code))
 
-    gh_ok = False
-    if shutil.which("gh"):
-        try:
-            gh_ok = subprocess.run(["gh", "api", "user", "--silent"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False).returncode == 0
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    findings.append(_finding("github_authentication", gh_ok, "ok" if gh_ok else "unavailable"))
+    findings.append(check_github_authentication())
     git_ok, git_code = _github_git_transport(cfg)
     findings.append(
         _finding(
@@ -454,8 +453,7 @@ def _check(
             repaired="github_git_transport" in repaired,
         )
     )
-    executor_ok = not (cfg.live and cfg.executor_enabled) or shutil.which(cfg.agent_command) is not None
-    findings.append(_finding("executor_availability", executor_ok, "ok" if executor_ok else "unavailable", repaired="executor_path" in repaired))
+    findings.append(check_executor_availability(cfg=cfg, repaired=repaired))
 
     lock_path = (cfg.state_path.parent / "mill.lock").expanduser().absolute()
     singleton_ok = inherited_singleton == lock_path or acquire_run_lock(lock_path)
@@ -515,6 +513,38 @@ def _read_incident_ledger(cfg: Any | None) -> dict[str, Any]:
     except (OSError, ValueError):
         pass
     return {}
+
+
+def reconcile_incident_ledger(cfg: Any | None = None) -> dict[str, Any]:
+    """Mark local incident rows closed when the GitHub issue is closed."""
+    ledger = _read_incident_ledger(cfg)
+    closed = 0
+    for entry in ledger.values():
+        if not isinstance(entry, dict) or entry.get("state") != "open":
+            continue
+        repo = str(entry.get("repo") or "")
+        number = entry.get("number")
+        if not repo or number is None:
+            continue
+        viewed = subprocess.run(
+            ["gh", "issue", "view", str(int(number)), "--repo", repo, "--json", "state"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if viewed.returncode != 0:
+            continue
+        try:
+            state = str(json.loads(viewed.stdout or "{}").get("state") or "").upper()
+        except ValueError:
+            continue
+        if state == "CLOSED":
+            entry["state"] = "closed"
+            closed += 1
+    if closed:
+        _write_incident_ledger(cfg, ledger)
+    return {"ok": True, "closed": closed, "rows": len(ledger)}
 
 
 def _write_incident_ledger(cfg: Any | None, data: dict[str, Any]) -> Path:
@@ -918,6 +948,18 @@ def require_healthy(config_path: str | None) -> None:
     healthy, lease_reason = health_lease_status()
     if healthy:
         return
+    # Inherited token + missing file: restore the record (same token) so a live
+    # mill can keep mutating. Other rejected leases stay fail-closed.
+    if os.environ.get("LOKAY_HEALTH_LEASE") and str(lease_reason).startswith(
+        "lease_unavailable_FileNotFound"
+    ):
+        try:
+            issue_health_lease()
+        except RuntimeError:
+            pass
+        healthy, lease_reason = health_lease_status()
+        if healthy:
+            return
     # An inherited token is a capability, not a request to mint another one.
     # If its backing record/lock cannot be validated, fail closed immediately;
     # a nested atom must never overwrite the daemon's process-tree lease.

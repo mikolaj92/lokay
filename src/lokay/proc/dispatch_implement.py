@@ -6,10 +6,6 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-import os
-import subprocess
-import sys
-
 from lokay.pass_receipt import build_pass_receipt, write_pass_receipt
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
@@ -18,15 +14,9 @@ from lokay.proc import intake_issue as p_intake
 from lokay.proc import label_issue as p_label
 from lokay.proc import select_issue as p_select
 from lokay.proc._common import add_config_live
+from lokay.proc.detach_issue_to_pr import detach_issue_to_pr
 from lokay.proc.repo_mutex import inspect_mutex, _live_ps_text
 from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuck
-
-
-def _issue_to_pr_log_path(repo: str, number: int) -> Path:
-    slug = str(repo).replace("/", "__")
-    root = Path.home() / ".lokay" / "logs"
-    root.mkdir(parents=True, exist_ok=True)
-    return root / f"issue-to-pr-{slug}-{int(number)}.log"
 
 
 def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -113,31 +103,11 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     i for i in implementable if int(i.get("number", -1)) != num
                 ]
                 continue
-            argv = [sys.executable, "-m", "lokay.compose.issue_to_pr"]
-            if config_path:
-                argv.extend(["--config", str(config_path)])
-            argv.extend(["--live", "--repo", str(selected["repo"]), "--issue", str(num)])
-            root = os.environ.get("LOKAY_ROOT") or str(Path.cwd())
-            log_path = _issue_to_pr_log_path(str(selected["repo"]), num)
-            log_fh = log_path.open("ab")
-            try:
-                proc = subprocess.Popen(
-                    argv,
-                    cwd=root,
-                    start_new_session=True,
-                    stdout=log_fh,
-                    stderr=subprocess.STDOUT,
-                )
-            finally:
-                log_fh.close()
-            result = {
-                "ok": True,
-                "detached": True,
-                "pid": int(proc.pid),
-                "repo": selected["repo"],
-                "issue": num,
-                "log": str(log_path),
-            }
+            result = detach_issue_to_pr(
+                repo=str(selected["repo"]),
+                issue=num,
+                config_path=config_path,
+            )
             actions.append({"step": "issue_to_pr", **result})
             issue_budget -= 1
             issue_to_pr_started += 1
