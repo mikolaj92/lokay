@@ -30,6 +30,70 @@ def write_issue_to_pr_receipt(payload: dict[str, Any]) -> Path:
     return path
 
 
+def pid_is_alive(pid: int) -> bool:
+    if int(pid) <= 0:
+        return False
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _pid_command(pid: int) -> str:
+    try:
+        done = subprocess.run(
+            ["ps", "-p", str(int(pid)), "-o", "command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except OSError:
+        return ""
+    return (done.stdout or "").strip()
+
+
+def is_live_issue_to_pr_pid(pid: int) -> bool:
+    if not pid_is_alive(pid):
+        return False
+    command = _pid_command(pid)
+    return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
+
+
+def live_issue_to_pr_receipts(
+    cycle_dir: Path | None = None,
+    *,
+    pid_alive=None,
+) -> list[dict[str, Any]]:
+    """Receipts whose recorded pid is still a live issue_to_pr. Next pass must see in-flight work."""
+    root = Path(cycle_dir) if cycle_dir is not None else Path.home() / ".lokay" / "cycle"
+    check = pid_alive or is_live_issue_to_pr_pid
+    if not root.is_dir():
+        return []
+    live: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        if "pid" not in data or not data.get("repo") or data.get("issue") is None:
+            continue
+        try:
+            pid = int(data["pid"])
+        except (TypeError, ValueError):
+            continue
+        if check(pid):
+            live.append(data)
+    return live
+
+
 def detach_issue_to_pr(
     *,
     repo: str,

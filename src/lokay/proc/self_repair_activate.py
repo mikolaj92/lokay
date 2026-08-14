@@ -57,8 +57,32 @@ def main(argv: list[str] | None = None) -> int:
             ["git", "-C", str(repo.clone_path), "rev-parse", "HEAD"],
             capture_output=True, text=True, timeout=30, check=False,
         )
-        if head.returncode or head.stdout.strip() != args.commit:
+        head_sha = (head.stdout or "").strip()
+        if head.returncode or not head_sha:
             raise RuntimeError("exact recovery commit not activated")
+        if head_sha == args.commit:
+            return emit_exit(
+                ok(planned=False, activated=True, path=str(repo.clone_path), commit=args.commit)
+            )
+        # host_ff / later commits: recovery SHA is already an ancestor — do not rewind.
+        for tip in ("HEAD", "origin/main"):
+            contains = subprocess.run(
+                ["git", "-C", str(repo.clone_path), "merge-base", "--is-ancestor", args.commit, tip],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            if contains.returncode == 0:
+                return emit_exit(
+                    ok(
+                        planned=False,
+                        activated=True,
+                        published=True,
+                        reason="already_on_main",
+                        path=str(repo.clone_path),
+                        commit=args.commit,
+                        head=head_sha,
+                    )
+                )
+        raise RuntimeError("exact recovery commit not activated")
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(ok(planned=False, activated=True, path=str(repo.clone_path), commit=args.commit))
