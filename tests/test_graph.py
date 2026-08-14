@@ -109,6 +109,7 @@ def test_describe_issue_to_pr_graph():
     assert "get_issue" in agent["conduction"]
     worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
     assert "stage_implementing" in worktree["conduction"]
+    assert "assign_issue" in worktree["conduction"]
     pr_open = next(n for n in path["nodes"] if n["id"] == "stage_pr_open")
     assert "pr_create" in pr_open["conduction"]
     repair = next(n for n in path["nodes"] if n["id"] == "repair_agent")
@@ -146,6 +147,17 @@ def test_issue_to_pr_commit_then_test_then_assert_is_a_dag():
     assert "commit_all" in by_id["test_local"]["conduction"]
     assert "test_local" in by_id["assert_real_diff"]["conduction"]
     assert "assert_real_diff" in by_id["push"]["conduction"]
+
+
+def test_issue_to_pr_run_agent_timeout_covers_executor():
+    """Fala adapter must outlive config.timeout_seconds (1800) or the path never reaches pr_create."""
+    import tomllib
+
+    raw = (Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml").read_bytes()
+    pkg = tomllib.loads(raw.decode())
+    path = next(p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr")
+    agent = next(n for n in path["effectors"] if n["id"] == "run_agent")
+    assert int(agent["adapter"]["timeout_seconds"]) >= 1800
 
 
 def test_describe_includes_pr_repair():

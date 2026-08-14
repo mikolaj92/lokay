@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from lokay.config import Config, RepoConfig
@@ -138,9 +139,15 @@ def create_pr(
         live=live,
     )
     if not live:
-        return {"planned": True, "head": head, "title": title}
+        return {"planned": True, "head": head, "title": title, "number": None}
     url = (result.stdout or "").strip().splitlines()[-1] if result.stdout else ""
-    return {"url": url, "head": head, "title": title}
+    number = _pr_number_from_url(url)
+    return {"url": url, "head": head, "title": title, "number": number}
+
+
+def _pr_number_from_url(url: str) -> int | None:
+    match = re.search(r"/pull/(\d+)\b", str(url or ""))
+    return int(match.group(1)) if match else None
 
 
 def add_pr_labels(runner: Runner, repo: str, number: int, labels: list[str], *, live: bool) -> None:

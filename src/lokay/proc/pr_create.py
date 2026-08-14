@@ -37,7 +37,16 @@ def main(argv: list[str] | None = None) -> int:
         )
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
-    return emit_exit(ok(planned=not live, pr=pr))
+    number = pr.get("number")
+    return emit_exit(
+        ok(
+            planned=not live,
+            pr=number,
+            pull=pr,
+            repo=args.repo,
+            head=args.head,
+        )
+    )
 
 
 if __name__ == "__main__":

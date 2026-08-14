@@ -103,7 +103,7 @@ def detach_issue_to_pr(
 ) -> dict[str, Any]:
     """Spawn issue_to_pr in a new session; do not wait. One job: detach + receipt."""
     spawn = popen or subprocess.Popen
-    argv = [sys.executable, "-m", "lokay.compose.issue_to_pr"]
+    argv = [sys.executable, "-u", "-m", "lokay.compose.issue_to_pr"]
     if config_path:
         argv.extend(["--config", str(config_path)])
     argv.extend(["--live", "--repo", str(repo), "--issue", str(int(issue))])

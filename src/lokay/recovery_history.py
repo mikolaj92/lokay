@@ -89,7 +89,12 @@ def _delivered(row: dict[str, Any]) -> bool:
         return False
     if row.get("kind") == "issue_to_pr":
         created = terminal.get("pr_create")
-        return isinstance(created, dict) and isinstance(created.get("pr"), dict)
+        if not isinstance(created, dict):
+            return False
+        if isinstance(created.get("pr"), int) or created.get("pr_number"):
+            return True
+        pull = created.get("pull") if isinstance(created.get("pull"), dict) else created.get("pr")
+        return isinstance(pull, dict) and bool(pull.get("url") or pull.get("number"))
     if row.get("kind") == "pr_triage":
         merged = terminal.get("pr_merge")
         return isinstance(merged, dict) and merged.get("merged") is True
