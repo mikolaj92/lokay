@@ -229,21 +229,30 @@ def issue_health_lease(
     """Issue a run-scoped capability bound to the lock retained by its owner."""
     import time
 
-    if os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1":
-        return
     inherited = os.environ.get("LOKAY_HEALTH_LEASE", "")
+    disabled = os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1"
+    # DISABLE blocks minting a new token. Restoring the same inherited token
+    # when the file is gone is not a new capability — detached Fala children
+    # inherit DISABLE=1 from the mill and must still mutate after mill revoke.
+    if disabled and not inherited:
+        return
     if inherited:
         healthy, reason = health_lease_status()
         if healthy:
             return
         # File gone: rewrite the record for the same token so nested atoms can
         # still mutate. Never overwrite an expired/mismatched/present record.
-        if not str(reason).startswith("lease_unavailable_FileNotFound"):
+        restorable = str(reason).startswith("lease_unavailable_FileNotFound")
+        if not restorable:
+            if disabled:
+                return
             raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
         if len(inherited) != 64:
             raise RuntimeError(f"refusing to replace inherited health lease ({reason})")
         token = inherited
     else:
+        if disabled:
+            return
         token = secrets.token_hex(32)
     # The daemon may preselect a per-run path. Standalone callers retain the
     # conventional location for compatibility and tests.

@@ -827,6 +827,16 @@ def test_nested_issue_guard_never_mints_lease(tmp_path, monkeypatch):
     assert "LOKAY_HEALTH_LEASE" not in __import__("os").environ
 
 
+def test_disable_still_restores_inherited_token_file(tmp_path, monkeypatch):
+    """Mill sets DISABLE=1 on the tree; detached children must rewrite a missing file."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "e" * 64)
+    monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "1")
+    preflight.require_healthy("config.yaml")
+    assert preflight.has_health_lease() is True
+    assert (tmp_path / ".lokay" / "health-lease").is_file()
+
+
 def test_child_cannot_replace_parent_health_lease(tmp_path, monkeypatch):
     import json
 
