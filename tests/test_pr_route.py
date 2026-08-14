@@ -61,7 +61,7 @@ def test_needs_review_routes_skip():
 
 
 def test_pending_still_waits_when_merge_disabled():
-    """Closeout must stage ci-waiting even while merge.enabled is off."""
+    """Pending checks still wait even while merge.enabled is off."""
     out = run_pr_route(checks={"status": "pending"}, merge_enabled=False)
     assert out["route"] == "wait"
     assert out["reason"] == "checks_pending"

@@ -1,4 +1,4 @@
-"""One job: list ai:ready issues; unready those already covered by open AI PRs."""
+"""One job: list ai:ready issues; skip those already covered by open AI PRs."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import list_issues as p_list_issues
-from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 
@@ -54,35 +53,6 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             )
             covered_ready = [i for i in issues if int(i.get("number", -1)) in covered]
             remaining_ready_with_pr += len(covered_ready)
-            # Live: swap ready → pr-open so PR triage owns the work (ledger).
-            if live and covered_ready:
-                for issue in covered_ready:
-                    num = int(issue["number"])
-                    staged = run_proc(
-                        p_stage.main,
-                        [
-                            *cfg_flag,
-                            *live_flag,
-                            "--repo",
-                            repo_name,
-                            "--issue",
-                            str(num),
-                            "--stage",
-                            "pr-open",
-                        ],
-                    )
-                    actions.append(
-                        {
-                            "step": "unready_with_open_pr",
-                            "repo": repo_name,
-                            "issue": num,
-                            "stage": "pr-open",
-                            **staged,
-                        }
-                    )
-                    if staged.get("ok") and staged.get("applied"):
-                        progress += 1
-                        remaining_ready_with_pr = max(0, remaining_ready_with_pr - 1)
         if excluded_numbers(stuck, repo_name):
             actions.append(
                 {

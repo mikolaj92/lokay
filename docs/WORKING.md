@@ -12,20 +12,11 @@ hermetic canaries, how to read `lokay status` / `last-pass.json`), see
 
 ## Issue ledger = chat with the mill
 
-Operators should read **GitHub Issues** (labels + optional short receipts), not
-chat, to see where Lokay is. Exclusive stage labels:
-
-| Stage | Label | When |
-| --- | --- | --- |
-| ready | `ai:ready` | Intake READY (implementable) |
-| implementing | `ai:in-progress` | `issue_to_pr` running |
-| pr-open | `ai:pr-open` | PR created / covering open AI PR |
-| ci-waiting | `ai:ci-waiting` | Checks pending |
-| repairing | `ai:repairing` | `pr_repair` in flight |
-| (terminal) | clear + close | After merge — issue closed |
-
-Reuse parking / residual labels unchanged: `ai:blocked`, `ai:needs-feedback`,
-`ai:needs-review`, `ai:tracker`. Atom: `lokay-stage-label`. Diagram:
+Operators should read **GitHub Issues** for *decisions* (`ai:ready` / blocked /
+feedback / frozen / tracker) and **open PRs + live jobs** for in-flight work.
+In-flight is not an issue label. `ai:ready` stays until merge + `stage_clear` +
+close. Parking / residual unchanged: `ai:blocked`, `ai:needs-feedback`,
+`ai:needs-review`, `ai:tracker`. Diagram:
 [`AUTONOMY.md`](AUTONOMY.md#issue-ledger--chat-with-the-mill).
 
 ## Product law: minimize human in the loop

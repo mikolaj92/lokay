@@ -1,4 +1,4 @@
-"""One job: checks → route → triage/repair/ci-waiting for one open AI PR."""
+"""One job: checks → route → triage/repair/wait for one open AI PR."""
 
 import argparse
 from pathlib import Path
@@ -9,7 +9,7 @@ from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit
 from lokay.passkit.support import is_manual_pr, run_proc
-from lokay.proc import pr_checks as p_checks, stage_label as p_stage
+from lokay.proc import pr_checks as p_checks
 from lokay.proc._common import add_config_live
 from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
@@ -57,10 +57,6 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
             repair()
         return done("repair", reason)
     if route == "wait":
-        issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
-        if reason == "checks_pending" and live and issue_n is not None:
-            staged = run_proc(p_stage.main, [*cfg, "--live", "--repo", repo, "--issue", str(issue_n), "--stage", "ci-waiting"])
-            actions.append({"step": "stage_ci_waiting", "repo": repo, "issue": issue_n, "pr": n, **staged})
         return done("wait", reason)
     if route != "merge" or not live or not head:
         return done(route, reason)
