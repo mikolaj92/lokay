@@ -195,25 +195,36 @@ def add_issue_labels(
         )
 
 
+def _remove_label_already_absent(label: str, stdout: str, stderr: str) -> bool:
+    blob = f"{stderr}\n{stdout}"
+    return f"'{label}' not found" in blob or f'"{label}" not found' in blob
+
+
 def remove_issue_labels(
     runner: Runner, repo: str, number: int, labels: list[str], *, live: bool
 ) -> None:
     for label in labels:
         if not label:
             continue
-        runner.run_checked(
-            gh_spec(
-                [
-                    "issue",
-                    "edit",
-                    str(number),
-                    "--repo",
-                    repo,
-                    "--remove-label",
-                    label,
-                ]
-            ),
-            live=live,
+        spec = gh_spec(
+            [
+                "issue",
+                "edit",
+                str(number),
+                "--repo",
+                repo,
+                "--remove-label",
+                label,
+            ]
+        )
+        result = runner.run(spec, live=live)
+        if not live or result.returncode == 0:
+            continue
+        if _remove_label_already_absent(label, result.stdout, result.stderr):
+            continue
+        raise RuntimeError(
+            f"command failed ({result.returncode}): {spec.display()}\n"
+            f"stdout: {result.stdout[-2000:]}\nstderr: {result.stderr[-2000:]}"
         )
 
 
