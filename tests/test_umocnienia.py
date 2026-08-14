@@ -163,6 +163,7 @@ def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
         def __init__(self, argv, **kwargs):
             seen["argv"] = argv
             seen["session"] = kwargs.get("start_new_session")
+            seen["env"] = kwargs.get("env") or {}
             self.pid = 4242
 
     out = detach_issue_to_pr(
@@ -178,6 +179,28 @@ def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
     assert data["issue"] == 164 and data["log"].endswith("issue-to-pr-mikolaj92__Fala-164.log")
     assert seen["session"] is True
     assert "lokay.compose.issue_to_pr" in seen["argv"]
+
+
+def test_detach_forwards_lease_path_for_fala_inherit(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "d" * 64)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+    seen = {}
+
+    class FakePopen:
+        def __init__(self, argv, **kwargs):
+            seen["env"] = kwargs.get("env") or {}
+            self.pid = 7
+
+    detach_issue_to_pr(
+        repo="mikolaj92/Fala",
+        issue=1,
+        config_path=None,
+        popen=FakePopen,
+    )
+    env = seen["env"]
+    assert env.get("LOKAY_HEALTH_LEASE") == "d" * 64
+    assert env.get("LOKAY_HEALTH_LEASE_PATH") == str(tmp_path / ".lokay" / "health-lease")
 
 
 def test_evaluate_mill_stop_plateau_is_not_progress_continue():

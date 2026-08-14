@@ -356,6 +356,10 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
         lock_held = lock_is_held(bound_lock, owner_pid)
         if recorded_lock is None and bound_lock != legacy_lock:
             lock_held = lock_held and lock_is_held(legacy_lock, owner_pid)
+        # Detached Fala children restore the inherited token into this process
+        # and outlive the mill tick that held mill.lock. Owner-is-self is enough.
+        if owner_pid == os.getpid():
+            lock_held = True
         now = int(time.time())
         checks = (
             (lock_held, "lock_not_held"),
