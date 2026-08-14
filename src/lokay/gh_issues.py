@@ -106,6 +106,32 @@ def _issue_from_row(repo_name: str, row: dict) -> Issue:
     )
 
 
+def list_labeled_issues(
+    runner: Runner, config: Config, repo: RepoConfig, *, label: str, live: bool
+) -> list[Issue]:
+    """Open issues carrying one ledger/factory label (no ready-only filter)."""
+    if live:
+        survey_pace(config)
+    args = [
+        "issue",
+        "list",
+        "--repo",
+        repo.name,
+        "--state",
+        "open",
+        "--label",
+        label,
+        "--json",
+        "number,title,body,labels,assignees,url",
+        "--limit",
+        "50",
+    ]
+    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
+    if not live:
+        return []
+    return [_issue_from_row(repo.name, row) for row in json.loads(result.stdout or "[]")]
+
+
 def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
     if live:
         survey_pace(config)

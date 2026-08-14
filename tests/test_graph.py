@@ -19,6 +19,7 @@ def test_describe_parent_factory_graph():
         "dispatch_triage",
         "resolve_conflicts",
         "closeout_prs",
+        "reap_stale_implementing",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
@@ -34,7 +35,8 @@ def test_describe_parent_factory_graph():
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "closeout_prs" in conduction["select_implement"]
+    assert "reap_stale_implementing" in conduction["select_implement"]
+    assert "closeout_prs" in conduction["reap_stale_implementing"]
     assert "select_implement" in conduction["queue_conflict"]
     assert "queue_conflict" in conduction["dispatch_implement"]
     assert "dispatch_implement" in conduction["compute_health"]
@@ -361,6 +363,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "dispatch_triage",
             "resolve_conflicts",
             "closeout_prs",
+            "reap_stale_implementing",
             "select_implement",
             "queue_conflict",
             "dispatch_implement",

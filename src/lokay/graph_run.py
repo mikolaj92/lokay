@@ -158,6 +158,7 @@ def run_path(
             "dispatch_triage",
             "resolve_conflicts",
             "closeout_prs",
+            "reap_stale_implementing",
             "select_implement",
             "queue_conflict",
             "dispatch_implement",
