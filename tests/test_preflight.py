@@ -827,6 +827,32 @@ def test_nested_issue_guard_never_mints_lease(tmp_path, monkeypatch):
     assert "LOKAY_HEALTH_LEASE" not in __import__("os").environ
 
 
+def test_dead_owner_inherited_token_is_restored(tmp_path, monkeypatch):
+    """Mill pid in the lease record can be gone; same token must still push."""
+    import json
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "f" * 64)
+    monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "1")
+    lease = tmp_path / ".lokay" / "health-lease"
+    lease.parent.mkdir(parents=True)
+    lease.write_text(
+        json.dumps(
+            {
+                "token_sha256": __import__("hashlib").sha256(("f" * 64).encode()).hexdigest(),
+                "owner_pid": 999_999_999,
+                "lock_path": str(tmp_path / ".lokay" / "mill.lock"),
+                "issued_at": 1,
+                "expires_at": 2_000_000_000,
+            }
+        )
+    )
+    lease.chmod(0o600)
+    preflight.require_healthy("config.yaml")
+    assert preflight.has_health_lease() is True
+    assert json.loads(lease.read_text())["owner_pid"] == __import__("os").getpid()
+
+
 def test_disable_still_restores_inherited_token_file(tmp_path, monkeypatch):
     """Mill sets DISABLE=1 on the tree; detached children must rewrite a missing file."""
     monkeypatch.setenv("HOME", str(tmp_path))
