@@ -965,9 +965,10 @@ def require_healthy(config_path: str | None) -> None:
         return
     # Inherited token + missing file: restore the record (same token) so a live
     # mill can keep mutating. Other rejected leases stay fail-closed.
-    if os.environ.get("LOKAY_HEALTH_LEASE") and str(lease_reason).startswith(
-        "lease_unavailable_FileNotFound"
-    ):
+    restorable = str(lease_reason).startswith("lease_unavailable_FileNotFound") or str(
+        lease_reason
+    ).startswith("lease_unavailable_ProcessLookup")
+    if os.environ.get("LOKAY_HEALTH_LEASE") and restorable:
         try:
             issue_health_lease()
         except RuntimeError:
