@@ -136,6 +136,18 @@ def test_issue_to_pr_plan_issue_before_run_agent():
     assert "run_agent" not in by_id["localize"]["conduction"]
 
 
+def test_issue_to_pr_commit_then_test_then_assert_is_a_dag():
+    """commit_all must not wait on assert_real_diff (that cycle never reaches push)."""
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
+    by_id = {n["id"]: n for n in path["nodes"]}
+    assert "run_agent" in by_id["commit_all"]["conduction"]
+    assert "assert_real_diff" not in by_id["commit_all"]["conduction"]
+    assert "commit_all" in by_id["test_local"]["conduction"]
+    assert "test_local" in by_id["assert_real_diff"]["conduction"]
+    assert "assert_real_diff" in by_id["push"]["conduction"]
+
+
 def test_describe_includes_pr_repair():
     desc = describe_package()
     assert any(p["id"] == "pr_repair" for p in desc["paths"])

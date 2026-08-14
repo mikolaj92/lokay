@@ -778,6 +778,16 @@ def test_rejected_inherited_lease_does_not_run_or_replace_preflight(tmp_path, mo
     assert __import__("os").environ["LOKAY_HEALTH_LEASE"] == "a" * 64
 
 
+def test_restored_lease_owner_does_not_need_mill_lock(tmp_path, monkeypatch):
+    """Detached issue_to_pr outlives the mill lock; inherited token must still mutate."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "c" * 64)
+    # No acquire_run_lock — mill tick already exited.
+    preflight.require_healthy("config.yaml")
+    assert preflight.has_health_lease() is True
+    assert (tmp_path / ".lokay" / "health-lease").is_file()
+
+
 def test_expired_inherited_lease_still_fail_closed(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)

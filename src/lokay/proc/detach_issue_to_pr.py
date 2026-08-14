@@ -108,12 +108,17 @@ def detach_issue_to_pr(
         argv.extend(["--config", str(config_path)])
     argv.extend(["--live", "--repo", str(repo), "--issue", str(int(issue))])
     root = os.environ.get("LOKAY_ROOT") or str(Path.cwd())
+    env = os.environ.copy()
+    # Fala effectors inherit these keys; an empty PATH fails commit_all.
+    if env.get("LOKAY_HEALTH_LEASE") and not env.get("LOKAY_HEALTH_LEASE_PATH"):
+        env["LOKAY_HEALTH_LEASE_PATH"] = str(Path.home() / ".lokay" / "health-lease")
     log_path = issue_to_pr_log_path(repo, issue)
     log_fh = log_path.open("ab")
     try:
         proc = spawn(
             argv,
             cwd=root,
+            env=env,
             start_new_session=True,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
