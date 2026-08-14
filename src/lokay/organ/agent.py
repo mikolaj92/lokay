@@ -380,7 +380,13 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             if pr.get("head_ref") == branch:
                 pr_number = pr.get("number")
                 break
-        # also accept from pr_create url parse — optional
+        if pr_number is None:
+            created = up.get("pr_create") or {}
+            candidate = created.get("pr_number") or created.get("pr")
+            if isinstance(candidate, dict):
+                candidate = candidate.get("number")
+            if isinstance(candidate, int):
+                pr_number = candidate
         if pr_number is None:
             return {"ok": True, "skipped": True, "reason": "pr_number_not_found", "branch": branch}
         return _run_atom_main(

@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     return emit_exit(
         ok(
             planned=not live,
+            applied=live,
             repo=args.repo,
             issue=args.issue,
             assignee=cfg.assignee,
