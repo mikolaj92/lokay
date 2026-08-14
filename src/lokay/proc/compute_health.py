@@ -10,6 +10,7 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.health import health_payload
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
+from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
 
 
 def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
@@ -51,7 +52,10 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         "actionable_open_ai_prs": int(working.get("actionable_prs") or 0),
         "manual_open_ai_prs": int(working.get("manual_prs") or 0),
         "intake_skip_reason": working.get("intake_skip_reason"),
-        "issue_to_pr_started": int(working.get("issue_to_pr_started") or 0),
+        "issue_to_pr_started": max(
+            int(working.get("issue_to_pr_started") or 0),
+            len(live_issue_to_pr_receipts()),
+        ),
         "max_issue_to_pr_per_pass": int(begin.get("max_issue_to_pr_per_pass") or 0),
         "mergeable_green": int(working.get("mergeable_green") or 0),
         "merge_disabled": int(working.get("merge_disabled") or 0),

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 from lokay.graph_run import normalize_path_result
+from lokay.passkit import io as pass_io
 from lokay.passkit.health import evaluate_mill_stop
 from lokay.preflight import (
     acquire_run_lock,
@@ -13,11 +17,11 @@ from lokay.preflight import (
     reconcile_incident_ledger,
     require_healthy,
 )
-from lokay.proc.detach_issue_to_pr import detach_issue_to_pr
+from lokay.proc.compute_health import run_compute_health
+from lokay.proc.detach_issue_to_pr import detach_issue_to_pr, live_issue_to_pr_receipts
 from lokay.proc.self_repair_activate import main as activate_main
 from lokay.proc.self_repair_prepare import published_self_repair_commit
 from lokay.recovery_history import observe_run, record_observation
-from types import SimpleNamespace
 
 
 def test_missing_lease_file_with_inherited_token_allows_mutate(tmp_path, monkeypatch):
@@ -232,6 +236,141 @@ def test_organ_routing_files_stay_small():
             continue
         lines = path.read_text().count("\n")
         assert lines < 400, f"{path.name} grew to {lines} lines"
+
+
+def _issue_to_pr_cmd(pid: int) -> str:
+    if pid == os.getpid():
+        return "python -m lokay.compose.issue_to_pr --live --repo mikolaj92/Fala --issue 164"
+    return ""
+
+
+def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "mikolaj92__Fala-164.json").write_text(
+        json.dumps({"pid": os.getpid(), "repo": "mikolaj92/Fala", "issue": 164, "log": "a"}),
+        encoding="utf-8",
+    )
+    (cycle / "mikolaj92__Temida-1.json").write_text(
+        json.dumps({"pid": 999_999_999, "repo": "mikolaj92/Temida", "issue": 1, "log": "b"}),
+        encoding="utf-8",
+    )
+    (cycle / "noise.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
+    live = live_issue_to_pr_receipts()
+    assert len(live) == 1
+    assert live[0]["repo"] == "mikolaj92/Fala" and live[0]["issue"] == 164
+
+
+def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "mikolaj92__Fala-164.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "pid": os.getpid(),
+                "repo": "mikolaj92/Fala",
+                "issue": 164,
+                "log": str(tmp_path / "x.log"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (cycle / "mikolaj92__Temida-1.json").write_text(
+        json.dumps({"pid": 999_999_999, "repo": "mikolaj92/Temida", "issue": 1, "log": "dead"}),
+        encoding="utf-8",
+    )
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {
+            "live": True,
+            "mode": "live",
+            "repos": ["mikolaj92/Fala", "mikolaj92/Temida"],
+            "max_issue_to_pr_per_pass": 4,
+            "executor_enabled": True,
+            "merge_enabled": True,
+            "planned": [],
+            "stuck_path": "",
+        },
+    )
+    pass_io.write_json(
+        pass_io.working_path(pass_dir),
+        {
+            "actions": [],
+            "progress": 0,
+            "issue_to_pr_started": 0,
+            "remaining_ready": 10,
+            "remaining_inbox": 0,
+            "remaining_prs": 0,
+            "actionable_prs": 0,
+            "manual_prs": 0,
+            "prs_by_repo": {},
+            "ready_by_repo": {},
+            "inbox_by_repo": {},
+        },
+    )
+    result = run_compute_health(pass_dir=str(pass_dir))
+    tick = pass_io.read_json(pass_io.tick_path(pass_dir))
+    assert result["ok"] is True
+    assert tick["remaining"]["issue_to_pr_started"] == 1
+    assert tick["health"] == "progress"
+    assert tick["progress"] == 1
+    assert tick["idle"] is False
+
+
+def test_activate_descendant_of_recovery_keeps_published_push(tmp_path, monkeypatch, capsys):
+    clone = tmp_path / "lokay"
+    bare = tmp_path / "origin.git"
+    clone.mkdir()
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True)
+
+    git("init")
+    git("config", "user.email", "t@t.example")
+    git("config", "user.name", "t")
+    (clone / "a.txt").write_text("one\n", encoding="utf-8")
+    git("add", "a.txt")
+    git("commit", "-m", "self-repair: cafebabe")
+    recovery = subprocess.check_output(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], text=True
+    ).strip()
+    (clone / "a.txt").write_text("two\n", encoding="utf-8")
+    git("add", "a.txt")
+    git("commit", "-m", "host_ff later")
+    descendant = subprocess.check_output(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], text=True
+    ).strip()
+    git("branch", "-M", "main")
+    git("remote", "add", "origin", str(bare))
+    git("push", "-u", "origin", "main")
+
+    from lokay.proc import self_repair_activate as act
+
+    monkeypatch.setattr(
+        act,
+        "load_cfg",
+        lambda a: SimpleNamespace(
+            active_repos=lambda: [SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)]
+        ),
+    )
+    monkeypatch.setattr(act, "mutations_allowed", lambda **k: True)
+    code = activate_main(["--live", "--commit", recovery])
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert payload["ok"] is True
+    assert payload["published"] is True
+    assert payload["commit"] == recovery
+    head = subprocess.check_output(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], text=True
+    ).strip()
+    assert head == descendant
 
 
 def test_activate_dirty_keeps_published_commit(tmp_path, monkeypatch):
