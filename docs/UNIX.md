@@ -27,7 +27,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-intake-check` | one deterministic intake check (JSON) |
 | `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| SPLIT \| NEEDS_HUMAN |
 | `lokay-issue-split` | auto-split oversized issue → bounded child issues (gh + rules) |
-| `lokay-stage-label` | exclusive issue ledger stage (`ready` / `implementing` / `pr-open` / `ci-waiting` / `repairing` / `clear`) |
+| `lokay-stage-label` | issue decision (`ready` / `clear`); in-flight names keep ready and strip leftover cache |
 | `lokay-select-issue` | pick one issue |
 | `lokay-assign-issue` | assign maintainer |
 | `lokay-make-branch` | pure branch name |

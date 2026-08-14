@@ -1,8 +1,8 @@
-"""Issue-as-live-ledger: exclusive stage labels operators can read like chat.
+"""Issue ledger: decisions only. In-flight is a fact, not a label.
 
-GitHub Issues are the visible conversation with the mill. Each major Fala stage
-swaps one exclusive ledger label (plus optional short receipt). Hermetic helpers
-only — no network.
+Hermetic helpers only — no network. Fala still calls stage names
+(`implementing` / `pr-open` / …); those plans strip leftover cache and
+keep `ai:ready`. Mutex is the live job or covering open PR.
 """
 
 from __future__ import annotations
@@ -10,21 +10,16 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
-# Reuse existing labels where they already mean the stage.
 LABEL_READY = "ai:ready"
-LABEL_IMPLEMENTING = "ai:in-progress"  # unused historically; now "implementing"
-LABEL_PR_OPEN = "ai:pr-open"  # issue-side; PR chrome stays ai:pr-opened
+# Retired cache. Still stripped by stage/reap; never awarded.
+LABEL_IMPLEMENTING = "ai:in-progress"
+LABEL_PR_OPEN = "ai:pr-open"
 LABEL_CI_WAITING = "ai:ci-waiting"
 LABEL_REPAIRING = "ai:repairing"
 
-# New issue ledger labels (≤6). ready + in-progress already exist in _LABEL_META.
-NEW_LEDGER_LABELS: tuple[str, ...] = (
-    LABEL_PR_OPEN,
-    LABEL_CI_WAITING,
-    LABEL_REPAIRING,
-)
+NEW_LEDGER_LABELS: tuple[str, ...] = ()
 
-# Active in-flight stages (left inbox; not implementable as ready).
+# Leftover in-flight cache: not inbox, reap restores ready.
 LEDGER_ACTIVE_LABELS: frozenset[str] = frozenset(
     {
         LABEL_IMPLEMENTING,
@@ -45,12 +40,12 @@ STAGES: frozenset[str] = frozenset(
     }
 )
 
+INFLIGHT_STAGES: frozenset[str] = frozenset(
+    {"implementing", "pr-open", "ci-waiting", "repairing"}
+)
+
 _RECEIPTS: dict[str, str] = {
     "ready": "Lokay ledger: ready for implement.",
-    "implementing": "Lokay ledger: implementing (issue_to_pr).",
-    "pr-open": "Lokay ledger: PR open.",
-    "ci-waiting": "Lokay ledger: waiting on CI checks.",
-    "repairing": "Lokay ledger: repairing PR (pr_repair).",
     "clear": "Lokay ledger: stage cleared after merge/close.",
 }
 
@@ -85,18 +80,13 @@ def plan_stage_transition(
         raise ValueError(
             f"unknown ledger stage {stage!r}; expected one of {sorted(STAGES)}"
         )
+    # In-flight names stay in the Fala DAG but must not mint cache or drop ready.
+    if name in INFLIGHT_STAGES:
+        name = "ready"
     all_ledger = ledger_labels(ready_label=ready_label)
     add: tuple[str, ...]
     if name == "ready":
         add = (ready_label,)
-    elif name == "implementing":
-        add = (LABEL_IMPLEMENTING,)
-    elif name == "pr-open":
-        add = (LABEL_PR_OPEN,)
-    elif name == "ci-waiting":
-        add = (LABEL_CI_WAITING,)
-    elif name == "repairing":
-        add = (LABEL_REPAIRING,)
     else:  # clear
         add = ()
     remove = tuple(sorted(lab for lab in all_ledger if lab not in add))

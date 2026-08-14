@@ -19,12 +19,7 @@ from lokay.triage import decision_labels, is_undecided
 
 
 def test_new_ledger_labels_budget():
-    assert len(NEW_LEDGER_LABELS) <= 6
-    assert set(NEW_LEDGER_LABELS) == {
-        LABEL_PR_OPEN,
-        LABEL_CI_WAITING,
-        LABEL_REPAIRING,
-    }
+    assert NEW_LEDGER_LABELS == ()
 
 
 def test_exclusive_ready_clears_in_flight():
@@ -37,17 +32,17 @@ def test_exclusive_ready_clears_in_flight():
     assert LABEL_READY not in plan.remove_labels
 
 
-def test_implementing_drops_ready():
-    plan = plan_stage_transition("implementing")
-    assert plan.add_labels == (LABEL_IMPLEMENTING,)
-    assert LABEL_READY in plan.remove_labels
-    assert LABEL_PR_OPEN in plan.remove_labels
+def test_inflight_stage_names_keep_ready():
+    for name in ("implementing", "pr-open", "ci-waiting", "repairing"):
+        plan = plan_stage_transition(name)
+        assert plan.stage == "ready"
+        assert plan.add_labels == (LABEL_READY,)
+        assert LABEL_IMPLEMENTING in plan.remove_labels
+        assert LABEL_PR_OPEN in plan.remove_labels
+        assert LABEL_READY not in plan.remove_labels
 
 
-def test_pr_open_and_ci_waiting_and_repairing():
-    assert plan_stage_transition("pr-open").add_labels == (LABEL_PR_OPEN,)
-    assert plan_stage_transition("ci-waiting").add_labels == (LABEL_CI_WAITING,)
-    assert plan_stage_transition("repairing").add_labels == (LABEL_REPAIRING,)
+def test_clear_strips_ready_and_cache():
     clear = plan_stage_transition("clear")
     assert clear.add_labels == ()
     assert set(clear.remove_labels) == {
@@ -60,8 +55,9 @@ def test_pr_open_and_ci_waiting_and_repairing():
 
 
 def test_receipt_optional():
-    assert plan_stage_transition("implementing", receipt=False).receipt is None
-    assert "implementing" in (plan_stage_transition("implementing", receipt=True).receipt or "")
+    assert plan_stage_transition("ready", receipt=False).receipt is None
+    assert "ready" in (plan_stage_transition("ready", receipt=True).receipt or "")
+    assert plan_stage_transition("implementing", receipt=True).receipt is not None
 
 
 def test_unknown_stage_raises():
@@ -130,9 +126,10 @@ repos: []
     assert env["ok"] is True
     assert env["planned"] is True
     assert env["applied"] is False
-    assert env["stage"] == "implementing"
-    assert env["add_labels"] == [LABEL_IMPLEMENTING]
-    assert LABEL_READY in env["remove_labels"]
+    assert env["stage"] == "ready"
+    assert env["add_labels"] == [LABEL_READY]
+    assert LABEL_IMPLEMENTING in env["remove_labels"]
+    assert LABEL_READY not in env["remove_labels"]
     # dry-run still plans through gh helpers with live=False
     assert calls and all(live is False for _, live in calls)
 
@@ -196,4 +193,4 @@ repos: []
     env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert env["ok"] is True
     assert env["applied"] is True
-    assert env["stage"] == "implementing"
+    assert env["stage"] == "ready"

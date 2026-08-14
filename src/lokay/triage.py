@@ -74,8 +74,7 @@ def decision_labels(
     park_labels: Iterable[str] = PARK_LABELS,
 ) -> frozenset[str]:
     """Labels that mean the issue already left the undecided inbox."""
-    # Ledger in-flight stages (ai:in-progress / pr-open / ci-waiting / repairing)
-    # must not bounce the issue back into undecided inbox.
+    # Leftover in-flight cache must not bounce the issue back into inbox.
     return (
         frozenset({ready_label, blocked_label, needs_feedback_label})
         | frozenset(park_labels)

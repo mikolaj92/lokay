@@ -36,39 +36,29 @@ workflow step and not a mill brake.
 
 ## Issue ledger = chat with the mill
 
-The issue is the conversation. Each major Fala/mill stage updates **one
-exclusive ledger label** (optional short receipt via `lokay-stage-label
---receipt`) so an operator can read state without chat.
+The issue is the conversation for **decisions**. In-flight work is a fact
+(live `issue_to_pr` receipt or covering open PR), not an exclusive label.
 
 | Stage | Label | Set by |
 | --- | --- | --- |
-| ready | `ai:ready` | intake READY (existing) |
-| implementing | `ai:in-progress` | `issue_to_pr` → `stage_implementing` |
-| pr-open | `ai:pr-open` | after `pr_create` / survey unready-with-PR |
-| ci-waiting | `ai:ci-waiting` | closeout when checks `pending` |
-| repairing | `ai:repairing` | `pr_repair` → `stage_repairing` |
-| clear | (removes ledger labels) | `pr_triage` → `stage_clear` then `close_issue` |
+| ready | `ai:ready` | intake READY — stays through implement / PR |
+| clear | (removes ready) | `pr_triage` → `stage_clear` then `close_issue` |
 
-Reuse (not new stages): `ai:blocked`, `ai:needs-feedback`, `ai:needs-review`,
-`ai:tracker`. PR chrome `ai:pr-opened` / `ai:generated` stay on the **PR**, not
-the issue ledger. New issue labels are only `ai:pr-open`, `ai:ci-waiting`,
-`ai:repairing` (≤6).
+Reuse: `ai:blocked`, `ai:needs-feedback`, `ai:needs-review`, `ai:tracker`.
+PR chrome `ai:pr-opened` / `ai:generated` stay on the **PR**. Fala still has
+`stage_implementing` / `stage_pr_open` / `stage_repairing` nodes; they keep
+`ai:ready` and strip leftover cache. They do not mint `ai:in-progress`,
+`ai:pr-open`, `ai:ci-waiting`, or `ai:repairing`.
 
 ```mermaid
 stateDiagram-v2
   [*] --> ready: intake READY
-  ready --> implementing: issue_to_pr
-  implementing --> pr_open: pr_create
-  pr_open --> ci_waiting: checks pending
-  ci_waiting --> repairing: checks failed
-  repairing --> ci_waiting: repair pushed
-  ci_waiting --> [*]: merge + close
-  pr_open --> [*]: merge + close
-  ready --> [*]: CLOSE / conflict re-ready loop
+  ready --> ready: issue_to_pr / open PR (mutex is job or PR)
+  ready --> [*]: merge + close
+  ready --> [*]: CLOSE
 ```
 
-Atom: `lokay-stage-label --stage <name>`. Fala owns flow; the atom does one
-exclusive swap.
+Atom: `lokay-stage-label --stage <name>`. In-flight names map to ready.
 
 ## Product promises (mill pass)
 

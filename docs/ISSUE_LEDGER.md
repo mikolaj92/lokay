@@ -1,48 +1,53 @@
-# Issue ledger — maszyna stanów
+# Issue ledger — decyzje, nie cache faktów
 
-GitHub Issue jest księgą. Etykiety `ai:*` to **wyłączne** stany (jeden ledger stage na raz). Fala zmienia stan atomem `stage_label`. Agent nie ustawia etykiet.
+GitHub Issue jest księgą **decyzji**. Etykiety `ai:*` na issue to wyłącznie to, czego nie da się wyliczyć z GitHuba. Agent nie ustawia etykiet. In-flight (job, PR, checki) nie jest stanem issue.
 
-## Stany
+## Stany (decyzje)
 
 | Stan | Etykieta | Kto widzi | Co wolno |
 | --- | --- | --- | --- |
 | **undecided** | brak etykiety decyzyjnej | `list_inbox` | triage (nie implement) |
-| **ready** | `ai:ready` | `list_ready` / `survey_ready` | `issue_to_pr` |
-| **implementing** | `ai:in-progress` | nic w kolejce implement | żywy `issue_to_pr` albo wrótki |
-| **pr-open** | `ai:pr-open` | closeout / PR-first | merge / repair; **nie** nowe `issue_to_pr` w tym repo |
-| **ci-waiting** | `ai:ci-waiting` | closeout | czekać na checki (u nas zwykle wyłączone) |
-| **repairing** | `ai:repairing` | `pr_repair` | jeden repair |
+| **ready** | `ai:ready` | `list_ready` / `survey_ready` | `issue_to_pr`, o ile brak żywego joba i brak covering open PR |
 | **blocked** | `ai:blocked` | nikt | człowiek |
 | **needs-feedback** | `ai:needs-feedback` | nikt | człowiek |
 | **parked** | `frozen` / `ai:frozen` / `ai:tracker` | nikt | człowiek / rodzic splitu |
 | **closed** | issue closed | nikt | koniec |
 
-`ai:ready` jest **wynikiem triaży**, nie biletem wstępu. Wejście to otwarte, nierozstrzygnięte issue (inbox).
+`ai:ready` jest **wynikiem triaży**, nie biletem wstępu. Wejście to otwarte, nierozstrzygnięte issue (inbox). Zostaje na issue przez cały bieg, aż merge + `stage_clear` + close.
 
-## Przejścia (Fala)
+Chrom **PR** (`ai:generated`, `ai:pr-opened`) zostaje na pull requescie.
+
+## Mutex (fakt, nie etykieta)
+
+```text
+wolno brać  =  ai:ready
+            ∧  brak żywego issue_to_pr na repo#n
+            ∧  brak otwartego covering AI PR
+```
+
+Źródła: receipt `~/.lokay/cycle/` + `gh pr list`. `select_implement` i `survey_ready` już tak liczą.
+
+## Przejścia
 
 ```text
 otwarte, bez decyzji  --triage-->  ready | blocked | needs-feedback | close | split
-ready                 --stage_implementing-->  implementing
-implementing          --pr_create + stage_pr_open-->  pr-open
-pr-open               --pr_merge + stage_clear + close-->  closed
-pr-open               --pr_repair-->  repairing --> pr-open
-implementing          --reap (brak żywego joba i brak PR)-->  ready
-pr-open               --reap (brak otwartego covering PR i brak żywego joba)-->  ready
-ready + otwarty AI PR --survey_ready-->  pr-open   (nie drugie issue_to_pr)
+ready + brak mutexu   --dispatch-->  issue_to_pr   (ai:ready zostaje)
+ready + otwarty AI PR --survey-->  skip implement  (ai:ready zostaje; closeout włada PR)
+PR zmergowany         --stage_clear + close-->  closed
+konflikt PR           --close PR-->  ready zostaje, następny pass bierze od main
 ```
+
+Węzły Fali `stage_implementing` / `stage_pr_open` / `stage_repairing` zostają w DAG (kolejność), ale **nie nadają** `ai:in-progress` / `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`. Plan to `ready` + zdjęcie resztek cache.
 
 Pass katalogu (`factory_pass`):
 
 ```text
 survey PRs → inbox → ready → triage → konflikty
   → closeout (najpierw merge otwartych PR)
-    → reap porzuconego implementing / pr-open bez covering PR
-      → select / implement (max 4, 1 na repo)
+    → reap resztek in-flight cache → ai:ready
+      → select / implement (max 4, 1 na repo; mutex = job lub open PR)
 ```
 
-## Limbo (bug, który ten dokument nazywa)
+## Resztki (do zmiecenia)
 
-`stage_implementing` zdejmuje `ai:ready` **zanim** powstanie PR. Gdy `issue_to_pr` umrze (lease, timeout, czerwony test, push), issue zostaje na `ai:in-progress`. Inbox go nie bierze. Ready go nie bierze. Mill idzie dalej i widzi puste repo.
-
-**Prawo:** `implementing` i `pr-open` są legalne tylko gdy (a) żyje proces `issue_to_pr` dla `repo#n`, albo (b) jest **otwarty** AI PR pokrywający `#n`. Zamknięty/odrzucony PR albo sam label bez PR to limbo: inbox i ready ich nie biorą, closeout nie ma czego mergować. `reap_stale_implementing` wraca takie issue na `ready`.
+Historyczne `ai:in-progress` / `ai:pr-open` / `ai:ci-waiting` / `ai:repairing` chowały pracę: inbox i ready ich nie brały, closeout nie miał PR. `reap_stale_implementing` zdejmuje je i wraca `ai:ready`. Mill ich więcej nie stawia.

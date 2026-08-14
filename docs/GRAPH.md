@@ -51,7 +51,7 @@ host_ff
             → dispatch_triage          → issue_triage child Fala
               → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
                 → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
-                  → reap_stale_implementing  → abandoned in-progress / pr-open → ai:ready
+                  → reap_stale_implementing  → leftover in-flight cache → ai:ready
                     → select_implement
                     → queue_conflict   → SKIP/CLOSE/READY queue hygiene
                       → dispatch_implement → issue_to_pr child Fala
@@ -65,12 +65,12 @@ host_ff
 | `factory_begin` | preflight + pass workspace + budgets |
 | `survey_prs` | list open AI PRs for all repos |
 | `survey_inbox` | list undecided inbox issues |
-| `survey_ready` | list ai:ready; unready issues covered by open AI PRs |
+| `survey_ready` | list ai:ready; skip those covered by open AI PRs (label stays ready) |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
-| `reap_stale_implementing` | `ai:in-progress` / `ai:pr-open` without live job or covering open PR → `ai:ready` |
+| `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels) |
 | `select_implement` | clean repos eligible for issue_to_pr (serial K budget) |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design) |
@@ -121,7 +121,7 @@ the stale daemon process.
 ```text
 get_issue
   ├─→ assign_issue
-  ├─→ stage_implementing   ← issue ledger: ai:in-progress
+  ├─→ stage_implementing   ← no-op on labels: keep ai:ready, strip leftover cache
   └─→ make_branch
         └─→ worktree_add
               └─→ plan_issue   ← deterministic approach.md (trust-with-evidence)
@@ -134,7 +134,7 @@ get_issue
                                             └─→ assert_real_diff ← refuse plan/localize-only diffs
                                                   └─→ push            ← only after green / honest skip (recheck if nest ran)
                                                         └─→ pr_create   ← only after successful push; never off a red suite or plan-only diff
-                                                              └─→ stage_pr_open   ← issue ledger: ai:pr-open
+                                                              └─→ stage_pr_open   ← no-op on labels: keep ai:ready
                                                                     └─→ list_prs
                                                                           └─→ pr_label
 ```
@@ -189,7 +189,7 @@ ticket). K is an optional pass budget, not concurrent worktrees/Pi/tmux.
 
 ```text
 pr_checks
-  └─→ stage_repairing   ← issue ledger: ai:repairing
+  └─→ stage_repairing   ← no-op on labels: keep ai:ready
         └─→ worktree_add
               └─→ localize    ← paths from checks/review seed + tree
                     └─→ run_agent   ← repair prompt (only non-deterministic node)

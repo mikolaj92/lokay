@@ -45,16 +45,16 @@ def _issue(number: int, title: str, labels: list[str]) -> Issue:
     )
 
 
-def test_atom_reaps_stale_and_keeps_live(tmp_path, monkeypatch):
-    issue = _issue(164, "readme", [LABEL_IMPLEMENTING])
-    live = _issue(99, "live", [LABEL_IMPLEMENTING])
+def test_atom_strips_leftover_cache_even_when_job_or_pr_exists(monkeypatch):
+    leftover = _issue(164, "readme", [LABEL_IMPLEMENTING])
+    also = _issue(21, "pr cache", [LABEL_PR_OPEN])
+    by_label = {
+        LABEL_IMPLEMENTING: [leftover],
+        LABEL_PR_OPEN: [also],
+    }
     monkeypatch.setattr(
         "lokay.proc.reap_stale_implementing.list_labeled_issues",
-        lambda *a, **k: [issue, live] if k.get("label") == LABEL_IMPLEMENTING else [],
-    )
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing._live_job_keys",
-        lambda: {("mikolaj92/Fala", 99)},
+        lambda *a, **k: list(by_label.get(k.get("label"), [])),
     )
     monkeypatch.setattr(
         "lokay.proc.reap_stale_implementing.load_cfg",
@@ -72,50 +72,7 @@ def test_atom_reaps_stale_and_keeps_live(tmp_path, monkeypatch):
     monkeypatch.setattr("lokay.proc.reap_stale_implementing.run_proc", fake_proc)
     out = run_reap_stale_implementing(pass_dir=None, config_path=None, live=True)
     assert out["ok"] is True
-    assert out["reaped_count"] == 1
-    assert out["reaped"][0]["issue"] == 164
-    assert out["kept"][0]["issue"] == 99
-    assert any("--stage" in a and "ready" in a for a in staged)
-
-
-def test_atom_reaps_abandoned_pr_open_without_covering_pr(monkeypatch):
-    stale = _issue(21, "readme lie", [LABEL_PR_OPEN])
-    covered = _issue(9, "has pr", [LABEL_PR_OPEN])
-    by_label = {
-        LABEL_IMPLEMENTING: [],
-        LABEL_PR_OPEN: [stale, covered],
-    }
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing.list_labeled_issues",
-        lambda *a, **k: list(by_label.get(k.get("label"), [])),
-    )
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing._live_job_keys", lambda: set()
-    )
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing.load_cfg",
-        lambda args: SimpleNamespace(
-            branch_prefix="ai/fix",
-            active_repos=lambda: [SimpleNamespace(name="mikolaj92/Fala")],
-        ),
-    )
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing.pass_io.read_json",
-        lambda path: {"prs_by_repo": {"mikolaj92/Fala": [{"head_ref": "ai/fix/9-readme", "title": "fix"}]}},
-    )
-    staged: list[list[str]] = []
-
-    def fake_proc(main, argv):
-        staged.append(argv)
-        return {"ok": True, "stage": "ready", "applied": True}
-
-    monkeypatch.setattr("lokay.proc.reap_stale_implementing.run_proc", fake_proc)
-    out = run_reap_stale_implementing(
-        pass_dir="/tmp/pass", config_path=None, live=True
-    )
-    assert out["ok"] is True
-    assert out["reaped_count"] == 1
-    assert out["reaped"][0]["issue"] == 21
-    assert out["reaped"][0]["label"] == LABEL_PR_OPEN
-    assert out["kept"][0]["issue"] == 9
-    assert any("21" in a for a in staged)
+    assert out["reaped_count"] == 2
+    assert {row["issue"] for row in out["reaped"]} == {164, 21}
+    assert out["kept"] == []
+    assert any("164" in a and "ready" in a for a in staged)

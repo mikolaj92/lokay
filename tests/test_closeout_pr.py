@@ -85,7 +85,7 @@ def _run(
     return out, triage_calls, repair_calls, stages
 
 
-def test_pending_stages_ci_waiting(monkeypatch, tmp_path):
+def test_pending_waits_without_ci_waiting_label(monkeypatch, tmp_path):
     out, triage, repair, stages = _run(
         monkeypatch, checks={"status": "pending"}, tmp_path=tmp_path
     )
@@ -94,10 +94,10 @@ def test_pending_stages_ci_waiting(monkeypatch, tmp_path):
     assert out["reason"] == "checks_pending"
     assert out["still_open"] is True
     assert out["pending_checks"] == 1
-    assert stages == ["ci-waiting"]
+    assert stages == []
     assert triage == []
     assert repair == []
-    assert any(a.get("step") == "stage_ci_waiting" for a in out["actions"])
+    assert not any(a.get("step") == "stage_ci_waiting" for a in out["actions"])
 
 
 def test_failed_dispatches_pr_repair(monkeypatch, tmp_path):
