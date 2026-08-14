@@ -242,7 +242,9 @@ def issue_health_lease(
             return
         # File gone: rewrite the record for the same token so nested atoms can
         # still mutate. Never overwrite an expired/mismatched/present record.
-        restorable = str(reason).startswith("lease_unavailable_FileNotFound")
+        restorable = str(reason).startswith("lease_unavailable_FileNotFound") or str(
+            reason
+        ).startswith("lease_unavailable_ProcessLookup")
         if not restorable:
             if disabled:
                 return
