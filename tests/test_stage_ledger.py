@@ -135,3 +135,65 @@ repos: []
     assert LABEL_READY in env["remove_labels"]
     # dry-run still plans through gh helpers with live=False
     assert calls and all(live is False for _, live in calls)
+
+
+def test_stage_label_live_missing_ci_waiting_does_not_abort(tmp_path, monkeypatch, capsys):
+    import json
+
+    from lokay.proc import stage_label as atom
+    from lokay.runner import CommandResult
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        """
+mode: live
+github:
+  assignee: mikolaj92
+repos: []
+""",
+        encoding="utf-8",
+    )
+
+    class _R:
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if "--remove-label" in argv:
+                label = argv[argv.index("--remove-label") + 1]
+                if label == LABEL_CI_WAITING:
+                    return CommandResult(
+                        spec=spec,
+                        executed=True,
+                        returncode=1,
+                        stderr=(
+                            "failed to update https://github.com/a/b/issues/7: "
+                            f"'{LABEL_CI_WAITING}' not found\n"
+                        ),
+                    )
+            return CommandResult(spec=spec, executed=True, returncode=0)
+
+        def run_checked(self, spec, *, live):
+            result = self.run(spec, live=live)
+            if live and result.returncode != 0:
+                raise RuntimeError(result.stderr)
+            return result
+
+    monkeypatch.setattr(atom, "runner", lambda: _R())
+    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
+    code = atom.main(
+        [
+            "--config",
+            str(cfg),
+            "--live",
+            "--repo",
+            "a/b",
+            "--issue",
+            "7",
+            "--stage",
+            "implementing",
+        ]
+    )
+    assert code == 0
+    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert env["ok"] is True
+    assert env["applied"] is True
+    assert env["stage"] == "implementing"
