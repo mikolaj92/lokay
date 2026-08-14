@@ -1,4 +1,4 @@
-"""When is ai:in-progress abandoned? Pure — no gh/git."""
+"""When is an in-flight ledger stage abandoned? Pure — no gh/git."""
 
 from __future__ import annotations
 
@@ -7,9 +7,23 @@ from typing import Any
 from lokay.stuck import issue_number_from_branch, issue_numbers_covered_by_prs
 
 
+def should_reap_abandoned(*, has_live_job: bool, has_covering_pr: bool) -> bool:
+    """True when implementing/pr-open has no live job and no covering open PR."""
+    return (not has_live_job) and (not has_covering_pr)
+
+
 def should_reap_implementing(*, has_live_job: bool, has_covering_pr: bool) -> bool:
     """True when the ledger says implementing but nothing is actually in flight."""
-    return (not has_live_job) and (not has_covering_pr)
+    return should_reap_abandoned(
+        has_live_job=has_live_job, has_covering_pr=has_covering_pr
+    )
+
+
+def should_reap_pr_open(*, has_live_job: bool, has_covering_pr: bool) -> bool:
+    """True when the ledger says pr-open but no open covering PR remains."""
+    return should_reap_abandoned(
+        has_live_job=has_live_job, has_covering_pr=has_covering_pr
+    )
 
 
 def issue_has_covering_pr(

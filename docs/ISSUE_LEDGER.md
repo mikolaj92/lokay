@@ -28,6 +28,7 @@ implementing          --pr_create + stage_pr_open-->  pr-open
 pr-open               --pr_merge + stage_clear + close-->  closed
 pr-open               --pr_repair-->  repairing --> pr-open
 implementing          --reap (brak żywego joba i brak PR)-->  ready
+pr-open               --reap (brak otwartego covering PR i brak żywego joba)-->  ready
 ready + otwarty AI PR --survey_ready-->  pr-open   (nie drugie issue_to_pr)
 ```
 
@@ -36,7 +37,7 @@ Pass katalogu (`factory_pass`):
 ```text
 survey PRs → inbox → ready → triage → konflikty
   → closeout (najpierw merge otwartych PR)
-    → reap porzuconego implementing
+    → reap porzuconego implementing / pr-open bez covering PR
       → select / implement (max 4, 1 na repo)
 ```
 
@@ -44,4 +45,4 @@ survey PRs → inbox → ready → triage → konflikty
 
 `stage_implementing` zdejmuje `ai:ready` **zanim** powstanie PR. Gdy `issue_to_pr` umrze (lease, timeout, czerwony test, push), issue zostaje na `ai:in-progress`. Inbox go nie bierze. Ready go nie bierze. Mill idzie dalej i widzi puste repo.
 
-**Prawo:** `implementing` jest legalne tylko gdy (a) żyje proces `issue_to_pr` dla `repo#n`, albo (b) jest otwarty AI PR pokrywający `#n`. Inaczej `reap_stale_implementing` wraca issue na `ready`.
+**Prawo:** `implementing` i `pr-open` są legalne tylko gdy (a) żyje proces `issue_to_pr` dla `repo#n`, albo (b) jest **otwarty** AI PR pokrywający `#n`. Zamknięty/odrzucony PR albo sam label bez PR to limbo: inbox i ready ich nie biorą, closeout nie ma czego mergować. `reap_stale_implementing` wraca takie issue na `ready`.

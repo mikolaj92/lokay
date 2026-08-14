@@ -1,4 +1,4 @@
-"""One job: return abandoned ai:in-progress issues to ai:ready."""
+"""One job: return abandoned implementing / pr-open issues to ai:ready."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from lokay.passkit.support import run_proc
 from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live, load_cfg, runner
 from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
-from lokay.stage_ledger import LABEL_IMPLEMENTING
-from lokay.stale_implementing import issue_has_covering_pr, should_reap_implementing
+from lokay.stage_ledger import LABEL_IMPLEMENTING, LABEL_PR_OPEN
+from lokay.stale_implementing import issue_has_covering_pr, should_reap_abandoned
 
 
 def _live_job_keys() -> set[tuple[str, int]]:
@@ -41,27 +41,51 @@ def run_reap_stale_implementing(
     kept: list[dict[str, Any]] = []
     prefix = str(cfg.branch_prefix or "ai/fix")
     for repo in cfg.active_repos():
-        issues = list_labeled_issues(
-            runner(cfg), cfg, repo, label=LABEL_IMPLEMENTING, live=live
-        )
         prs = list(prs_by_repo.get(repo.name) or [])
-        for issue in issues:
-            num = int(issue.number)
-            live_job = (repo.name, num) in live_jobs
-            covering = issue_has_covering_pr(num, prs, branch_prefix=prefix)
-            if not should_reap_implementing(
-                has_live_job=live_job, has_covering_pr=covering
-            ):
-                kept.append({"repo": repo.name, "issue": num, "live_job": live_job})
-                continue
-            if live:
-                staged = run_proc(
-                    p_stage.main,
-                    [*cfg_flag, *live_flag, "--repo", repo.name, "--issue", str(num), "--stage", "ready"],
+        for label in (LABEL_IMPLEMENTING, LABEL_PR_OPEN):
+            issues = list_labeled_issues(
+                runner(cfg), cfg, repo, label=label, live=live
+            )
+            for issue in issues:
+                num = int(issue.number)
+                live_job = (repo.name, num) in live_jobs
+                covering = issue_has_covering_pr(num, prs, branch_prefix=prefix)
+                if not should_reap_abandoned(
+                    has_live_job=live_job, has_covering_pr=covering
+                ):
+                    kept.append(
+                        {
+                            "repo": repo.name,
+                            "issue": num,
+                            "label": label,
+                            "live_job": live_job,
+                        }
+                    )
+                    continue
+                if live:
+                    staged = run_proc(
+                        p_stage.main,
+                        [
+                            *cfg_flag,
+                            *live_flag,
+                            "--repo",
+                            repo.name,
+                            "--issue",
+                            str(num),
+                            "--stage",
+                            "ready",
+                        ],
+                    )
+                else:
+                    staged = {"ok": True, "planned": True, "stage": "ready"}
+                reaped.append(
+                    {
+                        "repo": repo.name,
+                        "issue": num,
+                        "label": label,
+                        **staged,
+                    }
                 )
-            else:
-                staged = {"ok": True, "planned": True, "stage": "ready"}
-            reaped.append({"repo": repo.name, "issue": num, **staged})
     return ok(
         planned=not live,
         reaped=reaped,

@@ -51,7 +51,7 @@ host_ff
             → dispatch_triage          → issue_triage child Fala
               → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
                 → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
-                  → reap_stale_implementing  → abandoned ai:in-progress → ai:ready
+                  → reap_stale_implementing  → abandoned in-progress / pr-open → ai:ready
                     → select_implement
                     → queue_conflict   → SKIP/CLOSE/READY queue hygiene
                       → dispatch_implement → issue_to_pr child Fala
@@ -70,7 +70,7 @@ host_ff
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
-| `reap_stale_implementing` | `ai:in-progress` without live job or covering PR → `ai:ready` |
+| `reap_stale_implementing` | `ai:in-progress` / `ai:pr-open` without live job or covering open PR → `ai:ready` |
 | `select_implement` | clean repos eligible for issue_to_pr (serial K budget) |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design) |

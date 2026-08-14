@@ -190,7 +190,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
 - `factory_pass` is the parent Fala run used by the mill. It conducts
   `host_ff → factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
-  dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
+  dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
