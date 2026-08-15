@@ -1,5 +1,13 @@
 # Lokay agent notes
 
+## always use delegate wave
+
+Always use delegate wave.
+
+Use pi in zellij. All read, discovery, and changes should be delegated to pi. Your role is to review and delegate.
+
+Load the `delegate-wave` skill before any worktree read, discovery, or change. Do not open the tree with Hermes `read_file` / `search_files` / `write_file` / `patch`. Review `pi` output; send the next wave if needed.
+
 ## Composition (non-negotiable)
 
 - Prefer small Unix-style modules/processes; compose them. No fat god-files.
@@ -10,9 +18,9 @@
 
 ## Design law
 
-**Unix small programs + Fala graph for order + real agent only.**
+**Product = Fala graph(s).** Unix atoms are replaceable blocks. Coding harness is not the product.
 
-- See `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
+- See **`docs/PROCESS.md`**, `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
 - **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
@@ -20,10 +28,14 @@
   dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`), not a
   fat `compose/tick.py`.
+- Graph may **return** across passes (repair / re-ready / re-survey). Do not
+  flatten the mill to one-way issue→done.
 - **Serial by design.** Default `limits.max_issue_to_pr_per_pass` is **1**
   (ticket after ticket). K is an optional pass budget — not concurrent
-  worktrees / Pi / tmux. `queue_conflict` is queue hygiene, not a parallel
+  worktrees / harness / tmux. `queue_conflict` is queue hygiene, not a parallel
   scheduler.
+- Coding slot is `executor.command` / `args` (any real worker). Named harnesses
+  in examples are illustration, not a dependency.
 - **Trust intentional issues.** Owner / configured-assignee tickets are
   purposeful; no new human-approval gates in the pass spine. Intake CLOSE only
   for clear obsolete / wrong-shape / superseded. Human writes → mill delivers.
@@ -45,7 +57,7 @@
 
 ## Stack
 
-- Executor: **Pi** (`lokay-run-agent`; `executor.command: pi`, model `omniroute/pi`).
+- Coding slot: `lokay-run-agent` via `executor.command` / `executor.args` (any real harness; current example is `pi` + `omniroute/pi`). Swap is config, not a product change. See `docs/PROCESS.md`.
 - Scope: `repos.mikolaj92.yaml` (managed repos).
 - Continuous mill: LaunchAgent `ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`.
 

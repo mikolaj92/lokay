@@ -14,6 +14,7 @@ The top-level mill runs the parent `factory_pass` Fala. Its `factory_tick` effec
 
 ## Architecture
 
+- **Core value:** authored Fala process graph(s) (`fala/`). Workers, GitHub, and atom bodies are replaceable blocks under JSON contracts — see `docs/PROCESS.md`.
 - `src/lokay/proc/`: small command-line atoms. They exchange JSON envelopes on stdout.
 - `fala/lokay.fala-package.toml`: authored parent `factory_pass` plus child conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
 - `src/lokay/compose/`: graph entrypoints plus the Python tick, mill, and status policy.
