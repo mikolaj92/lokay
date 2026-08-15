@@ -84,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
             CommandSpec(
                 test_argv,
                 cwd=str(worktree),
+                # Verifier is not a mill atom — do not inherit the capability.
+                env={
+                    "LOKAY_HEALTH_LEASE": "",
+                    "LOKAY_HEALTH_LEASE_PATH": "",
+                },
                 timeout_seconds=TEST_TIMEOUT_SECONDS,
             ),
             live=True,

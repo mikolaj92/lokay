@@ -36,6 +36,8 @@ def _fake_runner(expected: tuple[str, ...], result: CommandResult):
         def run(self, spec, *, live):
             assert spec.argv == expected
             assert spec.timeout_seconds == test_local.TEST_TIMEOUT_SECONDS
+            assert spec.env.get("LOKAY_HEALTH_LEASE") == ""
+            assert spec.env.get("LOKAY_HEALTH_LEASE_PATH") == ""
             assert live is True
             return result
 
@@ -141,6 +143,24 @@ def test_declared_string_command_runs(tmp_path: Path, monkeypatch, capsys):
     assert payload["tested"] is True
     assert payload["skipped"] is False
     assert payload["tests"] == "pixi run core-smoke"
+
+
+def test_declared_suite_strips_mill_lease(tmp_path: Path, monkeypatch, capsys):
+    """Verifier must not inherit the mill health capability."""
+    _declare_test(tmp_path)
+    captured: list = []
+
+    class CaptureRunner:
+        def run(self, spec, *, live):
+            captured.append(spec.env)
+            return CommandResult(spec=spec, executed=True, returncode=0)
+
+    monkeypatch.setattr(test_local, "runner", lambda: CaptureRunner())
+    code = test_local.main(["--worktree", str(tmp_path)])
+    assert code == 0
+    assert captured[0]["LOKAY_HEALTH_LEASE"] == ""
+    assert captured[0]["LOKAY_HEALTH_LEASE_PATH"] == ""
+    assert _payload(capsys)["tested"] is True
 
 
 def test_declared_list_command_runs(tmp_path: Path, monkeypatch, capsys):
