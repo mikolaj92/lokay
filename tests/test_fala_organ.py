@@ -656,6 +656,19 @@ def test_recheck_red_marks_bounded_loop_exhausted(monkeypatch):
     assert list(result).index("reason") < list(result).index("stdout_tail")
 
 
+def test_ensure_project_cwd_prefers_lokay_root(tmp_path, monkeypatch):
+    root = tmp_path / "lokay"
+    root.mkdir()
+    (root / "pyproject.toml").write_text("[project]\nname='lokay'\n", encoding="utf-8")
+    (root / "fala").mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setenv("LOKAY_ROOT", str(root))
+    monkeypatch.chdir(elsewhere)
+    fala_organ._ensure_project_cwd()
+    assert Path.cwd() == root.resolve()
+
+
 def test_bundled_fala_manifest_is_ascii_safe():
     """Native TOML parsing must never land on a UTF-8 continuation byte."""
     from pathlib import Path

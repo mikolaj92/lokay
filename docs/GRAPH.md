@@ -23,9 +23,15 @@ preflight. Fala owns product/recovery order. Every node above is a separate
 `lokay-recovery-*` Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
 
+Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
+durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not
+inherit that cwd or they emit empty `adapter_failed` and starve the mill.
+
 **Quorum law (narrow recovery):** `recovery_observe` / `recovery_record` mint and
 confirm fingerprints only for true product-mill / carrier-class failures
 (`stall`, `survey_error`, `plateau`, `budget_exhausted`, hard pass failures).
+Empty `adapter_failed` / `subprocess adapter failed` with no product detail is
+plumbing, not a confirmed stall — it must not fill the 4-of-5 quorum.
 Mill envelopes (and their run-tail events) with `waiting`, `repairing`, `idle`,
 `progress`, `offline`, or `overlap` never confirm a stall — so review limbo,
 pending CI, and `ai:needs-review` parked PRs cannot steal cycles into

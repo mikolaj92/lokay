@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 from fala import sdk
@@ -70,7 +71,22 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     raise ValueError(f"unknown atom: {atom!r}")
 
 
+def _ensure_project_cwd() -> None:
+    """Atoms must not inherit Fala's sqlite.fire dylib cwd."""
+    root = os.environ.get("LOKAY_ROOT")
+    if root and os.path.isdir(root):
+        os.chdir(root)
+        return
+    here = Path(__file__).resolve()
+    for candidate in (here.parents[2], Path.cwd()):
+        if (candidate / "pyproject.toml").is_file() and (candidate / "fala").is_dir():
+            os.chdir(candidate)
+            return
+
+
 def main() -> int:
+    _ensure_project_cwd()
+
     def handler(manifest: dict[str, Any]) -> dict[str, Any]:
         config = sdk.config(manifest)
         atom = str(config.get("atom") or manifest.get("process_id") or "")

@@ -2,6 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from lokay import self_repair
+from lokay.proc import self_repair_validate
 
 
 def cfg(tmp_path, **kw):
@@ -108,3 +109,26 @@ def test_self_repair_honors_configured_incident_repo(monkeypatch, tmp_path):
     assert result["ok"]
     assert calls[0]["repo"] == "acme/ops"
     assert calls[0]["issue"] == 44
+
+
+def test_self_repair_validate_isolates_pytest_home(tmp_path, monkeypatch):
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    seen: dict[str, object] = {}
+
+    class FakeRun:
+        def run_checked(self, spec, *, live):
+            seen["status"] = spec.argv
+            return SimpleNamespace(stdout=" M src/lokay/x.py\n", returncode=0)
+
+        def run(self, spec, *, live):
+            if spec.argv and spec.argv[0] == "uv":
+                seen["pytest"] = spec
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(self_repair_validate, "runner", lambda: FakeRun())
+    assert self_repair_validate.main(["--worktree", str(worktree)]) == 0
+    spec = seen["pytest"]
+    assert spec.argv[:4] == ("uv", "run", "--extra", "dev")
+    assert spec.env["HOME"].startswith(str(tmp_path)) or "lokay-self-repair-pytest-" in spec.env["HOME"]
+    assert spec.env["HOME"] != str(Path.home())

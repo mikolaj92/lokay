@@ -85,6 +85,20 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
 
 
+def test_subprocess_atoms_pin_project_cwd():
+    import tomllib
+
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    missing = [
+        f"{path['id']}:{effector['id']}"
+        for path in package["correlation_paths"]
+        for effector in path["effectors"]
+        if (effector.get("adapter") or {}).get("kind") == "subprocess"
+        and (effector.get("adapter") or {}).get("cwd") != "PLACEHOLDER_PROJECT"
+    ]
+    assert missing == []
+
+
 def test_describe_issue_to_pr_graph():
     desc = describe_package()
     assert desc["package_id"] == "lokay"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import tempfile
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
@@ -22,14 +23,21 @@ def main(argv: list[str] | None = None) -> int:
         ).stdout.strip()
         if not changed:
             raise RuntimeError("self-repair produced zero diff")
-        tests = run.run(
-            CommandSpec(
-                ("uv", "run", "--extra", "dev", "pytest", "-q"),
-                cwd=str(worktree),
-                timeout_seconds=1800,
-            ),
-            live=True,
-        )
+        # Isolate pytest from the live mill: a leaking test must not rewrite
+        # ~/.lokay/last-pass.json or recovery-history.json.
+        with tempfile.TemporaryDirectory(prefix="lokay-self-repair-pytest-") as home:
+            tests = run.run(
+                CommandSpec(
+                    ("uv", "run", "--extra", "dev", "pytest", "-q"),
+                    cwd=str(worktree),
+                    env={
+                        "HOME": home,
+                        "PYTEST_ADDOPTS": "-p no:cacheprovider",
+                    },
+                    timeout_seconds=1800,
+                ),
+                live=True,
+            )
         if tests.returncode != 0:
             raise RuntimeError("self-repair validation suite failed")
         diff = run.run(

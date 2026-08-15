@@ -106,6 +106,31 @@ def _lease_noise(text: str) -> bool:
     return "lease_unavailable_" in value or "lease_file_missing" in value
 
 
+def _empty_adapter_failure(text: str) -> bool:
+    """True when Fala reports adapter_failed with no product detail.
+
+    Empty stderr from a subprocess effector is plumbing (often a inherited
+    sqlite.fire cwd), not a confirmed product-mill stall. A real atom error
+    keeps words after the adapter wrapper and still fingerprints.
+    """
+    raw = str(text or "")
+    if "adapter_failed" not in raw and "subprocess adapter failed" not in raw:
+        return False
+    remainder = raw
+    for token in (
+        "adapter_failed",
+        "subprocess adapter failed",
+        "code",
+        "message",
+        "error",
+    ):
+        remainder = re.sub(re.escape(token), " ", remainder, flags=re.I)
+    # str(dict) keeps the newline as the two-character sequence \\n.
+    remainder = re.sub(r"\\[nrt]", " ", remainder)
+    remainder = re.sub(r"[^A-Za-z0-9]+", "", remainder)
+    return remainder == ""
+
+
 def _soft_mill_health(mill: dict[str, Any]) -> bool:
     """True for honest wait / repair / idle outcomes — never systemic stall."""
     if str(mill.get("health") or "") in _NON_FAILURE_HEALTH:
@@ -154,7 +179,7 @@ def _failure_texts(row: dict[str, Any]):
             continue
         if str(raw).strip() in _SOFT_PRODUCT_REASONS:
             continue
-        if _lease_noise(raw):
+        if _lease_noise(raw) or _empty_adapter_failure(raw):
             continue
         yield raw, normalized
 
@@ -206,12 +231,21 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
     # True carrier/preflight/product-mill failures only: envelope fallback when
     # no event text was available and health is not an honest soft wait.
     if not failures and not mill.get("ok"):
-        raw = str(mill.get("error") or mill.get("health") or "mill failed")
+        mill_error = mill.get("error")
+        if isinstance(mill_error, dict):
+            raw = str(
+                mill_error.get("message")
+                or mill_error.get("code")
+                or mill_error
+            )
+        else:
+            raw = str(mill_error or mill.get("health") or "mill failed")
         # Soft-looking mill errors must not confirm either.
         if (
             normalize_failure(raw) in _SOFT_REASON_NORMALIZED
             or str(raw).strip() in _SOFT_PRODUCT_REASONS
             or str(raw).strip() in _NON_FAILURE_HEALTH
+            or _empty_adapter_failure(raw)
         ):
             return {
                 "ts": datetime.now(timezone.utc).isoformat(),

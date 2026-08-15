@@ -136,6 +136,43 @@ def test_waiting_or_repairing_mill_envelope_is_not_failure_fingerprint(tmp_path)
             assert row["health"] == health
 
 
+def test_empty_adapter_failed_is_not_stall_fingerprint(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={
+            "ok": False,
+            "health": "failed",
+            "error": {"code": "adapter_failed", "message": "subprocess adapter failed: \n"},
+            "progress": 0,
+        },
+    )
+    assert row["fingerprint"] is None
+    assert row["evidence"] == ""
+
+
+def test_adapter_failed_with_product_detail_still_fingerprints(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={
+            "ok": False,
+            "health": "failed",
+            "error": {
+                "code": "adapter_failed",
+                "message": "subprocess adapter failed: survey_ready timed out",
+            },
+            "progress": 0,
+        },
+    )
+    assert row["fingerprint"]
+    assert "survey_ready" in row["evidence"]
+
+
 def test_running_health_is_not_failure_fingerprint(tmp_path):
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
