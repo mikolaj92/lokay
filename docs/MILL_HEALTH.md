@@ -52,7 +52,13 @@ the receipt — see [`AUTONOMY.md`](AUTONOMY.md).
 
 Daemon logs remain under `~/.lokay/logs/mill-latest.log` (see
 `scripts/lokay-mill-daemon.sh`). The receipt is the structured signal; logs are
-the transcript.
+the transcript. LaunchAgent `StandardOutPath` (`launchd-stdout.log`) is a
+bounded glance (`health` / `progress` / optional error) — the full Fala
+envelope stays in `mill-*.log`, which is size-capped and rotated. The 60s tick
+reinstalls editable `lokay`/`fala` only when checkout HEAD or `uv.lock`
+actually moved (`~/.lokay/uv-install.digest`). `LastExitStatus=0` when the
+pass did work (`health=progress` or detached `issue_to_pr_started`), even if
+the Fala wrapper envelope has `ok: false`.
 
 ## How to read health
 

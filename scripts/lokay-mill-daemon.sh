@@ -174,11 +174,209 @@ caretaker_write_interval
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="${LOG_DIR}/mill-${STAMP}.log"
 LATEST="${LOG_DIR}/mill-latest.log"
+DIGEST_FILE="${LOKAY_UV_DIGEST:-${LOKAY_HOME}/uv-install.digest}"
+# Bounded transcripts: launchd stdout stays a glance; mill-*.log keeps the body.
+MILL_LOG_MAX="${LOKAY_MILL_LOG_MAX:-1048576}"
+LAUNCHD_STDOUT_MAX="${LOKAY_LAUNCHD_STDOUT_MAX:-1048576}"
+MILL_LOG_KEEP="${LOKAY_MILL_LOG_KEEP:-48}"
 
-# Refresh the preflight carrier before starting: uv otherwise preserves stale
-# editable installs of Lokay or Fala after either checkout was repaired.
-# One Python process owns the crash-safe OS lock across preflight and all work.
-uv run --reinstall-package lokay --reinstall-package fala lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" 2>&1 | tee "${LOG}" | tee "${LATEST}"
+checkout_digest() {
+  _python - "${ROOT}" "${FALA_HOME:-}" <<'PY'
+import hashlib, subprocess, sys
+from pathlib import Path
+
+def head(path: str) -> str:
+    if not path:
+        return ""
+    repo = Path(path)
+    git_dir = repo / ".git"
+    if not repo.exists() or not (git_dir.exists() or git_dir.is_file()):
+        return ""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return "unreadable"
+    return (out.stdout or "").strip() or "unreadable"
+
+parts = [f"lokay:{head(sys.argv[1])}", f"fala:{head(sys.argv[2])}"]
+for rel in ("pyproject.toml", "uv.lock"):
+    path = Path(sys.argv[1]) / rel
+    try:
+        stat = path.stat()
+        parts.append(f"{rel}:{stat.st_mtime_ns}:{stat.st_size}")
+    except OSError:
+        parts.append(f"{rel}:missing")
+print(hashlib.sha256("\n".join(parts).encode()).hexdigest())
+PY
+}
+
+bound_file() {
+  local path="$1"
+  local max_bytes="$2"
+  [[ -f "${path}" ]] || return 0
+  _python - "${path}" "${max_bytes}" <<'PY'
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    limit = int(sys.argv[2])
+except ValueError:
+    raise SystemExit(0)
+if limit < 1024:
+    raise SystemExit(0)
+try:
+    size = path.stat().st_size
+except OSError:
+    raise SystemExit(0)
+if size <= limit:
+    raise SystemExit(0)
+try:
+    data = path.read_bytes()
+except OSError:
+    raise SystemExit(0)
+head_n = max(256, limit // 4)
+tail_n = max(256, limit - head_n - 32)
+marker = b"\n... truncated ...\n"
+path.write_bytes(data[:head_n] + marker + data[-tail_n:])
+PY
+}
+
+launchd_stdout_paths() {
+  _python - "${LOKAY_LAUNCHD_PLIST}" "${LOKAY_HOME}" "${LOG_DIR}" <<'PY'
+import plistlib, sys
+from pathlib import Path
+
+seen = []
+def add(path: str) -> None:
+    text = (path or "").strip()
+    if text and text not in seen:
+        seen.append(text)
+
+plist = Path(sys.argv[1])
+if plist.is_file():
+    try:
+        with plist.open("rb") as handle:
+            data = plistlib.load(handle)
+    except Exception:
+        data = {}
+    if isinstance(data, dict):
+        add(str(data.get("StandardOutPath") or ""))
+        add(str(data.get("StandardErrorPath") or ""))
+add(str(Path(sys.argv[2]) / "launchd-stdout.log"))
+add(str(Path(sys.argv[3]) / "launchd-stdout.log"))
+print("\n".join(seen))
+PY
+}
+
+prune_mill_logs() {
+  _python - "${LOG_DIR}" "${MILL_LOG_KEEP}" <<'PY'
+import sys
+from pathlib import Path
+
+log_dir = Path(sys.argv[1])
+try:
+    keep = max(1, int(sys.argv[2]))
+except ValueError:
+    keep = 48
+try:
+    logs = [
+        path
+        for path in log_dir.glob("mill-*.log")
+        if path.name != "mill-latest.log"
+    ]
+except OSError:
+    raise SystemExit(0)
+logs.sort(key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+for stale in logs[keep:]:
+    try:
+        stale.unlink()
+    except OSError:
+        pass
+PY
+}
+
+emit_launchd_glance() {
+  _python - "${LOG}" <<'PY'
+import json, sys
+from pathlib import Path
+
+payload = None
+try:
+    text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+except OSError:
+    text = ""
+for line in reversed(text.splitlines()):
+    raw = line.strip()
+    if not (raw.startswith("{") and raw.endswith("}")):
+        continue
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        continue
+    if isinstance(parsed, dict):
+        payload = parsed
+        break
+glance = {
+    "ok": bool((payload or {}).get("ok")),
+    "health": (payload or {}).get("health") or "unknown",
+    "progress": int((payload or {}).get("progress") or 0),
+}
+remaining = (payload or {}).get("remaining")
+if isinstance(remaining, dict) and remaining.get("issue_to_pr_started"):
+    glance["issue_to_pr_started"] = remaining.get("issue_to_pr_started")
+error = (payload or {}).get("error")
+if isinstance(error, str) and error:
+    glance["error"] = error[:200]
+print(json.dumps(glance, ensure_ascii=False, default=str))
+PY
+}
+
+# Bound StandardOutPath before this tick appends a glance line.
+while IFS= read -r stdout_path; do
+  [[ -n "${stdout_path}" ]] || continue
+  bound_file "${stdout_path}" "${LAUNCHD_STDOUT_MAX}"
+done < <(launchd_stdout_paths || true)
+
+UV_REINSTALL_ARGS=()
+CURRENT_DIGEST="$(checkout_digest || true)"
+PREVIOUS_DIGEST=""
+if [[ -f "${DIGEST_FILE}" ]]; then
+  PREVIOUS_DIGEST="$(cat "${DIGEST_FILE}" 2>/dev/null || true)"
+fi
+# Reinstall only when lokay/Fala HEAD or lockfile actually moved.
+if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]]; then
+  UV_REINSTALL_ARGS=(--reinstall-package lokay --reinstall-package fala)
+fi
+
+# Transcript stays in mill-*.log. Do not tee the Fala envelope into launchd stdout.
+# Empty array + set -u is fatal on macOS bash 3.2, so branch the argv.
+set +e
+if [[ ${#UV_REINSTALL_ARGS[@]} -gt 0 ]]; then
+  uv run "${UV_REINSTALL_ARGS[@]}" lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >"${LOG}" 2>&1
+else
+  uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >"${LOG}" 2>&1
+fi
+MILL_RC=$?
+set -e
+cp "${LOG}" "${LATEST}" 2>/dev/null || true
+if [[ -n "${CURRENT_DIGEST}" ]]; then
+  printf '%s\n' "${CURRENT_DIGEST}" > "${DIGEST_FILE}" || true
+fi
+bound_file "${LOG}" "${MILL_LOG_MAX}" || true
+bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
+prune_mill_logs || true
+emit_launchd_glance || true
+while IFS= read -r stdout_path; do
+  [[ -n "${stdout_path}" ]] || continue
+  bound_file "${stdout_path}" "${LAUNCHD_STDOUT_MAX}" || true
+done < <(launchd_stdout_paths || true)
+
 # Self-repair writes this flag when activate+preflight released the gate.
 if [[ -f "${LOKAY_HOME}/restart-required" ]]; then
   rm -f "${LOKAY_HOME}/restart-required" || true
@@ -186,3 +384,4 @@ if [[ -f "${LOKAY_HOME}/restart-required" ]]; then
     reload_launchagent "${LOKAY_LAUNCHD_PLIST}" "${LOKAY_LAUNCHD_LABEL}" || true
   fi
 fi
+exit "${MILL_RC}"

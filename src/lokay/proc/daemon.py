@@ -8,7 +8,8 @@ from pathlib import Path
 
 from lokay.compose.daemon_cycle import compose_daemon_cycle
 from lokay.config import load_config
-from lokay.envelope import emit_exit, err
+from lokay.envelope import emit_exit, err, process_exit_code
+from lokay.pass_receipt import read_pass_receipt
 from lokay.preflight import acquire_run_lock, revoke_health_lease, run_preflight
 from lokay.self_repair import run_self_repair
 
@@ -76,7 +77,12 @@ def main(argv: list[str] | None = None) -> int:
                 handle.write(json.dumps({"health": payload.get("health"), "code": payload.get("code", "gate")}) + "\n")
         except OSError:
             pass
-    return emit_exit(payload)
+    last_pass = None
+    try:
+        last_pass = read_pass_receipt(path=lock.parent / "last-pass.json")
+    except OSError:
+        last_pass = None
+    return emit_exit(payload, code=process_exit_code(payload, last_pass=last_pass))
 
 
 if __name__ == "__main__":
