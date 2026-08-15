@@ -1,20 +1,55 @@
-"""Atomic: run local pytest in a worktree when a Python suite is present."""
+"""Atomic: run the repository-declared local test command in a worktree.
+
+Verification is declared by the checkout (`[tool.lokay] test` in
+``pyproject.toml``), not inferred from ``pyproject`` / ``tests/``. Missing
+declaration is an honest skip — do not invent ``uv run --extra dev pytest``.
+"""
 
 from __future__ import annotations
 
 import argparse
+import shlex
+import tomllib
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import runner
 from lokay.runner import CommandSpec
 
-TEST_ARGV = ("uv", "run", "--extra", "dev", "pytest", "-q")
 TEST_TIMEOUT_SECONDS = 1800
 
 
-def has_python_test_suite(worktree: Path) -> bool:
-    return (worktree / "pyproject.toml").is_file() or (worktree / "tests").is_dir()
+def _argv_from_raw(raw: object) -> tuple[str, ...] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        argv = tuple(shlex.split(raw))
+        return argv or None
+    if isinstance(raw, list):
+        if not raw:
+            return None
+        if not all(isinstance(item, str) and item.strip() for item in raw):
+            raise ValueError("tool.lokay.test must be a string or list of strings")
+        return tuple(str(item) for item in raw)
+    raise ValueError("tool.lokay.test must be a string or list of strings")
+
+
+def declared_test_argv(worktree: Path) -> tuple[str, ...] | None:
+    """Return the repo-declared test argv, or None when none is declared."""
+    pyproject = worktree / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise ValueError(f"cannot read tool.lokay.test: {exc}") from exc
+    tool = data.get("tool")
+    if not isinstance(tool, dict):
+        return None
+    lokay = tool.get("lokay")
+    if not isinstance(lokay, dict):
+        return None
+    return _argv_from_raw(lokay.get("test"))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,11 +59,22 @@ def main(argv: list[str] | None = None) -> int:
     worktree = Path(args.worktree).resolve()
     if not worktree.is_dir():
         return emit_exit(err("worktree is not a directory", worktree=str(worktree)))
-    if not has_python_test_suite(worktree):
+    try:
+        test_argv = declared_test_argv(worktree)
+    except ValueError as exc:
+        return emit_exit(
+            err(
+                str(exc),
+                reason="invalid_test_declaration",
+                tested=False,
+                worktree=str(worktree),
+            )
+        )
+    if not test_argv:
         return emit_exit(
             ok(
                 skipped=True,
-                reason="no_python_test_suite",
+                reason="no_declared_test",
                 tested=False,
                 worktree=str(worktree),
             )
@@ -36,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         tests = runner().run(
             CommandSpec(
-                TEST_ARGV,
+                test_argv,
                 cwd=str(worktree),
                 timeout_seconds=TEST_TIMEOUT_SECONDS,
             ),
@@ -44,6 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc), worktree=str(worktree)))
+    command = " ".join(test_argv)
     if tests.returncode != 0:
         # Bounded failure log for the one-shot repair patch nest (AlphaCodium:
         # the test log drives exactly one repair attempt, never a PR).
@@ -52,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
                 "local test suite failed",
                 returncode=tests.returncode,
                 worktree=str(worktree),
+                tests=command,
                 stdout_tail=(tests.stdout or "")[-4000:],
                 stderr_tail=(tests.stderr or "")[-2000:],
             )
@@ -61,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             skipped=False,
             tested=True,
             worktree=str(worktree),
-            tests="uv run --extra dev pytest -q",
+            tests=command,
         )
     )
 

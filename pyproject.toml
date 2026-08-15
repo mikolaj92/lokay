@@ -104,6 +104,11 @@ packages = ["src/lokay"]
 [tool.hatch.build.targets.wheel.force-include]
 "src/lokay" = "lokay"
 
+[tool.lokay]
+# Repository-declared local verifier for lokay-test-local. Missing this table
+# is an honest skip — the mill must not invent `uv run --extra dev pytest`.
+test = ["uv", "run", "--extra", "dev", "pytest", "-q"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
