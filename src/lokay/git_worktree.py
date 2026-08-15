@@ -50,10 +50,14 @@ def ensure_worktree(
 ) -> Path:
     """Ensure a worktree for *branch*.
 
-    When ``reset_to_base`` is True (issue_to_pr re-implement path), the worktree
-    and branch are recreated from ``origin/<base>`` so a prior CONFLICTING PR on
-    the same branch name cannot poison the next attempt. Best-effort deletes the
-    remote branch so a subsequent non-force push can publish the rewrite.
+    When ``reset_to_base`` is True (issue_to_pr re-implement path):
+
+    * KEEP if the existing corner is ahead of ``origin/<base>`` (unpublished
+      commits). Restart must not wipe a child that has not published a PR.
+    * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) only
+      when ahead is 0 — conflict rewrite after the corner is already empty
+      or already aligned with base.
+    * Fail closed if ahead cannot be measured. Do not ``rm -rf``.
     """
     root = config.worktrees_root / repo.name.replace("/", "__")
     worktree = root / branch.replace("/", "__")
@@ -72,6 +76,28 @@ def ensure_worktree(
 
     if reset_to_base:
         if worktree.exists():
+            ahead_result = runner.run(
+                git_spec(
+                    ["rev-list", "--count", f"origin/{base}..HEAD"],
+                    cwd=worktree,
+                    timeout_seconds=60,
+                ),
+                live=True,
+            )
+            if ahead_result.returncode != 0:
+                detail = (ahead_result.stderr or ahead_result.stdout or "").strip()
+                raise RuntimeError(
+                    f"cannot measure unpublished ahead vs origin/{base}: {detail}"
+                )
+            try:
+                ahead = int((ahead_result.stdout or "").strip())
+            except ValueError as exc:
+                raise RuntimeError(
+                    f"cannot measure unpublished ahead vs origin/{base}: "
+                    f"{(ahead_result.stdout or '').strip()!r}"
+                ) from exc
+            if ahead > 0:
+                return worktree
             rm = runner.run(
                 git_spec(
                     ["worktree", "remove", "--force", str(worktree)],
