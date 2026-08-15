@@ -33,7 +33,7 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.health import health_payload as _health_payload  # noqa: F401
 from lokay.passkit.support import is_manual_pr as _is_manual_pr  # noqa: F401
 from lokay.passkit.support import run_proc as _run  # noqa: F401
-from lokay.compose.issue_to_pr import compose_issue_to_pr  # noqa: F401
+from lokay.compose.issue_to_pr import compose_issue_to_pr as _default_compose_issue_to_pr  # noqa: F401
 from lokay.compose.pr_repair import compose_pr_repair  # noqa: F401
 from lokay.compose.pr_triage import compose_pr_triage  # noqa: F401
 from lokay.graph_run import run_path  # noqa: F401
@@ -47,6 +47,8 @@ from lokay.proc import pr_checks as p_checks  # noqa: F401
 from lokay.proc import pr_close as p_pr_close  # noqa: F401
 from lokay.proc import select_issue as p_select  # noqa: F401
 from lokay.proc import stage_label as p_stage  # noqa: F401
+
+compose_issue_to_pr = _default_compose_issue_to_pr
 
 
 def _run_bound(fn, argv):  # type: ignore[no-untyped-def]
@@ -108,7 +110,13 @@ def _bind_test_patches() -> None:
     closeout_pr.is_manual_pr = _is_manual_pr
     queue_conflict.run_proc = _run_bound
     dispatch_implement.run_proc = _run_bound
-    dispatch_implement.compose_issue_to_pr = compose_issue_to_pr
+    # Honor tick.compose_issue_to_pr only when tests replace it. The live
+    # in-process spine still detaches; Fala dispatch never sees this bind.
+    dispatch_implement.compose_issue_to_pr = (
+        compose_issue_to_pr
+        if compose_issue_to_pr is not _default_compose_issue_to_pr
+        else None
+    )
     dispatch_triage.run_path = run_path
     compute_health.is_manual_pr = _is_manual_pr
     compute_health.health_payload = _health_payload

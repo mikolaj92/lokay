@@ -54,7 +54,11 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         "intake_skip_reason": working.get("intake_skip_reason"),
         "issue_to_pr_started": max(
             int(working.get("issue_to_pr_started") or 0),
-            len(live_issue_to_pr_receipts()),
+            sum(
+                1
+                for row in live_issue_to_pr_receipts()
+                if str(row.get("repo") or "") in set(begin.get("repos") or [])
+            ),
         ),
         "max_issue_to_pr_per_pass": int(begin.get("max_issue_to_pr_per_pass") or 0),
         "mergeable_green": int(working.get("mergeable_green") or 0),
