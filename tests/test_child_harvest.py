@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import time
 from pathlib import Path
 
 from lokay.child_harvest import harvest_fail_closed_children
@@ -179,3 +180,54 @@ state:
     stuck = load_stuck(stuck_path_for(state))
     assert 7 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
+
+
+def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monkeypatch):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    filler = json.dumps({"kind": "pass_receipt", "repo": "x/y", "issue": 1, "pad": "z" * 256})
+    with state.open("w", encoding="utf-8") as fh:
+        for i in range(3000):
+            fh.write(filler + "\n")
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "issue_to_pr",
+                    "repo": "a/b",
+                    "issue": 7,
+                    "ok": False,
+                    "reason": "local_repair_exhausted",
+                }
+            )
+            + "\n"
+        )
+    _receipt(cycle / "a__b-7.json", repo="a/b", issue=7, pid=8)
+    for n in range(8, 15):
+        _receipt(cycle / f"a__b-{n}.json", repo="a/b", issue=n, pid=n)
+
+    opens = {"n": 0}
+    orig_open = Path.open
+
+    def counting_open(self, *args, **kwargs):
+        if self == state:
+            opens["n"] += 1
+        return orig_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting_open)
+
+    stuck = {"issues": {}}
+    t0 = time.perf_counter()
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    dt = time.perf_counter() - t0
+    assert opens["n"] == 1
+    assert dt < 2.0
+    assert 7 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
+    for n in range(8, 15):
+        assert n not in excluded_numbers(stuck, "a/b")

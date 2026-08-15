@@ -68,30 +68,36 @@ def _classify(event: dict[str, Any] | None) -> str | None:
     return _reason_from_text(blob)
 
 
-def _last_issue_to_pr_event(state_path: Path, repo: str, issue: int) -> dict[str, Any] | None:
+def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[str, Any]]:
+    """One pass over state.jsonl → last issue_to_pr event per (repo, issue)."""
+    index: dict[tuple[str, int], dict[str, Any]] = {}
     if not state_path.is_file():
-        return None
-    last: dict[str, Any] | None = None
+        return index
     try:
-        lines = state_path.read_text(encoding="utf-8").splitlines()
+        fh = state_path.open(encoding="utf-8")
     except OSError:
-        return None
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(ev, dict) or ev.get("kind") != "issue_to_pr":
-            continue
-        if str(ev.get("repo") or "") != repo:
-            continue
-        if _as_int(ev.get("issue")) != issue:
-            continue
-        last = ev
-    return last
+        return index
+    with fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ev = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(ev, dict) or ev.get("kind") != "issue_to_pr":
+                continue
+            repo = str(ev.get("repo") or "")
+            issue = _as_int(ev.get("issue"))
+            if not repo or issue is None:
+                continue
+            index[(repo, issue)] = ev
+    return index
+
+
+def _last_issue_to_pr_event(state_path: Path, repo: str, issue: int) -> dict[str, Any] | None:
+    return _index_issue_to_pr_events(state_path).get((repo, issue))
 
 
 def _fala_i2pr_db(repo: str, issue: int, home: Path) -> Path:
@@ -159,6 +165,7 @@ def harvest_fail_closed_children(
     if not root.is_dir():
         return stuck
 
+    events = _index_issue_to_pr_events(state_path)
     for path in sorted(root.glob("*.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -177,7 +184,7 @@ def harvest_fail_closed_children(
             if pid is not None and check(pid):
                 continue
 
-        event = _last_issue_to_pr_event(state_path, repo, issue)
+        event = events.get((repo, issue))
         if event is None:
             event = _event_from_fala_journal(repo, issue, home_root)
         reason = _classify(event)
