@@ -103,6 +103,104 @@ def test_worktree_add_failed_error_is_fail_closed(tmp_path: Path):
     assert stuck["issues"]["a/b#7"].get("reason") == "invalid_branch_ref"
 
 
+def test_nested_adapter_envelope_invalid_branch_is_fail_closed(tmp_path: Path):
+    """Live SMT#7: top error is empty adapter_failed; reason sits in worktree_add."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "mikolaj92__ShowMeThePlayer-7.json", repo="mikolaj92/ShowMeThePlayer", issue=7, pid=8)
+    nested = (
+        "subprocess adapter failed: "
+        '{"ok": false, "atom": "worktree_add", "error": '
+        '"worktree reset-to-base failed:\\n'
+        "Preparing worktree (new branch "
+        "'ai/fix/7-uv.sources-pinuje-splot-na-..-splot-bez-ce23b5da')\\n"
+        "fatal: 'ai/fix/7-uv.sources-pinuje-splot-na-..-splot-bez-ce23b5da' "
+        'is not a valid branch name\\nhint: See \'git help check-ref-format\'\\n"}'
+    )
+    ev = {
+        "kind": "issue_to_pr",
+        "repo": "mikolaj92/ShowMeThePlayer",
+        "issue": 7,
+        "ok": False,
+        "error": {"code": "adapter_failed", "message": "subprocess adapter failed: \n"},
+        "terminal": {
+            "pr_create": {
+                "status": "failed",
+                "error": {
+                    "code": "adapter_failed",
+                    "message": (
+                        "subprocess adapter failed: "
+                        '{"ok": false, "atom": "pr_create", '
+                        '"error": "refusing: test_local_recheck did not succeed", '
+                        '"reason": "test_local_recheck_failed"}'
+                    ),
+                },
+            },
+            "worktree_add": {
+                "status": "failed",
+                "error": {"code": "adapter_failed", "message": nested},
+            },
+        },
+    }
+    state.write_text(json.dumps(ev) + "\n", encoding="utf-8")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 7 in excluded_numbers(stuck, "mikolaj92/ShowMeThePlayer")
+    assert stuck["issues"]["mikolaj92/ShowMeThePlayer#7"].get("reason") == "invalid_branch_ref"
+
+
+def test_empty_jsonl_reason_falls_back_to_fala_journal_invalid_ref(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    ev = {
+        "kind": "issue_to_pr",
+        "repo": "a/b",
+        "issue": 7,
+        "ok": False,
+        "error": {"code": "adapter_failed", "message": "subprocess adapter failed: \n"},
+    }
+    state.write_text(json.dumps(ev) + "\n", encoding="utf-8")
+    _receipt(cycle / "a__b-7.json", repo="a/b", issue=7, pid=8)
+    db = tmp_path / ".lokay" / "fala" / "i2pr" / "a__b__7" / "state.sqlite"
+    db.parent.mkdir(parents=True)
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE processes (status TEXT, output_json TEXT, error_json TEXT, updated_at TEXT)"
+    )
+    con.execute(
+        "INSERT INTO processes VALUES (?, ?, ?, ?)",
+        ("failed", "{}", '{"message":"subprocess adapter failed: \\n"}', "2026-01-01T00:00:02Z"),
+    )
+    con.execute(
+        "INSERT INTO processes VALUES (?, ?, ?, ?)",
+        (
+            "failed",
+            "{}",
+            '{"message":"fatal: \'ai/fix/7-foo-..-bar\' is not a valid branch name"}',
+            "2026-01-01T00:00:01Z",
+        ),
+    )
+    con.commit()
+    con.close()
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        home=tmp_path,
+    )
+    assert 7 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#7"].get("reason") == "invalid_branch_ref"
+
+
 def test_waiting_reason_is_not_fail_closed(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()

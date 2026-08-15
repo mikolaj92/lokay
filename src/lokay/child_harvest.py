@@ -43,16 +43,53 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
+_REASON_PRIORITY = (
+    "invalid_branch_ref",
+    "local_repair_exhausted",
+    "test_local_recheck_failed",
+    "test_local_failed",
+    "test_local_missing",
+    "repair_agent_failed",
+    "zero_diff",
+)
+
+
 def _reason_from_text(text: str) -> str | None:
     if not text:
         return None
-    for token in FAIL_CLOSED:
-        if token in text:
-            return token
     low = text.lower()
     if any(marker in low for marker in _WORKTREE_FAIL_MARKERS):
         return "invalid_branch_ref"
+    for token in _REASON_PRIORITY:
+        if token in text:
+            return token
     return None
+
+
+def _walk_text(value: Any, chunks: list[str], *, depth: int = 0) -> None:
+    """Collect strings from a child envelope, including nested adapter JSON."""
+    if depth > 8 or value in (None, "", {}, []):
+        return
+    if isinstance(value, str):
+        chunks.append(value)
+        start = value.find("{")
+        if start >= 0 and "}" in value[start:]:
+            try:
+                parsed = json.loads(value[start:])
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, (dict, list)):
+                _walk_text(parsed, chunks, depth=depth + 1)
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            _walk_text(item, chunks, depth=depth + 1)
+        return
+    if isinstance(value, list):
+        for item in value[:80]:
+            _walk_text(item, chunks, depth=depth + 1)
+        return
+    chunks.append(str(value))
 
 
 def _classify(event: dict[str, Any] | None) -> str | None:
@@ -61,11 +98,11 @@ def _classify(event: dict[str, Any] | None) -> str | None:
     reason = event.get("reason")
     if isinstance(reason, str) and reason in FAIL_CLOSED:
         return reason
-    blob = reason if isinstance(reason, str) else ""
-    error = event.get("error")
-    if error not in (None, "", {}):
-        blob = f"{blob}\n{error}"
-    return _reason_from_text(blob)
+    chunks: list[str] = []
+    if isinstance(reason, str):
+        chunks.append(reason)
+    _walk_text(event, chunks)
+    return _reason_from_text("\n".join(chunks))
 
 
 def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[str, Any]]:
@@ -123,17 +160,23 @@ def _event_from_fala_journal(repo: str, issue: int, home: Path) -> dict[str, Any
             con.close()
     except sqlite3.Error:
         return None
-    blob = ""
-    saw_failed = False
+    blobs: list[str] = []
     for status, output_json, error_json in rows:
         if str(status or "").lower() != "failed":
             continue
-        saw_failed = True
-        blob = f"{error_json or ''}\n{output_json or ''}"
-        break
-    if not saw_failed:
+        blobs.append(f"{error_json or ''}\n{output_json or ''}")
+    if not blobs:
         return None
-    reason = _reason_from_text(blob)
+    reason = None
+    chosen = ""
+    for blob in blobs:
+        found = _reason_from_text(blob)
+        if not found:
+            continue
+        reason = found
+        chosen = blob
+        if found == "invalid_branch_ref":
+            break
     if not reason:
         return None
     return {
@@ -142,7 +185,7 @@ def _event_from_fala_journal(repo: str, issue: int, home: Path) -> dict[str, Any
         "repo": repo,
         "issue": issue,
         "reason": reason,
-        "error": blob[:500],
+        "error": chosen[:500],
     }
 
 
@@ -185,9 +228,12 @@ def harvest_fail_closed_children(
                 continue
 
         event = events.get((repo, issue))
-        if event is None:
-            event = _event_from_fala_journal(repo, issue, home_root)
         reason = _classify(event)
+        if not reason:
+            fallback = _event_from_fala_journal(repo, issue, home_root)
+            if fallback is not None:
+                event = fallback
+                reason = _classify(event)
         if not reason:
             continue
         error = ""

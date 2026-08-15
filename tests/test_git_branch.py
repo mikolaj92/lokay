@@ -57,3 +57,12 @@ def test_triple_dot_in_title_is_not_a_git_ref():
     _assert_single_head("ai/fix", branch)
     assert ".." not in branch
     assert "foo" in branch and "bar" in branch
+
+
+def test_smt7_dotdot_slash_title_is_legal_ref():
+    # Live SMT#7: unsanitized slug was ai/fix/7-uv.sources-pinuje-splot-na-..-splot-bez-ce23b5da
+    title = "uv.sources pinuje splot na ../Splot — bez lokalnego klona import pada"
+    branch = branch_for_issue("ai/fix", "mikolaj92/ShowMeThePlayer", 7, title)
+    _assert_single_head("ai/fix", branch)
+    assert ".." not in branch
+    assert branch == "ai/fix/7-uv.sources-pinuje-splot-na-splot-bez-ce23b5da"

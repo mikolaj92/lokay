@@ -1,5 +1,6 @@
 """worktree --reset-base flag wiring (no live git)."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -55,6 +56,57 @@ def test_assert_valid_branch_ref_rejects_dotdot():
     with pytest.raises(InvalidBranchRef) as caught:
         assert_valid_branch_ref(Runner(), "ai/fix/7-foo-..-bar")
     assert caught.value.reason == "invalid_branch_ref"
+
+
+def test_worktree_add_maps_check_ref_format_fail_to_invalid_branch_ref(
+    tmp_path, monkeypatch, capsys
+):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: owner/repo
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(worktree_add, "mutations_allowed", lambda **kw: True)
+
+    def boom(*_a, **_kw):
+        raise InvalidBranchRef("ai/fix/7-foo-..-bar", "not a valid branch name")
+
+    monkeypatch.setattr(worktree_add, "ensure_worktree", boom)
+    code = worktree_add.main(
+        [
+            "--config",
+            str(cfg),
+            "--repo",
+            "owner/repo",
+            "--branch",
+            "ai/fix/7-foo-..-bar",
+            "--live",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["reason"] == "invalid_branch_ref"
 
 
 def _result(argv, *, returncode=0, stdout="", stderr=""):
