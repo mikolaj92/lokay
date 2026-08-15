@@ -222,10 +222,14 @@ def harvest_fail_closed_children(
             continue
         if is_blocked_in_ledger(stuck, repo, issue):
             continue
-        if "pid" in data:
-            pid = _as_int(data.get("pid"))
-            if pid is not None and check(pid):
-                continue
+        # cycle_start writes repo/issue/started_ts only. Harvest source is
+        # the detach receipt (has pid). A start file must not fail-close a
+        # still-live sibling.
+        if "pid" not in data:
+            continue
+        pid = _as_int(data.get("pid"))
+        if pid is not None and check(pid):
+            continue
 
         event = events.get((repo, issue))
         reason = _classify(event)

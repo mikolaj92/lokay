@@ -64,6 +64,27 @@ def test_live_pid_does_not_block_even_with_fail_event(tmp_path: Path):
     assert excluded_numbers(stuck, "a/b") == set()
 
 
+def test_cycle_start_without_pid_does_not_block_live_sibling(tmp_path: Path):
+    """Live 135: cycle_start (no pid) must not harvest a still-running detach."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "mikolaj92__lokay-135.json", repo="mikolaj92/lokay", issue=135, pid=42)
+    (cycle / "mikolaj92__lokay__135.json").write_text(
+        json.dumps({"repo": "mikolaj92/lokay", "issue": 135, "started_ts": "2026-08-15T15:15:15Z"}),
+        encoding="utf-8",
+    )
+    _event(state, repo="mikolaj92/lokay", issue=135, ok=False, reason="invalid_branch_ref")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda pid: int(pid) == 42,
+    )
+    assert excluded_numbers(stuck, "mikolaj92/lokay") == set()
+
+
 def test_dead_pid_without_event_or_reason_is_not_blocked(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
