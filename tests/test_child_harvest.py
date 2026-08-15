@@ -268,14 +268,35 @@ def test_fala_journal_fallback_when_jsonl_silent(tmp_path: Path):
     assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
 
 
+def test_tmp_mill_does_not_inherit_host_cycle(tmp_path: Path):
+    """A checkout mill with its own state.jsonl must not harvest host cycle."""
+    host = tmp_path / "host"
+    mill = tmp_path / "mill"
+    host_cycle = host / ".lokay" / "cycle"
+    host_cycle.mkdir(parents=True)
+    mill.mkdir()
+    _receipt(host_cycle / "a__one-2.json", repo="a/one", issue=2, pid=999_999_999)
+    host_state = host / ".lokay" / "state.jsonl"
+    host_state.parent.mkdir(parents=True, exist_ok=True)
+    _event(host_state, repo="a/one", issue=2, ok=False, reason="test_local_recheck_failed")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=mill / "state.jsonl",
+        home=host,
+        is_live=lambda _pid: False,
+    )
+    assert excluded_numbers(stuck, "a/one") == set()
+
+
 def test_factory_begin_harvests_into_stuck(tmp_path: Path, monkeypatch):
     from lokay.proc.factory_begin import run_factory_begin
 
     monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
-    cycle = tmp_path / ".lokay" / "cycle"
-    cycle.mkdir(parents=True)
     state = tmp_path / "state.jsonl"
+    cycle = state.parent / "cycle"
+    cycle.mkdir(parents=True)
     _receipt(cycle / "a__b-7.json", repo="a/b", issue=7, pid=999_999_999)
     _event(state, repo="a/b", issue=7, ok=False, reason="local_repair_exhausted")
     cfg = tmp_path / "config.yaml"

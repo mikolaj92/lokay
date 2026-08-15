@@ -10,29 +10,70 @@ from lokay.graph_run import describe_package
 from lokay.proc import test_local
 from lokay.runner import CommandResult, CommandSpec
 
+LOKAY_PYTEST = ("uv", "run", "--extra", "dev", "pytest", "-q")
+
 
 def _payload(capsys) -> dict:
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
 
-def _fake_runner(result: CommandResult):
+def _declare_test(worktree: Path, command: object = None) -> None:
+    if command is None:
+        command = list(LOKAY_PYTEST)
+    if isinstance(command, str):
+        test_line = f'test = {command!r}\n'
+    else:
+        items = ", ".join(repr(part) for part in command)
+        test_line = f"test = [{items}]\n"
+    (worktree / "pyproject.toml").write_text(
+        "[project]\nname = 'x'\n\n[tool.lokay]\n" + test_line,
+        encoding="utf-8",
+    )
+
+
+def _fake_runner(expected: tuple[str, ...], result: CommandResult):
     class FakeRunner:
         def run(self, spec, *, live):
-            assert spec.argv == test_local.TEST_ARGV
+            assert spec.argv == expected
             assert spec.timeout_seconds == test_local.TEST_TIMEOUT_SECONDS
+            assert spec.env.get("LOKAY_HEALTH_LEASE") == ""
+            assert spec.env.get("LOKAY_HEALTH_LEASE_PATH") == ""
             assert live is True
             return result
 
     return FakeRunner()
 
 
-def test_no_suite_skips(tmp_path: Path, capsys):
+def test_this_repo_declares_pytest():
+    root = Path(__file__).resolve().parents[1]
+    assert test_local.declared_test_argv(root) == LOKAY_PYTEST
+
+
+def test_no_declaration_skips(tmp_path: Path, capsys):
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 0
     payload = _payload(capsys)
     assert payload["ok"] is True
     assert payload["skipped"] is True
-    assert payload["reason"] == "no_python_test_suite"
+    assert payload["reason"] == "no_declared_test"
+    assert payload["tested"] is False
+
+
+def test_pyproject_and_tests_without_declaration_skips(tmp_path: Path, capsys):
+    """Fala-shaped tree: pyproject + tests must not invent pytest."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname = 'fala-shaped'\n\n[project.optional-dependencies]\n"
+        "dev = ['pytest>=8.0']\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_x.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    code = test_local.main(["--worktree", str(tmp_path)])
+    assert code == 0
+    payload = _payload(capsys)
+    assert payload["ok"] is True
+    assert payload["skipped"] is True
+    assert payload["reason"] == "no_declared_test"
     assert payload["tested"] is False
 
 
@@ -45,19 +86,35 @@ def test_missing_worktree_fails_closed(tmp_path: Path, capsys):
     assert "not a directory" in payload["error"]
 
 
-def test_red_pytest_fails_closed(tmp_path: Path, monkeypatch, capsys):
-    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
-    spec = CommandSpec(test_local.TEST_ARGV, cwd=str(tmp_path.resolve()), timeout_seconds=1800)
+def test_invalid_declaration_fails_closed(tmp_path: Path, capsys):
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.lokay]\ntest = 12\n",
+        encoding="utf-8",
+    )
+    code = test_local.main(["--worktree", str(tmp_path)])
+    assert code == 1
+    payload = _payload(capsys)
+    assert payload["ok"] is False
+    assert payload["reason"] == "invalid_test_declaration"
+    assert payload["tested"] is False
+
+
+def test_red_declared_suite_fails_closed(tmp_path: Path, monkeypatch, capsys):
+    _declare_test(tmp_path)
+    spec = CommandSpec(LOKAY_PYTEST, cwd=str(tmp_path.resolve()), timeout_seconds=1800)
     monkeypatch.setattr(
         test_local,
         "runner",
-        lambda: _fake_runner(CommandResult(
-            spec=spec,
-            executed=True,
-            returncode=1,
-            stdout="FAILED tests/test_x.py::test_y - assert 1 == 2\n",
-            stderr="1 failed\n",
-        )),
+        lambda: _fake_runner(
+            LOKAY_PYTEST,
+            CommandResult(
+                spec=spec,
+                executed=True,
+                returncode=1,
+                stdout="FAILED tests/test_x.py::test_y - assert 1 == 2\n",
+                stderr="1 failed\n",
+            ),
+        ),
     )
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 1
@@ -65,17 +122,56 @@ def test_red_pytest_fails_closed(tmp_path: Path, monkeypatch, capsys):
     assert payload["ok"] is False
     assert payload["error"] == "local test suite failed"
     assert payload["returncode"] == 1
+    assert payload["tests"] == "uv run --extra dev pytest -q"
     assert "FAILED tests/test_x.py::test_y" in payload["stdout_tail"]
     assert payload["stderr_tail"] == "1 failed\n"
 
 
-def test_tests_dir_without_pyproject_still_runs(tmp_path: Path, monkeypatch, capsys):
-    (tmp_path / "tests").mkdir()
-    spec = CommandSpec(test_local.TEST_ARGV, cwd=str(tmp_path.resolve()), timeout_seconds=1800)
+def test_declared_string_command_runs(tmp_path: Path, monkeypatch, capsys):
+    _declare_test(tmp_path, "pixi run core-smoke")
+    argv = ("pixi", "run", "core-smoke")
+    spec = CommandSpec(argv, cwd=str(tmp_path.resolve()), timeout_seconds=1800)
     monkeypatch.setattr(
         test_local,
         "runner",
-        lambda: _fake_runner(CommandResult(spec=spec, executed=True, returncode=0)),
+        lambda: _fake_runner(argv, CommandResult(spec=spec, executed=True, returncode=0)),
+    )
+    code = test_local.main(["--worktree", str(tmp_path)])
+    assert code == 0
+    payload = _payload(capsys)
+    assert payload["ok"] is True
+    assert payload["tested"] is True
+    assert payload["skipped"] is False
+    assert payload["tests"] == "pixi run core-smoke"
+
+
+def test_declared_suite_strips_mill_lease(tmp_path: Path, monkeypatch, capsys):
+    """Verifier must not inherit the mill health capability."""
+    _declare_test(tmp_path)
+    captured: list = []
+
+    class CaptureRunner:
+        def run(self, spec, *, live):
+            captured.append(spec.env)
+            return CommandResult(spec=spec, executed=True, returncode=0)
+
+    monkeypatch.setattr(test_local, "runner", lambda: CaptureRunner())
+    code = test_local.main(["--worktree", str(tmp_path)])
+    assert code == 0
+    assert captured[0]["LOKAY_HEALTH_LEASE"] == ""
+    assert captured[0]["LOKAY_HEALTH_LEASE_PATH"] == ""
+    assert _payload(capsys)["tested"] is True
+
+
+def test_declared_list_command_runs(tmp_path: Path, monkeypatch, capsys):
+    _declare_test(tmp_path, list(LOKAY_PYTEST))
+    spec = CommandSpec(LOKAY_PYTEST, cwd=str(tmp_path.resolve()), timeout_seconds=1800)
+    monkeypatch.setattr(
+        test_local,
+        "runner",
+        lambda: _fake_runner(
+            LOKAY_PYTEST, CommandResult(spec=spec, executed=True, returncode=0)
+        ),
     )
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 0

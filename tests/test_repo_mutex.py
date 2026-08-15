@@ -70,6 +70,20 @@ def test_other_repo_is_idle():
     assert out == {"ok": True, "busy": False}
 
 
+def test_quoted_fixture_repo_in_pi_prompt_is_not_busy():
+    # A coding-slot prompt that quotes test JSON ("a/one") must not lock a/one.
+    out = repo_mutex.inspect_mutex(
+        repo="a/one",
+        ps_text='  74431 pi -p Goal: ... working={"prs_by_repo": {"a/one": [{"number": 69}]}}\n',
+    )
+    assert out == {"ok": True, "busy": False}
+    live = repo_mutex.inspect_mutex(
+        repo="mikolaj92/lokay",
+        ps_text="  74431 pi -p Goal: ... Repository: mikolaj92/lokay Issue: #135\n",
+    )
+    assert live == {"ok": True, "busy": True, "pids": [74431]}
+
+
 def test_non_pi_mention_is_not_busy():
     # grep/python/pip/pihole mention strings but argv0 is not pi.
     out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text="\n".join(PID_CMD.splitlines()[2:]))

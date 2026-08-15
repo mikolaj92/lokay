@@ -18,6 +18,10 @@ from lokay.proc.detach_issue_to_pr import detach_issue_to_pr
 from lokay.proc.repo_mutex import inspect_mutex, _live_ps_text
 from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuck
 
+# In-process hook for compose_tick tests. Production / Fala leave this None
+# and detach. Tick binds a patched composer only when tests replace it.
+compose_issue_to_pr = None
+
 
 def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     begin = pass_io.read_json(pass_io.begin_path(pass_dir))
@@ -103,11 +107,20 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     i for i in implementable if int(i.get("number", -1)) != num
                 ]
                 continue
-            result = detach_issue_to_pr(
-                repo=str(selected["repo"]),
-                issue=num,
-                config_path=config_path,
-            )
+            composer = compose_issue_to_pr
+            if callable(composer):
+                result = composer(
+                    config_path=config_path,
+                    repo=str(selected["repo"]),
+                    issue_number=num,
+                    live=True,
+                )
+            else:
+                result = detach_issue_to_pr(
+                    repo=str(selected["repo"]),
+                    issue=num,
+                    config_path=config_path,
+                )
             actions.append({"step": "issue_to_pr", **result})
             issue_budget -= 1
             issue_to_pr_started += 1

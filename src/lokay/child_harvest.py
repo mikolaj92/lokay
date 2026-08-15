@@ -189,6 +189,22 @@ def _event_from_fala_journal(repo: str, issue: int, home: Path) -> dict[str, Any
     }
 
 
+def _resolved(path: Path) -> Path:
+    try:
+        return Path(path).expanduser().resolve()
+    except OSError:
+        return Path(path).expanduser()
+
+
+def _isolated_mill_roots(state_path: Path, home: Path) -> tuple[Path, Path]:
+    """Host mill reads ~/.lokay/cycle; a tmp mill must not inherit it."""
+    host_state = _resolved(Path(home) / ".lokay" / "state.jsonl")
+    state = _resolved(Path(state_path))
+    if state == host_state:
+        return Path(home) / ".lokay" / "cycle", Path(home)
+    return state.parent / "cycle", state.parent
+
+
 def harvest_fail_closed_children(
     stuck: dict[str, Any],
     *,
@@ -202,9 +218,12 @@ def harvest_fail_closed_children(
     Live pids are left alone. Dead pid + no event + no machine reason is
     treated as transient (retry), not fail-closed.
     """
-    root = Path(cycle_dir) if cycle_dir is not None else Path.home() / ".lokay" / "cycle"
-    check = is_live or is_live_issue_to_pr_pid
     home_root = Path(home) if home is not None else Path.home()
+    default_cycle, isolated_home = _isolated_mill_roots(state_path, home_root)
+    root = Path(cycle_dir) if cycle_dir is not None else default_cycle
+    if home is None:
+        home_root = isolated_home
+    check = is_live or is_live_issue_to_pr_pid
     if not root.is_dir():
         return stuck
 

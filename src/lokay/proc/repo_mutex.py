@@ -80,12 +80,19 @@ def _holds_repo(command: str, repo: str) -> bool:
     return _is_pi_command(command) or _is_issue_to_pr_command(command)
 
 def _mentions_repo(command: str, repo: str) -> bool:
+    # Bare ``owner/name`` inside a quoted fixture/prompt is not a hold.
+    # Live Pi/issue_to_pr mention a repo via worktree slug, GitHub URL,
+    # ``--repo``, or the mill ``Repository:`` line.
     owner, name = repo.split("/", 1)
-    for needle in (f"{owner}/{name}", f"{owner}__{name}"):
-        pat = rf"(?<!{_NAME_CHAR}){re.escape(needle)}(?!{_NAME_CHAR})"
-        if re.search(pat, command):
-            return True
-    return False
+    slash = f"{owner}/{name}"
+    slug = f"{owner}__{name}"
+    patterns = (
+        rf"(?<!{_NAME_CHAR}){re.escape(slug)}(?!{_NAME_CHAR})",
+        rf"(?:github\.com[/:]|git@github\.com:){re.escape(slash)}(?!{_NAME_CHAR})",
+        rf"--repo(?:=|\s+){re.escape(slash)}(?!{_NAME_CHAR})",
+        rf"Repository:\s*`?{re.escape(slash)}`?(?!{_NAME_CHAR})",
+    )
+    return any(re.search(pat, command) for pat in patterns)
 
 
 def pids_for_repo(ps_text: str, repo: str) -> list[int]:
