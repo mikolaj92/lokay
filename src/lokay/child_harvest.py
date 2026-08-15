@@ -1,0 +1,198 @@
+"""Read finished detached issue_to_pr children into the existing stuck ledger.
+
+Not a second journal. Receipts live in ``~/.lokay/cycle/*.json``; the child's
+result is already in ``state.jsonl`` (compose) or the Fala i2pr sqlite (read
+only). Fail-closed reasons skip the next survey via ``stuck.json``.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+from typing import Any, Callable
+
+from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
+from lokay.stuck import is_blocked_in_ledger, record_failure
+
+FAIL_CLOSED = frozenset(
+    {
+        "local_repair_exhausted",
+        "test_local_recheck_failed",
+        "test_local_failed",
+        "test_local_missing",
+        "repair_agent_failed",
+        "zero_diff",
+        "invalid_branch_ref",
+    }
+)
+
+_WORKTREE_FAIL_MARKERS = (
+    "worktree add failed",
+    "invalid_branch_ref",
+    "invalid branch ref",
+    "not a valid branch",
+    "check-ref-format",
+)
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _reason_from_text(text: str) -> str | None:
+    if not text:
+        return None
+    for token in FAIL_CLOSED:
+        if token in text:
+            return token
+    low = text.lower()
+    if any(marker in low for marker in _WORKTREE_FAIL_MARKERS):
+        return "invalid_branch_ref"
+    return None
+
+
+def _classify(event: dict[str, Any] | None) -> str | None:
+    if not event or event.get("ok") is not False:
+        return None
+    reason = event.get("reason")
+    if isinstance(reason, str) and reason in FAIL_CLOSED:
+        return reason
+    blob = reason if isinstance(reason, str) else ""
+    error = event.get("error")
+    if error not in (None, "", {}):
+        blob = f"{blob}\n{error}"
+    return _reason_from_text(blob)
+
+
+def _last_issue_to_pr_event(state_path: Path, repo: str, issue: int) -> dict[str, Any] | None:
+    if not state_path.is_file():
+        return None
+    last: dict[str, Any] | None = None
+    try:
+        lines = state_path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(ev, dict) or ev.get("kind") != "issue_to_pr":
+            continue
+        if str(ev.get("repo") or "") != repo:
+            continue
+        if _as_int(ev.get("issue")) != issue:
+            continue
+        last = ev
+    return last
+
+
+def _fala_i2pr_db(repo: str, issue: int, home: Path) -> Path:
+    owner, name = repo.split("/", 1)
+    return home / ".lokay" / "fala" / "i2pr" / f"{owner}__{name}__{issue}" / "state.sqlite"
+
+
+def _event_from_fala_journal(repo: str, issue: int, home: Path) -> dict[str, Any] | None:
+    """Read-only fallback: existing Fala i2pr journal. Never create the file."""
+    if "/" not in repo:
+        return None
+    db = _fala_i2pr_db(repo, issue, home)
+    if not db.is_file():
+        return None
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            rows = con.execute(
+                "SELECT status, output_json, error_json FROM processes "
+                "ORDER BY updated_at DESC"
+            ).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    blob = ""
+    saw_failed = False
+    for status, output_json, error_json in rows:
+        if str(status or "").lower() != "failed":
+            continue
+        saw_failed = True
+        blob = f"{error_json or ''}\n{output_json or ''}"
+        break
+    if not saw_failed:
+        return None
+    reason = _reason_from_text(blob)
+    if not reason:
+        return None
+    return {
+        "ok": False,
+        "kind": "issue_to_pr",
+        "repo": repo,
+        "issue": issue,
+        "reason": reason,
+        "error": blob[:500],
+    }
+
+
+def harvest_fail_closed_children(
+    stuck: dict[str, Any],
+    *,
+    state_path: Path,
+    cycle_dir: Path | None = None,
+    is_live: Callable[[int], bool] | None = None,
+    home: Path | None = None,
+) -> dict[str, Any]:
+    """Block tickets whose detached child already died fail-closed.
+
+    Live pids are left alone. Dead pid + no event + no machine reason is
+    treated as transient (retry), not fail-closed.
+    """
+    root = Path(cycle_dir) if cycle_dir is not None else Path.home() / ".lokay" / "cycle"
+    check = is_live or is_live_issue_to_pr_pid
+    home_root = Path(home) if home is not None else Path.home()
+    if not root.is_dir():
+        return stuck
+
+    for path in sorted(root.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        repo = str(data.get("repo") or "")
+        issue = _as_int(data.get("issue"))
+        if not repo or issue is None:
+            continue
+        if is_blocked_in_ledger(stuck, repo, issue):
+            continue
+        if "pid" in data:
+            pid = _as_int(data.get("pid"))
+            if pid is not None and check(pid):
+                continue
+
+        event = _last_issue_to_pr_event(state_path, repo, issue)
+        if event is None:
+            event = _event_from_fala_journal(repo, issue, home_root)
+        reason = _classify(event)
+        if not reason:
+            continue
+        error = ""
+        if event:
+            error = str(event.get("error") or event.get("reason") or reason)
+        row = record_failure(
+            stuck,
+            repo=repo,
+            number=issue,
+            error=error or reason,
+            max_failures=1,
+        )
+        row["blocked"] = True
+        row["reason"] = reason
+    return stuck

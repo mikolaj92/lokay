@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.git_worktree import ensure_worktree
+from lokay.git_worktree import InvalidBranchRef, ensure_worktree
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
             base=args.base,
             reset_to_base=bool(args.reset_base),
         )
+    except InvalidBranchRef as exc:
+        return emit_exit(err(str(exc), reason=exc.reason))
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(

@@ -1,6 +1,10 @@
 """worktree --reset-base flag wiring (no live git)."""
 
+import pytest
+
+from lokay.git_worktree import InvalidBranchRef, assert_valid_branch_ref
 from lokay.proc import worktree_add
+from lokay.runner import Runner
 
 
 def test_worktree_add_reset_base_dry(tmp_path, monkeypatch):
@@ -42,3 +46,9 @@ state:
         ]
     )
     assert code == 0
+
+
+def test_assert_valid_branch_ref_rejects_dotdot():
+    with pytest.raises(InvalidBranchRef) as caught:
+        assert_valid_branch_ref(Runner(), "ai/fix/7-foo-..-bar")
+    assert caught.value.reason == "invalid_branch_ref"

@@ -6,6 +6,38 @@ from lokay.config import Config, RepoConfig
 from lokay.runner import Runner, git_spec
 
 
+class InvalidBranchRef(ValueError):
+    """Git will not accept this as ``refs/heads/*`` (e.g. a ``..`` slug)."""
+
+    def __init__(self, branch: str, detail: str = "") -> None:
+        self.branch = branch
+        self.reason = "invalid_branch_ref"
+        msg = f"invalid branch ref: {branch}"
+        if detail:
+            msg = f"{msg}: {detail}"
+        super().__init__(msg)
+
+
+def assert_valid_branch_ref(
+    runner: Runner,
+    branch: str,
+    *,
+    cwd: Path | None = None,
+) -> None:
+    """Fail closed before ``git worktree add`` if the head is not a legal ref."""
+    result = runner.run(
+        git_spec(
+            ["check-ref-format", "--normalize", f"refs/heads/{branch}"],
+            cwd=cwd,
+            timeout_seconds=30,
+        ),
+        live=True,
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise InvalidBranchRef(branch, detail)
+
+
 def ensure_worktree(
     runner: Runner,
     config: Config,
@@ -28,8 +60,10 @@ def ensure_worktree(
     if not live:
         return worktree
 
-    root.mkdir(parents=True, exist_ok=True)
     clone = repo.clone_path
+    assert_valid_branch_ref(runner, branch, cwd=clone if Path(clone).exists() else None)
+
+    root.mkdir(parents=True, exist_ok=True)
     runner.run_checked(
         git_spec(["fetch", "origin", base], cwd=clone, timeout_seconds=300),
         live=True,

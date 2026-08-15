@@ -37,3 +37,23 @@ def test_plain_title_keeps_prefix_slash():
     branch = branch_for_issue("ai/fix", "a/b", 3, "Hello World")
     _assert_single_head("ai/fix", branch)
     assert branch.startswith("ai/fix/3-hello-world-")
+
+
+def test_dotdot_in_title_is_not_a_git_ref():
+    # SMT#7-like: SAFE_SLUG treats '.' as legal, so '..' used to survive.
+    branch = branch_for_issue(
+        "ai/fix",
+        "mikolaj92/lokay",
+        7,
+        "uv.sources pinuje splot na .. splot bez pinowania",
+    )
+    _assert_single_head("ai/fix", branch)
+    assert ".." not in branch
+    assert branch.startswith("ai/fix/7-")
+
+
+def test_triple_dot_in_title_is_not_a_git_ref():
+    branch = branch_for_issue("ai/fix", "a/b", 9, "foo...bar")
+    _assert_single_head("ai/fix", branch)
+    assert ".." not in branch
+    assert "foo" in branch and "bar" in branch

@@ -10,7 +10,8 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.preflight import health_lease_status, run_preflight
-from lokay.stuck import load_stuck, stuck_path_for
+from lokay.child_harvest import harvest_fail_closed_children
+from lokay.stuck import load_stuck, save_stuck, stuck_path_for
 
 
 def _offline() -> bool:
@@ -89,6 +90,8 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
 
     stuck_path = stuck_path_for(cfg.state_path)
     stuck = load_stuck(stuck_path)
+    harvest_fail_closed_children(stuck, state_path=cfg.state_path)
+    save_stuck(stuck_path, stuck)
     pass_dir = pass_io.make_pass_dir(cfg.state_path)
     begin = {
         "pass_dir": str(pass_dir),

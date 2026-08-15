@@ -9,10 +9,23 @@ SAFE_PREFIX = re.compile(r"[^A-Za-z0-9._/-]+")
 SAFE_SLUG = re.compile(r"[^A-Za-z0-9._-]+")
 
 
+def _sanitize_slug(title: str) -> str:
+    """Collapse a ticket title into a git-safe slug (no ``..`` segment)."""
+    slug = SAFE_SLUG.sub("-", title.lower())[:40]
+    while ".." in slug:
+        slug = slug.replace("..", "-")
+    slug = re.sub(r"-+", "-", slug)
+    slug = slug.strip(".-") or "issue"
+    # A ref segment must not end with a dot (git check-ref-format).
+    slug = re.sub(r"\.(?=-|$)", "", slug)
+    slug = re.sub(r"-+", "-", slug).strip(".-") or "issue"
+    return slug
+
+
 def branch_for_issue(prefix: str, repo: str, number: int, title: str = "") -> str:
     """Pure function: branch name only. No git I/O."""
     safe_prefix = SAFE_PREFIX.sub("-", prefix.strip("/")).strip("-")
-    slug = SAFE_SLUG.sub("-", title.lower())[:40].strip("-") or "issue"
+    slug = _sanitize_slug(title)
     digest = hashlib.sha256(f"{repo}#{number}".encode()).hexdigest()[:8]
     head = f"{number}-{slug}-{digest}"
     if not safe_prefix or "/" in head:
