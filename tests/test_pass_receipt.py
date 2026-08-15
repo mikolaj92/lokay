@@ -150,3 +150,89 @@ def test_waiting_and_repairing_receipts_do_not_feed_recovery_quorum(tmp_path: Pa
         # Soft window must not confirm; receipt remains the soft health signal.
         assert read_pass_receipt(state_path=state)["health"] == health
         history.unlink(missing_ok=True)
+
+
+def _product_receipt() -> dict:
+    return {
+        "kind": "pass_receipt",
+        "ts": "2026-08-15T16:16:42Z",
+        "config": "/Users/mini-m4-main/Developer/OSS/lokay/config.yaml",
+        "ok": True,
+        "health": "progress",
+        "idle": False,
+        "live": True,
+        "progress": 3,
+        "remaining": {
+            "ready": 97,
+            "issue_to_pr_started": 3,
+            "open_ai_prs": 0,
+            "by_repo": [{"repo": "mikolaj92/Temida", "ready": 46}],
+        },
+        "by_repo": [{"repo": "mikolaj92/Temida", "ready": 46}],
+    }
+
+
+def _fixture_receipt(tmp_path: Path) -> dict:
+    return {
+        "kind": "pass_receipt",
+        "ts": "2026-08-15T16:23:54Z",
+        "config": str(tmp_path / "pytest-of-mini" / "test_tick_fala_failure_does_no0" / "config.yaml"),
+        "ok": False,
+        "health": "stall",
+        "idle": False,
+        "live": True,
+        "progress": 0,
+        "remaining": {
+            "ready": 0,
+            "issue_to_pr_started": 0,
+            "inbox": 1,
+            "by_repo": [{"repo": "o/r", "inbox": 1, "ready": 0}],
+        },
+        "by_repo": [{"repo": "o/r", "inbox": 1, "ready": 0}],
+        "error": "stall: actionable work remains but no progress this pass",
+    }
+
+
+def test_fixture_receipt_does_not_clobber_mill_last_pass(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    mill = home / ".lokay" / "last-pass.json"
+    mill.parent.mkdir(parents=True)
+    product = _product_receipt()
+    mill.write_text(json.dumps(product), encoding="utf-8")
+    monkeypatch.setattr("lokay.pass_receipt.Path.home", lambda: home)
+
+    written = write_pass_receipt(_fixture_receipt(tmp_path))
+    assert written == mill
+    loaded = json.loads(mill.read_text(encoding="utf-8"))
+    assert loaded["health"] == "progress"
+    assert loaded["remaining"]["ready"] == 97
+    assert loaded["by_repo"][0]["repo"] == "mikolaj92/Temida"
+
+
+def test_mill_receipt_still_overwrites_last_pass(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    mill = home / ".lokay" / "last-pass.json"
+    mill.parent.mkdir(parents=True)
+    mill.write_text(json.dumps(_fixture_receipt(tmp_path)), encoding="utf-8")
+    monkeypatch.setattr("lokay.pass_receipt.Path.home", lambda: home)
+
+    next_pass = _product_receipt()
+    next_pass["ts"] = "2026-08-15T16:33:13Z"
+    next_pass["remaining"]["ready"] = 96
+    written = write_pass_receipt(next_pass)
+    assert written == mill
+    loaded = json.loads(mill.read_text(encoding="utf-8"))
+    assert loaded["health"] == "progress"
+    assert loaded["remaining"]["ready"] == 96
+    assert loaded["config"].endswith("lokay/config.yaml")
+
+
+def test_fixture_receipt_still_writes_isolated_state_path(tmp_path: Path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    path = write_pass_receipt(_fixture_receipt(tmp_path), state_path=state)
+    assert path == tmp_path / "last-pass.json"
+    loaded = read_pass_receipt(state_path=state)
+    assert loaded is not None
+    assert loaded["health"] == "stall"
+    assert loaded["by_repo"][0]["repo"] == "o/r"

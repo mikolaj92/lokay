@@ -15,12 +15,81 @@ from typing import Any
 
 
 RECEIPT_NAME = "last-pass.json"
+_TOY_REPOS = frozenset({"o/r", "a/three", "a/clean", "a/two", "a/four", "a/b"})
+_FIXTURE_CONFIG_MARKERS = (
+    "pytest-of-",
+    "/pytest/",
+    "/private/var/folders/",
+    "/tmp/pytest",
+    "pytest-cache",
+)
+_PRODUCT_HEALTH = frozenset({"progress", "idle", "overlap", "repairing", "waiting"})
+
+
+def mill_receipt_path() -> Path:
+    return Path.home() / ".lokay" / RECEIPT_NAME
 
 
 def receipt_path_for(state_path: Path | None = None) -> Path:
     if state_path is not None:
         return Path(state_path).expanduser().resolve().parent / RECEIPT_NAME
-    return Path.home() / ".lokay" / RECEIPT_NAME
+    return mill_receipt_path()
+
+
+def _remaining_of(receipt: dict[str, Any]) -> dict[str, Any]:
+    rem = receipt.get("remaining")
+    return rem if isinstance(rem, dict) else {}
+
+
+def _repos_of(receipt: dict[str, Any]) -> list[str]:
+    rem = _remaining_of(receipt)
+    rows = rem.get("by_repo") or receipt.get("by_repo") or []
+    out: list[str] = []
+    for row in rows:
+        if isinstance(row, dict) and row.get("repo"):
+            out.append(str(row["repo"]))
+    return out
+
+
+def incoming_is_fixture(receipt: dict[str, Any]) -> bool:
+    """True when this receipt came from pytest / toy catalog, not the mill."""
+    config = str(receipt.get("config") or "").replace("\\", "/").lower()
+    if any(marker in config for marker in _FIXTURE_CONFIG_MARKERS):
+        return True
+    repos = _repos_of(receipt)
+    return bool(repos) and all(repo in _TOY_REPOS or repo.startswith("a/") for repo in repos)
+
+
+def existing_is_product(receipt: dict[str, Any]) -> bool:
+    """True when on-disk last-pass looks like a live mill glance."""
+    if receipt.get("kind") != "pass_receipt":
+        return False
+    rem = _remaining_of(receipt)
+    work = (
+        int(rem.get("ready") or 0)
+        + int(rem.get("issue_to_pr_started") or 0)
+        + int(rem.get("open_ai_prs") or 0)
+    )
+    repos = _repos_of(receipt)
+    real = any(
+        repo not in _TOY_REPOS and "/" in repo and not repo.startswith("a/")
+        for repo in repos
+    )
+    liveish = bool(receipt.get("live")) or receipt.get("health") in _PRODUCT_HEALTH
+    return work > 0 and real and liveish
+
+
+def _should_skip_clobber(target: Path, receipt: dict[str, Any]) -> bool:
+    if not incoming_is_fixture(receipt):
+        return False
+    try:
+        resolved = target.expanduser().resolve()
+    except OSError:
+        resolved = target
+    if resolved == mill_receipt_path().resolve():
+        return True
+    existing = read_pass_receipt(path=target)
+    return bool(existing) and existing_is_product(existing)
 
 
 def build_pass_receipt(
@@ -92,8 +161,15 @@ def write_pass_receipt(
     state_path: Path | None = None,
     path: Path | None = None,
 ) -> Path:
-    """Atomically write receipt JSON. Returns the path written."""
+    """Atomically write receipt JSON. Returns the path written.
+
+    Fixture receipts (pytest tmp config, toy ``o/r`` catalog) must not clobber
+    the mill glance file at ``~/.lokay/last-pass.json``. Isolated ``state_path``
+    writes still land next to the test state.
+    """
     target = path or receipt_path_for(state_path)
+    if _should_skip_clobber(target, receipt):
+        return target
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + f".{os.getpid()}.tmp")
     tmp.write_text(
