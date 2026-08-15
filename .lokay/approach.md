@@ -16,7 +16,6 @@ Heartbeat 60s na `mini-m4-0` za każdym razem robi `uv run --reinstall-package l
 - `src/lokay/compose/daemon_cycle.py`
 - `src/lokay/proc/daemon.py`
 - `tests/test_preflight_daemon.py`
-- `tests/test_self_repair_daemon.py`
 - `docs/MILL_HEALTH.md`
 
 ## Test plan

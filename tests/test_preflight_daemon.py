@@ -22,7 +22,10 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "--reinstall-package lokay --reinstall-package fala" in script
     assert "uv-install.digest" in script
     assert "emit_launchd_glance" in script
+    assert "reopen_stdio_on_path" in script
+    assert "os.ftruncate" in script
     assert "| tee " not in script
+    assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
 
 
 def test_daemon_handles_missing_home_and_bounds_bootstrap_outbox():
@@ -41,15 +44,27 @@ def _fake_uv(local_bin: Path) -> Path:
         "#!/bin/sh\n"
         "log=${LOKAY_UV_ARGV_LOG:-}\n"
         'if [ -n "$log" ]; then printf \'%s\\n\' "$*" >> "$log"; fi\n'
-        "if [ \"$1 $2\" = 'run lokay-host-ff' ]; then exit 0; fi\n"
+        "if [ \"$1 $2\" = 'run lokay-host-ff' ]; then\n"
+        "  printf '%s\\n' '{\"ok\":true,\"health\":\"current\"}'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if [ \"$LOKAY_UV_REINSTALL_FAIL\" = 1 ] && "
+        "[ \"$1 $2 $3 $4 $5\" = 'run --reinstall-package lokay --reinstall-package fala' ]; then\n"
+        "  echo 'error: failed to reinstall' >&2\n"
+        "  exit 1\n"
+        "fi\n"
         "if [ \"$1\" = run ] && [ \"$2\" = lokay-daemon ]; then\n"
         "  printf '%s\\n' \"$(command -v pi)\" \"$PATH\"\n"
-        "  printf '%s\\n' '{\"ok\":false,\"health\":\"progress\",\"progress\":1}'\n"
+        "  if [ -n \"$LOKAY_UV_ENVELOPE\" ]; then printf '%s\\n' \"$LOKAY_UV_ENVELOPE\"; else\n"
+        "    printf '%s\\n' '{\"ok\":false,\"health\":\"progress\",\"progress\":1}'\n"
+        "  fi\n"
         "  exit 0\n"
         "fi\n"
         "if [ \"$1 $2 $3 $4 $5\" = 'run --reinstall-package lokay --reinstall-package fala' ]; then\n"
         "  printf '%s\\n' \"$(command -v pi)\" \"$PATH\"\n"
-        "  printf '%s\\n' '{\"ok\":false,\"health\":\"progress\",\"progress\":1}'\n"
+        "  if [ -n \"$LOKAY_UV_ENVELOPE\" ]; then printf '%s\\n' \"$LOKAY_UV_ENVELOPE\"; else\n"
+        "    printf '%s\\n' '{\"ok\":false,\"health\":\"progress\",\"progress\":1}'\n"
+        "  fi\n"
         "  exit 0\n"
         "fi\n"
         "exit 64\n"
@@ -58,7 +73,13 @@ def _fake_uv(local_bin: Path) -> Path:
     return uv
 
 
-def _run_daemon(tmp_path: Path, extra_env: dict[str, str] | None = None):
+def _run_daemon(
+    tmp_path: Path,
+    extra_env: dict[str, str] | None = None,
+    *,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+):
     root = tmp_path / "repo"
     local_bin = tmp_path / ".local" / "bin"
     root.mkdir(exist_ok=True)
@@ -81,7 +102,8 @@ def _run_daemon(tmp_path: Path, extra_env: dict[str, str] | None = None):
     return subprocess.run(
         ["/bin/bash", str(_script())],
         env=env,
-        capture_output=True,
+        stdout=stdout,
+        stderr=stderr,
         text=True,
         check=False,
     )
@@ -96,8 +118,8 @@ def test_daemon_exposes_local_pi_to_preflight(tmp_path):
     assert logs
     transcript = next(path.read_text() for path in logs if path.name != "mill-latest.log")
     lines = [line for line in transcript.splitlines() if line]
-    assert str(tmp_path / ".local" / "bin" / "pi") in lines[0]
-    assert lines[1].split(os.pathsep)[0] == str(tmp_path / ".local" / "bin")
+    pi_line = next(i for i, line in enumerate(lines) if str(tmp_path / ".local" / "bin" / "pi") in line)
+    assert lines[pi_line + 1].split(os.pathsep)[0] == str(tmp_path / ".local" / "bin")
     glance = json.loads(completed.stdout.strip().splitlines()[-1])
     assert glance["health"] == "progress"
     assert glance["progress"] == 1
@@ -141,6 +163,66 @@ def test_mill_log_and_launchd_stdout_are_bounded(tmp_path):
     ]
     assert mill_logs
     assert all(path.stat().st_size < 8192 for path in mill_logs)
+
+
+def test_failed_uv_reinstall_does_not_persist_digest(tmp_path):
+    first = _run_daemon(tmp_path, extra_env={"LOKAY_UV_REINSTALL_FAIL": "1"})
+    assert first.returncode != 0
+    digest = tmp_path / ".lokay" / "uv-install.digest"
+    assert not digest.exists()
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    second_calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("--reinstall-package lokay" in line for line in second_calls)
+    assert digest.is_file()
+
+
+def test_open_launchd_stdout_stays_bounded_after_truncate(tmp_path):
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    fat = logs / "launchd-stdout.log"
+    fat.write_bytes(b"x" * 8000)
+    with fat.open("a", encoding="utf-8") as handle:
+        completed = _run_daemon(
+            tmp_path,
+            extra_env={"LOKAY_LAUNCHD_STDOUT_MAX": "2048"},
+            stdout=handle,
+        )
+        assert completed.returncode == 0, completed.stderr
+        handle.flush()
+        os.fsync(handle.fileno())
+    assert fat.stat().st_size < 4096
+    body = fat.read_text(encoding="utf-8", errors="replace")
+    assert "truncated" in body
+    glance = None
+    for line in reversed(body.splitlines()):
+        raw = line.strip()
+        if raw.startswith("{") and raw.endswith("}"):
+            glance = json.loads(raw)
+            break
+    assert glance is not None
+    assert glance["health"] == "progress"
+
+
+def test_glance_reads_nested_mill_health_from_truncated_envelope(tmp_path):
+    fat = (
+        '{"ok":false,"error":"soft recovery","fala":{"host":"'
+        + ("x" * 4000)
+        + '"},"mill":{"health":"progress","progress":3,"remaining":{"issue_to_pr_started":1}}}'
+    )
+    completed = _run_daemon(
+        tmp_path,
+        extra_env={
+            "LOKAY_UV_ENVELOPE": fat,
+            "LOKAY_MILL_LOG_MAX": "2048",
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    glance = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert glance["health"] == "progress"
+    assert glance["progress"] >= 1
 
 
 def _write_cfg(tmp_path, *, state_name: str = "state.jsonl") -> str:

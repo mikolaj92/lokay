@@ -149,12 +149,6 @@ fi
 cd "${ROOT}"
 export LOKAY_ROOT="${ROOT}"
 
-# Tick starts on current origin/main or fail-closed (do not mill on stale host code).
-if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}"; then
-  bootstrap_incident "host_behind"
-  exit 78
-fi
-
 # Live factory (override with env in the plist if needed). This LaunchAgent
 # runs the PR mill only; collector patches own their post-merge durable
 # background startup. Never use this loop to populate collector data or wait.
@@ -216,11 +210,13 @@ PY
 }
 
 bound_file() {
+  # Stream head+tail in place. Never slurp a GiB launchd log into RAM,
+  # and keep the same inode so an already-open stdout fd can be rebound.
   local path="$1"
   local max_bytes="$2"
   [[ -f "${path}" ]] || return 0
   _python - "${path}" "${max_bytes}" <<'PY'
-import sys
+import os, sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
@@ -236,14 +232,26 @@ except OSError:
     raise SystemExit(0)
 if size <= limit:
     raise SystemExit(0)
-try:
-    data = path.read_bytes()
-except OSError:
-    raise SystemExit(0)
 head_n = max(256, limit // 4)
 tail_n = max(256, limit - head_n - 32)
 marker = b"\n... truncated ...\n"
-path.write_bytes(data[:head_n] + marker + data[-tail_n:])
+try:
+    fd = os.open(path, os.O_RDWR)
+except OSError:
+    raise SystemExit(0)
+try:
+    head = os.read(fd, head_n)
+    os.lseek(fd, max(0, size - tail_n), os.SEEK_SET)
+    tail = os.read(fd, tail_n)
+    blob = head + marker + tail
+    if not blob.endswith(b"\n"):
+        blob += b"\n"
+    os.lseek(fd, 0, os.SEEK_SET)
+    written = os.write(fd, blob)
+    os.ftruncate(fd, written)
+    os.fsync(fd)
+finally:
+    os.close(fd)
 PY
 }
 
@@ -302,46 +310,198 @@ PY
 }
 
 emit_launchd_glance() {
-  _python - "${LOG}" <<'PY'
-import json, sys
+  # Head+tail only. Nested mill.health wins so a Fala ok:false wrapper still
+  # reports progress on the glance line. A truncated one-line envelope
+  # still yields health via regex or last-pass.json.
+  _python - "${LOG}" "${LOKAY_HOME}/last-pass.json" <<'PY'
+import json, re, sys
 from pathlib import Path
 
-payload = None
-try:
-    text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
-except OSError:
-    text = ""
-for line in reversed(text.splitlines()):
+def head_and_tail(path: Path, limit: int = 262144) -> str:
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as handle:
+            head = handle.read(limit)
+            if size > limit:
+                handle.seek(max(limit, size - limit))
+                tail = handle.read(limit)
+            else:
+                tail = b""
+        return (head + tail).decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+def as_dict(value):
+    return value if isinstance(value, dict) else None
+
+def remaining_of(payload):
+    remaining = payload.get("remaining")
+    return remaining if isinstance(remaining, dict) else {}
+
+def glance_of(payload):
+    sources = [payload]
+    mill = as_dict(payload.get("mill"))
+    if mill is not None:
+        sources.append(mill)
+    last = as_dict(payload.get("last"))
+    if last is not None:
+        sources.append(last)
+    terminal = as_dict(payload.get("terminal"))
+    if terminal is not None:
+        recovery_mill = as_dict(terminal.get("recovery_mill"))
+        if recovery_mill is not None:
+            nested = as_dict(recovery_mill.get("mill"))
+            sources.append(nested if nested is not None else recovery_mill)
+    for src in sources:
+        health = str(src.get("health") or "")
+        remaining = remaining_of(src)
+        started = int(remaining.get("issue_to_pr_started") or 0)
+        progress = int(src.get("progress") or 0)
+        if health == "progress" or started > 0 or progress > 0:
+            return {
+                "ok": bool(src.get("ok")),
+                "health": health or "progress",
+                "progress": max(progress, started),
+                "remaining": remaining,
+                "error": src.get("error"),
+            }
+    return {
+        "ok": bool(payload.get("ok")),
+        "health": str(payload.get("health") or "unknown"),
+        "progress": int(payload.get("progress") or 0),
+        "remaining": remaining_of(payload),
+        "error": payload.get("error"),
+    }
+
+def load_json(path: Path):
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+def scrape_truncated(text: str) -> dict:
+    out = {}
+    healths = re.findall(r'"health"\s*:\s*"([^"]+)"', text)
+    if "progress" in healths:
+        out["health"] = "progress"
+    elif healths:
+        out["health"] = healths[-1]
+    progress = re.search(r'"progress"\s*:\s*(-?\d+)', text)
+    if progress:
+        out["progress"] = int(progress.group(1))
+    started = re.search(r'"issue_to_pr_started"\s*:\s*(-?\d+)', text)
+    if started:
+        out["remaining"] = {"issue_to_pr_started": int(started.group(1))}
+    ok_m = re.search(r'"ok"\s*:\s*(true|false)', text)
+    if ok_m:
+        out["ok"] = ok_m.group(1) == "true"
+    return out
+
+def productive(look):
+    if str(look.get("health") or "") == "progress":
+        return True
+    if int(look.get("progress") or 0) > 0:
+        return True
+    remaining = look.get("remaining")
+    return isinstance(remaining, dict) and int(remaining.get("issue_to_pr_started") or 0) > 0
+
+text = head_and_tail(Path(sys.argv[1]))
+candidates = []
+for line in text.splitlines():
     raw = line.strip()
-    if not (raw.startswith("{") and raw.endswith("}")):
+    if "{" not in raw:
         continue
     try:
         parsed = json.loads(raw)
     except ValueError:
-        continue
-    if isinstance(parsed, dict):
-        payload = parsed
+        parsed = scrape_truncated(raw)
+    if isinstance(parsed, dict) and parsed:
+        candidates.append(parsed)
+scraped = scrape_truncated(text)
+if scraped:
+    candidates.append(scraped)
+receipt = load_json(Path(sys.argv[2]))
+if receipt:
+    candidates.append(receipt)
+payload = candidates[-1] if candidates else {}
+look = glance_of(payload)
+for candidate in candidates:
+    cand = glance_of(candidate)
+    if productive(cand):
+        look = cand
         break
 glance = {
-    "ok": bool((payload or {}).get("ok")),
-    "health": (payload or {}).get("health") or "unknown",
-    "progress": int((payload or {}).get("progress") or 0),
+    "ok": bool(look.get("ok")),
+    "health": look.get("health") or "unknown",
+    "progress": int(look.get("progress") or 0),
 }
-remaining = (payload or {}).get("remaining")
+remaining = look.get("remaining")
 if isinstance(remaining, dict) and remaining.get("issue_to_pr_started"):
     glance["issue_to_pr_started"] = remaining.get("issue_to_pr_started")
-error = (payload or {}).get("error")
+error = look.get("error")
 if isinstance(error, str) and error:
     glance["error"] = error[:200]
 print(json.dumps(glance, ensure_ascii=False, default=str))
 PY
 }
 
+reopen_stdio_on_path() {
+  # launchd keeps StandardOutPath open at the pre-truncate offset.
+  # Compare inode (not path string: /var vs /private/var) and reopen so
+  # the glance cannot punch a sparse GiB hole.
+  local path="$1"
+  [[ -n "${path}" && -f "${path}" ]] || return 0
+  _python - "${path}" <<'PY'
+import os, sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    want = path.stat()
+except OSError:
+    raise SystemExit(0)
+
+def same(fd: int) -> bool:
+    try:
+        got = os.fstat(fd)
+    except OSError:
+        return False
+    return (got.st_dev, got.st_ino) == (want.st_dev, want.st_ino)
+
+print("1" if same(1) else "0")
+print("2" if same(2) else "0")
+PY
+}
+
+bound_launchd_stdio() {
+  local stdout_path fds fd
+  while IFS= read -r stdout_path; do
+    [[ -n "${stdout_path}" ]] || continue
+    bound_file "${stdout_path}" "${LAUNCHD_STDOUT_MAX}" || true
+    fds="$(reopen_stdio_on_path "${stdout_path}" || true)"
+    for fd in ${fds}; do
+      case "${fd}" in
+        1) exec >>"${stdout_path}" ;;
+        2) exec 2>>"${stdout_path}" ;;
+      esac
+    done
+  done < <(launchd_stdout_paths || true)
+}
+
 # Bound StandardOutPath before this tick appends a glance line.
-while IFS= read -r stdout_path; do
-  [[ -n "${stdout_path}" ]] || continue
-  bound_file "${stdout_path}" "${LAUNCHD_STDOUT_MAX}"
-done < <(launchd_stdout_paths || true)
+bound_launchd_stdio
+
+# Tick starts on current origin/main or fail-closed (do not mill on stale host code).
+# Keep host-ff out of launchd stdout; the mill transcript owns that line.
+: >"${LOG}"
+if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}" 2>&1; then
+  bootstrap_incident "host_behind"
+  bound_file "${LOG}" "${MILL_LOG_MAX}" || true
+  emit_launchd_glance || true
+  bound_launchd_stdio
+  exit 78
+fi
 
 UV_REINSTALL_ARGS=()
 CURRENT_DIGEST="$(checkout_digest || true)"
@@ -358,24 +518,24 @@ fi
 # Empty array + set -u is fatal on macOS bash 3.2, so branch the argv.
 set +e
 if [[ ${#UV_REINSTALL_ARGS[@]} -gt 0 ]]; then
-  uv run "${UV_REINSTALL_ARGS[@]}" lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >"${LOG}" 2>&1
+  uv run "${UV_REINSTALL_ARGS[@]}" lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
 else
-  uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >"${LOG}" 2>&1
+  uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
 fi
 MILL_RC=$?
 set -e
 cp "${LOG}" "${LATEST}" 2>/dev/null || true
-if [[ -n "${CURRENT_DIGEST}" ]]; then
+# Persist digest only after lokay-daemon emitted an envelope. host-ff writes
+# health=current first; a failed uv reinstall must retry next tick.
+if [[ -n "${CURRENT_DIGEST}" ]] && grep -Eq '"(engine|path_id|preflight|self_repair)"|"health"[[:space:]]*:[[:space:]]*"(progress|idle|waiting|repairing|stall|overlap|survey_error|self_repair|carrier_failed|work_remaining)' "${LOG}" 2>/dev/null; then
   printf '%s\n' "${CURRENT_DIGEST}" > "${DIGEST_FILE}" || true
 fi
 bound_file "${LOG}" "${MILL_LOG_MAX}" || true
 bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
 prune_mill_logs || true
+bound_launchd_stdio
 emit_launchd_glance || true
-while IFS= read -r stdout_path; do
-  [[ -n "${stdout_path}" ]] || continue
-  bound_file "${stdout_path}" "${LAUNCHD_STDOUT_MAX}" || true
-done < <(launchd_stdout_paths || true)
+bound_launchd_stdio
 
 # Self-repair writes this flag when activate+preflight released the gate.
 if [[ -f "${LOKAY_HOME}/restart-required" ]]; then
