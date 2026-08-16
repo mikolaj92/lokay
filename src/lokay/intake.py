@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from lokay.issue_checkboxes import work_checkbox_count
+from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.triage import is_parked, is_undecided
 
@@ -569,7 +569,7 @@ def check_ambiguity(issue: Issue) -> CheckResult:
         )
 
     boxes = checkbox_count(body)
-    if boxes > MAX_CHECKBOXES_ONE_PASS:
+    if boxes > MAX_CHECKBOXES_ONE_PASS and not is_bug_issue(issue):
         return CheckResult(
             check="ambiguity",
             verdict=SPLIT,

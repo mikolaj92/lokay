@@ -20,6 +20,7 @@ from lokay.gh_issues import (
     remove_issue_labels,
 )
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.issue_checkboxes import is_bug_issue
 from lokay.split import parent_tracker_comment, plan_split
 
 
@@ -114,6 +115,22 @@ def main(argv: list[str] | None = None) -> int:
                 applied=False,
                 skipped=True,
                 reason="parent_not_open",
+                repo=args.repo,
+                issue=issue.to_dict(),
+                children=[],
+            )
+        )
+
+    if is_bug_issue(issue) and (reason or "too_large_split") in {
+        "too_many_checkboxes",
+        "too_large_split",
+    }:
+        return emit_exit(
+            ok(
+                planned=not live_mut,
+                applied=False,
+                skipped=True,
+                reason="bug_is_not_an_epic",
                 repo=args.repo,
                 issue=issue.to_dict(),
                 children=[],

@@ -10,7 +10,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Mapping
 
-from lokay.issue_checkboxes import work_checkbox_count
+from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stuck import issue_number_from_branch, issue_numbers_covered_by_prs
 
@@ -88,7 +88,10 @@ def is_epic_like(issue: Issue) -> bool:
         return True
     if _EPIC_TITLE.search(issue.title or ""):
         return True
-    # Large *work* checkbox blobs are epic-shaped. Template Subsystem tags are not.
+    # Large *work* checkbox blobs are epic-shaped. A bug is one fix; template
+    # Subsystem tags (## or **bold**) are routing, not children.
+    if is_bug_issue(issue):
+        return False
     return work_checkbox_count(issue.body or "") >= 6
 
 

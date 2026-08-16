@@ -10,7 +10,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from lokay.issue_checkboxes import iter_work_checkboxes
+from lokay.issue_checkboxes import is_bug_issue, iter_work_checkboxes
 from lokay.models import Issue
 
 MAX_CHILDREN = 5
@@ -141,6 +141,10 @@ def plan_split(
     max_children: int = MAX_CHILDREN,
 ) -> SplitPlan | None:
     """Return a bounded child plan, or None when split is not deterministic."""
+    # One symptom, one repair. Never mint Argus/Dike children from a bug form.
+    if is_bug_issue(issue) and reason in {"too_many_checkboxes", "too_large_split"}:
+        return None
+
     cap = max(MIN_CHILDREN, min(int(max_children), MAX_CHILDREN))
     candidates = _from_checkboxes(issue)
     if len(candidates) < MIN_CHILDREN:

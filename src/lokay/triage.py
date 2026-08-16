@@ -10,7 +10,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
-from lokay.issue_checkboxes import work_checkbox_count
+from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
@@ -206,8 +206,9 @@ def decide_issue(
     # Body phrases like "Parent epic" / "child of epic" must NOT block implementable issues
     # (Pad Audit wave: 362 false needs-feedback from "## Parent epic" footers).
     # Oversized work → SPLIT (auto child issues), not needs-feedback brake.
+    # A bug is one symptom / one fix — never an epic of template checkboxes.
     title_is_epic = bool(re.search(r"\bepic\b", title.lower()))
-    if boxes > MAX_CHECKBOXES or title_is_epic:
+    if (boxes > MAX_CHECKBOXES and not is_bug_issue(issue)) or title_is_epic:
         return TriageDecision(
             decision="split",
             reason="too_large_split",

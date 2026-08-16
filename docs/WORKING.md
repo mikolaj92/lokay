@@ -88,6 +88,9 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    already-satisfied / feature-present, size → split) — not an
    agent-orchestrator. Oversized / multi-epic / inventory blobs **auto-split**
    into bounded child issues (parent becomes `ai:tracker`, not `ai:ready`).
+   A **bug** (`bug` / `kind:bug` / `[BUG]`) is one symptom, one fix: template
+   Subsystem / Environment checkboxes (`##` or `**bold**`) are routing, not
+   slices. Intake must not close the parent and mint empty children.
    Children re-enter inbox/intake on later passes. Fail closed: a failed PR
    survey for a repo refuses triage mutations **in that repo only**.
 4. **PR close-out**: for open AI PRs — conflicts → close + re-ready; failed CI →
