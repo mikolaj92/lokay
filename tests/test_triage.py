@@ -190,6 +190,7 @@ def test_pr_repair_path_in_package():
         "localize",
         "run_agent",
         "commit_all",
+        "rebase_onto_base",
         "test_local",
         "assert_real_diff",
         "push",

@@ -30,6 +30,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     }
     remaining_prs = int(working.get("remaining_prs") or 0)
     totals = {key: int(working.get(key) or 0) for key in COUNTERS}
+    merged_this_pass = [str(n) for n in list(working.get("merged_this_pass") or []) if n]
 
     for repo_name in list(begin.get("repos") or []):
         still_open: list[dict[str, Any]] = []
@@ -55,6 +56,8 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 totals[key] += int(out.get(key) or 0)
             if out.get("still_open"):
                 still_open.append(pr)
+            elif repo_name not in merged_this_pass:
+                merged_this_pass.append(repo_name)
         prs_by_repo[repo_name] = still_open
 
     if live:
@@ -68,6 +71,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
             "stuck": stuck,
             "prs_by_repo": prs_by_repo,
             "remaining_prs": remaining_prs,
+            "merged_this_pass": merged_this_pass,
             **totals,
         }
     )

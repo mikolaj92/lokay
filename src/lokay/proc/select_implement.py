@@ -21,6 +21,13 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
     prs_by_repo = dict(working.get("prs_by_repo") or {})
     ready_by_repo = dict(working.get("ready_by_repo") or {})
     pr_survey_failed = set(working.get("pr_survey_failed") or [])
+    occupied = {
+        str(name)
+        for name in list(working.get("occupied_repos") or [])
+        + list(working.get("merged_this_pass") or [])
+        + list(working.get("live_issue_to_pr_repos") or [])
+        if str(name or "")
+    }
     clean_repos: list[str] = []
 
     if not live or issue_budget <= 0:
@@ -49,6 +56,18 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
                     "repo": repo_name,
                     "open_ai_prs": len(actionable_prs),
                     "note": "per-repo PR-first: finish actionable AI PR before new issue_to_pr",
+                }
+            )
+            continue
+        if repo_name in occupied:
+            actions.append(
+                {
+                    "step": "skip_ready_repo_occupied",
+                    "repo": repo_name,
+                    "note": (
+                        "repo just merged or still has a live issue_to_pr; "
+                        "do not start a sibling from stale origin/main"
+                    ),
                 }
             )
             continue

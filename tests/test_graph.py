@@ -20,6 +20,7 @@ def test_describe_parent_factory_graph():
         "resolve_conflicts",
         "closeout_prs",
         "reap_stale_implementing",
+        "refresh_occupancy",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
@@ -35,7 +36,8 @@ def test_describe_parent_factory_graph():
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "reap_stale_implementing" in conduction["select_implement"]
+    assert "refresh_occupancy" in conduction["select_implement"]
+    assert "reap_stale_implementing" in conduction["refresh_occupancy"]
     assert "closeout_prs" in conduction["reap_stale_implementing"]
     assert "select_implement" in conduction["queue_conflict"]
     assert "queue_conflict" in conduction["dispatch_implement"]
@@ -135,6 +137,12 @@ def test_describe_issue_to_pr_graph():
     push = next(n for n in path["nodes"] if n["id"] == "push")
     assert "test_local_recheck" in push["conduction"]
     assert "assert_real_diff" in push["conduction"]
+    assert "rebase_onto_base" in push["conduction"]
+    rebase = next(n for n in path["nodes"] if n["id"] == "rebase_onto_base")
+    assert "commit_all" in rebase["conduction"]
+    assert "worktree_add" in rebase["conduction"]
+    test_local = next(n for n in path["nodes"] if n["id"] == "test_local")
+    assert "rebase_onto_base" in test_local["conduction"]
 
 
 def test_issue_to_pr_plan_issue_before_run_agent():
@@ -161,8 +169,11 @@ def test_issue_to_pr_commit_then_test_then_assert_is_a_dag():
     assert "run_agent" in by_id["commit_all"]["conduction"]
     assert "assert_real_diff" not in by_id["commit_all"]["conduction"]
     assert "commit_all" in by_id["test_local"]["conduction"]
+    assert "rebase_onto_base" in by_id["test_local"]["conduction"]
+    assert "commit_all" in by_id["rebase_onto_base"]["conduction"]
     assert "test_local" in by_id["assert_real_diff"]["conduction"]
     assert "assert_real_diff" in by_id["push"]["conduction"]
+    assert "rebase_onto_base" in by_id["push"]["conduction"]
 
 
 def test_issue_to_pr_run_agent_timeout_covers_executor():
@@ -178,7 +189,13 @@ def test_issue_to_pr_run_agent_timeout_covers_executor():
 
 def test_describe_includes_pr_repair():
     desc = describe_package()
-    assert any(p["id"] == "pr_repair" for p in desc["paths"])
+    path = next(p for p in desc["paths"] if p["id"] == "pr_repair")
+    ids = [node["id"] for node in path["nodes"]]
+    assert "rebase_onto_base" in ids
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert "commit_all" in by_id["rebase_onto_base"]["conduction"]
+    assert "rebase_onto_base" in by_id["test_local"]["conduction"]
+    assert "rebase_onto_base" in by_id["push"]["conduction"]
 
 
 def test_package_file_exists():
@@ -378,6 +395,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "resolve_conflicts",
             "closeout_prs",
             "reap_stale_implementing",
+            "refresh_occupancy",
             "select_implement",
             "queue_conflict",
             "dispatch_implement",
@@ -387,14 +405,15 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
         "issue_to_pr": {
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "cycle_start", "run_agent",
-            "commit_all", "test_local", "repair_agent", "test_local_recheck",
-            "assert_real_diff", "push", "pr_create", "cycle_end", "stage_pr_open",
+            "commit_all", "rebase_onto_base", "test_local", "repair_agent",
+            "test_local_recheck", "assert_real_diff", "push", "pr_create",
+            "cycle_end", "stage_pr_open",
             "list_prs", "pr_label",
         },
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {
             "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "test_local", "assert_real_diff", "push",
+            "commit_all", "rebase_onto_base", "test_local", "assert_real_diff", "push",
         },
         "pr_triage": {
             "pr_checks", "pr_review", "worktree_add", "test_local",

@@ -53,8 +53,10 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-resolve-conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready |
 | `lokay-closeout-pr` | one open AI PR: checks → route → triage/repair/ci-waiting |
 | `lokay-closeout-prs` | for-each remaining AI PRs via lokay-closeout-pr |
+| `lokay-refresh-occupancy` | re-list PRs after closeout; union just-merged + live i2pr |
 | `lokay-dispatch-closeout` | thin bridge: resolve_conflicts then closeout_prs |
-| `lokay-select-implement` | clean repos eligible for issue_to_pr |
+| `lokay-select-implement` | clean repos eligible for issue_to_pr (skip occupied) |
+| `lokay-rebase-onto-base` | fetch + rebase onto origin/main; conflict = fail closed |
 | `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement |
 | `lokay-dispatch-implement` | intake gate + up to K issue_to_pr (serial budget) |
 | `lokay-compute-health` | remaining + honest mill health |

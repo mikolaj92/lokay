@@ -22,3 +22,13 @@ def _isolate_mill_health_lease() -> None:
     yield
     for key in _MILL_LEASE_KEYS:
         os.environ.pop(key, None)
+
+
+
+@pytest.fixture(autouse=True)
+def _isolate_live_issue_to_pr_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Occupancy must not scan the host mill's ~/.lokay/cycle during compose canaries."""
+    monkeypatch.setattr(
+        "lokay.proc.refresh_occupancy.live_issue_to_pr_receipts",
+        lambda *a, **k: [],
+    )

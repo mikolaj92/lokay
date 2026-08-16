@@ -290,3 +290,4 @@ def test_closeout_prs_foreach_recounts(tmp_path, monkeypatch):
     assert [pr["number"] for pr in working["prs_by_repo"]["a/one"]] == [2]
     assert working["progress"] == 1
     assert working["actionable_prs"] == 1
+    assert working["merged_this_pass"] == ["a/one"]

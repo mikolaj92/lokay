@@ -159,6 +159,7 @@ def run_path(
             "resolve_conflicts",
             "closeout_prs",
             "reap_stale_implementing",
+            "refresh_occupancy",
             "select_implement",
             "queue_conflict",
             "dispatch_implement",
@@ -168,14 +169,15 @@ def run_path(
         "issue_to_pr": (
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "cycle_start", "run_agent",
-            "commit_all", "test_local", "repair_agent", "test_local_recheck",
-            "assert_real_diff", "push", "pr_create", "cycle_end", "stage_pr_open",
+            "commit_all", "rebase_onto_base", "test_local", "repair_agent",
+            "test_local_recheck", "assert_real_diff", "push", "pr_create",
+            "cycle_end", "stage_pr_open",
             "list_prs", "pr_label",
         ),
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": (
             "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "test_local", "assert_real_diff", "push",
+            "commit_all", "rebase_onto_base", "test_local", "assert_real_diff", "push",
         ),
         "pr_triage": (
             "pr_checks", "pr_review", "worktree_add", "test_local",

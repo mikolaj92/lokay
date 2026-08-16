@@ -37,7 +37,7 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         pr_review, push_branch, record_pass, recovery_begin, recovery_incident,
         recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
         resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
-        reap_stale_implementing,
+        reap_stale_implementing, refresh_occupancy,
         survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
         triage_issue, intake_issue, issue_split, worktree_add, assert_real_diff,
         self_repair_activate, self_repair_close, self_repair_prepare,
@@ -140,6 +140,13 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         if pass_dir:
             argv.extend(["--pass-dir", pass_dir])
         return _run_atom_main(reap_stale_implementing.main, argv)
+
+    if atom == "refresh_occupancy":
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        assert pass_dir
+        return _run_atom_main(
+            refresh_occupancy.main, [*cfg, *live, "--pass-dir", pass_dir]
+        )
 
     if atom == "select_implement":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")

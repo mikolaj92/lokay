@@ -58,8 +58,9 @@ host_ff
               → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
                 → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
                   → reap_stale_implementing  → leftover in-flight cache → ai:ready
-                    → select_implement
-                    → queue_conflict   → SKIP/CLOSE/READY queue hygiene
+                    → refresh_occupancy  → re-list PRs + live i2pr + just-merged
+                      → select_implement
+                      → queue_conflict   → SKIP/CLOSE/READY queue hygiene
                       → dispatch_implement → issue_to_pr child Fala
                         → compute_health
                           → record_pass    → last-pass.json
@@ -77,7 +78,8 @@ host_ff
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
 | `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels) |
-| `select_implement` | clean repos eligible for issue_to_pr (serial K budget) |
+| `refresh_occupancy` | re-list open AI PRs after closeout; union just-merged + live i2pr receipts |
+| `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied) |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design) |
 | `compute_health` | remaining counters + honest mill health |
@@ -134,7 +136,8 @@ get_issue
                     └─→ localize     ← Agentless file-before-patch path list
                           └─→ run_agent     ← only non-deterministic coding node
                                 └─→ commit_all
-                                      └─→ test_local   ← local pytest; skip if no suite
+                                      └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed (no dirty PR)
+                                            └─→ test_local   ← local pytest; skip if no suite
                                             ├─ (red, recorded) → repair_agent   ← ONE patch from the test log (K=1)
                                             │                      └─→ test_local_recheck
                                             └─→ assert_real_diff ← refuse plan/localize-only diffs
@@ -200,9 +203,10 @@ pr_checks
               └─→ localize    ← paths from checks/review seed + tree
                     └─→ run_agent   ← repair prompt (only non-deterministic node)
                           └─→ commit_all
-                                └─→ test_local   ← local pytest; skip if no suite
-                                      └─→ assert_real_diff
-                                            └─→ push
+                                └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
+                                      └─→ test_local   ← local pytest; skip if no suite
+                                            └─→ assert_real_diff
+                                                  └─→ push
 ```
 
 ### `pr_triage` (merge policy → close issue)

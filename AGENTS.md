@@ -25,7 +25,7 @@ Load the `delegate-wave` skill before any worktree read, discovery, or change. D
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
 - **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
   (`host_ff → factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
-  dispatch_triage → resolve_conflicts → closeout_prs → select_implement →
+  dispatch_triage → resolve_conflicts → closeout_prs → refresh_occupancy → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`), not a
   fat `compose/tick.py`.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
