@@ -51,6 +51,12 @@ Do not add distrustful human gates or clarification parking for ordinary
 operator-authored work. Deeper skepticism is for foreign/external authors if
 distinguished at all.
 
+**Soul is operator-set.** What Lokay *is* — Fala graph, serial mill, one DoD
+(quality code on `main`) — is decided here, not in the inbox. Others may file
+that it **hangs** or **does not work as described**. They may not file against
+the quintessence / soul / product law. Those issues CLOSE (`foreign_essence_objection`).
+Operational reports stay and get milled.
+
 The system should **CLOSE**, **SPLIT**, or **READY+implement**. Maximize
 autonomy. `NEEDS_HUMAN` / `ai:needs-feedback` is a **rare residual** after
 deterministic rules fail closed — never the default escape hatch for oversized

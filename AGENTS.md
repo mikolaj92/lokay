@@ -38,7 +38,9 @@ Load the `delegate-wave` skill before any worktree read, discovery, or change. D
   in examples are illustration, not a dependency.
 - **Trust intentional issues.** Owner / configured-assignee tickets are
   purposeful; no new human-approval gates in the pass spine. Intake CLOSE only
-  for clear obsolete / wrong-shape / superseded. Human writes → mill delivers.
+  for clear obsolete / wrong-shape / superseded / foreign essence objections.
+  Others may report hangs or “does not work as described”. They may not object
+  to what Lokay *is*. Human writes → mill delivers.
 - **One Definition of Done:** quality code merged to `main`. Agent-ok, plan-only,
   `health=progress`, and green tests are not Done. Fast scrap and machines-for-
   machines are worthless. See `docs/WORKING.md`.

@@ -7,9 +7,10 @@ Product law: humans author intentional issues; the mill consumes. Trust the
 operator/assignee — prefer READY+implement autonomy; do not invent distrustful
 human gates. CLOSE / SPLIT / READY+implement are the default exits.
 CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
-bias toward distrusting every ticket. NEEDS_HUMAN is a rare residual after
-rules fail closed — never the escape hatch for oversized work that can be
-auto-split.
+bias toward distrusting every ticket. Foreign objections to the mill's
+essence (what Lokay is) CLOSE; operational reports (hangs / does not work as
+described) stay. NEEDS_HUMAN is a rare residual after rules fail closed —
+never the escape hatch for oversized work that can be auto-split.
 """
 
 from __future__ import annotations
@@ -95,6 +96,32 @@ _PR_HASH = re.compile(r"(?i)\b(?:pr|pull\s*request)\s*#(\d+)\b")
 _ISSUE_HASH = re.compile(r"(?:^|[\s(,])#(\d+)\b")
 _SUPERSEDED_MARKERS = re.compile(
     r"(?i)\b(superseded\s+by|already\s+(?:done|fixed|merged)|duplicate\s+of)\b"
+)
+
+# Operational reports stay. Essence / soul / "should be something else" does not.
+_OPERATIONAL_REPORT = re.compile(
+    r"(?i)\b("
+    r"hangs?|hung|zawies|freeze[sd]?|stuck|utkn"
+    r"|crash(?:es|ed)?|pad(?:a|nie)|segfault"
+    r"|timeout|deadlock|traceback|exception"
+    r"|does\s+not\s+work|doesn't\s+work|nie\s+działa|nie\s+dziala"
+    r"|as\s+described|jak\s+opis"
+    r"|repro(?:duce)?|steps?\s+to\s+repro"
+    r"|error\s+when|fails?\s+when|failed\s+with"
+    r")\b"
+)
+_ESSENCE_OBJECTION = re.compile(
+    r"(?i)\b("
+    r"should\s+(?:be|not\s+be)\s+(?:a\s+)?(?:factory|mill|harness|kanban|chat)"
+    r"|wrong\s+(?:product|philosophy|soul|essence|kwintesenc)"
+    r"|instead\s+of\s+(?:a\s+)?(?:mill|factory|fala\s+graph)"
+    r"|nie\s+powin(?:ien|no)\s+(?:być|byc)\s+(?:młyn|mlynem|fabryk)"
+    r"|kwintesenc(?:ja|ji)|dusza\s+(?:lokaya|produktu)"
+    r"|zmien(?:ić|ic)\s+(?:wizj|dusz|kierunek|istot)"
+    r"|rewrite\s+(?:the\s+)?(?:product|soul|essence|vision)"
+    r"|this\s+should\s+(?:not\s+)?exist"
+    r"|dlaczego\s+(?:w\s+ogóle|w\s+ogole)\s+(?:to|lokay)"
+    r")\b"
 )
 
 _HOST_FILE_MARKERS = (
@@ -385,6 +412,55 @@ def check_duplicate_ai_pr(
     )
 
 
+def _issue_is_operator(issue: Issue, *, trusted_assignee: str) -> bool:
+    login = (trusted_assignee or "").strip().lower()
+    if not login:
+        return False
+    if (issue.author or "").strip().lower() == login:
+        return True
+    return login in {a.strip().lower() for a in (issue.assignees or []) if a}
+
+
+def check_essence_objection(
+    issue: Issue,
+    *,
+    trusted_assignee: str = "mikolaj92",
+) -> CheckResult:
+    """CLOSE foreign objections to what the mill is. Operator tickets stay.
+
+    Others may report that it hangs or does not work as described. They may
+    not file against the soul / quintessence / product law. Those close.
+    """
+    if _issue_is_operator(issue, trusted_assignee=trusted_assignee):
+        return CheckResult(
+            check="essence",
+            verdict=PASS,
+            reason="operator_authored",
+            detail={"author": issue.author, "assignees": list(issue.assignees or [])},
+        )
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    if _OPERATIONAL_REPORT.search(blob):
+        return CheckResult(
+            check="essence",
+            verdict=PASS,
+            reason="operational_report",
+            detail={"author": issue.author},
+        )
+    if _ESSENCE_OBJECTION.search(blob):
+        return CheckResult(
+            check="essence",
+            verdict=CLOSE,
+            reason="foreign_essence_objection",
+            detail={"author": issue.author},
+        )
+    return CheckResult(
+        check="essence",
+        verdict=PASS,
+        reason="not_essence_objection",
+        detail={"author": issue.author},
+    )
+
+
 def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
     """Playbook fitness: reject platform-host work on libraries/kits/empty/Swift-only."""
     wants_host = issue_requests_platform_host(issue)
@@ -638,6 +714,13 @@ def _close_comment(hit: CheckResult, checks: tuple[CheckResult, ...]) -> str:
         return f"Closed (intake): duplicate of existing AI PR ({prs or 'see branch'})."
     if hit.reason == "issue_already_closed":
         return "Closed (intake): already closed upstream."
+    if hit.reason == "foreign_essence_objection":
+        return (
+            "Closed (intake): objection to what Lokay is, not a report that it "
+            "hangs or does not work as described. Soul / quintessence is set by "
+            "the operator. File a hang or a mismatch with the written contract "
+            "if something is broken."
+        )
     return f"Closed (intake): {reasons or hit.reason}."
 
 
@@ -702,6 +785,7 @@ def decide_intake(
     tracker_refs: Iterable[str] = (),
     ready_label: str = "ai:ready",
     needs_feedback_label: str = "ai:needs-feedback",
+    trusted_assignee: str = "mikolaj92",
     run: bool = True,
     skip_reason: str = "",
     force_split: bool = False,
@@ -725,6 +809,7 @@ def decide_intake(
             tracker_refs=tracker_refs,
         ),
         check_duplicate_ai_pr(issue, covering_prs=covering_prs),
+        check_essence_objection(issue, trusted_assignee=trusted_assignee),
         check_shape(issue, shape),
         check_satisfied(issue, clone_path=clone_path),
         check_ambiguity(issue),

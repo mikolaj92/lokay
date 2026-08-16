@@ -32,6 +32,11 @@ not for the operator’s own issues. Deterministic intake still applies
 shape/superseded/duplicate/size rules (`CLOSE` / `SPLIT` / `READY`), but those
 are fitness checks, not author distrust.
 
+Foreign tickets that object to the mill’s **essence** (soul, quintessence,
+“should be a harness / kanban / something else”) CLOSE. Foreign tickets that
+report a hang or that it does not work as described stay. Operator tickets
+always stay — even when they rewrite the product.
+
 Maximize autonomy. Minimize `NEEDS_HUMAN` / `ai:needs-feedback`: it is a **rare
 residual** after rules fail closed (missing evidence), never the default exit
 for oversized work (auto-`SPLIT`) or obsolete playbooks (`CLOSE`).

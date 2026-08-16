@@ -87,6 +87,13 @@ def _eligible(assignees: list[str], config: Config) -> bool:
     return (not assignees) and config.allow_unassigned
 
 
+def _author_login(row: dict) -> str:
+    author = row.get("author")
+    if isinstance(author, dict):
+        return str(author.get("login") or "")
+    return str(author or "")
+
+
 def _issue_from_row(repo_name: str, row: dict) -> Issue:
     labels = [lbl.get("name", "") for lbl in row.get("labels") or []]
     assignees = [a.get("login", "") for a in row.get("assignees") or []]
@@ -99,6 +106,7 @@ def _issue_from_row(repo_name: str, row: dict) -> Issue:
         assignees=assignees,
         url=str(row.get("url") or ""),
         state=str(row.get("state") or "OPEN").upper(),
+        author=_author_login(row),
     )
 
 
@@ -118,7 +126,7 @@ def list_labeled_issues(
         "--label",
         label,
         "--json",
-        "number,title,body,labels,assignees,url",
+        "number,title,body,labels,assignees,author,url",
         "--limit",
         "50",
     ]
@@ -141,7 +149,7 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         "--label",
         config.ready_label,
         "--json",
-        "number,title,body,labels,assignees,url",
+        "number,title,body,labels,assignees,author,url",
         "--limit",
         "50",
     ]
@@ -173,7 +181,7 @@ def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         "--state",
         "open",
         "--json",
-        "number,title,body,labels,assignees,url",
+        "number,title,body,labels,assignees,author,url",
         "--limit",
         "50",
     ]
@@ -277,7 +285,7 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
                 "--repo",
                 repo,
                 "--json",
-                "number,title,body,labels,assignees,url,state",
+                "number,title,body,labels,assignees,author,url,state",
             ]
         ),
         live=live,
@@ -292,6 +300,7 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
             assignees=[config.assignee],
             url=f"https://github.com/{repo}/issues/{number}",
             state="OPEN",
+            author=config.assignee,
         )
     if result.returncode != 0:
         return None
@@ -305,6 +314,7 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
         assignees=[a.get("login", "") for a in row.get("assignees") or []],
         url=str(row.get("url") or ""),
         state=str(row.get("state") or "OPEN").upper(),
+        author=_author_login(row),
     )
 
 
@@ -427,7 +437,7 @@ def list_issues_with_label(
         "--label",
         label,
         "--json",
-        "number,title,body,labels,assignees,url",
+        "number,title,body,labels,assignees,author,url",
         "--limit",
         str(max(1, min(int(limit), 100))),
     ]

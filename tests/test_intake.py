@@ -8,6 +8,7 @@ from lokay.graph_run import describe_package, normalize_path_result
 from lokay.intake import (
     check_ambiguity,
     check_duplicate_ai_pr,
+    check_essence_objection,
     check_open,
     check_satisfied,
     check_shape,
@@ -163,6 +164,46 @@ def test_tracker_closed_superseded():
     result = check_superseded(issue, closed_tracker_done=True)
     assert result.verdict == "close"
     assert result.reason == "tracker_already_done"
+
+
+def test_essence_closes_foreign_soul_objection():
+    issue = _issue(
+        author="stranger",
+        assignees=[],
+        title="Lokay should be a kanban not a mill",
+        body="Wrong philosophy. Change the soul / kwintesencja of the product.",
+    )
+    result = check_essence_objection(issue)
+    assert result.verdict == "close"
+    assert result.reason == "foreign_essence_objection"
+    d = decide_intake(issue, clone_path=None, state="OPEN")
+    assert d.decision == "close"
+    assert d.reason == "foreign_essence_objection"
+    assert "hangs" in (d.comment or "")
+
+
+def test_essence_keeps_operator_rewrite():
+    issue = _issue(
+        author="mikolaj92",
+        assignees=["mikolaj92"],
+        title="Rewrite the soul of the mill",
+        body="Kwintesencja ma być inna. Zmienić wizję produktu.",
+    )
+    result = check_essence_objection(issue)
+    assert result.verdict == "pass"
+    assert result.reason == "operator_authored"
+
+
+def test_essence_keeps_foreign_hang_report():
+    issue = _issue(
+        author="stranger",
+        assignees=[],
+        title="Mill hangs on issue_to_pr",
+        body="Does not work as described: daemon stuck after survey, no merge.",
+    )
+    result = check_essence_objection(issue)
+    assert result.verdict == "pass"
+    assert result.reason == "operational_report"
 
 
 def test_decide_intake_ready_path(tmp_path: Path):

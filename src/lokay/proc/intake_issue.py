@@ -66,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         covering_prs=covering,
         ready_label=cfg.ready_label,
         needs_feedback_label=cfg.needs_feedback_label,
+        trusted_assignee=cfg.assignee,
         run=run,
         skip_reason=skip_reason,
         force_split=bool(args.candidate_split) and run,

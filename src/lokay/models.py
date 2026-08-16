@@ -14,6 +14,7 @@ class Issue:
     assignees: list[str]
     url: str
     state: str = "OPEN"
+    author: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -29,6 +30,7 @@ class Issue:
             assignees=list(data.get("assignees") or []),
             url=str(data.get("url") or ""),
             state=str(data.get("state") or "OPEN").upper(),
+            author=str(data.get("author") or ""),
         )
 
 

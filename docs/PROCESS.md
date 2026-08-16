@@ -71,6 +71,7 @@ When implementing in this repo:
 2. Prefer a new or tighter **atom** over growing `compose/*`.
 3. Prefer fixing a **block** over redesigning pass order.
 4. Do not add human gates into the spine; residual human stays exceptional.
+   Foreign objections to what Lokay *is* CLOSE. Hangs / does-not-work-as-described stay.
 5. Do not invent a second process ledger next to Fala journals.
 6. Do not treat the coding harness as the product.
 
