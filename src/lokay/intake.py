@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
+from lokay.issue_checkboxes import work_checkbox_count
 from lokay.models import Issue
 from lokay.triage import is_parked, is_undecided
 
@@ -95,7 +96,6 @@ _ISSUE_HASH = re.compile(r"(?:^|[\s(,])#(\d+)\b")
 _SUPERSEDED_MARKERS = re.compile(
     r"(?i)\b(superseded\s+by|already\s+(?:done|fixed|merged)|duplicate\s+of)\b"
 )
-_CHECKBOX = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s*(.+)$")
 
 _HOST_FILE_MARKERS = (
     "product_shell",
@@ -302,7 +302,8 @@ def referenced_pr_numbers(issue: Issue) -> list[int]:
 
 
 def checkbox_count(body: str) -> int:
-    return len(_CHECKBOX.findall(body or ""))
+    """Work checkboxes only — template Subsystem/Environment tags do not count."""
+    return work_checkbox_count(body)
 
 
 def check_open(*, state: str | None) -> CheckResult:

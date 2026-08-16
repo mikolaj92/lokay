@@ -10,6 +10,7 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
+from lokay.issue_checkboxes import work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
@@ -105,7 +106,7 @@ def is_parked(labels: Iterable[str], *, park_labels: Iterable[str] = PARK_LABELS
 
 
 def _checkbox_count(body: str) -> int:
-    return len(re.findall(r"^\s*[-*]\s*\[[ xX]\]", body, flags=re.MULTILINE))
+    return work_checkbox_count(body)
 
 
 def _strip_nongoal_sections(body: str) -> str:

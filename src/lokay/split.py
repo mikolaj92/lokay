@@ -10,13 +10,13 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from lokay.issue_checkboxes import iter_work_checkboxes
 from lokay.models import Issue
 
 MAX_CHILDREN = 5
 MIN_CHILDREN = 2
 _MAX_TITLE = 72
 
-_CHECKBOX = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s*(.+)$")
 _NUMBERED = re.compile(r"(?m)^\s*\d+[.)]\s+(.+)$")
 _H2 = re.compile(r"(?m)^#{2,3}\s+(.+)$")
 _SKIP_HEADINGS = re.compile(
@@ -72,7 +72,7 @@ def _child_body(parent: Issue, part_title: str, part_detail: str) -> str:
 
 
 def _from_checkboxes(parent: Issue) -> list[ChildSpec]:
-    items = [m.strip() for m in _CHECKBOX.findall(parent.body or "") if m.strip()]
+    items = [m.strip() for m in iter_work_checkboxes(parent.body or "") if m.strip()]
     out: list[ChildSpec] = []
     for item in items[:MAX_CHILDREN]:
         title = _clip_title(item)

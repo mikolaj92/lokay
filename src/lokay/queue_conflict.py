@@ -10,6 +10,7 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Mapping
 
+from lokay.issue_checkboxes import work_checkbox_count
 from lokay.models import Issue
 from lokay.stuck import issue_number_from_branch, issue_numbers_covered_by_prs
 
@@ -36,7 +37,6 @@ _PATH = re.compile(
     r")\b"
 )
 _EPIC_TITLE = re.compile(r"(?i)\b(?:epic|tracker)\b")
-_CHECKBOX = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s+")
 
 
 @dataclass
@@ -88,8 +88,8 @@ def is_epic_like(issue: Issue) -> bool:
         return True
     if _EPIC_TITLE.search(issue.title or ""):
         return True
-    # Large checkbox blobs are epic-shaped even without the word in the title.
-    return len(_CHECKBOX.findall(issue.body or "")) >= 6
+    # Large *work* checkbox blobs are epic-shaped. Template Subsystem tags are not.
+    return work_checkbox_count(issue.body or "") >= 6
 
 
 def _peer_dict(raw: Mapping[str, Any] | Issue) -> dict[str, Any]:
