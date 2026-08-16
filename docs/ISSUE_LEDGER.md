@@ -23,9 +23,11 @@ Chrom **PR** (`ai:generated`, `ai:pr-opened`) zostaje na pull requescie.
 wolno brać  =  ai:ready
             ∧  brak żywego issue_to_pr na repo#n
             ∧  brak otwartego covering AI PR
+            ∧  repo nie jest occupied (właśnie zmergowane / still-coding)
 ```
 
-Źródła: receipt `~/.lokay/cycle/` + `gh pr list`. `select_implement` i `survey_ready` już tak liczą.
+Źródła: receipt `~/.lokay/cycle/` + `gh pr list` + `merged_this_pass`.
+`refresh_occupancy` składa to po closeout; `select_implement` tylko czyta.
 
 ## Przejścia
 
@@ -45,7 +47,8 @@ Pass katalogu (`factory_pass`):
 survey PRs → inbox → ready → triage → konflikty
   → closeout (najpierw merge otwartych PR)
     → reap resztek in-flight cache → ai:ready
-      → select / implement (max 4, 1 na repo; mutex = job lub open PR)
+      → refresh_occupancy (re-list PRs ∪ live i2pr ∪ just-merged)
+        → select / implement (K=1; skip occupied)
 ```
 
 ## Resztki (do zmiecenia)

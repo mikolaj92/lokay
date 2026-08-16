@@ -117,7 +117,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    obvious path overlap), then `lokay-intake-issue --require-ready` so
    READY-without-intake cannot implement. Inside `issue_to_pr`: worktree from
    `origin/main` → **`plan_issue`** (`.lokay/approach.md` evidence) →
-   configured executor → commit/push → PR. The plan atom is trust-with-evidence,
+   configured executor → commit → **`rebase_onto_base`** (fail closed on
+   conflict; never force-push) → tests → push → PR. After closeout,
+   `refresh_occupancy` re-lists PRs and marks just-merged / still-coding
+   repos occupied so `select_implement` cannot start a sibling i2pr from
+   stale `origin/main`. The plan atom is trust-with-evidence,
    not a human gate. For a seed classified separately as unbounded collection
    work, the executor may make only the bounded collector/bootstrap patch: the
    deployed collector starts durably in the background after merge. Pi and the
@@ -219,7 +223,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
 - `factory_pass` is the parent Fala run used by the mill. It conducts
   `host_ff → factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
-  dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing → select_implement →
+  dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
+  refresh_occupancy → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.

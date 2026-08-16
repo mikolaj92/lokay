@@ -177,6 +177,48 @@ def test_merge_then_intake_when_repo_queue_is_clear(tmp_path, monkeypatch):
     assert result["remaining"]["intake_skip_reason"] is None
 
 
+def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
+    """Just-merged repo stays occupied this pass — do not publish #288 from stale main."""
+    config = _config(tmp_path, repos=("a/one",), max_issue_to_pr_per_pass=1)
+    listed = {"prs": 0}
+
+    def fake_run(fn, argv):
+        if fn is tick.p_list_prs.main:
+            listed["prs"] += 1
+            # Start-of-pass survey sees the mergeable PR. Refresh after merge
+            # sees GitHub without it — occupancy, not the stale PR list, must brake.
+            if listed["prs"] == 1:
+                return {"ok": True, "prs": [_pr(labels=[])]}
+            return {"ok": True, "prs": []}
+        if fn is tick.p_list_inbox.main:
+            return {"ok": True, "issues": []}
+        if fn is tick.p_list_issues.main:
+            return {
+                "ok": True,
+                "issues": [{"number": 2, "repo": "a/one", "title": "sibling"}],
+            }
+        if fn is tick.p_checks.main:
+            return {"ok": True, "status": "none", "merge_ok": True}
+        if fn is tick.p_intake.main:
+            return _intake_ok()
+        raise AssertionError(fn)
+
+    intake = []
+    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(tick, "compose_pr_triage", lambda **_: {"ok": True, "merged": True})
+    monkeypatch.setattr(
+        tick,
+        "compose_issue_to_pr",
+        lambda **kw: intake.append(kw) or {"ok": True, "pr": 2, "branch": "ai/fix/2-next"},
+    )
+    result = tick.compose_tick(config_path=config, live=True)
+
+    assert intake == []
+    actions = result.get("actions") or []
+    assert any(row.get("step") == "skip_ready_repo_occupied" for row in actions)
+
+
 def test_manual_only_pr_allows_unrelated_repo_intake(tmp_path, monkeypatch):
     config = _config(tmp_path)
 

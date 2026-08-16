@@ -28,7 +28,7 @@ from lokay.prompts import (
 def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
     from lokay.proc import (
         assert_real_diff, commit_all, list_prs, pr_create, pr_label,
-        push_branch, run_agent, test_local,
+        push_branch, rebase_onto_base, run_agent, test_local,
     )
     from lokay.git_commit import branch_ahead_of_upstream
     from lokay.proc._common import runner
@@ -256,13 +256,16 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             out["committed_by"] = "agent"
         return out
 
+    if atom == "rebase_onto_base":
+        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        assert worktree
+        return _run_atom_main(rebase_onto_base.main, [*cfg, *live, "--worktree", worktree])
+
     if atom == "test_local":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
         out = _run_atom_main(test_local.main, ["--worktree", worktree])
-        # issue_to_pr first probe: record a red suite without failing the
-        # effector so Fala can conduct the one-shot repair nest. Publish
-        # atoms still fail closed via _require_test_local (passed=false).
+        # Record a red first probe so Fala can conduct the one-shot repair nest.
         if (
             inputs.get("record_red")
             and isinstance(out, dict)
