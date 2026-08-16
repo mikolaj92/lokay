@@ -203,10 +203,9 @@ pr_checks
               └─→ localize    ← paths from checks/review seed + tree
                     └─→ run_agent   ← repair prompt (only non-deterministic node)
                           └─→ commit_all
-                                └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
-                                      └─→ test_local   ← local pytest; skip if no suite
-                                            └─→ assert_real_diff
-                                                  └─→ push
+                                └─→ test_local   ← local pytest; skip if no suite
+                                      └─→ assert_real_diff
+                                            └─→ push   ← published tip; never rebase (force-push forbidden)
 ```
 
 ### `pr_triage` (merge policy → close issue)
@@ -248,12 +247,16 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 - **run_agent timeout** (executor 1800s) is incomplete, not a graph hard-fail.
   The leftover tree is kept; `repair_agent` resumes the same corner / session
   once (K=1). Do not raise 1800 on the first shot.
-- **NFF reuse** (`ahead` of `origin/<base>` and `behind` `origin/<branch>`) resets
-  the corner from `origin/<base>` and deletes the stale remote tip. Never force-push.
+- **Published-tip retry** (`origin/<branch>` exists — including a closed
+  CONFLICTING tip that matches HEAD) resets the corner from `origin/<base>`
+  and deletes the stale remote tip. KEEP only unpublished ahead / dirty leftover.
+  Replaying a closed dirty tip just republishes the same CONFLICTING PR.
+  Never force-push.
 - **Miss harvest** (`factory_begin` → `harvest_fail_closed_children`): `plan_only`
-  / `zero_diff` leave the slot after **3** unique `run_id`s; `push_failed` after **2**.
-  Crash reasons (`local_repair_exhausted`, red recheck, bad ref) still block at 1.
-  Harvest does not CLOSE the issue. The repo mutex must not stay on one corpse.
+  / `zero_diff` / `rebase_conflict` leave the slot after **3** unique `run_id`s;
+  `push_failed` after **2**. Crash reasons (`local_repair_exhausted`, red recheck,
+  bad ref) still block at 1. Harvest does not CLOSE the issue. The repo mutex
+  must not stay on one corpse.
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run

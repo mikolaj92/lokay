@@ -131,6 +131,12 @@ class _ResetRunner:
         self.calls.append(argv)
         if argv[1:3] == ["check-ref-format", "--normalize"]:
             return _result(argv)
+        if argv[1:3] == ["fetch", "origin"] and len(argv) > 3 and argv[3] != "main":
+            return _result(
+                argv,
+                returncode=getattr(self, "branch_fetch_rc", 0),
+                stderr="couldn't find remote ref" if getattr(self, "branch_fetch_rc", 0) else "",
+            )
         if argv[1:4] == ["rev-list", "--count", "origin/main..HEAD"]:
             return _result(argv, returncode=self.ahead_rc, stdout=(self.ahead or "") + "\n")
         if argv[1:3] == ["rev-list", "--count"] and "HEAD..origin/" in argv[3]:
@@ -157,10 +163,12 @@ def _cfg_repo(tmp_path, branch: str):
     return cfg, repo, wt
 
 
-def test_reset_to_base_keeps_worktree_when_ahead(tmp_path):
+def test_reset_to_base_keeps_unpublished_ahead(tmp_path):
+    """Timeout leftover that never pushed: no origin/<branch> → KEEP."""
     branch = "ai/fix/164-observe"
     cfg, repo, wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="3")
+    runner.branch_fetch_rc = 128
     path = ensure_worktree(
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
@@ -168,6 +176,21 @@ def test_reset_to_base_keeps_worktree_when_ahead(tmp_path):
     destructive = {"remove", "add", "push"}
     assert not any(call[1] in destructive for call in runner.calls)
     assert any(call[1:4] == ["rev-list", "--count", "origin/main..HEAD"] for call in runner.calls)
+
+
+def test_reset_to_base_rewrites_published_even_if_current(tmp_path):
+    """Closed CONFLICTING tip matches HEAD: KEEP would republish the same dirty PR."""
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="8")
+    runner.behind = 0
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+    assert path == wt
+    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
+    assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
 
 def test_reset_to_base_rewrites_when_ahead_zero(tmp_path):
@@ -217,6 +240,32 @@ def test_reset_to_base_fail_closed_when_ahead_unreadable(tmp_path):
     cfg, repo, _wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="", ahead_rc=128)
     with pytest.raises(RuntimeError, match="ahead"):
+        ensure_worktree(
+            runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+        )
+    assert not any(call[1] == "remove" for call in runner.calls)
+    assert not any(call[1] == "add" for call in runner.calls)
+
+
+def test_reset_to_base_fail_closed_when_branch_fetch_flakes(tmp_path):
+    """Network flake is not 'unpublished' — do not KEEP a maybe-published tip."""
+    branch = "ai/fix/142-prompt"
+    cfg, repo, _wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="8")
+    runner.branch_fetch_rc = 128
+    runner.branch_fetch_stderr = "fatal: unable to access 'https://github.com/': Could not resolve host"
+    # override default missing-ref stderr
+    orig_run = runner.run
+
+    def run(spec, *, live):
+        argv = list(spec.argv)
+        if argv[1:3] == ["fetch", "origin"] and len(argv) > 3 and argv[3] != "main":
+            runner.calls.append(argv)
+            return _result(argv, returncode=128, stderr=runner.branch_fetch_stderr)
+        return orig_run(spec, live=live)
+
+    runner.run = run  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="origin/"):
         ensure_worktree(
             runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
         )

@@ -61,7 +61,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "survey: list-prs + list-inbox + list-issues (all repos)",
         "per-repo PR-first: conflict close / repair / merge open AI PRs",
         "inbox triage + deterministic intake (skip repos with actionable open AI PRs)",
-        "intake gate then issue_to_pr up to K across clean repos (zero open AI PRs)",
+        "occupancy then issue_to_pr up to K across clean (not occupied) repos",
         "on failure: stuck ledger → ai:blocked",
     ]
     planned = [

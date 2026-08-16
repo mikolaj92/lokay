@@ -514,3 +514,49 @@ def test_two_push_failed_leave_the_slot(tmp_path: Path):
     )
     assert 86 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#86"].get("failures") == 2
+
+
+
+def test_one_rebase_conflict_does_not_leave_the_slot(tmp_path: Path):
+    """Conflict close + re-ready is the product; harvest must not bury the retry."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-142.json", repo="a/b", issue=142, pid=1)
+    _event(state, repo="a/b", issue=142, ok=False, reason="rebase_conflict", run_id="r1")
+    stuck: dict = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 142 not in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#142"]
+    assert row.get("blocked") is not True
+    assert row.get("reason") == "rebase_conflict"
+
+
+def test_three_rebase_conflicts_leave_the_slot(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-142.json", repo="a/b", issue=142, pid=1)
+    for i in range(1, 4):
+        _event(
+            state,
+            repo="a/b",
+            issue=142,
+            ok=False,
+            reason="rebase_conflict",
+            run_id=f"r{i}",
+        )
+    stuck: dict = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 142 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#142"].get("reason") == "rebase_conflict"

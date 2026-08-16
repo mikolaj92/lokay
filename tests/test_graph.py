@@ -191,11 +191,11 @@ def test_describe_includes_pr_repair():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "pr_repair")
     ids = [node["id"] for node in path["nodes"]]
-    assert "rebase_onto_base" in ids
+    assert "rebase_onto_base" not in ids
     by_id = {node["id"]: node for node in path["nodes"]}
-    assert "commit_all" in by_id["rebase_onto_base"]["conduction"]
-    assert "rebase_onto_base" in by_id["test_local"]["conduction"]
-    assert "rebase_onto_base" in by_id["push"]["conduction"]
+    assert "commit_all" in by_id["test_local"]["conduction"]
+    assert "test_local" in by_id["assert_real_diff"]["conduction"]
+    assert "assert_real_diff" in by_id["push"]["conduction"]
 
 
 def test_package_file_exists():
@@ -413,7 +413,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
         "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
         "pr_repair": {
             "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "rebase_onto_base", "test_local", "assert_real_diff", "push",
+            "commit_all", "test_local", "assert_real_diff", "push",
         },
         "pr_triage": {
             "pr_checks", "pr_review", "worktree_add", "test_local",
