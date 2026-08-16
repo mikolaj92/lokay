@@ -21,6 +21,7 @@ def test_describe_parent_factory_graph():
         "closeout_prs",
         "reap_stale_implementing",
         "refresh_occupancy",
+        "reap_stale_worktrees",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
@@ -36,7 +37,8 @@ def test_describe_parent_factory_graph():
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "refresh_occupancy" in conduction["select_implement"]
+    assert "reap_stale_worktrees" in conduction["select_implement"]
+    assert "refresh_occupancy" in conduction["reap_stale_worktrees"]
     assert "reap_stale_implementing" in conduction["refresh_occupancy"]
     assert "closeout_prs" in conduction["reap_stale_implementing"]
     assert "select_implement" in conduction["queue_conflict"]
@@ -396,6 +398,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "closeout_prs",
             "reap_stale_implementing",
             "refresh_occupancy",
+            "reap_stale_worktrees",
             "select_implement",
             "queue_conflict",
             "dispatch_implement",

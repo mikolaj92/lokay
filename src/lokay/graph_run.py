@@ -160,6 +160,7 @@ def run_path(
             "closeout_prs",
             "reap_stale_implementing",
             "refresh_occupancy",
+            "reap_stale_worktrees",
             "select_implement",
             "queue_conflict",
             "dispatch_implement",

@@ -67,7 +67,10 @@ actually moved (`~/.lokay/uv-install.digest`); a failed reinstall does not
 persist the digest. `LastExitStatus=0` when the pass did work (`health=progress`
 or detached `issue_to_pr_started`), even if the Fala wrapper envelope has
 `ok: false`. `factory_begin` keeps a handful of `factory-pass-*` workspaces
-beside `state.jsonl` and deletes the rest.
+beside `state.jsonl` and deletes the rest. After occupancy,
+`reap_stale_worktrees` drops leftover `~/.lokay/worktrees` corners that
+cannot resume (merged / closed CONFLICTING / unpublished-behind-main) and
+KEEPs a live i2pr, an open covering PR, or a dirty unpublished leftover.
 
 ## How to read health
 

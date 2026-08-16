@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from lokay.config import Config, RepoConfig
-from lokay.git_worktree import InvalidBranchRef, assert_valid_branch_ref, ensure_worktree
+from lokay.git_worktree import InvalidBranchRef, assert_valid_branch_ref, ensure_worktree, leftover_status, remove_worktree
 from lokay.proc import worktree_add
 from lokay.runner import Runner
 
@@ -288,3 +288,78 @@ def test_reset_to_base_fail_closed_when_branch_fetch_flakes(tmp_path):
         )
     assert not any(call[1] == "remove" for call in runner.calls)
     assert not any(call[1] == "add" for call in runner.calls)
+
+
+def test_leftover_status_keeps_unpublished_ahead(tmp_path):
+    branch = "ai/fix/164-observe"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="3")
+    runner.branch_fetch_rc = 128
+    status = leftover_status(runner, wt, repo.clone_path, branch)
+    assert status["readable"] is True
+    assert status["published"] is False
+    assert status["keep_unpublished"] is True
+
+
+def test_leftover_status_does_not_keep_unpublished_behind_main(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="3")
+    runner.branch_fetch_rc = 128
+    runner.behind_main = 4
+    status = leftover_status(runner, wt, repo.clone_path, branch)
+    assert status["readable"] is True
+    assert status["published"] is False
+    assert status["keep_unpublished"] is False
+
+
+def test_leftover_status_marks_published_tip(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="3")
+    status = leftover_status(runner, wt, repo.clone_path, branch)
+    assert status["readable"] is True
+    assert status["published"] is True
+    assert status["keep_unpublished"] is False
+
+
+def test_leftover_status_keeps_dirty_unpublished(tmp_path):
+    branch = "ai/fix/54-x"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="0")
+    runner.branch_fetch_rc = 128
+    runner.diff_names = "src/app.py\n"
+    status = leftover_status(runner, wt, repo.clone_path, branch)
+    assert status["keep_unpublished"] is True
+    assert status["dirty"] == "real"
+
+
+def test_leftover_status_fail_closed_on_branch_fetch_flake(tmp_path):
+    branch = "ai/fix/54-x"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+
+    class _Flake(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:3] == ["fetch", "origin"] and len(argv) > 3 and argv[3] != "main":
+                self.calls.append(argv)
+                return _result(
+                    argv,
+                    returncode=128,
+                    stderr="unable to access 'https://github.com/': Could not resolve host",
+                )
+            return super().run(spec, live=live)
+
+    status = leftover_status(_Flake(ahead="2"), wt, repo.clone_path, branch)
+    assert status["readable"] is False
+    assert "unable to access" in str(status.get("error") or "")
+
+
+def test_remove_worktree_already_gone(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    missing = tmp_path / "gone"
+    runner = _ResetRunner()
+    out = remove_worktree(runner, clone, missing)
+    assert out == {"ok": True, "removed": False, "already_gone": True}
+    assert not any(call[1] == "worktree" for call in runner.calls)

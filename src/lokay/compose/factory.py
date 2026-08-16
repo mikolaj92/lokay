@@ -1,7 +1,7 @@
 """Parent Fala composition for one complete Lokay factory pass.
 
 The parent path ``factory_pass`` owns pass order (survey → plan → triage →
-closeout → occupancy → select → implement → health → receipt). Python only validates the
+closeout → occupancy → reap leftover worktrees → select → implement → health → receipt). Python only validates the
 CLI contract and invokes ``graph_run.run_path``.
 """
 
