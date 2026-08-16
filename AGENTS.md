@@ -39,6 +39,9 @@ Load the `delegate-wave` skill before any worktree read, discovery, or change. D
 - **Trust intentional issues.** Owner / configured-assignee tickets are
   purposeful; no new human-approval gates in the pass spine. Intake CLOSE only
   for clear obsolete / wrong-shape / superseded. Human writes → mill delivers.
+- **One Definition of Done:** quality code merged to `main`. Agent-ok, plan-only,
+  `health=progress`, and green tests are not Done. Fast scrap and machines-for-
+  machines are worthless. See `docs/WORKING.md`.
 - Do **not** grow `compose/*` with GitHub/git/agent / fleet-scheduling logic
   beyond CLI wiring + `graph_run.run_path`.
 - JSON on stdout (`envelope.ok` / `envelope.err`).

@@ -3,6 +3,11 @@
 Operators should not need chat notifications or the GitHub inbox to know whether
 the autonomous mill is healthy. Use local commands and the pass receipt.
 
+**Health is not Done.** `last-pass.json` / `lokay status` tell you whether the
+mill is turning. The Definition of Done is still only **quality code merged
+to `main`** ([`WORKING.md`](WORKING.md)). `health=progress` with no merges is a
+spinning machine, not a working factory.
+
 ## One glance
 
 ```bash
@@ -59,7 +64,7 @@ the transcript.
 | `health` | Operator action |
 | --- | --- |
 | `idle` | No remaining actionable work — mill may sleep until new issues |
-| `progress` | Last pass moved the queue — healthy |
+| `progress` | Last pass moved the queue — mill is turning; **not** proof of Done |
 | `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox — honest wait |
 | `repairing` | Repair / request_changes cycle in flight — honest wait |
 | `stall` | Actionable work with no progress — investigate agent/config (not merge-disarmed green) |

@@ -1,6 +1,9 @@
 # Process (binding)
 
 **The product of Lokay is the process graph(s), not the workers.**
+The **output** of that process is **quality code merged to `main`** — one
+Definition of Done ([`WORKING.md`](WORKING.md)). A running graph that ships
+nothing (or scrap) is not the product working.
 
 Lokay’s valuable asset is one or more **Fala graphs** that describe how software
 gets delivered: order, gates, retries, and close-out. Everything else is a

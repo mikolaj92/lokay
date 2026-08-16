@@ -1,10 +1,33 @@
 # WORKING machine (Definition of Done)
 
+**One Definition of Done.** An issue is done only when the designed change is
+**quality code on `main`** — produced, reviewed by the mill's gates, and
+**merged**. That is the only measure that the factory worked.
+
+Not done: agent session `ok`, plan-only tree, open PR, closed-unmerged PR,
+pass `health=progress`, green pytest, recovery plateau, or a spinning
+machine that consumes tickets without landing them. Those are intermediate
+signals. They may explain a miss. They never count as output.
+
+The factory exists to turn designed issues into **good toys** — merged
+product at the quality the gates already demand (real diff, tests that the
+repo declared, no force-push junk). Fast broken toys are worthless. Machines
+that only keep other machines busy — retries, receipts, health, self-repair —
+are worthless if nothing lands. Quality without merge is a warehouse.
+Merge without quality is scrap.
+
+A miss (agent "succeeded" with no product, push refused, same ticket looping)
+is a factory defect, not an honest wait. After bounded misses the seed must
+leave the slot so the next designed issue can land. Tests and pass health
+are not a representation of whether the mill works. Merges of intended
+issues are.
+
 Lokay is **working** only if it continuously mills **all** work across
-configured repos (`repos.mikolaj92.yaml`). Order: survey → **per-repo PR-first**
-(close-out) → inbox triage / implement in repos with no open AI PR. Agent must
-be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize human: humans write issues;
-the mill consumes them to merged results — do not add new human gates.
+configured repos (`repos.mikolaj92.yaml`) **to that DoD**. Order: survey →
+**per-repo PR-first** (close-out) → inbox triage / implement in repos with no
+open AI PR. Agent must be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize
+human: humans write issues; the mill consumes them to merged results — do not
+add new human gates.
 
 For the autonomous mill Definition of Working (pass promises, night profile,
 hermetic canaries, how to read `lokay status` / `last-pass.json`), see

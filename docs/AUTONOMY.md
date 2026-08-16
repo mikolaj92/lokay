@@ -1,9 +1,14 @@
 # Autonomy (Definition of Working)
 
 Lokay is **working as an autonomous mill** when it continuously turns human-authored
-issues into merged results across the managed catalog — without new human gates,
-without freezing clean repos behind a busy peer, and without treating honest waits
-as recovery stalls.
+issues into **merged quality code on `main`** across the managed catalog — without
+new human gates, without freezing clean repos behind a busy peer, and without
+treating honest waits as recovery stalls.
+
+That merge is the **only Definition of Done** ([`WORKING.md`](WORKING.md)).
+A green agent, a plan-only worktree, a pass receipt, or a green test suite is
+not output. Broken toys shipped fast are worthless; machines that only feed
+machines are worthless. Bounded misses must free the slot.
 
 Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Fleet pass order
