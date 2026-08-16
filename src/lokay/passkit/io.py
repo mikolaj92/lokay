@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import shutil
 from pathlib import Path
 from typing import Any
+
+# Live mill was leaving one factory-pass-* dir per 60s tick (~1k leftovers).
+PASS_DIR_KEEP = 8
 
 
 def make_pass_dir(state_path: Path) -> Path:
@@ -14,6 +18,46 @@ def make_pass_dir(state_path: Path) -> Path:
     path = root / f"factory-pass-{os.getpid()}-{secrets.token_hex(6)}"
     path.mkdir(parents=True, exist_ok=False)
     return path
+
+
+def prune_pass_dirs(
+    state_path: Path,
+    *,
+    keep: int = PASS_DIR_KEEP,
+    keep_path: Path | None = None,
+) -> int:
+    """Drop stale factory-pass-* workspaces beside state.jsonl.
+
+    Conduction carries the current pass_dir. Older directories are leftovers
+    from previous ticks, not a second journal.
+    """
+    root = Path(state_path).expanduser().resolve().parent
+    try:
+        dirs = [path for path in root.glob("factory-pass-*") if path.is_dir()]
+    except OSError:
+        return 0
+    pinned: Path | None = None
+    if keep_path is not None:
+        try:
+            pinned = Path(keep_path).expanduser().resolve()
+        except OSError:
+            pinned = Path(keep_path)
+    dirs.sort(
+        key=lambda path: path.stat().st_mtime if path.exists() else 0,
+        reverse=True,
+    )
+    retain = max(1, int(keep))
+    removed = 0
+    for stale in dirs[retain:]:
+        try:
+            resolved = stale.resolve()
+        except OSError:
+            resolved = stale
+        if pinned is not None and resolved == pinned:
+            continue
+        shutil.rmtree(stale, ignore_errors=True)
+        removed += 1
+    return removed
 
 
 def write_json(path: Path, data: dict[str, Any]) -> Path:

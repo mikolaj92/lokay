@@ -46,7 +46,7 @@ class Config:
             "--model",
             "{model}",
             "--approve",
-            "--session",
+            "--session-id",
             "{session}",
         ]
     )

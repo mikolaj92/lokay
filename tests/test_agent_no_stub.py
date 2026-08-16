@@ -15,7 +15,7 @@ PI_ARGS = [
     "--model",
     "{model}",
     "--approve",
-    "--session",
+    "--session-id",
     "{session}",
 ]
 # Optional harness that wants an explicit model via template.
@@ -42,7 +42,7 @@ def _clear_mill_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_pi_argv_with_model():
+def test_pi_argv_uses_session_id_not_session():
     cfg = Config(
         agent="pi",
         agent_command="pi",
@@ -58,10 +58,10 @@ def test_pi_argv_with_model():
         "--model",
         "omniroute/pi",
         "--approve",
-        "--session",
+        "--session-id",
         argv[-1],
     ]
-    assert argv[-2] == "--session"
+    assert argv[-2] == "--session-id"
     assert argv[-1].startswith("lokay-")
 
 

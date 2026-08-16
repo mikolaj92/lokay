@@ -66,7 +66,11 @@ def resolve_agent_kind(config: Config) -> str:
 
 
 def session_id_for_worktree(worktree: Path) -> str:
-    """Stable per-corner session so a timeout retry continues, not a new lottery."""
+    """Stable per-corner session so a timeout retry continues, not a new lottery.
+
+    Pair with Pi ``--session-id`` (creates if missing). ``--session`` looks
+    up an existing file and exits 1 on the first ticket.
+    """
     digest = hashlib.sha256(str(Path(worktree).resolve()).encode()).hexdigest()[:16]
     return f"lokay-{digest}"
 

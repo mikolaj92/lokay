@@ -35,14 +35,16 @@ executor:
   agent: pi                  # log label only
   command: pi               # harness binary — swap to change implementation
   model: omniroute/pi
-  # args after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
+  # args after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout} {session}
+  # --session-id creates the corner session if missing and resumes it after timeout.
+  # --session dies on the first ticket ("No session found matching 'lokay-…'").
   args:
     - -p
     - "{prompt}"
     - --model
     - "{model}"
     - --approve
-    - --session
+    - --session-id
     - "{session}"
   max_turns: 40
   timeout_seconds: 1800
