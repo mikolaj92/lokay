@@ -50,6 +50,7 @@ class CommandResult:
     returncode: int
     stdout: str = ""
     stderr: str = ""
+    timed_out: bool = False
 
 
 def git_spec(args: Sequence[str], cwd: str | Path | None = None, timeout_seconds: int = 120) -> CommandSpec:
@@ -97,15 +98,34 @@ class Runner:
 
         last = CommandResult(spec=spec, executed=True, returncode=1)
         for attempt in range(attempts):
-            completed = subprocess.run(
-                list(spec.argv),
-                cwd=spec.cwd,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=spec.timeout_seconds,
-                check=False,
-            )
+            try:
+                completed = subprocess.run(
+                    list(spec.argv),
+                    cwd=spec.cwd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    timeout=spec.timeout_seconds,
+                    check=False,
+                )
+            except subprocess.TimeoutExpired as exc:
+                out = exc.stdout or ""
+                err = exc.stderr or ""
+                if isinstance(out, bytes):
+                    out = out.decode("utf-8", errors="replace")
+                if isinstance(err, bytes):
+                    err = err.decode("utf-8", errors="replace")
+                return CommandResult(
+                    spec=spec,
+                    executed=True,
+                    returncode=124,
+                    stdout=strip_ansi(out),
+                    stderr=strip_ansi(
+                        (err + "\n" if err else "")
+                        + f"timed out after {spec.timeout_seconds} seconds"
+                    ),
+                    timed_out=True,
+                )
             last = CommandResult(
                 spec=spec,
                 executed=True,

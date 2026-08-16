@@ -42,7 +42,8 @@ executor:
     - --model
     - "{model}"
     - --approve
-    - --no-session
+    - --session
+    - "{session}"
   max_turns: 40
   timeout_seconds: 1800
 

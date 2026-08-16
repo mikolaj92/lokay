@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from lokay.models import Issue
 from lokay.organ.common import (
-    _cfg_flags,
-    _live_flags,
     _localize_paths,
     _require_push,
     _require_real_diff,
     _require_test_local,
+    _resume_after_timeout,
     _run_atom_main,
     _test_local_ok,
 )
@@ -24,27 +22,16 @@ from lokay.prompts import (
     local_test_repair_prompt,
     pr_body,
     repair_pr_prompt,
-    self_repair_prompt,
 )
 
 
 def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
     from lokay.proc import (
-        assign_issue, close_issue, commit_all, closeout_prs, compute_health,
-        cycle_end, cycle_start, dispatch_implement, dispatch_triage, factory_begin,
-        factory_tick, get_issue, host_ff, list_prs, make_branch, plan_issue,
-        localize, pi_budget, plan_pass, pr_checks, pr_create, pr_label, pr_merge,
-        pr_review, push_branch, record_pass, recovery_begin, recovery_incident,
-        recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
-        resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
-        survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
-        triage_issue, intake_issue, issue_split, worktree_add, assert_real_diff,
-        self_repair_activate, self_repair_close, self_repair_prepare,
-        self_repair_preflight, self_repair_push_main, self_repair_validate,
+        assert_real_diff, commit_all, list_prs, pr_create, pr_label,
+        push_branch, run_agent, test_local,
     )
     from lokay.git_commit import branch_ahead_of_upstream
     from lokay.proc._common import runner
-    from lokay.stuck import issue_number_from_branch
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
@@ -115,11 +102,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             Path(prompt_path).unlink(missing_ok=True)
 
     if atom == "repair_agent":
-        # AlphaCodium bounded loop, K=1: exactly one extra patch after a red
-        # local suite. Any other state is a no-op; test_local_recheck reruns
-        # pytest once after this, and push/pr_create never see a red suite.
         if repair_mode:
-            # pr_repair already IS the repair lane — no nested repair session.
             return {
                 "ok": False,
                 "error": "refusing: repair_agent is issue_to_pr-only",
@@ -135,7 +118,25 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                 "reason": "test_local_missing",
             }
         if _test_local_ok(first):
-            return {"ok": True, "skipped": True, "reason": "test_local_ok"}
+            run_env = up.get("run_agent") or {}
+            timed_out = bool(run_env.get("timed_out")) or str(
+                run_env.get("reason") or ""
+            ) == "timeout"
+            if not timed_out:
+                return {"ok": True, "skipped": True, "reason": "test_local_ok"}
+            return _resume_after_timeout(
+                run_agent_main=run_agent.main,
+                assert_real_diff_main=assert_real_diff.main,
+                commit_all_main=commit_all.main,
+                cfg=cfg,
+                live=live,
+                inputs=inputs,
+                worktree=worktree,
+                repo=repo,
+                branch=branch,
+                issue_number=issue_number,
+                issue_raw=up.get("get_issue", {}).get("issue") or {},
+            )
         log_text = "\n".join(
             tail
             for tail in (
@@ -167,9 +168,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         return out
 
     if atom == "test_local_recheck":
-        # Second (final) probe of the bounded loop: rerun pytest only after a
-        # red first probe. A red recheck fails closed here — there is no third
-        # attempt, so push/pr_create downstream stay unreachable.
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
         first = up.get("test_local")
@@ -395,5 +393,3 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         )
 
     raise ValueError(f"unknown atom: {atom!r}")
-
-    return None

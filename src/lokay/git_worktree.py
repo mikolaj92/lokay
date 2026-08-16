@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from lokay.config import Config, RepoConfig
+from lokay.git_real_diff import classify_changed_paths, list_changed_paths
 from lokay.runner import Runner, git_spec
 
 
@@ -38,6 +39,30 @@ def assert_valid_branch_ref(
         raise InvalidBranchRef(branch, detail)
 
 
+def _behind_own_remote(
+    runner: Runner, worktree: Path, clone: Path, branch: str
+) -> int:
+    """How many commits ``origin/<branch>`` has that HEAD does not."""
+    runner.run(
+        git_spec(["fetch", "origin", branch], cwd=clone, timeout_seconds=180),
+        live=True,
+    )
+    result = runner.run(
+        git_spec(
+            ["rev-list", "--count", f"HEAD..origin/{branch}"],
+            cwd=worktree,
+            timeout_seconds=60,
+        ),
+        live=True,
+    )
+    if result.returncode != 0:
+        return 0
+    try:
+        return int((result.stdout or "").strip() or "0")
+    except ValueError:
+        return 0
+
+
 def ensure_worktree(
     runner: Runner,
     config: Config,
@@ -52,11 +77,13 @@ def ensure_worktree(
 
     When ``reset_to_base`` is True (issue_to_pr re-implement path):
 
-    * KEEP if the existing corner is ahead of ``origin/<base>`` (unpublished
-      commits). Restart must not wipe a child that has not published a PR.
-    * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) only
-      when ahead is 0 — conflict rewrite after the corner is already empty
-      or already aligned with base.
+    * KEEP if the existing corner is ahead of ``origin/<base>`` and not
+      behind its own remote (unpublished, pushable) **or** has a dirty real
+      tree (timeout leftover). Restart must not wipe a child that has not
+      published a PR.
+    * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) when
+      ahead is 0 and the tree is clean, **or** when the corner is ahead of
+      base and behind ``origin/<branch>`` (non-fast-forward reuse). Never force-push.
     * Fail closed if ahead cannot be measured. Do not ``rm -rf``.
     """
     root = config.worktrees_root / repo.name.replace("/", "__")
@@ -97,7 +124,24 @@ def ensure_worktree(
                     f"{(ahead_result.stdout or '').strip()!r}"
                 ) from exc
             if ahead > 0:
-                return worktree
+                behind = _behind_own_remote(runner, worktree, clone, branch)
+                if behind == 0:
+                    return worktree
+                # Ahead of main and behind origin/<branch>: KEEP would NFF.
+                # Fall through and recreate from origin/<base>.
+            else:
+                try:
+                    dirty = classify_changed_paths(
+                        list_changed_paths(runner, worktree, base=f"origin/{base}")
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    raise RuntimeError(
+                        f"cannot classify leftover tree vs origin/{base}: {exc}"
+                    ) from exc
+                if dirty == "real":
+                    # Timeout leftover: agent wrote files but did not commit.
+                    # Next pass must resume this corner, not wipe it.
+                    return worktree
             rm = runner.run(
                 git_spec(
                     ["worktree", "remove", "--force", str(worktree)],

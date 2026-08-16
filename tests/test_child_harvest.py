@@ -18,12 +18,23 @@ def _receipt(path: Path, *, repo: str, issue: int, pid: int) -> None:
     )
 
 
-def _event(path: Path, *, repo: str, issue: int, ok: bool, reason: str | None = None, error: str = "") -> None:
+def _event(
+    path: Path,
+    *,
+    repo: str,
+    issue: int,
+    ok: bool,
+    reason: str | None = None,
+    error: str | dict | None = None,
+    run_id: str | None = None,
+) -> None:
     ev: dict = {"kind": "issue_to_pr", "repo": repo, "issue": issue, "ok": ok}
     if reason is not None:
         ev["reason"] = reason
     if error:
         ev["error"] = error
+    if run_id is not None:
+        ev["run_id"] = run_id
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(ev) + "\n")
 
@@ -371,3 +382,135 @@ def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monke
     assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
     for n in range(8, 15):
         assert n not in excluded_numbers(stuck, "a/b")
+
+
+def test_one_plan_only_does_not_leave_the_slot(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-137.json", repo="a/b", issue=137, pid=8)
+    _event(
+        state,
+        repo="a/b",
+        issue=137,
+        ok=False,
+        reason=None,
+        run_id="run-1",
+        error={
+            "code": "adapter_failed",
+            "message": (
+                'subprocess adapter failed: {"ok": false, '
+                '"atom": "assert_real_diff", "reason": "plan_only"}'
+            ),
+        },
+    )
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 137 not in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#137"]
+    assert row.get("blocked") is not True
+    assert row.get("failures") == 1
+    assert row.get("reason") == "plan_only"
+
+
+def test_three_plan_only_run_ids_leave_the_slot(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-137.json", repo="a/b", issue=137, pid=8)
+    for i in range(1, 4):
+        _event(
+            state,
+            repo="a/b",
+            issue=137,
+            ok=False,
+            reason="plan_only",
+            run_id=f"run-{i}",
+        )
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 137 in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#137"]
+    assert row.get("blocked") is True
+    assert row.get("failures") == 3
+    assert row.get("reason") == "plan_only"
+
+
+def test_same_plan_only_event_reread_does_not_increment(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-137.json", repo="a/b", issue=137, pid=8)
+    _event(
+        state,
+        repo="a/b",
+        issue=137,
+        ok=False,
+        reason="plan_only",
+        run_id="run-same",
+    )
+    stuck = {"issues": {}}
+    for _ in range(10):
+        harvest_fail_closed_children(
+            stuck,
+            state_path=state,
+            cycle_dir=cycle,
+            is_live=lambda _pid: False,
+        )
+    assert 137 not in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#137"].get("failures") == 1
+
+
+def test_ok_breaks_trailing_plan_only_streak(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-7.json", repo="a/b", issue=7, pid=8)
+    _event(state, repo="a/b", issue=7, ok=False, reason="plan_only", run_id="a")
+    _event(state, repo="a/b", issue=7, ok=False, reason="plan_only", run_id="b")
+    _event(state, repo="a/b", issue=7, ok=True, run_id="ok")
+    _event(state, repo="a/b", issue=7, ok=False, reason="plan_only", run_id="c")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 7 not in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#7"].get("failures") == 1
+
+
+def test_two_push_failed_leave_the_slot(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-86.json", repo="a/b", issue=86, pid=8)
+    _event(state, repo="a/b", issue=86, ok=False, reason="push_failed", run_id="nff-1")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 86 not in excluded_numbers(stuck, "a/b")
+    _event(state, repo="a/b", issue=86, ok=False, reason="push_failed", run_id="nff-2")
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 86 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#86"].get("failures") == 2

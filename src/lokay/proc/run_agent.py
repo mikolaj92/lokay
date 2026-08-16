@@ -59,8 +59,14 @@ def main(argv: list[str] | None = None) -> int:
     except AgentError as exc:
         return emit_exit(err(str(exc), status="refused"))
 
-    ok_flag = result.get("status") != "failed"
-    return emit_exit(ok(**result) if ok_flag else err("agent failed", **result))
+    if result.get("timed_out"):
+        # Incomplete, not a graph hard-fail: commit leftover work and let
+        # repair_agent resume the same corner / session (K=1).
+        payload = {**result, "status": "timeout", "reason": "timeout"}
+        return emit_exit(ok(**payload))
+    if result.get("status") == "failed":
+        return emit_exit(err("agent failed", reason="agent_failed", **result))
+    return emit_exit(ok(**result))
 
 
 if __name__ == "__main__":

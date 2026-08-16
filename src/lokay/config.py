@@ -37,7 +37,7 @@ class Config:
     agent: str = "pi"  # log label only
     agent_command: str = "pi"  # harness binary on PATH (executor.command)
     agent_model: str | None = "omniroute/pi"
-    # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout}
+    # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout} {session}
     # Empty {model} drops a preceding flag + {model} pair.
     agent_args: list[str] = field(
         default_factory=lambda: [
@@ -46,7 +46,8 @@ class Config:
             "--model",
             "{model}",
             "--approve",
-            "--no-session",
+            "--session",
+            "{session}",
         ]
     )
     max_turns: int = 40

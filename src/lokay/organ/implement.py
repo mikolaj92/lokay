@@ -172,6 +172,13 @@ def handle_implement(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, 
                     json.dump(issue_raw, fh, ensure_ascii=False)
                     issue_path = fh.name
                 argv.extend(["--issue-json", issue_path])
+                plan = up.get("plan_issue") or {}
+                likely = (plan.get("plan") or {}).get("files_likely") or []
+                if isinstance(likely, list):
+                    for raw in likely:
+                        rel = str(raw or "").strip()
+                        if rel:
+                            argv.extend(["--extra-path", rel])
             return _run_atom_main(localize.main, argv)
         finally:
             if issue_path:

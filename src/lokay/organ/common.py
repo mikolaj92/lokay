@@ -19,6 +19,7 @@ from lokay.prompts import (
     pr_body,
     repair_pr_prompt,
     self_repair_prompt,
+    timeout_resume_prompt,
 )
 
 
@@ -170,5 +171,57 @@ def _require_real_diff(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             "reason": str(env.get("reason") or "plan_only"),
         }
     return None
+
+
+def _resume_after_timeout(
+    *,
+    run_agent_main,
+    assert_real_diff_main,
+    commit_all_main,
+    cfg: list[str],
+    live: list[str],
+    inputs: dict[str, Any],
+    worktree: str,
+    repo: str,
+    branch: str,
+    issue_number: int | None,
+    issue_raw: dict[str, Any],
+) -> dict[str, Any]:
+    """One continue pass on the same corner after executor timeout."""
+    prompt = timeout_resume_prompt(
+        repo=repo,
+        branch=branch,
+        issue_number=issue_number,
+        issue_title=str(issue_raw.get("title") or ""),
+    )
+    import lokay.fala_organ as _fo
+
+    run = getattr(_fo, "_run_atom_main", _run_atom_main)
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
+        fh.write(prompt)
+        prompt_path = fh.name
+    try:
+        out = run(
+            run_agent_main,
+            [*cfg, *live, "--worktree", worktree, "--prompt-file", prompt_path],
+        )
+    finally:
+        Path(prompt_path).unlink(missing_ok=True)
+    if isinstance(out, dict):
+        out["attempted"] = True
+        out["reason"] = "timeout_resume"
+    if inputs.get("live") and isinstance(out, dict) and out.get("ok") is not False:
+        gate = run(assert_real_diff_main, ["--worktree", worktree])
+        if isinstance(gate, dict) and gate.get("real") is True:
+            n = issue_raw.get("number", issue_number)
+            title = str(issue_raw.get("title") or "")[:60]
+            msg = f"fix: {repo}#{n} {title}".strip()
+            committed = run(
+                commit_all_main,
+                [*cfg, *live, "--worktree", worktree, "--message", msg],
+            )
+            if isinstance(committed, dict):
+                out["committed"] = committed.get("committed")
+    return out
 
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 
+import subprocess
+
 from lokay.runner import CommandSpec, Runner, strip_ansi
 
 
@@ -60,3 +62,17 @@ def test_runner_env_disables_force_color(monkeypatch):
     assert seen.get('FORCE_COLOR') == '0'
     assert seen.get('GH_FORCE_TTY') == '0'
     assert '\x1b' not in res.stdout
+
+
+def test_runner_timeout_is_machine_reason(monkeypatch):
+    def boom(*_a, **_kw):
+        raise subprocess.TimeoutExpired(cmd=("pi",), timeout=1800, output="partial", stderr="")
+
+    monkeypatch.setattr("lokay.runner.subprocess.run", boom)
+    res = Runner().run(
+        CommandSpec(argv=("pi", "-p", "x"), timeout_seconds=1800),
+        live=True,
+    )
+    assert res.timed_out is True
+    assert res.returncode == 124
+    assert "timed out after 1800 seconds" in res.stderr

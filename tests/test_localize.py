@@ -234,3 +234,95 @@ def test_repair_prompt_includes_edit_scope():
     )
     assert "Edit scope" in text
     assert "tests/test_x.py" in text
+
+
+def test_long_localize_list_is_hint_not_cage():
+    paths = [f"src/mod_{i}.py" for i in range(12)]
+    text = issue_fix_prompt(_issue(), branch="ai/fix/88-x", paths=paths)
+    assert "hints, not a cage" in text
+    assert "Patch **only**" not in text
+
+
+def test_polish_stop_and_acronym_do_not_pad_to_forty(tmp_path: Path):
+    """Ticket prose is not an edit map. Weak hits must not fill the 40-slot cage."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "evidence.py").write_text("e\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_runtime_evidence.py").write_text("t\n", encoding="utf-8")
+    planning = tmp_path / "planning" / "tasks"
+    planning.mkdir(parents=True)
+    (planning / "plan.md").write_text("# plan\n", encoding="utf-8")
+    specs = tmp_path / "specs" / "api-boundary"
+    specs.mkdir(parents=True)
+    (specs / "plan.md").write_text("# spec\n", encoding="utf-8")
+    for i in range(20):
+        (planning / f"note-{i}.md").write_text("x\n", encoding="utf-8")
+
+    seed = (
+        "TK w salonie, orzeczeń w bazie nie ma\n\n"
+        "Nie trzymać TK w salonie, gdy korpus jest pusty.\n"
+        "Źródło luki: agent, bez patcha.\n"
+    )
+    loc = build_localization(
+        worktree=tmp_path,
+        seed_text=seed,
+        extra_paths=(
+            "src/evidence.py",
+            "tests/test_runtime_evidence.py",
+        ),
+    )
+    assert "src/evidence.py" in loc.paths
+    assert "tests/test_runtime_evidence.py" in loc.paths
+    assert len(loc.paths) < 40
+    assert not any(p.endswith("plan.md") for p in loc.paths)
+    assert "nie" not in {t.lower() for t in loc.matched_tokens}
+
+
+def test_repo_package_name_is_not_a_forty_file_cage(tmp_path: Path):
+    """influenzer#137: token = checkout name must not select the whole package."""
+    pkg = tmp_path / "influenzer"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("\n", encoding="utf-8")
+    (pkg / "brief_scan.py").write_text("\n", encoding="utf-8")
+    (pkg / "brief_admit.py").write_text("\n", encoding="utf-8")
+    for name in (
+        "campaigns",
+        "catalog",
+        "cli",
+        "config",
+        "content",
+        "domain",
+        "effector",
+        "envelope",
+        "host",
+        "playbook",
+        "policy",
+        "scheduler",
+        "security",
+        "storage",
+        "tick",
+    ):
+        (pkg / f"{name}.py").write_text("x\n", encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_e2e_gates.py").write_text("t\n", encoding="utf-8")
+
+    seed = (
+        "Used by tylko z faktu w briefie\n\n"
+        "Repository: `mikolaj92/influenzer`\n"
+        "Issue: #137 — Used by tylko z faktu w briefie\n\n"
+        "„Used by” tylko z faktu w briefie/profilu. "
+        "Nazwany klient, logo, case bez źródła = cisza.\n"
+    )
+    loc = build_localization(worktree=tmp_path, seed_text=seed)
+    assert len(loc.paths) < 8
+    assert "influenzer" not in loc.paths
+    assert not any(
+        p.startswith("influenzer/") and "brief" not in p for p in loc.paths
+    )
+
+    pinned = build_localization(
+        worktree=tmp_path,
+        seed_text=seed + "\nTouch `influenzer/brief_scan.py`.\n",
+    )
+    assert "influenzer/brief_scan.py" in pinned.paths
+    assert len(pinned.paths) < 8

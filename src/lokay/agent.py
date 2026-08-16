@@ -12,6 +12,7 @@ Switch harness by editing config (command/args), not by forking lokay.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -64,6 +65,12 @@ def resolve_agent_kind(config: Config) -> str:
     return kind
 
 
+def session_id_for_worktree(worktree: Path) -> str:
+    """Stable per-corner session so a timeout retry continues, not a new lottery."""
+    digest = hashlib.sha256(str(Path(worktree).resolve()).encode()).hexdigest()[:16]
+    return f"lokay-{digest}"
+
+
 def _values(
     config: Config, *, worktree: Path, prompt: str, command: str
 ) -> dict[str, str]:
@@ -74,6 +81,7 @@ def _values(
         "model": (config.agent_model or "").strip(),
         "max_turns": str(int(config.max_turns)),
         "timeout": str(int(config.timeout_seconds)),
+        "session": session_id_for_worktree(worktree),
     }
 
 
@@ -105,7 +113,7 @@ def build_agent_argv(config: Config, *, worktree: Path, prompt: str) -> list[str
     if not raw_args:
         raise AgentError(
             "executor.args is empty — set argv template "
-            "({cwd} {prompt} {model} {max_turns} {timeout})"
+            "({cwd} {prompt} {model} {max_turns} {timeout} {session})"
         )
     values = _values(config, worktree=worktree, prompt=prompt, command=command)
     argv: list[str] = [command]
@@ -173,12 +181,15 @@ def run_agent(
         ),
         live=True,
     )
+    timed_out = bool(getattr(result, "timed_out", False))
     return {
         "status": "completed" if result.returncode == 0 else "failed",
         "agent": kind,
         "returncode": result.returncode,
+        "timed_out": timed_out,
         "stdout_tail": (result.stdout or "")[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],
         "collector_boundary": True,
         "worktree": str(worktree),
+        "session": session_id_for_worktree(worktree),
     }

@@ -15,7 +15,8 @@ PI_ARGS = [
     "--model",
     "{model}",
     "--approve",
-    "--no-session",
+    "--session",
+    "{session}",
 ]
 # Optional harness that wants an explicit model via template.
 ALT_ARGS = [
@@ -57,8 +58,11 @@ def test_pi_argv_with_model():
         "--model",
         "omniroute/pi",
         "--approve",
-        "--no-session",
+        "--session",
+        argv[-1],
     ]
+    assert argv[-2] == "--session"
+    assert argv[-1].startswith("lokay-")
 
 
 def test_optional_model_in_template_when_set():

@@ -133,6 +133,10 @@ class _ResetRunner:
             return _result(argv)
         if argv[1:4] == ["rev-list", "--count", "origin/main..HEAD"]:
             return _result(argv, returncode=self.ahead_rc, stdout=(self.ahead or "") + "\n")
+        if argv[1:3] == ["rev-list", "--count"] and "HEAD..origin/" in argv[3]:
+            return _result(argv, stdout=str(getattr(self, "behind", 0)) + "\n")
+        if argv[1] == "diff" or argv[1] == "ls-files":
+            return _result(argv, stdout=getattr(self, "diff_names", ""))
         return _result(argv)
 
     def run_checked(self, spec, *, live):
@@ -177,6 +181,35 @@ def test_reset_to_base_rewrites_when_ahead_zero(tmp_path):
     assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
     assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
     assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
+
+
+def test_reset_to_base_rewrites_when_ahead_but_behind_own_remote(tmp_path):
+    """NFF reuse: unpublished vs main AND behind origin/<branch> → new corner."""
+    branch = "ai/fix/86-nff"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="11")
+    runner.behind = 3
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+    assert path == wt
+    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
+    assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
+
+
+def test_reset_to_base_keeps_dirty_real_tree(tmp_path):
+    """Timeout leftover: no commit yet, but real files in the tree → KEEP."""
+    branch = "ai/fix/62-timeout"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="0")
+    runner.diff_names = "src/lokay/agent.py\n"
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+    assert path == wt
+    assert not any(call[1] == "remove" for call in runner.calls)
+    assert not any(call[1] == "add" for call in runner.calls)
 
 
 def test_reset_to_base_fail_closed_when_ahead_unreadable(tmp_path):

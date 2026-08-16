@@ -65,8 +65,11 @@ _SKIP_FILE_SUFFIXES = (
     ".lock",
 )
 
-# Tokens / identifiers from seed text (not full English stopword list).
-_TOKEN_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]{2,}|[A-Z][a-z]+(?:[A-Z][a-z0-9]+)*)\b")
+# Tokens / identifiers from seed text (not a full stopword list).
+# 2+ letter ALLCAPS first so TK/SN survive; then identifiers / CamelCase.
+_TOKEN_RE = re.compile(
+    r"\b([A-Z]{2,}|[A-Za-z_][A-Za-z0-9_]{2,}|[A-Z][a-z]+(?:[A-Z][a-z0-9]+)*)\b"
+)
 _PATHISH_RE = re.compile(
     r"(?<![`\w])((?:[\w.-]+/)+[\w.-]+(?:\.[A-Za-z0-9]{1,12})?)"
 )
@@ -277,8 +280,118 @@ _STOP_TOKENS = frozenset(
         "swift",
         "mojo",
         "fala",
+        # Polish prose (ticket bodies are often PL; these are not edit stems).
+        "nie",
+        "tak",
+        "jest",
+        "sa",
+        "są",
+        "byc",
+        "być",
+        "jak",
+        "czy",
+        "ale",
+        "lub",
+        "oraz",
+        "gdy",
+        "gdyz",
+        "gdyż",
+        "zeby",
+        "żeby",
+        "jesli",
+        "jeśli",
+        "ktory",
+        "który",
+        "ktore",
+        "które",
+        "tego",
+        "tym",
+        "tej",
+        "ten",
+        "ta",
+        "to",
+        "sie",
+        "się",
+        "bez",
+        "przy",
+        "przez",
+        "poza",
+        "nad",
+        "pod",
+        "ma",
+        "mam",
+        "mamy",
+        "mieć",
+        "miec",
+        "trzeba",
+        "moze",
+        "może",
+        "musi",
+        "musza",
+        "muszą",
+        "zostawic",
+        "zostawić",
+        "trzymac",
+        "trzymać",
+        "pusty",
+        "pusta",
+        # Planning / spec noise — token match, not a ship path.
+        "plan",
+        "planning",
+        "specs",
+        "spec",
+        "roadmap",
+        "audit",
+        "audits",
     }
 )
+
+# Weak token hits below this do not pad the list to _MAX_PATHS.
+_MIN_INFERRED_SCORE = 30
+
+# Top-level dirs that are layout, not the product package name.
+_GENERIC_TOP_DIRS = frozenset(
+    {
+        "src",
+        "tests",
+        "test",
+        "docs",
+        "fala",
+        "scripts",
+        "config",
+        "lib",
+        "bin",
+        "pkg",
+        "cmd",
+        "internal",
+        "vendor",
+        "examples",
+        "example",
+        "fixtures",
+        "testdata",
+        ".github",
+        ".lokay",
+    }
+)
+
+# ``Repository: owner/name`` / github.com/owner/name in approach.md or issue.
+_REPO_SLUG_RE = re.compile(
+    r"(?:Repository:|github\.com/)\s*`?[\w.-]+/([\w.-]+)",
+    re.IGNORECASE,
+)
+
+# Directory / filename stems that are planning evidence, not edit targets.
+_DEMOTE_DIR_PARTS = frozenset(
+    {
+        "planning",
+        "specs",
+        "audits",
+        "docs",
+        "notes",
+        "tasks",
+    }
+)
+_DEMOTE_FILE_NAMES = frozenset({"plan.md", "readme.md", "agents.md"})
 
 _MAX_WALK_ENTRIES = 8000
 _MAX_PATHS = 40
@@ -431,7 +544,8 @@ def extract_seed_tokens(text: str) -> tuple[str, ...]:
             continue
         if tok.isdigit():
             continue
-        if len(tok) < 3:
+        # 2-letter ALLCAPS (TK, SN) are stems; other 2-letter tokens are noise.
+        if len(tok) < 2 or (len(tok) == 2 and not tok.isupper()):
             continue
         tokens.append(tok)
     # path stems as tokens too
@@ -442,7 +556,34 @@ def extract_seed_tokens(text: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(tokens))
 
 
-def _score_path(rel: str, tokens_lower: set[str], explicit: set[str]) -> int:
+def _repo_name_tokens(
+    seed_text: str,
+    *,
+    worktree: Path | None = None,
+) -> set[str]:
+    """Checkout / package name is not an edit stem (influenzer#137)."""
+    names: set[str] = set()
+    for match in _REPO_SLUG_RE.finditer(seed_text or ""):
+        slug = match.group(1).strip().lower().rstrip(".git")
+        if slug and slug not in _GENERIC_TOP_DIRS:
+            names.add(slug)
+    if worktree is not None:
+        for raw in (Path(worktree).name.lower(), Path(worktree).parent.name.lower()):
+            if "__" not in raw:
+                continue
+            slug = raw.split("__", 1)[-1]
+            if slug and slug not in _GENERIC_TOP_DIRS:
+                names.add(slug)
+    return names
+
+
+def _score_path(
+    rel: str,
+    tokens_lower: set[str],
+    explicit: set[str],
+    *,
+    ignore_tokens: set[str] | None = None,
+) -> int:
     if rel in explicit:
         return 1000
     score = 0
@@ -450,7 +591,10 @@ def _score_path(rel: str, tokens_lower: set[str], explicit: set[str]) -> int:
     stem = Path(rel).stem.lower()
     name = Path(rel).name.lower()
     lowered_parts = [p.lower() for p in parts]
+    ignore = {t.lower() for t in (ignore_tokens or ()) if t}
     for tok in tokens_lower:
+        if tok in ignore:
+            continue
         if tok == stem or tok == name or tok == Path(rel).name:
             score += 50
         elif tok in lowered_parts:
@@ -459,11 +603,17 @@ def _score_path(rel: str, tokens_lower: set[str], explicit: set[str]) -> int:
             score += 10
         elif tok in rel.lower():
             score += 5
-    # Prefer source/tests over noise
-    if parts and parts[0] in {"src", "tests", "docs", "fala", "scripts", "config"}:
-        score += 3
-    if rel.endswith((".py", ".toml", ".md", ".yaml", ".yml", ".sh", ".mojo")):
-        score += 2
+    # Prefer source / tests over docs and lockfiles.
+    if parts and parts[0] in {"src", "tests", "fala", "scripts", "config"}:
+        score += 8
+    if name.startswith("test_") or "/tests/" in f"/{rel}/":
+        score += 12
+    if rel.endswith((".py", ".mojo", ".toml", ".yaml", ".yml", ".sh")):
+        score += 4
+    elif rel.endswith(".md"):
+        score -= 8
+    if name in _DEMOTE_FILE_NAMES or any(p in _DEMOTE_DIR_PARTS for p in lowered_parts):
+        score -= 40
     return score
 
 
@@ -473,6 +623,7 @@ def select_paths(
     seed_text: str,
     extra_paths: Iterable[str] = (),
     max_paths: int = _MAX_PATHS,
+    worktree: Path | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
     """Return (paths, seed_paths, matched_tokens)."""
     explicit = list(extract_seed_paths(seed_text))
@@ -480,13 +631,16 @@ def select_paths(
     explicit_set = set(dict.fromkeys(p for p in explicit if p))
     tokens = extract_seed_tokens(seed_text)
     tokens_lower = {t.lower() for t in tokens}
+    ignore_tokens = _repo_name_tokens(seed_text, worktree=worktree)
 
     tree_list = [_norm_rel(p) for p in tree if _norm_rel(p)]
     tree_set = set(tree_list)
 
     scored: list[tuple[int, str]] = []
     for rel in tree_list:
-        s = _score_path(rel, tokens_lower, explicit_set)
+        s = _score_path(
+            rel, tokens_lower, explicit_set, ignore_tokens=ignore_tokens
+        )
         if s > 0:
             scored.append((s, rel))
     scored.sort(key=lambda x: (-x[0], x[1]))
@@ -496,18 +650,26 @@ def select_paths(
     for rel in explicit:
         if rel and rel not in selected:
             selected.append(rel)
-    for _score, rel in scored:
+    # Inferred hits must clear a floor. Weak substring matches must not pad
+    # the list to max_paths — a 40-path "scope" is a cage, not a compass.
+    for score, rel in scored:
         if rel in selected:
+            continue
+        if score < _MIN_INFERRED_SCORE:
             continue
         selected.append(rel)
         if len(selected) >= max_paths:
             break
 
     # If still empty, try directory-level matches from tokens against top-level tree.
+    # Repo / package name is not a directory hit — that is the whole product.
     if not selected and tokens_lower:
+        usable = {t for t in tokens_lower if t not in ignore_tokens}
         for rel in tree_list:
             base = rel.split("/", 1)[0].lower()
-            if base in tokens_lower or any(t in base for t in tokens_lower if len(t) >= 4):
+            if base in _GENERIC_TOP_DIRS or base in ignore_tokens:
+                continue
+            if base in usable or any(t in base for t in usable if len(t) >= 4):
                 selected.append(rel.split("/", 1)[0])
                 break
 
@@ -550,6 +712,7 @@ def build_localization(
         seed_text=seed_text or "",
         extra_paths=extra_paths,
         max_paths=max_paths,
+        worktree=Path(worktree) if worktree is not None else None,
     )
     if not paths:
         notes.append("No paths matched — fail closed.")

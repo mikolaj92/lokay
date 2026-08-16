@@ -22,10 +22,26 @@ FAIL_CLOSED = frozenset(
         "test_local_failed",
         "test_local_missing",
         "repair_agent_failed",
-        "zero_diff",
         "invalid_branch_ref",
     }
 )
+
+# Product miss: sitko / push / empty compass. Not a spawn crash.
+# Count unique runs, not factory_begin ticks. Skip the slot after N;
+# do not CLOSE the issue and do not label from harvest.
+MISS_REASONS = frozenset(
+    {
+        "plan_only",
+        "zero_diff",
+        "push_failed",
+        "empty_paths",
+        "localize_empty",
+        "localize_missing",
+    }
+)
+MISS_SKIP_AFTER = 3
+# First NFF is the reset shot (worktree -B from origin/main). Second = leave.
+PUSH_FAILED_SKIP_AFTER = 2
 
 _WORKTREE_FAIL_MARKERS = (
     "worktree add failed",
@@ -50,7 +66,12 @@ _REASON_PRIORITY = (
     "test_local_failed",
     "test_local_missing",
     "repair_agent_failed",
+    "push_failed",
+    "plan_only",
     "zero_diff",
+    "localize_empty",
+    "localize_missing",
+    "empty_paths",
 )
 
 
@@ -96,7 +117,8 @@ def _classify(event: dict[str, Any] | None) -> str | None:
     if not event or event.get("ok") is not False:
         return None
     reason = event.get("reason")
-    if isinstance(reason, str) and reason in FAIL_CLOSED:
+    known = FAIL_CLOSED | MISS_REASONS
+    if isinstance(reason, str) and reason in known:
         return reason
     chunks: list[str] = []
     if isinstance(reason, str):
@@ -105,15 +127,54 @@ def _classify(event: dict[str, Any] | None) -> str | None:
     return _reason_from_text("\n".join(chunks))
 
 
-def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[str, Any]]:
-    """One pass over state.jsonl → last issue_to_pr event per (repo, issue)."""
-    index: dict[tuple[str, int], dict[str, Any]] = {}
+def _event_run_id(event: dict[str, Any], seq: int) -> str:
+    rid = event.get("run_id")
+    if rid:
+        return str(rid)
+    ts = event.get("ts") or event.get("started_ts")
+    if ts:
+        return f"ts:{ts}"
+    return f"seq:{seq}"
+
+
+def _trailing_miss_runs(
+    history: list[tuple[str, str | None]],
+) -> tuple[str | None, int]:
+    """Unique run_ids of consecutive trailing product misses."""
+    last_reason: str | None = None
+    seen: list[str] = []
+    for run_id, reason in reversed(history):
+        if reason not in MISS_REASONS:
+            break
+        if last_reason is None:
+            last_reason = reason
+        if run_id not in seen:
+            seen.append(run_id)
+    return last_reason, len(seen)
+
+
+def _skip_after(reason: str) -> int:
+    if reason == "push_failed":
+        return PUSH_FAILED_SKIP_AFTER
+    return MISS_SKIP_AFTER
+
+
+def _index_issue_to_pr_log(
+    state_path: Path,
+) -> tuple[
+    dict[tuple[str, int], dict[str, Any]],
+    dict[tuple[str, int], list[tuple[str, str | None]]],
+]:
+    """One pass: last event + (run_id, reason|ok) history per issue."""
+    last: dict[tuple[str, int], dict[str, Any]] = {}
+    history: dict[tuple[str, int], list[tuple[str, str | None]]] = {}
     if not state_path.is_file():
-        return index
+        return last, history
     try:
         fh = state_path.open(encoding="utf-8")
     except OSError:
-        return index
+        return last, history
+    seq = 0
     with fh:
         for line in fh:
             line = line.strip()
@@ -129,8 +190,21 @@ def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[st
             issue = _as_int(ev.get("issue"))
             if not repo or issue is None:
                 continue
-            index[(repo, issue)] = ev
-    return index
+            seq += 1
+            key = (repo, issue)
+            last[key] = ev
+            if ev.get("ok") is True:
+                classified: str | None = "ok"
+            else:
+                classified = _classify(ev)
+            history.setdefault(key, []).append((_event_run_id(ev, seq), classified))
+    return last, history
+
+
+def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[str, Any]]:
+    """One pass over state.jsonl → last issue_to_pr event per (repo, issue)."""
+    last, _history = _index_issue_to_pr_log(state_path)
+    return last
 
 
 def _last_issue_to_pr_event(state_path: Path, repo: str, issue: int) -> dict[str, Any] | None:
@@ -213,10 +287,12 @@ def harvest_fail_closed_children(
     is_live: Callable[[int], bool] | None = None,
     home: Path | None = None,
 ) -> dict[str, Any]:
-    """Block tickets whose detached child already died fail-closed.
+    """Skip tickets whose detached child already died fail-closed / miss-N.
 
     Live pids are left alone. Dead pid + no event + no machine reason is
-    treated as transient (retry), not fail-closed.
+    treated as transient (retry), not fail-closed. Product misses
+    (plan_only / zero_diff / push_failed) count unique run_ids and only
+    leave the slot after N — harvest does not CLOSE the issue.
     """
     home_root = Path(home) if home is not None else Path.home()
     default_cycle, isolated_home = _isolated_mill_roots(state_path, home_root)
@@ -227,7 +303,7 @@ def harvest_fail_closed_children(
     if not root.is_dir():
         return stuck
 
-    events = _index_issue_to_pr_events(state_path)
+    events, history = _index_issue_to_pr_log(state_path)
     for path in sorted(root.glob("*.json")):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -262,13 +338,44 @@ def harvest_fail_closed_children(
         error = ""
         if event:
             error = str(event.get("error") or event.get("reason") or reason)
+
+        if reason in FAIL_CLOSED:
+            row = record_failure(
+                stuck,
+                repo=repo,
+                number=issue,
+                error=error or reason,
+                max_failures=1,
+            )
+            row["blocked"] = True
+            row["reason"] = reason
+            continue
+
+        if reason not in MISS_REASONS:
+            continue
+        miss_reason, miss_runs = _trailing_miss_runs(
+            history.get((repo, issue)) or []
+        )
+        counted = miss_reason or reason
+        # Journal fallback has no run history — treat as a single miss.
+        if miss_runs == 0:
+            miss_runs = 1
+            counted = reason
+        threshold = _skip_after(counted)
         row = record_failure(
             stuck,
             repo=repo,
             number=issue,
-            error=error or reason,
-            max_failures=1,
+            error=error or counted,
+            max_failures=threshold,
         )
-        row["blocked"] = True
-        row["reason"] = reason
+        # record_failure increments once per harvest call. Overwrite with
+        # the unique-run count so a later tick does not add a phantom miss.
+        row["failures"] = miss_runs
+        row["reason"] = counted
+        if miss_runs >= threshold:
+            row["blocked"] = True
+        else:
+            row.pop("blocked", None)
+            row.pop("blocked_ts", None)
     return stuck

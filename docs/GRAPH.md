@@ -239,6 +239,17 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 - **localize** is deterministic Agentless path selection immediately before the
   coding slot (serial path: `worktree_add → plan_issue → localize → run_agent`).
   Missing/empty localize fails closed in the organ — agent does not start.
+  `plan_issue.files_likely` is passed as `--extra-path`. Weak token hits do not
+  pad the list to 40; a long list is a hint in the prompt, not a cage.
+- **run_agent timeout** (executor 1800s) is incomplete, not a graph hard-fail.
+  The leftover tree is kept; `repair_agent` resumes the same corner / session
+  once (K=1). Do not raise 1800 on the first shot.
+- **NFF reuse** (`ahead` of `origin/<base>` and `behind` `origin/<branch>`) resets
+  the corner from `origin/<base>` and deletes the stale remote tip. Never force-push.
+- **Miss harvest** (`factory_begin` → `harvest_fail_closed_children`): `plan_only`
+  / `zero_diff` leave the slot after **3** unique `run_id`s; `push_failed` after **2**.
+  Crash reasons (`local_repair_exhausted`, red recheck, bad ref) still block at 1.
+  Harvest does not CLOSE the issue. The repo mutex must not stay on one corpse.
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run

@@ -451,6 +451,67 @@ def test_push_green_recheck_pushes(monkeypatch):
     assert result["pushed"] is True
 
 
+def test_localize_forwards_plan_files_likely_as_extra_paths(monkeypatch, tmp_path):
+    captured: dict = {}
+
+    def fake_run(main, argv):
+        captured["argv"] = argv
+        return {"ok": True, "paths": ["src/a.py"]}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "localize",
+        {"repo": "a/b", "issue": 7, "live": False},
+        {
+            "get_issue": {
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix a",
+                    "body": "",
+                    "labels": [],
+                    "assignees": [],
+                    "url": "",
+                }
+            },
+            "worktree_add": {"worktree": str(tmp_path)},
+            "plan_issue": {"plan": {"files_likely": ["src/a.py", "tests/test_a.py"]}},
+        },
+    )
+    assert result["ok"] is True
+    argv = captured["argv"]
+    extras = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--extra-path"]
+    assert extras == ["src/a.py", "tests/test_a.py"]
+
+
+def test_repair_agent_resumes_after_timeout_when_suite_green(monkeypatch):
+    captured: dict = {}
+
+    def fake_run(main, argv):
+        if "--prompt-file" in argv:
+            prompt_path = argv[argv.index("--prompt-file") + 1]
+            captured["prompt"] = Path(prompt_path).read_text(encoding="utf-8")
+        captured.setdefault("calls", []).append(argv)
+        return {"ok": True, "status": "completed"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": False},
+        {
+            "get_issue": {"issue": {"repo": "a/b", "number": 7, "title": "Fix x"}},
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
+            "test_local": _ok_test_local(),
+        },
+    )
+    assert result["ok"] is True
+    assert result["attempted"] is True
+    assert result["reason"] == "timeout_resume"
+    assert "killed after" in captured["prompt"]
+    assert "Resume" in captured["prompt"]
+
+
 def test_repair_agent_skips_when_first_probe_green(monkeypatch):
     def boom(main, argv):
         raise AssertionError("repair agent must not run after a green test_local")
