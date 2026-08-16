@@ -167,6 +167,36 @@ def _skip_after(reason: str) -> int:
     return MISS_SKIP_AFTER
 
 
+def _apply_miss_count(
+    stuck: dict[str, Any],
+    *,
+    repo: str,
+    issue: int,
+    reason: str,
+    miss_runs: int,
+    error: str,
+) -> dict[str, Any]:
+    """Write unique-run miss count. Reconcile stale blocked rows below N."""
+    threshold = _skip_after(reason)
+    row = record_failure(
+        stuck,
+        repo=repo,
+        number=issue,
+        error=error or reason,
+        max_failures=threshold,
+    )
+    # record_failure increments once per harvest call. Overwrite with
+    # the unique-run count so a later tick does not add a phantom miss.
+    row["failures"] = miss_runs
+    row["reason"] = reason
+    if miss_runs >= threshold:
+        row["blocked"] = True
+    else:
+        row.pop("blocked", None)
+        row.pop("blocked_ts", None)
+    return row
+
+
 def _index_issue_to_pr_log(
     state_path: Path,
 ) -> tuple[
@@ -300,7 +330,8 @@ def harvest_fail_closed_children(
     Live pids are left alone. Dead pid + no event + no machine reason is
     treated as transient (retry), not fail-closed. Product misses
     (plan_only / zero_diff / push_failed) count unique run_ids and only
-    leave the slot after N — harvest does not CLOSE the issue.
+    leave the slot after N — harvest does not CLOSE the issue. A stale
+    blocked miss row below N is reconciled (reopened); crash rows stay buried.
     """
     home_root = Path(home) if home is not None else Path.home()
     default_cycle, isolated_home = _isolated_mill_roots(state_path, home_root)
@@ -308,82 +339,100 @@ def harvest_fail_closed_children(
     if home is None:
         home_root = isolated_home
     check = is_live or is_live_issue_to_pr_pid
-    if not root.is_dir():
-        return stuck
-
     events, history = _index_issue_to_pr_log(state_path)
-    for path in sorted(root.glob("*.json")):
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(data, dict):
-            continue
-        repo = str(data.get("repo") or "")
-        issue = _as_int(data.get("issue"))
-        if not repo or issue is None:
-            continue
-        if is_blocked_in_ledger(stuck, repo, issue):
-            continue
-        # cycle_start writes repo/issue/started_ts only. Harvest source is
-        # the detach receipt (has pid). A start file must not fail-close a
-        # still-live sibling.
-        if "pid" not in data:
-            continue
-        pid = _as_int(data.get("pid"))
-        if pid is not None and check(pid):
-            continue
+    if root.is_dir():
+        for path in sorted(root.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            repo = str(data.get("repo") or "")
+            issue = _as_int(data.get("issue"))
+            if not repo or issue is None:
+                continue
+            # cycle_start writes repo/issue/started_ts only. Harvest source is
+            # the detach receipt (has pid). A start file must not fail-close a
+            # still-live sibling.
+            if "pid" not in data:
+                continue
+            pid = _as_int(data.get("pid"))
+            if pid is not None and check(pid):
+                continue
 
-        event = events.get((repo, issue))
-        reason = _classify(event)
-        if not reason:
-            fallback = _event_from_fala_journal(repo, issue, home_root)
-            if fallback is not None:
-                event = fallback
-                reason = _classify(event)
-        if not reason:
-            continue
-        error = ""
-        if event:
-            error = str(event.get("error") or event.get("reason") or reason)
+            event = events.get((repo, issue))
+            reason = _classify(event)
+            if not reason:
+                fallback = _event_from_fala_journal(repo, issue, home_root)
+                if fallback is not None:
+                    event = fallback
+                    reason = _classify(event)
+            if not reason:
+                continue
+            error = ""
+            if event:
+                error = str(event.get("error") or event.get("reason") or reason)
 
-        if reason in FAIL_CLOSED:
-            row = record_failure(
+            if reason in FAIL_CLOSED:
+                # Crash / red-recheck stays buried. Do not increment a corpse.
+                if is_blocked_in_ledger(stuck, repo, issue):
+                    continue
+                row = record_failure(
+                    stuck,
+                    repo=repo,
+                    number=issue,
+                    error=error or reason,
+                    max_failures=1,
+                )
+                row["blocked"] = True
+                row["reason"] = reason
+                continue
+
+            if reason not in MISS_REASONS:
+                continue
+            miss_reason, miss_runs = _trailing_miss_runs(
+                history.get((repo, issue)) or []
+            )
+            counted = miss_reason or reason
+            # Journal fallback has no run history — treat as a single miss.
+            if miss_runs == 0:
+                miss_runs = 1
+                counted = reason
+            # Reconcile even when the ledger already says blocked: a 1-shot
+            # plan_only/zero_diff/push_failed row is stale vs unique-run N.
+            _apply_miss_count(
                 stuck,
                 repo=repo,
-                number=issue,
-                error=error or reason,
-                max_failures=1,
+                issue=issue,
+                reason=counted,
+                miss_runs=miss_runs,
+                error=error or counted,
             )
-            row["blocked"] = True
-            row["reason"] = reason
-            continue
 
-        if reason not in MISS_REASONS:
+    # Receipts can be pruned. Reconcile stale blocked miss rows from the
+    # journal so unique-run N still owns the slot.
+    for key, row in list((stuck.get("issues") or {}).items()):
+        if not isinstance(row, dict) or not row.get("blocked"):
+            continue
+        if str(row.get("reason") or "") not in MISS_REASONS:
+            continue
+        repo, sep, num_s = str(key).rpartition("#")
+        issue = _as_int(num_s)
+        if not sep or not repo or issue is None:
             continue
         miss_reason, miss_runs = _trailing_miss_runs(
             history.get((repo, issue)) or []
         )
-        counted = miss_reason or reason
-        # Journal fallback has no run history — treat as a single miss.
         if miss_runs == 0:
-            miss_runs = 1
-            counted = reason
-        threshold = _skip_after(counted)
-        row = record_failure(
+            continue
+        counted = miss_reason or str(row.get("reason"))
+        _apply_miss_count(
             stuck,
             repo=repo,
-            number=issue,
-            error=error or counted,
-            max_failures=threshold,
+            issue=issue,
+            reason=counted,
+            miss_runs=miss_runs,
+            error=str(row.get("last_error") or counted),
         )
-        # record_failure increments once per harvest call. Overwrite with
-        # the unique-run count so a later tick does not add a phantom miss.
-        row["failures"] = miss_runs
-        row["reason"] = counted
-        if miss_runs >= threshold:
-            row["blocked"] = True
-        else:
-            row.pop("blocked", None)
-            row.pop("blocked_ts", None)
     return stuck

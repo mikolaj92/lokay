@@ -23,10 +23,13 @@ are worthless if nothing lands. Quality without merge is a warehouse.
 Merge without quality is scrap.
 
 A miss (agent "succeeded" with no product, push refused, same ticket looping)
-is a factory defect, not an honest wait. After bounded misses the seed must
-leave the slot so the next designed issue can land. Tests and pass health
-are not a representation of whether the mill works. Merges of intended
-issues are.
+is a factory defect, not an honest wait. After bounded unique-run misses the
+seed must leave the slot so the next designed issue can land. A stale
+`stuck.json` row already blocked at 1 for `plan_only` / `zero_diff` /
+`push_failed` is reconciled from the journal — harvest reopens the slot
+until unique-run N. Crash / red-recheck rows stay buried. Tests and pass
+health are not a representation of whether the mill works. Merges of
+intended issues are.
 
 Lokay is **working** only if it continuously mills **all** work across
 configured repos (`repos.mikolaj92.yaml`) **to that DoD**. Order: survey →
