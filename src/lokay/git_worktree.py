@@ -39,14 +39,24 @@ def assert_valid_branch_ref(
         raise InvalidBranchRef(branch, detail)
 
 
+def _missing_remote_ref(detail: str) -> bool:
+    low = detail.lower()
+    return "couldn't find remote ref" in low or "could not find remote ref" in low
+
+
 def _behind_own_remote(
     runner: Runner, worktree: Path, clone: Path, branch: str
-) -> int:
-    """How many commits ``origin/<branch>`` has that HEAD does not."""
-    runner.run(
+) -> int | None:
+    """Commits on ``origin/<branch>`` that HEAD lacks. ``None`` if unpublished."""
+    fetched = runner.run(
         git_spec(["fetch", "origin", branch], cwd=clone, timeout_seconds=180),
         live=True,
     )
+    if fetched.returncode != 0:
+        detail = (fetched.stderr or fetched.stdout or "").strip()
+        if _missing_remote_ref(detail):
+            return None
+        raise RuntimeError(f"cannot determine origin/{branch}: {detail}")
     result = runner.run(
         git_spec(
             ["rev-list", "--count", f"HEAD..origin/{branch}"],
@@ -56,11 +66,15 @@ def _behind_own_remote(
         live=True,
     )
     if result.returncode != 0:
-        return 0
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"cannot measure behind vs origin/{branch}: {detail}")
     try:
         return int((result.stdout or "").strip() or "0")
-    except ValueError:
-        return 0
+    except ValueError as exc:
+        raise RuntimeError(
+            f"cannot measure behind vs origin/{branch}: "
+            f"{(result.stdout or '').strip()!r}"
+        ) from exc
 
 
 def ensure_worktree(
@@ -77,13 +91,14 @@ def ensure_worktree(
 
     When ``reset_to_base`` is True (issue_to_pr re-implement path):
 
-    * KEEP if the existing corner is ahead of ``origin/<base>`` and not
-      behind its own remote (unpublished, pushable) **or** has a dirty real
-      tree (timeout leftover). Restart must not wipe a child that has not
-      published a PR.
+    * KEEP if the existing corner is unpublished (no ``origin/<branch>``)
+      and ahead of ``origin/<base>``, **or** has a dirty real tree (timeout
+      leftover). Restart must not wipe a child that has not published a PR.
     * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) when
-      ahead is 0 and the tree is clean, **or** when the corner is ahead of
-      base and behind ``origin/<branch>`` (non-fast-forward reuse). Never force-push.
+      ``origin/<branch>`` exists — including a closed CONFLICTING tip that
+      matches HEAD. Replaying those commits just republishes the same dirty
+      PR. Also reset when ahead is 0 and the tree is clean, or when ahead of
+      base and behind ``origin/<branch>`` (NFF reuse). Never force-push.
     * Fail closed if ahead cannot be measured. Do not ``rm -rf``.
     """
     root = config.worktrees_root / repo.name.replace("/", "__")
@@ -125,9 +140,10 @@ def ensure_worktree(
                 ) from exc
             if ahead > 0:
                 behind = _behind_own_remote(runner, worktree, clone, branch)
-                if behind == 0:
+                if behind is None:
+                    # Never pushed — keep unpublished commits.
                     return worktree
-                # Ahead of main and behind origin/<branch>: KEEP would NFF.
+                # origin/<branch> exists: closed/conflicting retry or NFF.
                 # Fall through and recreate from origin/<base>.
             else:
                 try:

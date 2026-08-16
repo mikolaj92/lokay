@@ -37,6 +37,10 @@ MISS_REASONS = frozenset(
         "empty_paths",
         "localize_empty",
         "localize_missing",
+        "rebase_conflict",
+        "rebase_failed",
+        "fetch_failed",
+        "rebase_behind_unreadable",
     }
 )
 MISS_SKIP_AFTER = 3
@@ -66,6 +70,10 @@ _REASON_PRIORITY = (
     "test_local_failed",
     "test_local_missing",
     "repair_agent_failed",
+    "rebase_conflict",
+    "rebase_failed",
+    "fetch_failed",
+    "rebase_behind_unreadable",
     "push_failed",
     "plan_only",
     "zero_diff",

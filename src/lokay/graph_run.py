@@ -177,7 +177,7 @@ def run_path(
         "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
         "pr_repair": (
             "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "rebase_onto_base", "test_local", "assert_real_diff", "push",
+            "commit_all", "test_local", "assert_real_diff", "push",
         ),
         "pr_triage": (
             "pr_checks", "pr_review", "worktree_add", "test_local",

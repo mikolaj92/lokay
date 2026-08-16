@@ -410,7 +410,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "pr_repair"
 title = "PR repair"
-description = "Repair an open ai/fix PR after failed checks; agent is one node only. Rebase onto origin/main before tests and push; conflict is fail-closed (no dirty force-push)."
+description = "Repair an open ai/fix PR after failed checks; agent is one node only. Do not rebase a published tip (force-push is forbidden); conflict close + re-ready is the retry."
 
 [[correlation_paths.effectors]]
 id = "pr_checks"
@@ -460,17 +460,9 @@ config = { atom = "commit_all" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "rebase_onto_base"
-capability = "lokay_atom"
-conduction = ["worktree_add", "commit_all"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "rebase_onto_base" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
 id = "test_local"
 capability = "lokay_atom"
-conduction = ["worktree_add", "commit_all", "rebase_onto_base"]
+conduction = ["worktree_add", "commit_all"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 2100, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "test_local" }
 retry_policy = "none"
@@ -478,7 +470,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "assert_real_diff"
 capability = "lokay_atom"
-conduction = ["worktree_add", "commit_all", "rebase_onto_base", "test_local"]
+conduction = ["worktree_add", "commit_all", "test_local"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "assert_real_diff" }
 retry_policy = "none"
@@ -486,7 +478,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "push"
 capability = "lokay_atom"
-conduction = ["worktree_add", "commit_all", "rebase_onto_base", "test_local", "assert_real_diff"]
+conduction = ["worktree_add", "commit_all", "test_local", "assert_real_diff"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "push" }
 retry_policy = "none"
