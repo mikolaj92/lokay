@@ -249,8 +249,9 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   once (K=1). Do not raise 1800 on the first shot.
 - **Published-tip retry** (`origin/<branch>` exists — including a closed
   CONFLICTING tip that matches HEAD) resets the corner from `origin/<base>`
-  and deletes the stale remote tip. KEEP only unpublished ahead / dirty leftover.
-  Replaying a closed dirty tip just republishes the same CONFLICTING PR.
+  and deletes the stale remote tip. KEEP only unpublished ahead that already
+  contains `origin/<base>`, or a dirty leftover. Unpublished-but-behind-main
+  (rebase_conflict leftover) also RESET — replaying those commits loops.
   Never force-push.
 - **Miss harvest** (`factory_begin` → `harvest_fail_closed_children`): `plan_only`
   / `zero_diff` / `rebase_conflict` leave the slot after **3** unique `run_id`s;
