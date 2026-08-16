@@ -93,6 +93,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     harvest_fail_closed_children(stuck, state_path=cfg.state_path)
     save_stuck(stuck_path, stuck)
     pass_dir = pass_io.make_pass_dir(cfg.state_path)
+    pass_io.prune_pass_dirs(cfg.state_path, keep_path=pass_dir)
     begin = {
         "pass_dir": str(pass_dir),
         "config_path": str(cfg.config_path) if cfg.config_path else config_path,
