@@ -32,3 +32,7 @@ def _isolate_live_issue_to_pr_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
         "lokay.proc.refresh_occupancy.live_issue_to_pr_receipts",
         lambda *a, **k: [],
     )
+    monkeypatch.setattr(
+        "lokay.proc.reap_stale_worktrees.live_issue_to_pr_receipts",
+        lambda *a, **k: [],
+    )

@@ -23,6 +23,7 @@ from lokay.proc.plan_pass import run_plan_pass
 from lokay.proc.record_pass import run_record_pass
 from lokay.proc.resolve_conflicts import run_resolve_conflicts
 from lokay.proc.queue_conflict import run_queue_conflict
+from lokay.proc.reap_stale_worktrees import run_reap_stale_worktrees
 from lokay.proc.refresh_occupancy import run_refresh_occupancy
 from lokay.proc.select_implement import run_select_implement
 from lokay.proc.survey_inbox import run_survey_inbox
@@ -142,6 +143,7 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     run_resolve_conflicts(pass_dir=pass_dir, config_path=config_path, live=live)
     run_closeout_prs(pass_dir=pass_dir, config_path=config_path, live=live)
     run_refresh_occupancy(pass_dir=pass_dir, config_path=config_path, live=live)
+    run_reap_stale_worktrees(pass_dir=pass_dir, config_path=config_path, live=live)
     run_select_implement(pass_dir=pass_dir)
     run_queue_conflict(pass_dir=pass_dir, config_path=config_path, live=live)
     run_dispatch_implement(pass_dir=pass_dir, config_path=config_path, live=live)

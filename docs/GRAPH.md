@@ -59,6 +59,7 @@ host_ff
                 → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
                   → reap_stale_implementing  → leftover in-flight cache → ai:ready
                     → refresh_occupancy  → re-list PRs + live i2pr + just-merged
+                      → reap_stale_worktrees → drop leftover corners that cannot resume
                       → select_implement
                       → queue_conflict   → SKIP/CLOSE/READY queue hygiene
                       → dispatch_implement → issue_to_pr child Fala
@@ -79,6 +80,7 @@ host_ff
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
 | `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels) |
 | `refresh_occupancy` | re-list open AI PRs after closeout; union just-merged + live i2pr receipts |
+| `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / open PR / dirty unpublished) |
 | `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied) |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design) |

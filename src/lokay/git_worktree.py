@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from typing import Any
+
 from lokay.config import Config, RepoConfig
 from lokay.git_real_diff import classify_changed_paths, list_changed_paths
 from lokay.runner import Runner, git_spec
@@ -90,6 +92,134 @@ def _behind_own_remote(
         ) from exc
 
 
+def worktree_dir(config: Config, repo: RepoConfig, branch: str) -> Path:
+    return config.worktrees_root / repo.name.replace("/", "__") / branch.replace("/", "__")
+
+
+def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
+    """Existing leftover corners for *repo*: ``(path, branch)``."""
+    root = config.worktrees_root / repo.name.replace("/", "__")
+    if not root.is_dir():
+        return []
+    found: list[tuple[Path, str]] = []
+    for child in sorted(root.iterdir()):
+        if child.is_dir():
+            found.append((child, child.name.replace("__", "/")))
+    return found
+
+
+def remove_worktree(runner: Runner, clone: Path, worktree: Path) -> dict[str, Any]:
+    """Drop a leftover worktree. Never ``rm -rf`` a path git still owns."""
+    if not worktree.exists():
+        return {"ok": True, "removed": False, "already_gone": True}
+    rm = runner.run(
+        git_spec(
+            ["worktree", "remove", "--force", str(worktree)],
+            cwd=clone,
+            timeout_seconds=120,
+        ),
+        live=True,
+    )
+    if worktree.exists():
+        # Detached/corrupt registry, or a test runner that does not delete.
+        import shutil
+
+        shutil.rmtree(worktree, ignore_errors=True)
+        runner.run(
+            git_spec(["worktree", "prune"], cwd=clone, timeout_seconds=60),
+            live=True,
+        )
+    if worktree.exists():
+        detail = (rm.stderr or rm.stdout or "").strip()
+        return {
+            "ok": False,
+            "removed": False,
+            "error": detail or "worktree still exists after remove",
+        }
+    return {"ok": True, "removed": True}
+
+
+def leftover_status(
+    runner: Runner,
+    worktree: Path,
+    clone: Path,
+    branch: str,
+    *,
+    base: str = "main",
+    fetch_base: bool = True,
+) -> dict[str, Any]:
+    """Classify a leftover corner. ``readable=False`` is fail-closed (KEEP).
+
+    * ``keep_unpublished`` — never pushed, and either already contains
+      ``origin/<base>`` or has a dirty real tree (timeout resume).
+    * ``published`` — ``origin/<branch>`` exists (including a closed
+      CONFLICTING tip). Replaying that tip is a dirty-PR loop; reap it.
+    * Fetch / rev-list flake is not unpublished.
+    """
+    if not worktree.is_dir():
+        return {"readable": False, "error": "worktree missing"}
+    if fetch_base:
+        fetched = runner.run(
+            git_spec(["fetch", "origin", base], cwd=clone, timeout_seconds=300),
+            live=True,
+        )
+        if fetched.returncode != 0:
+            detail = (fetched.stderr or fetched.stdout or "").strip()
+            return {
+                "readable": False,
+                "error": f"cannot fetch origin/{base}: {detail}",
+            }
+    ahead_result = runner.run(
+        git_spec(
+            ["rev-list", "--count", f"origin/{base}..HEAD"],
+            cwd=worktree,
+            timeout_seconds=60,
+        ),
+        live=True,
+    )
+    if ahead_result.returncode != 0:
+        detail = (ahead_result.stderr or ahead_result.stdout or "").strip()
+        return {"readable": False, "error": f"cannot measure ahead: {detail}"}
+    try:
+        ahead = int((ahead_result.stdout or "").strip() or "0")
+    except ValueError:
+        return {
+            "readable": False,
+            "error": f"cannot parse ahead: {(ahead_result.stdout or '').strip()!r}",
+        }
+    behind_main = _rev_count(runner, worktree, f"HEAD..origin/{base}")
+    if behind_main is None:
+        return {
+            "readable": False,
+            "error": f"cannot measure behind vs origin/{base}",
+        }
+    try:
+        behind_own = _behind_own_remote(runner, worktree, clone, branch)
+    except RuntimeError as exc:
+        return {"readable": False, "error": str(exc)}
+    published = behind_own is not None
+    try:
+        dirty = classify_changed_paths(
+            list_changed_paths(runner, worktree, base=f"origin/{base}")
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "readable": False,
+            "error": f"cannot classify leftover tree vs origin/{base}: {exc}",
+        }
+    keep_unpublished = (not published) and (
+        (ahead > 0 and behind_main == 0) or dirty == "real"
+    )
+    return {
+        "readable": True,
+        "ahead": ahead,
+        "behind_main": behind_main,
+        "published": published,
+        "dirty": dirty,
+        "keep_unpublished": keep_unpublished,
+    }
+
+
 def ensure_worktree(
     runner: Runner,
     config: Config,
@@ -115,15 +245,14 @@ def ensure_worktree(
       base and behind ``origin/<branch>`` (NFF reuse). Never force-push.
     * Fail closed if ahead cannot be measured. Do not ``rm -rf``.
     """
-    root = config.worktrees_root / repo.name.replace("/", "__")
-    worktree = root / branch.replace("/", "__")
+    worktree = worktree_dir(config, repo, branch)
     if not live:
         return worktree
 
     clone = repo.clone_path
     assert_valid_branch_ref(runner, branch, cwd=clone if Path(clone).exists() else None)
 
-    root.mkdir(parents=True, exist_ok=True)
+    worktree.parent.mkdir(parents=True, exist_ok=True)
     runner.run_checked(
         git_spec(["fetch", "origin", base], cwd=clone, timeout_seconds=300),
         live=True,
@@ -183,22 +312,10 @@ def ensure_worktree(
                     # Timeout leftover: agent wrote files but did not commit.
                     # Next pass must resume this corner, not wipe it.
                     return worktree
-            rm = runner.run(
-                git_spec(
-                    ["worktree", "remove", "--force", str(worktree)],
-                    cwd=clone,
-                    timeout_seconds=120,
-                ),
-                live=True,
-            )
-            if rm.returncode != 0 and worktree.exists():
-                # Detached/corrupt registry: drop directory then prune.
-                import shutil
-
-                shutil.rmtree(worktree, ignore_errors=True)
-                runner.run(
-                    git_spec(["worktree", "prune"], cwd=clone, timeout_seconds=60),
-                    live=True,
+            removed = remove_worktree(runner, clone, worktree)
+            if not removed.get("ok"):
+                raise RuntimeError(
+                    f"worktree remove failed: {removed.get('error') or 'still exists'}"
                 )
         # -B: create or reset branch to start_ref at the new worktree path.
         result = runner.run(

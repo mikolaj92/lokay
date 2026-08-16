@@ -130,7 +130,10 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    After closeout,
    `refresh_occupancy` re-lists PRs and marks just-merged / still-coding
    repos occupied so `select_implement` cannot start a sibling i2pr from
-   stale `origin/main`. The plan atom is trust-with-evidence,
+   stale `origin/main`. Then `reap_stale_worktrees` drops leftover corners
+   that cannot resume (merged, closed CONFLICTING, unpublished-behind-main)
+   and KEEPs a live i2pr, an open covering PR, or a dirty unpublished
+   timeout leftover. The plan atom is trust-with-evidence,
    not a human gate. For a seed classified separately as unbounded collection
    work, the executor may make only the bounded collector/bootstrap patch: the
    deployed collector starts durably in the background after merge. Pi and the
@@ -233,7 +236,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 - `factory_pass` is the parent Fala run used by the mill. It conducts
   `host_ff → factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  refresh_occupancy → select_implement →
+  refresh_occupancy → reap_stale_worktrees → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
