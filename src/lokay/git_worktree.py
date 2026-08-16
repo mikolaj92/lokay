@@ -44,6 +44,19 @@ def _missing_remote_ref(detail: str) -> bool:
     return "couldn't find remote ref" in low or "could not find remote ref" in low
 
 
+def _rev_count(runner: Runner, worktree: Path, spec: str) -> int | None:
+    result = runner.run(
+        git_spec(["rev-list", "--count", spec], cwd=worktree, timeout_seconds=60),
+        live=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return int((result.stdout or "").strip() or "0")
+    except ValueError:
+        return None
+
+
 def _behind_own_remote(
     runner: Runner, worktree: Path, clone: Path, branch: str
 ) -> int | None:
@@ -91,9 +104,10 @@ def ensure_worktree(
 
     When ``reset_to_base`` is True (issue_to_pr re-implement path):
 
-    * KEEP if the existing corner is unpublished (no ``origin/<branch>``)
-      and ahead of ``origin/<base>``, **or** has a dirty real tree (timeout
-      leftover). Restart must not wipe a child that has not published a PR.
+    * KEEP if the existing corner is unpublished (no ``origin/<branch>``),
+      ahead of ``origin/<base>``, and already contains ``origin/<base>``,
+      **or** has a dirty real tree (timeout leftover). Restart must not
+      wipe a child that has not published a PR and can still push.
     * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) when
       ``origin/<branch>`` exists — including a closed CONFLICTING tip that
       matches HEAD. Replaying those commits just republishes the same dirty
@@ -141,9 +155,20 @@ def ensure_worktree(
             if ahead > 0:
                 behind = _behind_own_remote(runner, worktree, clone, branch)
                 if behind is None:
-                    # Never pushed — keep unpublished commits.
-                    return worktree
-                # origin/<branch> exists: closed/conflicting retry or NFF.
+                    # Never pushed. KEEP only when the leftover is already
+                    # on current origin/<base>. Stale unpublished commits
+                    # (behind main) are a rebase_conflict loop waiting to
+                    # happen — RESET and re-implement.
+                    behind_main = _rev_count(
+                        runner, worktree, f"HEAD..origin/{base}"
+                    )
+                    if behind_main is None:
+                        raise RuntimeError(
+                            f"cannot measure behind vs origin/{base}"
+                        )
+                    if behind_main == 0:
+                        return worktree
+                # origin/<branch> exists, or unpublished-but-stale vs main.
                 # Fall through and recreate from origin/<base>.
             else:
                 try:

@@ -139,6 +139,8 @@ class _ResetRunner:
             )
         if argv[1:4] == ["rev-list", "--count", "origin/main..HEAD"]:
             return _result(argv, returncode=self.ahead_rc, stdout=(self.ahead or "") + "\n")
+        if argv[1:4] == ["rev-list", "--count", "HEAD..origin/main"]:
+            return _result(argv, stdout=str(getattr(self, "behind_main", 0)) + "\n")
         if argv[1:3] == ["rev-list", "--count"] and "HEAD..origin/" in argv[3]:
             return _result(argv, stdout=str(getattr(self, "behind", 0)) + "\n")
         if argv[1] == "diff" or argv[1] == "ls-files":
@@ -176,6 +178,21 @@ def test_reset_to_base_keeps_unpublished_ahead(tmp_path):
     destructive = {"remove", "add", "push"}
     assert not any(call[1] in destructive for call in runner.calls)
     assert any(call[1:4] == ["rev-list", "--count", "origin/main..HEAD"] for call in runner.calls)
+
+
+def test_reset_to_base_rewrites_unpublished_behind_main(tmp_path):
+    """rebase_conflict leftover: never pushed, but origin/main moved → RESET."""
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="5")
+    runner.branch_fetch_rc = 128
+    runner.behind_main = 4
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+    assert path == wt
+    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
 
 
 def test_reset_to_base_rewrites_published_even_if_current(tmp_path):

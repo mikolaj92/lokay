@@ -120,8 +120,10 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    configured executor → commit → **`rebase_onto_base`** (fail closed on
    conflict; never force-push) → tests → push → PR. A retry on a
    deterministic `ai/fix/*` branch RESETs when `origin/<branch>` still
-   exists (closed CONFLICTING tip) and KEEPs only unpublished ahead /
-   dirty leftover. `pr_repair` does **not** rebase a published tip.
+   exists (closed CONFLICTING tip) **or** the unpublished leftover is
+   behind `origin/main` (rebase_conflict replay). KEEP only unpublished
+   ahead that already contains main, or a dirty leftover. `pr_repair`
+   does **not** rebase a published tip.
    After closeout,
    `refresh_occupancy` re-lists PRs and marks just-merged / still-coding
    repos occupied so `select_implement` cannot start a sibling i2pr from
