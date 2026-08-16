@@ -384,6 +384,143 @@ def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monke
         assert n not in excluded_numbers(stuck, "a/b")
 
 
+def test_one_plan_only_already_blocked_reopens_the_slot(tmp_path: Path):
+    """Stale 1-shot miss rows must not stay buried after unique-run harvest."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-137.json", repo="a/b", issue=137, pid=8)
+    _event(state, repo="a/b", issue=137, ok=False, reason="plan_only", run_id="run-1")
+    stuck = {
+        "issues": {
+            "a/b#137": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "plan_only",
+                "last_error": "plan_only",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 137 not in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#137"]
+    assert row.get("blocked") is not True
+    assert row.get("failures") == 1
+    assert row.get("reason") == "plan_only"
+
+
+def test_three_plan_only_already_blocked_stays_blocked(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-137.json", repo="a/b", issue=137, pid=8)
+    for i in range(1, 4):
+        _event(state, repo="a/b", issue=137, ok=False, reason="plan_only", run_id=f"run-{i}")
+    stuck = {
+        "issues": {
+            "a/b#137": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "plan_only",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 137 in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#137"]
+    assert row.get("blocked") is True
+    assert row.get("failures") == 3
+
+
+def test_blocked_plan_only_without_cycle_dir_reopens_from_journal(tmp_path: Path):
+    """Missing cycle dir must still reconcile stale miss rows from the journal."""
+    state = tmp_path / "state.jsonl"
+    _event(state, repo="a/b", issue=61, ok=False, reason="plan_only", run_id="run-1")
+    stuck = {
+        "issues": {
+            "a/b#61": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "plan_only",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=tmp_path / "missing-cycle",
+        is_live=lambda _pid: False,
+    )
+    assert 61 not in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#61"].get("blocked") is not True
+    assert stuck["issues"]["a/b#61"].get("failures") == 1
+
+
+def test_blocked_plan_only_without_receipt_reopens_from_journal(tmp_path: Path):
+    """Cycle prune must not freeze a 1-shot miss; unique-run N still owns the slot."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _event(state, repo="a/b", issue=61, ok=False, reason="plan_only", run_id="run-1")
+    stuck = {
+        "issues": {
+            "a/b#61": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "plan_only",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 61 not in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#61"]
+    assert row.get("blocked") is not True
+    assert row.get("failures") == 1
+
+
+def test_fail_closed_already_blocked_is_not_incremented(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-7.json", repo="a/b", issue=7, pid=8)
+    _event(state, repo="a/b", issue=7, ok=False, reason="test_local_recheck_failed")
+    stuck = {
+        "issues": {
+            "a/b#7": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "test_local_recheck_failed",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 7 in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#7"]
+    assert row.get("blocked") is True
+    assert row.get("failures") == 1
+    assert row.get("reason") == "test_local_recheck_failed"
+
+
 def test_one_plan_only_does_not_leave_the_slot(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
