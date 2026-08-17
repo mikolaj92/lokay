@@ -70,6 +70,11 @@ _SKIP_FILE_SUFFIXES = (
 _TOKEN_RE = re.compile(
     r"\b([A-Z]{2,}|[A-Za-z_][A-Za-z0-9_]{2,}|[A-Z][a-z]+(?:[A-Z][a-z0-9]+)*)\b"
 )
+# One-letter platform names (X) are real stems. Do not generalize to A/I.
+_STANDALONE_PLATFORM_RE = re.compile(r"\bX\b")
+_PLATFORM_ALIASES = {
+    "x": ("twitter", "tweet"),
+}
 _PATHISH_RE = re.compile(
     r"(?<![`\w])((?:[\w.-]+/)+[\w.-]+(?:\.[A-Za-z0-9]{1,12})?)"
 )
@@ -548,6 +553,8 @@ def extract_seed_tokens(text: str) -> tuple[str, ...]:
         if len(tok) < 2 or (len(tok) == 2 and not tok.isupper()):
             continue
         tokens.append(tok)
+    if _STANDALONE_PLATFORM_RE.search(text or ""):
+        tokens.append("X")
     # path stems as tokens too
     for path in extract_seed_paths(text or ""):
         for part in path.replace(".", "/").split("/"):
@@ -583,6 +590,8 @@ def _score_path(
     explicit: set[str],
     *,
     ignore_tokens: set[str] | None = None,
+    worktree: Path | None = None,
+    content_needles: set[str] | None = None,
 ) -> int:
     if rel in explicit:
         return 1000
@@ -602,10 +611,21 @@ def _score_path(
         elif tok in stem.split("_") or tok in stem.split("-"):
             # scan_due.py ← token `scan` is the same hit as a directory named scan.
             score += 30
+        elif len(tok) <= 2:
+            # `x` is a letter in influenzer/unrelated — not a path hit.
+            continue
         elif any(tok in p for p in lowered_parts):
             score += 10
         elif tok in rel.lower():
             score += 5
+    if (
+        worktree is not None
+        and content_needles
+        and rel not in explicit
+        and _path_has_content_needles(Path(worktree), rel, content_needles)
+    ):
+        # X → twitter/tweet in file body is a real stem, not a letter in the path.
+        score += 30
     # Prefer source / tests over docs and lockfiles.
     if parts and parts[0] in {"src", "tests", "fala", "scripts", "config"}:
         score += 8
@@ -624,6 +644,30 @@ def _score_path(
     if name in _DEMOTE_FILE_NAMES or any(p in _DEMOTE_DIR_PARTS for p in lowered_parts):
         score -= 40
     return score
+
+
+def _expand_platform_tokens(tokens_lower: set[str]) -> tuple[set[str], set[str]]:
+    """X is twitter/tweet in product files, not a one-letter substring."""
+    needles: set[str] = set()
+    expanded = set(tokens_lower)
+    for tok in tokens_lower:
+        aliases = _PLATFORM_ALIASES.get(tok)
+        if not aliases:
+            continue
+        expanded.update(aliases)
+        needles.update(aliases)
+    return expanded, needles
+
+
+def _path_has_content_needles(worktree: Path, rel: str, needles: set[str]) -> bool:
+    if not needles:
+        return False
+    try:
+        raw = (Path(worktree) / rel).read_bytes()[:8192]
+    except OSError:
+        return False
+    text = raw.decode("utf-8", errors="ignore").lower()
+    return any(needle in text for needle in needles)
 
 
 def _is_test_rel(rel: str) -> bool:
@@ -728,6 +772,7 @@ def select_paths(
     explicit_set = set(dict.fromkeys(p for p in explicit if p))
     tokens = extract_seed_tokens(seed_text)
     tokens_lower = {t.lower() for t in tokens}
+    tokens_lower, content_needles = _expand_platform_tokens(tokens_lower)
     ignore_tokens = _repo_name_tokens(seed_text, worktree=worktree)
 
     tree_list = [_norm_rel(p) for p in tree if _norm_rel(p)]
@@ -736,7 +781,12 @@ def select_paths(
     scored: list[tuple[int, str]] = []
     for rel in tree_list:
         s = _score_path(
-            rel, tokens_lower, explicit_set, ignore_tokens=ignore_tokens
+            rel,
+            tokens_lower,
+            explicit_set,
+            ignore_tokens=ignore_tokens,
+            worktree=worktree,
+            content_needles=content_needles,
         )
         if s > 0:
             scored.append((s, rel))
