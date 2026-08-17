@@ -132,8 +132,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    repos occupied so `select_implement` cannot start a sibling i2pr from
    stale `origin/main`. Then `reap_stale_worktrees` drops leftover corners
    that cannot resume (merged, closed CONFLICTING, unpublished-behind-main)
-   and KEEPs a live i2pr, an open covering PR, or a dirty unpublished
-   timeout leftover. The plan atom is trust-with-evidence,
+   and KEEPs a live i2pr (from receipts **or** `working.json`), an open
+   covering PR, or a dirty unpublished timeout leftover. A ready published
+   tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
+   Classify with one `ls-remote --heads` per repo — a per-branch fetch
+   stalls the pass. The plan atom is trust-with-evidence,
    not a human gate. For a seed classified separately as unbounded collection
    work, the executor may make only the bounded collector/bootstrap patch: the
    deployed collector starts durably in the background after merge. Pi and the

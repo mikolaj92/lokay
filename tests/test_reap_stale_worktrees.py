@@ -21,7 +21,15 @@ class _Git:
     def run(self, spec, *, live):
         argv = list(spec.argv)
         if argv[1:3] == ["fetch", "origin"]:
+            if len(argv) > 3 and argv[3] != "main":
+                raise AssertionError(f"per-branch fetch forbidden: {argv}")
             return _ok()
+        if argv[1:4] == ["ls-remote", "--heads", "origin"]:
+            return SimpleNamespace(
+                returncode=0,
+                stdout=getattr(self, "ls_remote", ""),
+                stderr="",
+            )
         if argv[1:3] == ["push", "origin"]:
             self.pushes.append(argv)
             return _ok()
@@ -349,3 +357,101 @@ def test_no_leftovers_skips_git(tmp_path, monkeypatch):
     )
     assert out["reaped_count"] == 0
     assert out["kept_count"] == 0
+
+
+def test_keep_live_repo_from_working_json(tmp_path, monkeypatch):
+    """Occupancy already wrote live_issue_to_pr_repos — do not wait for a live pid."""
+    _corner(tmp_path, "ai/fix/51-list")
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not classify live repo")),
+    )
+
+    class _Boom:
+        def run(self, spec, *, live):
+            raise AssertionError(f"live repo must skip git: {spec.argv}")
+
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Boom())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must KEEP live repo")),
+    )
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(
+            tmp_path,
+            working={"live_issue_to_pr_repos": ["owner/repo"]},
+        ),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert out["kept"][0]["reason"] == "live_issue_to_pr"
+    assert out["reaped_count"] == 0
+
+
+def test_ls_remote_failure_keeps_unreadability(tmp_path, monkeypatch):
+    _corner(tmp_path, "ai/fix/142-x")
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not classify")),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must KEEP unreadability")),
+    )
+
+    class _NoHeads(_Git):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["ls-remote", "--heads", "origin"]:
+                return SimpleNamespace(returncode=128, stdout="", stderr="unable to access")
+            return super().run(spec, live=live)
+
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _NoHeads())
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert out["kept"][0]["reason"] == "unreadability"
+    assert out["reaped_count"] == 0
+
+
+def test_classify_uses_ls_remote_not_per_branch_fetch(tmp_path, monkeypatch):
+    branch = "ai/fix/142-prompt"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    seen: list[bool] = []
+
+    def _status(*a, **k):
+        seen.append(bool(k.get("known_published")))
+        return {
+            "readable": True,
+            "ahead": 3,
+            "behind_main": 0,
+            "published": True,
+            "dirty": "empty",
+            "keep_unpublished": False,
+        }
+
+    monkeypatch.setattr(reap_stale_worktrees, "leftover_status", _status)
+    git = _Git()
+    git.ls_remote = f"abc\trefs/heads/{branch}\n"
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: git)
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: {"ok": True, "removed": True},
+    )
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert seen == [True]
+    assert out["reaped_count"] == 1

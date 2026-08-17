@@ -48,7 +48,7 @@ survey PRs → inbox → ready → triage → konflikty
   → closeout (najpierw merge otwartych PR)
     → reap resztek in-flight cache → ai:ready
       → refresh_occupancy (re-list PRs ∪ live i2pr ∪ just-merged)
-        → reap leftover worktrees (KEEP live / open PR / dirty unpublished)
+        → reap leftover worktrees (KEEP live/occupancy / open PR / dirty unpublished; one ls-remote per repo)
           → select / implement (K=1; skip occupied)
 ```
 
