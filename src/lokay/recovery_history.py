@@ -27,6 +27,7 @@ _NON_FAILURE_HEALTH = frozenset(
         "offline",
         "overlap",
         "plateau",
+        "host_updated",
     }
 )
 # merge_policy / pr_triage soft product reasons — never systemic stall evidence.

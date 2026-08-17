@@ -72,6 +72,20 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         return _run_atom_main(host_ff.main, argv)
 
     if atom == "factory_begin":
+        # In-cycle host_ff updates git; this process still imported the
+        # previous package and the Fala graph is already materialized.
+        # Refuse product work so the next launchd tick reinstalls.
+        host = up.get("host_ff") or {}
+        if "--live" in live and host.get("updated") is True:
+            return {
+                "ok": False,
+                "error": "host checkout updated; restart required before product work",
+                "reason": "host_updated",
+                "health": "host_updated",
+                "restart_required": True,
+                "head": host.get("head"),
+                "origin_main": host.get("origin_main"),
+            }
         return _run_atom_main(factory_begin.main, [*cfg, *live])
 
     if atom == "survey_repos":

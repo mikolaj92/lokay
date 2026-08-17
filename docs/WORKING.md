@@ -243,6 +243,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
   refresh_occupancy → reap_stale_worktrees → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`.
+  `factory_begin` fail-closes when `host_ff` just fast-forwarded (`health=host_updated`)
+  so the next launchd tick reinstalls and imports the new checkout.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy

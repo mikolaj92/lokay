@@ -138,6 +138,13 @@ def evaluate_mill_stop(tick: dict[str, Any]) -> dict[str, Any]:
     ``plateau`` stops the loop but is not a stall fingerprint.
     """
     health = str(tick.get("health") or "")
+    if health == "host_updated" or str(tick.get("reason") or "") == "host_updated":
+        return {
+            "stop": True,
+            "hard": False,
+            "health": "host_updated",
+            "error": "",
+        }
     if health in {"stall", "survey_error"}:
         return {
             "stop": True,

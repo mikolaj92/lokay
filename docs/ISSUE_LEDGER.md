@@ -41,6 +41,9 @@ konflikt PR           --close PR-->  ready zostaje, następny pass bierze od mai
 
 Węzły Fali `stage_implementing` / `stage_pr_open` / `stage_repairing` zostają w DAG (kolejność), ale **nie nadają** `ai:in-progress` / `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`. Plan to `ready` + zdjęcie resztek cache.
 
+`host_ff updated` w trakcie passa zatrzymuje `factory_begin` (`health=host_updated`):
+git już nowy, import jeszcze stary — następny tick launchd przebudowuje koło.
+
 Pass katalogu (`factory_pass`):
 
 ```text

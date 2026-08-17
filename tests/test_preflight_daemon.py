@@ -21,6 +21,10 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "preflight-bootstrap-incidents.log" in script
     assert "--reinstall-package lokay --reinstall-package fala" in script
     assert "uv-install.digest" in script
+    assert 'export PYTHONPATH="${ROOT}/src' in script
+    assert "package_matches()" in script
+    assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
+    assert "host_updated" in script
     assert "emit_launchd_glance" in script
     assert "reopen_stdio_on_path" in script
     assert "loaded_plist_path" in script
@@ -166,6 +170,46 @@ def test_mill_log_and_launchd_stdout_are_bounded(tmp_path):
     assert all(path.stat().st_size < 8192 for path in mill_logs)
 
 
+def test_overlap_envelope_does_not_persist_digest(tmp_path):
+    first = _run_daemon(
+        tmp_path,
+        extra_env={
+            "LOKAY_UV_ENVELOPE": '{"ok":false,"health":"overlap","code":"overlap"}'
+        },
+    )
+    # Fake uv exits 0; the envelope is overlap. Digest must stay open.
+    assert first.returncode == 0, first.stderr
+    digest = tmp_path / ".lokay" / "uv-install.digest"
+    assert not digest.exists()
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    second_calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("--reinstall-package lokay" in line for line in second_calls)
+
+
+def test_stale_site_packages_forces_reinstall_when_digest_matches(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    digest = tmp_path / ".lokay" / "uv-install.digest"
+    assert digest.is_file()
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+
+    src = tmp_path / "repo" / "src" / "lokay"
+    src.mkdir(parents=True)
+    (src / "gh_rate.py").write_text("SURVEY_LIST_CAP = 1000\n", encoding="utf-8")
+    stale = tmp_path / "repo" / ".venv" / "lib" / "python3.14" / "site-packages" / "lokay"
+    stale.mkdir(parents=True)
+    (stale / "gh_rate.py").write_text("old\n", encoding="utf-8")
+
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    second_calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("--reinstall-package lokay" in line for line in second_calls)
+
+
 def test_failed_uv_reinstall_does_not_persist_digest(tmp_path):
     first = _run_daemon(tmp_path, extra_env={"LOKAY_UV_REINSTALL_FAIL": "1"})
     assert first.returncode != 0
@@ -249,6 +293,7 @@ state:
 
 
 def test_process_exit_zero_when_pass_did_work():
+    assert process_exit_code({"ok": False, "health": "host_updated", "reason": "host_updated"}) == 0
     assert process_exit_code({"ok": False, "health": "progress", "progress": 2}) == 0
     assert process_exit_code(
         {"ok": False, "remaining": {"issue_to_pr_started": 1}}

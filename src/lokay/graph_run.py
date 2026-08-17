@@ -373,6 +373,12 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             reason = _failure_reason(failed[0])
             if reason:
                 out["reason"] = reason
+        if (
+            str(result.get("path_id") or "") == "factory_pass"
+            and out.get("reason") == "host_updated"
+        ):
+            out["health"] = "host_updated"
+            out["restart_required"] = True
         return out
 
     out["ok"] = True
