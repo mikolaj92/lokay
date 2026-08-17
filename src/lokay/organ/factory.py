@@ -75,6 +75,10 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         # In-cycle host_ff updates git; this process still imported the
         # previous package and the Fala graph is already materialized.
         # Refuse product work so the next launchd tick reinstalls.
+        # Launchd-ff under mill.lock can eat updated=true; then HEAD
+        # moved under LOKAY_PROCESS_HEAD and we still refuse.
+        from lokay.git_host_ff import process_head_moved
+
         host = up.get("host_ff") or {}
         if "--live" in live and host.get("updated") is True:
             return {
@@ -86,6 +90,10 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
                 "head": host.get("head"),
                 "origin_main": host.get("origin_main"),
             }
+        checkout = inputs.get("checkout") or os.environ.get("LOKAY_ROOT")
+        moved = process_head_moved(Path(str(checkout))) if checkout else None
+        if "--live" in live and moved is not None:
+            return moved
         return _run_atom_main(factory_begin.main, [*cfg, *live])
 
     if atom == "survey_repos":
