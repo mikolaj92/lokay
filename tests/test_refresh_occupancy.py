@@ -100,8 +100,10 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
         },
     )
 
+    called: list[str] = []
+
     def fake_run(fn, argv):
-        repo = argv[argv.index("--repo") + 1]
+        called.append(argv[argv.index("--repo") + 1])
         return {"ok": True, "prs": []}
 
     monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
@@ -120,6 +122,11 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["occupied_repos"] == ["a/one", "a/two"]
     assert working["prs_by_repo"] == {"a/one": [], "a/two": []}
+    assert called == []
+    assert [a.get("reason") for a in working["actions"] if a.get("step") == "refresh_prs_skipped"] == [
+        "occupied",
+        "occupied",
+    ]
 
     selected = run_select_implement(pass_dir=pass_dir)
     assert selected["selected"] == 0
@@ -248,3 +255,100 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
     assert selected["selected"] == 1
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
     assert implement["clean_repos"] == ["a/one"]
+
+
+def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
+    """No leftover ready and no leftover PRs — do not spend a gh list."""
+    pass_dir = _pass(
+        tmp_path,
+        begin={"repos": ["a/idle", "a/ready"]},
+        working={
+            "ready_by_repo": {"a/idle": [], "a/ready": [{"number": 4, "title": "next"}]},
+            "remaining_ready": 1,
+        },
+    )
+    called: list[str] = []
+
+    def fake_run(fn, argv):
+        called.append(argv[argv.index("--repo") + 1])
+        return {"ok": True, "prs": []}
+
+    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
+    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+    assert out["ok"] is True
+    assert called == ["a/ready"]
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["prs_by_repo"]["a/idle"] == []
+    skips = [a for a in working["actions"] if a.get("step") == "refresh_prs_skipped"]
+    assert skips == [{"step": "refresh_prs_skipped", "repo": "a/idle", "reason": "no_ready"}]
+
+
+def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
+    """A 429 must not wipe a known open PR into a fake clear lane."""
+    parked = {
+        "number": 318,
+        "head_ref": "ai/fix/32-x",
+        "labels": ["ai:generated"],
+    }
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "prs_by_repo": {"a/one": [parked]},
+            "ready_by_repo": {"a/one": [{"number": 33, "title": "next"}]},
+            "remaining_ready": 1,
+            "remaining_prs": 1,
+            "actionable_prs": 1,
+        },
+    )
+    monkeypatch.setattr(
+        refresh_occupancy,
+        "run_proc",
+        lambda fn, argv: {"ok": False, "error": "gh rate limit exhausted"},
+    )
+    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+    assert out["ok"] is True
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["pr_survey_failed"] == ["a/one"]
+    assert working["prs_by_repo"]["a/one"] == [parked]
+    selected = run_select_implement(pass_dir=pass_dir)
+    assert selected["selected"] == 0
+
+def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch):
+    """An occupied 429 from survey_prs must stay on the board."""
+    pass_dir = _pass(
+        tmp_path,
+        begin={"repos": ["a/one"]},
+        working={
+            "merged_this_pass": ["a/one"],
+            "pr_survey_failed": ["a/one"],
+            "inbox_survey_failed": [],
+            "ready_survey_failed": [],
+            "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
+            "remaining_ready": 1,
+            "survey_errors": 1,
+        },
+    )
+    called: list[str] = []
+
+    def fake_run(fn, argv):
+        called.append(argv[argv.index("--repo") + 1])
+        return {"ok": True, "prs": []}
+
+    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
+    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+    assert out["ok"] is True
+    assert called == []
+    assert out["survey_errors"] == 1
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["pr_survey_failed"] == ["a/one"]
+    assert working["survey_errors"] == 1
+
