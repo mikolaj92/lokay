@@ -77,6 +77,20 @@ def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
     assert captured["token"] == "parent-token"
 
 
+def test_every_subprocess_atom_inherits_pythonpath():
+    import tomllib
+
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    missing = [
+        f"{path['id']}:{effector['id']}"
+        for path in package["correlation_paths"]
+        for effector in path["effectors"]
+        if (effector.get("adapter") or {}).get("kind") == "subprocess"
+        and "PYTHONPATH" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
+    ]
+    assert missing == []
+
+
 def test_parent_factory_inherits_fala_home_and_health_lease():
     import tomllib
 
@@ -87,6 +101,7 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     assert "LOKAY_HEALTH_LEASE" in inherited
     assert "LOKAY_HEALTH_LEASE_PATH" in inherited
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
+    assert "PYTHONPATH" in inherited
 
 
 def test_subprocess_atoms_pin_project_cwd():
@@ -426,6 +441,29 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
     for path_id, effectors in expected.items():
         graph_run.run_path(path_id=path_id, repo="a/b", issue=1, pr=2, branch="ai/fix/1-x", live=False, package_path=str(package), db_path=str(tmp_path / path_id))
         assert set(captured[-1]["effector_inputs"]) == effectors
+
+
+def test_factory_path_lifts_host_updated_from_failed_begin():
+    out = _host(
+        "factory_pass",
+        {
+            "host_ff": {
+                "id": "host_ff",
+                "status": "completed",
+                "output": {"values": {"ok": True, "updated": True, "head": "abc"}},
+            },
+            "factory_begin": {
+                "id": "factory_begin",
+                "status": "failed",
+                "error": '{"ok": false, "reason": "host_updated", "health": "host_updated"}',
+            },
+        },
+        ok=False,
+    )
+    assert out["ok"] is False
+    assert out["reason"] == "host_updated"
+    assert out["health"] == "host_updated"
+    assert out["restart_required"] is True
 
 
 def test_factory_path_normalizes_tick_contract():

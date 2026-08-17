@@ -203,6 +203,32 @@ def test_detach_forwards_lease_path_for_fala_inherit(tmp_path, monkeypatch):
     assert env.get("LOKAY_HEALTH_LEASE_PATH") == str(tmp_path / ".lokay" / "health-lease")
 
 
+def test_evaluate_mill_stop_host_updated_is_soft_stop():
+    decision = evaluate_mill_stop(
+        {"ok": False, "health": "host_updated", "reason": "host_updated", "progress": 0}
+    )
+    assert decision["stop"] is True
+    assert decision["hard"] is False
+    assert decision["health"] == "host_updated"
+
+
+def test_host_updated_is_not_stall_fingerprint(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={
+            "ok": False,
+            "health": "host_updated",
+            "reason": "host_updated",
+            "error": "host checkout updated; restart required before product work",
+            "progress": 0,
+        },
+    )
+    assert row["fingerprint"] is None
+
+
 def test_evaluate_mill_stop_plateau_is_not_progress_continue():
     decision = evaluate_mill_stop({"ok": True, "health": "plateau", "progress": 4})
     assert decision["stop"] is True

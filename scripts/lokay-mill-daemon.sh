@@ -160,6 +160,9 @@ fi
 
 cd "${ROOT}"
 export LOKAY_ROOT="${ROOT}"
+# site-packages/lokay (hatch force-include wheel) shadows the editable pth.
+# Organ subprocesses and detached i2pr must import the checkout, not a stale copy.
+export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 
 # Live factory (override with env in the plist if needed). This LaunchAgent
 # runs the PR mill only; collector patches own their post-merge durable
@@ -185,6 +188,33 @@ DIGEST_FILE="${LOKAY_UV_DIGEST:-${LOKAY_HOME}/uv-install.digest}"
 MILL_LOG_MAX="${LOKAY_MILL_LOG_MAX:-1048576}"
 LAUNCHD_STDOUT_MAX="${LOKAY_LAUNCHD_STDOUT_MAX:-1048576}"
 MILL_LOG_KEEP="${LOKAY_MILL_LOG_KEEP:-48}"
+
+package_matches() {
+  # 0 = site-packages matches src (or no copy to compare). 1 = stale wheel.
+  _python - "${ROOT}" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+src = root / "src" / "lokay"
+if not src.is_dir():
+    raise SystemExit(0)
+copies = list((root / ".venv").glob("lib/python*/site-packages/lokay"))
+if not copies:
+    raise SystemExit(0)
+sp = copies[0]
+for path in src.rglob("*.py"):
+    if "__pycache__" in path.parts:
+        continue
+    other = sp / path.relative_to(src)
+    try:
+        if not other.is_file() or other.read_bytes() != path.read_bytes():
+            raise SystemExit(1)
+    except OSError:
+        raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
 
 checkout_digest() {
   _python - "${ROOT}" "${FALA_HOME:-}" <<'PY'
@@ -521,8 +551,10 @@ PREVIOUS_DIGEST=""
 if [[ -f "${DIGEST_FILE}" ]]; then
   PREVIOUS_DIGEST="$(cat "${DIGEST_FILE}" 2>/dev/null || true)"
 fi
-# Reinstall only when lokay/Fala HEAD or lockfile actually moved.
-if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]]; then
+# Reinstall when lokay/Fala HEAD or lockfile moved, or the installed
+# wheel still shadows a different checkout (digest can match after an
+# overlap tick that never rebuilt).
+if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]] || ! package_matches; then
   UV_REINSTALL_ARGS=(--reinstall-package lokay --reinstall-package fala)
 fi
 
@@ -539,7 +571,10 @@ set -e
 cp "${LOG}" "${LATEST}" 2>/dev/null || true
 # Persist digest only after lokay-daemon emitted an envelope. host-ff writes
 # health=current first; a failed uv reinstall must retry next tick.
-if [[ -n "${CURRENT_DIGEST}" ]] && grep -Eq '"(engine|path_id|preflight|self_repair)"|"health"[[:space:]]*:[[:space:]]*"(progress|idle|waiting|repairing|stall|overlap|survey_error|self_repair|carrier_failed|work_remaining)' "${LOG}" 2>/dev/null; then
+# Overlap means this tick never loaded the new package into a factory pass.
+# Do not close the digest gate on a contended lock — the next idle tick
+# must still reinstall if the wheel drifted.
+if [[ -n "${CURRENT_DIGEST}" ]] && ! grep -Eq '"health"[[:space:]]*:[[:space:]]*"overlap"' "${LOG}" 2>/dev/null && grep -Eq '"(engine|path_id|preflight|self_repair)"|"health"[[:space:]]*:[[:space:]]*"(progress|idle|waiting|repairing|stall|survey_error|self_repair|carrier_failed|work_remaining|host_updated)' "${LOG}" 2>/dev/null; then
   printf '%s\n' "${CURRENT_DIGEST}" > "${DIGEST_FILE}" || true
 fi
 bound_file "${LOG}" "${MILL_LOG_MAX}" || true

@@ -62,9 +62,14 @@ bounded glance (`health` / `progress` / optional error) — the full Fala
 envelope stays in `mill-*.log`, which is size-capped and rotated. Bound is
 in-place (same inode, no full-file slurp) and the tick reopens stdout after
 truncate so launchd cannot punch a sparse hole at the old offset. The 60s tick
-reinstalls editable `lokay`/`fala` only when checkout HEAD or `uv.lock`
-actually moved (`~/.lokay/uv-install.digest`); a failed reinstall does not
-persist the digest. `LastExitStatus=0` when the pass did work (`health=progress`
+reinstalls editable `lokay`/`fala` when checkout HEAD or `uv.lock`
+moved (`~/.lokay/uv-install.digest`) **or** `site-packages/lokay` still
+shadows a different checkout (hatch `force-include` copies the tree and
+wins over the editable pth). `PYTHONPATH=$LOKAY_ROOT/src` is exported so
+organ subprocesses and detached `issue_to_pr` import the checkout, not a
+stale wheel. An overlap envelope does not persist the digest. A failed
+reinstall does not persist the digest. In-cycle `host_ff updated=true`
+stops the pass (`health=host_updated`) so the next tick reloads. `LastExitStatus=0` when the pass did work (`health=progress`
 or detached `issue_to_pr_started`), even if the Fala wrapper envelope has
 `ok: false`. `factory_begin` keeps a handful of `factory-pass-*` workspaces
 beside `state.jsonl` and deletes the rest. After occupancy,

@@ -156,6 +156,59 @@ def test_cli_live_ff_when_behind(tmp_path: Path, capsys):
     assert payload["head"] == remote
 
 
+def test_factory_begin_refuses_after_in_cycle_host_ff_update():
+    from lokay import fala_organ
+
+    out = fala_organ._handle(
+        "factory_begin",
+        {"live": True, "config_path": "config.yaml"},
+        {"host_ff": {"ok": True, "updated": True, "head": "abc", "origin_main": "abc"}},
+    )
+    assert out["ok"] is False
+    assert out["reason"] == "host_updated"
+    assert out["health"] == "host_updated"
+    assert out["restart_required"] is True
+
+
+def test_factory_begin_continues_when_host_already_current(monkeypatch):
+    from lokay import fala_organ
+
+    called = []
+
+    def fake_run(main, argv):
+        called.append(argv)
+        return {"ok": True, "pass_dir": "/tmp/pass"}
+
+    # handle_factory rebinds _run_atom_main from fala_organ each call.
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    out = fala_organ._handle(
+        "factory_begin",
+        {"live": True, "config_path": "config.yaml"},
+        {"host_ff": {"ok": True, "updated": False, "already_current": True}},
+    )
+    assert out["ok"] is True
+    assert called
+
+
+def test_factory_begin_planned_ignores_host_updated(monkeypatch):
+    from lokay import fala_organ
+
+    called = []
+
+    def fake_run(main, argv):
+        called.append(argv)
+        return {"ok": True, "pass_dir": "/tmp/pass"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    out = fala_organ._handle(
+        "factory_begin",
+        {"live": False, "config_path": "config.yaml"},
+        {"host_ff": {"ok": True, "updated": True, "head": "abc"}},
+    )
+    assert out["ok"] is True
+    assert called
+
+
 def test_factory_pass_starts_with_host_ff():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")

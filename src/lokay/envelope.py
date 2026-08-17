@@ -91,6 +91,11 @@ def process_exit_code(
     current = mill_glance(payload)
     if _productive(current):
         return 0
+    if isinstance(payload, dict) and (
+        str(payload.get("health") or "") == "host_updated"
+        or str(payload.get("reason") or "") == "host_updated"
+    ):
+        return 0
     current_health = str(current.get("health") or "")
     if current_health not in _WRAPPER_HEALTH:
         return 1
