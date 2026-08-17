@@ -24,7 +24,7 @@ The JSON envelope includes:
 | `require_llm_review` | Structured approve/`merge_ok` required before merge |
 | `max_issue_to_pr_per_pass` / `k` | Serial pass budget for `issue_to_pr` (default 1; not concurrency) |
 | `health` | `idle` / `progress` / `waiting` / `repairing` / `stall` / `survey_error` |
-| `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, `merge_disabled`, … |
+| `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, `merge_disabled`, … (survey lists the full page; a 50-row newest-first window is a lie) |
 | `by_repo` | Per-repo inbox / ready / actionable open AI PRs |
 | `human_residuals` | Compact needs-feedback / needs-review count (not a mill brake) |
 | `last_pass` | Prior compact pass receipt (also refreshed by this survey) |

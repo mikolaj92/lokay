@@ -13,6 +13,7 @@ from lokay.gh_issues import (
     comment_issue,
     remove_issue_labels,
 )
+from lokay.gh_rate import survey_list_cap
 from lokay.intake import IntakeDecision
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
@@ -78,7 +79,7 @@ def covering_ai_prs(
                     "--json",
                     "number,state,mergedAt,headRefName",
                     "--limit",
-                    "50",
+                    str(survey_list_cap()),
                 ],
                 timeout_seconds=60,
             ),

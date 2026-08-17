@@ -71,9 +71,9 @@ host_ff
 | --- | --- |
 | `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / skip-worktree would overwrite |
 | `factory_begin` | preflight + pass workspace + budgets |
-| `survey_prs` | list open AI PRs for all repos |
-| `survey_inbox` | list undecided inbox issues |
-| `survey_ready` | list ai:ready; skip those covered by open AI PRs (label stays ready) |
+| `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error) |
+| `survey_inbox` | list undecided inbox issues (full page; cap is survey_error) |
+| `survey_ready` | list all ai:ready (full page; cap is survey_error); skip those covered by open AI PRs (label stays ready) |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from lokay.config import Config
+from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.intake import IntakeDecision
 from lokay.intake_io import apply_intake, covering_ai_prs, merged_prs
 from lokay.models import Issue
@@ -108,6 +109,12 @@ def test_covering_ai_prs_filters_and_dedupes():
     out = covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True)
     assert [row["number"] for row in out] == [10]
     assert out[0]["head_ref"] == "ai/fix/12-foo"
+    limits = [
+        c[c.index("--limit") + 1]
+        for c in runner.calls
+        if "pr" in c and "list" in c
+    ]
+    assert limits == [str(SURVEY_LIST_CAP), str(SURVEY_LIST_CAP)]
     assert covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=False) == []
 
 
