@@ -139,6 +139,24 @@ def remove_worktree(runner: Runner, clone: Path, worktree: Path) -> dict[str, An
     return {"ok": True, "removed": True}
 
 
+def remote_heads(runner: Runner, clone: Path) -> set[str] | None:
+    """Branch names on ``origin``. ``None`` is fail-closed, not unpublished."""
+    listed = runner.run(
+        git_spec(["ls-remote", "--heads", "origin"], cwd=clone, timeout_seconds=180),
+        live=True,
+    )
+    if listed.returncode != 0:
+        return None
+    heads: set[str] = set()
+    for line in (listed.stdout or "").splitlines():
+        _, sep, ref = line.partition("refs/heads/")
+        if sep:
+            name = ref.strip()
+            if name:
+                heads.add(name)
+    return heads
+
+
 def leftover_status(
     runner: Runner,
     worktree: Path,
@@ -147,6 +165,7 @@ def leftover_status(
     *,
     base: str = "main",
     fetch_base: bool = True,
+    known_published: bool | None = None,
 ) -> dict[str, Any]:
     """Classify a leftover corner. ``readable=False`` is fail-closed (KEEP).
 
@@ -155,6 +174,8 @@ def leftover_status(
     * ``published`` — ``origin/<branch>`` exists (including a closed
       CONFLICTING tip). Replaying that tip is a dirty-PR loop; reap it.
     * Fetch / rev-list flake is not unpublished.
+    * ``known_published`` skips the per-branch fetch when the atom already
+      listed ``origin`` heads once.
     """
     if not worktree.is_dir():
         return {"readable": False, "error": "worktree missing"}
@@ -193,11 +214,14 @@ def leftover_status(
             "readable": False,
             "error": f"cannot measure behind vs origin/{base}",
         }
-    try:
-        behind_own = _behind_own_remote(runner, worktree, clone, branch)
-    except RuntimeError as exc:
-        return {"readable": False, "error": str(exc)}
-    published = behind_own is not None
+    if known_published is None:
+        try:
+            behind_own = _behind_own_remote(runner, worktree, clone, branch)
+        except RuntimeError as exc:
+            return {"readable": False, "error": str(exc)}
+        published = behind_own is not None
+    else:
+        published = bool(known_published)
     try:
         dirty = classify_changed_paths(
             list_changed_paths(runner, worktree, base=f"origin/{base}")

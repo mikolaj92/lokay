@@ -1,12 +1,13 @@
 """worktree --reset-base flag wiring (no live git)."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from lokay.config import Config, RepoConfig
-from lokay.git_worktree import InvalidBranchRef, assert_valid_branch_ref, ensure_worktree, leftover_status, remove_worktree
+from lokay.git_worktree import InvalidBranchRef, assert_valid_branch_ref, ensure_worktree, leftover_status, remote_heads, remove_worktree
 from lokay.proc import worktree_add
 from lokay.runner import Runner
 
@@ -363,3 +364,59 @@ def test_remove_worktree_already_gone(tmp_path):
     out = remove_worktree(runner, clone, missing)
     assert out == {"ok": True, "removed": False, "already_gone": True}
     assert not any(call[1] == "worktree" for call in runner.calls)
+
+
+def test_leftover_status_known_published_skips_branch_fetch(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="3")
+    status = leftover_status(
+        runner, wt, repo.clone_path, branch, known_published=True
+    )
+    assert status["published"] is True
+    assert status["keep_unpublished"] is False
+    assert not any(
+        call[1:3] == ["fetch", "origin"] and len(call) > 3 and call[3] != "main"
+        for call in runner.calls
+    )
+
+
+def test_leftover_status_known_unpublished_skips_branch_fetch(tmp_path):
+    branch = "ai/fix/164-observe"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="3")
+    status = leftover_status(
+        runner, wt, repo.clone_path, branch, known_published=False
+    )
+    assert status["published"] is False
+    assert status["keep_unpublished"] is True
+    assert not any(
+        call[1:3] == ["fetch", "origin"] and len(call) > 3 and call[3] != "main"
+        for call in runner.calls
+    )
+
+
+def test_remote_heads_lists_origin():
+    class _Heads(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["ls-remote", "--heads", "origin"]:
+                return _result(
+                    argv,
+                    stdout="abc\trefs/heads/ai/fix/142-x\ndef\trefs/heads/main\n",
+                )
+            return super().run(spec, live=live)
+
+    heads = remote_heads(_Heads(), Path("/tmp"))
+    assert heads == {"ai/fix/142-x", "main"}
+
+
+def test_remote_heads_fail_closed():
+    class _Fail(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["ls-remote", "--heads", "origin"]:
+                return _result(argv, returncode=128, stderr="unable to access")
+            return super().run(spec, live=live)
+
+    assert remote_heads(_Fail(), Path("/tmp")) is None
