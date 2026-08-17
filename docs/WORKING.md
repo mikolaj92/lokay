@@ -11,7 +11,9 @@ signals. They may explain a miss. They never count as output.
 
 The coding slot must actually run. Default Pi argv uses `--session-id`
 `{session}` so the first ticket *creates* the per-corner session and a
-timeout retry resumes it. `--session` looks up an existing file and exits
+timeout retry resumes it — unless a sibling already closed the issue
+(`reason=issue_closed`; do not continue or open a second PR).
+`--session` looks up an existing file and exits
 1 (`No session found matching 'lokay-…'`), which leaves only
 `.lokay/approach.md` / `.lokay/localize.json` — a `plan_only` miss, not a PR.
 `localize` must not cage the agent in `tests/` when the seed only names a

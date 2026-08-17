@@ -38,6 +38,7 @@ ready + otwarty AI PR --survey-->  skip implement  (ai:ready zostaje; closeout w
 ready + occupied repo --select-->  skip implement  (health=waiting, nie stall)
 PR zmergowany         --stage_clear + close-->  closed
 konflikt PR           --close PR-->  ready zostaje, następny pass bierze od main
+timeout + issue CLOSED --skip-->  issue_closed (nie continue, nie drugi PR)
 ```
 
 Węzły Fali `stage_implementing` / `stage_pr_open` / `stage_repairing` zostają w DAG (kolejność), ale **nie nadają** `ai:in-progress` / `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`. Plan to `ready` + zdjęcie resztek cache.
