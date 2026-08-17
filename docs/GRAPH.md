@@ -250,6 +250,10 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   A tests-only inferred list is a cage: matching `test_foo.py` promotes
   `foo.py`, and a still-empty product set opens first-party imports from
   those tests so the agent can edit product code.
+  A skill / markdown hit is not product — `skills/influenzer-shorts` must
+  not skip the import walk that opens `playbook.py`.
+  Snake identifiers from the seed (`has_fair_hook`) are body needles in
+  the whole file, not the first 8KiB.
   Standalone `X` is a platform stem (twitter/tweet), not a dropped
   one-letter token — otherwise #27 cages the agent in HN/brief.
 - **run_agent timeout** (executor 1800s) is incomplete, not a graph hard-fail.

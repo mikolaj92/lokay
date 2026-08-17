@@ -659,11 +659,22 @@ def _expand_platform_tokens(tokens_lower: set[str]) -> tuple[set[str], set[str]]
     return expanded, needles
 
 
+def _seed_identifier_needles(tokens: Iterable[str]) -> set[str]:
+    """Snake identifiers from the seed (`has_fair_hook`) live in product files."""
+    return {tok.lower() for tok in tokens if "_" in tok}
+
+
+def _is_docs_rel(rel: str) -> bool:
+    name = Path(rel).name.lower()
+    parts = Path(rel).as_posix().split("/")
+    return name.endswith(".md") or parts[:1] == ["docs"] or parts[:1] == ["skills"]
+
+
 def _path_has_content_needles(worktree: Path, rel: str, needles: set[str]) -> bool:
     if not needles:
         return False
     try:
-        raw = (Path(worktree) / rel).read_bytes()[:8192]
+        raw = (Path(worktree) / rel).read_bytes()
     except OSError:
         return False
     text = raw.decode("utf-8", errors="ignore").lower()
@@ -746,7 +757,11 @@ def _attach_product_paths(
                 if Path(cand).stem.lower() == stem:
                     paired.append(cand)
         extra.extend(paired)
-    if not any(not _is_test_rel(p) for p in (*selected, *extra)) and worktree is not None:
+    selected_plus = (*selected, *extra)
+    has_code_product = any(
+        not _is_test_rel(p) and not _is_docs_rel(p) for p in selected_plus
+    )
+    if not has_code_product and worktree is not None:
         root = Path(worktree)
         for rel in selected:
             if not _is_test_rel(rel):
@@ -773,6 +788,7 @@ def select_paths(
     tokens = extract_seed_tokens(seed_text)
     tokens_lower = {t.lower() for t in tokens}
     tokens_lower, content_needles = _expand_platform_tokens(tokens_lower)
+    content_needles = set(content_needles) | _seed_identifier_needles(tokens)
     ignore_tokens = _repo_name_tokens(seed_text, worktree=worktree)
 
     tree_list = [_norm_rel(p) for p in tree if _norm_rel(p)]

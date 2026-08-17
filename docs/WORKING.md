@@ -20,6 +20,9 @@ timeout retry resumes it — unless a sibling already closed the issue
 test token (`gate` → `test_e2e_gates.py`): matching `test_foo.py` promotes
 `foo.py`, and a still-empty product set opens first-party imports from those
 tests. A tests-only scope is how #41/#26 go `plan_only`.
+A skill / markdown hit is not product (`skills/influenzer-shorts` on #36
+must still open `playbook.py` via the test imports). Snake identifiers
+from the seed (`has_fair_hook`) are searched in the whole file.
 Standalone `X` must stay a stem (twitter/tweet in product files); dropping
 it is how #27 opens `brief_*`/`influenzer-hn` and never `playbook.py`.
 
