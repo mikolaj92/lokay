@@ -135,3 +135,61 @@ def test_compute_health_parked_needs_review_only_is_waiting_not_stall(tmp_path):
     assert tick["ok"] is True
     assert tick["remaining"]["manual_open_ai_prs"] == 1
     assert tick["remaining"]["actionable_open_ai_prs"] == 0
+
+
+def test_compute_health_ready_behind_actionable_pr_is_waiting_not_stall(tmp_path):
+    """Late PR after survey_prs: catalog ready stays, but the repo is PR-first."""
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "prs_by_repo": {
+                "a/one": [
+                    {
+                        "number": 313,
+                        "head_ref": "ai/fix/27-x",
+                        "labels": ["ai:generated"],
+                    }
+                ]
+            },
+            "ready_by_repo": {
+                "a/one": [{"number": n, "title": f"r{n}"} for n in range(28, 33)]
+            },
+            "remaining_ready": 5,
+            "remaining_prs": 1,
+            "actionable_prs": 1,
+            "manual_prs": 0,
+            "actions": [{"step": "skip_ready_open_ai_pr", "repo": "a/one"}],
+        },
+    )
+    result = run_compute_health(pass_dir=pass_dir)
+    assert result["ok"] is True
+    assert result["health"] == "waiting"
+    assert result["tick_ok"] is True
+    tick = pass_io.read_json(pass_io.tick_path(pass_dir))
+    assert tick["health"] == "waiting"
+    assert tick["ok"] is True
+    assert tick["remaining"]["ready"] == 5
+    assert tick["remaining"]["actionable_open_ai_prs"] == 1
+    by_repo = {row["repo"]: row for row in tick["remaining"]["by_repo"]}
+    assert by_repo["a/one"]["occupied"] is False
+    assert by_repo["a/one"]["actionable_open_ai_prs"] == 1
+
+
+def test_compute_health_ready_on_occupied_repo_is_waiting_not_stall(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "ready_by_repo": {"a/one": [{"number": 29, "title": "next"}]},
+            "remaining_ready": 1,
+            "occupied_repos": ["a/one"],
+            "live_issue_to_pr_repos": ["a/one"],
+            "actions": [{"step": "skip_ready_repo_occupied", "repo": "a/one"}],
+        },
+    )
+    result = run_compute_health(pass_dir=pass_dir)
+    assert result["health"] == "waiting"
+    tick = pass_io.read_json(pass_io.tick_path(pass_dir))
+    assert tick["health"] == "waiting"
+    assert tick["ok"] is True
+    by_repo = {row["repo"]: row for row in tick["remaining"]["by_repo"]}
+    assert by_repo["a/one"]["occupied"] is True

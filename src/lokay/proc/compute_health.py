@@ -24,6 +24,13 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
     inbox_survey_failed = set(working.get("inbox_survey_failed") or [])
     ready_survey_failed = set(working.get("ready_survey_failed") or [])
 
+    occupied = {
+        str(name)
+        for name in list(working.get("occupied_repos") or [])
+        + list(working.get("merged_this_pass") or [])
+        + list(working.get("live_issue_to_pr_repos") or [])
+        if str(name or "")
+    }
     by_repo: list[dict[str, Any]] = []
     for repo_name in list(begin.get("repos") or []):
         pr_list = list(prs_by_repo.get(repo_name) or [])
@@ -36,6 +43,7 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
                 "open_ai_prs": len(pr_list),
                 "actionable_open_ai_prs": sum(not is_manual_pr(pr) for pr in pr_list),
                 "manual_open_ai_prs": sum(is_manual_pr(pr) for pr in pr_list),
+                "occupied": repo_name in occupied,
                 "survey_error": bool(
                     repo_name in pr_survey_failed
                     or repo_name in inbox_survey_failed

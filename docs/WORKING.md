@@ -156,10 +156,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    - `progress` — mutations moved the queue this pass
    - `repairing` — active repair / request_changes cycle (not mill-failing)
    - `waiting` — pending CI, no-CI while `require_checks`, review limbo,
-     green PRs while `merge.enabled` false (`remaining.merge_disabled`), or
-     only manual PRs (same soft matrix as `merge_policy`)
+     green PRs while `merge.enabled` false (`remaining.merge_disabled`),
+     only manual PRs (same soft matrix as `merge_policy`), or ready
+     tickets frozen by per-repo PR-first / occupancy
    - `stall` — actionable work with no progress (true stuck / agent disabled;
-     not merge-disarmed green)
+     not merge-disarmed green; not ready behind an open AI PR or live job)
    - `survey_error` — list atoms failed (refuse false idle)
 
 ## Continuous mill

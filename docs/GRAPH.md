@@ -84,7 +84,7 @@ host_ff
 | `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied) |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design) |
-| `compute_health` | remaining counters + honest mill health |
+| `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /

@@ -8,6 +8,7 @@ from lokay.merge_policy import (
     soft_waiting_remaining,
 )
 from lokay.passkit.health import health_payload as _health_payload
+from lokay.passkit.health import implementable_ready
 
 
 def test_survey_work_remaining_fails_ok():
@@ -76,6 +77,114 @@ def test_live_stall_when_ready_no_progress():
     )
     assert payload["health"] == "stall"
     assert payload["ok"] is False
+
+
+def test_live_waiting_when_ready_only_in_pr_first_or_occupied_repo():
+    """Catalog ready on a frozen repo is PR-first wait, not a stall fingerprint."""
+    remaining = {
+        "inbox": 0,
+        "ready": 57,
+        "open_ai_prs": 1,
+        "actionable_open_ai_prs": 1,
+        "manual_open_ai_prs": 0,
+        "mergeable_green": 0,
+        "needs_repair": 0,
+        "by_repo": [
+            {
+                "repo": "mikolaj92/influenzer",
+                "inbox": 0,
+                "ready": 57,
+                "open_ai_prs": 1,
+                "actionable_open_ai_prs": 1,
+                "manual_open_ai_prs": 0,
+                "occupied": False,
+            }
+        ],
+    }
+    assert implementable_ready(remaining, live=True, executor_enabled=True) == 0
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining=remaining,
+        actions=[{"step": "skip_ready_open_ai_pr", "repo": "mikolaj92/influenzer"}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+    assert payload["idle"] is False
+
+    occupied_only = {
+        "inbox": 0,
+        "ready": 56,
+        "open_ai_prs": 0,
+        "actionable_open_ai_prs": 0,
+        "mergeable_green": 0,
+        "needs_repair": 0,
+        "by_repo": [
+            {
+                "repo": "mikolaj92/influenzer",
+                "inbox": 0,
+                "ready": 56,
+                "open_ai_prs": 0,
+                "actionable_open_ai_prs": 0,
+                "occupied": True,
+            }
+        ],
+    }
+    assert implementable_ready(occupied_only, live=True, executor_enabled=True) == 0
+    occupied_payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining=occupied_only,
+        actions=[{"step": "skip_ready_repo_occupied", "repo": "mikolaj92/influenzer"}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert occupied_payload["health"] == "waiting"
+    assert occupied_payload["ok"] is True
+
+    mixed = {
+        "inbox": 0,
+        "ready": 3,
+        "open_ai_prs": 1,
+        "actionable_open_ai_prs": 1,
+        "mergeable_green": 0,
+        "needs_repair": 0,
+        "by_repo": [
+            {
+                "repo": "a/frozen",
+                "ready": 2,
+                "actionable_open_ai_prs": 1,
+                "occupied": False,
+            },
+            {
+                "repo": "a/clean",
+                "ready": 1,
+                "actionable_open_ai_prs": 0,
+                "occupied": False,
+            },
+        ],
+    }
+    assert implementable_ready(mixed, live=True, executor_enabled=True) == 1
+    mixed_payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining=mixed,
+        actions=[],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert mixed_payload["health"] == "stall"
 
 
 def test_live_stall_when_ready_but_agent_disabled():
