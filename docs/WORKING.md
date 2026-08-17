@@ -18,6 +18,8 @@ timeout retry resumes it. `--session` looks up an existing file and exits
 test token (`gate` → `test_e2e_gates.py`): matching `test_foo.py` promotes
 `foo.py`, and a still-empty product set opens first-party imports from those
 tests. A tests-only scope is how #41/#26 go `plan_only`.
+Standalone `X` must stay a stem (twitter/tweet in product files); dropping
+it is how #27 opens `brief_*`/`influenzer-hn` and never `playbook.py`.
 
 The factory exists to turn designed issues into **good toys** — merged
 product at the quality the gates already demand (real diff, tests that the

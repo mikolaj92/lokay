@@ -43,6 +43,7 @@ Węzły Fali `stage_implementing` / `stage_pr_open` / `stage_repairing` zostają
 
 `localize` nie zamyka agenta w `tests/`: `test_foo.py` promuje `foo.py`,
 a gdy produktu nadal brak — first-party importy z tych testów.
+Samodzielne `X` to stem platformy (twitter/tweet), nie zgubiony 1-znak.
 
 `host_ff updated` w trakcie passa zatrzymuje `factory_begin` (`health=host_updated`):
 git już nowy, import jeszcze stary — następny tick launchd przebudowuje koło.

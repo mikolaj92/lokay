@@ -396,3 +396,50 @@ def test_gate_only_test_hit_still_opens_imported_product(tmp_path: Path):
     assert "influenzer/hom.py" in loc.paths
     assert "influenzer/domain.py" in loc.paths
     assert "influenzer/unrelated.py" not in loc.paths
+
+
+def test_singleton_x_opens_platform_product_not_just_hn(tmp_path: Path):
+    """influenzer#27: one-letter token X was dropped; HN/brief won the scope."""
+    pkg = tmp_path / "influenzer"
+    pkg.mkdir()
+    (pkg / "playbook.py").write_text(
+        "def score_x():\n    # twitter empty feed / tweet reply\n    return 1\n",
+        encoding="utf-8",
+    )
+    (pkg / "brief_admit.py").write_text(
+        "def admit():\n    return 'brief'\n", encoding="utf-8"
+    )
+    (pkg / "brief_scan.py").write_text(
+        "def scan():\n    return 'hn'\n", encoding="utf-8"
+    )
+    (pkg / "unrelated.py").write_text("value = 1\n", encoding="utf-8")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_x_handoff.py").write_text(
+        "from influenzer.playbook import score_x\n# https://twitter.com/intent/tweet\n",
+        encoding="utf-8",
+    )
+    (tests / "test_brief_admit.py").write_text(
+        "from influenzer.brief_admit import admit\n", encoding="utf-8"
+    )
+    (tests / "test_e2e_gates.py").write_text("gate = 1\n", encoding="utf-8")
+    skills = tmp_path / "skills"
+    skills.mkdir()
+    (skills / "influenzer-hn").write_text("hn\n", encoding="utf-8")
+
+    seed = (
+        "X nie dostaje pustego feedu\n\n"
+        "Repository: `mikolaj92/influenzer`\n"
+        "Issue: #27 — X nie dostaje pustego feedu\n\n"
+        "X nie dostaje pustego feedu. Score nie wybiera X, chyba ze brief ma URL. "
+        "Ship bez watku -> github albo HN gdy tryable, inaczej cisza.\n"
+    )
+    loc = build_localization(worktree=tmp_path, seed_text=seed)
+    assert "influenzer/playbook.py" in loc.paths, loc.paths
+    assert "tests/test_x_handoff.py" in loc.paths, loc.paths
+    assert "influenzer/unrelated.py" not in loc.paths
+    assert "X" in loc.matched_tokens or "x" in {t.lower() for t in loc.matched_tokens}
+    # HN/brief may still appear (seed names them) but must not cage out X product.
+    assert loc.paths.index("influenzer/playbook.py") < loc.paths.index(
+        "skills/influenzer-hn"
+    ) or "skills/influenzer-hn" not in loc.paths
