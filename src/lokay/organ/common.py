@@ -91,6 +91,75 @@ def _test_local_ok(env: dict[str, Any] | None) -> bool:
     return env.get("ok") is True
 
 
+def _closed_issue_payload(raw: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Refuse envelope when a viewed issue is not OPEN. None means still open."""
+    if not isinstance(raw, dict) or not raw:
+        return None
+    state = str(raw.get("state") or "OPEN").upper()
+    if state == "OPEN":
+        return None
+    number = raw.get("number")
+    repo = str(raw.get("repo") or "")
+    return {
+        "ok": False,
+        "error": f"refusing: issue {repo}#{number} is {state}",
+        "reason": "issue_closed",
+        "issue_state": state,
+        "issue": number,
+        "repo": repo,
+    }
+
+
+def _issue_no_longer_open(
+    up: dict[str, dict[str, Any]],
+    *,
+    cfg: list[str] | None = None,
+    live: list[str] | None = None,
+    repo: str = "",
+    issue_number: int | None = None,
+    run=None,
+    get_issue_main=None,
+) -> dict[str, Any] | None:
+    """Stop coding / publishing when the ticket is no longer OPEN.
+
+    ``get_issue`` runs at the start of issue_to_pr. A sibling (human, Codex)
+    can close it during the 1800s slot; timeout-resume and pr_create must
+    re-view live, not trust that stale conduction. Gh flake stays fail-open
+    so a blip does not abort a still-open ticket. ``issue not found`` is closed.
+    """
+    raw = up.get("get_issue", {}).get("issue")
+    refused = _closed_issue_payload(raw if isinstance(raw, dict) else None)
+    if refused is not None:
+        return refused
+    if live is None or "--live" not in live:
+        return None
+    if not repo or issue_number is None or run is None or get_issue_main is None:
+        return None
+    try:
+        viewed = run(
+            get_issue_main,
+            [*(cfg or []), *live, "--repo", str(repo), "--issue", str(issue_number)],
+        )
+    except Exception:
+        return None
+    if not isinstance(viewed, dict):
+        return None
+    if viewed.get("ok") is False:
+        err = str(viewed.get("error") or "").lower()
+        if "not found" in err:
+            return {
+                "ok": False,
+                "error": f"refusing: issue {repo}#{issue_number} is missing",
+                "reason": "issue_closed",
+                "issue_state": "MISSING",
+                "issue": issue_number,
+                "repo": repo,
+            }
+        return None
+    issue = viewed.get("issue")
+    return _closed_issue_payload(issue if isinstance(issue, dict) else None)
+
+
 def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
 
@@ -186,17 +255,29 @@ def _resume_after_timeout(
     branch: str,
     issue_number: int | None,
     issue_raw: dict[str, Any],
+    get_issue_main=None,
 ) -> dict[str, Any]:
     """One continue pass on the same corner after executor timeout."""
+    import lokay.fala_organ as _fo
+
+    run = getattr(_fo, "_run_atom_main", _run_atom_main)
+    refused = _issue_no_longer_open(
+        {"get_issue": {"issue": issue_raw or {}}},
+        cfg=cfg,
+        live=live,
+        repo=repo,
+        issue_number=issue_number,
+        run=run,
+        get_issue_main=get_issue_main,
+    )
+    if refused is not None:
+        return refused
     prompt = timeout_resume_prompt(
         repo=repo,
         branch=branch,
         issue_number=issue_number,
         issue_title=str(issue_raw.get("title") or ""),
     )
-    import lokay.fala_organ as _fo
-
-    run = getattr(_fo, "_run_atom_main", _run_atom_main)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
         fh.write(prompt)
         prompt_path = fh.name

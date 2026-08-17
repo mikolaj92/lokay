@@ -249,6 +249,23 @@ def test_waiting_reason_is_not_fail_closed(tmp_path: Path):
     assert excluded_numbers(stuck, "a/b") == set()
 
 
+def test_issue_closed_is_not_fail_closed(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-5.json", repo="a/b", issue=5, pid=11)
+    _event(state, repo="a/b", issue=5, ok=False, reason="issue_closed")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert stuck["issues"] == {}
+
+
 def test_fala_journal_fallback_when_jsonl_silent(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()

@@ -104,6 +104,10 @@ mailbox residual (`waiting` / `human_residuals`). They must not count as mill
 `stall`, must not mint a recovery fingerprint, and must not PR-first-block
 implement of *other* ready issues in that repo.
 
+**Closed-issue abort is done, not stall:** timeout-resume / `pr_create` skip
+with `reason=issue_closed` when a sibling already closed the ticket. Harvest
+does not bury it; occupancy dies with the pid.
+
 **PR-first / occupancy is wait, not stall:** `remaining.ready` is the survey
 catalog. A late covering PR (published after `survey_prs`) or a live / just-
 merged occupancy freezes that catalog for the repo — closeout owns the lane.

@@ -9,6 +9,7 @@ from typing import Any
 
 from lokay.models import Issue
 from lokay.organ.common import (
+    _issue_no_longer_open,
     _localize_paths,
     _require_push,
     _require_real_diff,
@@ -27,7 +28,7 @@ from lokay.prompts import (
 
 def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
     from lokay.proc import (
-        assert_real_diff, commit_all, list_prs, pr_create, pr_label,
+        assert_real_diff, commit_all, get_issue, list_prs, pr_create, pr_label,
         push_branch, rebase_onto_base, run_agent, test_local,
     )
     from lokay.git_commit import branch_ahead_of_upstream
@@ -55,7 +56,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             or ""
         )
         assert worktree
-        # Fail-closed: localize must produce a non-empty path list before agent.
         if "localize" not in up:
             return {
                 "ok": False,
@@ -136,6 +136,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                 branch=branch,
                 issue_number=issue_number,
                 issue_raw=up.get("get_issue", {}).get("issue") or {},
+                get_issue_main=get_issue.main,
             )
         log_text = "\n".join(
             tail
@@ -192,7 +193,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             ) > 0
             committed = bool(up.get("commit_all", {}).get("committed"))
             if not (committed or unpublished):
-                # Zero-diff repair: the patch nest produced nothing to test.
                 return {
                     "ok": False,
                     "error": "refusing recheck: repair patch produced no commit",
@@ -201,9 +201,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         out = _run_atom_main(test_local.main, ["--worktree", worktree])
         if isinstance(out, dict):
             if out.get("ok") is False and not out.get("skipped"):
-                # Bounded loop exhausted: mark with a machine reason first, so
-                # it survives the organ's truncated failure raise (the log
-                # tails in this envelope can exceed the 2000-char raise cap).
                 out = {
                     "ok": False,
                     "reason": "local_repair_exhausted",
@@ -242,9 +239,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             commit_all.main,
             [*cfg, *live, "--worktree", worktree, "--message", msg],
         )
-        # The coding agent may commit directly (no staged diff left for the
-        # deterministic commit). A clean tree with unpublished commits is real
-        # progress — report it truthfully so test_local/push see the patch.
         if (
             isinstance(out, dict)
             and out.get("ok") is True
@@ -265,7 +259,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
         out = _run_atom_main(test_local.main, ["--worktree", worktree])
-        # Record a red first probe so Fala can conduct the one-shot repair nest.
         if (
             inputs.get("record_red")
             and isinstance(out, dict)
@@ -309,8 +302,6 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             return refused
         committed = up.get("commit_all", {}).get("committed")
         if inputs.get("live") and committed is not True:
-            # Repair agents may create commits themselves. A clean worktree with
-            # unpublished commits is real progress and must still be pushed.
             unpublished = branch_ahead_of_upstream(
                 runner(), Path(worktree), live=True
             ) > 0
@@ -329,8 +320,17 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         )
 
     if atom == "pr_create":
-        # Never open a PR off a red local suite, a plan-only diff, or a
-        # missing/failed push.
+        refused = _issue_no_longer_open(
+            up,
+            cfg=cfg,
+            live=live,
+            repo=repo,
+            issue_number=issue_number,
+            run=_run_atom_main,
+            get_issue_main=get_issue.main,
+        )
+        if refused is not None:
+            return refused
         refused = _require_test_local(up)
         if refused is not None:
             return refused

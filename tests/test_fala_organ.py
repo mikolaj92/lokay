@@ -411,6 +411,90 @@ def test_pr_create_green_tests_and_successful_push_runs(monkeypatch):
     assert called and "--head" in called[0]
 
 
+def test_pr_create_does_not_open_when_issue_already_closed(monkeypatch):
+    def boom(main, argv):
+        raise AssertionError("pr_create must not run after the issue closed")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    up = _pr_create_up()
+    up["get_issue"]["issue"]["state"] = "CLOSED"
+    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, up)
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+
+
+def test_pr_create_rechecks_live_issue_before_opening(monkeypatch):
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {
+                "ok": True,
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix thing",
+                    "state": "CLOSED",
+                },
+            }
+        raise AssertionError("gh pr create must not run after a live CLOSED re-view")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": True}, _pr_create_up())
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+
+
+def test_pr_create_runs_when_live_issue_still_open(monkeypatch):
+    called = []
+
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {
+                "ok": True,
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix thing",
+                    "state": "OPEN",
+                },
+            }
+        called.append(argv)
+        return {"ok": True, "pr": {"url": "https://example.test/pr/1"}}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": True}, _pr_create_up())
+    assert result["ok"] is True
+    assert called and "--head" in called[0]
+
+
+def test_repair_agent_treats_missing_live_issue_as_closed(monkeypatch):
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {"ok": False, "error": "issue not found: a/b#7"}
+        raise AssertionError("timeout-resume must not run after the issue vanished")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
+        {
+            "get_issue": {
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "OPEN",
+                }
+            },
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
+            "test_local": _ok_test_local(),
+        },
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+    assert result["issue_state"] == "MISSING"
+
+
 def test_push_red_recheck_does_not_push(monkeypatch):
     def boom(main, argv):
         raise AssertionError("push must not run after a red recheck")
@@ -509,6 +593,148 @@ def test_repair_agent_resumes_after_timeout_when_suite_green(monkeypatch):
     assert result["attempted"] is True
     assert result["reason"] == "timeout_resume"
     assert "killed after" in captured["prompt"]
+    assert "Resume" in captured["prompt"]
+
+
+def test_repair_agent_does_not_resume_when_issue_already_closed(monkeypatch):
+    def boom(main, argv):
+        raise AssertionError("timeout-resume must not run after the issue closed")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": False},
+        {
+            "get_issue": {
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "CLOSED",
+                }
+            },
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
+            "test_local": _ok_test_local(),
+        },
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+    assert result["issue_state"] == "CLOSED"
+
+
+def test_repair_agent_rechecks_live_issue_before_timeout_resume(monkeypatch):
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {
+                "ok": True,
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "CLOSED",
+                },
+            }
+        raise AssertionError("timeout-resume must not run after a live CLOSED re-view")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
+        {
+            "get_issue": {
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "OPEN",
+                }
+            },
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
+            "test_local": _ok_test_local(),
+        },
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+    assert result["issue_state"] == "CLOSED"
+
+
+def test_repair_agent_timeout_resume_stays_open_when_live_review_flakes(monkeypatch):
+    captured: dict = {}
+
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {"ok": False, "error": "API rate limit"}
+        if "--prompt-file" in argv:
+            captured["prompt"] = Path(argv[argv.index("--prompt-file") + 1]).read_text(
+                encoding="utf-8"
+            )
+        return {"ok": True, "status": "completed"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
+        {
+            "get_issue": {
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "OPEN",
+                }
+            },
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
+            "test_local": _ok_test_local(),
+        },
+    )
+    assert result["ok"] is True
+    assert result["reason"] == "timeout_resume"
+    assert "Resume" in captured["prompt"]
+
+
+def test_repair_agent_timeout_resume_when_live_issue_still_open(monkeypatch):
+    captured: dict = {}
+
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {
+                "ok": True,
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "OPEN",
+                },
+            }
+        if "--prompt-file" in argv:
+            captured["prompt"] = Path(argv[argv.index("--prompt-file") + 1]).read_text(
+                encoding="utf-8"
+            )
+        return {"ok": True, "status": "completed"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
+        {
+            "get_issue": {
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "title": "Fix x",
+                    "state": "OPEN",
+                }
+            },
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
+            "test_local": _ok_test_local(),
+        },
+    )
+    assert result["ok"] is True
+    assert result["reason"] == "timeout_resume"
     assert "Resume" in captured["prompt"]
 
 
