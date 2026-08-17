@@ -6,7 +6,7 @@ from typing import Any
 
 from lokay.config import Config, RepoConfig
 from lokay.gh_issues import ensure_labels
-from lokay.gh_rate import survey_pace
+from lokay.gh_rate import parse_survey_list, survey_list_cap, survey_pace
 from lokay.models import PullRequest
 from lokay.runner import CommandResult, Runner, gh_spec
 
@@ -66,6 +66,7 @@ def _label_names(value: Any) -> list[str] | None:
 def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[PullRequest]:
     if live:
         survey_pace(config)
+    cap = survey_list_cap()
     args = [
         "pr",
         "list",
@@ -76,14 +77,16 @@ def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: 
         "--json",
         "number,title,body,headRefName,headRefOid,author,url,isDraft,mergeable,labels",
         "--limit",
-        "50",
+        str(cap),
     ]
     result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     if not live:
         return []
     prefix = config.branch_prefix.rstrip("/") + "/"
     out: list[PullRequest] = []
-    for row in json.loads(result.stdout or "[]"):
+    for row in parse_survey_list(
+        result.stdout, kind="open-ai-pr", repo=repo.name, cap=cap
+    ):
         head = str(row.get("headRefName") or "")
         if not head.startswith(prefix):
             continue

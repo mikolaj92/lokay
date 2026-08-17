@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from lokay.config import Config, RepoConfig
-from lokay.gh_rate import survey_pace
+from lokay.gh_rate import parse_survey_list, survey_list_cap, survey_pace
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
 from lokay.triage import is_parked, is_undecided
@@ -110,54 +110,52 @@ def _issue_from_row(repo_name: str, row: dict) -> Issue:
     )
 
 
+def _list_open_issues(
+    runner: Runner,
+    config: Config,
+    repo: RepoConfig,
+    *,
+    live: bool,
+    label: str | None = None,
+    kind: str,
+) -> list[dict]:
+    """One full newest-first page. Hitting the cap is truncated, not idle."""
+    if live:
+        survey_pace(config)
+    cap = survey_list_cap()
+    args = ["issue", "list", "--repo", repo.name, "--state", "open"]
+    if label:
+        args.extend(["--label", label])
+    args.extend(
+        [
+            "--json",
+            "number,title,body,labels,assignees,author,url",
+            "--limit",
+            str(cap),
+        ]
+    )
+    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
+    if not live:
+        return []
+    return parse_survey_list(result.stdout, kind=kind, repo=repo.name, cap=cap)
+
+
 def list_labeled_issues(
     runner: Runner, config: Config, repo: RepoConfig, *, label: str, live: bool
 ) -> list[Issue]:
     """Open issues carrying one ledger/factory label (no ready-only filter)."""
-    if live:
-        survey_pace(config)
-    args = [
-        "issue",
-        "list",
-        "--repo",
-        repo.name,
-        "--state",
-        "open",
-        "--label",
-        label,
-        "--json",
-        "number,title,body,labels,assignees,author,url",
-        "--limit",
-        "50",
-    ]
-    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
-    if not live:
-        return []
-    return [_issue_from_row(repo.name, row) for row in json.loads(result.stdout or "[]")]
+    rows = _list_open_issues(
+        runner, config, repo, live=live, label=label, kind="labeled-issue"
+    )
+    return [_issue_from_row(repo.name, row) for row in rows]
 
 
 def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
-    if live:
-        survey_pace(config)
-    args = [
-        "issue",
-        "list",
-        "--repo",
-        repo.name,
-        "--state",
-        "open",
-        "--label",
-        config.ready_label,
-        "--json",
-        "number,title,body,labels,assignees,author,url",
-        "--limit",
-        "50",
-    ]
-    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
-    if not live:
-        return []
+    rows = _list_open_issues(
+        runner, config, repo, live=live, label=config.ready_label, kind="ready-issue"
+    )
     issues: list[Issue] = []
-    for row in json.loads(result.stdout or "[]"):
+    for row in rows:
         issue = _issue_from_row(repo.name, row)
         if config.blocked_label in issue.labels:
             continue
@@ -171,25 +169,9 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
 
 def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
     """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
-    if live:
-        survey_pace(config)
-    args = [
-        "issue",
-        "list",
-        "--repo",
-        repo.name,
-        "--state",
-        "open",
-        "--json",
-        "number,title,body,labels,assignees,author,url",
-        "--limit",
-        "50",
-    ]
-    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
-    if not live:
-        return []
+    rows = _list_open_issues(runner, config, repo, live=live, kind="inbox-issue")
     out: list[Issue] = []
-    for row in json.loads(result.stdout or "[]"):
+    for row in rows:
         issue = _issue_from_row(repo.name, row)
         if not is_undecided(
             issue.labels,
@@ -420,13 +402,14 @@ def list_issues_with_label(
     *,
     label: str,
     live: bool,
-    limit: int = 50,
+    limit: int | None = None,
 ) -> list[Issue]:
     """Open issues carrying a label (read-only survey helper)."""
     if not label:
         return []
     if live:
         survey_pace(config)
+    cap = survey_list_cap(limit)
     args = [
         "issue",
         "list",
@@ -439,9 +422,14 @@ def list_issues_with_label(
         "--json",
         "number,title,body,labels,assignees,author,url",
         "--limit",
-        str(max(1, min(int(limit), 100))),
+        str(cap),
     ]
     result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     if not live:
         return []
-    return [_issue_from_row(repo.name, row) for row in json.loads(result.stdout or "[]")]
+    return [
+        _issue_from_row(repo.name, row)
+        for row in parse_survey_list(
+            result.stdout, kind="labeled-issue", repo=repo.name, cap=cap
+        )
+    ]

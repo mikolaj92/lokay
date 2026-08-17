@@ -1,0 +1,153 @@
+"""Survey lists must not silently drop oldest tickets behind a newest-first cap."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from lokay.config import Config, RepoConfig
+from lokay.gh_issues import list_inbox_issues, list_issues_with_label, list_ready_issues
+from lokay.gh_prs import list_open_ai_prs
+from lokay.gh_rate import SURVEY_LIST_CAP, parse_survey_list, survey_list_cap
+from lokay.runner import CommandResult, CommandSpec
+
+
+class _ListRunner:
+    def __init__(self, rows: list[dict] | dict, *, returncode: int = 0) -> None:
+        self.rows = rows
+        self.returncode = returncode
+        self.calls: list[tuple[str, ...]] = []
+
+    def run(self, spec: CommandSpec, *, live: bool) -> CommandResult:
+        self.calls.append(spec.argv)
+        payload = self.rows
+        if isinstance(self.rows, dict):
+            argv = list(spec.argv)
+            kind = "issue" if "issue" in argv else "pr"
+            payload = self.rows.get(kind, [])
+        return CommandResult(
+            spec=spec,
+            executed=live,
+            returncode=self.returncode,
+            stdout=json.dumps(payload) if self.returncode == 0 else "",
+        )
+
+    def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:
+        result = self.run(spec, live=live)
+        if live and result.returncode != 0:
+            raise RuntimeError("fail")
+        return result
+
+
+def _cfg(tmp_path) -> tuple[Config, RepoConfig]:
+    repo = RepoConfig(name="mikolaj92/influenzer", clone_path=tmp_path)
+    cfg = Config(
+        assignee="mikolaj92",
+        allow_unassigned=True,
+        repos=[repo],
+        ready_label="ai:ready",
+        blocked_label="ai:blocked",
+        branch_prefix="ai/fix",
+    )
+    return cfg, repo
+
+
+def _issue_row(number: int, *labels: str) -> dict:
+    return {
+        "number": number,
+        "title": f"issue {number}",
+        "body": "body",
+        "labels": [{"name": name} for name in labels],
+        "assignees": [{"login": "mikolaj92"}],
+        "author": {"login": "mikolaj92"},
+        "url": f"https://example.com/{number}",
+        "state": "OPEN",
+    }
+
+
+def test_survey_list_cap_clamps_to_hard_ceiling():
+    assert survey_list_cap() == SURVEY_LIST_CAP
+    assert survey_list_cap(50) == 50
+    assert survey_list_cap(5000) == SURVEY_LIST_CAP
+    assert survey_list_cap(0) == 1
+
+
+def test_parse_survey_list_refuses_a_full_newest_first_page():
+    rows = parse_survey_list('[{"number": 1}]', kind="ready-issue", repo="a/b", cap=10)
+    assert rows == [{"number": 1}]
+    with pytest.raises(RuntimeError, match="newest-first cap"):
+        parse_survey_list(
+            json.dumps([{"number": i} for i in range(10)]),
+            kind="ready-issue",
+            repo="a/b",
+            cap=10,
+        )
+    with pytest.raises(RuntimeError, match="non-list"):
+        parse_survey_list("{}", kind="ready-issue", repo="a/b", cap=10)
+
+
+def test_list_ready_asks_for_full_page_and_keeps_oldest(tmp_path):
+    runner = _ListRunner(
+        [
+            _issue_row(185, "ai:ready"),
+            _issue_row(45, "ai:ready"),
+            _issue_row(24, "ai:ready"),
+        ]
+    )
+    cfg, repo = _cfg(tmp_path)
+    issues = list_ready_issues(runner, cfg, repo, live=True)
+    assert [i.number for i in issues] == [185, 45, 24]
+    argv = runner.calls[0]
+    assert argv[argv.index("--limit") + 1] == str(SURVEY_LIST_CAP)
+    assert "--label" in argv
+    assert argv[argv.index("--label") + 1] == "ai:ready"
+
+
+def test_list_ready_fail_closed_when_page_is_full(tmp_path):
+    runner = _ListRunner([_issue_row(i, "ai:ready") for i in range(SURVEY_LIST_CAP)])
+    cfg, repo = _cfg(tmp_path)
+    with pytest.raises(RuntimeError, match="newest-first cap"):
+        list_ready_issues(runner, cfg, repo, live=True)
+
+
+def test_list_inbox_uses_full_page(tmp_path):
+    runner = _ListRunner([_issue_row(3), _issue_row(2, "ai:ready")])
+    cfg, repo = _cfg(tmp_path)
+    issues = list_inbox_issues(runner, cfg, repo, live=True)
+    assert [i.number for i in issues] == [3]
+    assert runner.calls[0][runner.calls[0].index("--limit") + 1] == str(SURVEY_LIST_CAP)
+
+
+def test_list_issues_with_label_uses_full_page(tmp_path):
+    runner = _ListRunner([_issue_row(9, "ai:needs-feedback")])
+    cfg, repo = _cfg(tmp_path)
+    issues = list_issues_with_label(
+        runner, cfg, repo, label="ai:needs-feedback", live=True
+    )
+    assert [i.number for i in issues] == [9]
+    argv = runner.calls[0]
+    assert argv[argv.index("--limit") + 1] == str(SURVEY_LIST_CAP)
+
+
+def test_list_open_ai_prs_uses_full_page(tmp_path):
+    runner = _ListRunner(
+        [
+            {
+                "number": 301,
+                "title": "fix 49",
+                "body": "",
+                "headRefName": "ai/fix/49-reddit",
+                "headRefOid": "abc",
+                "author": {"login": "mikolaj92"},
+                "url": "https://example.com/301",
+                "isDraft": False,
+                "mergeable": "MERGEABLE",
+                "labels": [{"name": "ai:generated"}],
+            }
+        ]
+    )
+    cfg, repo = _cfg(tmp_path)
+    prs = list_open_ai_prs(runner, cfg, repo, live=True)
+    assert [pr.number for pr in prs] == [301]
+    assert runner.calls[0][runner.calls[0].index("--limit") + 1] == str(SURVEY_LIST_CAP)

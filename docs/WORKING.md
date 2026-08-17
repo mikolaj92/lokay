@@ -81,7 +81,8 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
 
 ## Full pass (one tick)
 
-1. **Survey** every managed repo: inbox, `ai:ready`, open `ai/fix/*` PRs.
+1. **Survey** every managed repo: inbox, `ai:ready`, open `ai/fix/*` PRs
+   (full newest-first page, cap 1000; hitting the cap is `survey_error`, not idle).
 2. **Per-repo PR-first**: PR close-out (conflict / repair / triage / waiting) is
    scoped to each repository. An **actionable** AI PR in repo A does **not**
    freeze inbox triage or `issue_to_pr` in repo B. Manual/terminal PRs
