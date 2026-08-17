@@ -113,6 +113,8 @@ does not bury it; occupancy dies with the pid.
 **PR-first / occupancy is wait, not stall:** `remaining.ready` is the survey
 catalog. A late covering PR (published after `survey_prs`) or a live / just-
 merged occupancy freezes that catalog for the repo — closeout owns the lane.
+`refresh_occupancy` must not spend a second 29-repo `gh pr list` on that
+frozen set (secondary rate-limit then fingerprints `survey_error`).
 Those ready rows must not fill `actionable_now` or the 4-of-5 stall quorum.
 A clean repo with leftover ready is still a stall if the mill made no progress.
 

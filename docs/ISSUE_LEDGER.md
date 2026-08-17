@@ -59,7 +59,7 @@ Pass katalogu (`factory_pass`):
 survey PRs → inbox → ready → triage → konflikty
   → closeout (najpierw merge otwartych PR)
     → reap resztek in-flight cache → ai:ready
-      → refresh_occupancy (re-list PRs ∪ live i2pr ∪ just-merged)
+      → refresh_occupancy (occupy live/merged; re-list leftover-ready only)
         → reap leftover worktrees (KEEP live/occupancy / open PR / dirty unpublished; one ls-remote per repo)
           → select / implement (K=1; skip occupied)
 ```

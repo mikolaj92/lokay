@@ -137,9 +137,10 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    ahead that already contains main, or a dirty leftover. `pr_repair`
    does **not** rebase a published tip.
    After closeout,
-   `refresh_occupancy` re-lists PRs and marks just-merged / still-coding
-   repos occupied so `select_implement` cannot start a sibling i2pr from
-   stale `origin/main`. Then `reap_stale_worktrees` drops leftover corners
+   `refresh_occupancy` marks just-merged / still-coding repos occupied
+   and re-lists PRs only on leftover-ready repos that are not already
+   occupied, so a 29-repo catalog does not 429 the secondary budget
+   before `select_implement`. Then `reap_stale_worktrees` drops leftover corners
    that cannot resume (merged, closed CONFLICTING, unpublished-behind-main)
    and KEEPs a live i2pr (from receipts **or** `working.json`), an open
    covering PR, or a dirty unpublished timeout leftover. A ready published

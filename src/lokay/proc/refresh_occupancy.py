@@ -1,9 +1,9 @@
-"""One job: after closeout, refresh which repos are occupied for implement.
+"""One job: after closeout, mark occupied repos for implement.
 
 Start-of-pass ``survey_prs`` is stale once closeout merges or a live
-``issue_to_pr`` is still coding. Re-list open AI PRs, union just-merged
-repos and live receipts, write occupancy so ``select_implement`` cannot
-start a sibling i2pr on a dirty / settling repo.
+``issue_to_pr`` is still coding. Union just-merged + live receipts first.
+Re-list open AI PRs only on leftover-ready repos that are not occupied.
+A 29-repo refresh after a full survey is what 429s the secondary budget.
 """
 
 from __future__ import annotations
@@ -28,6 +28,33 @@ def _merged_this_pass(working: dict[str, Any]) -> list[str]:
     return seen
 
 
+def _live_repos() -> list[str]:
+    live_repos: list[str] = []
+    for row in live_issue_to_pr_receipts():
+        repo_name = str(row.get("repo") or "")
+        if repo_name and repo_name not in live_repos:
+            live_repos.append(repo_name)
+    return live_repos
+
+
+def _keep_parked_labels(
+    previous: list[dict[str, Any]], rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    prev = {
+        int(row["number"]): row
+        for row in previous
+        if row.get("number") is not None
+    }
+    kept: list[dict[str, Any]] = []
+    for row in rows:
+        parked = prev.get(int(row["number"])) if row.get("number") is not None else None
+        if parked is not None and is_manual_pr(parked) and not is_manual_pr(row):
+            labels = list(row.get("labels") or [])
+            row = {**row, "labels": [*labels, "ai:needs-review"]}
+        kept.append(row)
+    return kept
+
+
 def run_refresh_occupancy(
     *,
     pass_dir: str,
@@ -39,59 +66,61 @@ def run_refresh_occupancy(
     live_flag = ["--live"] if live else []
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
     previous = dict(working.get("prs_by_repo") or {})
+    ready_by_repo = dict(working.get("ready_by_repo") or {})
+    merged = _merged_this_pass(working)
+    live_repos = _live_repos()
+    occupied = list(dict.fromkeys([*merged, *live_repos]))
+    occupied_set = set(occupied)
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
-    pr_survey_failed: list[str] = []
-    remaining_prs = 0
-    actionable_prs = 0
-    manual_prs = 0
-    pr_errors = 0
+    pr_survey_failed = set(working.get("pr_survey_failed") or [])
 
     for repo_name in list(begin.get("repos") or []):
+        prev_list = list(previous.get(repo_name) or [])
+        ready = list(ready_by_repo.get(repo_name) or [])
+        if repo_name in occupied_set:
+            actions.append(
+                {
+                    "step": "refresh_prs_skipped",
+                    "repo": repo_name,
+                    "reason": "occupied",
+                }
+            )
+            prs_by_repo[repo_name] = prev_list
+            continue
+        if not ready:
+            actions.append(
+                {
+                    "step": "refresh_prs_skipped",
+                    "repo": repo_name,
+                    "reason": "no_ready",
+                }
+            )
+            prs_by_repo[repo_name] = prev_list
+            continue
         prs = run_proc(p_list_prs.main, [*cfg_flag, *live_flag, "--repo", repo_name])
         actions.append({"step": "refresh_prs", "repo": repo_name, **prs})
         if not prs.get("ok"):
-            pr_errors += 1
-            pr_survey_failed.append(repo_name)
-            prs_by_repo[repo_name] = []
+            pr_survey_failed.add(repo_name)
+            # Keep closeout / survey snapshot. Emptying it would look like
+            # a clear lane and waste the next pass's rate budget.
+            prs_by_repo[repo_name] = prev_list
             continue
-        prev = {
-            int(row["number"]): row
-            for row in list(previous.get(repo_name) or [])
-            if row.get("number") is not None
-        }
-        pr_list: list[dict[str, Any]] = []
-        for row in list(prs.get("prs") or []):
-            parked = prev.get(int(row["number"])) if row.get("number") is not None else None
-            if parked is not None and is_manual_pr(parked) and not is_manual_pr(row):
-                labels = list(row.get("labels") or [])
-                row = {**row, "labels": [*labels, "ai:needs-review"]}
-            pr_list.append(row)
-        prs_by_repo[repo_name] = pr_list
-        remaining_prs += len(pr_list)
-        actionable_prs += sum(not is_manual_pr(pr) for pr in pr_list)
-        manual_prs += sum(is_manual_pr(pr) for pr in pr_list)
+        pr_survey_failed.discard(repo_name)
+        prs_by_repo[repo_name] = _keep_parked_labels(
+            prev_list, list(prs.get("prs") or [])
+        )
 
-    merged = _merged_this_pass(working)
-    live_rows = live_issue_to_pr_receipts()
-    live_repos: list[str] = []
-    for row in live_rows:
-        repo_name = str(row.get("repo") or "")
-        if repo_name and repo_name not in live_repos:
-            live_repos.append(repo_name)
-
-    occupied = list(dict.fromkeys([*merged, *live_repos]))
     inbox_failed = len(working.get("inbox_survey_failed") or [])
     ready_failed = len(working.get("ready_survey_failed") or [])
+    # Count every failed PR survey still on the board, not just this
+    # atom's new 429s. A skipped occupied/no_ready repo keeps its flag.
 
     working.update(
         {
             "actions": actions,
             "prs_by_repo": prs_by_repo,
             "pr_survey_failed": sorted(pr_survey_failed),
-            "remaining_prs": remaining_prs,
-            "actionable_prs": actionable_prs,
-            "manual_prs": manual_prs,
-            "survey_errors": inbox_failed + ready_failed + pr_errors,
+            "survey_errors": inbox_failed + ready_failed + len(pr_survey_failed),
             "merged_this_pass": merged,
             "live_issue_to_pr_repos": live_repos,
             "occupied_repos": occupied,
