@@ -215,7 +215,8 @@ Product mill time wins over emergency recovery.
 **Self-repair may run only when:**
 
 1. **Preflight lane** — daemon preflight proves Lokay unhealthy while the
-   minimal carrier remains healthy (not overlap, not carrier-down). Or
+   minimal carrier remains healthy (not overlap, not carrier-down). A
+   transient GitHub 503 on `/user` is not a missing token. Or
 2. **Product-stall quorum** — `daemon_cycle` observes a true product-mill /
    carrier-class failure fingerprint in **4 of the last 5** runs
    (`recovery-history.json`), then files one deduplicated incident and enters

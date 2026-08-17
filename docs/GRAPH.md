@@ -70,7 +70,7 @@ host_ff
 | Atom | One job |
 | --- | --- |
 | `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / skip-worktree would overwrite |
-| `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated (restart, do not mill on the previous import) |
+| `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token |
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error) |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error) |
 | `survey_ready` | list all ai:ready (full page; cap is survey_error); skip those covered by open AI PRs (label stays ready) |

@@ -5,12 +5,23 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from pathlib import Path
 from typing import Any, Callable
 
 
 Finding = dict[str, Any]
 Check = Callable[..., Finding]
+
+_TRANSIENT_MARKERS = (
+    "HTTP 429",
+    "HTTP 500",
+    "HTTP 502",
+    "HTTP 503",
+    "HTTP 504",
+    "No server is currently available",
+    "502 Bad Gateway",
+    "503 Service Unavailable",
+    "504 Gateway Timeout",
+)
 
 
 def finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> Finding:
@@ -42,24 +53,48 @@ def check_repository_catalog_clones(*, cfg: Any) -> Finding:
     )
 
 
+def _gh_run(argv: list[str], *, timeout: int = 10) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        argv,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+
+
+def _is_transient_github(stderr: str) -> bool:
+    blob = stderr or ""
+    return any(marker in blob for marker in _TRANSIENT_MARKERS)
+
+
+def _local_auth_present() -> bool:
+    """Token on disk is not the same question as /user being 503."""
+    try:
+        return _gh_run(["gh", "auth", "status", "--hostname", "github.com"]).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def check_github_authentication() -> Finding:
-    gh_ok = False
-    if shutil.which("gh"):
-        try:
-            gh_ok = (
-                subprocess.run(
-                    ["gh", "api", "user", "--silent"],
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=10,
-                    check=False,
-                ).returncode
-                == 0
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-    return finding("github_authentication", gh_ok, "ok" if gh_ok else "unavailable")
+    """Prove credentials exist. A 503 on /user is not a missing token.
+
+    Mini froze closeout of a MERGEABLE PR for 15+ ticks because GitHub
+    503'd ``gh api user`` while ``gh auth status`` and ``rate_limit`` worked.
+    """
+    if not shutil.which("gh"):
+        return finding("github_authentication", False, "unavailable")
+    try:
+        probed = _gh_run(["gh", "api", "user", "--silent"])
+    except (OSError, subprocess.TimeoutExpired):
+        ok = _local_auth_present()
+        return finding("github_authentication", ok, "ok" if ok else "unavailable")
+    if probed.returncode == 0:
+        return finding("github_authentication", True, "ok")
+    if _is_transient_github(probed.stderr or "") and _local_auth_present():
+        return finding("github_authentication", True, "ok")
+    return finding("github_authentication", False, "unavailable")
 
 
 def check_executor_availability(*, cfg: Any, repaired: set[str]) -> Finding:

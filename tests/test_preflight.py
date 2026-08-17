@@ -50,13 +50,27 @@ state:
     return path
 
 
+def _auth_ok(monkeypatch):
+    from lokay import preflight_checks
+
+    ok = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    real_which = preflight_checks.shutil.which
+
+    def fake_which(command, path=None, **kwargs):
+        if command == "gh":
+            return "/usr/bin/gh"
+        return real_which(command, path=path, **kwargs)
+
+    # preflight.shutil is preflight_checks.shutil — do not stub every command.
+    monkeypatch.setattr(preflight_checks.shutil, "which", fake_which)
+    monkeypatch.setattr(preflight_checks.subprocess, "run", lambda *args, **kwargs: ok)
+    return ok
+
+
 def _host_ok(monkeypatch):
+    ok = _auth_ok(monkeypatch)
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
-    monkeypatch.setattr(
-        preflight.subprocess,
-        "run",
-        lambda *args, **kwargs: type("Completed", (), {"returncode": 0})(),
-    )
+    monkeypatch.setattr(preflight.subprocess, "run", lambda *args, **kwargs: ok)
 
 
 def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch):
@@ -101,9 +115,12 @@ def test_missing_catalog_clone_does_not_block_global_preflight(tmp_path, monkeyp
 
 
 def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
+    from lokay import preflight_checks
+
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: None)
+    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: None)
 
     result = preflight.run_preflight(str(cfg))
 
@@ -520,11 +537,15 @@ def test_unavailable_runtime_path_does_not_open_github_issue(tmp_path, monkeypat
     )
 
     def allow_auth_only(args, **kwargs):
-        if args == ["gh", "api", "user", "--silent"]:
-            return type("Completed", (), {"returncode": 0})()
+        if list(args)[:3] == ["gh", "api", "user"]:
+            return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
         raise AssertionError("GitHub mutation attempted for runtime-path failure")
 
+    from lokay import preflight_checks
+
     monkeypatch.setattr(preflight.subprocess, "run", allow_auth_only)
+    monkeypatch.setattr(preflight_checks.subprocess, "run", allow_auth_only)
+    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}")
 
     result = preflight.run_preflight(str(cfg), remediate=False)
 
@@ -538,6 +559,7 @@ def test_unavailable_runtime_path_does_not_open_github_issue(tmp_path, monkeypat
 def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
+    _auth_ok(monkeypatch)
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else None)
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
     result = preflight.run_preflight(str(cfg))
@@ -557,6 +579,7 @@ def test_preflight_repairs_daemon_path_for_pi_in_local_bin(tmp_path, monkeypatch
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("LANG", "C.UTF-8")
+    _auth_ok(monkeypatch)
     real_which = preflight.shutil.which
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
@@ -582,6 +605,7 @@ def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monk
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("LANG", "C.UTF-8")
+    _auth_ok(monkeypatch)
     real_which = preflight.shutil.which
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
@@ -609,6 +633,7 @@ def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypat
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
     monkeypatch.setenv("LANG", "C.UTF-8")
+    _auth_ok(monkeypatch)
     real_which = preflight.shutil.which
     monkeypatch.setattr(
         preflight.shutil,
@@ -1070,3 +1095,95 @@ def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypat
     assert result["carrier_ok"] is False
     assert issued == []
     assert next(x for x in result["findings"] if x["name"] == "fala_manifest_provenance")["ok"] is False
+
+def test_github_auth_treats_user_503_as_ok_when_token_present(monkeypatch):
+    """Mini froze closeout while /user was 503 and gh auth status was fine."""
+    from lokay import preflight_checks
+
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, **kwargs):
+        cmd = tuple(argv)
+        calls.append(cmd)
+        if cmd[:3] == ("gh", "api", "user"):
+            return type(
+                "C",
+                (),
+                {
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": (
+                        "gh: No server is currently available to service "
+                        "your request. (HTTP 503)"
+                    ),
+                },
+            )()
+        if cmd[:3] == ("gh", "auth", "status"):
+            return type("C", (), {"returncode": 0, "stdout": "Logged in", "stderr": ""})()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
+    out = preflight_checks.check_github_authentication()
+    assert out["ok"] is True
+    assert out["code"] == "ok"
+    assert ("gh", "auth", "status", "--hostname", "github.com") in calls
+
+
+def test_github_auth_stays_unavailable_on_401(monkeypatch):
+    from lokay import preflight_checks
+
+    def fake_run(argv, **kwargs):
+        cmd = tuple(argv)
+        if cmd[:3] == ("gh", "api", "user"):
+            return type(
+                "C",
+                (),
+                {"returncode": 1, "stdout": "", "stderr": "HTTP 401: Bad credentials"},
+            )()
+        raise AssertionError(f"must not fall back on 401: {argv}")
+
+    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
+    out = preflight_checks.check_github_authentication()
+    assert out["ok"] is False
+    assert out["code"] == "unavailable"
+
+
+def test_preflight_releases_gate_when_user_api_is_503(tmp_path, monkeypatch):
+    from lokay import preflight_checks
+
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    ok = type("C", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}")
+    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **k: ok)
+
+    def fake_run(argv, **kwargs):
+        cmd = tuple(argv)
+        if cmd[:3] == ("gh", "api", "user"):
+            return type(
+                "C",
+                (),
+                {
+                    "returncode": 1,
+                    "stdout": "",
+                    "stderr": "HTTP 503\nNo server is currently available",
+                },
+            )()
+        if cmd[:2] == ("gh", "auth"):
+            return ok
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(
+        preflight_checks.shutil,
+        "which",
+        lambda command, **kwargs: "/usr/bin/gh" if command == "gh" else "/usr/bin/omp",
+    )
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
+    result = preflight.run_preflight(str(cfg))
+    assert result["ok"] is True, result
+    finding = next(x for x in result["findings"] if x["name"] == "github_authentication")
+    assert finding["ok"] is True
+
