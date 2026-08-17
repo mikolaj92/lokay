@@ -86,7 +86,10 @@ def test_every_subprocess_atom_inherits_pythonpath():
         for path in package["correlation_paths"]
         for effector in path["effectors"]
         if (effector.get("adapter") or {}).get("kind") == "subprocess"
-        and "PYTHONPATH" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
+        and (
+            "PYTHONPATH" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
+            or "LOKAY_PROCESS_HEAD" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
+        )
     ]
     assert missing == []
 
@@ -102,6 +105,7 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     assert "LOKAY_HEALTH_LEASE_PATH" in inherited
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
     assert "PYTHONPATH" in inherited
+    assert "LOKAY_PROCESS_HEAD" in inherited
 
 
 def test_subprocess_atoms_pin_project_cwd():

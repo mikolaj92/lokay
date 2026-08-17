@@ -2,12 +2,62 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 from lokay.runner import Runner, git_spec
 
 CANONICAL_REPO = "mikolaj92/lokay"
 SKIP_WORKTREE_CATALOG = "repos.mikolaj92.yaml"
+
+
+PROCESS_HEAD_ENV = "LOKAY_PROCESS_HEAD"
+
+
+def checkout_head(checkout: Path) -> str:
+    """Current HEAD of the mill checkout, or empty when unreadable."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(checkout), "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return ""
+    return (out.stdout or "").strip()
+
+
+def snapshot_process_head(checkout: Path) -> str:
+    """Remember the HEAD this mill process imported. Empty if already set or unread."""
+    existing = os.environ.get(PROCESS_HEAD_ENV, "").strip()
+    if existing:
+        return existing
+    head = checkout_head(checkout)
+    if head:
+        os.environ[PROCESS_HEAD_ENV] = head
+    return head
+
+
+def process_head_moved(checkout: Path) -> dict[str, object] | None:
+    """If launchd-ff moved HEAD under this live process, return a host_updated payload."""
+    started = os.environ.get(PROCESS_HEAD_ENV, "").strip()
+    if not started:
+        return None
+    current = checkout_head(checkout)
+    if not current or current == started:
+        return None
+    return {
+        "ok": False,
+        "error": "host checkout moved under this process; restart required before product work",
+        "reason": "host_updated",
+        "health": "host_updated",
+        "restart_required": True,
+        "head": current,
+        "origin_main": current,
+        "process_head": started,
+    }
 
 
 def origin_is_lokay(url: str) -> bool:

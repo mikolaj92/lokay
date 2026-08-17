@@ -31,6 +31,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "os.ftruncate" in script
     assert "| tee " not in script
     assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
+    assert "lock_busy" in script
+    assert "mill_lock_busy" in script
 
 
 def test_daemon_handles_missing_home_and_bounds_bootstrap_outbox():
@@ -130,6 +132,28 @@ def test_daemon_exposes_local_pi_to_preflight(tmp_path):
     assert glance["progress"] == 1
     assert "engine" not in glance
     assert "fala" not in glance
+
+
+def test_launchd_skips_host_ff_when_mill_lock_busy(tmp_path):
+    import fcntl
+
+    lock = tmp_path / ".lokay" / "mill.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock.open("a+", encoding="utf-8")
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        completed = _run_daemon(tmp_path)
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+    assert completed.returncode == 0, completed.stderr
+    argv_log = tmp_path / "uv-argv.log"
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-host-ff" not in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
+    logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
+    body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
+    assert "lock_busy" in body
 
 
 def test_second_tick_skips_uv_reinstall_when_digest_matches(tmp_path):

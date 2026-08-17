@@ -48,6 +48,9 @@ Samodzielne `X` to stem platformy (twitter/tweet), nie zgubiony 1-znak.
 
 `host_ff updated` w trakcie passa zatrzymuje `factory_begin` (`health=host_updated`):
 git już nowy, import jeszcze stary — następny tick launchd przebudowuje koło.
+Launchd nie robi `host_ff` gdy `mill.lock` jest trzymany (inaczej zjada
+`updated=true`); `LOKAY_PROCESS_HEAD` i tak odmawia, gdy HEAD ruszył pod
+żywym daemonem.
 
 Pass katalogu (`factory_pass`):
 

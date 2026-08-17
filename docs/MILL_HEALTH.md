@@ -69,7 +69,9 @@ wins over the editable pth). `PYTHONPATH=$LOKAY_ROOT/src` is exported so
 organ subprocesses and detached `issue_to_pr` import the checkout, not a
 stale wheel. An overlap envelope does not persist the digest. A failed
 reinstall does not persist the digest. In-cycle `host_ff updated=true`
-stops the pass (`health=host_updated`) so the next tick reloads. `LastExitStatus=0` when the pass did work (`health=progress`
+stops the pass (`health=host_updated`) so the next tick reloads. Launchd
+`host_ff` skips when `mill.lock` is held; `LOKAY_PROCESS_HEAD` still
+lifts `host_updated` if HEAD moved under the live daemon. `LastExitStatus=0` when the pass did work (`health=progress`
 or detached `issue_to_pr_started`), even if the Fala wrapper envelope has
 `ok: false`. `factory_begin` keeps a handful of `factory-pass-*` workspaces
 beside `state.jsonl` and deletes the rest. After occupancy,

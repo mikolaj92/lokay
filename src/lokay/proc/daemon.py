@@ -9,6 +9,7 @@ from pathlib import Path
 from lokay.compose.daemon_cycle import compose_daemon_cycle
 from lokay.config import load_config
 from lokay.envelope import emit_exit, err, process_exit_code
+from lokay.git_host_ff import snapshot_process_head
 from lokay.pass_receipt import read_pass_receipt
 from lokay.preflight import acquire_run_lock, revoke_health_lease, run_preflight
 from lokay.self_repair import run_self_repair
@@ -38,6 +39,9 @@ def main(argv: list[str] | None = None) -> int:
         payload = err("mill skipped; overlapping run", health="overlap", code="overlap")
     else:
         try:
+            root = os.environ.get("LOKAY_ROOT", "").strip()
+            if root:
+                snapshot_process_head(Path(root))
             health = run_preflight(args.config, remediate=True, issue_lease=True)
             if health.get("ok"):
                 payload = compose_daemon_cycle(
