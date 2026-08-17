@@ -110,6 +110,11 @@ merged occupancy freezes that catalog for the repo — closeout owns the lane.
 Those ready rows must not fill `actionable_now` or the 4-of-5 stall quorum.
 A clean repo with leftover ready is still a stall if the mill made no progress.
 
+**GitHub 503 is not missing auth:** `github_authentication` must not treat a
+transient `gh api user` 5xx as `unavailable` when `gh auth status` still
+proves a local token. That freezes closeout as `carrier_failed` while a
+MERGEABLE PR sits open.
+
 **Recovery boundary:** `waiting` / `repairing` (and other soft mill health) must
 not mint systemic stall fingerprints or fill the daemon 4-of-5 quorum into
 `self_repair`. Pass receipts and `lokay status` keep reporting those honest

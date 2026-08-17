@@ -137,15 +137,27 @@ state:
     monkeypatch.delenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", raising=False)
     monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
     monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+    from lokay import preflight_checks
+
+    ok = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}")
+    real_which = preflight_checks.shutil.which
+    monkeypatch.setattr(
+        preflight_checks.shutil,
+        "which",
+        lambda command, path=None, **kwargs: "/usr/bin/gh"
+        if command == "gh"
+        else real_which(command, path=path, **kwargs),
+    )
     real_run = subprocess.run
     monkeypatch.setattr(
         preflight.subprocess,
         "run",
-        lambda *args, **kwargs: type("Completed", (), {"returncode": 0})()
+        lambda *args, **kwargs: ok
         if args[0][0] == "gh"
         else real_run(*args, **kwargs),
     )
+    monkeypatch.setattr(preflight_checks.subprocess, "run", lambda *args, **kwargs: ok)
     observed: dict[str, object] = {}
 
     def factory_pass(**kwargs):
