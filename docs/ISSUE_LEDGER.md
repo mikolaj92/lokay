@@ -35,6 +35,7 @@ wolno brać  =  ai:ready
 otwarte, bez decyzji  --triage-->  ready | blocked | needs-feedback | close | split
 ready + brak mutexu   --dispatch-->  issue_to_pr   (ai:ready zostaje)
 ready + otwarty AI PR --survey-->  skip implement  (ai:ready zostaje; closeout włada PR)
+ready + occupied repo --select-->  skip implement  (health=waiting, nie stall)
 PR zmergowany         --stage_clear + close-->  closed
 konflikt PR           --close PR-->  ready zostaje, następny pass bierze od main
 ```

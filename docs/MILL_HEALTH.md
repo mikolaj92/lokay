@@ -85,7 +85,7 @@ fetch. A ready published tip is reaped; `issue_to_pr` RESETs from main.
 | --- | --- |
 | `idle` | No remaining actionable work — mill may sleep until new issues |
 | `progress` | Last pass moved the queue — mill is turning; **not** proof of Done |
-| `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox — honest wait |
+| `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox / ready catalog frozen by per-repo PR-first or occupancy — honest wait |
 | `repairing` | Repair / request_changes cycle in flight — honest wait |
 | `stall` | Actionable work with no progress — investigate agent/config (not merge-disarmed green) |
 | `survey_error` | `gh` list atoms failed — fix network/auth before trusting idle |
@@ -103,6 +103,12 @@ recovery.
 mailbox residual (`waiting` / `human_residuals`). They must not count as mill
 `stall`, must not mint a recovery fingerprint, and must not PR-first-block
 implement of *other* ready issues in that repo.
+
+**PR-first / occupancy is wait, not stall:** `remaining.ready` is the survey
+catalog. A late covering PR (published after `survey_prs`) or a live / just-
+merged occupancy freezes that catalog for the repo — closeout owns the lane.
+Those ready rows must not fill `actionable_now` or the 4-of-5 stall quorum.
+A clean repo with leftover ready is still a stall if the mill made no progress.
 
 **Recovery boundary:** `waiting` / `repairing` (and other soft mill health) must
 not mint systemic stall fingerprints or fill the daemon 4-of-5 quorum into

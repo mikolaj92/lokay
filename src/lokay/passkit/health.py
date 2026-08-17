@@ -8,6 +8,35 @@ from lokay.envelope import ok
 from lokay.merge_policy import actionable_mergeable_green, soft_waiting_remaining
 
 
+def implementable_ready(remaining: dict[str, Any], *, live: bool, executor_enabled: bool) -> int:
+    """Ready tickets the mill can start this pass.
+
+    ``remaining.ready`` is the survey catalog. Per-repo PR-first and occupancy
+    freeze that catalog until closeout / the live job finishes — those rows
+    are waiting, not stall bait.
+    """
+    ready = int(remaining.get("ready") or 0)
+    if live and not executor_enabled:
+        return 0
+    by_repo = remaining.get("by_repo")
+    if not isinstance(by_repo, list) or not by_repo:
+        return ready
+    implementable = 0
+    frozen = 0
+    for row in by_repo:
+        if not isinstance(row, dict):
+            continue
+        n = int(row.get("ready") or 0)
+        actionable_prs = int(row.get("actionable_open_ai_prs") or 0)
+        if actionable_prs > 0 or bool(row.get("occupied")):
+            frozen += n
+        else:
+            implementable += n
+    if implementable + frozen == ready:
+        return implementable
+    return max(0, ready - frozen)
+
+
 def health_payload(
     *,
     cfg_mode: str,
@@ -53,8 +82,12 @@ def health_payload(
             soft_waits, int(remaining.get("mergeable_green") or 0)
         )
     repair_actionable = needs_repair if executor_enabled else 0
-    # Ready issues need the agent slot when live.
-    ready_actionable = ready if (not live or executor_enabled) else 0
+    # Ready catalog is not stall bait when every remaining ticket sits in a
+    # PR-first / occupied repo (closeout owns the lane; next pass implements).
+    ready_actionable = implementable_ready(
+        remaining, live=live, executor_enabled=executor_enabled
+    )
+    # Disabled agent is still a stall even when the catalog is PR-first frozen.
     agent_blocked = bool(live and ready > 0 and not executor_enabled)
     # Active repair / CI wait / review limbo / parked needs-review / merge-disarmed
     # green are honest non-error waiting states. They must not fingerprint as stall.
