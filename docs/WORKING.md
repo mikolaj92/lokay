@@ -145,8 +145,11 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    occupied, so a 29-repo catalog does not 429 the secondary budget
    before `select_implement`. Then `reap_stale_worktrees` drops leftover corners
    that cannot resume (merged, closed CONFLICTING, unpublished-behind-main)
-   and KEEPs a live i2pr (from receipts **or** `working.json`), an open
-   covering PR, or a dirty unpublished timeout leftover. A ready published
+   and KEEPs a live i2pr (from receipts **or** `working.json`), a repo
+   whose PR survey failed, an open covering PR, or a dirty unpublished
+   timeout leftover. A failed `list_prs` is unknown, not idle — wiping
+   `prs_by_repo` must not let reap `push --delete` a published MERGEABLE
+   tip (that closes the GitHub PR). A ready published
    tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
    Classify with one `ls-remote --heads` per repo — a per-branch fetch
    stalls the pass. The plan atom is trust-with-evidence,

@@ -455,3 +455,40 @@ def test_classify_uses_ls_remote_not_per_branch_fetch(tmp_path, monkeypatch):
     )
     assert seen == [True]
     assert out["reaped_count"] == 1
+
+
+def test_keep_when_pr_survey_failed(tmp_path, monkeypatch):
+    """Failed list_prs is unknown, not idle — do not delete a published tip."""
+    branch = "ai/fix/40-show-hn"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not classify survey-failed repo")),
+    )
+
+    class _Boom:
+        def run(self, spec, *, live):
+            raise AssertionError(f"survey-failed repo must skip git: {spec.argv}")
+
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Boom())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must KEEP survey-failed repo")),
+    )
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(
+            tmp_path,
+            working={
+                "prs_by_repo": {"owner/repo": []},
+                "pr_survey_failed": ["owner/repo"],
+            },
+        ),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert out["kept"][0]["reason"] == "pr_survey_failed"
+    assert out["reaped_count"] == 0
+    assert out["kept_count"] == 1
