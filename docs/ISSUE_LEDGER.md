@@ -41,6 +41,9 @@ konflikt PR           --close PR-->  ready zostaje, następny pass bierze od mai
 
 Węzły Fali `stage_implementing` / `stage_pr_open` / `stage_repairing` zostają w DAG (kolejność), ale **nie nadają** `ai:in-progress` / `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`. Plan to `ready` + zdjęcie resztek cache.
 
+`localize` nie zamyka agenta w `tests/`: `test_foo.py` promuje `foo.py`,
+a gdy produktu nadal brak — first-party importy z tych testów.
+
 `host_ff updated` w trakcie passa zatrzymuje `factory_begin` (`health=host_updated`):
 git już nowy, import jeszcze stary — następny tick launchd przebudowuje koło.
 

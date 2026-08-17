@@ -247,6 +247,9 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   Missing/empty localize fails closed in the organ — agent does not start.
   `plan_issue.files_likely` is passed as `--extra-path`. Weak token hits do not
   pad the list to 40; a long list is a hint in the prompt, not a cage.
+  A tests-only inferred list is a cage: matching `test_foo.py` promotes
+  `foo.py`, and a still-empty product set opens first-party imports from
+  those tests so the agent can edit product code.
 - **run_agent timeout** (executor 1800s) is incomplete, not a graph hard-fail.
   The leftover tree is kept; `repair_agent` resumes the same corner / session
   once (K=1). Do not raise 1800 on the first shot.

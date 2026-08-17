@@ -326,3 +326,73 @@ def test_repo_package_name_is_not_a_forty_file_cage(tmp_path: Path):
     )
     assert "influenzer/brief_scan.py" in pinned.paths
     assert len(pinned.paths) < 8
+
+
+def test_inferred_scope_promotes_product_next_to_matching_tests(tmp_path: Path):
+    """influenzer#26/#41: token hits must not cage the agent in tests/ only."""
+    pkg = tmp_path / "influenzer"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("\n", encoding="utf-8")
+    (pkg / "scan_due.py").write_text("def due():\n    return 1\n", encoding="utf-8")
+    (pkg / "hom_draft.py").write_text("def draft():\n    return 1\n", encoding="utf-8")
+    (pkg / "hom_verdict.py").write_text("def verdict():\n    return 1\n", encoding="utf-8")
+    (pkg / "playbook.py").write_text("def play():\n    return 1\n", encoding="utf-8")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_scan_due.py").write_text(
+        "from influenzer.scan_due import due\n", encoding="utf-8"
+    )
+    (tests / "test_hom_draft.py").write_text(
+        "from influenzer.hom_draft import draft\n", encoding="utf-8"
+    )
+    (tests / "test_hom_verdict.py").write_text(
+        "from influenzer.hom_verdict import verdict\n", encoding="utf-8"
+    )
+    (tests / "test_e2e_gates.py").write_text(
+        "from influenzer.playbook import play\n", encoding="utf-8"
+    )
+    (tests / "test_brief_scan_cli.py").write_text("x\n", encoding="utf-8")
+    (tests / "test_scan_path.py").write_text("x\n", encoding="utf-8")
+
+    seed = (
+        "Launch to jeden stos 24-48h, nie drugi kat spoleczny\n\n"
+        "Repository: `mikolaj92/influenzer`\n"
+        "Issue: #26 — Launch to jeden stos\n\n"
+        "Jesli w oknie 48h jest juz noszalny draft github/hn (nawet po verdict pass), "
+        "kolejny scan/score nie puszcza drugiego kata. Jedna historia, jeden stos.\n"
+    )
+    loc = build_localization(worktree=tmp_path, seed_text=seed)
+    product = [p for p in loc.paths if p.startswith("influenzer/")]
+    tests_hit = [p for p in loc.paths if p.startswith("tests/")]
+    assert product, loc.paths
+    assert "influenzer/scan_due.py" in loc.paths
+    assert "influenzer/hom_draft.py" in loc.paths
+    assert "influenzer/hom_verdict.py" in loc.paths
+    assert "influenzer/playbook.py" not in loc.paths
+    assert tests_hit
+    assert loc.paths.index("influenzer/scan_due.py") < loc.paths.index(
+        "tests/test_scan_due.py"
+    )
+
+
+def test_gate_only_test_hit_still_opens_imported_product(tmp_path: Path):
+    """#41: token `gate` matched only tests/test_e2e_gates.py."""
+    pkg = tmp_path / "influenzer"
+    pkg.mkdir()
+    (pkg / "hom.py").write_text("x\n", encoding="utf-8")
+    (pkg / "domain.py").write_text("x\n", encoding="utf-8")
+    (pkg / "unrelated.py").write_text("x\n", encoding="utf-8")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_e2e_gates.py").write_text(
+        "from influenzer.hom import x\nfrom influenzer.domain import y\n",
+        encoding="utf-8",
+    )
+    loc = build_localization(
+        worktree=tmp_path,
+        seed_text="Reply na X bez nowej mysli = cisza\n\ngate keeps the lane silent.\n",
+    )
+    assert "tests/test_e2e_gates.py" in loc.paths
+    assert "influenzer/hom.py" in loc.paths
+    assert "influenzer/domain.py" in loc.paths
+    assert "influenzer/unrelated.py" not in loc.paths
