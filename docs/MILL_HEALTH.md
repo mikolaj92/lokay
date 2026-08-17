@@ -77,8 +77,9 @@ or detached `issue_to_pr_started`), even if the Fala wrapper envelope has
 beside `state.jsonl` and deletes the rest. After occupancy,
 `reap_stale_worktrees` drops leftover `~/.lokay/worktrees` corners that
 cannot resume (merged / closed CONFLICTING / unpublished-behind-main) and
-KEEPs a live i2pr (receipts or occupancy), an open covering PR, or a dirty
-unpublished leftover. One `ls-remote --heads` per repo — never a per-branch
+KEEPs a live i2pr (receipts or occupancy), a repo whose PR survey failed,
+an open covering PR, or a dirty unpublished leftover. A failed `list_prs`
+is unknown, not idle. One `ls-remote --heads` per repo — never a per-branch
 fetch. A ready published tip is reaped; `issue_to_pr` RESETs from main.
 
 ## How to read health

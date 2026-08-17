@@ -1,9 +1,10 @@
 """One job: drop leftover worktrees that cannot resume.
 
 After occupancy is known, a merged or closed-CONFLICTING corner still
-occupies disk (Mini: ~158G). KEEP a live i2pr (whole repo), an open
-covering PR, or an unpublished timeout leftover. A ready published tip
-is stale — issue_to_pr RESETs from ``origin/main``. REMOVE the rest.
+occupies disk (Mini: ~158G). KEEP a live i2pr (whole repo), a repo whose PR survey failed,
+an open covering PR, or an unpublished timeout leftover. A ready
+published tip is stale — issue_to_pr RESETs from ``origin/main``.
+REMOVE the rest. A failed ``list_prs`` is unknown, not idle.
 Never force-push. Fetch flake / unreadable git is fail-closed KEEP.
 Classify with one ``ls-remote`` per repo — a per-branch fetch stalls
 the factory pass.
@@ -98,6 +99,7 @@ def run_reap_stale_worktrees(
     live_repos = _names(working, "live_issue_to_pr_repos") | {
         name for name, _ in live_keys
     }
+    survey_failed = _names(working, "pr_survey_failed")
     covered, heads = _covering(working, branch_prefix=cfg.branch_prefix)
     git = make_runner(cfg)
     kept: list[dict[str, Any]] = []
@@ -119,6 +121,25 @@ def run_reap_stale_worktrees(
                     "issue": issue,
                     "worktree": str(path),
                     "reason": "live_issue_to_pr",
+                    "kept": True,
+                }
+                kept.append(row)
+                actions.append({"step": "keep_stale_worktree", **row})
+            continue
+        if repo.name in survey_failed:
+            # A failed PR list is unknown, not idle. Wiping prs_by_repo to []
+            # would make a published MERGEABLE tip look uncovered and a
+            # later push --delete closes the GitHub PR (influenzer #326).
+            for path, branch in leftovers:
+                issue = issue_number_from_branch(
+                    branch, branch_prefix=cfg.branch_prefix
+                )
+                row = {
+                    "repo": repo.name,
+                    "branch": branch,
+                    "issue": issue,
+                    "worktree": str(path),
+                    "reason": "pr_survey_failed",
                     "kept": True,
                 }
                 kept.append(row)
