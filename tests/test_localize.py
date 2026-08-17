@@ -443,3 +443,47 @@ def test_singleton_x_opens_platform_product_not_just_hn(tmp_path: Path):
     assert loc.paths.index("influenzer/playbook.py") < loc.paths.index(
         "skills/influenzer-hn"
     ) or "skills/influenzer-hn" not in loc.paths
+
+
+def test_skill_hit_still_opens_identifier_product(tmp_path: Path):
+    """influenzer#36/#40: a skill path is docs, not product; snake tokens live late in playbook."""
+    pkg = tmp_path / "influenzer"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("\n", encoding="utf-8")
+    padding = "# padding so the hook sits past the old 8KiB body window\n" * 400
+    body = (
+        padding
+        + "def has_fair_hook(text):\n    return True\n"
+        + "def choose_arena(kind):\n    return kind\n"
+    )
+    (pkg / "playbook.py").write_text(body, encoding="utf-8")
+    (pkg / "unrelated.py").write_text("value = 1\n", encoding="utf-8")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_e2e_gates.py").write_text(
+        "from influenzer.playbook import has_fair_hook, choose_arena\n",
+        encoding="utf-8",
+    )
+    skills = tmp_path / "skills"
+    (skills / "influenzer-shorts").mkdir(parents=True)
+    (skills / "influenzer-shorts" / "SKILL.md").write_text(
+        "Shorts skill. See playbook.\n", encoding="utf-8"
+    )
+    (skills / "influenzer-youtube").mkdir()
+    (skills / "influenzer-youtube" / "SKILL.md").write_text(
+        "YouTube skill.\n", encoding="utf-8"
+    )
+
+    seed = (
+        "Shorts bez haczyka 1-3s = cisza\n\n"
+        "Repository: `mikolaj92/influenzer`\n"
+        "Issue: #36 — Shorts bez haczyka\n\n"
+        "Shorts to swipe, nie VOD. `has_fair_hook` fail-closed. "
+        "Ten sam cut co YouTube nie przechodzi.\n"
+    )
+    loc = build_localization(worktree=tmp_path, seed_text=seed)
+    assert "influenzer/playbook.py" in loc.paths, loc.paths
+    assert "influenzer/unrelated.py" not in loc.paths
+    assert loc.paths.index("influenzer/playbook.py") < loc.paths.index(
+        "tests/test_e2e_gates.py"
+    )
