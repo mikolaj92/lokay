@@ -599,6 +599,9 @@ def _score_path(
             score += 50
         elif tok in lowered_parts:
             score += 30
+        elif tok in stem.split("_") or tok in stem.split("-"):
+            # scan_due.py ← token `scan` is the same hit as a directory named scan.
+            score += 30
         elif any(tok in p for p in lowered_parts):
             score += 10
         elif tok in rel.lower():
@@ -606,7 +609,13 @@ def _score_path(
     # Prefer source / tests over docs and lockfiles.
     if parts and parts[0] in {"src", "tests", "fala", "scripts", "config"}:
         score += 8
-    if name.startswith("test_") or "/tests/" in f"/{rel}/":
+    is_test = name.startswith("test_") or "/tests/" in f"/{rel}/"
+    if is_test:
+        score += 12
+    elif score > 0:
+        # A product file with a real token hit must clear the inferred
+        # floor alongside its tests. Otherwise `gate`/`scan` cages the
+        # agent in tests/ and the mill records plan_only.
         score += 12
     if rel.endswith((".py", ".mojo", ".toml", ".yaml", ".yml", ".sh")):
         score += 4
@@ -615,6 +624,94 @@ def _score_path(
     if name in _DEMOTE_FILE_NAMES or any(p in _DEMOTE_DIR_PARTS for p in lowered_parts):
         score -= 40
     return score
+
+
+def _is_test_rel(rel: str) -> bool:
+    name = Path(rel).name.lower()
+    return name.startswith("test_") or "/tests/" in f"/{rel}/"
+
+
+def _product_stem_from_test(rel: str) -> str:
+    stem = Path(rel).stem.lower()
+    return stem[5:] if stem.startswith("test_") else ""
+
+
+_IMPORT_RE = re.compile(
+    r"^(?:from|import)\s+([A-Za-z_][\w.]*)",
+    re.MULTILINE,
+)
+
+
+def _first_party_imports(abs_path: Path, tree_set: set[str]) -> tuple[str, ...]:
+    """Map `from pkg.mod import x` to an existing repo-relative product file."""
+    try:
+        text = abs_path.read_text(encoding="utf-8")
+    except OSError:
+        return ()
+    found: list[str] = []
+    for mod in _IMPORT_RE.findall(text):
+        root = mod.split(".", 1)[0]
+        if root in {
+            "__future__",
+            "tests",
+            "typing",
+            "pathlib",
+            "unittest",
+            "json",
+            "io",
+            "os",
+            "sys",
+            "re",
+            "ast",
+            "collections",
+            "contextlib",
+            "datetime",
+            "tempfile",
+            "tomllib",
+        }:
+            continue
+        rel = mod.replace(".", "/")
+        for cand in (f"{rel}.py", f"{rel}/__init__.py"):
+            if cand in tree_set and not _is_test_rel(cand):
+                found.append(cand)
+                break
+        if len(found) >= 8:
+            break
+    return tuple(dict.fromkeys(found))
+
+
+def _attach_product_paths(
+    selected: list[str],
+    *,
+    tree_list: list[str],
+    worktree: Path | None,
+    max_paths: int,
+) -> list[str]:
+    """A tests-only inferred scope is a cage. Open the matching product files."""
+    tree_set = set(tree_list)
+    extra: list[str] = []
+    for rel in selected:
+        if not _is_test_rel(rel):
+            continue
+        stem = _product_stem_from_test(rel)
+        paired: list[str] = []
+        if stem:
+            for cand in tree_list:
+                if _is_test_rel(cand):
+                    continue
+                if Path(cand).stem.lower() == stem:
+                    paired.append(cand)
+        extra.extend(paired)
+    if not any(not _is_test_rel(p) for p in (*selected, *extra)) and worktree is not None:
+        root = Path(worktree)
+        for rel in selected:
+            if not _is_test_rel(rel):
+                continue
+            extra.extend(_first_party_imports(root / rel, tree_set))
+    out = list(dict.fromkeys([p for p in extra if p] + selected))
+    product = [p for p in out if not _is_test_rel(p)]
+    tests = [p for p in out if _is_test_rel(p)]
+    return list(dict.fromkeys(product + tests))[:max_paths]
 
 
 def select_paths(
@@ -660,6 +757,13 @@ def select_paths(
         selected.append(rel)
         if len(selected) >= max_paths:
             break
+
+    selected = _attach_product_paths(
+        selected,
+        tree_list=tree_list,
+        worktree=worktree,
+        max_paths=max_paths,
+    )
 
     # If still empty, try directory-level matches from tokens against top-level tree.
     # Repo / package name is not a directory hit — that is the whole product.
