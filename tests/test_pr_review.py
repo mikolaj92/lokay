@@ -117,6 +117,54 @@ def test_review_prompt_sets_collector_execution_boundary():
     assert "wait for collection to finish" in prompt
 
 
+def _prompt_with_plan_in_diff() -> str:
+    diff = (
+        "diff --git a/.lokay/approach.md b/.lokay/approach.md\n"
+        "--- /dev/null\n+++ b/.lokay/approach.md\n"
+        "@@ -0,0 +1,4 @@\n"
+        "+# Approach plan\n"
+        "+## Goal\n"
+        "+SECRET_PLAN_GOAL_SHIP_THE_ATOM\n"
+        "+## Files\n"
+        "+src/lokay/pr_review.py\n"
+        "diff --git a/src/lokay/pr_review.py b/src/lokay/pr_review.py\n"
+        "--- a/src/lokay/pr_review.py\n+++ b/src/lokay/pr_review.py\n"
+        "@@ -1 +1,2 @@\n"
+        " # review\n"
+        "+REAL_CODE_HUNK\n"
+    )
+    return review_prompt(
+        repo="owner/repo",
+        pr_number=42,
+        title="blind review ticket",
+        body="Ticket body: fix the review atom.",
+        head_ref="ai/fix/42-blind",
+        diff_text=diff,
+        checks_text="pytest tests/test_pr_review.py PASSED",
+    )
+
+
+def test_review_prompt_is_blind_to_approach_plan():
+    """Reviewer sees ticket + code diff + tests; never the builder plan."""
+    text = _prompt_with_plan_in_diff()
+    lowered = text.lower()
+    assert "blind review ticket" in text
+    assert "Ticket body: fix the review atom." in text
+    assert "REAL_CODE_HUNK" in text
+    assert "pytest tests/test_pr_review.py PASSED" in text
+    assert "SECRET_PLAN_GOAL_SHIP_THE_ATOM" not in text
+    assert "approach.md" not in lowered
+    assert "approach excerpt" not in lowered
+    assert "approach evidence" not in lowered
+    assert "approach plan" not in lowered
+    assert "porównaj" not in lowered
+    assert "compare the implementation" not in lowered
+    assert "compare the diff to" not in lowered
+    assert "compare" not in lowered or "plan" not in lowered
+    assert "soft signal" not in lowered
+    assert "porównaj do planu" not in lowered
+
+
 def test_review_marker_roundtrip_and_head_lookup():
     body = build_review_comment_body(
         parse_review_output(

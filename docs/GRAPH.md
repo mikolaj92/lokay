@@ -155,8 +155,9 @@ get_issue
 Mostly deterministic extraction from the issue body (+ path hints). Optional
 `--llm` assist is skippable and fail-closed when requested without a configured
 slot. This is **evidence for intentional issues**, not a human approval gate and
-not `NEEDS_HUMAN` by default. Later `pr_review` may compare the diff to the plan
-as a soft signal (missing/misaligned approach → `nits` only).
+not `NEEDS_HUMAN` by default. `pr_review` is blind to that plan: the reviewer
+sees ticket + code diff + tests, not `.lokay/approach.md` and not a
+compare-to-plan instruction.
 
 `localize` (`lokay-localize`) is a separate deterministic atom (Agentless
 localization → repair → validation): seed text (issue + approach.md) plus the
@@ -227,8 +228,8 @@ Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_E
 approve + green checks + local tests → `pr_merge` + `close_issue` in one path; pending → waiting;
 red → repair; secrets / `needs_human` / escalated `ai:needs-review` never merge.
 Soft documentation nits must not route to `ai:needs-review`.
-Presence / light alignment of `.lokay/approach.md` is a soft review signal only —
-never invent a human gate from a missing plan file.
+`pr_review` does not load `.lokay/approach.md` or ask the reviewer to compare
+the diff to the builder plan. The plan stays builder evidence only.
 Config: `merge.require_llm_review` (default true), `merge.require_checks` (default false).
 Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 

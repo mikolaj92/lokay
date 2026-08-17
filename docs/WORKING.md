@@ -138,7 +138,8 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
    Classify with one `ls-remote --heads` per repo — a per-branch fetch
    stalls the pass. The plan atom is trust-with-evidence,
-   not a human gate. For a seed classified separately as unbounded collection
+   not a human gate. `pr_review` is blind to `.lokay/approach.md`
+   (ticket + code diff + tests only). For a seed classified separately as unbounded collection
    work, the executor may make only the bounded collector/bootstrap patch: the
    deployed collector starts durably in the background after merge. Pi and the
    mill never populate its data or wait for it to finish; a later issue observes

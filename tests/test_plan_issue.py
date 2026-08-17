@@ -184,7 +184,7 @@ new file mode 100644
     assert approach_present_in_diff("diff --git a/src/x.py b/src/x.py\n") is False
 
 
-def test_review_prompt_notes_missing_approach_as_soft():
+def test_review_prompt_stays_blind_when_approach_missing():
     text = review_prompt(
         repo="owner/repo",
         pr_number=9,
@@ -194,18 +194,22 @@ def test_review_prompt_notes_missing_approach_as_soft():
         diff_text="diff --git a/src/a.py b/src/a.py\n",
         checks_text="",
     )
-    assert "soft nit" in text.lower() or "soft signal" in text.lower()
-    assert "not a human gate" in text.lower() or "never needs_human" in text.lower()
-    assert "Approach plan" in text or "approach.md" in text
+    lowered = text.lower()
     assert "Collector boundary" in text
     assert "must not use Pi or the mill to populate data" in text
+    assert "approach.md" not in lowered
+    assert "soft signal" not in lowered
+    assert "compare the" not in lowered
 
 
-def test_review_prompt_notes_present_approach():
+def test_review_prompt_strips_approach_hunk_from_diff():
     diff = (
         "diff --git a/.lokay/approach.md b/.lokay/approach.md\n"
         "--- /dev/null\n+++ b/.lokay/approach.md\n"
         "@@ -0,0 +1,2 @@\n+# Approach plan\n+## Goal\n"
+        "diff --git a/src/a.py b/src/a.py\n"
+        "--- a/src/a.py\n+++ b/src/a.py\n"
+        "@@ -1 +1,2 @@\n keep\n+CODE_ONLY\n"
     )
     text = review_prompt(
         repo="owner/repo",
@@ -216,7 +220,9 @@ def test_review_prompt_notes_present_approach():
         diff_text=diff,
         checks_text="",
     )
-    assert "appears in this PR diff" in text
+    assert "CODE_ONLY" in text
+    assert "Approach plan" not in text
+    assert "approach.md" not in text.lower()
 
 
 def test_commit_all_force_adds_approach_md(tmp_path: Path, monkeypatch):

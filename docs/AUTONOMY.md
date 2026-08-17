@@ -89,8 +89,8 @@ Atom: `lokay-stage-label --stage <name>`. In-flight names map to ready.
    `lokay-plan-issue` writes `.lokay/approach.md` after `worktree_add` and
    **before** `run_agent` (goal / likely files / test plan / non-goals).
    Trust-with-evidence for intentional issues — **not** a human approval gate
-   and not `NEEDS_HUMAN` by default. `pr_review` may note plan presence /
-   light alignment as a soft signal only.
+   and not `NEEDS_HUMAN` by default. `pr_review` is blind to the plan
+   (ticket + code diff + tests only).
 6. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
    red checks → `repair`; approve + green → merge; secrets / needs_human /
    escalated `ai:needs-review` → fail closed.

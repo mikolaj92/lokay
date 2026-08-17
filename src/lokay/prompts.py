@@ -238,10 +238,6 @@ Automated Lokay fix for {issue.repo}#{issue.number}.
 
 {issue.title}
 
-## Approach
-
-See `.lokay/approach.md` on this branch (plan-before-agent evidence). Later review may compare the diff to that plan as a soft signal — not a human approval gate.
-
 ## Agent notes
 
 {agent_summary[:4000] or "(no summary)"}
