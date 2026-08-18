@@ -9,7 +9,9 @@ leftovers. A failed ``list_prs`` is unknown, not idle.
 Never force-push. Fetch flake / unreadable git is fail-closed KEEP.
 Classify with one ``ls-remote`` per repo. Never fetch here: a 300s
 ``git fetch`` per leftover repo eats the 5–10 min cycle. Walk only
-survey_scope (hot + rotated cold).
+survey_scope (hot + rotated cold). Cap leftover classification per pass
+(``CLASSIFY_CAP``): ``leftover_status`` (rev-list + ls-files) on 66
+corners ate the implement slot. Excess leftovers stay KEEP ``over_cap``.
 """
 
 from __future__ import annotations
@@ -33,6 +35,10 @@ from lokay.proc.detach_issue_to_pr import (
 )
 from lokay.runner import git_spec
 from lokay.stuck import issue_number_from_branch
+
+# leftover_status is seconds each (rev-list + ls-files). 66 leftovers
+# ate the 5–10 min implement slot. Classify a handful; skip the rest.
+CLASSIFY_CAP = 4
 
 
 def _live_keys(rows: list[dict[str, Any]]) -> set[tuple[str, int]]:
@@ -113,6 +119,7 @@ def run_reap_stale_worktrees(
     kept: list[dict[str, Any]] = []
     reaped: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
+    classified = 0
 
     for repo in cfg.active_repos():
         if scope is not None and repo.name not in scope:
@@ -209,7 +216,10 @@ def run_reap_stale_worktrees(
                 reason = "unreadability" if live else "planned"
                 if live and fetch_err:
                     row["error"] = fetch_err
+            if reason is None and classified >= CLASSIFY_CAP:
+                reason = "over_cap"
             if reason is None:
+                classified += 1
                 status = leftover_status(
                     git,
                     path,
