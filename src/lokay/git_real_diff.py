@@ -33,20 +33,43 @@ def classify_changed_paths(paths: list[str] | tuple[str, ...]) -> str:
     return "real"
 
 
-def list_changed_paths(runner: Runner, worktree: Path, *, base: str) -> list[str]:
-    """Union of committed, staged, unstaged, and untracked paths vs *base*."""
+def _list_paths(runner: Runner, worktree: Path, queries: tuple[list[str], ...]) -> list[str]:
     found: set[str] = set()
-    queries = (
-        ["diff", "--name-only", "--relative", f"{base}...HEAD"],
-        ["diff", "--name-only", "--relative", base],
-        ["diff", "--name-only", "--cached", "--relative"],
-        ["diff", "--name-only", "--relative"],
-        ["ls-files", "--others", "--exclude-standard"],
-    )
     for argv in queries:
         result = runner.run(git_spec(argv, cwd=worktree), live=True)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(detail or f"cannot inspect worktree paths: {' '.join(argv)}")
         for line in (result.stdout or "").splitlines():
             rel = normalize_rel(line)
             if rel:
                 found.add(rel)
     return sorted(found)
+
+
+def list_uncommitted_paths(runner: Runner, worktree: Path) -> list[str]:
+    """Union of staged, unstaged, and untracked paths, excluding commits."""
+    return _list_paths(
+        runner,
+        worktree,
+        (
+            ["diff", "--name-only", "--cached", "--relative"],
+            ["diff", "--name-only", "--relative"],
+            ["ls-files", "--others", "--exclude-standard"],
+        ),
+    )
+
+
+def list_changed_paths(runner: Runner, worktree: Path, *, base: str) -> list[str]:
+    """Union of committed, staged, unstaged, and untracked paths vs *base*."""
+    return _list_paths(
+        runner,
+        worktree,
+        (
+            ["diff", "--name-only", "--relative", f"{base}...HEAD"],
+            ["diff", "--name-only", "--relative", base],
+            ["diff", "--name-only", "--cached", "--relative"],
+            ["diff", "--name-only", "--relative"],
+            ["ls-files", "--others", "--exclude-standard"],
+        ),
+    )

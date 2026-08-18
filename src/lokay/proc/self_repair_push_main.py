@@ -16,6 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--worktree", required=True)
     p.add_argument("--base-sha", required=True)
     p.add_argument("--validated", action="store_true", required=True)
+    p.add_argument("--expected-commit", default="")
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
@@ -38,6 +39,8 @@ def main(argv: list[str] | None = None) -> int:
         ).stdout.strip()
         if head == args.base_sha:
             raise RuntimeError("self-repair produced no commit")
+        if args.expected_commit and head != args.expected_commit:
+            raise RuntimeError("self-repair candidate changed after validation")
         run.run_checked(
             git_spec(
                 ["push", "origin", f"{head}:refs/heads/main"],

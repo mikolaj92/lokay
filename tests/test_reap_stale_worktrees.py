@@ -222,6 +222,74 @@ def test_keep_unpublished_or_dirty(tmp_path, monkeypatch):
     assert removed == []
 
 
+def test_keep_published_tip_with_real_uncommitted_work(tmp_path, monkeypatch):
+    branch = "ai/fix/142-prompt-i-i-asked"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: {
+            "readable": True,
+            "ahead": 3,
+            "behind_main": 0,
+            "published": True,
+            "dirty": "real",
+            "uncommitted": "real",
+            "keep_unpublished": False,
+        },
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must keep partial work")),
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+
+    assert out["kept"][0]["reason"] == "uncommitted_real"
+    assert out["reaped_count"] == 0
+
+
+def test_keep_unpublished_behind_main_with_real_uncommitted_work(tmp_path, monkeypatch):
+    branch = "ai/fix/142-prompt"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: {
+            "readable": True,
+            "ahead": 3,
+            "behind_main": 4,
+            "published": False,
+            "dirty": "real",
+            "uncommitted": "real",
+            "keep_unpublished": False,
+        },
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must keep partial work")),
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+
+    assert out["kept"][0]["reason"] == "uncommitted_real"
+    assert out["reaped_count"] == 0
+
+
 def test_remove_published_closed_tip(tmp_path, monkeypatch):
     branch = "ai/fix/142-prompt-i-i-asked"
     wt = _corner(tmp_path, branch)

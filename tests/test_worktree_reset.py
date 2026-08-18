@@ -409,6 +409,37 @@ def test_leftover_status_keeps_dirty_unpublished(tmp_path):
     assert status["dirty"] == "real"
 
 
+def test_leftover_status_reports_real_uncommitted_on_published_tip(tmp_path):
+    branch = "ai/fix/54-x"
+    _cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="2")
+    runner.behind = 0
+    runner.diff_names = "src/partial.py\n"
+
+    status = leftover_status(runner, wt, repo.clone_path, branch)
+
+    assert status["published"] is True
+    assert status["uncommitted"] == "real"
+
+
+def test_leftover_status_fails_closed_when_uncommitted_state_is_unreadable(tmp_path):
+    branch = "ai/fix/54-x"
+    _cfg, repo, wt = _cfg_repo(tmp_path, branch)
+
+    class _Unreadable(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["diff", "--name-only", "--cached"]:
+                self.calls.append(argv)
+                return _result(argv, returncode=128, stderr="cannot read index")
+            return super().run(spec, live=live)
+
+    status = leftover_status(_Unreadable(ahead="2"), wt, repo.clone_path, branch)
+
+    assert status["readable"] is False
+    assert "cannot read index" in status["error"]
+
+
 def test_leftover_status_fail_closed_on_branch_fetch_flake(tmp_path):
     branch = "ai/fix/54-x"
     cfg, repo, wt = _cfg_repo(tmp_path, branch)

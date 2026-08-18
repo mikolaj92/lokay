@@ -29,13 +29,14 @@ class FakeRunner:
         return result(spec.argv)
 
 
-def invoke(monkeypatch, tmp_path, fake, *, base="base"):
+def invoke(monkeypatch, tmp_path, fake, *, base="base", expected=""):
     monkeypatch.setattr(self_repair_push_main, "load_cfg", lambda a: SimpleNamespace())
     monkeypatch.setattr(self_repair_push_main, "mutations_allowed", lambda **k: True)
     monkeypatch.setattr(self_repair_push_main, "runner", lambda: fake)
     return self_repair_push_main.main([
         "--config", str(tmp_path / "config.yaml"), "--live",
         "--worktree", str(tmp_path), "--base-sha", base, "--validated",
+        *(["--expected-commit", expected] if expected else []),
     ])
 
 
@@ -64,4 +65,13 @@ def test_push_main_rejects_no_commit(monkeypatch, tmp_path, capsys):
     fake = FakeRunner(head="base")
     assert invoke(monkeypatch, tmp_path, fake) == 1
     assert "no commit" in payload(capsys)["error"]
+    assert not any(call[1] == "push" for call in fake.calls)
+
+
+def test_push_main_rejects_candidate_changed_after_validation(
+    monkeypatch, tmp_path, capsys
+):
+    fake = FakeRunner(head="changed")
+    assert invoke(monkeypatch, tmp_path, fake, expected="candidate") == 1
+    assert "candidate changed" in payload(capsys)["error"]
     assert not any(call[1] == "push" for call in fake.calls)
