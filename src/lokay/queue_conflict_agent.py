@@ -26,6 +26,19 @@ from lokay.safety import untrusted_issue_block
 from lokay.stuck import issue_number_from_branch, issue_numbers_covered_by_prs
 
 VALID_OUTCOMES = frozenset({"ready", "skip", "close"})
+# These are orchestration facts, not semantic queue evidence. If a harness
+# emits one anyway, discard the answer and use the deterministic evaluator.
+_POLICY_REASON_MARKERS = (
+    "executor",
+    "budget",
+    "mutex",
+    "occup",
+    "process",
+    "branch",
+    "push",
+    "merge",
+    "test",
+)
 SEMANTIC_TIMEOUT_SECONDS = 180
 
 
@@ -235,6 +248,9 @@ def evaluate_queue_conflict_with_agent(
     try:
         parsed = parse_queue_conflict_output(str(agent_out.get("stdout_tail") or ""))
     except (QueueConflictAgentError, PrReviewError):
+        return fallback
+    reason_blob = parsed["reason"].lower()
+    if any(marker in reason_blob for marker in _POLICY_REASON_MARKERS):
         return fallback
     return _verdict_from_agent(
         parsed,

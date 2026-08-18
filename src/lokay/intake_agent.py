@@ -28,6 +28,19 @@ from lokay.runner import Runner
 from lokay.safety import untrusted_issue_block
 
 VALID_DECISIONS = frozenset({"ready", "close", "split", "needs_human"})
+# Semantic intake must not answer execution-policy questions. Such output is
+# invalid for this boundary and falls back to deterministic intake.
+_POLICY_REASON_MARKERS = (
+    "executor",
+    "budget",
+    "mutex",
+    "occup",
+    "process",
+    "branch",
+    "push",
+    "merge",
+    "test",
+)
 SEMANTIC_TIMEOUT_SECONDS = 180
 
 
@@ -223,6 +236,9 @@ def decide_intake_with_agent(
     try:
         parsed = parse_intake_output(str(agent_out.get("stdout_tail") or ""))
     except (IntakeAgentError, PrReviewError):
+        return fallback
+    reason_blob = parsed["reason"].lower()
+    if any(marker in reason_blob for marker in _POLICY_REASON_MARKERS):
         return fallback
     return _decision_from_agent(
         parsed,
