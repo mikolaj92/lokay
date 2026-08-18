@@ -48,8 +48,8 @@ state:
   path: ~/.lokay/state.jsonl
 
 limits:
-  max_issue_to_pr_per_pass: 1
-  max_issues_per_tick: 1
+  max_issue_to_pr_per_pass: 4
+  max_issues_per_tick: 4
   max_triage_per_tick: 5
   max_repairs_per_tick: 1
   max_failures_before_block: 2
