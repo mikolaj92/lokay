@@ -3,8 +3,9 @@
 After occupancy is known, a merged or closed-CONFLICTING corner still
 occupies disk (Mini: ~158G). KEEP a live i2pr (whole repo), a repo whose PR survey failed,
 an open covering PR, or an unpublished timeout leftover. A ready
-published tip is stale — issue_to_pr RESETs from ``origin/main``.
-REMOVE the rest. A failed ``list_prs`` is unknown, not idle.
+published tip is stale — issue_to_pr RESETs from ``origin/main`` — unless it
+contains real uncommitted timeout work. REMOVE only fully classified clean
+leftovers. A failed ``list_prs`` is unknown, not idle.
 Never force-push. Fetch flake / unreadable git is fail-closed KEEP.
 Classify with one ``ls-remote`` per repo — a per-branch fetch stalls
 the factory pass.
@@ -227,6 +228,7 @@ def run_reap_stale_worktrees(
                             "behind_main",
                             "published",
                             "dirty",
+                            "uncommitted",
                             "keep_unpublished",
                         )
                         if k in status
@@ -235,6 +237,8 @@ def run_reap_stale_worktrees(
                 if not status.get("readable"):
                     reason = "unreadability"
                     row["error"] = status.get("error")
+                elif status.get("uncommitted") == "real":
+                    reason = "uncommitted_real"
                 elif status.get("keep_unpublished"):
                     reason = "unpublished_or_dirty"
                 else:

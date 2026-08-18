@@ -68,12 +68,16 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
 
     if atom == "self_repair_run_agent":
         prepared = up.get("self_repair_prepare", {})
-        if prepared.get("already_on_main"):
+        if prepared.get("already_on_main") or prepared.get("resumed"):
             return {
                 "ok": True,
                 "skipped": True,
-                "reason": "already_on_main",
-                "commit": prepared.get("commit"),
+                "reason": (
+                    "already_on_main"
+                    if prepared.get("already_on_main")
+                    else "resume_existing_candidate"
+                ),
+                "commit": prepared.get("commit") or prepared.get("candidate_commit"),
             }
         worktree = str(prepared.get("worktree") or "")
         issue_raw = inputs.get("incident") or {}
@@ -102,12 +106,25 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
             return {"ok": True, "skipped": True, "validated": True, "reason": "already_on_main"}
         worktree = str(prepared.get("worktree") or "")
         assert worktree
-        return _run_atom_main(self_repair_validate.main, ["--worktree", worktree])
+        base_sha = str(prepared.get("base_sha") or "")
+        return _run_atom_main(
+            self_repair_validate.main,
+            ["--worktree", worktree, *(["--base-sha", base_sha] if base_sha else [])],
+        )
 
     if atom == "self_repair_commit":
         prepared = up.get("self_repair_prepare", {})
-        if prepared.get("already_on_main"):
-            return {"ok": True, "skipped": True, "reason": "already_on_main"}
+        if prepared.get("already_on_main") or prepared.get("candidate_commit"):
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": (
+                    "already_on_main"
+                    if prepared.get("already_on_main")
+                    else "resume_committed_candidate"
+                ),
+                "commit": prepared.get("commit") or prepared.get("candidate_commit"),
+            }
         worktree = str(prepared.get("worktree") or "")
         fingerprint = str(inputs.get("fingerprint") or "")
         assert worktree and fingerprint
@@ -132,7 +149,20 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
         assert worktree and base_sha and validated.get("validated") is True
         return _run_atom_main(
             self_repair_push_main.main,
-            [*cfg, *live, "--worktree", worktree, "--base-sha", base_sha, "--validated"],
+            [
+                *cfg,
+                *live,
+                "--worktree",
+                worktree,
+                "--base-sha",
+                base_sha,
+                "--validated",
+                *(
+                    ["--expected-commit", str(prepared["candidate_commit"])]
+                    if prepared.get("candidate_commit")
+                    else []
+                ),
+            ],
         )
 
     if atom == "self_repair_activate":

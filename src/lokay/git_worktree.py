@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from lokay.config import Config, RepoConfig
-from lokay.git_real_diff import classify_changed_paths, list_changed_paths
+from lokay.git_real_diff import (
+    classify_changed_paths,
+    list_changed_paths,
+    list_uncommitted_paths,
+)
 from lokay.runner import Runner, git_spec
 
 
@@ -152,6 +156,13 @@ def _clone_lists_worktree(runner: Runner, clone: Path, worktree: Path) -> bool |
     return target in candidates
 
 
+def worktree_owned_by_clone(
+    runner: Runner, clone: Path, worktree: Path
+) -> bool | None:
+    """Return confirmed registry ownership; ``None`` means unreadable."""
+    return _clone_lists_worktree(runner, clone, worktree)
+
+
 def remove_worktree(runner: Runner, clone: Path, worktree: Path) -> dict[str, Any]:
     """Drop a leftover worktree without deleting an unconfirmed path.
 
@@ -295,6 +306,9 @@ def leftover_status(
         dirty = classify_changed_paths(
             list_changed_paths(runner, worktree, base=f"origin/{base}")
         )
+        uncommitted = classify_changed_paths(
+            list_uncommitted_paths(runner, worktree)
+        )
     except Exception as exc:  # noqa: BLE001
         return {
             "readable": False,
@@ -309,31 +323,10 @@ def leftover_status(
         "behind_main": behind_main,
         "published": published,
         "dirty": dirty,
+        "uncommitted": uncommitted,
         "keep_unpublished": keep_unpublished,
     }
 
-
-
-def _uncommitted_changed_paths(runner: Runner, worktree: Path) -> list[str]:
-    """Staged, unstaged, and untracked paths, excluding committed history."""
-    found: set[str] = set()
-    queries = (
-        ["diff", "--name-only", "--cached", "--relative"],
-        ["diff", "--name-only", "--relative"],
-        ["ls-files", "--others", "--exclude-standard"],
-    )
-    for argv in queries:
-        result = runner.run(git_spec(argv, cwd=worktree), live=True)
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "").strip()
-            raise RuntimeError(detail or f"cannot inspect uncommitted work: {' '.join(argv)}")
-        for line in (result.stdout or "").splitlines():
-            rel = line.strip().replace("\\", "/")
-            while rel.startswith("./"):
-                rel = rel[2:]
-            if rel:
-                found.add(rel)
-    return sorted(found)
 
 
 def ensure_worktree(
@@ -398,7 +391,7 @@ def ensure_worktree(
                 ) from exc
             try:
                 uncommitted = classify_changed_paths(
-                    _uncommitted_changed_paths(runner, worktree)
+                    list_uncommitted_paths(runner, worktree)
                 )
             except Exception as exc:  # noqa: BLE001
                 raise RuntimeError(f"cannot inspect uncommitted worktree changes: {exc}") from exc
