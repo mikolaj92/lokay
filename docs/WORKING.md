@@ -103,12 +103,12 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    `ai/fix/*` PR in a repo that already has an open AI PR.
 3. **Inbox triage + intake + optional split** (per repo, when that repo has no
    actionable open AI PR and its PR survey succeeded): undecided issues →
-   triage rules, then deterministic **intake** → `CLOSE` | `READY` | `SPLIT` |
+   triage rules, then **intake** → `CLOSE` | `READY` | `SPLIT` |
    rare `NEEDS_HUMAN`. Path: `issue_triage`
-   (`get_issue → triage_issue → intake_issue → issue_split`). Intake is a
-   deterministic frame (shape/playbook fitness, superseded, duplicate AI PR,
-   already-satisfied / feature-present, size → split) — not an
-   agent-orchestrator. Oversized / multi-epic / inventory blobs **auto-split**
+   (`get_issue → triage_issue → intake_issue → issue_split`). Hard facts
+   (open/superseded/duplicate AI PR) stay deterministic. Semantic remainder is
+   one structured executor call with the previous heuristic frame as fallback.
+   Oversized / multi-epic / inventory blobs **auto-split**
    into bounded child issues (parent becomes `ai:tracker`, not `ai:ready`).
    A **bug** (`bug` / `kind:bug` / `[BUG]`) is one symptom, one fix: template
    Subsystem / Environment checkboxes (`##` or `**bold**`) are routing, not

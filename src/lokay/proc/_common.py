@@ -66,10 +66,22 @@ def mutations_allowed(*, live_flag: bool, cfg: Config | None = None) -> bool:
 
 
 def agent_execute_allowed(cfg: Config, *, live_flag: bool) -> bool:
+    """Allow a mutating/coding agent only after the live health gate."""
     if live_flag:
         from lokay.preflight import require_healthy
 
         require_healthy(str(cfg.config_path) if cfg.config_path else None)
+    return bool(live_flag and cfg.mode == "live" and cfg.executor_enabled)
+
+
+def semantic_agent_allowed(cfg: Config, *, live_flag: bool) -> bool:
+    """Enable a read-only semantic call without minting/owning the mill lease.
+
+    Intake, queue-conflict, and localization agents only return structured
+    advice. Their deterministic callers retain all mutation and health gates;
+    requiring the singleton lease here would make a nested semantic call own
+    orchestration policy and would also reject hermetic in-process passes.
+    """
     return bool(live_flag and cfg.mode == "live" and cfg.executor_enabled)
 
 

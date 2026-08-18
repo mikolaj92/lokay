@@ -25,7 +25,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-list-issues` | `ai:ready` issues |
 | `lokay-triage-issue` | apply triage decision (ready \| split \| rare needs-feedback \| OOS) |
 | `lokay-intake-check` | one deterministic intake check (JSON) |
-| `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| SPLIT \| NEEDS_HUMAN |
+| `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| SPLIT \| NEEDS_HUMAN (hard facts + one structured agent call) |
 | `lokay-issue-split` | auto-split oversized issue → bounded child issues (gh + rules) |
 | `lokay-stage-label` | issue decision (`ready` / `clear`); in-flight names keep ready and strip leftover cache |
 | `lokay-select-issue` | pick one issue |
@@ -33,7 +33,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-make-branch` | pure branch name |
 | `lokay-worktree-add` | git worktree |
 | `lokay-plan-issue` | write `.lokay/approach.md` before coding (deterministic evidence) |
-| `lokay-localize` | deterministic edit-path list before coding (Agentless; fail-closed if empty) |
+| `lokay-localize` | edit-path list before coding (agent proposal + tree validation; fail-closed if empty) |
 | `lokay-run-agent` | **coding harness slot** (binary + args from config only) |
 | `lokay-commit-all` | commit if dirty |
 | `lokay-assert-real-diff` | refuse plan/localize-only diffs (not progress; no pr_create) |
@@ -58,7 +58,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-dispatch-closeout` | thin bridge: resolve_conflicts then closeout_prs |
 | `lokay-select-implement` | clean repos eligible for issue_to_pr (skip occupied) |
 | `lokay-rebase-onto-base` | fetch + rebase onto origin/main; conflict = fail closed |
-| `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement |
+| `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement (covering PR deterministic; rest one agent call) |
 | `lokay-dispatch-implement` | intake gate + up to K issue_to_pr (serial budget) |
 | `lokay-compute-health` | remaining + honest mill health |
 | `lokay-record-pass` | write last-pass.json receipt |

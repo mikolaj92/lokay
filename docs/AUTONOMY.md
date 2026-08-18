@@ -79,12 +79,14 @@ Atom: `lokay-stage-label --stage <name>`. In-flight names map to ready.
    (default **1**) is an optional pass budget, **not** concurrent worktrees /
    Pi / tmux. `K>1` is rare breadth across already-isolated clean repos.
 3. **Contradiction gate** — `lokay-queue-conflict` is queue hygiene before
-   `issue_to_pr` (SKIP/defer or CLOSE/demote on clear conflicts). Not a
+   `issue_to_pr` (SKIP/defer or CLOSE/demote on clear conflicts). Covering-PR
+   matches stay deterministic; the rest may ask the executor once. Not a
    parallel scheduler; does not invent NEEDS_HUMAN for intentional tickets.
-4. **Intake gates implement** — Deterministic intake yields `CLOSE` | `SPLIT` |
-   `READY` (rare `NEEDS_HUMAN`). Only `READY` + `--require-ready` may call
-   `issue_to_pr`. CLOSE/SPLIT never implement. Trusted-author ordinary work
-   prefers READY.
+4. **Intake gates implement** — Intake yields `CLOSE` | `SPLIT` |
+   `READY` (rare `NEEDS_HUMAN`). Hard facts stay deterministic; the semantic
+   remainder is one structured executor call with regex fallback. Only `READY`
+   + `--require-ready` may call `issue_to_pr`. CLOSE/SPLIT never implement.
+   Trusted-author ordinary work prefers READY.
 5. **Plan before agent (evidence)** — On the serial `issue_to_pr` path,
    `lokay-plan-issue` writes `.lokay/approach.md` after `worktree_add` and
    **before** `run_agent` (goal / likely files / test plan / non-goals).

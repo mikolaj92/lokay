@@ -1,6 +1,7 @@
 """Atomic: aggregate intake checks → CLOSE | READY | SPLIT | NEEDS_HUMAN + receipt.
 
-Hardens triage / ready issues before `issue_to_pr`. Mutates only with --live.
+Hard facts stay deterministic. Semantic remainder is one structured agent call.
+Mutates only with --live.
 """
 
 from __future__ import annotations
@@ -9,10 +10,12 @@ import argparse
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.gh_issues import get_issue
-from lokay.intake import decide_intake, referenced_pr_numbers, should_run_intake
+from lokay.intake import referenced_pr_numbers, should_run_intake
+from lokay.intake_agent import decide_intake_with_agent
 from lokay.intake_io import apply_intake, covering_ai_prs, merged_prs
 from lokay.proc._common import (
     add_config_live,
+    semantic_agent_allowed,
     load_cfg,
     mutations_allowed,
     read_live,
@@ -58,8 +61,11 @@ def main(argv: list[str] | None = None) -> int:
         covering = covering_ai_prs(
             r, args.repo, int(args.issue), branch_prefix=cfg.branch_prefix, live=fetch
         )
-    decision = decide_intake(
+    decision = decide_intake_with_agent(
         issue,
+        runner=r,
+        config=cfg,
+        execute=semantic_agent_allowed(cfg, live_flag=args.live),
         state=issue.state,
         clone_path=clone,
         merged_prs=merged,

@@ -65,27 +65,37 @@ def resolve_agent_kind(config: Config) -> str:
     return kind
 
 
-def session_id_for_worktree(worktree: Path) -> str:
+def session_id_for_worktree(worktree: Path, *, kind: str = "code") -> str:
     """Stable per-corner session so a timeout retry continues, not a new lottery.
 
     Pair with Pi ``--session-id`` (creates if missing). ``--session`` looks
-    up an existing file and exits 1 on the first ticket.
+    up an existing file and exits 1 on the first ticket. Semantic slots
+    (intake / queue / localize) use a distinct ``kind`` so they cannot
+    resume a coding session or poison its transcript.
     """
     digest = hashlib.sha256(str(Path(worktree).resolve()).encode()).hexdigest()[:16]
-    return f"lokay-{digest}"
+    suffix = "" if kind in {"", "code"} else f"-{kind}"
+    return f"lokay-{digest}{suffix}"
 
 
 def _values(
-    config: Config, *, worktree: Path, prompt: str, command: str
+    config: Config,
+    *,
+    worktree: Path,
+    prompt: str,
+    command: str,
+    session_kind: str = "code",
+    timeout_seconds: int | None = None,
 ) -> dict[str, str]:
+    timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
     return {
         "command": command,
         "cwd": str(worktree),
         "prompt": prompt,
         "model": (config.agent_model or "").strip(),
         "max_turns": str(int(config.max_turns)),
-        "timeout": str(int(config.timeout_seconds)),
-        "session": session_id_for_worktree(worktree),
+        "timeout": str(timeout),
+        "session": session_id_for_worktree(worktree, kind=session_kind),
     }
 
 
@@ -106,7 +116,14 @@ def _render_arg(token: str, values: dict[str, str]) -> str | None:
     return _PLACEHOLDER_RE.sub(repl, token)
 
 
-def build_agent_argv(config: Config, *, worktree: Path, prompt: str) -> list[str]:
+def build_agent_argv(
+    config: Config,
+    *,
+    worktree: Path,
+    prompt: str,
+    session_kind: str = "code",
+    timeout_seconds: int | None = None,
+) -> list[str]:
     """Build argv from executor.command + executor.args. Fail closed on empty."""
     command = (config.agent_command or "").strip()
     if not command:
@@ -119,7 +136,14 @@ def build_agent_argv(config: Config, *, worktree: Path, prompt: str) -> list[str
             "executor.args is empty — set argv template "
             "({cwd} {prompt} {model} {max_turns} {timeout} {session})"
         )
-    values = _values(config, worktree=worktree, prompt=prompt, command=command)
+    values = _values(
+        config,
+        worktree=worktree,
+        prompt=prompt,
+        command=command,
+        session_kind=session_kind,
+        timeout_seconds=timeout_seconds,
+    )
     argv: list[str] = [command]
     i = 0
     tokens = [str(t) for t in raw_args]
@@ -150,11 +174,22 @@ def run_agent(
     worktree: Path,
     prompt: str,
     execute: bool,
+    session_kind: str = "code",
+    timeout_seconds: int | None = None,
+    attach_collector_boundary: bool = True,
 ) -> dict:
     """Run configured harness. execute=False → plan only."""
     kind = resolve_agent_kind(config)
-    effective_prompt = with_collector_boundary(prompt)
-    argv = build_agent_argv(config, worktree=worktree, prompt=effective_prompt)
+    effective_prompt = (
+        with_collector_boundary(prompt) if attach_collector_boundary else (prompt or "")
+    )
+    argv = build_agent_argv(
+        config,
+        worktree=worktree,
+        prompt=effective_prompt,
+        session_kind=session_kind,
+        timeout_seconds=timeout_seconds,
+    )
     display = [("<prompt>" if p == effective_prompt else p) for p in argv]
 
     if not execute:
@@ -163,10 +198,11 @@ def run_agent(
             "agent": kind,
             "command": display,
             "prompt_len": len(effective_prompt),
-            "collector_boundary": True,
+            "collector_boundary": bool(attach_collector_boundary),
             "worktree": str(worktree),
             "executor_enabled": config.executor_enabled,
             "execute": execute,
+            "session": session_id_for_worktree(worktree, kind=session_kind),
         }
 
     if not config.executor_enabled:
@@ -175,13 +211,14 @@ def run_agent(
             "(no silent plan fallback when execute was requested)"
         )
 
+    timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
     result = runner.run(
         CommandSpec(
             argv=tuple(argv),
             cwd=str(worktree),
             # Never delegate the orchestration health capability to the coding agent.
             env={"LOKAY_HEALTH_LEASE": ""},
-            timeout_seconds=config.timeout_seconds,
+            timeout_seconds=timeout,
         ),
         live=True,
     )
@@ -193,7 +230,7 @@ def run_agent(
         "timed_out": timed_out,
         "stdout_tail": (result.stdout or "")[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],
-        "collector_boundary": True,
+        "collector_boundary": bool(attach_collector_boundary),
         "worktree": str(worktree),
-        "session": session_id_for_worktree(worktree),
+        "session": session_id_for_worktree(worktree, kind=session_kind),
     }

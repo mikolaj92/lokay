@@ -1,7 +1,7 @@
 """One job: contradiction gate over ready candidates before issue_to_pr.
 
-Filters / demotes clear queue contradictions. Queue hygiene — not a parallel
-scheduler. JSON envelope on stdout.
+Covering-PR matches stay deterministic. Semantic remainder is one structured
+agent call. Queue hygiene — not a parallel scheduler.
 """
 
 from __future__ import annotations
@@ -15,8 +15,9 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import label_issue as p_label
-from lokay.proc._common import add_config_live
-from lokay.queue_conflict import READY, SKIP, evaluate_queue_conflict
+from lokay.proc._common import add_config_live, load_cfg, runner, semantic_agent_allowed
+from lokay.queue_conflict import READY, SKIP
+from lokay.queue_conflict_agent import evaluate_queue_conflict_with_agent
 
 
 def evaluate_stdin(payload: dict[str, Any]) -> dict[str, Any]:
@@ -25,8 +26,11 @@ def evaluate_stdin(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return err("stdin must include issue{} object")
     issue = Issue.from_dict(raw)
-    verdict = evaluate_queue_conflict(
+    verdict = evaluate_queue_conflict_with_agent(
         issue,
+        runner=None,
+        config=None,
+        execute=False,
         open_prs=list(payload.get("open_prs") or []),
         peer_issues=list(payload.get("peer_issues") or []),
         branch_prefix=str(payload.get("branch_prefix") or "ai/fix/"),
@@ -103,6 +107,9 @@ def run_queue_conflict(
     begin, working = load_begin_working(pass_dir)
     cfg_flag = ["--config", config_path] if config_path else []
     live_flag = ["--live"] if live else []
+    cfg = load_cfg(argparse.Namespace(config=config_path)) if config_path or live else None
+    execute = bool(cfg and semantic_agent_allowed(cfg, live_flag=live))
+    r = runner(cfg) if execute and cfg is not None else None
     branch_prefix = str(begin.get("branch_prefix") or "ai/fix/")
     ready_label = str(begin.get("ready_label") or "ai:ready")
     tracker_label = "ai:tracker"
@@ -144,8 +151,11 @@ def run_queue_conflict(
                 break
             examined += 1
             num = int(issue.get("number") or 0)
-            verdict = evaluate_queue_conflict(
+            verdict = evaluate_queue_conflict_with_agent(
                 issue,
+                runner=r,
+                config=cfg,
+                execute=execute,
                 open_prs=open_prs,
                 peer_issues=peers,
                 branch_prefix=branch_prefix,

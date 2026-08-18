@@ -1,7 +1,7 @@
-"""Atomic: localize edit paths before run_agent (Agentless file-before-patch).
+"""Atomic: localize edit paths before run_agent.
 
-Deterministic: repo tree + seed (issue/approach/checks) → non-empty path list.
-Fail-closed when empty. No embeddings, no second planner.
+Live mode may ask the configured executor for a JSON path list; Python
+validates against the tree. Fail-closed when empty. No embeddings.
 """
 
 from __future__ import annotations
@@ -14,11 +14,17 @@ from lokay.approach_plan import APPROACH_REL_PATH
 from lokay.envelope import emit_exit, err, ok
 from lokay.localize import (
     LOCALIZE_REL_PATH,
-    build_localization,
     write_localize_file,
 )
+from lokay.localize_agent import build_localization_with_agent
 from lokay.models import Issue
-from lokay.proc._common import add_config_live, load_cfg, mutations_allowed
+from lokay.proc._common import (
+    add_config_live,
+    semantic_agent_allowed,
+    load_cfg,
+    mutations_allowed,
+    runner,
+)
 
 
 def _issue_from_args(args: argparse.Namespace) -> Issue | None:
@@ -111,7 +117,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
-    loc = build_localization(
+    cfg = load_cfg(args) if args.config or args.live else None
+    execute = bool(cfg and semantic_agent_allowed(cfg, live_flag=args.live))
+    loc = build_localization_with_agent(
+        runner=runner(cfg) if execute and cfg is not None else None,
+        config=cfg,
+        execute=execute,
         worktree=worktree if worktree.is_dir() else None,
         seed_text=seed,
         extra_paths=list(args.extra_path or []),
@@ -128,9 +139,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
-    cfg = load_cfg(args) if args.live else None
     try:
-        live = mutations_allowed(live_flag=args.live, cfg=cfg)
+        live = mutations_allowed(live_flag=args.live, cfg=cfg if args.live else None)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
 

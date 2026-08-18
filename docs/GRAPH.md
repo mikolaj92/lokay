@@ -168,13 +168,12 @@ not `NEEDS_HUMAN` by default. `pr_review` is blind to that plan: the reviewer
 sees ticket + code diff + tests, not `.lokay/approach.md` and not a
 compare-to-plan instruction.
 
-`localize` (`lokay-localize`) is a separate deterministic atom (Agentless
-localization → repair → validation): seed text (issue + approach.md) plus the
-worktree tree → non-empty edit path list (written to `.lokay/localize.json`).
-Fala conducts it **before** `run_agent`. Empty list fails closed — the agent
-does not start. Not an embedding service and not a second planner; one job:
-paths. The agent prompt receives that scope so patches stay on listed files/
-directories instead of roaming the full checkout.
+`localize` (`lokay-localize`) remains one job: a non-empty edit path list
+written to `.lokay/localize.json` before `run_agent`. Live mode asks the
+configured executor for a structured path proposal; Python still validates
+against the tree, keeps extra/seed paths, and fails closed on an empty list.
+Invalid JSON / timeout falls back to the deterministic scorer. Not an
+embedding service and not a second planner.
 
 ### `issue_triage` (inbox → labels / split)
 
@@ -190,21 +189,23 @@ get_issue
 default for oversized work.
 
 `ai:ready` is an **outcome** of triage **plus intake**, not the start of the universe.
-Intake runs cheap checks first (still-open, superseded/merged PR, duplicate AI PR
-for the same issue, playbook/shape fitness on library/kit/empty/Swift-only,
-already-satisfied / feature-present paths, size → SPLIT). CLOSE posts a short
-actionable receipt (and drops `ai:ready`). SPLIT queues `issue_split`, which
-creates bounded child issues, labels the parent `ai:tracker`, and closes the
-parent as a tracker — parent is never left `ai:ready`. Children re-enter
-inbox/intake on later passes. NEEDS_HUMAN applies `ai:needs-feedback` only when
-split is impossible or evidence is inconclusive. Per-repo PR-first:
-triage/intake/split mutations skip a repo that still has actionable open AI PRs
-(or a failed PR survey for that repo); other clean repos continue. Intake still
-runs inside `issue_triage` whenever triage is allowed; the mill also runs
-`queue_conflict` (queue hygiene — not a parallel scheduler) then re-runs
-`intake_issue` with `--require-ready` before every `issue_to_pr`. **Serial by
-design:** default `limits.max_issue_to_pr_per_pass` is **1** (ticket after
-ticket). K is an optional pass budget, not concurrent worktrees/Pi/tmux.
+Hard facts stay deterministic (still-open, superseded/merged PR, duplicate AI PR
+for the same issue). Semantic remainder — shape, already-satisfied, size/SPLIT,
+essence — is one structured executor call; invalid JSON / timeout falls back to
+the previous regex/heuristic frame. CLOSE posts a short actionable receipt (and
+drops `ai:ready`). SPLIT queues `issue_split`, which creates bounded child
+issues, labels the parent `ai:tracker`, and closes the parent as a tracker —
+parent is never left `ai:ready`. Children re-enter inbox/intake on later passes.
+NEEDS_HUMAN applies `ai:needs-feedback` only when split is impossible or evidence
+is inconclusive. Per-repo PR-first: triage/intake/split mutations skip a repo
+that still has actionable open AI PRs (or a failed PR survey for that repo);
+other clean repos continue. Intake still runs inside `issue_triage` whenever
+triage is allowed; the mill also runs `queue_conflict` (queue hygiene — not a
+parallel scheduler; covering-PR matches stay deterministic, the rest may ask
+the executor once) then re-runs `intake_issue` with `--require-ready` before
+every `issue_to_pr`. **Serial by design:** default
+`limits.max_issue_to_pr_per_pass` is **1** (ticket after ticket). K is an
+optional pass budget, not concurrent worktrees/Pi/tmux.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 
@@ -252,9 +253,10 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 - **issue_to_pr red suite** does **not** open a PR. One bounded AlphaCodium nest runs instead: `test_local` (first probe, records red so Fala can continue) → `repair_agent` (K=1 patch from the test log) → `test_local_recheck`. Recheck green → push → pr_create. Recheck red / zero-diff / agent fail → path fails closed (`local_repair_exhausted`); the mill marks that seed stuck and takes the next one. There is no third attempt and no `gh pr create` off a red suite.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the mill do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
-- **localize** is deterministic Agentless path selection immediately before the
-  coding slot (serial path: `worktree_add → plan_issue → localize → run_agent`).
-  Missing/empty localize fails closed in the organ — agent does not start.
+- **localize** proposes paths immediately before the coding slot (serial path:
+  `worktree_add → plan_issue → localize → run_agent`). Live mode may call the
+  configured executor once for a JSON path list; Python validates and still
+  fails closed on missing/empty localize — the coding agent does not start.
   `plan_issue.files_likely` is passed as `--extra-path`. Weak token hits do not
   pad the list to 40; a long list is a hint in the prompt, not a cage.
   A tests-only inferred list is a cage: matching `test_foo.py` promotes
