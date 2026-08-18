@@ -1,0 +1,56 @@
+# Production-aligned config. LaunchAgent may still set LOKAY_* env overrides.
+# Agent stubs are FORBIDDEN — see docs/NO_STUBS.md
+
+mode: live
+
+repos_file: repos.mikolaj92.yaml
+
+github:
+  assignee: mikolaj92
+  allow_unassigned: false
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  needs_feedback_label: ai:needs-feedback
+  branch_prefix: ai/fix
+  pr_labels:
+    - ai:generated
+    - ai:pr-opened
+
+executor:
+  enabled: true
+  agent: pi
+  command: pi
+  model: omniroute/pi
+  args:
+    - -p
+    - "{prompt}"
+    - --model
+    - "{model}"
+    - --approve
+    - --session-id
+    - "{session}"
+  max_turns: 20
+  timeout_seconds: 1800
+  always_approve: true
+
+merge:
+  enabled: true
+  # Local trust only — do NOT gate merges on GitHub Actions / remote CI providers.
+  require_checks: false
+  # Still prefer agent-visible local test evidence when present; not a remote check.
+  require_test_evidence: false
+  require_llm_review: false
+
+worktrees:
+  root: ~/.lokay/worktrees
+
+state:
+  path: ~/.lokay/state.jsonl
+
+limits:
+  max_issue_to_pr_per_pass: 4
+  max_issues_per_tick: 4
+  max_triage_per_tick: 5
+  max_repairs_per_tick: 1
+  max_failures_before_block: 2
+  min_free_gb: 2
