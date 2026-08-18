@@ -280,11 +280,13 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   Never force-push.
 - **Miss harvest** (`factory_begin` → `harvest_fail_closed_children`): `plan_only`
   / `zero_diff` / `rebase_conflict` leave the slot after **3** unique `run_id`s;
-  `push_failed` after **2**. A stale ledger row already `blocked` at 1 is
-  reconciled from the journal — harvest reopens the slot until unique-run N.
-  Crash reasons (`local_repair_exhausted`, red recheck, bad ref) still block at
-  1 and stay buried. Harvest does not CLOSE the issue. The repo mutex must not
-  stay on one corpse.
+  `push_failed` after **2**. A stale ledger row already `blocked` below that
+  threshold is reconciled from the journal — harvest reopens the slot until
+  unique-run N. At/above its reason's bound the miss row is terminal and is
+  preserved verbatim: an old dead receipt cannot refresh its timestamp/error or
+  re-enable it. Crash reasons (`local_repair_exhausted`, red recheck, bad ref)
+  still block at 1 and stay buried. Harvest does not CLOSE the issue. The repo
+  mutex must not stay on one corpse.
 - Everything else is deterministic (`gh` / `git` / pure functions).
 
 ## Run

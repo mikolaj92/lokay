@@ -176,8 +176,20 @@ def _apply_miss_count(
     miss_runs: int,
     error: str,
 ) -> dict[str, Any]:
-    """Write unique-run miss count. Reconcile stale blocked rows below N."""
+    """Reopen only blocked misses below N; preserve terminal miss rows."""
     threshold = _skip_after(reason)
+    existing = (stuck.get("issues") or {}).get(f"{repo}#{issue}")
+    # Reconciliation repairs only stale one-shot blocks below this miss
+    # reason's bound. Once the bound was reached, retain the terminal row
+    # verbatim: a dead receipt and its old journal event must not refresh the
+    # timestamp/error or make it eligible again on each factory_begin.
+    if (
+        isinstance(existing, dict)
+        and existing.get("blocked")
+        and _as_int(existing.get("failures")) is not None
+        and int(existing["failures"]) >= threshold
+    ):
+        return existing
     row = record_failure(
         stuck,
         repo=repo,
@@ -240,7 +252,7 @@ def _index_issue_to_pr_log(
 
 
 def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[str, Any]]:
-    """One pass over state.jsonl → last issue_to_pr event per (repo, issue)."""
+    """One pass over state.jsonl to the last issue_to_pr event per issue."""
     last, _history = _index_issue_to_pr_log(state_path)
     return last
 
@@ -330,7 +342,7 @@ def harvest_fail_closed_children(
     Live pids are left alone. Dead pid + no event + no machine reason is
     treated as transient (retry), not fail-closed. Product misses
     (plan_only / zero_diff / push_failed) count unique run_ids and only
-    leave the slot after N — harvest does not CLOSE the issue. A stale
+    leave the slot after N; harvest does not CLOSE the issue. A stale
     blocked miss row below N is reconciled (reopened); crash rows stay buried.
     """
     home_root = Path(home) if home is not None else Path.home()
@@ -395,7 +407,7 @@ def harvest_fail_closed_children(
                 history.get((repo, issue)) or []
             )
             counted = miss_reason or reason
-            # Journal fallback has no run history — treat as a single miss.
+            # Journal fallback has no run history; treat as a single miss.
             if miss_runs == 0:
                 miss_runs = 1
                 counted = reason

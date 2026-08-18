@@ -36,10 +36,11 @@ Merge without quality is scrap.
 A miss (agent "succeeded" with no product, push refused, same ticket looping)
 is a factory defect, not an honest wait. After bounded unique-run misses the
 seed must leave the slot so the next designed issue can land. A stale
-`stuck.json` row already blocked at 1 for `plan_only` / `zero_diff` /
-`push_failed` is reconciled from the journal — harvest reopens the slot
-until unique-run N. Crash / red-recheck rows stay buried. Tests and pass
-health are not a representation of whether the mill works. Merges of
+`stuck.json` row below its miss bound for `plan_only` / `zero_diff` /
+`push_failed` is reconciled from the journal — harvest reopens the slot until
+unique-run N. At/above its bound it is terminal and is not refreshed by a dead
+receipt or old journal event. Crash / red-recheck rows stay buried. Tests and
+pass health are not a representation of whether the mill works. Merges of
 intended issues are.
 
 Lokay is **working** only if it continuously mills **all** work across

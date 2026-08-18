@@ -714,3 +714,95 @@ def test_three_rebase_conflicts_leave_the_slot(tmp_path: Path):
     )
     assert 142 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#142"].get("reason") == "rebase_conflict"
+
+
+def test_terminal_influenzer_86_plan_only_row_with_zero_diff_error_is_not_refreshed(tmp_path: Path):
+    """#86's recorded plan_only row and final zero_diff error stay terminal."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "mikolaj92__influenzer-86.json", repo="mikolaj92/influenzer", issue=86, pid=8)
+    _event(
+        state,
+        repo="mikolaj92/influenzer",
+        issue=86,
+        ok=False,
+        run_id="86-zero-diff",
+        error={
+            "code": "adapter_failed",
+            "message": (
+                'subprocess adapter failed: {"ok": false, "atom": "assert_real_diff", '
+                '"error": "refusing: empty diff vs base; not progress", '
+                '"reason": "zero_diff"}'
+            ),
+        },
+    )
+    stuck = {
+        "issues": {
+            "mikolaj92/influenzer#86": {
+                "failures": 23,
+                "blocked": True,
+                "blocked_ts": "2026-08-16T12:31:39+00:00",
+                "last_error": "refusing: empty diff vs base; not progress",
+                "last_ts": "2026-08-16T12:31:39+00:00",
+                "reason": "plan_only",
+            }
+        }
+    }
+    expected = json.loads(json.dumps(stuck))
+
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+
+    assert stuck == expected
+    assert 86 in excluded_numbers(stuck, "mikolaj92/influenzer")
+
+
+def test_terminal_influenzer_137_plan_only_is_not_refreshed(tmp_path: Path):
+    """#137's final plan_only must remain a terminal skipped miss on each tick."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "mikolaj92__influenzer-137.json", repo="mikolaj92/influenzer", issue=137, pid=8)
+    _event(
+        state,
+        repo="mikolaj92/influenzer",
+        issue=137,
+        ok=False,
+        run_id="137-plan-only",
+        error={
+            "code": "adapter_failed",
+            "message": (
+                'subprocess adapter failed: {"ok": false, "atom": "assert_real_diff", '
+                '"error": "refusing: diff is only plan/localize evidence", '
+                '"reason": "plan_only"}'
+            ),
+        },
+    )
+    stuck = {
+        "issues": {
+            "mikolaj92/influenzer#137": {
+                "failures": 72,
+                "blocked": True,
+                "blocked_ts": "2026-08-16T16:52:06+00:00",
+                "last_error": "refusing: diff is only plan/localize evidence",
+                "last_ts": "2026-08-16T16:52:06+00:00",
+                "reason": "plan_only",
+            }
+        }
+    }
+    expected = json.loads(json.dumps(stuck))
+
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+
+    assert stuck == expected
+    assert 137 in excluded_numbers(stuck, "mikolaj92/influenzer")
