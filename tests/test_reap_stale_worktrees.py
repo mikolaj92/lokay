@@ -211,7 +211,7 @@ def test_keep_unpublished_or_dirty(tmp_path, monkeypatch):
     monkeypatch.setattr(
         reap_stale_worktrees,
         "remove_worktree",
-        lambda runner, clone, path: removed.append(path) or {"ok": True, "removed": True},
+        lambda runner, clone, path, **_kwargs: removed.append(path) or {"ok": True, "removed": True},
     )
     out = reap_stale_worktrees.run_reap_stale_worktrees(
         pass_dir=_pass(tmp_path),
@@ -310,7 +310,7 @@ def test_remove_published_closed_tip(tmp_path, monkeypatch):
     monkeypatch.setattr(
         reap_stale_worktrees,
         "remove_worktree",
-        lambda runner, clone, path: removed.append(path) or {"ok": True, "removed": True},
+        lambda runner, clone, path, **_kwargs: removed.append(path) or {"ok": True, "removed": True},
     )
     git = _Git()
     monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: git)
@@ -345,7 +345,7 @@ def test_remove_unpublished_behind_main(tmp_path, monkeypatch):
     monkeypatch.setattr(
         reap_stale_worktrees,
         "remove_worktree",
-        lambda runner, clone, path: removed.append(path) or {"ok": True, "removed": True},
+        lambda runner, clone, path, **_kwargs: removed.append(path) or {"ok": True, "removed": True},
     )
 
     class _NoDelete(_Git):

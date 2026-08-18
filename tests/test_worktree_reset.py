@@ -146,12 +146,22 @@ class _ResetRunner:
             return _result(argv, stdout=str(getattr(self, "behind", 0)) + "\n")
         if argv[1] == "diff" or argv[1] == "ls-files":
             return _result(argv, stdout=getattr(self, "diff_names", ""))
+        if argv[1:3] == ["worktree", "remove"]:
+            target = Path(argv[3])
+            if target.exists():
+                target.rmdir()
+            return _result(argv)
         if argv[1:4] == ["worktree", "list", "--porcelain"]:
             clone = Path(spec.cwd).resolve()
-            return _result(
-                argv,
-                stdout=f"worktree {clone}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0branch refs/heads/main\0\0",
-            )
+            records = [
+                f"worktree {clone}\0HEAD {'d' * 40}\0branch refs/heads/main\0"
+            ]
+            for path in sorted(clone.parent.rglob("*")):
+                if path.is_dir() and path != clone and not path.is_symlink():
+                    records.append(
+                        f"worktree {path.resolve()}\0HEAD {'c' * 40}\0branch refs/heads/fix\0"
+                    )
+            return _result(argv, stdout="\0".join(records) + "\0")
         return _result(argv)
 
     def run_checked(self, spec, *, live):
@@ -198,7 +208,7 @@ def test_reset_to_base_rewrites_unpublished_behind_main(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
 
 
@@ -212,7 +222,7 @@ def test_reset_to_base_rewrites_published_even_if_current(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
     assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
@@ -225,7 +235,7 @@ def test_reset_to_base_rewrites_when_ahead_zero(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
     assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
@@ -240,7 +250,7 @@ def test_reset_to_base_rewrites_when_ahead_but_behind_own_remote(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
     assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
@@ -304,7 +314,7 @@ def test_reset_to_base_resets_plan_only_uncommitted_evidence(tmp_path):
     )
 
     assert path == wt
-    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
 
 
 def test_reset_to_base_fails_closed_when_uncommitted_state_is_unreadable(tmp_path):
@@ -324,7 +334,7 @@ def test_reset_to_base_fails_closed_when_uncommitted_state_is_unreadable(tmp_pat
         ensure_worktree(
             runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
         )
-    assert not any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
 
 
 def test_reset_to_base_fail_closed_when_ahead_unreadable(tmp_path):
@@ -466,60 +476,48 @@ def test_remove_worktree_already_gone(tmp_path):
     clone.mkdir()
     missing = tmp_path / "gone"
     runner = _ResetRunner()
-    out = remove_worktree(runner, clone, missing)
+    out = remove_worktree(runner, clone, missing, managed_root=tmp_path)
     assert out == {"ok": True, "removed": False, "already_gone": True}
     assert not any(call[1] == "worktree" for call in runner.calls)
 
 
 
-def test_remove_worktree_uses_rmtree_only_after_git_and_registry_confirm(tmp_path):
+def test_remove_worktree_archives_bytes_after_registry_prune(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
     corner = tmp_path / "corner"
     corner.mkdir()
-    class _Registry(_ResetRunner):
-        def run(self, spec, *, live):
-            argv = list(spec.argv)
-            if argv[1:4] == ["worktree", "list", "--porcelain"]:
-                self.calls.append(argv)
-                return _result(
-                    argv,
-                    stdout=f"worktree {clone}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0branch refs/heads/main\0\0",
-                )
-            return super().run(spec, live=live)
+    (corner / "tracked.txt").write_text("preserve snapshot\n", encoding="utf-8")
+    runner = _ResetRunner()
 
-    runner = _Registry()
+    out = remove_worktree(runner, clone, corner, managed_root=tmp_path)
 
-    out = remove_worktree(runner, clone, corner)
-
-    assert out == {"ok": True, "removed": True}
+    archive = Path(out["preserved_path"])
+    assert out["ok"] is True
+    assert out["removed"] is True
     assert not corner.exists()
-    assert any(call[1:4] == ["worktree", "list", "--porcelain"] for call in runner.calls)
+    assert (archive / "tracked.txt").read_text(encoding="utf-8") == "preserve snapshot\n"
     assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
 
-
-def test_remove_worktree_keeps_path_when_git_refuses_remove(tmp_path):
+def test_remove_worktree_restores_path_when_registry_prune_fails(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
     corner = tmp_path / "foreign"
     corner.mkdir()
 
-    class _Refuses(_ResetRunner):
+    class Refuses(_ResetRunner):
         def run(self, spec, *, live):
             argv = list(spec.argv)
-            self.calls.append(argv)
-            if argv[1:4] == ["worktree", "remove", "--force"]:
-                return _result(argv, returncode=128, stderr="fatal: not a working tree")
-            return _result(argv)
+            if argv[1:3] == ["worktree", "prune"]:
+                return _result(argv, returncode=128, stderr="fatal: registry locked")
+            return super().run(spec, live=live)
 
-    runner = _Refuses()
-    out = remove_worktree(runner, clone, corner)
+    out = remove_worktree(Refuses(), clone, corner, managed_root=tmp_path)
 
     assert out["ok"] is False
-    assert "not a working tree" in out["error"]
+    assert "registry locked" in out["error"]
     assert corner.is_dir()
-    assert not any(call[1:3] == ["worktree", "list"] for call in runner.calls)
-
 
 def test_remove_worktree_keeps_path_when_clone_still_lists_it(tmp_path):
     clone = tmp_path / "clone"
@@ -542,11 +540,13 @@ def test_remove_worktree_keeps_path_when_clone_still_lists_it(tmp_path):
             return _result(argv)
 
     runner = _StillOwned()
-    out = remove_worktree(runner, clone, corner)
+    out = remove_worktree(runner, clone, corner, managed_root=tmp_path)
 
-    assert out == {"ok": False, "removed": False, "error": "git still owns worktree after removal"}
-    assert corner.is_dir()
-    assert not any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert out["error"] == "git still owns worktree after registry prune"
+    assert Path(out["preserved_path"]).is_dir()
+    assert not corner.exists()
 
 
 def test_remove_worktree_keeps_path_when_post_remove_registry_is_empty(tmp_path):
@@ -562,12 +562,12 @@ def test_remove_worktree_keeps_path_when_post_remove_registry_is_empty(tmp_path)
                 return _result(argv, stdout="")
             return super().run(spec, live=live)
 
-    out = remove_worktree(_EmptyRegistry(), clone, corner)
+    out = remove_worktree(_EmptyRegistry(), clone, corner, managed_root=tmp_path)
 
     assert out == {
         "ok": False,
         "removed": False,
-        "error": "cannot confirm worktree ownership after git removal",
+        "error": "cannot confirm worktree ownership before preservation",
     }
     assert corner.is_dir()
 
@@ -586,12 +586,12 @@ def test_remove_worktree_keeps_path_when_post_remove_registry_is_truncated(tmp_p
                 return _result(argv, stdout=f"worktree {clone}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0")
             return _result(argv)
 
-    out = remove_worktree(_TruncatedRegistry(), clone, corner)
+    out = remove_worktree(_TruncatedRegistry(), clone, corner, managed_root=tmp_path)
 
     assert out == {
         "ok": False,
         "removed": False,
-        "error": "cannot confirm worktree ownership after git removal",
+        "error": "cannot confirm worktree ownership before preservation",
     }
     assert corner.is_dir()
 
@@ -611,12 +611,12 @@ def test_remove_worktree_keeps_path_when_post_remove_registry_is_unreadable(tmp_
             return _result(argv)
 
     runner = _NoRegistry()
-    out = remove_worktree(runner, clone, corner)
+    out = remove_worktree(runner, clone, corner, managed_root=tmp_path)
 
     assert out == {
         "ok": False,
         "removed": False,
-        "error": "cannot confirm worktree ownership after git removal",
+        "error": "cannot confirm worktree ownership before preservation",
     }
     assert corner.is_dir()
 
@@ -674,3 +674,360 @@ def test_remote_heads_fail_closed():
             return super().run(spec, live=live)
 
     assert remote_heads(_Fail(), Path("/tmp")) is None
+
+
+def test_list_uncommitted_paths_includes_ignored_user_data_but_not_caches(tmp_path):
+    import subprocess
+
+    from lokay.git_real_diff import list_uncommitted_paths
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / ".gitignore").write_text(
+        "important.secret\ntrailing \n.venv/\n__pycache__/\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "base"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / "important.secret").write_text("do not delete\n", encoding="utf-8")
+    (tmp_path / "trailing ").write_text("also keep\n", encoding="utf-8")
+    (tmp_path / ".venv").mkdir()
+    (tmp_path / ".venv" / "cache").write_text("generated\n", encoding="utf-8")
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "__pycache__" / "x.pyc").write_bytes(b"generated")
+
+    assert list_uncommitted_paths(Runner(), tmp_path) == [
+        "important.secret",
+        "trailing ",
+    ]
+
+
+def test_remove_worktree_rejects_symlink_without_git(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    managed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    alias = managed / "alias"
+    alias.symlink_to(outside, target_is_directory=True)
+    runner = _ResetRunner()
+
+    out = remove_worktree(
+        runner,
+        clone,
+        alias,
+        managed_root=managed,
+    )
+
+    assert out["ok"] is False
+    assert "symlink" in out["error"]
+    assert outside.is_dir()
+    assert runner.calls == []
+
+
+def test_remove_worktree_rejects_path_outside_managed_root(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    managed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    runner = _ResetRunner()
+
+    out = remove_worktree(
+        runner,
+        clone,
+        outside,
+        managed_root=managed,
+    )
+
+    assert out["ok"] is False
+    assert "outside managed root" in out["error"]
+    assert outside.is_dir()
+    assert runner.calls == []
+
+
+def test_iter_worktrees_ignores_symlink_corners(tmp_path):
+    from lokay.git_worktree import iter_worktrees
+
+    managed = tmp_path / "managed"
+    repo_root = managed / "owner__repo"
+    repo_root.mkdir(parents=True)
+    real = repo_root / "ai__fix__1-real"
+    real.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repo_root / "ai__fix__2-alias").symlink_to(outside, target_is_directory=True)
+    cfg = Config(worktrees_root=managed, repos=[])
+    repo = RepoConfig(name="owner/repo", clone_path=tmp_path / "clone")
+
+    assert iter_worktrees(cfg, repo) == [(real, "ai/fix/1-real")]
+
+
+def test_remove_registered_worktree_preserves_ignored_user_data(tmp_path):
+    import subprocess
+
+    clone = tmp_path / "clone"
+    managed = tmp_path / "managed"
+    corner = managed / "owner__repo" / "ai__fix__1-x"
+    clone.mkdir()
+    managed.mkdir()
+    subprocess.run(["git", "init"], cwd=clone, check=True, capture_output=True)
+    (clone / ".gitignore").write_text("important.secret\n", encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore"], cwd=clone, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "base"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(corner), "HEAD"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+    )
+    important = corner / "important.secret"
+    important.write_text("do not delete\n", encoding="utf-8")
+
+    out = remove_worktree(
+        Runner(),
+        clone,
+        corner,
+        managed_root=managed,
+    )
+
+    assert out["ok"] is False
+    assert "uncommitted real content" in out["error"]
+    assert important.read_text(encoding="utf-8") == "do not delete\n"
+
+
+def test_remove_worktree_never_recursively_deletes_late_content(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    corner = managed / "corner"
+    corner.mkdir(parents=True)
+
+    class LateContent(_ResetRunner):
+        def __init__(self):
+            super().__init__()
+            self.list_count = 0
+
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["worktree", "list", "--porcelain"]:
+                self.calls.append(argv)
+                self.list_count += 1
+                records = f"worktree {clone}\0HEAD {'d' * 40}\0branch refs/heads/main\0"
+                if self.list_count == 1:
+                    records += f"\0worktree {corner}\0HEAD {'c' * 40}\0branch refs/heads/fix\0"
+                return _result(argv, stdout=records + "\0")
+            if argv[1:3] == ["worktree", "prune"]:
+                self.calls.append(argv)
+                archive = corner.with_name(f".{corner.name}.lokay-preserved")
+                (archive / "late.txt").write_text("late work\n", encoding="utf-8")
+                return _result(argv)
+            return super().run(spec, live=live)
+
+    runner = LateContent()
+    out = remove_worktree(
+        runner,
+        clone,
+        corner,
+        managed_root=managed,
+    )
+
+    assert out["ok"] is True
+    archive = Path(out["preserved_path"])
+    assert (archive / "late.txt").read_text(encoding="utf-8") == "late work\n"
+    assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
+
+
+def test_remove_worktree_rejects_ancestor_symlink_alias_without_git(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    managed.mkdir()
+    outside = tmp_path / "outside"
+    corner = outside / "corner"
+    corner.mkdir(parents=True)
+    alias_parent = managed / "alias"
+    alias_parent.symlink_to(outside, target_is_directory=True)
+    alias = alias_parent / "corner"
+    runner = _ResetRunner()
+
+    out = remove_worktree(
+        runner,
+        clone,
+        alias,
+        managed_root=managed,
+    )
+
+    assert out["ok"] is False
+    assert "outside managed root" in out["error"] or "does not resolve lexically" in out["error"]
+    assert corner.is_dir()
+    assert runner.calls == []
+
+
+def test_list_uncommitted_paths_fails_closed_on_warning_only_ignored_query(tmp_path):
+    from lokay.git_real_diff import list_uncommitted_paths
+
+    class WarningIgnored(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:3] == ["ls-files", "--others"] and "--ignored" in argv:
+                return _result(argv, stderr="warning: ignored paths omitted")
+            return super().run(spec, live=live)
+
+    with pytest.raises(RuntimeError, match="ignored paths omitted"):
+        list_uncommitted_paths(WarningIgnored(), tmp_path)
+
+
+def test_remove_worktree_native_late_ignored_file_is_archived(tmp_path):
+    import subprocess
+
+    clone = tmp_path / "clone"
+    managed = tmp_path / "managed"
+    corner = managed / "owner__repo" / "ai__fix__1-x"
+    clone.mkdir()
+    managed.mkdir()
+    subprocess.run(["git", "init"], cwd=clone, check=True, capture_output=True)
+    (clone / ".gitignore").write_text("*.secret\n", encoding="utf-8")
+    (clone / "tracked").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=clone, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "base"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(corner), "HEAD"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+    )
+
+    class Inject(Runner):
+        def run(self, spec, *, live):
+            if list(spec.argv)[1:3] == ["worktree", "prune"]:
+                archive = corner.with_name(f".{corner.name}.lokay-preserved")
+                (archive / "late.secret").write_text("IRREPLACEABLE", encoding="utf-8")
+            return super().run(spec, live=live)
+
+    out = remove_worktree(Inject(), clone, corner, managed_root=managed)
+
+    archive = Path(out["preserved_path"])
+    assert out["ok"] is True
+    assert not corner.exists()
+    assert (archive / "late.secret").read_text(encoding="utf-8") == "IRREPLACEABLE"
+    listed = subprocess.run(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert str(corner.resolve()) not in listed
+
+
+def test_iter_worktrees_excludes_only_preserved_namespace(tmp_path):
+    from lokay.git_worktree import iter_worktrees
+
+    managed = tmp_path / "managed"
+    repo_root = managed / "owner__repo"
+    repo_root.mkdir(parents=True)
+    archive = repo_root / ".ai__fix__1-old.lokay-preserved"
+    archive.mkdir()
+    ordinary_hidden = repo_root / ".ordinary"
+    ordinary_hidden.mkdir()
+    cfg = Config(worktrees_root=managed, repos=[])
+    repo = RepoConfig(name="owner/repo", clone_path=tmp_path / "clone")
+
+    assert iter_worktrees(cfg, repo) == [(ordinary_hidden, ".ordinary")]
+
+
+def test_remove_worktree_fails_closed_on_warning_only_registry_query(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+
+    class WarningRegistry(_ResetRunner):
+        def run(self, spec, *, live):
+            result = super().run(spec, live=live)
+            if list(spec.argv)[1:4] == ["worktree", "list", "--porcelain"]:
+                result.stderr = "warning: registry may be incomplete"
+            return result
+
+    out = remove_worktree(WarningRegistry(), clone, corner, managed_root=tmp_path)
+
+    assert out == {
+        "ok": False,
+        "removed": False,
+        "error": "cannot confirm worktree ownership before preservation",
+    }
+    assert corner.is_dir()
+
+
+def test_remove_worktree_fails_closed_on_interrupted_preservation_archive(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    archive = tmp_path / ".corner.lokay-preserved"
+    archive.mkdir()
+    (archive / "valuable").write_text("keep\n", encoding="utf-8")
+
+    out = remove_worktree(_ResetRunner(), clone, corner, managed_root=tmp_path)
+
+    assert out["ok"] is False
+    assert out["preserved_path"] == str(archive)
+    assert "requires reconciliation" in out["error"]
+    assert (archive / "valuable").read_text(encoding="utf-8") == "keep\n"
+
+
+def test_remove_worktree_restores_path_on_warning_only_registry_prune(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+
+    class WarningPrune(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:3] == ["worktree", "prune"]:
+                return _result(argv, stderr="warning: prune incomplete")
+            return super().run(spec, live=live)
+
+    out = remove_worktree(WarningPrune(), clone, corner, managed_root=tmp_path)
+
+    assert out["ok"] is False
+    assert "prune incomplete" in out["error"]
+    assert corner.is_dir()
+
+
+def test_backslash_filename_cannot_alias_plan_evidence(tmp_path):
+    import subprocess
+
+    from lokay.git_real_diff import classify_changed_paths, list_uncommitted_paths
+
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    (tmp_path / ".gitignore").write_text("*\\approach.md\n", encoding="utf-8")
+    subprocess.run(["git", "add", ".gitignore"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "base"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    (tmp_path / ".lokay\approach.md").write_text("real user data\n", encoding="utf-8")
+
+    paths = list_uncommitted_paths(Runner(), tmp_path)
+    assert paths == [".lokay\approach.md"]
+    assert classify_changed_paths(paths) == "real"

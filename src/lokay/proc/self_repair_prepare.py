@@ -133,7 +133,12 @@ def main(argv: list[str] | None = None) -> int:
                 resumed = True
                 candidate_commit = head if ahead > 0 else ""
             else:
-                removed = remove_worktree(run, repo.clone_path, worktree)
+                removed = remove_worktree(
+                    run,
+                    repo.clone_path,
+                    worktree,
+                    managed_root=cfg.worktrees_root,
+                )
                 if not removed.get("ok"):
                     raise RuntimeError(
                         f"self-repair worktree remove failed: {removed.get('error') or 'still exists'}"

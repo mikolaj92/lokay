@@ -58,7 +58,7 @@ def test_prepare_refuses_unconfirmed_existing_worktree(tmp_path, monkeypatch, ca
     monkeypatch.setattr(
         prepare,
         "remove_worktree",
-        lambda *_args: {"ok": False, "error": "git refused worktree removal"},
+        lambda *_args, **_kwargs: {"ok": False, "error": "git refused worktree removal"},
     )
 
     code = prepare.main(["--live", "--fingerprint", fingerprint])
@@ -339,7 +339,7 @@ def test_prepare_recreates_confirmed_empty_existing_worktree(
     monkeypatch.setattr(prepare, "runner", Run)
     monkeypatch.setattr(prepare, "worktree_owned_by_clone", lambda *_args: True)
 
-    def remove(*_args):
+    def remove(*_args, **_kwargs):
         corner.rmdir()
         return {"ok": True, "removed": True}
 
