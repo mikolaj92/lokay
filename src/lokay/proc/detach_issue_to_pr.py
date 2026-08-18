@@ -265,11 +265,14 @@ def _is_cycle_start_metric(data: dict[str, Any], path: Path | None) -> bool:
         or not isinstance(issue, int)
         or issue < 1
         or not isinstance(started_ts, str)
+        or len(started_ts) != 20
     ):
         return False
     try:
-        datetime.strptime(started_ts, "%Y-%m-%dT%H:%M:%SZ")
+        parsed_started_ts = datetime.strptime(started_ts, "%Y-%m-%dT%H:%M:%SZ")
     except ValueError:
+        return False
+    if parsed_started_ts.strftime("%Y-%m-%dT%H:%M:%SZ") != started_ts:
         return False
     owner, name = repo.split("/", 1)
     expected_name = f"{owner}__{name}__{issue}.json"

@@ -184,6 +184,28 @@ def test_complete_cycle_start_metric_is_readable_but_filename_is_distinct(tmp_pa
     assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is True
 
 
+
+def test_cycle_start_metric_requires_exact_utc_timestamp(tmp_path):
+    import json
+
+    for index, started_ts in enumerate(
+        [
+            "2026-1-1T1:2:3Z",
+            "2026-01-01T00:00:00z",
+            "2026-01-01T00:00:00+00:00",
+            "2026-01-01T00:00:00.000Z",
+        ]
+    ):
+        path = tmp_path / "owner__repo__9.json"
+        path.write_text(
+            json.dumps(
+                {"repo": "owner/repo", "issue": 9, "started_ts": started_ts}
+            ),
+            encoding="utf-8",
+        )
+        assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is True, index
+        path.unlink()
+
 def test_cycle_start_metric_rejects_boolean_issue(tmp_path):
     import json
 
