@@ -827,3 +827,20 @@ def test_terminal_influenzer_137_plan_only_is_not_refreshed(tmp_path: Path):
 
     assert stuck == expected
     assert 137 in excluded_numbers(stuck, "mikolaj92/influenzer")
+
+
+
+def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _event(state, repo="a/b", issue=4796, ok=False, reason="plan_only", run_id="run-1")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 4796 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#4796"].get("reason") == "plan_only"

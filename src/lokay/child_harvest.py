@@ -449,6 +449,23 @@ def harvest_fail_closed_children(
                 error=error or counted,
             )
 
+    # Receipts can be pruned and stuck.json can be overwritten mid-pass.
+    # Re-apply terminal plan_only from the journal so the mill cannot loop
+    # the same ticket after a wipe.
+    for (repo, issue), hist in history.items():
+        miss_reason, miss_runs = _trailing_miss_runs(hist)
+        if miss_reason != "plan_only" or miss_runs < _skip_after("plan_only"):
+            continue
+        ev = events.get((repo, issue)) or {}
+        _apply_miss_count(
+            stuck,
+            repo=repo,
+            issue=issue,
+            reason="plan_only",
+            miss_runs=miss_runs,
+            error=str(ev.get("error") or ev.get("reason") or "plan_only"),
+        )
+
     # Receipts can be pruned. Reconcile stale blocked miss rows from the
     # journal so unique-run N still owns the slot.
     for key, row in list((stuck.get("issues") or {}).items()):
