@@ -245,6 +245,39 @@ def test_reset_to_base_rewrites_when_ahead_but_behind_own_remote(tmp_path):
     assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
 
+def test_reset_to_base_keeps_dirty_real_tree_when_unpublished_behind_main(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="5")
+    runner.branch_fetch_rc = 128
+    runner.behind_main = 4
+    runner.diff_names = "UNCOMMITTED_IMPORTANT\n"
+
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+
+    assert path == wt
+    assert not any(call[1] == "worktree" and call[2] == "remove" for call in runner.calls)
+    assert not any(call[1] == "worktree" and call[2] == "add" for call in runner.calls)
+
+
+def test_reset_to_base_keeps_dirty_real_tree_when_branch_is_published(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="8")
+    runner.behind = 0
+    runner.diff_names = "src/lokay/partial_fix.py\n"
+
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+
+    assert path == wt
+    assert not any(call[1] == "worktree" and call[2] == "remove" for call in runner.calls)
+    assert not any(call[1] == "push" and "--delete" in call for call in runner.calls)
+
+
 def test_reset_to_base_keeps_dirty_real_tree(tmp_path):
     """Timeout leftover: no commit yet, but real files in the tree → KEEP."""
     branch = "ai/fix/62-timeout"
@@ -257,6 +290,41 @@ def test_reset_to_base_keeps_dirty_real_tree(tmp_path):
     assert path == wt
     assert not any(call[1] == "remove" for call in runner.calls)
     assert not any(call[1] == "add" for call in runner.calls)
+
+
+def test_reset_to_base_resets_plan_only_uncommitted_evidence(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, wt = _cfg_repo(tmp_path, branch)
+    runner = _ResetRunner(ahead="8")
+    runner.behind = 0
+    runner.diff_names = ".lokay/approach.md\n.lokay/localize.json\n"
+
+    path = ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    )
+
+    assert path == wt
+    assert any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
+
+
+def test_reset_to_base_fails_closed_when_uncommitted_state_is_unreadable(tmp_path):
+    branch = "ai/fix/142-prompt"
+    cfg, repo, _wt = _cfg_repo(tmp_path, branch)
+
+    class _UnreadableDirty(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["diff", "--name-only", "--cached"]:
+                self.calls.append(argv)
+                return _result(argv, returncode=128, stderr="cannot read index")
+            return super().run(spec, live=live)
+
+    runner = _UnreadableDirty(ahead="8")
+    with pytest.raises(RuntimeError, match="cannot inspect uncommitted"):
+        ensure_worktree(
+            runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+        )
+    assert not any(call[1:4] == ["worktree", "remove", "--force"] for call in runner.calls)
 
 
 def test_reset_to_base_fail_closed_when_ahead_unreadable(tmp_path):

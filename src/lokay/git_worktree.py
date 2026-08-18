@@ -313,6 +313,29 @@ def leftover_status(
     }
 
 
+
+def _uncommitted_changed_paths(runner: Runner, worktree: Path) -> list[str]:
+    """Staged, unstaged, and untracked paths, excluding committed history."""
+    found: set[str] = set()
+    queries = (
+        ["diff", "--name-only", "--cached", "--relative"],
+        ["diff", "--name-only", "--relative"],
+        ["ls-files", "--others", "--exclude-standard"],
+    )
+    for argv in queries:
+        result = runner.run(git_spec(argv, cwd=worktree), live=True)
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(detail or f"cannot inspect uncommitted work: {' '.join(argv)}")
+        for line in (result.stdout or "").splitlines():
+            rel = line.strip().replace("\\", "/")
+            while rel.startswith("./"):
+                rel = rel[2:]
+            if rel:
+                found.add(rel)
+    return sorted(found)
+
+
 def ensure_worktree(
     runner: Runner,
     config: Config,
@@ -327,10 +350,9 @@ def ensure_worktree(
 
     When ``reset_to_base`` is True (issue_to_pr re-implement path):
 
-    * KEEP if the existing corner is unpublished (no ``origin/<branch>``),
-      ahead of ``origin/<base>``, and already contains ``origin/<base>``,
-      **or** has a dirty real tree (timeout leftover). Restart must not
-      wipe a child that has not published a PR and can still push.
+    * KEEP any staged, unstaged, or untracked real implementation change
+      (timeout leftover), regardless of published/behind history. Also keep an
+      unpublished corner that is ahead of and contains ``origin/<base>``.
     * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) when
       ``origin/<branch>`` exists — including a closed CONFLICTING tip that
       matches HEAD. Replaying those commits just republishes the same dirty
@@ -374,6 +396,17 @@ def ensure_worktree(
                     f"cannot measure unpublished ahead vs origin/{base}: "
                     f"{(ahead_result.stdout or '').strip()!r}"
                 ) from exc
+            try:
+                uncommitted = classify_changed_paths(
+                    _uncommitted_changed_paths(runner, worktree)
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"cannot inspect uncommitted worktree changes: {exc}") from exc
+            if uncommitted == "real":
+                # A timeout/resume can leave new work on any branch state.
+                # Published or behind-main history is not permission to erase
+                # staged, unstaged, or untracked implementation changes.
+                return worktree
             if ahead > 0:
                 behind = _behind_own_remote(runner, worktree, clone, branch)
                 if behind is None:
@@ -392,19 +425,6 @@ def ensure_worktree(
                         return worktree
                 # origin/<branch> exists, or unpublished-but-stale vs main.
                 # Fall through and recreate from origin/<base>.
-            else:
-                try:
-                    dirty = classify_changed_paths(
-                        list_changed_paths(runner, worktree, base=f"origin/{base}")
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    raise RuntimeError(
-                        f"cannot classify leftover tree vs origin/{base}: {exc}"
-                    ) from exc
-                if dirty == "real":
-                    # Timeout leftover: agent wrote files but did not commit.
-                    # Next pass must resume this corner, not wipe it.
-                    return worktree
             removed = remove_worktree(runner, clone, worktree)
             if not removed.get("ok"):
                 raise RuntimeError(
