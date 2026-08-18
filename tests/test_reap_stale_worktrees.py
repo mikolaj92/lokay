@@ -492,3 +492,29 @@ def test_keep_when_pr_survey_failed(tmp_path, monkeypatch):
     assert out["kept"][0]["reason"] == "pr_survey_failed"
     assert out["reaped_count"] == 0
     assert out["kept_count"] == 1
+
+
+
+def test_unreadable_receipt_keeps_all_worktrees(tmp_path, monkeypatch):
+    """An unparseable lifecycle file cannot be evidence that a live child is gone."""
+    _corner(tmp_path, "ai/fix/142-x")
+    monkeypatch.setattr(reap_stale_worktrees, "has_unreadable_issue_to_pr_receipts", lambda: True)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not classify unknown receipt state")),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not reap unknown receipt state")),
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+
+    assert out["receipt_state_unknown"] is True
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["reason"] == "receipt_state_unknown"

@@ -352,3 +352,36 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
     assert working["pr_survey_failed"] == ["a/one"]
     assert working["survey_errors"] == 1
 
+
+
+
+def test_refresh_unknown_receipt_state_occupies_configured_repos(tmp_path, monkeypatch):
+    """Unknown receipt contents cannot expose a fresh implementation lane."""
+    pass_dir = _pass(
+        tmp_path,
+        begin={"repos": ["a/one", "a/two"]},
+        working={
+            "ready_by_repo": {
+                "a/one": [{"number": 1, "title": "one"}],
+                "a/two": [{"number": 2, "title": "two"}],
+            },
+            "remaining_ready": 2,
+        },
+    )
+    monkeypatch.setattr(refresh_occupancy, "has_unreadable_issue_to_pr_receipts", lambda: True)
+    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        refresh_occupancy,
+        "run_proc",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("must not survey into unknown lifecycle state")),
+    )
+
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+
+    assert out["receipt_state_unknown"] is True
+    assert out["occupied_repos"] == ["a/one", "a/two"]
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["live_issue_to_pr_repos"] == []
+    assert working["occupied_repos"] == ["a/one", "a/two"]

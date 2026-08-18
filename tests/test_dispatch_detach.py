@@ -117,3 +117,32 @@ def test_dispatch_refuses_to_launch_when_repo_mutex_is_unknown(monkeypatch, tmp_
         "reason": "repo_mutex_unknown",
         "error_detail": "ps unavailable",
     }
+
+
+def test_dispatch_refuses_to_launch_when_receipt_state_is_unknown(monkeypatch, tmp_path):
+    """Direct dispatch has the same fail-closed lifecycle boundary as reap."""
+    from lokay.passkit import io as pass_io
+
+    begin = {"live": True, "issue_budget": 1, "stuck_path": str(tmp_path / "stuck.json")}
+    working = {"actions": [], "progress": 0, "stuck": {}, "ready_by_repo": {"owner/repo": [{"repo": "owner/repo", "number": 1}]}}
+    (tmp_path / "begin.json").write_text(__import__("json").dumps(begin))
+    (tmp_path / "working.json").write_text(__import__("json").dumps(working))
+    (tmp_path / "implement.json").write_text(__import__("json").dumps({"clean_repos": ["owner/repo"], "issue_budget": 1}))
+    monkeypatch.setattr(pass_io, "begin_path", lambda _p: tmp_path / "begin.json")
+    monkeypatch.setattr(pass_io, "working_path", lambda _p: tmp_path / "working.json")
+    monkeypatch.setattr(pass_io, "implement_path", lambda _p: tmp_path / "implement.json")
+    monkeypatch.setattr(d, "has_unreadable_issue_to_pr_receipts", lambda: True)
+    monkeypatch.setattr(
+        d,
+        "detach_issue_to_pr",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("must not detach when receipts are unknown")),
+    )
+
+    out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
+
+    assert out == {
+        "ok": False,
+        "error": "cannot inspect issue_to_pr receipts; refusing dispatch",
+        "pass_dir": str(tmp_path),
+        "reason": "receipt_state_unknown",
+    }

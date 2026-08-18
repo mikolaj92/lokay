@@ -24,7 +24,10 @@ from lokay.git_worktree import (
 )
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc._common import add_config_live, load_cfg, runner as make_runner
-from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
+from lokay.proc.detach_issue_to_pr import (
+    has_unreadable_issue_to_pr_receipts,
+    live_issue_to_pr_receipts,
+)
 from lokay.runner import git_spec
 from lokay.stuck import issue_number_from_branch
 
@@ -94,6 +97,7 @@ def run_reap_stale_worktrees(
     cfg = load_cfg(argparse.Namespace(config=config_path))
     begin, working = load_begin_working(pass_dir)
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
+    receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
     live_rows = live_issue_to_pr_receipts()
     live_keys = _live_keys(live_rows)
     live_repos = _names(working, "live_issue_to_pr_repos") | {
@@ -109,6 +113,25 @@ def run_reap_stale_worktrees(
     for repo in cfg.active_repos():
         leftovers = iter_worktrees(cfg, repo)
         if not leftovers:
+            continue
+        if receipt_state_unknown:
+            # A malformed/unreadable receipt may be the only record of a
+            # child that owns a clean, just-created worktree. Do not classify
+            # or delete any corner until lifecycle state is readable again.
+            for path, branch in leftovers:
+                issue = issue_number_from_branch(
+                    branch, branch_prefix=cfg.branch_prefix
+                )
+                row = {
+                    "repo": repo.name,
+                    "branch": branch,
+                    "issue": issue,
+                    "worktree": str(path),
+                    "reason": "receipt_state_unknown",
+                    "kept": True,
+                }
+                kept.append(row)
+                actions.append({"step": "keep_stale_worktree", **row})
             continue
         if repo.name in live_repos:
             for path, branch in leftovers:
@@ -261,6 +284,7 @@ def run_reap_stale_worktrees(
         failed=failed,
         kept_count=len(kept),
         reaped_count=len(reaped),
+        receipt_state_unknown=receipt_state_unknown,
     )
 
 
