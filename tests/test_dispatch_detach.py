@@ -76,3 +76,44 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
         log = row.get("log") or ""
         assert "issue-to-pr-" in log
         assert log.endswith(".log")
+
+
+def test_dispatch_refuses_to_launch_when_repo_mutex_is_unknown(monkeypatch, tmp_path):
+    """A failed live ps probe is unknown, never an all-idle mutex snapshot."""
+    from lokay.passkit import io as pass_io
+
+    begin = {
+        "live": True,
+        "issue_budget": 1,
+        "stuck_path": str(tmp_path / "stuck.json"),
+    }
+    working = {
+        "actions": [],
+        "progress": 0,
+        "stuck": {},
+        "ready_by_repo": {"owner/repo": [{"repo": "owner/repo", "number": 1}]},
+    }
+    (tmp_path / "begin.json").write_text(__import__("json").dumps(begin))
+    (tmp_path / "working.json").write_text(__import__("json").dumps(working))
+    (tmp_path / "implement.json").write_text(
+        __import__("json").dumps({"clean_repos": ["owner/repo"], "issue_budget": 1})
+    )
+    monkeypatch.setattr(pass_io, "begin_path", lambda _p: tmp_path / "begin.json")
+    monkeypatch.setattr(pass_io, "working_path", lambda _p: tmp_path / "working.json")
+    monkeypatch.setattr(pass_io, "implement_path", lambda _p: tmp_path / "implement.json")
+    monkeypatch.setattr(d, "_live_ps_text", lambda: (_ for _ in ()).throw(RuntimeError("ps unavailable")))
+    monkeypatch.setattr(
+        d,
+        "detach_issue_to_pr",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("must not detach when mutex is unknown")),
+    )
+
+    out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
+
+    assert out == {
+        "ok": False,
+        "error": "cannot inspect repo mutex; refusing issue_to_pr dispatch",
+        "pass_dir": str(tmp_path),
+        "reason": "repo_mutex_unknown",
+        "error_detail": "ps unavailable",
+    }

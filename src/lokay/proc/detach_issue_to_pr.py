@@ -40,7 +40,9 @@ def pid_is_alive(pid: int) -> bool:
     except PermissionError:
         return True
     except OSError:
-        return False
+        # An indeterminate liveness probe must not make an existing detached
+        # receipt disappear from occupancy or destructive-reap protection.
+        return True
     return True
 
 
@@ -53,7 +55,7 @@ def _pid_command(pid: int) -> str:
             timeout=5,
             check=False,
         )
-    except OSError:
+    except (OSError, subprocess.TimeoutExpired):
         return ""
     return (done.stdout or "").strip()
 
@@ -62,6 +64,11 @@ def is_live_issue_to_pr_pid(pid: int) -> bool:
     if not pid_is_alive(pid):
         return False
     command = _pid_command(pid)
+    # A live PID whose command cannot be read is unknown, not dead. Keep its
+    # receipt as occupancy so neither dispatch nor stale-worktree reap can race
+    # a coding child. A readable non-Lokay command still rejects PID reuse.
+    if not command:
+        return True
     return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
 
 
