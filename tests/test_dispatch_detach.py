@@ -146,3 +146,57 @@ def test_dispatch_refuses_to_launch_when_receipt_state_is_unknown(monkeypatch, t
         "pass_dir": str(tmp_path),
         "reason": "receipt_state_unknown",
     }
+
+
+def test_malformed_no_pid_receipts_are_unknown(tmp_path):
+    import json
+
+    for index, payload in enumerate(
+        [
+            {},
+            {"detached": True, "repo": "owner/repo", "issue": 9},
+            {"repo": "owner/repo", "issue": 9},
+            {"repo": "owner/repo", "issue": 9, "started_ts": "not-a-time"},
+        ]
+    ):
+        path = tmp_path / f"malformed-{index}.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is True
+    assert detach_mod.live_issue_to_pr_receipts(tmp_path, pid_alive=lambda _pid: False) == []
+
+
+def test_complete_cycle_start_metric_is_readable_but_filename_is_distinct(tmp_path):
+    import json
+
+    metric = {
+        "repo": "owner/repo",
+        "issue": 9,
+        "started_ts": "2026-08-18T12:34:56Z",
+    }
+    valid = tmp_path / "owner__repo__9.json"
+    valid.write_text(json.dumps(metric), encoding="utf-8")
+
+    assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is False
+    assert detach_mod.live_issue_to_pr_receipts(tmp_path, pid_alive=lambda _pid: False) == []
+
+    valid.rename(tmp_path / "owner__repo-9.json")
+    assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is True
+
+
+def test_cycle_start_metric_rejects_boolean_issue(tmp_path):
+    import json
+
+    path = tmp_path / "owner__repo__1.json"
+    path.write_text(
+        json.dumps(
+            {
+                "repo": "owner/repo",
+                "issue": True,
+                "started_ts": "2026-08-18T12:34:56Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is True

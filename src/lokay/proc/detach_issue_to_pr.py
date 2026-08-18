@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -250,8 +251,33 @@ def is_live_issue_to_pr_pid(pid: int) -> bool:
     return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
 
 
-def _receipt_is_readable(data: Any) -> bool:
-    """Validate detached lifecycle state without misreading cycle_start JSON."""
+def _is_cycle_start_metric(data: dict[str, Any], path: Path | None) -> bool:
+    """Require the complete metric schema and its distinct filename."""
+    repo = data.get("repo")
+    issue = data.get("issue")
+    started_ts = data.get("started_ts")
+    if (
+        not isinstance(repo, str)
+        or repo.strip() != repo
+        or repo.count("/") != 1
+        or any(not part for part in repo.split("/"))
+        or isinstance(issue, bool)
+        or not isinstance(issue, int)
+        or issue < 1
+        or not isinstance(started_ts, str)
+    ):
+        return False
+    try:
+        datetime.strptime(started_ts, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError:
+        return False
+    owner, name = repo.split("/", 1)
+    expected_name = f"{owner}__{name}__{issue}.json"
+    return path is None or path.name == expected_name
+
+
+def _receipt_is_readable(data: Any, path: Path | None = None) -> bool:
+    """Validate lifecycle state without misreading malformed JSON as a metric."""
     if not isinstance(data, dict):
         return False
     if data.get("starting") is True:
@@ -276,7 +302,7 @@ def _receipt_is_readable(data: Any) -> bool:
     if "starting" in data:
         return False
     if "pid" not in data:
-        return True  # cycle_start's metric-only receipt
+        return _is_cycle_start_metric(data, path)
     try:
         return (
             int(data["pid"]) > 0
@@ -310,7 +336,7 @@ def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return True
-        if not _receipt_is_readable(data):
+        if not _receipt_is_readable(data, path):
             return True
     return False
 

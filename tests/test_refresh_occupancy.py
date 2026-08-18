@@ -385,3 +385,39 @@ def test_refresh_unknown_receipt_state_occupies_configured_repos(tmp_path, monke
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["live_issue_to_pr_repos"] == []
     assert working["occupied_repos"] == ["a/one", "a/two"]
+
+
+def test_refresh_malformed_no_pid_receipt_occupies_configured_repos(tmp_path, monkeypatch):
+    """{} and partial no-PID objects are unknown occupancy, not cycle_start idle."""
+    import json
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "owner__repo-9.json").write_text(
+        json.dumps({"detached": True, "repo": "owner/repo", "issue": 9}),
+        encoding="utf-8",
+    )
+    pass_dir = _pass(
+        tmp_path,
+        begin={"repos": ["owner/repo", "other/repo"]},
+        working={
+            "ready_by_repo": {
+                "owner/repo": [{"number": 9, "title": "x"}],
+                "other/repo": [{"number": 1, "title": "y"}],
+            },
+            "remaining_ready": 2,
+        },
+    )
+    monkeypatch.setattr(
+        refresh_occupancy,
+        "run_proc",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("must not survey into unknown lifecycle state")),
+    )
+
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+
+    assert out["receipt_state_unknown"] is True
+    assert out["occupied_repos"] == ["owner/repo", "other/repo"]
