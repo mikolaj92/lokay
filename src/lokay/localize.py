@@ -1,4 +1,4 @@
-"""Deterministic Agentless-style localization: seed text + repo tree → edit paths.
+"""Deterministic fallback localization: seed text + repo tree → edit paths.
 
 One job only: produce a non-empty list of files/directories the coding agent
 may patch. No embeddings, no second planner, no LLM step selection.
@@ -863,9 +863,9 @@ def build_localization(
     extra_paths: Iterable[str] = (),
     max_paths: int = _MAX_PATHS,
 ) -> Localization:
-    """Pure localization from seed + optional worktree tree."""
+    """Pure fallback localization from seed + optional worktree tree."""
     notes: list[str] = [
-        "Agentless-style localization: deterministic paths only (no embeddings).",
+        "Deterministic fallback paths only (no embeddings).",
         "Empty path list fails closed — run_agent must not start.",
     ]
     tree: tuple[str, ...] = ()

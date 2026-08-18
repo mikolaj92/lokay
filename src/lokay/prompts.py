@@ -17,7 +17,7 @@ def _scope_block(paths: Iterable[str] | None) -> tuple[str, str]:
     rendered = render_paths_for_prompt(items)
     if len(items) <= _SCOPE_LOCK_MAX:
         header = (
-            "Edit scope (from deterministic `localize` atom — Agentless file-before-patch):\n"
+            "Edit scope (from semantic `localize` atom, validated by Python):\n"
             "Patch **only** these files/directories. Do not wander the full checkout."
         )
         stay = (
@@ -25,7 +25,7 @@ def _scope_block(paths: Iterable[str] | None) -> tuple[str, str]:
         )
     else:
         header = (
-            "Edit start (from deterministic `localize` atom — hints, not a cage):\n"
+            "Edit start (from semantic `localize` atom — hints, not a cage):\n"
             "Start here. Inspect neighbours and tests if the issue needs them."
         )
         stay = (
