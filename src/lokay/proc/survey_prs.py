@@ -10,6 +10,7 @@ from lokay.passkit.support import is_manual_pr, run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc._common import add_config_live
+from lokay.passkit.hot import survey_scope
 
 
 def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -24,7 +25,14 @@ def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dic
     manual_prs = 0
     survey_errors = int(working.get("survey_errors") or 0)
 
+    scope = set(survey_scope(begin) or [])
+    scoped = survey_scope(begin) is not None
     for repo_name in list(begin.get("repos") or []):
+
+        if scoped and repo_name not in scope:
+            actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "prs"})
+            prs_by_repo[repo_name] = []
+            continue
         prs = run_proc(p_list_prs.main, [*cfg_flag, *live_flag, "--repo", repo_name])
         actions.append({"step": "list_prs", "repo": repo_name, **prs})
         if not prs.get("ok"):

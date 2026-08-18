@@ -10,6 +10,7 @@ from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import list_inbox as p_list_inbox
 from lokay.proc._common import add_config_live
+from lokay.passkit.hot import survey_scope
 
 
 def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -23,7 +24,15 @@ def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> d
     remaining_inbox = 0
     survey_errors = int(working.get("survey_errors") or 0)
 
+    scope = set(survey_scope(begin) or [])
+    scoped = survey_scope(begin) is not None
     for repo_name in list(begin.get("repos") or []):
+
+        if scoped and repo_name not in scope:
+            actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "inbox"})
+            inbox_by_repo[repo_name] = 0
+            inbox_issues_by_repo[repo_name] = []
+            continue
         listed = run_proc(p_list_inbox.main, [*cfg_flag, *live_flag, "--repo", repo_name])
         actions.append({"step": "list_inbox", "repo": repo_name, **listed})
         if not listed.get("ok"):

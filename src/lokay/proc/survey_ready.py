@@ -11,6 +11,7 @@ from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import list_issues as p_list_issues
 from lokay.proc._common import add_config_live
+from lokay.passkit.hot import survey_scope
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 
 
@@ -29,7 +30,14 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     remaining_ready_with_pr = 0
     survey_errors = int(working.get("survey_errors") or 0)
 
+    scope = set(survey_scope(begin) or [])
+    scoped = survey_scope(begin) is not None
     for repo_name in list(begin.get("repos") or []):
+
+        if scoped and repo_name not in scope:
+            actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "ready"})
+            ready_by_repo[repo_name] = []
+            continue
         listed = run_proc(p_list_issues.main, [*cfg_flag, *live_flag, "--repo", repo_name])
         actions.append({"step": "list_issues", "repo": repo_name, **listed})
         if not listed.get("ok"):

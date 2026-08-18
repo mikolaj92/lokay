@@ -8,6 +8,7 @@ from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
+from lokay.passkit.hot import load_last_pass_by_repo, pick_survey_repos
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.preflight import health_lease_status, run_preflight
 from lokay.child_harvest import harvest_fail_closed_children
@@ -58,7 +59,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         return err("refusing --live while config mode is not live")
 
     pipeline = [
-        "survey: list-prs + list-inbox + list-issues (all repos)",
+        "survey: list-prs + list-inbox + list-issues (hot repos + rotated cold)",
         "per-repo PR-first: conflict close / repair / merge open AI PRs",
         "inbox triage + deterministic intake (skip repos with actionable open AI PRs)",
         "occupancy then reap leftover worktrees then issue_to_pr up to K across clean (not occupied) repos",
@@ -94,12 +95,19 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     save_stuck(stuck_path, stuck)
     pass_dir = pass_io.make_pass_dir(cfg.state_path)
     pass_io.prune_pass_dirs(cfg.state_path, keep_path=pass_dir)
+    repos = [r.name for r in cfg.active_repos()]
+    survey_repos = pick_survey_repos(
+        repos,
+        load_last_pass_by_repo(cfg.state_path),
+        salt=str(pass_dir),
+    )
     begin = {
         "pass_dir": str(pass_dir),
         "config_path": str(cfg.config_path) if cfg.config_path else config_path,
         "live": bool(live),
         "mode": cfg.mode,
-        "repos": [r.name for r in cfg.active_repos()],
+        "repos": repos,
+        "survey_repos": survey_repos,
         "stuck_path": str(stuck_path),
         "stuck": stuck,
         "planned": planned,
