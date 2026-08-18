@@ -517,7 +517,8 @@ def test_remove_worktree_restores_path_when_registry_prune_fails(tmp_path):
 
     assert out["ok"] is False
     assert "registry locked" in out["error"]
-    assert corner.is_dir()
+    assert not corner.exists()
+    assert Path(out["preserved_path"]).is_dir()
 
 def test_remove_worktree_keeps_path_when_clone_still_lists_it(tmp_path):
     clone = tmp_path / "clone"
@@ -1009,7 +1010,8 @@ def test_remove_worktree_restores_path_on_warning_only_registry_prune(tmp_path):
 
     assert out["ok"] is False
     assert "prune incomplete" in out["error"]
-    assert corner.is_dir()
+    assert not corner.exists()
+    assert Path(out["preserved_path"]).is_dir()
 
 
 def test_backslash_filename_cannot_alias_plan_evidence(tmp_path):
@@ -1031,3 +1033,39 @@ def test_backslash_filename_cannot_alias_plan_evidence(tmp_path):
     paths = list_uncommitted_paths(Runner(), tmp_path)
     assert paths == [".lokay\approach.md"]
     assert classify_changed_paths(paths) == "real"
+
+
+def test_remove_worktree_restore_never_overwrites_replacement_after_parent_swap(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    parent = managed / "owner__repo"
+    corner = parent / "ai__fix__1-x"
+    corner.mkdir(parents=True)
+    (corner / "source.txt").write_text("DECOY SOURCE\n", encoding="utf-8")
+
+    class SwapParent(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:3] == ["worktree", "prune"]:
+                outside = tmp_path / "outside"
+                outside.mkdir()
+                parent.rename(outside / "owner__repo")
+                parent.symlink_to(outside / "owner__repo", target_is_directory=True)
+                victim = parent / "ai__fix__1-x"
+                victim.mkdir()
+                (victim / "source.txt").write_text("VALUABLE VICTIM\n", encoding="utf-8")
+                return _result(argv, stderr="warning: prune uncertain")
+            return super().run(spec, live=live)
+
+    out = remove_worktree(SwapParent(), clone, corner, managed_root=managed)
+
+    victim = parent / "ai__fix__1-x"
+    archive = parent / ".ai__fix__1-x.lokay-preserved"
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert victim.is_dir()
+    assert (victim / "source.txt").read_text(encoding="utf-8") == "VALUABLE VICTIM\n"
+    assert archive.is_dir()
+    assert (archive / "source.txt").read_text(encoding="utf-8") == "DECOY SOURCE\n"
+    assert "prune uncertain" in out["error"]

@@ -262,9 +262,17 @@ def remove_worktree(
             "error": "worktree preservation archive already exists",
         }
     try:
-        # Pin the already-validated parent inode so an ancestor rename/symlink
-        # swap cannot redirect the source or destination during quarantine.
+        # Pin the validated parent inode for the archive rename. After that
+        # point never restore: any later Path.rename can overwrite a
+        # replacement tree created at the original name.
         parent_fd = os.open(worktree.parent, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError as exc:
+        return {
+            "ok": False,
+            "removed": False,
+            "error": f"cannot preserve worktree before registry prune: {exc}",
+        }
+    try:
         try:
             os.rename(
                 worktree.name,
@@ -272,75 +280,68 @@ def remove_worktree(
                 src_dir_fd=parent_fd,
                 dst_dir_fd=parent_fd,
             )
-        finally:
-            os.close(parent_fd)
-    except OSError as exc:
-        return {
-            "ok": False,
-            "removed": False,
-            "error": f"cannot preserve worktree before registry prune: {exc}",
-        }
-    # The original managed path must remain absent. If another process creates
-    # it, do not ask Git to follow that replacement path.
-    if worktree.exists() or worktree.is_symlink():
+        except OSError as exc:
+            return {
+                "ok": False,
+                "removed": False,
+                "error": f"cannot preserve worktree before registry prune: {exc}",
+            }
+        # If another process recreates the original name, leave both trees.
+        # Restoring over that replacement would erase foreign bytes.
         try:
-            quarantine.rename(worktree)
-        except OSError:
+            os.stat(worktree.name, dir_fd=parent_fd)
+        except FileNotFoundError:
             pass
-        return {
-            "ok": False,
-            "removed": False,
-            "error": "worktree path changed during removal",
-        }
-    # Git's remove operation recursively erases late ignored files, even
-    # without --force. Never invoke it after inspection. With the registered
-    # pathname atomically absent, prune only the administrative registry; the
-    # full worktree bytes remain archived in the hidden quarantine.
-    pruned = runner.run(
-        git_spec(
-            ["worktree", "prune", "--expire", "now"],
-            cwd=clone,
-            timeout_seconds=60,
-        ),
-        live=True,
-    )
-    if (
-        pruned.returncode != 0
-        or (pruned.stderr or "").strip()
-        or (pruned.stdout or "").strip()
-    ):
-        detail = (pruned.stderr or pruned.stdout or "").strip()
-        try:
-            quarantine.rename(worktree)
-        except OSError:
+        else:
             return {
                 "ok": False,
                 "removed": False,
                 "preserved_path": str(quarantine),
-                "error": "registry prune failed and preserved worktree could not be restored",
+                "error": "worktree path changed during preservation",
+            }
+        # Git's remove operation recursively erases late ignored files, even
+        # without --force. Never invoke it after inspection. With the registered
+        # pathname atomically absent, prune only the administrative registry; the
+        # full worktree bytes remain archived in the hidden quarantine.
+        pruned = runner.run(
+            git_spec(
+                ["worktree", "prune", "--expire", "now"],
+                cwd=clone,
+                timeout_seconds=60,
+            ),
+            live=True,
+        )
+        if (
+            pruned.returncode != 0
+            or (pruned.stderr or "").strip()
+            or (pruned.stdout or "").strip()
+        ):
+            detail = (pruned.stderr or pruned.stdout or "").strip()
+            return {
+                "ok": False,
+                "removed": False,
+                "preserved_path": str(quarantine),
+                "error": detail or "git refused worktree registry prune",
+            }
+        still_owned = _clone_lists_worktree(runner, clone, worktree)
+        if still_owned is not False:
+            return {
+                "ok": False,
+                "removed": False,
+                "preserved_path": str(quarantine),
+                "error": (
+                    "cannot confirm worktree ownership after registry prune"
+                    if still_owned is None
+                    else "git still owns worktree after registry prune"
+                ),
             }
         return {
-            "ok": False,
-            "removed": False,
-            "error": detail or "git refused worktree registry prune",
-        }
-    still_owned = _clone_lists_worktree(runner, clone, worktree)
-    if still_owned is not False:
-        return {
-            "ok": False,
-            "removed": False,
+            "ok": True,
+            "removed": True,
             "preserved_path": str(quarantine),
-            "error": (
-                "cannot confirm worktree ownership after registry prune"
-                if still_owned is None
-                else "git still owns worktree after registry prune"
-            ),
         }
-    return {
-        "ok": True,
-        "removed": True,
-        "preserved_path": str(quarantine),
-    }
+    finally:
+        os.close(parent_fd)
 
 def remote_heads(runner: Runner, clone: Path) -> set[str] | None:
     """Branch names on ``origin``. ``None`` is fail-closed, not unpublished."""
