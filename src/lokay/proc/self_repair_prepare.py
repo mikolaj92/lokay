@@ -6,7 +6,11 @@ import argparse
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.git_real_diff import classify_changed_paths, list_uncommitted_paths
+from lokay.git_real_diff import (
+    classify_changed_paths,
+    list_committed_paths,
+    list_uncommitted_paths,
+)
 from lokay.git_worktree import remove_worktree, worktree_owned_by_clone
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 from lokay.runner import git_spec
@@ -116,6 +120,13 @@ def main(argv: list[str] | None = None) -> int:
                 if ahead != 1 or subject != f"self-repair: {args.fingerprint}":
                     raise RuntimeError(
                         "cannot resume unrecognized committed self-repair candidate"
+                    )
+                committed = classify_changed_paths(
+                    list_committed_paths(run, worktree, base=base)
+                )
+                if committed != "real":
+                    raise RuntimeError(
+                        "cannot resume self-repair worktree with committed plan evidence"
                     )
             if uncommitted == "real" or ahead > 0:
                 contains_base = run.run(

@@ -208,6 +208,8 @@ def test_prepare_resumes_clean_committed_candidate(tmp_path, monkeypatch, capsys
                 return _result("c" * 40 + "\n")
             if argv[1:3] == ["rev-list", "--count"]:
                 return _result("1\n")
+            if argv[1:3] == ["diff", "--name-only"]:
+                return _result("src/lokay/fix.py\0")
             if argv[1] == "log" and "--format=%s" in argv:
                 return _result("self-repair: deadbeef\n")
             raise AssertionError(argv)
@@ -404,4 +406,57 @@ def test_prepare_preserves_plan_only_committed_candidate(
 
     assert code == 1
     assert "uncommitted plan evidence" in payload["error"]
+    assert corner.is_dir()
+
+
+def test_prepare_rejects_clean_committed_plan_only_candidate(
+    tmp_path, monkeypatch, capsys
+):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    fingerprint = "deadbeef"
+    corner = tmp_path / "wt" / "_self_repair" / fingerprint
+    corner.mkdir(parents=True)
+    cfg = SimpleNamespace(
+        active_repos=lambda: [SimpleNamespace(name=prepare.REPO, clone_path=clone)],
+        worktrees_root=tmp_path / "wt",
+    )
+
+    class Run:
+        def run_checked(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["remote", "get-url", "origin"]:
+                return _result("https://github.com/mikolaj92/lokay.git\n")
+            if argv[1:3] == ["fetch", "origin"]:
+                return _result()
+            if argv[1:3] == ["rev-parse", "origin/main"]:
+                return _result("a" * 40 + "\n")
+            if argv[1:3] == ["rev-parse", "HEAD"]:
+                return _result("c" * 40 + "\n")
+            if argv[1:3] == ["rev-list", "--count"]:
+                return _result("1\n")
+            if argv[1:3] == ["diff", "--name-only"]:
+                return _result(".lokay/approach.md\0")
+            if argv[1] == "log" and "--format=%s" in argv:
+                return _result("self-repair: deadbeef\n")
+            raise AssertionError(argv)
+
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1] == "log":
+                return _result()
+            if argv[1] == "diff" or argv[1] == "ls-files":
+                return _result()
+            raise AssertionError(argv)
+
+    monkeypatch.setattr(prepare, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(prepare, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(prepare, "runner", Run)
+    monkeypatch.setattr(prepare, "worktree_owned_by_clone", lambda *_args: True)
+
+    code = prepare.main(["--live", "--fingerprint", fingerprint])
+    payload = json.loads(capsys.readouterr().out.strip())
+
+    assert code == 1
+    assert "committed plan evidence" in payload["error"]
     assert corner.is_dir()

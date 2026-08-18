@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
+from lokay.git_real_diff import classify_changed_paths, list_committed_paths
 from lokay.proc._common import runner
 from lokay.runner import CommandSpec, git_spec
 
@@ -24,18 +25,18 @@ def main(argv: list[str] | None = None) -> int:
         changed = run.run_checked(
             git_spec(["status", "--porcelain"], cwd=worktree), live=True
         ).stdout.strip()
-        committed = ""
+        committed_paths: list[str] = []
         if args.base_sha:
-            committed = run.run_checked(
-                git_spec(
-                    ["diff", "--name-only", f"{args.base_sha}...HEAD"],
-                    cwd=worktree,
-                    timeout_seconds=120,
-                ),
-                live=True,
-            ).stdout.strip()
-        if not changed and not committed:
+            committed_paths = list_committed_paths(
+                run,
+                worktree,
+                base=args.base_sha,
+            )
+        committed = classify_changed_paths(committed_paths)
+        if not changed and committed == "empty":
             raise RuntimeError("self-repair produced zero diff")
+        if committed == "plan_only":
+            raise RuntimeError("self-repair candidate has committed plan evidence")
         if args.expected_subject:
             if not args.base_sha:
                 raise RuntimeError("self-repair candidate base is required")
