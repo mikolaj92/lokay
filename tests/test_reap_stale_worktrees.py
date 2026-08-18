@@ -715,6 +715,35 @@ def test_over_cap_skips_leftover_status(tmp_path, monkeypatch):
         config_path=str(_config(tmp_path)),
         live=True,
     )
-    assert calls["n"] == cap
+    assert calls["n"] == 0
     over = [row for row in out["kept"] if row.get("reason") == "over_cap"]
-    assert len(over) == 3
+    assert len(over) == cap + 3
+
+
+def test_fat_leftover_set_skips_all_classify(tmp_path, monkeypatch):
+    """A repo with more leftovers than CLASSIFY_CAP must not classify."""
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must skip classify")),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remote_heads",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must skip ls-remote")),
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    leftovers = []
+    for i in range(cap + 1):
+        leftovers.append((_corner(tmp_path, f"ai/fix/{i}"), f"ai/fix/{i}"))
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert out["reaped_count"] == 0
+    assert out["kept_count"] == cap + 1
+    assert all(row.get("reason") == "over_cap" for row in out["kept"])

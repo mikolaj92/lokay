@@ -127,6 +127,24 @@ def run_reap_stale_worktrees(
         leftovers = iter_worktrees(cfg, repo)
         if not leftovers:
             continue
+        if len(leftovers) > CLASSIFY_CAP:
+            # leftover_status on a fat leftover set (66) ate the implement slot.
+            # Keep them; do not classify or ls-remote this pass.
+            for path, branch in leftovers:
+                issue = issue_number_from_branch(
+                    branch, branch_prefix=cfg.branch_prefix
+                )
+                row = {
+                    "repo": repo.name,
+                    "branch": branch,
+                    "issue": issue,
+                    "worktree": str(path),
+                    "reason": "over_cap",
+                    "kept": True,
+                }
+                kept.append(row)
+                actions.append({"step": "keep_stale_worktree", **row})
+            continue
         if receipt_state_unknown:
             # A malformed/unreadable receipt may be the only record of a
             # child that owns a clean, just-created worktree. Do not classify
