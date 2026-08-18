@@ -85,7 +85,10 @@ unreadable process command stays live; a failed `ps` mutex survey refuses all
 new launches. Failed `list_prs`, local process uncertainty, and unreadable
 lifecycle receipt state are unknown, not idle: unreadable receipts prevent
 new dispatch and keep every corner. Each detach atomically reserves its
-receipt *before* spawning; if final PID publication fails it terminates the
+receipt *before* spawning and pipe-gates the child until its matching PID
+receipt is durable; launcher death before publication releases no worker, so a
+later pass can recover that orphan without opening a same-worktree race. If
+final PID publication fails it terminates the
 process group and retains its reservation unless termination is confirmed.
 One `ls-remote --heads` per repo — never a per-branch fetch. A ready published
 tip is reaped; `issue_to_pr` RESETs from main.

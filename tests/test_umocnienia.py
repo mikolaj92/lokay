@@ -484,6 +484,7 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
         def __init__(self, argv, **kwargs):
             receipt = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
             seen["during_spawn"] = json.loads(receipt.read_text(encoding="utf-8"))
+            seen["pass_fds"] = kwargs.get("pass_fds")
             self.pid = 4242
 
     out = detach_mod.detach_issue_to_pr(
@@ -494,11 +495,16 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
         "ok": True,
         "detached": False,
         "starting": True,
+        "activation": "pipe-v1",
         "launch_id": seen["during_spawn"]["launch_id"],
+        "launcher_pid": os.getpid(),
         "repo": "owner/repo",
         "issue": 9,
         "log": out["log"],
     }
+    assert seen["during_spawn"]["launcher_pid"] == os.getpid()
+    assert seen["pass_fds"] and len(seen["pass_fds"]) == 1
+    assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
     assert detach_mod.live_issue_to_pr_receipts(pid_alive=lambda _pid: True) == [
         json.loads(Path(out["receipt"]).read_text())
     ]
@@ -712,3 +718,115 @@ def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, 
     assert out["cleanup_confirmed"] is True
     assert seen == [4242]
     assert not detach_mod.issue_to_pr_receipt_path("owner/repo", 9).exists()
+
+
+def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(tmp_path, monkeypatch):
+    """A SIGKILL before final publication cannot wedge the issue forever.
+
+    The child is pipe-gated, so a dead launcher has no path to start work;
+    safely replacing its durable reservation lets the next dispatcher retry.
+    """
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(detach_mod, "pid_is_alive", lambda _pid: False)
+    path = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+    path.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "detached": False,
+                "starting": True,
+                "activation": "pipe-v1",
+                "launch_id": "dead-launch",
+                "launcher_pid": 4242,
+                "repo": "owner/repo",
+                "issue": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert detach_mod.live_issue_to_pr_receipts() == []
+    assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo",
+        issue=9,
+        config_path=None,
+        popen=lambda *_args, **_kwargs: type("P", (), {"pid": 4243})(),
+    )
+    assert out["ok"] is True
+    assert json.loads(path.read_text())["pid"] == 4243
+
+
+def test_legacy_starting_receipt_remains_live_not_reclaimable(tmp_path, monkeypatch):
+    """Pre-barrier reservations lack proof that a hidden worker cannot exist."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+    path.write_text(
+        json.dumps(
+            {
+                "starting": True,
+                "launch_id": "old-launch",
+                "repo": "owner/repo",
+                "issue": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert detach_mod.live_issue_to_pr_receipts() == [json.loads(path.read_text())]
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo",
+        issue=9,
+        config_path=None,
+        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+    )
+    assert out["reason"] == "receipt_unavailable"
+    assert "still starting" in out["error"]
+
+
+def test_pid_command_uses_wide_ps_to_avoid_macos_truncation(monkeypatch):
+    """A nonempty 80-column Darwin command must not look like PID reuse."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    seen = {}
+
+    def fake_run(argv, **_kwargs):
+        seen["argv"] = argv
+        return SimpleNamespace(stdout="/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9\n")
+
+    monkeypatch.setattr(detach_mod.subprocess, "run", fake_run)
+    assert detach_mod._pid_command(123) == "/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9"
+    assert seen["argv"] == ["ps", "-ww", "-p", "123", "-o", "command="]
+
+
+def test_cycle_start_metric_receipt_is_not_lifecycle_uncertainty(tmp_path, monkeypatch):
+    """The metric-only cycle_start schema coexists with detached receipts."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "owner__repo__9.json").write_text(
+        json.dumps({"repo": "owner/repo", "issue": 9, "started_ts": "2026-01-01T00:00:00Z"}),
+        encoding="utf-8",
+    )
+    assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
+    assert detach_mod.live_issue_to_pr_receipts() == []
+
+
+def test_malformed_starting_receipt_is_global_lifecycle_uncertainty(tmp_path, monkeypatch):
+    """A partial reservation must not expose another repo's destructive lane."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "partial-start.json").write_text(
+        json.dumps({"starting": True, "launch_id": "only-a-token"}),
+        encoding="utf-8",
+    )
+    assert detach_mod.has_unreadable_issue_to_pr_receipts() is True
