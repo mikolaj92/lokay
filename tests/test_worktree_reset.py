@@ -1126,14 +1126,16 @@ def test_remove_worktree_root_swap_before_open_cannot_move_outside_victim(
     real_open = os.open
     swapped = False
 
-    def swap_before_root_open(path, flags, *args, **kwargs):
+    def swap_before_root_open(path, flags, *args, dir_fd=None, **kwargs):
         nonlocal swapped
-        if not swapped and Path(path) == managed:
+        if not swapped and dir_fd is not None and path == managed.name:
             swapped = True
             displaced = tmp_path / "displaced-managed"
             managed.rename(displaced)
             managed.symlink_to(outside, target_is_directory=True)
-        return real_open(path, flags, *args, **kwargs)
+        if dir_fd is None:
+            return real_open(path, flags, *args, **kwargs)
+        return real_open(path, flags, *args, dir_fd=dir_fd, **kwargs)
 
     monkeypatch.setattr(os, "open", swap_before_root_open)
     out = remove_worktree(_ResetRunner(), clone, corner, managed_root=managed)
@@ -1146,3 +1148,71 @@ def test_remove_worktree_root_swap_before_open_cannot_move_outside_victim(
     assert (
         tmp_path / "displaced-managed" / "owner__repo" / "ai__fix__1-x" / "registered.txt"
     ).read_text(encoding="utf-8") == "REGISTERED\n"
+
+
+def test_remove_worktree_container_swap_before_open_cannot_move_outside_victim(
+    tmp_path, monkeypatch
+):
+    container = tmp_path / "container"
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = container / "managed"
+    parent = managed / "owner__repo"
+    corner = parent / "ai__fix__1-x"
+    corner.mkdir(parents=True)
+    (corner / "registered.txt").write_text("REGISTERED\n", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside_managed = outside / "managed"
+    outside_parent = outside_managed / "owner__repo"
+    outside_corner = outside_parent / "ai__fix__1-x"
+    outside_corner.mkdir(parents=True)
+    (outside_corner / "victim.txt").write_text("VALUABLE OUTSIDE\n", encoding="utf-8")
+    real_open = os.open
+    swapped = False
+
+    def swap_before_any_open(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if not swapped:
+            swapped = True
+            displaced = tmp_path / "displaced-container"
+            container.rename(displaced)
+            container.symlink_to(outside, target_is_directory=True)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap_before_any_open)
+    out = remove_worktree(_ResetRunner(), clone, corner, managed_root=managed)
+
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert outside_corner.is_dir()
+    assert (outside_corner / "victim.txt").read_text(encoding="utf-8") == "VALUABLE OUTSIDE\n"
+    assert not (outside_parent / ".ai__fix__1-x.lokay-preserved").exists()
+    assert (
+        tmp_path
+        / "displaced-container"
+        / "managed"
+        / "owner__repo"
+        / "ai__fix__1-x"
+        / "registered.txt"
+    ).read_text(encoding="utf-8") == "REGISTERED\n"
+
+
+def test_remove_worktree_rejects_dotdot_escape_without_git(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    managed.mkdir()
+    outside = tmp_path / "outside"
+    corner = outside / "ai__fix__1-x"
+    corner.mkdir(parents=True)
+    (corner / "victim.txt").write_text("VALUABLE OUTSIDE\n", encoding="utf-8")
+    escaped = managed / ".." / "outside" / "ai__fix__1-x"
+
+    out = remove_worktree(_ResetRunner(), clone, escaped, managed_root=managed)
+
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert "outside managed root" in out["error"] or "lexical" in out["error"]
+    assert corner.is_dir()
+    assert (corner / "victim.txt").read_text(encoding="utf-8") == "VALUABLE OUTSIDE\n"
+    assert not (outside / ".ai__fix__1-x.lokay-preserved").exists()

@@ -36,6 +36,39 @@ def _pinned_entry(parent_fd: int, name: str) -> os.stat_result | None:
     return current if stat.S_ISDIR(current.st_mode) else None
 
 
+def _absolute_posix_names(path: Path) -> tuple[str, ...]:
+    """Absolute POSIX names with no empty, ``.``, or ``..`` components."""
+    resolved = path.absolute()
+    parts = resolved.parts
+    if not resolved.is_absolute() or not parts or parts[0] != os.sep:
+        raise ValueError("path is not absolute")
+    names = parts[1:]
+    if any(part in {"", ".", ".."} for part in names):
+        raise ValueError("path is not lexical")
+    return names
+
+
+def _open_nofollow_dir(name: str, *, dir_fd: int | None = None) -> int:
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    if dir_fd is None:
+        return os.open(name, flags)
+    return os.open(name, flags, dir_fd=dir_fd)
+
+
+def _walk_nofollow(names: tuple[str, ...]) -> int:
+    """Open the directory named by *names* from ``/`` without following links."""
+    current_fd = _open_nofollow_dir(os.sep)
+    try:
+        for name in names:
+            next_fd = _open_nofollow_dir(name, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+        return current_fd
+    except Exception:
+        os.close(current_fd)
+        raise
+
+
 class InvalidBranchRef(ValueError):
     """Git will not accept this as ``refs/heads/*`` (e.g. a ``..`` slug)."""
 
@@ -214,20 +247,24 @@ def remove_worktree(
         }
     archive = worktree.with_name(f".{worktree.name}{_QUARANTINE_SUFFIX}")
     try:
-        lexical_rel = worktree.absolute().relative_to(managed_root.absolute())
+        root_names = _absolute_posix_names(managed_root)
+        worktree_names = _absolute_posix_names(worktree)
     except ValueError:
         return {
             "ok": False,
             "removed": False,
             "error": "worktree path is outside managed root",
         }
+    if worktree_names[: len(root_names)] != root_names or len(worktree_names) <= len(root_names):
+        return {
+            "ok": False,
+            "removed": False,
+            "error": "worktree path is outside managed root",
+        }
     try:
-        # Pin the managed root first, then walk every relative parent component
-        # with O_NOFOLLOW. No later ancestor exchange can redirect these fds.
-        root_fd = os.open(
-            managed_root,
-            os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
-        )
+        # Walk every component from the filesystem root with O_NOFOLLOW so an
+        # ancestor swap above managed_root cannot redirect the archive rename.
+        root_fd = _walk_nofollow(root_names)
     except OSError as exc:
         return {
             "ok": False,
@@ -237,12 +274,8 @@ def remove_worktree(
     parent_fd = root_fd
     try:
         try:
-            for component in lexical_rel.parts[:-1]:
-                next_fd = os.open(
-                    component,
-                    os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0),
-                    dir_fd=parent_fd,
-                )
+            for component in worktree_names[len(root_names) : -1]:
+                next_fd = _open_nofollow_dir(component, dir_fd=parent_fd)
                 if parent_fd != root_fd:
                     os.close(parent_fd)
                 parent_fd = next_fd
