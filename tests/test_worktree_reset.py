@@ -1216,3 +1216,66 @@ def test_remove_worktree_rejects_dotdot_escape_without_git(tmp_path):
     assert corner.is_dir()
     assert (corner / "victim.txt").read_text(encoding="utf-8") == "VALUABLE OUTSIDE\n"
     assert not (outside / ".ai__fix__1-x.lokay-preserved").exists()
+
+
+def test_remove_worktree_last_component_swap_at_rename_does_not_prune(tmp_path, monkeypatch):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    managed = tmp_path / "managed"
+    parent = managed / "owner__repo"
+    corner = parent / "ai__fix__1-x"
+    corner.mkdir(parents=True)
+    (corner / "registered.txt").write_text("REGISTERED\n", encoding="utf-8")
+    real_rename = os.rename
+    swapped = False
+
+    def swap_at_rename(src, dst, *args, src_dir_fd=None, dst_dir_fd=None, **kwargs):
+        nonlocal swapped
+        if (
+            not swapped
+            and src == corner.name
+            and dst == f".{corner.name}.lokay-preserved"
+            and src_dir_fd is not None
+        ):
+            swapped = True
+            displaced = parent / "displaced-original"
+            os.rename(corner.name, displaced.name, src_dir_fd=src_dir_fd, dst_dir_fd=src_dir_fd)
+            os.mkdir(corner.name, dir_fd=src_dir_fd)
+            victim = os.open(corner.name, os.O_RDONLY | os.O_DIRECTORY, dir_fd=src_dir_fd)
+            try:
+                fd = os.open("VICTIM.txt", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644, dir_fd=victim)
+                os.write(fd, b"VALUABLE REPLACEMENT\n")
+                os.close(fd)
+            finally:
+                os.close(victim)
+        if src_dir_fd is None and dst_dir_fd is None:
+            return real_rename(src, dst, *args, **kwargs)
+        return real_rename(
+            src,
+            dst,
+            *args,
+            src_dir_fd=src_dir_fd,
+            dst_dir_fd=dst_dir_fd,
+            **kwargs,
+        )
+
+    class Owned(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:3] == ["worktree", "prune"]:
+                raise AssertionError("must not prune after last-component identity mismatch")
+            return super().run(spec, live=live)
+
+    monkeypatch.setattr(os, "rename", swap_at_rename)
+    out = remove_worktree(Owned(), clone, corner, managed_root=managed)
+
+    archive = parent / ".ai__fix__1-x.lokay-preserved"
+    displaced = parent / "displaced-original"
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert "changed during preservation" in out["error"]
+    assert archive.is_dir()
+    assert (archive / "VICTIM.txt").read_text(encoding="utf-8") == "VALUABLE REPLACEMENT\n"
+    assert displaced.is_dir()
+    assert (displaced / "registered.txt").read_text(encoding="utf-8") == "REGISTERED\n"
+    assert not corner.exists()
