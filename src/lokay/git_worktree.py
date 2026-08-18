@@ -108,8 +108,57 @@ def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
     return found
 
 
+def _clone_lists_worktree(runner: Runner, clone: Path, worktree: Path) -> bool | None:
+    """Whether ``clone`` still owns ``worktree`` according to porcelain.
+
+    ``None`` means the registry could not be inspected and is never evidence
+    that a fallback filesystem delete is safe. NUL porcelain keeps paths
+    unquoted; require complete records and at least the clone's main worktree
+    rather than treating empty/truncated stdout as confirmed absence.
+    """
+    listed = runner.run(
+        git_spec(["worktree", "list", "--porcelain", "-z"], cwd=clone, timeout_seconds=60),
+        live=True,
+    )
+    raw = listed.stdout or ""
+    if listed.returncode != 0 or not raw.endswith("\0\0"):
+        return None
+    try:
+        target = worktree.resolve()
+        clone_root = clone.resolve()
+    except OSError:
+        return None
+    candidates: list[Path] = []
+    for record in raw[:-2].split("\0\0"):
+        fields = record.split("\0")
+        if (
+            not fields
+            or not fields[0].startswith("worktree ")
+            or not fields[0].removeprefix("worktree ")
+            or not any(
+                field.startswith("HEAD ")
+                and len(field.removeprefix("HEAD ")) in {40, 64}
+                and all(char in "0123456789abcdefABCDEF" for char in field.removeprefix("HEAD "))
+                for field in fields[1:]
+            )
+        ):
+            return None
+        try:
+            candidates.append(Path(fields[0].removeprefix("worktree ")).resolve())
+        except OSError:
+            return None
+    if clone_root not in candidates:
+        return None
+    return target in candidates
+
+
 def remove_worktree(runner: Runner, clone: Path, worktree: Path) -> dict[str, Any]:
-    """Drop a leftover worktree. Never ``rm -rf`` a path git still owns."""
+    """Drop a leftover worktree without deleting an unconfirmed path.
+
+    Git must accept removal from *this clone*, and its post-remove registry
+    must no longer list the resolved path, before a corrupt-registry fallback
+    may use ``rmtree``. Any Git/list uncertainty leaves the corner intact.
+    """
     if not worktree.exists():
         return {"ok": True, "removed": False, "already_gone": True}
     rm = runner.run(
@@ -120,8 +169,29 @@ def remove_worktree(runner: Runner, clone: Path, worktree: Path) -> dict[str, An
         ),
         live=True,
     )
+    if rm.returncode != 0:
+        detail = (rm.stderr or rm.stdout or "").strip()
+        return {
+            "ok": False,
+            "removed": False,
+            "error": detail or "git refused worktree removal",
+        }
     if worktree.exists():
-        # Detached/corrupt registry, or a test runner that does not delete.
+        still_owned = _clone_lists_worktree(runner, clone, worktree)
+        if still_owned is None:
+            return {
+                "ok": False,
+                "removed": False,
+                "error": "cannot confirm worktree ownership after git removal",
+            }
+        if still_owned:
+            return {
+                "ok": False,
+                "removed": False,
+                "error": "git still owns worktree after removal",
+            }
+        # Git accepted this clone's path and no longer owns it. This only
+        # repairs a corrupt/stale registry where Git left the corner behind.
         import shutil
 
         shutil.rmtree(worktree, ignore_errors=True)
@@ -137,7 +207,6 @@ def remove_worktree(runner: Runner, clone: Path, worktree: Path) -> dict[str, An
             "error": detail or "worktree still exists after remove",
         }
     return {"ok": True, "removed": True}
-
 
 def remote_heads(runner: Runner, clone: Path) -> set[str] | None:
     """Branch names on ``origin``. ``None`` is fail-closed, not unpublished."""

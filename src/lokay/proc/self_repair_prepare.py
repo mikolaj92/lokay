@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import shutil
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
+from lokay.git_worktree import remove_worktree
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 from lokay.runner import git_spec
 
@@ -70,12 +70,11 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         if worktree.exists():
-            run.run(
-                git_spec(["worktree", "remove", "--force", str(worktree)], cwd=repo.clone_path),
-                live=True,
-            )
-            shutil.rmtree(worktree, ignore_errors=True)
-            run.run(git_spec(["worktree", "prune"], cwd=repo.clone_path), live=True)
+            removed = remove_worktree(run, repo.clone_path, worktree)
+            if not removed.get("ok"):
+                raise RuntimeError(
+                    f"self-repair worktree remove failed: {removed.get('error') or 'still exists'}"
+                )
         base = run.run_checked(
             git_spec(["rev-parse", "origin/main"], cwd=repo.clone_path), live=True
         ).stdout.strip()
