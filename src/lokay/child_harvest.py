@@ -46,6 +46,8 @@ MISS_REASONS = frozenset(
     }
 )
 MISS_SKIP_AFTER = 3
+# One plan-only run is enough: retrying the same ticket just reprints approach.md.
+PLAN_ONLY_SKIP_AFTER = 1
 # First NFF is the reset shot (worktree -B from origin/main). Second = leave.
 PUSH_FAILED_SKIP_AFTER = 2
 
@@ -168,6 +170,8 @@ def _trailing_miss_runs(
 def _skip_after(reason: str) -> int:
     if reason == "push_failed":
         return PUSH_FAILED_SKIP_AFTER
+    if reason == "plan_only":
+        return PLAN_ONLY_SKIP_AFTER
     return MISS_SKIP_AFTER
 
 

@@ -422,8 +422,8 @@ def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monke
         assert stuck["issues"][f"a/b#{n}"].get("reason") == "no_pr"
 
 
-def test_one_plan_only_already_blocked_reopens_the_slot(tmp_path: Path):
-    """Stale 1-shot miss rows must not stay buried after unique-run harvest."""
+def test_one_plan_only_already_blocked_stays_blocked(tmp_path: Path):
+    """One plan_only leaves the slot; harvest must not reopen it."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
@@ -445,9 +445,9 @@ def test_one_plan_only_already_blocked_reopens_the_slot(tmp_path: Path):
         cycle_dir=cycle,
         is_live=lambda _pid: False,
     )
-    assert 137 not in excluded_numbers(stuck, "a/b")
+    assert 137 in excluded_numbers(stuck, "a/b")
     row = stuck["issues"]["a/b#137"]
-    assert row.get("blocked") is not True
+    assert row.get("blocked") is True
     assert row.get("failures") == 1
     assert row.get("reason") == "plan_only"
 
@@ -477,11 +477,11 @@ def test_three_plan_only_already_blocked_stays_blocked(tmp_path: Path):
     assert 137 in excluded_numbers(stuck, "a/b")
     row = stuck["issues"]["a/b#137"]
     assert row.get("blocked") is True
-    assert row.get("failures") == 3
+    assert row.get("failures") == 1
 
 
-def test_blocked_plan_only_without_cycle_dir_reopens_from_journal(tmp_path: Path):
-    """Missing cycle dir must still reconcile stale miss rows from the journal."""
+def test_blocked_plan_only_without_cycle_dir_stays_blocked(tmp_path: Path):
+    """One plan_only stays buried even when the cycle dir is missing."""
     state = tmp_path / "state.jsonl"
     _event(state, repo="a/b", issue=61, ok=False, reason="plan_only", run_id="run-1")
     stuck = {
@@ -499,13 +499,13 @@ def test_blocked_plan_only_without_cycle_dir_reopens_from_journal(tmp_path: Path
         cycle_dir=tmp_path / "missing-cycle",
         is_live=lambda _pid: False,
     )
-    assert 61 not in excluded_numbers(stuck, "a/b")
-    assert stuck["issues"]["a/b#61"].get("blocked") is not True
+    assert 61 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#61"].get("blocked") is True
     assert stuck["issues"]["a/b#61"].get("failures") == 1
 
 
-def test_blocked_plan_only_without_receipt_reopens_from_journal(tmp_path: Path):
-    """Cycle prune must not freeze a 1-shot miss; unique-run N still owns the slot."""
+def test_blocked_plan_only_without_receipt_stays_blocked(tmp_path: Path):
+    """One plan_only stays buried even after the receipt is gone."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
@@ -525,9 +525,9 @@ def test_blocked_plan_only_without_receipt_reopens_from_journal(tmp_path: Path):
         cycle_dir=cycle,
         is_live=lambda _pid: False,
     )
-    assert 61 not in excluded_numbers(stuck, "a/b")
+    assert 61 in excluded_numbers(stuck, "a/b")
     row = stuck["issues"]["a/b#61"]
-    assert row.get("blocked") is not True
+    assert row.get("blocked") is True
     assert row.get("failures") == 1
 
 
@@ -559,7 +559,7 @@ def test_fail_closed_already_blocked_is_not_incremented(tmp_path: Path):
     assert row.get("reason") == "test_local_recheck_failed"
 
 
-def test_one_plan_only_does_not_leave_the_slot(tmp_path: Path):
+def test_one_plan_only_leaves_the_slot(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
@@ -586,9 +586,9 @@ def test_one_plan_only_does_not_leave_the_slot(tmp_path: Path):
         cycle_dir=cycle,
         is_live=lambda _pid: False,
     )
-    assert 137 not in excluded_numbers(stuck, "a/b")
+    assert 137 in excluded_numbers(stuck, "a/b")
     row = stuck["issues"]["a/b#137"]
-    assert row.get("blocked") is not True
+    assert row.get("blocked") is True
     assert row.get("failures") == 1
     assert row.get("reason") == "plan_only"
 
@@ -642,7 +642,7 @@ def test_same_plan_only_event_reread_does_not_increment(tmp_path: Path):
             cycle_dir=cycle,
             is_live=lambda _pid: False,
         )
-    assert 137 not in excluded_numbers(stuck, "a/b")
+    assert 137 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#137"].get("failures") == 1
 
 
@@ -662,7 +662,7 @@ def test_ok_breaks_trailing_plan_only_streak(tmp_path: Path):
         cycle_dir=cycle,
         is_live=lambda _pid: False,
     )
-    assert 7 not in excluded_numbers(stuck, "a/b")
+    assert 7 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#7"].get("failures") == 1
 
 
