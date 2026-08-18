@@ -1,13 +1,5 @@
 # Lokay agent notes
 
-## always use delegate wave
-
-Always use delegate wave.
-
-Use pi in zellij. All read, discovery, and changes should be delegated to pi. Your role is to review and delegate.
-
-Load the `delegate-wave` skill before any worktree read, discovery, or change. Do not open the tree with Hermes `read_file` / `search_files` / `write_file` / `patch`. Review `pi` output; send the next wave if needed.
-
 ## Composition (non-negotiable)
 
 - Prefer small Unix-style modules/processes; compose them. No fat god-files.
