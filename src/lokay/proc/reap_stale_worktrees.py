@@ -255,7 +255,12 @@ def run_reap_stale_worktrees(
                 kept.append(row)
                 actions.append({"step": "keep_stale_worktree", **row})
                 continue
-            removed = remove_worktree(git, clone, path)
+            removed = remove_worktree(
+                git,
+                clone,
+                path,
+                managed_root=cfg.worktrees_root,
+            )
             if not removed.get("ok"):
                 row["kept"] = True
                 row["reason"] = "remove_failed"
