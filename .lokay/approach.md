@@ -1,32 +1,30 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=136 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=177 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #136 — test_local nie pali native/Fala pytestem z urzędu
+Issue: #177 — Preflight failure 9ae1b452464e1d5b
 
 ## Goal
 
-Fala #164 pali cały slot `issue_to_pr` (~20 min) na `uv run --extra dev pytest -q`: 51 faili native/Mojo, potem jedna naprawa, potem `pr_create` odmawia (`test_local_recheck_failed`). README issue nigdy nie dochodzi do PR.
+<!-- lokay-preflight:9ae1b452464e1d5b -->
+Bounded checks failed: executor_availability
 
 ## Files likely touched
 
-- `src/lokay/proc/test_local.py` — run only a repo-declared command
-- `pyproject.toml` — `[tool.lokay] test` for this checkout
-- `README.md` — document repository-declared verification
-- `tests/test_test_local.py` — skip without declaration; run declared argv
+- (infer from repo inspection)
 
 ## Test plan
 
-- `uv run pytest -q tests/test_test_local.py tests/test_fala_organ.py`
+- Run the smallest useful tests for files touched
 
 ## Non-goals
 
-- Do not rewrite Fala or invent a native/Mojo verifier here
-- Do not map worktree → `repos.mikolaj92.yaml` (declaration lives in the checkout)
+- (none stated)
 
 ## Notes
 
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
 - Collector boundary: if implementation introduces unbounded collection, ship only a bounded collector patch that starts durably in the background after merge. The coding agent and mill must not populate data or wait for collection to finish.
+- No explicit file paths in issue; infer from repo inspection.
