@@ -10,6 +10,11 @@ from typing import Any
 _RATE_LIMIT_RE = re.compile(
     r"(?i)(\b429\b|rate[- ]?limit|secondary rate|API rate limit exceeded|abuse detection)"
 )
+_SERVICE_TRANSIENT_RE = re.compile(
+    r"(?i)(?:\bHTTP\s+(?:429|500|502|503|504)\b|"
+    r"\b(?:502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout)\b|"
+    r"No server is currently available)"
+)
 
 # gh issue/pr list is newest-first. A silent page cap starves oldest ready
 # tickets (select_issue is oldest-first on whatever the survey returned).
@@ -21,6 +26,19 @@ def is_rate_limit_text(*parts: str) -> bool:
     if not blob:
         return False
     return bool(_RATE_LIMIT_RE.search(blob))
+
+
+def is_transient_github_text(*parts: str) -> bool:
+    """Whether a failed ``gh`` command is GitHub/rate-limit uncertainty.
+
+    This intentionally describes the transport/service response, not a red CI
+    result. Callers must keep the result non-green and wait rather than repair
+    or merge while GitHub cannot authoritatively report the PR state.
+    """
+    blob = "\n".join(p for p in parts if p)
+    return bool(blob) and (
+        is_rate_limit_text(blob) or bool(_SERVICE_TRANSIENT_RE.search(blob))
+    )
 
 
 def survey_pace(cfg: Any | None, *, sleep_fn=time.sleep) -> None:

@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from lokay.gh_rate import backoff_seconds, is_rate_limit_text, survey_pace
+from lokay.gh_rate import (
+    backoff_seconds,
+    is_rate_limit_text,
+    is_transient_github_text,
+    survey_pace,
+)
 from lokay.runner import CommandSpec, Runner
 
 
@@ -12,6 +17,14 @@ def test_is_rate_limit_text_detects_common_shapes():
     assert is_rate_limit_text("", "API rate limit exceeded for user")
     assert not is_rate_limit_text("not found")
     assert not is_rate_limit_text("")
+
+
+def test_is_transient_github_text_detects_service_and_rate_limit_outages():
+    assert is_transient_github_text("HTTP 503: No server is currently available")
+    assert is_transient_github_text("", "503 Service Unavailable")
+    assert is_transient_github_text("HTTP 429: API rate limit exceeded")
+    assert not is_transient_github_text("check failed: unit test failure")
+    assert not is_transient_github_text("")
 
 
 def test_backoff_seconds_grows_and_caps():

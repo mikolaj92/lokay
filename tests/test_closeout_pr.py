@@ -100,6 +100,21 @@ def test_pending_waits_without_ci_waiting_label(monkeypatch, tmp_path):
     assert not any(a.get("step") == "stage_ci_waiting" for a in out["actions"])
 
 
+def test_transient_checks_wait_without_pr_repair(monkeypatch, tmp_path):
+    """A GitHub 503 is unknown state, not a reason to mutate a published tip."""
+    out, triage, repair, stages = _run(
+        monkeypatch, checks={"status": "pending", "green": False}, tmp_path=tmp_path
+    )
+    assert out["ok"] is True
+    assert out["route"] == "wait"
+    assert out["reason"] == "checks_pending"
+    assert out["still_open"] is True
+    assert out["pending_checks"] == 1
+    assert repair == []
+    assert triage == []
+    assert stages == []
+
+
 def test_failed_dispatches_pr_repair(monkeypatch, tmp_path):
     out, triage, repair, stages = _run(
         monkeypatch,

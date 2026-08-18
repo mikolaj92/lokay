@@ -46,3 +46,21 @@ def test_failed():
     rep = pr_checks_report(r, "a/b", 1, live=True)  # type: ignore[arg-type]
     assert rep["status"] == "failed"
     assert rep["green"] is False
+
+
+def test_transient_github_503_is_pending_and_not_green():
+    r = _FakeRunner(
+        1,
+        stderr="HTTP 503: No server is currently available to service your request",
+    )
+    rep = pr_checks_report(r, "a/b", 1, live=True)  # type: ignore[arg-type]
+    assert rep["status"] == "pending"
+    assert rep["green"] is False
+    assert rep["no_checks"] is False
+
+
+def test_transient_github_429_is_pending_and_not_green():
+    r = _FakeRunner(1, stderr="HTTP 429: API rate limit exceeded")
+    rep = pr_checks_report(r, "a/b", 1, live=True)  # type: ignore[arg-type]
+    assert rep["status"] == "pending"
+    assert rep["green"] is False

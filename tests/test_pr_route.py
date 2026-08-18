@@ -29,6 +29,17 @@ def test_pending_routes_wait():
     assert out["waiting"] is True
 
 
+def test_transient_checks_route_wait_not_repair():
+    out = run_pr_route(
+        checks={"status": "pending", "green": False, "text": "HTTP 503"},
+        merge_enabled=True,
+    )
+    assert out["ok"] is True
+    assert out["route"] == "wait"
+    assert out["reason"] == "checks_pending"
+    assert out["repairable"] is False
+
+
 def test_failed_routes_repair():
     out = run_pr_route(checks={"status": "failed"}, merge_enabled=True)
     assert out["ok"] is True
