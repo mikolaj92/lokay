@@ -472,3 +472,243 @@ def test_unreadable_pid_liveness_probe_stays_occupied(monkeypatch):
         lambda _pid, _sig: (_ for _ in ()).throw(OSError("probe unavailable")),
     )
     assert pid_is_alive(123) is True
+
+def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
+    """The pre-spawn receipt closes the next-pass reaper window."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    seen = {}
+
+    class FakePopen:
+        def __init__(self, argv, **kwargs):
+            receipt = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+            seen["during_spawn"] = json.loads(receipt.read_text(encoding="utf-8"))
+            self.pid = 4242
+
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo", issue=9, config_path=None, popen=FakePopen
+    )
+
+    assert seen["during_spawn"] == {
+        "ok": True,
+        "detached": False,
+        "starting": True,
+        "launch_id": seen["during_spawn"]["launch_id"],
+        "repo": "owner/repo",
+        "issue": 9,
+        "log": out["log"],
+    }
+    assert detach_mod.live_issue_to_pr_receipts(pid_alive=lambda _pid: True) == [
+        json.loads(Path(out["receipt"]).read_text())
+    ]
+
+
+def test_detach_refuses_to_spawn_without_durable_reservation(tmp_path, monkeypatch):
+    """Receipt storage failure is not allowed to create an untracked child."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        detach_mod,
+        "write_issue_to_pr_receipt",
+        lambda _payload: (_ for _ in ()).throw(OSError("disk full")),
+    )
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo",
+        issue=9,
+        config_path=None,
+        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+    )
+
+    assert out["ok"] is False
+    assert out["reason"] == "receipt_unavailable"
+    assert out["repo"] == "owner/repo"
+
+
+def test_starting_receipt_keeps_repo_occupied_without_pid(tmp_path, monkeypatch):
+    """A durable pre-Popen reservation remains occupancy until final publication."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+    path.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "starting": True,
+                "launch_id": "launch",
+                "repo": "owner/repo",
+                "issue": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert detach_mod.live_issue_to_pr_receipts() == [json.loads(path.read_text())]
+
+
+def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch):
+    """If post-spawn publication fails, the child is killed and its KEEP remains."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    original = detach_mod.write_issue_to_pr_receipt
+    calls = 0
+
+    def fail_final(payload):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("I/O error")
+        return original(payload)
+
+    class FakePopen:
+        pid = 4242
+
+    monkeypatch.setattr(detach_mod, "write_issue_to_pr_receipt", fail_final)
+    monkeypatch.setattr(detach_mod, "_terminate_detached_process_group", lambda _proc: False)
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo", issue=9, config_path=None, popen=lambda *_a, **_k: FakePopen()
+    )
+
+    assert out["ok"] is False
+    assert out["reason"] == "receipt_unavailable"
+    assert out["cleanup_confirmed"] is False
+    assert detach_mod.live_issue_to_pr_receipts()[0]["starting"] is True
+
+
+
+def test_unreadable_receipt_state_is_detected(tmp_path, monkeypatch):
+    """Malformed lifecycle JSON is process-state uncertainty, not an empty cycle."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "partial.json").write_text("{", encoding="utf-8")
+
+    assert detach_mod.has_unreadable_issue_to_pr_receipts() is True
+
+
+def test_detach_does_not_replace_an_existing_starting_reservation(tmp_path, monkeypatch):
+    """A second dispatch cannot steal the first launch's durable K=1 reservation."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+    path.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "starting": True,
+                "launch_id": "other-launch",
+                "repo": "owner/repo",
+                "issue": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo",
+        issue=9,
+        config_path=None,
+        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+    )
+
+    assert out["ok"] is False
+    assert out["reason"] == "receipt_unavailable"
+    assert json.loads(path.read_text())["launch_id"] == "other-launch"
+
+
+
+def test_detach_replaces_a_dead_completed_receipt(tmp_path, monkeypatch):
+    """Historical dead receipts do not permanently block a later attempt."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+    path.write_text(
+        json.dumps({"pid": 999_999_999, "repo": "owner/repo", "issue": 9}),
+        encoding="utf-8",
+    )
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo",
+        issue=9,
+        config_path=None,
+        popen=lambda *_args, **_kwargs: type("P", (), {"pid": 4242})(),
+    )
+
+    assert out["ok"] is True
+    assert json.loads(path.read_text())["pid"] == 4242
+
+
+
+def test_final_receipt_requires_its_own_reservation(tmp_path, monkeypatch):
+    """A final PID receipt cannot overwrite another launch's reservation."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    path = detach_mod.issue_to_pr_receipt_path("owner/repo", 9)
+    path.write_text(
+        json.dumps(
+            {
+                "starting": True,
+                "launch_id": "other-launch",
+                "repo": "owner/repo",
+                "issue": 9,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        detach_mod.write_issue_to_pr_receipt(
+            {
+                "pid": 4242,
+                "launch_id": "this-launch",
+                "repo": "owner/repo",
+                "issue": 9,
+            }
+        )
+    except OSError as exc:
+        assert "reservation ownership changed" in str(exc)
+    else:
+        raise AssertionError("final receipt must require the matching reservation")
+    assert json.loads(path.read_text())["launch_id"] == "other-launch"
+
+
+
+def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, monkeypatch):
+    """A failed final publication leaves no child or stale reservation after reaping."""
+    import lokay.proc.detach_issue_to_pr as detach_mod
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    original = detach_mod.write_issue_to_pr_receipt
+    calls = 0
+    seen = []
+
+    def fail_final(payload):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("I/O error")
+        return original(payload)
+
+    class FakePopen:
+        pid = 4242
+
+    monkeypatch.setattr(detach_mod, "write_issue_to_pr_receipt", fail_final)
+    monkeypatch.setattr(
+        detach_mod,
+        "_terminate_detached_process_group",
+        lambda proc: seen.append(proc.pid) is None,
+    )
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo", issue=9, config_path=None, popen=lambda *_a, **_k: FakePopen()
+    )
+
+    assert out["ok"] is False
+    assert out["cleanup_confirmed"] is True
+    assert seen == [4242]
+    assert not detach_mod.issue_to_pr_receipt_path("owner/repo", 9).exists()

@@ -16,7 +16,10 @@ from lokay.passkit.support import is_manual_pr, run_proc
 from lokay.passkit.working import load_begin_working, recount_prs, save_begin_working
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc._common import add_config_live
-from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
+from lokay.proc.detach_issue_to_pr import (
+    has_unreadable_issue_to_pr_receipts,
+    live_issue_to_pr_receipts,
+)
 
 
 def _merged_this_pass(working: dict[str, Any]) -> list[str]:
@@ -68,8 +71,12 @@ def run_refresh_occupancy(
     previous = dict(working.get("prs_by_repo") or {})
     ready_by_repo = dict(working.get("ready_by_repo") or {})
     merged = _merged_this_pass(working)
+    receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
     live_repos = _live_repos()
-    occupied = list(dict.fromkeys([*merged, *live_repos]))
+    # An unreadable lifecycle receipt has no reliable repo identity. Occupy
+    # the configured scope instead of taking a new K=1 coding slot.
+    unknown_repos = list(begin.get("repos") or []) if receipt_state_unknown else []
+    occupied = list(dict.fromkeys([*merged, *live_repos, *unknown_repos]))
     occupied_set = set(occupied)
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
     pr_survey_failed = set(working.get("pr_survey_failed") or [])
@@ -82,7 +89,11 @@ def run_refresh_occupancy(
                 {
                     "step": "refresh_prs_skipped",
                     "repo": repo_name,
-                    "reason": "occupied",
+                    "reason": (
+                        "receipt_state_unknown"
+                        if receipt_state_unknown and repo_name not in merged and repo_name not in live_repos
+                        else "occupied"
+                    ),
                 }
             )
             prs_by_repo[repo_name] = prev_list
@@ -136,6 +147,7 @@ def run_refresh_occupancy(
         remaining_prs=int(working.get("remaining_prs") or 0),
         actionable_prs=int(working.get("actionable_prs") or 0),
         survey_errors=int(working.get("survey_errors") or 0),
+        receipt_state_unknown=receipt_state_unknown,
     )
 
 

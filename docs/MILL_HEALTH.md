@@ -82,9 +82,13 @@ cannot resume (merged / closed CONFLICTING / unpublished-behind-main) and
 KEEPS a live i2pr (receipts or occupancy), a repo whose PR survey failed,
 an open covering PR, or a dirty unpublished leftover. A live receipt with an
 unreadable process command stays live; a failed `ps` mutex survey refuses all
-new launches. Failed `list_prs` and local process uncertainty are unknown, not
-idle. One `ls-remote --heads` per repo — never a per-branch fetch. A ready
-published tip is reaped; `issue_to_pr` RESETs from main.
+new launches. Failed `list_prs`, local process uncertainty, and unreadable
+lifecycle receipt state are unknown, not idle: unreadable receipts prevent
+new dispatch and keep every corner. Each detach atomically reserves its
+receipt *before* spawning; if final PID publication fails it terminates the
+process group and retains its reservation unless termination is confirmed.
+One `ls-remote --heads` per repo — never a per-branch fetch. A ready published
+tip is reaped; `issue_to_pr` RESETs from main.
 
 ## How to read health
 

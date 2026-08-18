@@ -14,7 +14,10 @@ from lokay.proc import intake_issue as p_intake
 from lokay.proc import label_issue as p_label
 from lokay.proc import select_issue as p_select
 from lokay.proc._common import add_config_live
-from lokay.proc.detach_issue_to_pr import detach_issue_to_pr
+from lokay.proc.detach_issue_to_pr import (
+    detach_issue_to_pr,
+    has_unreadable_issue_to_pr_receipts,
+)
 from lokay.proc.repo_mutex import inspect_mutex, _live_ps_text
 from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuck
 
@@ -50,6 +53,12 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
 
     if not live or issue_budget <= 0:
         return ok(pass_dir=pass_dir, started=0, skipped=True, reason="dry_run")
+    if has_unreadable_issue_to_pr_receipts():
+        return err(
+            "cannot inspect issue_to_pr receipts; refusing dispatch",
+            pass_dir=pass_dir,
+            reason="receipt_state_unknown",
+        )
 
     try:
         ps_text = _live_ps_text()
