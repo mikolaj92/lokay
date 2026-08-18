@@ -209,6 +209,16 @@ def _terminate_detached_process_group(proc: Any, *, timeout_seconds: float = 5.0
     return gone()
 
 
+def terminate_issue_to_pr_pid(pid: int, *, timeout_seconds: float = 5.0) -> bool:
+    """Kill a detached issue_to_pr session by pid (same as the spawn helper)."""
+
+    class _Proc:
+        def __init__(self, value: int) -> None:
+            self.pid = int(value)
+
+    return _terminate_detached_process_group(_Proc(pid), timeout_seconds=timeout_seconds)
+
+
 def pid_is_alive(pid: int) -> bool:
     if int(pid) <= 0:
         return False

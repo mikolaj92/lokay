@@ -20,6 +20,7 @@ def test_describe_parent_factory_graph():
         "resolve_conflicts",
         "closeout_prs",
         "reap_stale_implementing",
+        "reap_over_budget",
         "refresh_occupancy",
         "reap_stale_worktrees",
         "select_implement",
@@ -39,7 +40,8 @@ def test_describe_parent_factory_graph():
     assert "resolve_conflicts" in conduction["closeout_prs"]
     assert "reap_stale_worktrees" in conduction["select_implement"]
     assert "refresh_occupancy" in conduction["reap_stale_worktrees"]
-    assert "reap_stale_implementing" in conduction["refresh_occupancy"]
+    assert "reap_over_budget" in conduction["refresh_occupancy"]
+    assert "reap_stale_implementing" in conduction["reap_over_budget"]
     assert "closeout_prs" in conduction["reap_stale_implementing"]
     assert "select_implement" in conduction["queue_conflict"]
     assert "queue_conflict" in conduction["dispatch_implement"]
@@ -416,6 +418,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "resolve_conflicts",
             "closeout_prs",
             "reap_stale_implementing",
+            "reap_over_budget",
             "refresh_occupancy",
             "reap_stale_worktrees",
             "select_implement",

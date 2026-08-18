@@ -159,6 +159,7 @@ def run_path(
             "resolve_conflicts",
             "closeout_prs",
             "reap_stale_implementing",
+            "reap_over_budget",
             "refresh_occupancy",
             "reap_stale_worktrees",
             "select_implement",

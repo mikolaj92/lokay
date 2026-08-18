@@ -150,9 +150,17 @@ config = { atom = "reap_stale_implementing" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "refresh_occupancy"
+id = "reap_over_budget"
 capability = "lokay_atom"
 conduction = ["factory_begin", "reap_stale_implementing"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "reap_over_budget" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "refresh_occupancy"
+capability = "lokay_atom"
+conduction = ["factory_begin", "reap_over_budget"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "refresh_occupancy" }
 retry_policy = "none"
