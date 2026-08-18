@@ -1,14 +1,23 @@
 """PR checks classification: no-checks is not a failure."""
 
 from lokay.gh_prs import pr_checks_report
+from lokay.proc.pr_route import run_pr_route
 from lokay.runner import CommandResult, CommandSpec
 
 
 class _FakeRunner:
-    def __init__(self, returncode: int, stdout: str = "", stderr: str = ""):
+    def __init__(
+        self,
+        returncode: int,
+        stdout: str = "",
+        stderr: str = "",
+        *,
+        timed_out: bool = False,
+    ):
         self.returncode = returncode
         self.stdout = stdout
         self.stderr = stderr
+        self.timed_out = timed_out
 
     def run(self, spec: CommandSpec, *, live: bool) -> CommandResult:
         return CommandResult(
@@ -17,6 +26,7 @@ class _FakeRunner:
             returncode=self.returncode if live else 0,
             stdout=self.stdout if live else "",
             stderr=self.stderr if live else "",
+            timed_out=self.timed_out if live else False,
         )
 
 
@@ -64,3 +74,21 @@ def test_transient_github_429_is_pending_and_not_green():
     rep = pr_checks_report(r, "a/b", 1, live=True)  # type: ignore[arg-type]
     assert rep["status"] == "pending"
     assert rep["green"] is False
+
+
+def test_timed_out_check_read_is_pending_not_failed_ci():
+    r = _FakeRunner(
+        124,
+        stderr="timed out after 120 seconds",
+        timed_out=True,
+    )
+
+    rep = pr_checks_report(r, "a/b", 1, live=True)  # type: ignore[arg-type]
+
+    assert rep["status"] == "pending"
+    assert rep["green"] is False
+    assert rep["no_checks"] is False
+    routed = run_pr_route(checks=rep, merge_enabled=True)
+    assert routed["route"] == "wait"
+    assert routed["reason"] == "checks_pending"
+    assert routed["repairable"] is False

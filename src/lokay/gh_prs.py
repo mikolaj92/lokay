@@ -210,7 +210,8 @@ def pr_checks_report(
     # unknown, not failed CI: wait for an authoritative check read rather than
     # sending a published PR tip through pr_repair.
     if (
-        result.returncode == 8
+        result.timed_out
+        or result.returncode == 8
         or "pending" in low
         or "in_progress" in low
         or is_transient_github_text(result.stdout or "", result.stderr or "")
