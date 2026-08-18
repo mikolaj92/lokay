@@ -146,6 +146,12 @@ class _ResetRunner:
             return _result(argv, stdout=str(getattr(self, "behind", 0)) + "\n")
         if argv[1] == "diff" or argv[1] == "ls-files":
             return _result(argv, stdout=getattr(self, "diff_names", ""))
+        if argv[1:4] == ["worktree", "list", "--porcelain"]:
+            clone = Path(spec.cwd).resolve()
+            return _result(
+                argv,
+                stdout=f"worktree {clone}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0branch refs/heads/main\0\0",
+            )
         return _result(argv)
 
     def run_checked(self, spec, *, live):
@@ -365,6 +371,155 @@ def test_remove_worktree_already_gone(tmp_path):
     assert out == {"ok": True, "removed": False, "already_gone": True}
     assert not any(call[1] == "worktree" for call in runner.calls)
 
+
+
+def test_remove_worktree_uses_rmtree_only_after_git_and_registry_confirm(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+    class _Registry(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["worktree", "list", "--porcelain"]:
+                self.calls.append(argv)
+                return _result(
+                    argv,
+                    stdout=f"worktree {clone}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0branch refs/heads/main\0\0",
+                )
+            return super().run(spec, live=live)
+
+    runner = _Registry()
+
+    out = remove_worktree(runner, clone, corner)
+
+    assert out == {"ok": True, "removed": True}
+    assert not corner.exists()
+    assert any(call[1:4] == ["worktree", "list", "--porcelain"] for call in runner.calls)
+    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+
+
+def test_remove_worktree_keeps_path_when_git_refuses_remove(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "foreign"
+    corner.mkdir()
+
+    class _Refuses(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            self.calls.append(argv)
+            if argv[1:4] == ["worktree", "remove", "--force"]:
+                return _result(argv, returncode=128, stderr="fatal: not a working tree")
+            return _result(argv)
+
+    runner = _Refuses()
+    out = remove_worktree(runner, clone, corner)
+
+    assert out["ok"] is False
+    assert "not a working tree" in out["error"]
+    assert corner.is_dir()
+    assert not any(call[1:3] == ["worktree", "list"] for call in runner.calls)
+
+
+def test_remove_worktree_keeps_path_when_clone_still_lists_it(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "locked"
+    corner.mkdir()
+
+    class _StillOwned(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            self.calls.append(argv)
+            if argv[1:4] == ["worktree", "list", "--porcelain"]:
+                return _result(
+                    argv,
+                    stdout=(
+                        f"worktree {clone}\0HEAD cccccccccccccccccccccccccccccccccccccccc\0branch refs/heads/main\0\0"
+                        f"worktree {corner}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0branch refs/heads/fix\0\0"
+                    ),
+                )
+            return _result(argv)
+
+    runner = _StillOwned()
+    out = remove_worktree(runner, clone, corner)
+
+    assert out == {"ok": False, "removed": False, "error": "git still owns worktree after removal"}
+    assert corner.is_dir()
+    assert not any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+
+
+def test_remove_worktree_keeps_path_when_post_remove_registry_is_empty(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+    class _EmptyRegistry(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["worktree", "list", "--porcelain"]:
+                self.calls.append(argv)
+                return _result(argv, stdout="")
+            return super().run(spec, live=live)
+
+    out = remove_worktree(_EmptyRegistry(), clone, corner)
+
+    assert out == {
+        "ok": False,
+        "removed": False,
+        "error": "cannot confirm worktree ownership after git removal",
+    }
+    assert corner.is_dir()
+
+
+def test_remove_worktree_keeps_path_when_post_remove_registry_is_truncated(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+
+    class _TruncatedRegistry(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            self.calls.append(argv)
+            if argv[1:4] == ["worktree", "list", "--porcelain"]:
+                return _result(argv, stdout=f"worktree {clone}\0HEAD dddddddddddddddddddddddddddddddddddddddd\0")
+            return _result(argv)
+
+    out = remove_worktree(_TruncatedRegistry(), clone, corner)
+
+    assert out == {
+        "ok": False,
+        "removed": False,
+        "error": "cannot confirm worktree ownership after git removal",
+    }
+    assert corner.is_dir()
+
+
+def test_remove_worktree_keeps_path_when_post_remove_registry_is_unreadable(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+
+    class _NoRegistry(_ResetRunner):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            self.calls.append(argv)
+            if argv[1:4] == ["worktree", "list", "--porcelain"]:
+                return _result(argv, returncode=128, stderr="registry unavailable")
+            return _result(argv)
+
+    runner = _NoRegistry()
+    out = remove_worktree(runner, clone, corner)
+
+    assert out == {
+        "ok": False,
+        "removed": False,
+        "error": "cannot confirm worktree ownership after git removal",
+    }
+    assert corner.is_dir()
 
 def test_leftover_status_known_published_skips_branch_fetch(tmp_path):
     branch = "ai/fix/142-prompt"
