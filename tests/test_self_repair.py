@@ -607,3 +607,38 @@ def test_self_repair_validate_rejects_directory_symlink_with_whitespace_target(
 
     assert code == 1
     assert "untracked diff check failed" in capsys.readouterr().out
+
+
+def test_self_repair_validate_rejects_committed_plan_only_candidate(
+    tmp_path, monkeypatch, capsys
+):
+    import subprocess
+
+    worktree = tmp_path / "wt"
+    subprocess.run(["git", "init", "-q", str(worktree)], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.name", "test"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "config", "user.email", "test@example.com"], check=True)
+    (worktree / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", "README.md"], check=True)
+    subprocess.run(["git", "-C", str(worktree), "commit", "-qm", "base"], check=True)
+    base = subprocess.run(
+        ["git", "-C", str(worktree), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    evidence = worktree / ".lokay" / "approach.md"
+    evidence.parent.mkdir()
+    evidence.write_text("plan only\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(worktree), "add", ".lokay/approach.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(worktree), "commit", "-qm", "self-repair: deadbeef"],
+        check=True,
+    )
+
+    code = self_repair_validate.main(
+        ["--worktree", str(worktree), "--base-sha", base]
+    )
+
+    assert code == 1
+    assert "committed plan evidence" in capsys.readouterr().out

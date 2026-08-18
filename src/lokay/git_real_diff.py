@@ -97,6 +97,24 @@ def list_uncommitted_paths(runner: Runner, worktree: Path) -> list[str]:
     )
 
 
+def list_committed_paths(runner: Runner, worktree: Path, *, base: str) -> list[str]:
+    """Committed path names in ``base...HEAD`` with NUL-safe identity."""
+    result = runner.run_checked(
+        git_spec(
+            ["diff", "--name-only", "--relative", "-z", f"{base}...HEAD"],
+            cwd=worktree,
+            timeout_seconds=120,
+        ),
+        live=True,
+    )
+    detail = (getattr(result, "stderr", "") or "").strip()
+    if detail:
+        raise RuntimeError(detail)
+    raw = result.stdout or ""
+    records = raw.split("\0") if "\0" in raw else raw.splitlines()
+    return sorted({normalize_rel(path) for path in records if normalize_rel(path)})
+
+
 def list_changed_paths(runner: Runner, worktree: Path, *, base: str) -> list[str]:
     """Union of committed, staged, unstaged, and untracked paths vs *base*."""
     committed = _list_paths(
