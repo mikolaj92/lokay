@@ -302,8 +302,8 @@ def test_self_repair_graph_orders_direct_main_recovery():
     assert conduction == {
         "self_repair_prepare": [],
         "self_repair_run_agent": ["self_repair_prepare"],
-        "self_repair_validate": ["self_repair_prepare", "self_repair_run_agent"],
-        "self_repair_commit": ["self_repair_prepare", "self_repair_validate"],
+        "self_repair_validate": ["self_repair_prepare", "self_repair_commit"],
+        "self_repair_commit": ["self_repair_prepare", "self_repair_run_agent"],
         "self_repair_push_main": ["self_repair_prepare", "self_repair_validate", "self_repair_commit"],
         "self_repair_activate": ["self_repair_push_main"],
         "self_repair_preflight": ["self_repair_activate"],

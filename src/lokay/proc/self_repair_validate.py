@@ -15,6 +15,8 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-self-repair-validate")
     p.add_argument("--worktree", required=True)
     p.add_argument("--base-sha", default="")
+    p.add_argument("--expected-subject", default="")
+    p.add_argument("--expected-commit", default="")
     args = p.parse_args(argv)
     worktree = Path(args.worktree).resolve()
     run = runner()
@@ -34,6 +36,34 @@ def main(argv: list[str] | None = None) -> int:
             ).stdout.strip()
         if not changed and not committed:
             raise RuntimeError("self-repair produced zero diff")
+        if args.expected_subject:
+            if not args.base_sha:
+                raise RuntimeError("self-repair candidate base is required")
+            if len(args.expected_commit) != 40 or any(
+                char not in "0123456789abcdef" for char in args.expected_commit
+            ):
+                raise RuntimeError("self-repair expected commit is invalid")
+            if changed:
+                raise RuntimeError("self-repair candidate has uncommitted changes")
+            head = run.run_checked(
+                git_spec(["rev-parse", "HEAD"], cwd=worktree), live=True
+            ).stdout.strip()
+            if head != args.expected_commit:
+                raise RuntimeError("self-repair candidate changed before validation")
+            ahead = run.run_checked(
+                git_spec(
+                    ["rev-list", "--count", f"{args.base_sha}..HEAD"],
+                    cwd=worktree,
+                    timeout_seconds=120,
+                ),
+                live=True,
+            ).stdout.strip()
+            subject = run.run_checked(
+                git_spec(["log", "-1", "--format=%s"], cwd=worktree),
+                live=True,
+            ).stdout.strip()
+            if ahead != "1" or subject != args.expected_subject:
+                raise RuntimeError("self-repair candidate commit is not exact")
         # Isolate pytest from the live mill: a leaking test must not rewrite
         # ~/.lokay/last-pass.json or recovery-history.json.
         with tempfile.TemporaryDirectory(prefix="lokay-self-repair-pytest-") as home:
@@ -51,6 +81,29 @@ def main(argv: list[str] | None = None) -> int:
             )
         if tests.returncode != 0:
             raise RuntimeError("self-repair validation suite failed")
+        untracked = run.run(
+            git_spec(
+                ["ls-files", "--others", "--exclude-standard", "-z"],
+                cwd=worktree,
+                timeout_seconds=120,
+            ),
+            live=True,
+        )
+        if untracked.returncode != 0:
+            raise RuntimeError("self-repair untracked diff check failed")
+        for rel in (untracked.stdout or "").split("\0"):
+            if not rel:
+                continue
+            diff = run.run(
+                git_spec(
+                    ["diff", "--no-index", "--check", "--", "/dev/null", rel],
+                    cwd=worktree,
+                    timeout_seconds=120,
+                ),
+                live=True,
+            )
+            if diff.returncode not in {0, 1} or (diff.stderr or "").strip():
+                raise RuntimeError("self-repair untracked diff check failed")
         diff_checks = [
             ["diff", "--check"],
             ["diff", "--cached", "--check"],
@@ -64,9 +117,26 @@ def main(argv: list[str] | None = None) -> int:
             )
             if diff.returncode != 0:
                 raise RuntimeError("self-repair diff check failed")
+        validated_commit = ""
+        if args.expected_subject:
+            final_status = run.run_checked(
+                git_spec(["status", "--porcelain"], cwd=worktree), live=True
+            ).stdout.strip()
+            validated_commit = run.run_checked(
+                git_spec(["rev-parse", "HEAD"], cwd=worktree), live=True
+            ).stdout.strip()
+            if final_status or validated_commit != args.expected_commit:
+                raise RuntimeError("self-repair candidate changed during validation")
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
-    return emit_exit(ok(validated=True, worktree=str(worktree), tests="uv run --extra dev pytest -q"))
+    return emit_exit(
+        ok(
+            validated=True,
+            commit=validated_commit,
+            worktree=str(worktree),
+            tests="uv run --extra dev pytest -q",
+        )
+    )
 
 
 if __name__ == "__main__":

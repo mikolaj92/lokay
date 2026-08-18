@@ -104,12 +104,23 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
         prepared = up.get("self_repair_prepare", {})
         if prepared.get("already_on_main"):
             return {"ok": True, "skipped": True, "validated": True, "reason": "already_on_main"}
+        committed = up.get("self_repair_commit", {})
         worktree = str(prepared.get("worktree") or "")
-        assert worktree
         base_sha = str(prepared.get("base_sha") or "")
+        fingerprint = str(inputs.get("fingerprint") or "")
+        assert worktree and base_sha and fingerprint and committed.get("commit")
         return _run_atom_main(
             self_repair_validate.main,
-            ["--worktree", worktree, *(["--base-sha", base_sha] if base_sha else [])],
+            [
+                "--worktree",
+                worktree,
+                "--base-sha",
+                base_sha,
+                "--expected-subject",
+                f"self-repair: {fingerprint}",
+                "--expected-commit",
+                str(committed["commit"]),
+            ],
         )
 
     if atom == "self_repair_commit":
@@ -144,9 +155,18 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
                 "pushed": False,
             }
         validated = up.get("self_repair_validate", {})
+        committed = up.get("self_repair_commit", {})
         worktree = str(prepared.get("worktree") or "")
         base_sha = str(prepared.get("base_sha") or "")
-        assert worktree and base_sha and validated.get("validated") is True
+        expected_commit = str(committed.get("commit") or "")
+        validated_commit = str(validated.get("commit") or "")
+        assert (
+            worktree
+            and base_sha
+            and expected_commit
+            and validated_commit == expected_commit
+            and validated.get("validated") is True
+        )
         return _run_atom_main(
             self_repair_push_main.main,
             [
@@ -157,11 +177,8 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
                 "--base-sha",
                 base_sha,
                 "--validated",
-                *(
-                    ["--expected-commit", str(prepared["candidate_commit"])]
-                    if prepared.get("candidate_commit")
-                    else []
-                ),
+                "--expected-commit",
+                validated_commit,
             ],
         )
 
