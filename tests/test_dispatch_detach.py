@@ -119,8 +119,8 @@ def test_dispatch_refuses_to_launch_when_repo_mutex_is_unknown(monkeypatch, tmp_
     }
 
 
-def test_dispatch_refuses_to_launch_when_receipt_state_is_unknown(monkeypatch, tmp_path):
-    """Direct dispatch has the same fail-closed lifecycle boundary as reap."""
+def test_dispatch_continues_when_receipt_state_is_unknown(monkeypatch, tmp_path):
+    """Stale/unreadable receipts are idle — dispatch still detaches K=1."""
     from lokay.passkit import io as pass_io
 
     begin = {"live": True, "issue_budget": 1, "stuck_path": str(tmp_path / "stuck.json")}
@@ -132,20 +132,34 @@ def test_dispatch_refuses_to_launch_when_receipt_state_is_unknown(monkeypatch, t
     monkeypatch.setattr(pass_io, "working_path", lambda _p: tmp_path / "working.json")
     monkeypatch.setattr(pass_io, "implement_path", lambda _p: tmp_path / "implement.json")
     monkeypatch.setattr(d, "has_unreadable_issue_to_pr_receipts", lambda: True)
+    monkeypatch.setattr(d, "_live_ps_text", lambda: "")
+    monkeypatch.setattr(d, "inspect_mutex", lambda **_k: {"busy": False, "pids": []})
+    monkeypatch.setattr(
+        d,
+        "run_select",
+        lambda _main, payload: {"ok": True, "selected": payload["issues"][0]},
+    )
+    monkeypatch.setattr(
+        d,
+        "run_proc",
+        lambda _main, _argv: {"ok": True, "implementable": True, "applied": False},
+    )
     monkeypatch.setattr(
         d,
         "detach_issue_to_pr",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("must not detach when receipts are unknown")),
+        lambda **kwargs: {"ok": True, "detached": True, "repo": kwargs["repo"], "issue": kwargs["issue"], "pid": 4242},
     )
+    monkeypatch.setattr(d, "save_stuck", lambda *_a, **_k: None)
+    monkeypatch.setattr(d, "write_pass_receipt", lambda *_a, **_k: None)
+    monkeypatch.setattr(d, "build_pass_receipt", lambda **_k: {})
 
     out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
 
-    assert out == {
-        "ok": False,
-        "error": "cannot inspect issue_to_pr receipts; refusing dispatch",
-        "pass_dir": str(tmp_path),
-        "reason": "receipt_state_unknown",
-    }
+    assert out.get("ok") is True
+    assert out.get("reason") != "receipt_state_unknown"
+    working_out = __import__("json").loads((tmp_path / "working.json").read_text())
+    assert any(a.get("step") == "receipts_unreadable" for a in working_out.get("actions") or [])
+    assert any(a.get("step") == "issue_to_pr" for a in working_out.get("actions") or [])
 
 
 def test_malformed_no_pid_receipts_are_unknown(tmp_path):
@@ -222,3 +236,44 @@ def test_cycle_start_metric_rejects_boolean_issue(tmp_path):
     )
 
     assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is True
+
+
+def test_dead_or_zero_pid_receipt_is_readable_idle(tmp_path):
+    import json
+
+    path = tmp_path / "owner__repo-9.json"
+    path.write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "reason": "token_missing",
+                "repo": "owner/repo",
+                "issue": 9,
+                "pid": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is False
+    assert detach_mod.live_issue_to_pr_receipts(tmp_path, pid_alive=lambda _pid: False) == []
+
+
+def test_failed_plan_only_receipt_without_pid_is_readable_idle(tmp_path):
+    import json
+
+    path = tmp_path / "owner__repo-9.json"
+    path.write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "reason": "plan_only",
+                "repo": "owner/repo",
+                "issue": 9,
+                "reaped": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert detach_mod.has_unreadable_issue_to_pr_receipts(tmp_path) is False
+    assert detach_mod.live_issue_to_pr_receipts(tmp_path, pid_alive=lambda _pid: False) == []
+

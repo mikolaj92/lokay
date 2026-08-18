@@ -369,7 +369,11 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
         st = path.lstat()
         record = json.loads(path.read_text(encoding="ascii"))
         owner_pid = int(record["owner_pid"])
-        os.kill(owner_pid, 0)  # owner must still be alive
+        try:
+            os.kill(owner_pid, 0)
+            owner_alive = True
+        except OSError:
+            owner_alive = False
         expected_lock = lock_path.expanduser().absolute() if lock_path is not None else None
         recorded_lock = record.get("lock_path")
         legacy_lock = (Path.home() / ".lokay" / "mill.lock").absolute()
@@ -390,6 +394,8 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
         # and outlive the mill tick that held mill.lock. Owner-is-self is enough.
         if owner_pid == os.getpid():
             lock_held = True
+        if not owner_alive and not lock_held:
+            return False, "lease_unavailable_ProcessLookupError"
         now = int(time.time())
         checks = (
             (lock_held, "lock_not_held"),

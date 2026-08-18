@@ -360,6 +360,14 @@ def _is_cycle_start_metric(data: dict[str, Any], path: Path | None) -> bool:
     return path is None or path.name == expected_name
 
 
+def _has_issue_identity(data: dict[str, Any]) -> bool:
+    try:
+        issue = int(data.get("issue"))
+    except (TypeError, ValueError):
+        return False
+    return isinstance(data.get("repo"), str) and bool(data["repo"]) and issue > 0
+
+
 def _receipt_is_readable(data: Any, path: Path | None = None) -> bool:
     """Validate lifecycle state without misreading malformed JSON as a metric."""
     if not isinstance(data, dict):
@@ -386,20 +394,24 @@ def _receipt_is_readable(data: Any, path: Path | None = None) -> bool:
     if "starting" in data:
         return False
     if "pid" not in data:
+        # Failed/reaped receipts (ok=false + identity) are idle, not unknown.
+        if data.get("ok") is False and _has_issue_identity(data):
+            return True
         return _is_cycle_start_metric(data, path)
     try:
-        return (
-            int(data["pid"]) > 0
-            and isinstance(data.get("repo"), str)
-            and bool(data["repo"])
-            and int(data.get("issue")) > 0
-            and (
-                "launch_id" not in data
-                or (isinstance(data["launch_id"], str) and bool(data["launch_id"]))
-            )
-        )
+        pid = int(data["pid"])
     except (TypeError, ValueError):
         return False
+    # pid 0 / negative is a finished or reclaimable receipt, not unknown.
+    if pid <= 0:
+        return _has_issue_identity(data)
+    return (
+        _has_issue_identity(data)
+        and (
+            "launch_id" not in data
+            or (isinstance(data["launch_id"], str) and bool(data["launch_id"]))
+        )
+    )
 
 
 def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:

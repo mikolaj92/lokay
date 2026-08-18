@@ -73,10 +73,9 @@ def run_refresh_occupancy(
     merged = _merged_this_pass(working)
     receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
     live_repos = _live_repos()
-    # An unreadable lifecycle receipt has no reliable repo identity. Occupy
-    # the configured scope instead of taking a new K=1 coding slot.
-    unknown_repos = list(begin.get("repos") or []) if receipt_state_unknown else []
-    occupied = list(dict.fromkeys([*merged, *live_repos, *unknown_repos]))
+    # Dead/stale/unreadable receipts are idle. Only a live coder or a merge
+    # this pass occupies a repo. Occupying the whole catalog blocked dispatch.
+    occupied = list(dict.fromkeys([*merged, *live_repos]))
     occupied_set = set(occupied)
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
     pr_survey_failed = set(working.get("pr_survey_failed") or [])

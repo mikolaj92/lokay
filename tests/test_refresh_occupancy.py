@@ -355,8 +355,8 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
 
 
 
-def test_refresh_unknown_receipt_state_occupies_configured_repos(tmp_path, monkeypatch):
-    """Unknown receipt contents cannot expose a fresh implementation lane."""
+def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeypatch):
+    """Stale/unreadable receipts are idle — they do not occupy every repo."""
     pass_dir = _pass(
         tmp_path,
         begin={"repos": ["a/one", "a/two"]},
@@ -373,7 +373,7 @@ def test_refresh_unknown_receipt_state_occupies_configured_repos(tmp_path, monke
     monkeypatch.setattr(
         refresh_occupancy,
         "run_proc",
-        lambda *_args: (_ for _ in ()).throw(AssertionError("must not survey into unknown lifecycle state")),
+        lambda *_args, **_kwargs: {"ok": True, "prs": []},
     )
 
     out = refresh_occupancy.run_refresh_occupancy(
@@ -381,14 +381,14 @@ def test_refresh_unknown_receipt_state_occupies_configured_repos(tmp_path, monke
     )
 
     assert out["receipt_state_unknown"] is True
-    assert out["occupied_repos"] == ["a/one", "a/two"]
+    assert out["occupied_repos"] == []
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["live_issue_to_pr_repos"] == []
-    assert working["occupied_repos"] == ["a/one", "a/two"]
+    assert working["occupied_repos"] == []
 
 
-def test_refresh_malformed_no_pid_receipt_occupies_configured_repos(tmp_path, monkeypatch):
-    """{} and partial no-PID objects are unknown occupancy, not cycle_start idle."""
+def test_refresh_malformed_no_pid_receipt_does_not_occupy_catalog(tmp_path, monkeypatch):
+    """Partial no-PID objects stay unknown but do not occupy the catalog."""
     import json
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -412,7 +412,7 @@ def test_refresh_malformed_no_pid_receipt_occupies_configured_repos(tmp_path, mo
     monkeypatch.setattr(
         refresh_occupancy,
         "run_proc",
-        lambda *_args: (_ for _ in ()).throw(AssertionError("must not survey into unknown lifecycle state")),
+        lambda *_args, **_kwargs: {"ok": True, "prs": []},
     )
 
     out = refresh_occupancy.run_refresh_occupancy(
@@ -420,4 +420,4 @@ def test_refresh_malformed_no_pid_receipt_occupies_configured_repos(tmp_path, mo
     )
 
     assert out["receipt_state_unknown"] is True
-    assert out["occupied_repos"] == ["owner/repo", "other/repo"]
+    assert out["occupied_repos"] == []

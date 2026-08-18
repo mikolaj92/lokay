@@ -54,10 +54,13 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
     if not live or issue_budget <= 0:
         return ok(pass_dir=pass_dir, started=0, skipped=True, reason="dry_run")
     if has_unreadable_issue_to_pr_receipts():
-        return err(
-            "cannot inspect issue_to_pr receipts; refusing dispatch",
-            pass_dir=pass_dir,
-            reason="receipt_state_unknown",
+        # Stale/unreadable cycle files are idle, not a catalog-wide stop.
+        # Dead pid / pid 0 / failed receipts must not refuse K=1 dispatch.
+        actions.append(
+            {
+                "step": "receipts_unreadable",
+                "note": "unknown receipts treated as idle; dispatch continues",
+            }
         )
 
     try:

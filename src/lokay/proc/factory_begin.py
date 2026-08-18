@@ -26,7 +26,10 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     if live and os.environ.get("LOKAY_HEALTH_LEASE"):
         # A delegated capability must validate as-is. Restore only a missing
         # file for the same token — never mint a replacement for expired/mismatch.
-        if not lease_ok and str(lease_reason).startswith("lease_unavailable_FileNotFound"):
+        if not lease_ok and (
+            str(lease_reason).startswith("lease_unavailable_FileNotFound")
+            or str(lease_reason).startswith("lease_unavailable_ProcessLookup")
+        ):
             from lokay.preflight import issue_health_lease
 
             try:
