@@ -249,6 +249,75 @@ def _pid_command(pid: int) -> str:
     return (done.stdout or "").strip()
 
 
+def is_coding_command(command: str) -> bool:
+    """True for the i2pr wrapper or the Fala/pi coder it spawned."""
+    if "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command:
+        return True
+    if "lokay.fala_organ" in command:
+        return True
+    return "implement GitHub issue #" in command
+
+
+def _child_pids(pid: int) -> list[int]:
+    try:
+        done = subprocess.run(
+            ["pgrep", "-P", str(int(pid))],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    out: list[int] = []
+    for line in (done.stdout or "").splitlines():
+        try:
+            child = int(line.strip())
+        except ValueError:
+            continue
+        if child > 0:
+            out.append(child)
+    return out
+
+
+def wrapper_has_coding_descendant(
+    pid: int,
+    *,
+    command_of=None,
+    children_of=None,
+) -> bool:
+    """True when the detached wrapper still has a Fala/pi coder under it."""
+    command_of = command_of or _pid_command
+    children_of = children_of or _child_pids
+    seen: set[int] = set()
+    stack = [int(pid)]
+    while stack:
+        cur = stack.pop()
+        if cur in seen or cur <= 0:
+            continue
+        seen.add(cur)
+        if cur != int(pid) and is_coding_command(command_of(cur)):
+            return True
+        stack.extend(children_of(cur))
+    return False
+
+
+def coding_live_for_issue(issue: int) -> bool:
+    """Orphan coder still writing this ticket after the wrapper died."""
+    needle = f"implement GitHub issue #{int(issue)}"
+    try:
+        done = subprocess.run(
+            ["pgrep", "-f", needle],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return bool((done.stdout or "").strip())
+
+
 def is_live_issue_to_pr_pid(pid: int) -> bool:
     if not pid_is_alive(pid):
         return False
@@ -258,7 +327,9 @@ def is_live_issue_to_pr_pid(pid: int) -> bool:
     # a coding child. A readable non-Lokay command still rejects PID reuse.
     if not command:
         return True
-    return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
+    if is_coding_command(command):
+        return True
+    return wrapper_has_coding_descendant(pid)
 
 
 def _is_cycle_start_metric(data: dict[str, Any], path: Path | None) -> bool:
@@ -386,7 +457,7 @@ def live_issue_to_pr_receipts(
             pid = int(data["pid"])
         except (TypeError, ValueError):
             continue
-        if check(pid):
+        if check(pid) or coding_live_for_issue(int(data["issue"])):
             live.append(data)
     return live
 

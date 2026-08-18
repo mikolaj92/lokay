@@ -12,6 +12,7 @@ from lokay.proc.detach_issue_to_pr import (
     issue_to_pr_receipt_path,
     live_issue_to_pr_receipts,
     terminate_issue_to_pr_pid,
+    wrapper_has_coding_descendant,
 )
 from lokay.proc.pi_budget import DEFAULT_BUDGET_S, check_pi_budget
 
@@ -33,6 +34,19 @@ def run_reap_over_budget(*, budget_s: int = DEFAULT_BUDGET_S) -> dict[str, Any]:
         if not check.get("over_budget"):
             kept.append(
                 {"repo": repo, "issue": issue, "pid": pid, "elapsed_s": elapsed}
+            )
+            continue
+        # Killing the wrapper while Fala/pi still codes orphans the coder:
+        # commit/push/pr_create never run, so the ticket dies without a PR.
+        if wrapper_has_coding_descendant(pid):
+            kept.append(
+                {
+                    "repo": repo,
+                    "issue": issue,
+                    "pid": pid,
+                    "elapsed_s": elapsed,
+                    "reason": "coder_live",
+                }
             )
             continue
         killed = terminate_issue_to_pr_pid(pid)
