@@ -614,3 +614,66 @@ def test_malformed_no_pid_receipt_keeps_all_worktrees(tmp_path, monkeypatch):
     assert out["receipt_state_unknown"] is True
     assert out["reaped_count"] == 0
     assert out["kept"][0]["reason"] == "receipt_state_unknown"
+
+
+
+def test_reap_does_not_fetch_origin_main(tmp_path, monkeypatch):
+    branch = "ai/fix/142-prompt"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+
+    class _NoFetch(_Git):
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:3] == ["fetch", "origin"]:
+                raise AssertionError(f"fetch must not run during reap: {argv}")
+            return super().run(spec, live=live)
+
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _NoFetch())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: {
+            "readable": True,
+            "ahead": 1,
+            "behind_main": 2,
+            "published": False,
+            "dirty": "empty",
+            "keep_unpublished": False,
+        },
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: {"ok": True, "removed": True},
+    )
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert out["reaped_count"] == 1
+
+
+def test_reap_skips_repos_outside_survey_scope(tmp_path, monkeypatch):
+    _corner(tmp_path, "ai/fix/142-x")
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("cold repo must be skipped")),
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    begin_working = {"survey_repos": ["other/hot"]}
+    pass_dir = _pass(tmp_path)
+    from lokay.passkit import io as pass_io
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    begin["survey_repos"] = ["other/hot"]
+    pass_io.write_json(pass_io.begin_path(pass_dir), begin)
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=pass_dir,
+        config_path=str(_config(tmp_path)),
+        live=True,
+    )
+    assert out["reaped_count"] == 0
+    assert out["kept_count"] == 0

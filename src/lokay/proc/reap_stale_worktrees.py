@@ -7,8 +7,9 @@ published tip is stale — issue_to_pr RESETs from ``origin/main`` — unless it
 contains real uncommitted timeout work. REMOVE only fully classified clean
 leftovers. A failed ``list_prs`` is unknown, not idle.
 Never force-push. Fetch flake / unreadable git is fail-closed KEEP.
-Classify with one ``ls-remote`` per repo — a per-branch fetch stalls
-the factory pass.
+Classify with one ``ls-remote`` per repo. Never fetch here: a 300s
+``git fetch`` per leftover repo eats the 5–10 min cycle. Walk only
+survey_scope (hot + rotated cold).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from lokay.git_worktree import (
     remote_heads,
     remove_worktree,
 )
+from lokay.passkit.hot import survey_scope
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc._common import add_config_live, load_cfg, runner as make_runner
 from lokay.proc.detach_issue_to_pr import (
@@ -106,12 +108,15 @@ def run_reap_stale_worktrees(
     }
     survey_failed = _names(working, "pr_survey_failed")
     covered, heads = _covering(working, branch_prefix=cfg.branch_prefix)
+    scope = survey_scope(begin)
     git = make_runner(cfg)
     kept: list[dict[str, Any]] = []
     reaped: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
 
     for repo in cfg.active_repos():
+        if scope is not None and repo.name not in scope:
+            continue
         leftovers = iter_worktrees(cfg, repo)
         if not leftovers:
             continue
@@ -175,17 +180,11 @@ def run_reap_stale_worktrees(
         base_ok = False
         published_heads: set[str] | None = None
         if live and clone.exists():
-            fetched = git.run(
-                git_spec(["fetch", "origin", "main"], cwd=clone, timeout_seconds=300),
-                live=True,
-            )
-            base_ok = fetched.returncode == 0
-            fetch_err = (fetched.stderr or fetched.stdout or "").strip()
-            if base_ok:
-                published_heads = remote_heads(git, clone)
-                if published_heads is None:
-                    base_ok = False
-                    fetch_err = "cannot list origin heads"
+            # Local origin/main + one ls-remote. Fetch here used to be 300s
+            # per leftover repo and ate the implement slot.
+            published_heads = remote_heads(git, clone)
+            base_ok = published_heads is not None
+            fetch_err = "" if base_ok else "cannot list origin heads"
         else:
             fetch_err = "" if clone.exists() else "clone_path missing"
 
