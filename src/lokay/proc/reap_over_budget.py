@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
@@ -36,8 +37,12 @@ def run_reap_over_budget(*, budget_s: int = DEFAULT_BUDGET_S) -> dict[str, Any]:
             continue
         killed = terminate_issue_to_pr_pid(pid)
         path = issue_to_pr_receipt_path(repo, issue)
+        # Leave the dead receipt. Unlinking it hides the child from harvest,
+        # so a reaped pi vanishes with no PR and no fail-closed.
         try:
-            path.unlink(missing_ok=True)
+            stamped = dict(row)
+            stamped.update(ok=False, reason="over_budget", reaped=True)
+            path.write_text(json.dumps(stamped), encoding="utf-8")
         except OSError:
             pass
         reaped.append(
@@ -48,6 +53,7 @@ def run_reap_over_budget(*, budget_s: int = DEFAULT_BUDGET_S) -> dict[str, Any]:
                 "elapsed_s": elapsed,
                 "budget_s": budget_s,
                 "killed": killed,
+                "reason": "over_budget",
             }
         )
     return ok(

@@ -24,6 +24,7 @@ FAIL_CLOSED = frozenset(
         "repair_agent_failed",
         "invalid_branch_ref",
         "no_pr",
+        "over_budget",
     }
 )
 
@@ -67,6 +68,7 @@ def _as_int(value: Any) -> int | None:
 _REASON_PRIORITY = (
     "invalid_branch_ref",
     "no_pr",
+    "over_budget",
     "local_repair_exhausted",
     "test_local_recheck_failed",
     "test_local_failed",
@@ -382,6 +384,11 @@ def harvest_fail_closed_children(
                 if fallback is not None:
                     event = fallback
                     reason = _classify(event)
+            if not reason:
+                receipt_reason = data.get("reason")
+                if isinstance(receipt_reason, str) and receipt_reason in FAIL_CLOSED:
+                    reason = receipt_reason
+                    event = event or {"ok": False, "reason": reason}
             if not reason:
                 receipt_pr = _as_int(data.get("pr"))
                 event_pr = _as_int((event or {}).get("pr")) if event else None

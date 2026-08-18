@@ -44,7 +44,11 @@ def test_reaps_over_budget_live_receipt(tmp_path, monkeypatch):
     assert out["ok"] is True
     assert out["reaped_count"] == 1
     assert killed == [4242]
-    assert not path.exists()
+    assert path.exists()
+    stamped = json.loads(path.read_text(encoding="utf-8"))
+    assert stamped["ok"] is False
+    assert stamped["reason"] == "over_budget"
+    assert stamped["pid"] == 4242
 
 
 def test_keeps_under_budget_live_receipt(tmp_path, monkeypatch):
