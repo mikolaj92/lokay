@@ -53,8 +53,13 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
 
     try:
         ps_text = _live_ps_text()
-    except Exception:
-        ps_text = ""
+    except Exception as exc:  # noqa: BLE001 -- unknown mutex state must not launch a sibling
+        return err(
+            "cannot inspect repo mutex; refusing issue_to_pr dispatch",
+            pass_dir=pass_dir,
+            reason="repo_mutex_unknown",
+            error_detail=str(exc),
+        )
     for repo_name in list(implement.get("clean_repos") or []):
         if issue_budget <= 0:
             break

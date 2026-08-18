@@ -445,3 +445,30 @@ def test_activate_dirty_keeps_published_commit(tmp_path, monkeypatch):
     monkeypatch.setattr(act.subprocess, "run", fake_run)
     code = activate_main(["--live", "--commit", "abc1234"])
     assert code == 0
+
+
+def test_live_receipt_with_unreadable_command_stays_occupied(tmp_path, monkeypatch):
+    """A live PID with an unavailable ps command is not proof that its child died."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "owner__repo-9.json").write_text(
+        json.dumps({"pid": os.getpid(), "repo": "owner/repo", "issue": 9}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", lambda _pid: "")
+
+    assert live_issue_to_pr_receipts() == [
+        {"pid": os.getpid(), "repo": "owner/repo", "issue": 9}
+    ]
+
+
+def test_unreadable_pid_liveness_probe_stays_occupied(monkeypatch):
+    """An OS probe error is unknown rather than a safe basis to launch/reap."""
+    from lokay.proc.detach_issue_to_pr import pid_is_alive
+
+    monkeypatch.setattr(
+        "lokay.proc.detach_issue_to_pr.os.kill",
+        lambda _pid, _sig: (_ for _ in ()).throw(OSError("probe unavailable")),
+    )
+    assert pid_is_alive(123) is True
