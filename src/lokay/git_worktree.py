@@ -412,6 +412,25 @@ def remove_worktree(
                 "removed": False,
                 "error": f"cannot preserve worktree before registry prune: {exc}",
             }
+        try:
+            archived = os.stat(
+                archive.name,
+                dir_fd=parent_fd,
+                follow_symlinks=False,
+            )
+        except OSError as exc:
+            return {
+                "ok": False,
+                "removed": False,
+                "error": f"cannot confirm preserved worktree identity: {exc}",
+            }
+        if not _same_entry(archived, expected) or not stat.S_ISDIR(archived.st_mode):
+            return {
+                "ok": False,
+                "removed": False,
+                "preserved_path": str(archive),
+                "error": "worktree path changed during preservation",
+            }
         # The pinned source is now the archive; any lexical replacement is
         # foreign and remains untouched. Automated cleanup never restores.
         try:
