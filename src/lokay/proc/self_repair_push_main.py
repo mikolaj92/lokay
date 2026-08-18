@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--worktree", required=True)
     p.add_argument("--base-sha", required=True)
     p.add_argument("--validated", action="store_true", required=True)
-    p.add_argument("--expected-commit", default="")
+    p.add_argument("--expected-commit", required=True)
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
@@ -25,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(ok(planned=True, branch="main", worktree=str(worktree)))
     run = runner()
     try:
+        if len(args.expected_commit) != 40 or any(
+            char not in "0123456789abcdef" for char in args.expected_commit
+        ):
+            raise RuntimeError("self-repair expected commit is invalid")
         run.run_checked(
             git_spec(["fetch", "origin", "main"], cwd=worktree, timeout_seconds=300),
             live=True,
@@ -39,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         ).stdout.strip()
         if head == args.base_sha:
             raise RuntimeError("self-repair produced no commit")
-        if args.expected_commit and head != args.expected_commit:
+        if head != args.expected_commit:
             raise RuntimeError("self-repair candidate changed after validation")
         run.run_checked(
             git_spec(

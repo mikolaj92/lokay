@@ -181,7 +181,7 @@ def test_self_repair_resume_candidate_skips_agent_and_commit_but_revalidates(
 
     def fake_atom(main, argv):
         calls.append((main, list(argv)))
-        return {"ok": True, "validated": True}
+        return {"ok": True, "validated": True, "commit": "c" * 40}
 
     import lokay.fala_organ as fala_organ
 
@@ -206,18 +206,25 @@ def test_self_repair_resume_candidate_skips_agent_and_commit_but_revalidates(
     agent = handle_self_repair(
         "self_repair_run_agent", {}, {"self_repair_prepare": prepared}, ctx
     )
-    validated = handle_self_repair(
-        "self_repair_validate", {}, {"self_repair_prepare": prepared}, ctx
-    )
     committed = handle_self_repair(
         "self_repair_commit", {}, {"self_repair_prepare": prepared}, ctx
+    )
+    validated = handle_self_repair(
+        "self_repair_validate",
+        {"fingerprint": "deadbeef"},
+        {
+            "self_repair_prepare": prepared,
+            "self_repair_commit": committed,
+        },
+        ctx,
     )
     handle_self_repair(
         "self_repair_push_main",
         {},
         {
             "self_repair_prepare": prepared,
-            "self_repair_validate": {"validated": True},
+            "self_repair_validate": validated,
+            "self_repair_commit": committed,
         },
         ctx,
     )
@@ -227,7 +234,16 @@ def test_self_repair_resume_candidate_skips_agent_and_commit_but_revalidates(
     assert calls == [
         (
             validate_module.main,
-            ["--worktree", str(tmp_path), "--base-sha", "a" * 40],
+            [
+                "--worktree",
+                str(tmp_path),
+                "--base-sha",
+                "a" * 40,
+                "--expected-subject",
+                "self-repair: deadbeef",
+                "--expected-commit",
+                "c" * 40,
+            ],
         ),
         (
             push_module.main,
@@ -255,7 +271,12 @@ def test_self_repair_dirty_resume_skips_agent_but_runs_validation_and_commit(
 
     def fake_atom(main, argv):
         calls.append((main, list(argv)))
-        return {"ok": True, "validated": True, "committed": True}
+        return {
+            "ok": True,
+            "validated": True,
+            "committed": True,
+            "commit": "d" * 40,
+        }
 
     import lokay.fala_organ as fala_organ
 
@@ -280,22 +301,24 @@ def test_self_repair_dirty_resume_skips_agent_but_runs_validation_and_commit(
     agent = handle_self_repair(
         "self_repair_run_agent", {}, {"self_repair_prepare": prepared}, ctx
     )
-    handle_self_repair(
-        "self_repair_validate", {}, {"self_repair_prepare": prepared}, ctx
-    )
-    handle_self_repair(
+    committed = handle_self_repair(
         "self_repair_commit",
         {"fingerprint": "deadbeef"},
         {"self_repair_prepare": prepared},
         ctx,
     )
+    handle_self_repair(
+        "self_repair_validate",
+        {"fingerprint": "deadbeef"},
+        {
+            "self_repair_prepare": prepared,
+            "self_repair_commit": committed,
+        },
+        ctx,
+    )
 
     assert agent["reason"] == "resume_existing_candidate"
     assert calls == [
-        (
-            validate_module.main,
-            ["--worktree", str(tmp_path), "--base-sha", "a" * 40],
-        ),
         (
             commit_all.main,
             [
@@ -303,6 +326,19 @@ def test_self_repair_dirty_resume_skips_agent_but_runs_validation_and_commit(
                 str(tmp_path),
                 "--message",
                 "self-repair: deadbeef",
+            ],
+        ),
+        (
+            validate_module.main,
+            [
+                "--worktree",
+                str(tmp_path),
+                "--base-sha",
+                "a" * 40,
+                "--expected-subject",
+                "self-repair: deadbeef",
+                "--expected-commit",
+                "d" * 40,
             ],
         ),
     ]
@@ -339,5 +375,235 @@ def test_self_repair_validate_checks_dirty_and_staged_work_with_base(
     )
 
     assert code == 1
-    assert checks == [("git", "diff", "--check")]
+    assert checks == [
+        ("git", "ls-files", "--others", "--exclude-standard", "-z"),
+        ("git", "diff", "--check"),
+    ]
     assert "diff check failed" in capsys.readouterr().out
+
+
+def test_self_repair_validate_rejects_untracked_whitespace(
+    tmp_path, monkeypatch, capsys
+):
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    calls: list[tuple[str, ...]] = []
+
+    class FakeRun:
+        def run_checked(self, spec, *, live):
+            if spec.argv[1:3] == ("status", "--porcelain"):
+                return SimpleNamespace(stdout="?? src/lokay/new.py\n", returncode=0)
+            if spec.argv[1:3] == ("diff", "--name-only"):
+                return SimpleNamespace(stdout="", returncode=0)
+            raise AssertionError(spec.argv)
+
+        def run(self, spec, *, live):
+            calls.append(spec.argv)
+            if spec.argv[0] == "uv":
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if spec.argv[1:3] == ("ls-files", "--others"):
+                return SimpleNamespace(
+                    returncode=0, stdout="src/lokay/new.py\0", stderr=""
+                )
+            if spec.argv[1:4] == ("diff", "--no-index", "--check"):
+                return SimpleNamespace(
+                    returncode=3, stdout="trailing whitespace", stderr=""
+                )
+            raise AssertionError(spec.argv)
+
+    monkeypatch.setattr(self_repair_validate, "runner", FakeRun)
+    code = self_repair_validate.main(
+        ["--worktree", str(worktree), "--base-sha", "a" * 40]
+    )
+
+    assert code == 1
+    assert (
+        "git",
+        "diff",
+        "--no-index",
+        "--check",
+        "--",
+        "/dev/null",
+        "src/lokay/new.py",
+    ) in calls
+    assert "untracked diff check failed" in capsys.readouterr().out
+
+
+def test_self_repair_validate_accepts_clean_untracked_diff(
+    tmp_path, monkeypatch, capsys
+):
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    class FakeRun:
+        def run_checked(self, spec, *, live):
+            if spec.argv[1:3] == ("status", "--porcelain"):
+                return SimpleNamespace(stdout="?? src/lokay/new.py\n", returncode=0)
+            if spec.argv[1:3] == ("diff", "--name-only"):
+                return SimpleNamespace(stdout="", returncode=0)
+            raise AssertionError(spec.argv)
+
+        def run(self, spec, *, live):
+            if spec.argv[0] == "uv":
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if spec.argv[1:3] == ("ls-files", "--others"):
+                return SimpleNamespace(
+                    returncode=0, stdout="src/lokay/new.py\0", stderr=""
+                )
+            if spec.argv[1:4] == ("diff", "--no-index", "--check"):
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
+            if spec.argv[1:3] == ("diff", "--check") or spec.argv[1:3] == (
+                "diff",
+                "--cached",
+            ):
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            raise AssertionError(spec.argv)
+
+    monkeypatch.setattr(self_repair_validate, "runner", FakeRun)
+    code = self_repair_validate.main(
+        ["--worktree", str(worktree), "--base-sha", "a" * 40]
+    )
+
+    assert code == 0
+    assert '"validated": true' in capsys.readouterr().out.lower()
+
+
+def test_commit_all_reports_exact_created_commit(tmp_path, monkeypatch, capsys):
+    from lokay.proc import commit_all as commit_module
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    class FakeRun:
+        def run_checked(self, spec, *, live):
+            assert spec.argv[1:3] == ("rev-parse", "HEAD")
+            return SimpleNamespace(stdout="c" * 40 + "\n", returncode=0)
+
+    monkeypatch.setattr(commit_module, "load_cfg", lambda _args: SimpleNamespace())
+    monkeypatch.setattr(commit_module, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(commit_module, "runner", FakeRun)
+    monkeypatch.setattr(commit_module, "commit_all", lambda *_args, **_kwargs: True)
+
+    code = commit_module.main(
+        ["--live", "--worktree", str(worktree), "--message", "fix"]
+    )
+    payload = __import__("json").loads(capsys.readouterr().out.strip())
+
+    assert code == 0
+    assert payload["committed"] is True
+    assert payload["commit"] == "c" * 40
+
+
+def test_self_repair_validate_rejects_vanished_untracked_path(
+    tmp_path, monkeypatch, capsys
+):
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    class FakeRun:
+        def run_checked(self, spec, *, live):
+            if spec.argv[1:3] == ("status", "--porcelain"):
+                return SimpleNamespace(stdout="?? gone.py\n", returncode=0)
+            if spec.argv[1:3] == ("diff", "--name-only"):
+                return SimpleNamespace(stdout="", returncode=0)
+            raise AssertionError(spec.argv)
+
+        def run(self, spec, *, live):
+            if spec.argv[0] == "uv":
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            if spec.argv[1:3] == ("ls-files", "--others"):
+                return SimpleNamespace(returncode=0, stdout="gone.py\0", stderr="")
+            if spec.argv[1:4] == ("diff", "--no-index", "--check"):
+                return SimpleNamespace(
+                    returncode=1,
+                    stdout="",
+                    stderr="error: Could not access 'gone.py'",
+                )
+            raise AssertionError(spec.argv)
+
+    monkeypatch.setattr(self_repair_validate, "runner", FakeRun)
+    code = self_repair_validate.main(
+        ["--worktree", str(worktree), "--base-sha", "a" * 40]
+    )
+
+    assert code == 1
+    assert "untracked diff check failed" in capsys.readouterr().out
+
+
+def test_self_repair_validate_requires_exact_clean_one_commit_subject(
+    tmp_path, monkeypatch, capsys
+):
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+
+    class FakeRun:
+        def __init__(self, *, changed="", ahead="1", subject="self-repair: fp"):
+            self.changed = changed
+            self.ahead = ahead
+            self.subject = subject
+
+        def run_checked(self, spec, *, live):
+            if spec.argv[1:3] == ("status", "--porcelain"):
+                return SimpleNamespace(stdout=self.changed, returncode=0)
+            if spec.argv[1:3] == ("diff", "--name-only"):
+                return SimpleNamespace(stdout="src/lokay/fix.py\n", returncode=0)
+            if spec.argv[1:3] == ("rev-list", "--count"):
+                return SimpleNamespace(stdout=self.ahead + "\n", returncode=0)
+            if spec.argv[1] == "log":
+                return SimpleNamespace(stdout=self.subject + "\n", returncode=0)
+            raise AssertionError(spec.argv)
+
+        def run(self, spec, *, live):
+            raise AssertionError("validation must reject before tests")
+
+    cases = [
+        FakeRun(changed="?? late.py\n"),
+        FakeRun(ahead="2"),
+        FakeRun(subject="unrelated"),
+    ]
+    for run in cases:
+        monkeypatch.setattr(self_repair_validate, "runner", lambda run=run: run)
+        code = self_repair_validate.main(
+            [
+                "--worktree",
+                str(worktree),
+                "--base-sha",
+                "a" * 40,
+                "--expected-subject",
+                "self-repair: fp",
+            ]
+        )
+        assert code == 1
+        assert capsys.readouterr().out
+
+
+def test_self_repair_validate_rejects_directory_symlink_with_whitespace_target(
+    tmp_path, monkeypatch, capsys
+):
+    import os
+    import subprocess
+
+    from lokay.runner import CommandResult, Runner
+
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    subprocess.run(["git", "init"], cwd=worktree, check=True, capture_output=True)
+    outside = tmp_path / "outside "
+    outside.mkdir()
+    os.symlink("../outside ", worktree / "dirlink")
+    real = Runner()
+
+    class HybridRun:
+        def run_checked(self, spec, *, live):
+            return real.run_checked(spec, live=live)
+
+        def run(self, spec, *, live):
+            if spec.argv[0] == "uv":
+                return CommandResult(spec, True, 0)
+            return real.run(spec, live=live)
+
+    monkeypatch.setattr(self_repair_validate, "runner", HybridRun)
+    code = self_repair_validate.main(["--worktree", str(worktree)])
+
+    assert code == 1
+    assert "untracked diff check failed" in capsys.readouterr().out

@@ -578,7 +578,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "self_repair_validate"
 capability = "lokay_atom"
-conduction = ["self_repair_prepare", "self_repair_run_agent"]
+conduction = ["self_repair_prepare", "self_repair_commit"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 2100, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "self_repair_validate" }
 retry_policy = "none"
@@ -586,7 +586,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "self_repair_commit"
 capability = "lokay_atom"
-conduction = ["self_repair_prepare", "self_repair_validate"]
+conduction = ["self_repair_prepare", "self_repair_run_agent"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "self_repair_commit" }
 retry_policy = "none"
