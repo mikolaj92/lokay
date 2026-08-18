@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import secrets
@@ -9,8 +10,12 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+
+_ACTIVATION_PROTOCOL = "pipe-v1"
 
 
 def issue_to_pr_log_path(repo: str, number: int) -> Path:
@@ -27,49 +32,89 @@ def issue_to_pr_receipt_path(repo: str, number: int) -> Path:
     return root / f"{slug}-{int(number)}.json"
 
 
+@contextmanager
+def _receipt_write_lock(path: Path):
+    """Serialize all transitions over the receipt name, not its inode."""
+    lock_path = path.parent / ".issue-to-pr-receipts.lock"
+    try:
+        with lock_path.open("a+", encoding="utf-8") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    except OSError as exc:
+        raise OSError(f"cannot lock issue_to_pr receipts: {exc}") from exc
+
+
+def _starting_receipt_state(payload: dict[str, Any]) -> str:
+    """Return ``live``, ``orphaned``, or ``unknown`` without trusting absence.
+
+    Only pipe-gated reservations can be reclaimed. Their child holds only the
+    read end before activation, so launcher death closes the write end and
+    makes it exit before it can start Fala or touch a worktree. Old
+    reservations predate that guarantee and deliberately retain their lane.
+    """
+    if payload.get("activation") != _ACTIVATION_PROTOCOL:
+        return "live"
+    try:
+        launcher_pid = int(payload["launcher_pid"])
+    except (KeyError, TypeError, ValueError):
+        return "unknown"
+    if launcher_pid <= 0:
+        return "unknown"
+    return "live" if pid_is_alive(launcher_pid) else "orphaned"
+
+
 def _write_starting_receipt(path: Path, payload: dict[str, Any]) -> Path:
     """Reserve a receipt name once, before any child may be spawned."""
-    try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        # Normal completed/dead receipts remain as history and may be replaced
-        # for a later attempt. Live, malformed, and pre-spawn reservations are
-        # unknown ownership and must instead hold the lane.
-        try:
-            previous = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise OSError(f"cannot inspect existing issue_to_pr receipt: {exc}") from exc
-        if not isinstance(previous, dict):
-            raise OSError("existing issue_to_pr receipt is not an object")
-        if previous.get("starting") is True:
-            raise OSError("existing issue_to_pr receipt is still starting")
-        if previous.get("pid") is not None:
-            try:
-                previous_pid = int(previous["pid"])
-            except (TypeError, ValueError):
-                raise OSError("existing issue_to_pr receipt has an invalid pid") from None
-            if is_live_issue_to_pr_pid(previous_pid):
-                raise OSError("existing issue_to_pr receipt is still live")
-        try:
-            path.unlink()
-        except OSError as exc:
-            raise OSError(f"cannot clear completed issue_to_pr receipt: {exc}") from exc
+    with _receipt_write_lock(path):
         try:
             fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError as exc:
-            raise OSError("issue_to_pr reservation was claimed concurrently") from exc
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-            fh.write("\n")
-            fh.flush()
-            os.fsync(fh.fileno())
-    except BaseException:
+        except FileExistsError:
+            # Completed/dead PID receipts are historical and replaceable. A
+            # reservation remains until its pipe-gated launcher is proven dead;
+            # malformed/legacy state is deliberately not ownership evidence.
+            try:
+                previous = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise OSError(f"cannot inspect existing issue_to_pr receipt: {exc}") from exc
+            if not isinstance(previous, dict):
+                raise OSError("existing issue_to_pr receipt is not an object")
+            if previous.get("starting") is True:
+                state = _starting_receipt_state(previous)
+                if state != "orphaned":
+                    detail = "still starting" if state == "live" else "state is unknown"
+                    raise OSError(f"existing issue_to_pr receipt is {detail}")
+            elif previous.get("pid") is not None:
+                try:
+                    previous_pid = int(previous["pid"])
+                except (TypeError, ValueError):
+                    raise OSError("existing issue_to_pr receipt has an invalid pid") from None
+                if is_live_issue_to_pr_pid(previous_pid):
+                    raise OSError("existing issue_to_pr receipt is still live")
+            else:
+                raise OSError("existing issue_to_pr receipt has no pid")
+            try:
+                path.unlink()
+            except OSError as exc:
+                raise OSError(f"cannot clear completed issue_to_pr receipt: {exc}") from exc
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            except FileExistsError as exc:
+                raise OSError("issue_to_pr reservation was claimed concurrently") from exc
         try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+                fh.write("\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+        except BaseException:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
     return path
 
 
@@ -77,48 +122,48 @@ def write_issue_to_pr_receipt(payload: dict[str, Any]) -> Path:
     """Atomically reserve or publish an issue-to-PR lifecycle receipt."""
     path = issue_to_pr_receipt_path(str(payload["repo"]), int(payload["issue"]))
     if payload.get("starting") is True:
-        # O_EXCL closes two dispatchers' absent-name race. Until complete JSON
-        # is visible, readers treat it as unknown and hold the lane.
         return _write_starting_receipt(path, payload)
 
-    # Final publication is allowed to replace only this launch's durable
-    # pre-spawn reservation; it can never overwrite another child.
+    # Hold the stable sidecar lock through matching ownership verification and
+    # replacement: replacing a path changes its inode, so receipt-file locking
+    # would permit a second launcher to be overwritten between read and rename.
     launch_id = str(payload.get("launch_id") or "")
-    if launch_id:
+    with _receipt_write_lock(path):
+        if launch_id:
+            try:
+                previous = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise OSError(f"cannot inspect starting issue_to_pr receipt: {exc}") from exc
+            if not isinstance(previous, dict) or previous.get("launch_id") != launch_id:
+                raise OSError("issue_to_pr reservation ownership changed")
+        temp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
         try:
-            previous = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise OSError(f"cannot inspect starting issue_to_pr receipt: {exc}") from exc
-        if not isinstance(previous, dict) or previous.get("launch_id") != launch_id:
-            raise OSError("issue_to_pr reservation ownership changed")
-    temp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
-    try:
-        with temp.open("x", encoding="utf-8") as fh:
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
-            fh.write("\n")
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(temp, path)
-    except BaseException:
-        try:
-            temp.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+            with temp.open("x", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+                fh.write("\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(temp, path)
+        except BaseException:
+            try:
+                temp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
     return path
 
 
 def _discard_starting_receipt(path: Path, launch_id: str) -> bool:
     """Drop only this launch's reservation after its process group is gone."""
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict) or data.get("launch_id") != launch_id:
-            return False
-        path.unlink()
+        with _receipt_write_lock(path):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict) or data.get("launch_id") != launch_id:
+                return False
+            path.unlink()
     except (OSError, ValueError):
         return False
     return True
-
 
 def _terminate_detached_process_group(proc: Any, *, timeout_seconds: float = 5.0) -> bool:
     """Terminate and confirm a child started with ``start_new_session=True`` is gone."""
@@ -182,7 +227,7 @@ def pid_is_alive(pid: int) -> bool:
 def _pid_command(pid: int) -> str:
     try:
         done = subprocess.run(
-            ["ps", "-p", str(int(pid)), "-o", "command="],
+            ["ps", "-ww", "-p", str(int(pid)), "-o", "command="],
             capture_output=True,
             text=True,
             timeout=5,
@@ -205,8 +250,50 @@ def is_live_issue_to_pr_pid(pid: int) -> bool:
     return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
 
 
+def _receipt_is_readable(data: Any) -> bool:
+    """Validate detached lifecycle state without misreading cycle_start JSON."""
+    if not isinstance(data, dict):
+        return False
+    if data.get("starting") is True:
+        # Starting records must identify their lane. A malformed lifecycle
+        # reservation is uncertainty, not an idle cycle file. Legacy records
+        # with a complete identity stay occupied but are never reclaimed.
+        try:
+            issue = int(data.get("issue"))
+        except (TypeError, ValueError):
+            return False
+        if (
+            not isinstance(data.get("launch_id"), str)
+            or not data["launch_id"]
+            or not isinstance(data.get("repo"), str)
+            or not data["repo"]
+            or issue < 1
+        ):
+            return False
+        if "activation" not in data:
+            return True
+        return _starting_receipt_state(data) != "unknown"
+    if "starting" in data:
+        return False
+    if "pid" not in data:
+        return True  # cycle_start's metric-only receipt
+    try:
+        return (
+            int(data["pid"]) > 0
+            and isinstance(data.get("repo"), str)
+            and bool(data["repo"])
+            and int(data.get("issue")) > 0
+            and (
+                "launch_id" not in data
+                or (isinstance(data["launch_id"], str) and bool(data["launch_id"]))
+            )
+        )
+    except (TypeError, ValueError):
+        return False
+
+
 def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:
-    """Whether cycle receipt state is unknown and destructive work must pause."""
+    """Whether lifecycle state is unknown and destructive work must pause."""
     root = Path(cycle_dir) if cycle_dir is not None else Path.home() / ".lokay" / "cycle"
     try:
         with os.scandir(root) as entries:
@@ -220,12 +307,12 @@ def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:
         return True
     for path in paths:
         try:
-            if not isinstance(json.loads(path.read_text(encoding="utf-8")), dict):
-                return True
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return True
+        if not _receipt_is_readable(data):
+            return True
     return False
-
 
 def live_issue_to_pr_receipts(
     cycle_dir: Path | None = None,
@@ -247,10 +334,12 @@ def live_issue_to_pr_receipts(
             continue
         if not data.get("repo") or data.get("issue") is None:
             continue
-        # A durable reservation written before Popen is occupancy until it is
-        # replaced by the PID receipt or explicitly cleaned up after no spawn.
-        if data.get("starting") is True and data.get("launch_id"):
-            live.append(data)
+        # A reservation remains occupancy until its matching PID receipt is
+        # published. Pipe-gated reservations whose launcher died before
+        # activation are inert and can be recovered by the next dispatcher.
+        if data.get("starting") is True:
+            if _starting_receipt_state(data) != "orphaned":
+                live.append(data)
             continue
         if "pid" not in data:
             continue
@@ -270,7 +359,13 @@ def detach_issue_to_pr(
     config_path: str | None,
     popen=None,
 ) -> dict[str, Any]:
-    """Detach only after a durable reservation protects its future worktree."""
+    """Detach only after a durable receipt and child activation barrier.
+
+    The child blocks on a private pipe before it can run Fala. If this parent
+    dies after ``Popen`` but before final publication, its write end closes and
+    the child exits without touching a worktree. That makes a later recovery
+    of the pre-spawn reservation safe rather than a second-worker race.
+    """
     spawn = popen or subprocess.Popen
     repo_name = str(repo)
     issue_number = int(issue)
@@ -280,7 +375,6 @@ def detach_issue_to_pr(
     argv.extend(["--live", "--repo", repo_name, "--issue", str(issue_number)])
     root = os.environ.get("LOKAY_ROOT") or str(Path.cwd())
     env = os.environ.copy()
-    # Fala effectors inherit these keys; an empty PATH fails commit_all.
     if env.get("LOKAY_HEALTH_LEASE") and not env.get("LOKAY_HEALTH_LEASE_PATH"):
         env["LOKAY_HEALTH_LEASE_PATH"] = str(Path.home() / ".lokay" / "health-lease")
 
@@ -290,7 +384,9 @@ def detach_issue_to_pr(
         "ok": True,
         "detached": False,
         "starting": True,
+        "activation": _ACTIVATION_PROTOCOL,
         "launch_id": launch_id,
+        "launcher_pid": os.getpid(),
         "repo": repo_name,
         "issue": issue_number,
         "log": str(log_path),
@@ -307,8 +403,22 @@ def detach_issue_to_pr(
         }
 
     try:
+        read_fd, write_fd = os.pipe()
+    except OSError as exc:
+        _discard_starting_receipt(receipt_path, launch_id)
+        return {
+            "ok": False,
+            "reason": "activation_unavailable",
+            "error": f"cannot create issue_to_pr activation pipe: {exc}",
+            "repo": repo_name,
+            "issue": issue_number,
+        }
+    env["LOKAY_ISSUE_TO_PR_ACTIVATION_FD"] = str(read_fd)
+    try:
         log_fh = log_path.open("ab")
     except OSError as exc:
+        os.close(read_fd)
+        os.close(write_fd)
         _discard_starting_receipt(receipt_path, launch_id)
         return {
             "ok": False,
@@ -325,8 +435,11 @@ def detach_issue_to_pr(
             start_new_session=True,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
+            pass_fds=(read_fd,),
         )
     except OSError as exc:
+        os.close(read_fd)
+        os.close(write_fd)
         _discard_starting_receipt(receipt_path, launch_id)
         return {
             "ok": False,
@@ -350,6 +463,8 @@ def detach_issue_to_pr(
     try:
         receipt["receipt"] = str(write_issue_to_pr_receipt(receipt))
     except OSError as exc:
+        os.close(read_fd)
+        os.close(write_fd)
         terminated = _terminate_detached_process_group(proc)
         if terminated:
             _discard_starting_receipt(receipt_path, launch_id)
@@ -362,4 +477,22 @@ def detach_issue_to_pr(
             "pid": int(proc.pid),
             "cleanup_confirmed": terminated,
         }
+    try:
+        os.write(write_fd, b"1")
+    except OSError as exc:
+        # The receipt is durable but a child that never read activation cannot
+        # work; terminate conservatively and leave its final historical receipt.
+        terminated = _terminate_detached_process_group(proc)
+        return {
+            "ok": False,
+            "reason": "activation_unavailable",
+            "error": f"cannot release issue_to_pr child: {exc}",
+            "repo": repo_name,
+            "issue": issue_number,
+            "pid": int(proc.pid),
+            "cleanup_confirmed": terminated,
+        }
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
     return receipt

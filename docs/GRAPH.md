@@ -128,6 +128,15 @@ the stale daemon process.
 
 ### `issue_to_pr`
 
+Detached launch uses a durable `starting` receipt before `Popen`, then a
+private activation pipe: the child cannot enter this graph until its matching
+PID receipt is atomically published. If the launcher dies in that interval,
+EOF makes the gated child exit before any worktree action; a later pass may
+recover only that pipe-gated reservation after confirming the launcher is dead.
+Malformed and pre-barrier reservations remain unknown/live and preserve the
+fail-closed occupancy/reap boundary. PID command inspection uses wide `ps` so
+macOS truncation cannot turn a live child into a stale worktree candidate.
+
 ```text
 get_issue
   ├─→ assign_issue

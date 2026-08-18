@@ -3,12 +3,34 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from lokay.config import load_config
 from lokay.envelope import emit_exit
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
+
+
+def _await_detach_activation() -> bool:
+    """Block a detached child until its parent durably publishes its PID."""
+    raw = os.environ.get("LOKAY_ISSUE_TO_PR_ACTIVATION_FD")
+    if raw is None:
+        return True
+    fd: int | None = None
+    try:
+        fd = int(raw)
+        if fd < 0:
+            return False
+        return os.read(fd, 1) == b"1"
+    except (OSError, ValueError):
+        return False
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def compose_issue_to_pr(
@@ -20,6 +42,8 @@ def compose_issue_to_pr(
     incident_fingerprint: str = "",
     package_path: str | None = None,
 ) -> dict:
+    if not _await_detach_activation():
+        return {"ok": False, "reason": "detachment_not_activated"}
     if live and load_config(config_path).mode != "live":
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
 
