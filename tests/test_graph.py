@@ -314,6 +314,26 @@ def test_self_repair_graph_orders_direct_main_recovery():
     assert not any(node in {"pr_create", "pr_review", "pr_merge", "pr_repair"} for node in conduction)
 
 
+def test_fala_issue_to_pr_no_pr_is_fail_closed():
+    out = _host("issue_to_pr", {
+        "make_branch": {"id": "make_branch", "status": "completed", "output": {"values": {"branch": "lokay/x"}}},
+        "pr_label": {"id": "pr_label", "status": "completed", "output": {"values": {"pr": None}}},
+    })
+    assert out["ok"] is False
+    assert out["error"] == "issue_to_pr produced no PR"
+    assert out["reason"] == "no_pr"
+
+
+def test_fala_issue_to_pr_with_pr_ok():
+    out = _host("issue_to_pr", {
+        "make_branch": {"id": "make_branch", "status": "completed", "output": {"values": {"branch": "lokay/x"}}},
+        "pr_create": {"id": "pr_create", "status": "completed", "output": {"values": {"pr": 12}}},
+        "pr_label": {"id": "pr_label", "status": "completed", "output": {"values": {"pr": 12}}},
+    })
+    assert out["ok"] is True
+    assert out["pr"] == 12
+
+
 def test_fala_zero_diff_repair_contract():
     out = _host("pr_repair", {"commit_all": {"id": "commit_all", "status": "completed", "output": {"values": {"committed": False}}}})
     assert out["ok"] is False and out["error"] == "repair produced no commit"

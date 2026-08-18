@@ -96,12 +96,32 @@ def test_cycle_start_without_pid_does_not_block_live_sibling(tmp_path: Path):
     assert excluded_numbers(stuck, "mikolaj92/lokay") == set()
 
 
-def test_dead_pid_without_event_or_reason_is_not_blocked(tmp_path: Path):
+def test_dead_pid_without_event_or_reason_is_fail_closed(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
     _receipt(cycle / "a__b-3.json", repo="a/b", issue=3, pid=1)
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert 3 in excluded_numbers(stuck, "a/b")
+    assert stuck["issues"]["a/b#3"].get("reason") == "no_pr"
+
+
+def test_dead_pid_with_pr_on_receipt_is_not_blocked(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    (cycle / "a__b-3.json").write_text(
+        json.dumps({"ok": True, "detached": True, "pid": 1, "repo": "a/b", "issue": 3, "pr": 88}),
+        encoding="utf-8",
+    )
     stuck = {"issues": {}}
     harvest_fail_closed_children(
         stuck,
@@ -398,7 +418,8 @@ def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monke
     assert 7 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
     for n in range(8, 15):
-        assert n not in excluded_numbers(stuck, "a/b")
+        assert n in excluded_numbers(stuck, "a/b")
+        assert stuck["issues"][f"a/b#{n}"].get("reason") == "no_pr"
 
 
 def test_one_plan_only_already_blocked_reopens_the_slot(tmp_path: Path):

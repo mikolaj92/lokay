@@ -537,10 +537,19 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         ):
             out.update(ok=False, error="repair produced no commit")
     elif path_id == "issue_to_pr":
+        pr = (
+            terminal.get("pr_create", {}).get("pr")
+            or terminal.get("pr_label", {}).get("pr")
+            or result.get("pr")
+        )
         out.update(
             branch=terminal.get("make_branch", {}).get("branch"),
-            pr=terminal.get("pr_label", {}).get("pr"),
+            pr=pr,
         )
+        # Live i2pr may not vanish: PR number or explicit fail-closed.
+        if result.get("live") and not result.get("planned") and out.get("ok") is not False:
+            if pr in (None, "", 0):
+                out.update(ok=False, error="issue_to_pr produced no PR", reason="no_pr")
     elif path_id == "self_repair":
         fresh = terminal.get("self_repair_preflight", {})
         pushed = terminal.get("self_repair_push_main", {})

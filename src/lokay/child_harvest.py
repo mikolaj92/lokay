@@ -23,6 +23,7 @@ FAIL_CLOSED = frozenset(
         "test_local_missing",
         "repair_agent_failed",
         "invalid_branch_ref",
+        "no_pr",
     }
 )
 
@@ -65,6 +66,7 @@ def _as_int(value: Any) -> int | None:
 
 _REASON_PRIORITY = (
     "invalid_branch_ref",
+    "no_pr",
     "local_repair_exhausted",
     "test_local_recheck_failed",
     "test_local_failed",
@@ -339,8 +341,8 @@ def harvest_fail_closed_children(
 ) -> dict[str, Any]:
     """Skip tickets whose detached child already died fail-closed / miss-N.
 
-    Live pids are left alone. Dead pid + no event + no machine reason is
-    treated as transient (retry), not fail-closed. Product misses
+    Live pids are left alone. Dead pid + no PR + no classified reason is
+    fail-closed (no_pr): a vanished child is not a silent retry. Product misses
     (plan_only / zero_diff / push_failed) count unique run_ids and only
     leave the slot after N; harvest does not CLOSE the issue. A stale
     blocked miss row below N is reconciled (reopened); crash rows stay buried.
@@ -381,7 +383,21 @@ def harvest_fail_closed_children(
                     event = fallback
                     reason = _classify(event)
             if not reason:
-                continue
+                receipt_pr = _as_int(data.get("pr"))
+                event_pr = _as_int((event or {}).get("pr")) if event else None
+                if receipt_pr or event_pr:
+                    continue
+                # Vanished: dead child and no PR. A classified miss/crash
+                # already has a reason. An unknown ok=False is not no_pr.
+                vanished = event is None or event.get("ok") is True
+                if not vanished:
+                    continue
+                reason = "no_pr"
+                event = event or {
+                    "ok": False,
+                    "reason": "no_pr",
+                    "error": "issue_to_pr produced no PR",
+                }
             error = ""
             if event:
                 error = str(event.get("error") or event.get("reason") or reason)
