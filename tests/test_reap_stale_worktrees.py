@@ -586,3 +586,31 @@ def test_unreadable_receipt_keeps_all_worktrees(tmp_path, monkeypatch):
     assert out["receipt_state_unknown"] is True
     assert out["reaped_count"] == 0
     assert out["kept"][0]["reason"] == "receipt_state_unknown"
+
+
+def test_malformed_no_pid_receipt_keeps_all_worktrees(tmp_path, monkeypatch):
+    import json
+
+    _corner(tmp_path, "ai/fix/142-x")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "empty.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not classify unknown receipt state")),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not reap unknown receipt state")),
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+
+    assert out["receipt_state_unknown"] is True
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["reason"] == "receipt_state_unknown"
