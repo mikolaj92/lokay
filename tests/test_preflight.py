@@ -656,6 +656,49 @@ def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypat
     assert executor["repaired"] is True
 
 
+def test_preflight_repairs_executor_from_login_home_when_home_is_service_fallback(
+    tmp_path, monkeypatch
+):
+    """A daemon fallback HOME must not hide the account's executor install."""
+    cfg = _config(tmp_path)
+    cfg.write_text(cfg.read_text().replace("command: omp", "command: pi"))
+    service_home = tmp_path / "service-home"
+    login_home = tmp_path / "login-home"
+    (login_home / ".local" / "bin").mkdir(parents=True)
+    (login_home / ".local" / "bin" / "pi").touch(mode=0o755)
+    monkeypatch.setenv("HOME", str(service_home))
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.setattr(
+        preflight.pwd,
+        "getpwuid",
+        lambda uid: type("Passwd", (), {"pw_dir": str(login_home)})(),
+    )
+    _auth_ok(monkeypatch)
+    real_which = preflight.shutil.which
+    monkeypatch.setattr(
+        preflight.shutil,
+        "which",
+        lambda command, **kwargs: "/gh"
+        if command == "gh"
+        else real_which(command, **kwargs),
+    )
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda *args, **kwargs: type("C", (), {"returncode": 0})(),
+    )
+
+    result = preflight.run_preflight(str(cfg))
+
+    assert result["ok"] is True, [item for item in result["findings"] if not item["ok"]]
+    assert str(login_home / ".local" / "bin") in __import__("os").environ["PATH"]
+    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    assert executor["ok"] is True
+    assert executor["repaired"] is True
+
+
 def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, monkeypatch):
     home = tmp_path / "home"
     user_bin = home / ".local" / "bin"

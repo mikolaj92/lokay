@@ -5,6 +5,7 @@ import fcntl
 import hashlib
 import json
 import os
+import pwd
 import re
 import secrets
 import shutil
@@ -165,19 +166,37 @@ def _repair_github_git_transport(cfg: Any) -> bool:
     return changed
 
 
+def _executor_path_candidates() -> tuple[Path, ...]:
+    """Return bounded executor directories for service and login homes.
+
+    launchd can start the daemon without HOME.  The shell bootstrap supplies a
+    writable fallback in that case, but the executor is still installed under
+    the account's real home.  Keep both homes in the small, known install set;
+    do not recursively scan the filesystem for binaries.
+    """
+    homes = [Path.home()]
+    try:
+        login_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except (KeyError, OSError, AttributeError):
+        login_home = None
+    if login_home is not None and login_home not in homes:
+        homes.append(login_home)
+    locations = (
+        (".local", "bin"),
+        (".local", "share", "mise", "shims"),
+        (".pi", "agent", "bin"),
+    )
+    return tuple(home.joinpath(*parts) for home in homes for parts in locations)
+
+
 def _repair_runtime_path(command: str) -> bool:
     """Expose user-installed executors when a service inherited a minimal PATH."""
     if shutil.which(command):
         return False
-    candidates = (
-        Path.home() / ".local" / "bin",
-        Path.home() / ".local" / "share" / "mise" / "shims",
-        Path.home() / ".pi" / "agent" / "bin",
-    )
     executor_dir = next(
         (
             path
-            for path in candidates
+            for path in _executor_path_candidates()
             if _safe_owned_path(path)
             and path.is_dir()
             and shutil.which(command, path=str(path)) is not None
