@@ -119,10 +119,11 @@ frozen set (secondary rate-limit then fingerprints `survey_error`).
 Those ready rows must not fill `actionable_now` or the 4-of-5 stall quorum.
 A clean repo with leftover ready is still a stall if the mill made no progress.
 
-**GitHub 503 is not missing auth:** `github_authentication` must not treat a
-transient `gh api user` 5xx as `unavailable` when `gh auth status` still
-proves a local token. That freezes closeout as `carrier_failed` while a
-MERGEABLE PR sits open.
+**GitHub 503 is not missing auth or failed CI:** `github_authentication` must
+not treat a transient `gh api user` 5xx as `unavailable` when `gh auth status`
+still proves a local token. Separately, `pr_checks` maps GitHub/rate-limit
+429/5xx uncertainty to non-green `pending`, so closeout waits rather than
+running `pr_repair` against a published tip. Neither case authorizes a merge.
 
 **Recovery boundary:** `waiting` / `repairing` (and other soft mill health) must
 not mint systemic stall fingerprints or fill the daemon 4-of-5 quorum into

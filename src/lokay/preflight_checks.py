@@ -7,21 +7,11 @@ import shutil
 import subprocess
 from typing import Any, Callable
 
+from lokay.gh_rate import is_transient_github_text
+
 
 Finding = dict[str, Any]
 Check = Callable[..., Finding]
-
-_TRANSIENT_MARKERS = (
-    "HTTP 429",
-    "HTTP 500",
-    "HTTP 502",
-    "HTTP 503",
-    "HTTP 504",
-    "No server is currently available",
-    "502 Bad Gateway",
-    "503 Service Unavailable",
-    "504 Gateway Timeout",
-)
 
 
 def finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> Finding:
@@ -64,10 +54,6 @@ def _gh_run(argv: list[str], *, timeout: int = 10) -> subprocess.CompletedProces
     )
 
 
-def _is_transient_github(stderr: str) -> bool:
-    blob = stderr or ""
-    return any(marker in blob for marker in _TRANSIENT_MARKERS)
-
 
 def _local_auth_present() -> bool:
     """Token on disk is not the same question as /user being 503."""
@@ -92,7 +78,7 @@ def check_github_authentication() -> Finding:
         return finding("github_authentication", ok, "ok" if ok else "unavailable")
     if probed.returncode == 0:
         return finding("github_authentication", True, "ok")
-    if _is_transient_github(probed.stderr or "") and _local_auth_present():
+    if is_transient_github_text(probed.stdout or "", probed.stderr or "") and _local_auth_present():
         return finding("github_authentication", True, "ok")
     return finding("github_authentication", False, "unavailable")
 

@@ -225,7 +225,8 @@ pr_checks
 
 `pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
 Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_ENABLED`,
-approve + green checks + local tests → `pr_merge` + `close_issue` in one path; pending → waiting;
+approve + green checks + local tests → `pr_merge` + `close_issue` in one path; pending
+**or transient GitHub 429/5xx while reading checks** → non-green waiting; confirmed
 red → repair; secrets / `needs_human` / escalated `ai:needs-review` never merge.
 Soft documentation nits must not route to `ai:needs-review`.
 `pr_review` does not load `.lokay/approach.md` or ask the reviewer to compare

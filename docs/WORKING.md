@@ -114,8 +114,9 @@ are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.m
    slices. Intake must not close the parent and mint empty children.
    Children re-enter inbox/intake on later passes. Fail closed: a failed PR
    survey for a repo refuses triage mutations **in that repo only**.
-4. **PR close-out**: for open AI PRs — conflicts → close + re-ready; failed CI →
-   `pr_repair`; mergeable + policy → `pr_triage` (LLM review → merge → close
+4. **PR close-out**: for open AI PRs — conflicts → close + re-ready; confirmed
+   failed CI → `pr_repair`; pending **or transient GitHub/rate-limit checks** →
+   wait non-green; mergeable + policy → `pr_triage` (LLM review → merge → close
    issue). Land code in a repo before opening a new front there.
    - Same head SHA: do not re-post / re-run LLM review (`already_reviewed_head`).
    - `request_changes` may auto-repair a few times (`limits.max_request_changes_per_pr`,

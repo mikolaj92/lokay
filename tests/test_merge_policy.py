@@ -194,6 +194,18 @@ def test_decide_auto_merge_matrix(kwargs, action, reason):
         assert got.repairable is True
 
 
+def test_transient_checks_are_non_green_wait_not_repair():
+    got = decide_auto_merge(
+        merge_enabled=True,
+        checks={"status": "pending", "green": False, "text": "HTTP 503"},
+        review=_review("approve"),
+    )
+    assert got.action == "waiting"
+    assert got.reason == "checks_pending"
+    assert got.merge_ok is False
+    assert got.repairable is False
+
+
 def test_approve_with_soft_nits_still_merges():
     d = coerce_soft_nits(
         parse_review_output(

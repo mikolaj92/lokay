@@ -6,7 +6,12 @@ from typing import Any
 
 from lokay.config import Config, RepoConfig
 from lokay.gh_issues import ensure_labels
-from lokay.gh_rate import parse_survey_list, survey_list_cap, survey_pace
+from lokay.gh_rate import (
+    is_transient_github_text,
+    parse_survey_list,
+    survey_list_cap,
+    survey_pace,
+)
 from lokay.models import PullRequest
 from lokay.runner import CommandResult, Runner, gh_spec
 
@@ -170,7 +175,7 @@ def pr_checks_report(
     status:
       - passed: all required checks green (gh exit 0)
       - failed: at least one check failed
-      - pending: checks still running (gh often exit 8)
+      - pending: checks still running, or GitHub cannot report them yet
       - none: repository reports no checks on the head branch
       - offline: dry-run / no network
     """
@@ -201,8 +206,15 @@ def pr_checks_report(
             "no_checks": False,
             "text": text or "checks passed",
         }
-    # gh: pending checks commonly exit 8
-    if result.returncode == 8 or "pending" in low or "in_progress" in low:
+    # gh: pending checks commonly exit 8. A 429/5xx is also non-green but
+    # unknown, not failed CI: wait for an authoritative check read rather than
+    # sending a published PR tip through pr_repair.
+    if (
+        result.returncode == 8
+        or "pending" in low
+        or "in_progress" in low
+        or is_transient_github_text(result.stdout or "", result.stderr or "")
+    ):
         return {
             "status": "pending",
             "green": False,
