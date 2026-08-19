@@ -364,6 +364,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                     body_path,
                     "--head",
                     branch,
+                    *(["--issue", str(issue_number)] if issue_number is not None else []),
                 ],
             )
         finally:
