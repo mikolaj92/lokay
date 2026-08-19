@@ -1,22 +1,25 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=213 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=215 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #213 — survey_ready: stuck blocked → park
+Issue: #215 — reap_over_budget: po kill over_budget — park + stuck plan_only
 
 ## Goal
 
-Dispatch parkuje nowe plan_only (#211). Stare blocked zostają w `work:ready` i zaśmiecają survey.
+`reap_over_budget` po `terminate_issue_to_pr_pid` stempluje receipt `reason=over_budget`, ale **nie** zdejmuje `work:ready`/`ai:ready` i **nie** zapisuje `stuck.json` (`plan_only`). Ticket wraca do survey.
 
 ## Files likely touched
 
-- `src/lokay/proc/survey_ready.py`
-- `tests/test_survey_list.py`
+- `stuck.json`
+- `src/lokay/proc/reap_over_budget.py`
+- `tests/test_reap_over_budget.py`
 
 ## Test plan
 
-- Mock blocked w stuck + listed ready → park wołany, nie ma w implementable.
+- `tests/test_reap_over_budget.py`
+- W `test_reaps_over_budget_live_receipt`: po `run_reap_over_budget` zassertuj, że wywołano park dla `a/one#9` oraz `stuck` ma ten issue jako blocked/`plan_only` (mock `unbounded_park` / `record_failure`/`save_stuck`).
+- Nie ruszaj 180–192.
 
 ## Non-goals
 
