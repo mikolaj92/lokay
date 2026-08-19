@@ -1,8 +1,70 @@
 """PR checks classification: no-checks is not a failure."""
 
+import json
+
+import pytest
+
 from lokay.gh_prs import pr_checks_report
+from lokay.proc import pr_checks
 from lokay.proc.pr_route import run_pr_route
 from lokay.runner import CommandResult, CommandSpec
+
+
+@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+def test_product_repo_skips_without_gh_or_config(
+    repo: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail_if_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("product repositories must not call GitHub or load config")
+
+    monkeypatch.setattr(pr_checks, "load_cfg", fail_if_called)
+    monkeypatch.setattr(pr_checks, "read_live", lambda _args: True)
+    monkeypatch.setattr(pr_checks, "runner", fail_if_called)
+    monkeypatch.setattr(pr_checks, "pr_checks_report", fail_if_called)
+
+    assert pr_checks.main(["--repo", repo, "--pr", "488"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": True,
+        "offline": False,
+        "skipped": True,
+        "reason": "repo_not_delivered_by_mini_mill",
+        "repo": repo,
+        "pr": 488,
+        "status": "skipped",
+        "green": False,
+        "no_checks": False,
+        "merge_ok": False,
+    }
+
+
+def test_lokay_repo_still_checks(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = type("Cfg", (), {"require_checks": True})()
+    sentinel_runner = object()
+    calls: list[tuple[object, str, int, bool]] = []
+
+    monkeypatch.setattr(pr_checks, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(pr_checks, "runner", lambda: sentinel_runner)
+
+    def report(
+        check_runner: object, repo: str, pr: int, *, live: bool
+    ) -> dict[str, object]:
+        calls.append((check_runner, repo, pr, live))
+        return {"status": "passed", "no_checks": False, "text": "all good"}
+
+    monkeypatch.setattr(pr_checks, "pr_checks_report", report)
+
+    assert pr_checks.main(["--repo", "mikolaj92/lokay", "--pr", "488"]) == 0
+    assert calls == [(sentinel_runner, "mikolaj92/lokay", 488, True)]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "passed"
+    assert payload["green"] is True
+    assert payload["merge_ok"] is True
+    assert payload["require_checks"] is True
 
 
 class _FakeRunner:
