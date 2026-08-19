@@ -10,6 +10,9 @@ from lokay.gh_issues import list_issues_with_label, list_ready_issues
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-list-issues")
     add_config_read(p)
@@ -18,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = read_live(args)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(ok(offline=not live, repo=args.repo, issues=[], count=0))
     repo = next((r for r in cfg.repos if r.name == args.repo), None)
     if repo is None:
         repo = RepoConfig(name=args.repo, clone_path=cfg.worktrees_root / "unused")
