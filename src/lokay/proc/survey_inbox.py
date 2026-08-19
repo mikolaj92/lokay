@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
@@ -11,6 +12,7 @@ from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import list_inbox as p_list_inbox
 from lokay.proc._common import add_config_live
 from lokay.passkit.hot import survey_scope
+from lokay.stuck import is_blocked_in_ledger, load_stuck
 
 
 def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -23,6 +25,12 @@ def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> d
     inbox_survey_failed: list[str] = []
     remaining_inbox = 0
     survey_errors = int(working.get("survey_errors") or 0)
+    stuck_path = str(begin.get("stuck_path") or "")
+    stuck = (
+        load_stuck(Path(stuck_path))
+        if stuck_path
+        else dict(working.get("stuck") or begin.get("stuck") or {})
+    )
 
     scope = set(survey_scope(begin) or [])
     scoped = survey_scope(begin) is not None
@@ -41,7 +49,22 @@ def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> d
             inbox_by_repo[repo_name] = 0
             inbox_issues_by_repo[repo_name] = []
             continue
-        inbox = list(listed.get("issues") or [])
+        inbox: list[dict[str, Any]] = []
+        blocked_numbers: list[int] = []
+        for issue in list(listed.get("issues") or []):
+            number = int(issue.get("number", -1))
+            if is_blocked_in_ledger(stuck, repo_name, number):
+                blocked_numbers.append(number)
+                continue
+            inbox.append(issue)
+        if blocked_numbers:
+            actions.append(
+                {
+                    "step": "skip_inbox_stuck_blocked",
+                    "repo": repo_name,
+                    "issues": blocked_numbers,
+                }
+            )
         inbox_by_repo[repo_name] = len(inbox)
         inbox_issues_by_repo[repo_name] = inbox
         remaining_inbox += len(inbox)
