@@ -1,24 +1,28 @@
 {
   "paths": [
-    "scripts/lokay-mill-daemon.sh",
-    "tests/test_preflight_daemon.py"
+    "src/lokay/gh_issues.py",
+    "ready/inbox/labeled",
+    "lokay/gh_issues.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "scripts/lokay-mill-daemon.sh"
+    "src/lokay/gh_issues.py",
+    "ready/inbox/labeled",
+    "lokay/gh_issues.py"
   ],
   "matched_tokens": [
-    "daemon",
-    "health",
-    "log",
-    "host",
-    "envelope",
-    "Log",
+    "gh_issues",
+    "reap",
+    "survey",
+    "list_",
+    "inbox",
+    "labeled",
+    "gh_rate",
+    "rate",
     "review",
     "gate",
     "unbounded",
-    "bounded",
-    "lokay-mill-daemon"
+    "bounded"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -26,7 +30,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__307-mill-daemon-zapisz-digest-po-pass_ceilin-62bdbd56",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__310-gh_issues-_list_open_issues-przy-429-zwr-79433231",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
