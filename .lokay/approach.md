@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=205 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=207 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #205 — park: zdejmij też work:ready
+Issue: #207 — select: zdejmij blocked z ready_by_repo
 
 ## Goal
 
-`unbounded_park` zdejmuje tylko `ai:ready`. Fail-closed (180–192) zostają w survey `work:ready` i młyn je zjada.
+Po #203 `test_blocked_ready_issue_is_not_selected_for_issue_to_pr` czerwony: skip jest, ale `ready_by_repo` dalej trzyma blocked.
 
 ## Files likely touched
 
-- `src/lokay/proc/unbounded_park.py`
-- `tests/test_unbounded_park.py`
+- `src/lokay/proc/select_implement.py`
+- `tests/test_select_implement.py`
 
 ## Test plan
 
-- argv zawiera `--remove-label work:ready` i `--remove-label ai:ready`.
+- blocked w stuck → `ready_by_repo` puste dla tego repo. selected=0.
 
 ## Non-goals
 
