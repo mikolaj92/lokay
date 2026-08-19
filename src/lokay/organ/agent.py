@@ -110,6 +110,20 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             }
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
+        run_env = up.get("run_agent") or {}
+        localized = run_env.get("localize")
+        if localized is None:
+            localized = up.get("localize")
+        if str(run_env.get("reason") or "") in {"localize_empty", "localize_missing"} or (
+            isinstance(localized, dict)
+            and not _localize_paths({"localize": localized})
+        ):
+            return {
+                "ok": False,
+                "error": "refusing repair_agent: localize produced no edit paths",
+                "reason": "localize_empty",
+                "localize": localized or {},
+            }
         first = up.get("test_local")
         if first is None:
             return {
