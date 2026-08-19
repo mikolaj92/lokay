@@ -1,22 +1,24 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=195 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=197 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #195 — detach: pierwsza linia w logu i2pr przy starcie
+Issue: #197 — testy: dual work:ready+ai:ready po gate #193
 
 ## Goal
 
-#193 miał log 0 bajtów przez cały lot. Olej nie widzi czy i2pr żyje.
+Po #193/#194 `survey_ready` wymaga `work:ready`. Suite na main: 18 czerwonych (`test_intake_mill_gate`, `test_autonomy_contracts`, `test_global_pr_first`) — mocki mają tylko `ai:ready`.
 
 ## Files likely touched
 
-- `src/lokay/proc/detach_issue_to_pr.py`
-- `tests/test_dispatch_detach.py`
+- `survey_ready.py`
+- `tests/test_intake_mill_gate.py`
+- `tests/test_autonomy_contracts.py`
+- `tests/test_global_pr_first.py`
 
 ## Test plan
 
-- Po `detach_issue_to_pr` (mock spawn) plik logu nie jest pusty i zawiera `started`.
+- `uv run --extra dev pytest -q tests/test_intake_mill_gate.py tests/test_autonomy_contracts.py tests/test_global_pr_first.py` zielone.
 
 ## Non-goals
 
