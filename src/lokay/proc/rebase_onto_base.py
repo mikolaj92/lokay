@@ -10,13 +10,27 @@ from lokay.git_rebase import RebaseConflict, RebaseError, rebase_onto_base
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-rebase-onto-base")
     add_config(parser)
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--repo", required=True)
     parser.add_argument("--worktree", required=True)
     parser.add_argument("--base", default="main")
     args = parser.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                worktree=args.worktree,
+            )
+        )
     cfg = load_cfg(args) if args.live else None
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
@@ -32,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(str(exc), reason=exc.reason, worktree=args.worktree))
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc), reason="rebase_failed", worktree=args.worktree))
-    return emit_exit(ok(worktree=args.worktree, **receipt))
+    return emit_exit(ok(repo=args.repo, worktree=args.worktree, **receipt))
 
 
 if __name__ == "__main__":
