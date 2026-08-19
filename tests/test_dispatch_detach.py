@@ -97,6 +97,71 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
         assert log.endswith(".log")
 
 
+def test_blocked_plan_only_is_parked_once(monkeypatch, tmp_path):
+    """A terminal plan-only failure must leave the ready survey lane."""
+    from lokay.passkit import io as pass_io
+
+    begin = {
+        "live": True,
+        "issue_budget": 1,
+        "stuck_path": str(tmp_path / "stuck.json"),
+        "max_fail": 1,
+        "blocked_label": "ai:blocked",
+    }
+    working = {
+        "actions": [],
+        "progress": 0,
+        "stuck": {},
+        "ready_by_repo": {
+            "owner/repo": [{"repo": "owner/repo", "number": 11}]
+        },
+    }
+    (tmp_path / "begin.json").write_text(__import__("json").dumps(begin))
+    (tmp_path / "working.json").write_text(__import__("json").dumps(working))
+    (tmp_path / "implement.json").write_text(
+        __import__("json").dumps({"clean_repos": ["owner/repo"], "issue_budget": 1})
+    )
+    monkeypatch.setattr(pass_io, "begin_path", lambda _p: tmp_path / "begin.json")
+    monkeypatch.setattr(pass_io, "working_path", lambda _p: tmp_path / "working.json")
+    monkeypatch.setattr(pass_io, "implement_path", lambda _p: tmp_path / "implement.json")
+    monkeypatch.setattr(d, "_live_ps_text", lambda: "")
+    monkeypatch.setattr(d, "inspect_mutex", lambda **_k: {"busy": False, "pids": []})
+    monkeypatch.setattr(
+        d,
+        "run_select",
+        lambda _main, payload: {"ok": True, "selected": payload["issues"][0]},
+    )
+    calls = []
+
+    def fake_proc(main, argv):
+        calls.append((main, argv))
+        if main is d.p_intake.main:
+            return {"ok": True, "implementable": True, "applied": False}
+        return {"ok": True, "applied": True}
+
+    monkeypatch.setattr(d, "run_proc", fake_proc)
+    monkeypatch.setattr(
+        d,
+        "detach_issue_to_pr",
+        lambda **_kwargs: {
+            "ok": False,
+            "reason": "plan_only",
+            "error": "plan_only",
+        },
+    )
+    monkeypatch.setattr(d, "save_stuck", lambda *_a, **_k: None)
+    monkeypatch.setattr(d, "write_pass_receipt", lambda *_a, **_k: None)
+    monkeypatch.setattr(d, "build_pass_receipt", lambda **_k: {})
+
+    out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
+
+    assert out.get("ok") is True
+    park_calls = [(main, argv) for main, argv in calls if main is d.p_park.main]
+    assert park_calls == [
+        (d.p_park.main, ["--repo", "owner/repo", "--issue", "11"])
+    ]
+
+
 def test_dispatch_refuses_to_launch_when_repo_mutex_is_unknown(monkeypatch, tmp_path):
     """A failed live ps probe is unknown, never an all-idle mutex snapshot."""
     from lokay.passkit import io as pass_io
