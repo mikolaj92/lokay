@@ -11,13 +11,28 @@ from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 from lokay.runner import git_spec
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-commit-all")
     add_config(p)
     p.add_argument("--live", action="store_true")
+    p.add_argument("--repo", default=MINI_MILL_REPO)
     p.add_argument("--worktree", required=True)
     p.add_argument("--message", required=True)
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                committed=False,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                worktree=args.worktree,
+            )
+        )
     cfg = load_cfg(args) if args.live else None
     run = runner()
     try:
@@ -55,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
             planned=not live,
             committed=did,
             commit=commit,
+            repo=args.repo,
             worktree=args.worktree,
         )
     )
