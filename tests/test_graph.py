@@ -220,6 +220,21 @@ def test_run_agent_timeouts_match_pi_budget():
     assert int(self_repair_agent["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
 
 
+def test_test_local_timeouts_are_bounded():
+    """Every test_local effector uses the local-suite timeout budget."""
+    import tomllib
+
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    test_locals = [
+        effector
+        for path in package["correlation_paths"]
+        for effector in path["effectors"]
+        if effector["id"] == "test_local"
+    ]
+    assert test_locals
+    assert all(int(effector["adapter"]["timeout_seconds"]) == 300 for effector in test_locals)
+
+
 def test_describe_includes_pr_repair():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "pr_repair")
