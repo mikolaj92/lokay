@@ -37,6 +37,12 @@ def test_no_last_pass_walks_all():
     assert pick_survey_repos(repos, {}) == repos
 
 
+def test_all_cold_walks_all():
+    repos = ["a/one", "a/two", "a/three"]
+    prev = {name: {"repo": name, "ready": 0, "inbox": 0, "open_ai_prs": 0} for name in repos}
+    assert pick_survey_repos(repos, prev, extra_cold=2) == repos
+
+
 def test_load_last_pass_by_repo(tmp_path):
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")

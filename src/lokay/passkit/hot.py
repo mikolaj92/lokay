@@ -59,6 +59,10 @@ def pick_survey_repos(
     if not prev_by_repo:
         return names
     hot = [name for name in names if repo_is_hot(prev_by_repo.get(name))]
+    if not hot:
+        # Empty last-pass must not stay blind: rotating 2/29 cold
+        # never sees Influenzer dual-label after Temida empties.
+        return names
     cold = [name for name in names if name not in set(hot)]
     if not cold or extra_cold <= 0:
         return hot or names
