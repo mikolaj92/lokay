@@ -268,9 +268,9 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   the whole file, not the first 8KiB.
   Standalone `X` is a platform stem (twitter/tweet), not a dropped
   one-letter token — otherwise #27 cages the agent in HN/brief.
-- **run_agent timeout** (executor 1800s) is incomplete, not a graph hard-fail.
+- **run_agent timeout** (executor budget 480s) is incomplete, not a graph hard-fail.
   The leftover tree is kept; `repair_agent` resumes the same corner / session
-  once (K=1). Do not raise 1800 on the first shot.
+  once (K=1). Do not raise 480 on the first shot.
   Re-view the issue first: if a sibling already closed it, skip with
   `reason=issue_closed` — do not continue or open a second PR.
   Harvest does not bury that reason (the ticket is already done).

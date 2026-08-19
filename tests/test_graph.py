@@ -199,15 +199,17 @@ def test_issue_to_pr_commit_then_test_then_assert_is_a_dag():
     assert "rebase_onto_base" in by_id["push"]["conduction"]
 
 
-def test_issue_to_pr_run_agent_timeout_covers_executor():
-    """Fala adapter must outlive config.timeout_seconds (1800) or the path never reaches pr_create."""
+def test_run_agent_timeouts_match_pi_budget():
+    """Both coding paths use the bounded Pi budget rather than the old 2100s cap."""
     import tomllib
 
+    DEFAULT_BUDGET_S = 480
     raw = (Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml").read_bytes()
     pkg = tomllib.loads(raw.decode())
-    path = next(p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr")
-    agent = next(n for n in path["effectors"] if n["id"] == "run_agent")
-    assert int(agent["adapter"]["timeout_seconds"]) >= 1800
+    for path_id in ("issue_to_pr", "pr_repair"):
+        path = next(p for p in pkg["correlation_paths"] if p["id"] == path_id)
+        agent = next(n for n in path["effectors"] if n["id"] == "run_agent")
+        assert int(agent["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
 
 
 def test_describe_includes_pr_repair():

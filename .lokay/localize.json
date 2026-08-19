@@ -1,39 +1,46 @@
 {
   "paths": [
-    "src/lokay/proc/survey_inbox.py",
-    "lokay/proc/survey_inbox.py",
-    "tests/test_survey_inbox.py"
+    "docs/GRAPH.md",
+    "lokay.fala-package.toml",
+    "src/lokay/data/lokay.fala-package.toml",
+    "fala/lokay.fala-package.toml",
+    "lokay/data/lokay.fala-package.toml",
+    "tests/test_fala_package_lock.py",
+    "tests/test_graph.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/survey_inbox.py",
-    "tests/test_survey_inbox.py",
-    "lokay/proc/survey_inbox.py"
+    "lokay.fala-package.toml",
+    "src/lokay/data/lokay.fala-package.toml",
+    "fala/lokay.fala-package.toml",
+    "tests/test_fala_package_lock.py",
+    "tests/test_graph.py",
+    "lokay/data/lokay.fala-package.toml"
   ],
   "matched_tokens": [
-    "survey_inbox",
-    "stuck",
-    "inbox",
-    "plan_pass",
-    "dispatch_triage",
-    "survey",
-    "proc",
-    "list_inbox",
-    "test_survey_inbox",
-    "issues",
-    "working",
+    "run_agent",
+    "pi_budget",
+    "reap_over_budget",
+    "reap",
+    "lock",
+    "Oba",
+    "issue_to_pr",
+    "pr_repair",
+    "test_fala_package_lock",
+    "test_graph",
     "review",
     "gate",
     "unbounded",
-    "bounded"
+    "bounded",
+    "fala-package"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 285.",
+    "Repo tree entries considered: 286.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__226-survey_inbox-stuck-blocked-nie-wrzucaj-d-7489b19e",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__229-run_agent-fala-timeout-2100s-480s-pi_bud-97adb298",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
