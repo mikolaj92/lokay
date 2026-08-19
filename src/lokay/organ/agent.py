@@ -28,8 +28,8 @@ from lokay.prompts import (
 
 def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
     from lokay.proc import (
-        assert_real_diff, commit_all, get_issue, list_prs, pr_create, pr_label,
-        push_branch, rebase_onto_base, run_agent, test_local,
+        assert_real_diff, commit_all, get_issue, pr_create, push_branch,
+        rebase_onto_base, run_agent, test_local,
     )
     from lokay.git_commit import branch_ahead_of_upstream
     from lokay.proc._common import runner
@@ -384,30 +384,4 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         finally:
             Path(body_path).unlink(missing_ok=True)
 
-    if atom == "list_prs":
-        assert repo
-        return _run_atom_main(list_prs.main, [*cfg, "--repo", repo])
-
-    if atom == "pr_label":
-        branch = str(up.get("make_branch", {}).get("branch") or "")
-        prs = up.get("list_prs", {}).get("prs") or []
-        pr_number = None
-        for pr in prs:
-            if pr.get("head_ref") == branch:
-                pr_number = pr.get("number")
-                break
-        if pr_number is None:
-            created = up.get("pr_create") or {}
-            candidate = created.get("pr_number") or created.get("pr")
-            if isinstance(candidate, dict):
-                candidate = candidate.get("number")
-            if isinstance(candidate, int):
-                pr_number = candidate
-        if pr_number is None:
-            return {"ok": True, "skipped": True, "reason": "pr_number_not_found", "branch": branch}
-        return _run_atom_main(
-            pr_label.main,
-            [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],
-        )
-
-    raise ValueError(f"unknown atom: {atom!r}")
+    return None

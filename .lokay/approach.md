@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=271 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=273 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #271 — issue_to_pr: nie wołaj repair_agent gdy localize puste
+Issue: #273 — issue_to_pr: wyjdź gdy issue CLOSED po merge
 
 ## Goal
 
-Gdy `localize` padnie (puste ścieżki), `run_agent` odmawia (`localize_empty`), a `repair_agent` i tak pisze kod — byle łatanie czerwonego `test_local` — i mill merdżuje to jako Fixes #N.
+Po udanym merge (Fixes #N) wrapper `issue_to_pr` zostaje żywy i trzyma mutex. `reap_over_budget` (#264) ma zabić z zewnątrz na następnym przebiegu — ale ten sam przebieg, który merdżuje, jeszcze widzi i2pr jako started, a wrapper sam nie wychodzi.
 
 ## Files likely touched
 
-- `src/lokay/compose/tick.py`
+- `compose/issue_to_pr.py`
 
 ## Test plan
 
-- localize puste → repair_agent nie odpalony.
-- localize z ścieżkami → repair_agent jak dziś (czerwony test po prawdziwym patchu).
+- Issue CLOSED w trakcie i2pr → wrapper kończy (nie zostaje detached).
+- Issue OPEN → jedzie jak dziś.
 
 ## Non-goals
 

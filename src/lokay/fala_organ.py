@@ -26,6 +26,7 @@ from lokay.organ.common import (  # noqa: F401
 from lokay.organ.factory import handle_factory
 from lokay.organ.implement import handle_implement
 from lokay.organ.lanes import handle_lanes
+from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.recovery import handle_recovery
 from lokay.organ.self_repair import handle_self_repair
 
@@ -89,6 +90,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         handle_lanes,
         handle_implement,
         handle_agent,
+        handle_pr_finalize,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
