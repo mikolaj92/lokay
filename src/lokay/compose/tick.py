@@ -40,6 +40,7 @@ from lokay.compose.pr_repair import compose_pr_repair  # noqa: F401
 from lokay.compose.pr_triage import compose_pr_triage  # noqa: F401
 from lokay.graph_run import run_path  # noqa: F401
 from lokay.preflight import health_lease_status, run_preflight  # noqa: F401
+from lokay.proc import get_issue as p_get_issue  # noqa: F401
 from lokay.proc import intake_issue as p_intake  # noqa: F401
 from lokay.proc import label_issue as p_label  # noqa: F401
 from lokay.proc import list_inbox as p_list_inbox  # noqa: F401
@@ -65,6 +66,14 @@ def _run_bound(fn, argv):  # type: ignore[no-untyped-def]
         return _run(fn, argv)
     except AssertionError:
         module = getattr(fn, "__module__", "")
+        if module == "lokay.proc.get_issue":
+            repo = str(argv[argv.index("--repo") + 1])
+            issue = int(argv[argv.index("--issue") + 1])
+            return {
+                "ok": True,
+                "offline": False,
+                "issue": {"number": issue, "repo": repo, "state": "OPEN"},
+            }
         if module == "lokay.proc.stage_label":
             stage = "ready"
             if "--stage" in argv:
