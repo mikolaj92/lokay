@@ -25,20 +25,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     repo = next((r for r in cfg.repos if r.name == args.repo), None)
     if repo is None:
         return emit_exit(err(f"repo not in config: {args.repo}"))
     if repo.name != MINI_MILL_REPO:
         return emit_exit(
             ok(
-                planned=not live,
+                planned=not args.live,
                 skipped=True,
                 reason="repo_not_delivered_by_mini_mill",
                 repo=args.repo,
                 branch=args.branch,
             )
         )
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
         path = ensure_worktree(
             runner(),
