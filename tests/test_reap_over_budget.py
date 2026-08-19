@@ -248,6 +248,7 @@ def test_does_not_reap_wrapper_while_coder_lives(tmp_path, monkeypatch):
         "wrapper_has_coding_descendant",
         lambda pid: True,
     )
+    monkeypatch.setattr(reap_over_budget, "_coder_has_real_diff", lambda pid: True)
     monkeypatch.setattr(
         reap_over_budget,
         "terminate_issue_to_pr_pid",
@@ -259,3 +260,118 @@ def test_does_not_reap_wrapper_while_coder_lives(tmp_path, monkeypatch):
     assert out["kept"][0]["reason"] == "coder_live"
     stamped = json.loads(path.read_text(encoding="utf-8"))
     assert stamped.get("reaped") is not True
+
+
+def test_coder_diff_classification_uses_coder_worktree(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_over_budget,
+        "_child_pids",
+        lambda pid: [200] if pid == 100 else [],
+    )
+    monkeypatch.setattr(
+        reap_over_budget,
+        "_pid_command",
+        lambda pid: "pi implement GitHub issue #9" if pid == 200 else "wrapper",
+    )
+    monkeypatch.setattr(reap_over_budget, "_process_cwd", lambda pid: tmp_path)
+    monkeypatch.setattr(
+        reap_over_budget,
+        "list_changed_paths",
+        lambda run, worktree, base: [".lokay/approach.md"],
+    )
+
+    assert reap_over_budget._coder_has_real_diff(100) is False
+
+    monkeypatch.setattr(
+        reap_over_budget,
+        "list_changed_paths",
+        lambda run, worktree, base: ["src/product.py"],
+    )
+    assert reap_over_budget._coder_has_real_diff(100) is True
+
+
+def test_reaps_coder_with_plan_only_diff(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".lokay" / "cycle").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    path = issue_to_pr_receipt_path("a/one", 9)
+    path.write_text(
+        json.dumps({"ok": True, "pid": 4242, "repo": "a/one", "issue": 9}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        reap_over_budget,
+        "live_issue_to_pr_receipts",
+        lambda: [{"repo": "a/one", "issue": 9, "pid": 4242}],
+    )
+    monkeypatch.setattr(
+        reap_over_budget,
+        "check_pi_budget",
+        lambda pid, budget: {
+            "ok": True,
+            "over_budget": True,
+            "elapsed_s": 900,
+            "budget_s": budget,
+            "pid": pid,
+        },
+    )
+    monkeypatch.setattr(
+        reap_over_budget, "wrapper_has_coding_descendant", lambda pid: True
+    )
+    monkeypatch.setattr(reap_over_budget, "_coder_has_real_diff", lambda pid: False)
+    killed: list[int] = []
+    monkeypatch.setattr(
+        reap_over_budget,
+        "terminate_issue_to_pr_pid",
+        lambda pid: killed.append(pid) or True,
+    )
+    parked: list[list[str]] = []
+
+    def fake_park(argv=None):
+        parked.append(list(argv or []))
+        return reap_over_budget.emit_exit(
+            reap_over_budget.ok(applied=True, removed=True)
+        )
+
+    monkeypatch.setattr(reap_over_budget.p_park, "main", fake_park)
+
+    out = reap_over_budget.run_reap_over_budget(budget_s=480)
+
+    assert out["ok"] is True
+    assert out["reaped_count"] == 1
+    assert killed == [4242]
+    assert parked == [["--repo", "a/one", "--issue", "9"]]
+    stamped = json.loads(path.read_text(encoding="utf-8"))
+    assert stamped["reaped"] is True
+    stuck = json.loads((home / ".lokay" / "stuck.json").read_text(encoding="utf-8"))
+    assert stuck["issues"]["a/one#9"]["reason"] == "plan_only"
+
+
+def test_keeps_coder_when_diff_cannot_be_inspected(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".lokay" / "cycle").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    monkeypatch.setattr(
+        reap_over_budget,
+        "live_issue_to_pr_receipts",
+        lambda: [{"repo": "a/one", "issue": 9, "pid": 4242}],
+    )
+    monkeypatch.setattr(
+        reap_over_budget,
+        "check_pi_budget",
+        lambda pid, budget: {"over_budget": True, "elapsed_s": 900},
+    )
+    monkeypatch.setattr(
+        reap_over_budget, "wrapper_has_coding_descendant", lambda pid: True
+    )
+    monkeypatch.setattr(reap_over_budget, "_coder_has_real_diff", lambda pid: None)
+    monkeypatch.setattr(
+        reap_over_budget,
+        "terminate_issue_to_pr_pid",
+        lambda pid: (_ for _ in ()).throw(AssertionError("must fail closed")),
+    )
+
+    out = reap_over_budget.run_reap_over_budget(budget_s=480)
+
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["reason"] == "coder_live"

@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
 from lokay.config import Config
 from lokay.envelope import emit_exit, err, ok
 from lokay.gh_issues import get_issue
+from lokay.git_real_diff import classify_changed_paths, list_changed_paths
 from lokay.passkit.support import run_proc
 from lokay.proc import close_issue as p_close
 from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live, runner
 from lokay.proc.detach_issue_to_pr import (
+    _child_pids,
+    _pid_command,
+    is_coding_command,
     issue_to_pr_receipt_path,
     live_issue_to_pr_receipts,
     terminate_issue_to_pr_pid,
@@ -22,6 +27,69 @@ from lokay.proc.detach_issue_to_pr import (
 )
 from lokay.proc.pi_budget import DEFAULT_BUDGET_S, check_pi_budget
 from lokay.stuck import load_stuck, record_failure, save_stuck
+
+
+
+def _process_cwd(pid: int) -> Path | None:
+    """Best-effort cwd lookup on Linux and macOS."""
+    try:
+        return Path(f"/proc/{int(pid)}/cwd").resolve(strict=True)
+    except OSError:
+        pass
+    try:
+        done = subprocess.run(
+            ["lsof", "-a", "-p", str(int(pid)), "-d", "cwd", "-Fn"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if done.returncode != 0:
+        return None
+    for line in (done.stdout or "").splitlines():
+        if line.startswith("n") and len(line) > 1:
+            return Path(line[1:])
+    return None
+
+
+def _coder_has_real_diff(pid: int) -> bool | None:
+    """Whether the deepest live coder has non-plan worktree changes.
+
+    ``None`` means the process/worktree could not be inspected and therefore
+    must retain the existing coder-live protection.
+    """
+    seen: set[int] = set()
+    stack = [(int(pid), 0)]
+    coders: list[tuple[int, int]] = []
+    while stack:
+        current, depth = stack.pop()
+        if current <= 0 or current in seen:
+            continue
+        seen.add(current)
+        if current != int(pid) and is_coding_command(_pid_command(current)):
+            coders.append((depth, current))
+        stack.extend((child, depth + 1) for child in _child_pids(current))
+    if not coders:
+        return None
+
+    deepest = max(depth for depth, _ in coders)
+    inspected = False
+    for depth, coder_pid in coders:
+        if depth != deepest:
+            continue
+        worktree = _process_cwd(coder_pid)
+        if worktree is None or not worktree.is_dir():
+            return None
+        try:
+            paths = list_changed_paths(runner(), worktree, base="origin/main")
+        except Exception:  # noqa: BLE001 - uncertainty must keep a live coder
+            return None
+        inspected = True
+        if classify_changed_paths(paths) == "real":
+            return True
+    return False if inspected else None
 
 
 def _stuck_path_for(pass_dir: str | None) -> Path:
@@ -84,16 +152,18 @@ def run_reap_over_budget(
         # coder. A closed issue is different: its coder can no longer produce
         # a useful PR, so reap the whole process group immediately.
         if not closed and wrapper_has_coding_descendant(pid):
-            kept.append(
-                {
-                    "repo": repo,
-                    "issue": issue,
-                    "pid": pid,
-                    "elapsed_s": elapsed,
-                    "reason": "coder_live",
-                }
-            )
-            continue
+            has_real_diff = _coder_has_real_diff(pid)
+            if has_real_diff is not False:
+                kept.append(
+                    {
+                        "repo": repo,
+                        "issue": issue,
+                        "pid": pid,
+                        "elapsed_s": elapsed,
+                        "reason": "coder_live",
+                    }
+                )
+                continue
         killed = terminate_issue_to_pr_pid(pid)
         reason = "issue_closed" if closed else "over_budget"
         path = issue_to_pr_receipt_path(repo, issue)
