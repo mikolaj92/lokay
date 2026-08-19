@@ -119,18 +119,19 @@ def _list_open_issues(
     live: bool,
     label: str | None = None,
     kind: str,
+    state: str = "open",
 ) -> list[dict]:
     """One full newest-first page. Hitting the cap is truncated, not idle."""
     if live:
         survey_pace(config)
     cap = survey_list_cap()
-    args = ["issue", "list", "--repo", repo.name, "--state", "open"]
+    args = ["issue", "list", "--repo", repo.name, "--state", state]
     if label:
         args.extend(["--label", label])
     args.extend(
         [
             "--json",
-            "number,title,body,labels,assignees,author,url",
+            "number,title,body,labels,assignees,author,url,state",
             "--limit",
             str(cap),
         ]
@@ -153,7 +154,13 @@ def list_labeled_issues(
 
 def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
     rows = _list_open_issues(
-        runner, config, repo, live=live, label=config.ready_label, kind="ready-issue"
+        runner,
+        config,
+        repo,
+        live=live,
+        label=config.ready_label,
+        kind="ready-issue",
+        state="all",
     )
     issues: list[Issue] = []
     for row in rows:
@@ -408,7 +415,7 @@ def list_issues_with_label(
     live: bool,
     limit: int | None = None,
 ) -> list[Issue]:
-    """Open issues carrying a label (read-only survey helper)."""
+    """Issues carrying a label; ready includes closed issues so they can be parked."""
     if not label:
         return []
     if live:
@@ -420,11 +427,11 @@ def list_issues_with_label(
         "--repo",
         repo.name,
         "--state",
-        "open",
+        "all" if label == config.ready_label else "open",
         "--label",
         label,
         "--json",
-        "number,title,body,labels,assignees,author,url",
+        "number,title,body,labels,assignees,author,url,state",
         "--limit",
         str(cap),
     ]

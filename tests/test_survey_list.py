@@ -56,7 +56,7 @@ def _cfg(tmp_path) -> tuple[Config, RepoConfig]:
     return cfg, repo
 
 
-def _issue_row(number: int, *labels: str) -> dict:
+def _issue_row(number: int, *labels: str, state: str = "OPEN") -> dict:
     return {
         "number": number,
         "title": f"issue {number}",
@@ -65,7 +65,7 @@ def _issue_row(number: int, *labels: str) -> dict:
         "assignees": [{"login": "mikolaj92"}],
         "author": {"login": "mikolaj92"},
         "url": f"https://example.com/{number}",
-        "state": "OPEN",
+        "state": state,
     }
 
 
@@ -105,6 +105,25 @@ def test_list_ready_asks_for_full_page_and_keeps_oldest(tmp_path):
     assert argv[argv.index("--limit") + 1] == str(SURVEY_LIST_CAP)
     assert "--label" in argv
     assert argv[argv.index("--label") + 1] == "ai:ready"
+    assert argv[argv.index("--state") + 1] == "all"
+    assert "state" in argv[argv.index("--json") + 1].split(",")
+
+
+def test_list_ready_includes_closed_issues_for_parking(tmp_path):
+    runner = _ListRunner(
+        [
+            _issue_row(8, "ai:ready"),
+            _issue_row(7, "ai:ready", state="CLOSED"),
+        ]
+    )
+    cfg, repo = _cfg(tmp_path)
+
+    issues = list_ready_issues(runner, cfg, repo, live=True)
+
+    assert [(issue.number, issue.state) for issue in issues] == [
+        (8, "OPEN"),
+        (7, "CLOSED"),
+    ]
 
 
 def test_list_ready_fail_closed_when_page_is_full(tmp_path):
@@ -119,7 +138,9 @@ def test_list_inbox_uses_full_page(tmp_path):
     cfg, repo = _cfg(tmp_path)
     issues = list_inbox_issues(runner, cfg, repo, live=True)
     assert [i.number for i in issues] == [3]
-    assert runner.calls[0][runner.calls[0].index("--limit") + 1] == str(SURVEY_LIST_CAP)
+    argv = runner.calls[0]
+    assert argv[argv.index("--limit") + 1] == str(SURVEY_LIST_CAP)
+    assert argv[argv.index("--state") + 1] == "open"
 
 
 def test_list_inbox_skips_stuck_blocked_issue(tmp_path):
@@ -145,6 +166,19 @@ def test_list_issues_with_label_uses_full_page(tmp_path):
     assert [i.number for i in issues] == [9]
     argv = runner.calls[0]
     assert argv[argv.index("--limit") + 1] == str(SURVEY_LIST_CAP)
+    assert argv[argv.index("--state") + 1] == "open"
+
+
+def test_list_issues_with_ready_label_includes_closed_issues(tmp_path):
+    runner = _ListRunner([_issue_row(7, "ai:ready", state="CLOSED")])
+    cfg, repo = _cfg(tmp_path)
+
+    issues = list_issues_with_label(runner, cfg, repo, label="ai:ready", live=True)
+
+    assert [(issue.number, issue.state) for issue in issues] == [(7, "CLOSED")]
+    argv = runner.calls[0]
+    assert argv[argv.index("--state") + 1] == "all"
+    assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
 def test_survey_ready_parks_blocked_ready_issue(tmp_path, monkeypatch):
