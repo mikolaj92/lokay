@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from lokay.passkit.hot import load_last_pass_by_repo, pick_survey_repos, repo_is_hot, survey_scope
+from lokay.proc.factory_begin import run_factory_begin
 from lokay.proc.survey_prs import run_survey_prs
 
 
@@ -47,6 +49,38 @@ def test_all_cold_surveys_anchor_plus_bounded_cold():
     assert "mikolaj92/lokay" in picked
     assert len(picked) <= 3
     assert len(picked) < len(repos)
+
+
+def test_factory_begin_cold_survey_covers_configured_issue_budget(tmp_path, monkeypatch):
+    repos = ["mikolaj92/lokay", "a/one", "a/two", "a/three"]
+    cfg = SimpleNamespace(
+        mode="dry_run",
+        active_repos=lambda: [SimpleNamespace(name=name) for name in repos],
+        agent="agent",
+        state_path=tmp_path / "state.jsonl",
+        config_path=None,
+        max_triage_per_tick=0,
+        max_issue_to_pr_per_pass=3,
+        max_repairs_per_tick=0,
+        max_failures_before_block=1,
+        executor_enabled=False,
+        merge_enabled=False,
+        require_checks=True,
+        require_llm_review=False,
+        ready_label="work:ready",
+        blocked_label="ai:blocked",
+        branch_prefix="ai/",
+    )
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    monkeypatch.setattr("lokay.proc.factory_begin.load_cfg", lambda _args: cfg)
+    monkeypatch.setattr("lokay.proc.factory_begin.harvest_fail_closed_children", lambda *_args, **_kwargs: None)
+
+    result = run_factory_begin(config_path=None, live=False)
+
+    assert result["ok"] is True
+    begin = json.loads((Path(result["pass_dir"]) / "begin.json").read_text(encoding="utf-8"))
+    assert len(begin["survey_repos"]) >= cfg.max_issue_to_pr_per_pass
+    assert set(begin["survey_repos"]) == set(repos)
 
 
 def test_load_last_pass_by_repo(tmp_path):
