@@ -79,6 +79,10 @@ _PATHISH_RE = re.compile(
     r"(?<![`\w])((?:[\w.-]+/)+[\w.-]+(?:\.[A-Za-z0-9]{1,12})?)"
 )
 _FILES_HEADING_RE = re.compile(r"(?im)^\s*#{1,6}\s+files?\s*:?[ \t]*$")
+_LOCALIZATION_HEADING_RE = re.compile(
+    r"(?im)^\s*#{1,6}\s+(?:zmiana|files?)\s*:?[ \t]*$"
+)
+_ANY_HEADING_RE = re.compile(r"(?im)^\s*#{1,6}\s+.+$")
 _STOP_TOKENS = frozenset(
     {
         "the",
@@ -207,6 +211,7 @@ _STOP_TOKENS = frozenset(
         "module",
         "modules",
         "package",
+        "proc",
         "packages",
         "class",
         "function",
@@ -507,9 +512,28 @@ def _looks_like_repo_path(rel: str) -> bool:
     return True
 
 
-def extract_seed_paths(text: str) -> tuple[str, ...]:
-    """Explicit path-like strings from seed (issue/approach/checks)."""
+def localization_seed_text(text: str) -> str:
+    """Limit a structured issue seed to its declared change/file sections.
+
+    Counterexamples and off-goal notes often contain valid-looking paths.  Once
+    an issue declares ``Zmiana`` or ``Files``, only those sections are edit
+    evidence; unstructured seeds retain the historical behavior.
+    """
     blob = text or ""
+    headings = list(_LOCALIZATION_HEADING_RE.finditer(blob))
+    if not headings:
+        return blob
+    sections: list[str] = []
+    for heading in headings:
+        next_heading = _ANY_HEADING_RE.search(blob, heading.end())
+        end = next_heading.start() if next_heading else len(blob)
+        sections.append(blob[heading.start() : end])
+    return "\n\n".join(sections)
+
+
+def extract_seed_paths(text: str) -> tuple[str, ...]:
+    """Explicit path-like strings from the localization-relevant seed."""
+    blob = localization_seed_text(text)
     found: list[str] = []
     found.extend(extract_paths(blob))
     for match in _PATHISH_RE.finditer(blob):
@@ -546,32 +570,26 @@ def has_issue_files_section(body: str) -> bool:
 
 
 def extract_issue_file_paths(body: str) -> tuple[str, ...]:
-    """Extract paths from an issue's explicit file list.
-
-    This is intentionally narrower than :func:`extract_seed_paths`: approach
-    plans and repair evidence can contain paths, but only paths stated by the
-    issue itself should bypass the semantic localization call.
-    """
+    """Extract paths from an issue's explicit change/file sections."""
     text = body or ""
     found: list[str] = []
-    headings = list(_FILES_HEADING_RE.finditer(text))
-    for heading in headings:
-        next_heading = re.search(r"(?im)^\s*#{1,6}\s+.+$", text[heading.end() :])
-        end = heading.end() + next_heading.start() if next_heading else len(text)
-        found.extend(extract_seed_paths(text[heading.end() : end]))
-
-    # A path at the start of a markdown bullet is an explicit file hint even
-    # when the issue omits the Files heading.
-    for line in text.splitlines():
-        if re.match(r"^\s*[-*+]\s+(?:\[[ xX]\]\s*)?(?:`|(?:\*\*)?)(?:src|tests|docs|fala|scripts|config)/", line):
-            found.extend(extract_seed_paths(line))
+    headings = list(_LOCALIZATION_HEADING_RE.finditer(text))
+    if headings:
+        found.extend(extract_seed_paths(text))
+    else:
+        # A path at the start of a markdown bullet is an explicit file hint
+        # when the issue omits a structured localization section.
+        for line in text.splitlines():
+            if re.match(r"^\s*[-*+]\s+(?:\[[ xX]\]\s*)?(?:`|(?:\*\*)?)(?:src|tests|docs|fala|scripts|config)/", line):
+                found.extend(extract_seed_paths(line))
     return tuple(dict.fromkeys(found))
 
 
 def extract_seed_tokens(text: str) -> tuple[str, ...]:
-    """Meaningful identifiers from seed text for tree matching."""
+    """Meaningful identifiers from localization-relevant seed text."""
+    text = localization_seed_text(text)
     tokens: list[str] = []
-    for match in _TOKEN_RE.finditer(text or ""):
+    for match in _TOKEN_RE.finditer(text):
         tok = match.group(1)
         low = tok.lower()
         if low in _STOP_TOKENS:
