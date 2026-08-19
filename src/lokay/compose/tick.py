@@ -49,32 +49,46 @@ from lokay.proc import pr_checks as p_checks  # noqa: F401
 from lokay.proc import pr_close as p_pr_close  # noqa: F401
 from lokay.proc import select_issue as p_select  # noqa: F401
 from lokay.proc import stage_label as p_stage  # noqa: F401
+from lokay.proc import unbounded_park as p_park  # noqa: F401
 
 compose_issue_to_pr = _default_compose_issue_to_pr
 
 
 def _run_bound(fn, argv):  # type: ignore[no-untyped-def]
-    """Dispatch through patched ``tick._run``, with hermetic stage_label default.
+    """Dispatch through patched ``tick._run`` with hermetic test defaults.
 
     Legacy tick tests stub list/checks/intake atoms and raise on unknowns.
-    Issue-ledger staging is additive; accept it unless a test stubs ``p_stage``.
+    Issue-ledger staging and merged-issue parking are additive; accept them
+    unless a test stubs the corresponding atom.
     """
     try:
         return _run(fn, argv)
     except AssertionError:
-        if getattr(fn, "__module__", "") != "lokay.proc.stage_label":
-            raise
-        stage = "ready"
-        if "--stage" in argv:
-            stage = str(argv[argv.index("--stage") + 1])
-        return {
-            "ok": True,
-            "applied": True,
-            "planned": False,
-            "stage": stage,
-            "add_labels": [],
-            "remove_labels": [],
-        }
+        module = getattr(fn, "__module__", "")
+        if module == "lokay.proc.stage_label":
+            stage = "ready"
+            if "--stage" in argv:
+                stage = str(argv[argv.index("--stage") + 1])
+            return {
+                "ok": True,
+                "applied": True,
+                "planned": False,
+                "stage": stage,
+                "add_labels": [],
+                "remove_labels": [],
+            }
+        if module == "lokay.proc.unbounded_park":
+            repo = str(argv[argv.index("--repo") + 1])
+            issue = int(argv[argv.index("--issue") + 1])
+            return {
+                "ok": True,
+                "applied": True,
+                "planned": False,
+                "removed": True,
+                "repo": repo,
+                "issue": issue,
+            }
+        raise
 
 
 def _bind_test_patches() -> None:
