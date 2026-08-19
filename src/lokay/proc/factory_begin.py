@@ -15,6 +15,9 @@ from lokay.child_harvest import harvest_fail_closed_children
 from lokay.stuck import load_stuck, save_stuck, stuck_path_for
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def _offline() -> bool:
     return os.environ.get("LOKAY_OFFLINE", "").strip() in {"1", "true", "yes"}
 
@@ -62,6 +65,16 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     if live and cfg.mode != "live":
         return err("refusing --live while config mode is not live")
 
+    configured_repos = [r.name for r in cfg.active_repos()]
+    # The mini mill is Lokay's own delivery lane. Product repositories may
+    # remain in the shared catalog, but must never enter its pass workspace:
+    # every later survey atom treats begin.repos as permission to call GitHub.
+    repos = (
+        [MINI_MILL_REPO]
+        if MINI_MILL_REPO in configured_repos
+        else configured_repos
+    )
+
     pipeline = [
         "survey: list-prs + list-inbox + list-issues (hot repos + rotated cold)",
         "per-repo PR-first: conflict close / repair / merge open AI PRs",
@@ -73,7 +86,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         {
             "kind": "tick",
             "status": "mutating" if live else "survey",
-            "repos": [r.name for r in cfg.active_repos()],
+            "repos": repos,
             "agent": cfg.agent,
             "pipeline": pipeline,
         }
@@ -99,7 +112,6 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     save_stuck(stuck_path, stuck)
     pass_dir = pass_io.make_pass_dir(cfg.state_path)
     pass_io.prune_pass_dirs(cfg.state_path, keep_path=pass_dir)
-    repos = [r.name for r in cfg.active_repos()]
     survey_repos = pick_survey_repos(
         repos,
         load_last_pass_by_repo(cfg.state_path),
