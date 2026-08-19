@@ -32,7 +32,7 @@ def _config(tmp_path: Path, *, min_free_gb: float = 0) -> Path:
         f"""
 mode: live
 repos:
-  - name: a/b
+  - name: mikolaj92/lokay
     clone_path: {tmp_path}
 executor:
   enabled: true
@@ -88,6 +88,29 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
     }
     assert (tmp_path / "runtime" / "logs").is_dir()
     assert result["repairs"][0]["value"] == "[redacted]"
+
+
+def test_catalog_clone_check_ignores_product_repositories(tmp_path):
+    from types import SimpleNamespace
+
+    from lokay.preflight_checks import check_repository_catalog_clones
+
+    product_clone = tmp_path / "Temida"
+    lokay_clone = tmp_path / "lokay"
+    product_clone.mkdir()
+    cfg = SimpleNamespace(
+        active_repos=lambda: [
+            SimpleNamespace(name="mikolaj92/Temida", clone_path=product_clone),
+            SimpleNamespace(name="mikolaj92/takt", clone_path=tmp_path / "takt"),
+            SimpleNamespace(name="mikolaj92/lokay", clone_path=lokay_clone),
+        ]
+    )
+
+    finding = check_repository_catalog_clones(cfg=cfg)
+
+    assert finding["code"] == "missing_clones_allowed"
+    lokay_clone.mkdir()
+    assert check_repository_catalog_clones(cfg=cfg)["code"] == "ok"
 
 
 def test_missing_catalog_clone_does_not_block_global_preflight(tmp_path, monkeypatch):
