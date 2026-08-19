@@ -28,10 +28,18 @@ def test_pick_surveys_hot_plus_rotated_cold():
     prev = {"a/two": {"repo": "a/two", "ready": 4, "inbox": 0, "open_ai_prs": 0}}
     first = pick_survey_repos(repos, prev, salt="p1", extra_cold=2)
     assert first[0] == "a/two"
+    assert first[1] == "a/one"
     assert len(first) == 3
     second = pick_survey_repos(repos, prev, salt="p2", extra_cold=2)
     assert "a/two" in second
     assert set(first) != set(second) or first != second
+
+
+def test_cold_survey_keeps_k_dispatch_lanes_in_config_order():
+    repos = ["a/four", "a/one", "a/three", "a/two"]
+    for salt in ("p1", "p2", "p3"):
+        picked = pick_survey_repos(repos, {}, salt=salt, extra_cold=3)
+        assert picked[:3] == ["a/four", "a/one", "a/three"]
 
 
 def test_no_last_pass_surveys_anchor_plus_bounded_cold():
