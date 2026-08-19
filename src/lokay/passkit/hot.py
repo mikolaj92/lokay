@@ -57,21 +57,24 @@ def pick_survey_repos(
     if not names:
         return []
     hot = [name for name in names if repo_is_hot(prev_by_repo.get(name))]
-    if not hot:
-        # Keep the mill repo visible while sampling a bounded number of products.
-        anchor = [name for name in names if name == "mikolaj92/lokay"]
-        cold = [name for name in names if name not in set(anchor)]
-        if extra_cold <= 0 or not cold:
-            return anchor
-        start = zlib.adler32(salt.encode("utf-8")) % len(cold)
-        rotated = [cold[(start + i) % len(cold)] for i in range(min(extra_cold, len(cold)))]
-        return [*anchor, *rotated]
-    cold = [name for name in names if name not in set(hot)]
+    # Keep the leading configured lanes stable so equal-priority repos retain
+    # their config order (priority, then name). Rotate only the final discovery
+    # lane; rotating the whole cold window makes K dispatch order random.
+    anchor = [name for name in names if name == "mikolaj92/lokay"] if not hot else []
+    fixed = set(hot) | set(anchor)
+    cold = [name for name in names if name not in fixed]
     if not cold or extra_cold <= 0:
-        return hot or names
-    start = zlib.adler32(salt.encode("utf-8")) % len(cold)
-    rotated = [cold[(start + i) % len(cold)] for i in range(min(extra_cold, len(cold)))]
-    return list(dict.fromkeys([*hot, *rotated]))
+        return [*hot, *anchor] or names
+    width = min(extra_cold, len(cold))
+    # Without the mill anchor, ``extra_cold`` is also the K dispatch breadth.
+    # Keep all K lanes stable and add one rotated discovery lane when available.
+    stable_count = width if not hot and not anchor else max(0, width - 1)
+    stable = cold[:stable_count]
+    remaining = cold[stable_count:]
+    rotated = []
+    if remaining:
+        rotated = [remaining[zlib.adler32(salt.encode("utf-8")) % len(remaining)]]
+    return list(dict.fromkeys([*hot, *anchor, *stable, *rotated]))
 
 
 def survey_scope(begin: dict[str, Any]) -> list[str] | None:
