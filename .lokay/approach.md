@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=211 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=213 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #211 — dispatch: po plan_only blocked — park
+Issue: #213 — survey_ready: stuck blocked → park
 
 ## Goal
 
-Fail-closed `plan_only` zostaje w survey `work:ready` (180–192). Park (#205) już zdejmuje etykietę, ale nikt go nie woła.
+Dispatch parkuje nowe plan_only (#211). Stare blocked zostają w `work:ready` i zaśmiecają survey.
 
 ## Files likely touched
 
-- `src/lokay/proc/dispatch_implement.py`
-- `tests/test_dispatch_detach.py`
+- `src/lokay/proc/survey_ready.py`
+- `tests/test_survey_list.py`
 
 ## Test plan
 
-- Mock plan_only blocked → park wołany raz.
+- Mock blocked w stuck + listed ready → park wołany, nie ma w implementable.
 
 ## Non-goals
 
