@@ -9,6 +9,7 @@ from lokay.graph_run import describe_package
 from lokay.localize import (
     LOCALIZE_REL_PATH,
     build_localization,
+    extract_seed_paths,
     select_paths,
     walk_repo_tree,
     write_localize_file,
@@ -53,6 +54,46 @@ def test_walk_and_select_prefers_explicit_seed_paths(tmp_path: Path):
     )
     assert "src/lokay/proc/localize.py" in paths
     assert "tests/test_localize.py" in seed or "tests/test_localize.py" in paths
+
+
+def test_structured_change_section_excludes_problem_counterexample(tmp_path: Path):
+    factory_begin = "src/lokay/proc/factory_begin.py"
+    commit_all = "src/lokay/proc/commit_all.py"
+    for rel in (factory_begin, commit_all):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# product\n", encoding="utf-8")
+
+    body = (
+        "## Dziura\n"
+        f"Counterexample touched `{factory_begin}` and 291/303/321.\n\n"
+        "## Zmiana\n"
+        f"Change `{commit_all}` only.\n\n"
+        "## Test\n"
+        f"Assert `{factory_begin}` is absent.\n"
+    )
+
+    seed_paths = extract_seed_paths(body)
+    assert commit_all in seed_paths
+    assert factory_begin not in seed_paths
+    loc = build_localization(worktree=tmp_path, seed_text=body)
+    assert commit_all in loc.seed_paths
+    assert commit_all in loc.paths
+    assert factory_begin not in loc.seed_paths
+    assert factory_begin not in loc.paths
+    assert "291/303/321" not in loc.seed_paths
+
+
+def test_files_section_excludes_paths_from_other_sections():
+    body = (
+        "## Context\n`src/lokay/proc/factory_begin.py` is a counterexample.\n\n"
+        "## Files\n- `src/lokay/localize.py`\n\n"
+        "## Off-goal\nDo not clone `src/lokay/proc/commit_all.py`.\n"
+    )
+    seed_paths = extract_seed_paths(body)
+    assert "src/lokay/localize.py" in seed_paths
+    assert "src/lokay/proc/factory_begin.py" not in seed_paths
+    assert "src/lokay/proc/commit_all.py" not in seed_paths
 
 
 def test_build_localization_fail_closed_empty_noise():
