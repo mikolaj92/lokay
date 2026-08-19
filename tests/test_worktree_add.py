@@ -42,9 +42,14 @@ state:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_product_repo_skips_without_creating_worktree(
+def test_product_repo_skips_before_preflight_or_creating_worktree(
     config_path, repo, monkeypatch, capsys
 ):
+    monkeypatch.setattr(
+        worktree_add,
+        "mutations_allowed",
+        lambda **_kwargs: pytest.fail("must not run preflight for a product repo"),
+    )
     monkeypatch.setattr(
         worktree_add,
         "ensure_worktree",
@@ -84,6 +89,11 @@ def test_lokay_repo_still_creates_worktree(config_path, tmp_path, monkeypatch, c
         return expected
 
     monkeypatch.setattr(worktree_add, "ensure_worktree", ensure)
+    monkeypatch.setattr(
+        worktree_add,
+        "mutations_allowed",
+        lambda *, live_flag, cfg: live_flag and cfg.mode == "live",
+    )
 
     code = worktree_add.main(
         [
