@@ -1,21 +1,27 @@
 {
   "paths": [
-    "src/lokay/proc/repo_mutex.py",
-    "lokay/proc/repo_mutex.py",
-    "tests/test_repo_mutex.py"
+    "src/lokay/proc/reap_over_budget.py",
+    "lokay/proc/reap_over_budget.py",
+    "tests/test_reap_over_budget.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/repo_mutex.py",
-    "lokay/proc/repo_mutex.py"
+    "src/lokay/proc/reap_over_budget.py",
+    "lokay/proc/reap_over_budget.py"
   ],
   "matched_tokens": [
-    "repo_mutex",
-    "proc",
-    "issue_to_pr",
     "reap",
     "mutex",
-    "Fixture",
+    "proces",
+    "pi_budget",
+    "worktree",
+    "proc",
+    "reap_over_budget",
+    "receipt",
+    "issue_to_pr",
+    "process",
+    "budget",
+    "park",
     "review",
     "gate",
     "unbounded",
@@ -27,7 +33,7 @@
     "Repo tree entries considered: 289.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__262-repo_mutex-nie-busy-gdy-issue-closed-db7a1f4a",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__264-reap-i2pr-pi-gdy-issue-closed-7054c88b",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
