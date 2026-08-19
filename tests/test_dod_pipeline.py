@@ -137,6 +137,13 @@ def test_pr_merge_mergeable_reports_merged(tmp_path, monkeypatch, capsys):
     runner = _GhRunner()
     monkeypatch.setattr(pr_merge, "runner", lambda: runner)
     monkeypatch.setattr(pr_merge, "mutations_allowed", lambda **k: True)
+    monkeypatch.setattr(
+        pr_merge,
+        "run_proc",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("merge without issue must not park")
+        ),
+    )
     code = pr_merge.main(
         ["--config", str(cfg), "--live", "--repo", "mikolaj92/Fala", "--pr", "88"]
     )
@@ -150,10 +157,59 @@ def test_pr_merge_mergeable_reports_merged(tmp_path, monkeypatch, capsys):
     assert "pr merge" in joined and "88" in joined
 
 
-def test_pr_merge_dry_run_planned(tmp_path, capsys):
-    cfg = _cfg(tmp_path)
+def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
+    cfg = _cfg(tmp_path, mode="live")
+    runner = _GhRunner()
+    parked: list[list[str]] = []
+    monkeypatch.setattr(pr_merge, "runner", lambda: runner)
+    monkeypatch.setattr(pr_merge, "mutations_allowed", lambda **k: True)
+    monkeypatch.setattr(
+        pr_merge,
+        "run_proc",
+        lambda _main, argv: parked.append(argv) or {"ok": True, "removed": True},
+    )
+
     code = pr_merge.main(
-        ["--config", str(cfg), "--repo", "mikolaj92/Fala", "--pr", "88"]
+        [
+            "--config",
+            str(cfg),
+            "--live",
+            "--repo",
+            "mikolaj92/Fala",
+            "--pr",
+            "88",
+            "--issue",
+            "164",
+        ]
+    )
+
+    assert code == 0
+    env = _envelope(capsys)
+    assert env["ok"] is True
+    assert env["merged"] is True
+    assert env["issue"] == 164
+    assert env["parked"]["removed"] is True
+    assert parked == [["--repo", "mikolaj92/Fala", "--issue", "164"]]
+
+
+def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):
+    cfg = _cfg(tmp_path)
+    monkeypatch.setattr(
+        pr_merge,
+        "run_proc",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("dry-run must not park")),
+    )
+    code = pr_merge.main(
+        [
+            "--config",
+            str(cfg),
+            "--repo",
+            "mikolaj92/Fala",
+            "--pr",
+            "88",
+            "--issue",
+            "164",
+        ]
     )
     assert code == 0
     env = _envelope(capsys)
@@ -161,3 +217,5 @@ def test_pr_merge_dry_run_planned(tmp_path, capsys):
     assert env["planned"] is True
     assert env["merged"] is False
     assert env["pr"] == 88
+    assert env["issue"] == 164
+    assert env["parked"] is None

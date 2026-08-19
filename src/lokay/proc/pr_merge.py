@@ -6,6 +6,8 @@ import argparse
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.gh_prs import merge_pr
+from lokay.passkit.support import run_proc
+from lokay.proc import unbounded_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
@@ -14,6 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     add_config_live(p)
     p.add_argument("--repo", required=True)
     p.add_argument("--pr", required=True, type=int)
+    p.add_argument("--issue", type=int)
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
@@ -23,7 +26,22 @@ def main(argv: list[str] | None = None) -> int:
         merge_pr(runner(), args.repo, args.pr, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
-    return emit_exit(ok(planned=not live, repo=args.repo, pr=args.pr, merged=live))
+    parked = None
+    if live and args.issue is not None:
+        parked = run_proc(
+            unbounded_park.main,
+            ["--repo", args.repo, "--issue", str(args.issue)],
+        )
+    return emit_exit(
+        ok(
+            planned=not live,
+            repo=args.repo,
+            pr=args.pr,
+            merged=live,
+            issue=args.issue,
+            parked=parked,
+        )
+    )
 
 
 if __name__ == "__main__":
