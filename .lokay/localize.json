@@ -1,24 +1,21 @@
 {
   "paths": [
-    "src/lokay/passkit/hot.py",
-    "lokay/passkit/hot.py",
-    "tests/test_hot_repos.py"
+    "src/lokay/compose/daemon_cycle.py",
+    "lokay/compose/daemon_cycle.py",
+    "tests/test_preflight_daemon.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/passkit/hot.py",
-    "lokay/passkit/hot.py"
+    "src/lokay/compose/daemon_cycle.py",
+    "lokay/compose/daemon_cycle.py"
   ],
   "matched_tokens": [
+    "daemon_cycle",
     "health",
-    "hot",
-    "list_prs",
-    "list_inbox",
-    "list_issues",
-    "factory",
-    "passkit",
+    "survey",
+    "receipt",
+    "compose",
     "review",
-    "gate",
     "unbounded",
     "bounded"
   ],
@@ -28,7 +25,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__319-pick_survey_repos-pusty-katalog-nie-woln-715b2e32",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__321-daemon_cycle-pass_ceiling-nie-mo-e-wycie-fd0af548",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

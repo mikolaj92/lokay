@@ -431,6 +431,9 @@ def test_finalize_daemon_payload_lifts_progress_and_drops_fala():
 
 def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
     cfg = _write_cfg(tmp_path)
+    receipt = tmp_path / "lokay-state" / "last-pass.json"
+    remaining = {"by_repo": {"a/b": {"remaining_ready": 0}}}
+    receipt.write_text(json.dumps({"remaining": remaining}), encoding="utf-8")
 
     def wait_forever(**_kwargs):
         import time
@@ -446,8 +449,10 @@ def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
 
     assert out["ok"] is False
     assert out["reason"] == "pass_ceiling"
-    receipt = tmp_path / "lokay-state" / "last-pass.json"
-    assert json.loads(receipt.read_text())["reason"] == "pass_ceiling"
+    assert out["remaining"] == remaining
+    persisted = json.loads(receipt.read_text())
+    assert persisted["reason"] == "pass_ceiling"
+    assert persisted["remaining"] == remaining
 
 
 def test_daemon_cycle_native_exception_after_ceiling_writes_receipt(
