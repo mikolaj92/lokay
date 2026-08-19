@@ -200,7 +200,7 @@ def test_issue_to_pr_commit_then_test_then_assert_is_a_dag():
 
 
 def test_run_agent_timeouts_match_pi_budget():
-    """Both coding paths use the bounded Pi budget rather than the old 2100s cap."""
+    """All coding paths use the bounded Pi budget rather than the old 2100s cap."""
     import tomllib
 
     DEFAULT_BUDGET_S = 480
@@ -214,6 +214,10 @@ def test_run_agent_timeouts_match_pi_budget():
     issue_to_pr = next(p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr")
     repair = next(n for n in issue_to_pr["effectors"] if n["id"] == "repair_agent")
     assert int(repair["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
+
+    self_repair = next(p for p in pkg["correlation_paths"] if p["id"] == "self_repair")
+    self_repair_agent = next(n for n in self_repair["effectors"] if n["id"] == "self_repair_run_agent")
+    assert int(self_repair_agent["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
 
 
 def test_describe_includes_pr_repair():

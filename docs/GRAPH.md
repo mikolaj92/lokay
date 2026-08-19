@@ -122,9 +122,10 @@ Entered only from:
    after `recovery_incident` (never from waiting/repairing/review limbo).
 
 It never creates a branch or PR. The coding agent can edit only the detached
-worktree; deterministic atoms alone commit and push directly to `main`. A
-successful path always returns `restart_required`; product work never resumes in
-the stale daemon process.
+worktree; deterministic atoms alone commit and push directly to `main`. The
+`self_repair_run_agent` coding slot uses the same bounded 480-second budget as
+other agent paths. A successful path always returns `restart_required`; product
+work never resumes in the stale daemon process.
 
 ### `issue_to_pr`
 
