@@ -20,6 +20,9 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 from lokay.triage import decide_issue
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def _fetch_live() -> bool:
     return os.environ.get("LOKAY_OFFLINE", "").strip() not in {"1", "true", "yes"}
 
@@ -30,6 +33,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", required=True)
     p.add_argument("--issue", required=True, type=int)
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                issue=args.issue,
+                applied=False,
+            )
+        )
     cfg = load_cfg(args)
     live_mut = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
