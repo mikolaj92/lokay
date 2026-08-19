@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from lokay.proc import repo_mutex
 
@@ -41,6 +42,10 @@ ISSUE_TO_PR = """\
 """
 
 
+def _gh_state(state: str):
+    return type("Completed", (), {"returncode": 0, "stdout": f"{state}\n"})()
+
+
 def _payload(capsys) -> dict:
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
@@ -76,15 +81,31 @@ def test_other_repo_is_idle():
 
 
 def test_busy_when_live_issue_to_pr_has_repo_argument():
-    out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR)
+    with patch("lokay.proc.repo_mutex.subprocess.run", return_value=_gh_state("OPEN")):
+        out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR)
     assert out == {"ok": True, "busy": True, "pids": [42001]}
 
 
-def test_issue_to_pr_for_other_repo_is_idle():
-    out = repo_mutex.inspect_mutex(repo="acme/other", ps_text=ISSUE_TO_PR)
-    assert out == {"ok": True, "busy": True, "pids": [42002]}
-    out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR.splitlines()[1])
+def test_closed_issue_to_pr_does_not_hold_repo_mutex():
+    with patch("lokay.proc.repo_mutex.subprocess.run", return_value=_gh_state("CLOSED")) as run:
+        out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR)
     assert out == {"ok": True, "busy": False}
+    run.assert_called_once()
+
+
+def test_issue_to_pr_for_other_repo_is_idle():
+    with patch("lokay.proc.repo_mutex.subprocess.run", return_value=_gh_state("OPEN")):
+        out = repo_mutex.inspect_mutex(repo="acme/other", ps_text=ISSUE_TO_PR)
+        assert out == {"ok": True, "busy": True, "pids": [42002]}
+        out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR.splitlines()[1])
+    assert out == {"ok": True, "busy": False}
+
+
+def test_issue_to_pr_status_failure_keeps_mutex_busy():
+    failed = type("Completed", (), {"returncode": 1, "stdout": ""})()
+    with patch("lokay.proc.repo_mutex.subprocess.run", return_value=failed):
+        out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR)
+    assert out == {"ok": True, "busy": True, "pids": [42001]}
 
 
 def test_quoted_fixture_repo_in_pi_prompt_is_not_busy():
