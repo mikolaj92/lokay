@@ -12,6 +12,7 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
+from lokay.proc import get_issue as p_get_issue
 from lokay.proc import list_issues as p_list_issues
 from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live
@@ -56,6 +57,44 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             if isinstance(issue.get("labels"), list)
             and WORK_READY_LABEL in issue["labels"]
         ]
+        open_work_ready: list[dict[str, Any]] = []
+        for issue in work_ready:
+            number = int(issue["number"])
+            viewed = run_proc(
+                p_get_issue.main,
+                [*cfg_flag, *live_flag, "--repo", repo_name, "--issue", str(number)],
+            )
+            actions.append(
+                {
+                    "step": "get_ready_issue",
+                    **viewed,
+                    "repo": repo_name,
+                    "issue": number,
+                }
+            )
+            if not viewed.get("ok"):
+                survey_errors += 1
+                if repo_name not in ready_survey_failed:
+                    ready_survey_failed.append(repo_name)
+                continue
+            if str((viewed.get("issue") or {}).get("state") or "").upper() == "OPEN":
+                open_work_ready.append(issue)
+                continue
+            park_argv = ["--repo", repo_name, "--issue", str(number)]
+            if not live:
+                park_argv.append("--dry-run")
+            parked = run_proc(p_park.main, park_argv)
+            actions.append(
+                {
+                    "step": "park_closed_ready",
+                    "repo": repo_name,
+                    "issue": number,
+                    **parked,
+                }
+            )
+            if parked.get("ok") and parked.get("applied"):
+                progress += 1
+        work_ready = open_work_ready
         covered = issue_numbers_covered_by_prs(
             prs_by_repo.get(repo_name) or [],
             branch_prefix=branch_prefix,

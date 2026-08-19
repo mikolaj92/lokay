@@ -176,11 +176,15 @@ def test_survey_ready_parks_blocked_ready_issue(tmp_path, monkeypatch):
             )
         )
 
+    def fake_get(argv=None):
+        return emit_exit(ok(issue={"state": "OPEN"}))
+
     def fake_park(argv=None):
         parked.append(list(argv or []))
         return emit_exit(ok(applied=True, removed=True))
 
     monkeypatch.setattr(survey_ready.p_list_issues, "main", fake_list)
+    monkeypatch.setattr(survey_ready.p_get_issue, "main", fake_get)
     monkeypatch.setattr(survey_ready.p_park, "main", fake_park)
 
     result = survey_ready.run_survey_ready(
@@ -194,6 +198,55 @@ def test_survey_ready_parks_blocked_ready_issue(tmp_path, monkeypatch):
     assert survey["remaining_ready"] == 1
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert any(action["step"] == "park_stuck" for action in working["actions"])
+
+
+def test_survey_ready_live_rechecks_and_parks_closed_issue(tmp_path, monkeypatch):
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {"repos": ["owner/repo"], "branch_prefix": "ai/fix/"},
+    )
+    pass_io.write_json(
+        pass_io.working_path(pass_dir),
+        {"actions": [], "progress": 0, "prs_by_repo": {}},
+    )
+    parked: list[list[str]] = []
+
+    def fake_list(argv=None):
+        return emit_exit(
+            ok(
+                issues=[
+                    {"number": 7, "labels": ["work:ready"]},
+                    {"number": 8, "labels": ["work:ready"]},
+                ]
+            )
+        )
+
+    def fake_get(argv=None):
+        number = int((argv or [])[-1])
+        return emit_exit(ok(issue={"state": "CLOSED" if number == 7 else "OPEN"}))
+
+    def fake_park(argv=None):
+        parked.append(list(argv or []))
+        return emit_exit(ok(applied=True, removed=True))
+
+    monkeypatch.setattr(survey_ready.p_list_issues, "main", fake_list)
+    monkeypatch.setattr(survey_ready.p_get_issue, "main", fake_get)
+    monkeypatch.setattr(survey_ready.p_park, "main", fake_park)
+
+    result = survey_ready.run_survey_ready(
+        pass_dir=str(pass_dir), config_path=None, live=True
+    )
+
+    assert result["ok"] is True
+    assert parked == [["--repo", "owner/repo", "--issue", "7"]]
+    survey = pass_io.read_json(pass_io.survey_path(pass_dir))
+    assert [issue["number"] for issue in survey["ready_by_repo"]["owner/repo"]] == [8]
+    assert survey["remaining_ready"] == 1
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["progress"] == 1
+    assert any(action["step"] == "park_closed_ready" for action in working["actions"])
 
 
 def test_list_open_ai_prs_uses_full_page(tmp_path):

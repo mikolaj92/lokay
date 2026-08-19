@@ -1,21 +1,24 @@
 {
   "paths": [
-    "src/lokay/stage_ledger.py",
-    "src/lokay/proc/stage_label.py",
-    "lokay/proc/stage_label.py",
-    "tests/test_stage_ledger.py"
+    "src/lokay/proc/survey_ready.py",
+    "lokay/proc/survey_ready.py",
+    "tests/test_survey_list.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/stage_label.py",
-    "lokay/proc/stage_label.py"
+    "src/lokay/proc/survey_ready.py",
+    "lokay/proc/survey_ready.py"
   ],
   "matched_tokens": [
-    "stage_label",
+    "survey_ready",
+    "view",
     "park",
+    "mutex",
+    "reap",
+    "get_issue",
+    "unbounded_park",
     "proc",
-    "organ",
-    "stage",
+    "stage_label",
     "review",
     "unbounded",
     "bounded"
@@ -26,7 +29,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__281-stage_label-nie-nak-adaj-ai-ready-na-clo-7046e706",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__283-survey_ready-closed-przy-live-re-view-pa-ded84e20",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
