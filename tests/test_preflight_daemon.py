@@ -54,6 +54,12 @@ def _fake_uv(local_bin: Path) -> Path:
         "#!/bin/sh\n"
         "log=${LOKAY_UV_ARGV_LOG:-}\n"
         'if [ -n "$log" ]; then printf \'%s\\n\' "$*" >> "$log"; fi\n'
+        "case \"$*\" in\n"
+        "  *lokay-daemon*)\n"
+        "    if [ -n \"$LOKAY_UV_DAEMON_MARKER\" ]; then : > \"$LOKAY_UV_DAEMON_MARKER\"; fi\n"
+        "    while [ -n \"$LOKAY_UV_DAEMON_GATE\" ] && [ ! -e \"$LOKAY_UV_DAEMON_GATE\" ]; do sleep 0.01; done\n"
+        "    ;;\n"
+        "esac\n"
         "if [ \"$1 $2\" = 'run lokay-host-ff' ]; then\n"
         "  printf '%s\\n' '{\"ok\":true,\"health\":\"current\"}'\n"
         "  exit 0\n"
@@ -135,6 +141,46 @@ def test_daemon_exposes_local_pi_to_preflight(tmp_path):
     assert glance["progress"] == 1
     assert "engine" not in glance
     assert "fala" not in glance
+
+
+def test_latest_log_is_current_before_daemon_finishes(tmp_path):
+    import threading
+    import time
+
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    latest = logs / "mill-latest.log"
+    latest.write_text('{"health":"pass_ceiling"}\n', encoding="utf-8")
+    marker = tmp_path / "daemon-started"
+    gate = tmp_path / "daemon-finish"
+    result = {}
+
+    thread = threading.Thread(
+        target=lambda: result.setdefault(
+            "completed",
+            _run_daemon(
+                tmp_path,
+                extra_env={
+                    "LOKAY_UV_DAEMON_MARKER": str(marker),
+                    "LOKAY_UV_DAEMON_GATE": str(gate),
+                },
+            ),
+        )
+    )
+    thread.start()
+    try:
+        deadline = time.monotonic() + 5
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert marker.exists(), "lokay-daemon did not start"
+        body = latest.read_text(encoding="utf-8")
+        assert '"health":"current"' in body
+        assert "pass_ceiling" not in body
+    finally:
+        gate.touch()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert result["completed"].returncode == 0, result["completed"].stderr
 
 
 def test_launchd_runs_host_ff_but_not_daemon_when_mill_lock_busy(tmp_path):

@@ -1,21 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=310 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=312 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #310 — gh_issues: _list_open_issues przy 429 zwraca puste, nie raise
+Issue: #312 — mill-daemon: na starcie ticka odśwież mill-latest
 
 ## Goal
 
-#303 nauczył reap łapać GraphQL 429. #309 (owijka w list_ready) zdjęte jako klon. Źródło jest jedno: `_list_open_issues` woła `run_checked` i raise leci do survey. Każdy list_* (ready/inbox/labeled) pada.
+`lokay-mill-daemon.sh` czyści log na starcie (`: >LOG`), ale `mill-latest.log` kopiowane jest dopiero po `lokay-daemon`. Przez cały przebieg (do 180s) olej czyta stary ogon — np. poprzedni `pass_ceiling` — i diagnostyka kłamie.
 
 ## Files likely touched
 
-- `src/lokay/gh_issues.py`
+- `lokay-mill-daemon.sh`
+- `mill-latest.log`
+- `scripts/lokay-mill-daemon.sh`
 
 ## Test plan
 
-- Sztuczny 429 z run_checked → pusta lista, bez wyjątku. Inny błąd nadal raise.
+- Po host-ff, przed długim daemonem, mill-latest ma linię host-ff / current, nie stary pass_ceiling.
 
 ## Non-goals
 

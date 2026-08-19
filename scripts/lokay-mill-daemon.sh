@@ -550,6 +550,11 @@ if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG
   bound_launchd_stdio
   exit 78
 fi
+# Publish this tick immediately: lokay-daemon may run for minutes, and readers
+# must not keep seeing the previous tick's terminal state in mill-latest.log.
+cp "${LOG}" "${LATEST}" 2>/dev/null || true
+bound_file "${LOG}" "${MILL_LOG_MAX}" || true
+bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
 if [[ "${MILL_LOCK_WAS_BUSY}" -eq 1 ]]; then
   printf '%s\n' '{"ok":true,"health":"current","reason":"lock_busy"}' >>"${LOG}"
   cp "${LOG}" "${LATEST}" 2>/dev/null || true
