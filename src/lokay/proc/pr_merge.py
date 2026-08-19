@@ -10,7 +10,7 @@ from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
-ALLOWED_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,17 +20,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--issue", type=int)
     args = p.parse_args(argv)
-    cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live, cfg=cfg)
-    if args.repo != ALLOWED_REPO:
+    if args.repo != MINI_MILL_REPO:
         return emit_exit(
-            err(
-                f"refusing to merge PR outside {ALLOWED_REPO}",
-                planned=not live,
+            ok(
+                planned=False,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
                 repo=args.repo,
                 pr=args.pr,
+                merged=False,
+                issue=args.issue,
+                parked=None,
             )
         )
+    cfg = load_cfg(args)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     if live and not cfg.merge_enabled:
         return emit_exit(err("merge.enabled is false in config", planned=True))
     try:
