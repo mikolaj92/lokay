@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
+import pytest
+
 from lokay.models import Issue
-from lokay.queue_conflict import CLOSE, READY, SKIP, evaluate_queue_conflict
+from lokay.passkit import io as pass_io
+from lokay.proc import queue_conflict as queue_conflict_proc
+from lokay.queue_conflict import (
+    CLOSE,
+    READY,
+    SKIP,
+    ConflictVerdict,
+    evaluate_queue_conflict,
+)
 from lokay.proc.queue_conflict import evaluate_stdin
 
 
@@ -151,10 +161,75 @@ def test_older_with_path_overlap_stays_ready():
     assert v.outcome == READY
 
 
+@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+def test_stdin_skips_product_repos_without_evaluating(repo, monkeypatch):
+    monkeypatch.setattr(
+        queue_conflict_proc,
+        "evaluate_queue_conflict_with_agent",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("product repo reached semantic agent")
+        ),
+    )
+
+    out = evaluate_stdin({"issue": _issue(repo=repo).to_dict()})
+
+    assert out["ok"] is True
+    assert out["outcome"] == SKIP
+    assert out["reason"] == "repo_not_delivered_by_mini_mill"
+    assert out["selected"] is None
+
+
+def test_pass_mode_skips_products_and_evaluates_lokay(tmp_path, monkeypatch):
+    product = _issue(repo="mikolaj92/Temida", number=20).to_dict()
+    lokay = _issue(repo="mikolaj92/lokay", number=21).to_dict()
+    pass_io.write_json(
+        pass_io.begin_path(tmp_path),
+        {"repos": ["mikolaj92/Temida", "mikolaj92/lokay"]},
+    )
+    pass_io.write_json(
+        pass_io.working_path(tmp_path),
+        {
+            "actions": [],
+            "ready_by_repo": {
+                "mikolaj92/Temida": [product],
+                "mikolaj92/lokay": [lokay],
+            },
+            "remaining_ready": 2,
+        },
+    )
+    pass_io.write_json(
+        pass_io.implement_path(tmp_path),
+        {"clean_repos": ["mikolaj92/Temida", "mikolaj92/lokay"]},
+    )
+    called: list[str] = []
+
+    def evaluate(issue, **_kwargs):
+        called.append(issue["repo"])
+        return ConflictVerdict(READY, "no_clear_contradiction")
+
+    monkeypatch.setattr(
+        queue_conflict_proc, "evaluate_queue_conflict_with_agent", evaluate
+    )
+
+    out = queue_conflict_proc.run_queue_conflict(
+        pass_dir=str(tmp_path), config_path=None, live=False
+    )
+
+    assert out["ok"] is True
+    assert out["skipped"] == 1
+    assert called == ["mikolaj92/lokay"]
+    working = pass_io.read_json(pass_io.working_path(tmp_path))
+    assert working["ready_by_repo"]["mikolaj92/Temida"] == []
+    assert working["remaining_ready"] == 1
+    assert pass_io.read_json(pass_io.implement_path(tmp_path))["clean_repos"] == [
+        "mikolaj92/lokay"
+    ]
+
+
 def test_stdin_envelope_selects_only_when_ready():
     out = evaluate_stdin(
         {
-            "issue": _issue(number=12).to_dict(),
+            "issue": _issue(repo="mikolaj92/lokay", number=12).to_dict(),
             "open_prs": [
                 {
                     "number": 99,
