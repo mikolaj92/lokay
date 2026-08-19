@@ -1,22 +1,29 @@
 {
   "paths": [
+    "src/lokay/proc/survey_ready.py",
     "src/lokay/gh_issues.py",
+    "lokay/proc/survey_ready.py",
     "lokay/gh_issues.py",
+    "src/lokay/proc/list_issues.py",
     "tests/test_survey_list.py"
   ],
   "source": "agent",
   "seed_paths": [
+    "src/lokay/proc/survey_ready.py",
     "src/lokay/gh_issues.py",
+    "lokay/proc/survey_ready.py",
     "lokay/gh_issues.py"
   ],
   "matched_tokens": [
-    "state",
     "survey_ready",
+    "state",
+    "list_issues",
     "park",
-    "inbox",
+    "proc",
     "gh_issues",
-    "unbounded_park",
+    "Inbox",
     "review",
+    "gate",
     "unbounded",
     "bounded"
   ],
@@ -26,7 +33,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__285-list_ready-work-ready-ze-state-all-nie-t-a76f84b2",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__287-survey_ready-listuj-work-ready-state-all-e238c01d",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

@@ -1,21 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=285 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=287 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #285 — list_ready: work:ready ze state all, nie tylko OPEN
+Issue: #287 — survey_ready: listuj work:ready (state all), nie filtr z ai:ready
 
 ## Goal
 
-`survey_ready` po #283 parkuje CLOSED, ale `list_ready_issues` / `list_issues_with_label` woła `gh issue list --state open`. CLOSED z leftover `work:ready` nigdy nie wchodzą na listę, więc park się nie odpala.
+`survey_ready` woła `list_issues` → `list_ready_issues` (etykieta `config.ready_label` = `ai:ready`), potem filtruje `work:ready`. CLOSED z samym `work:ready` nigdy nie wchodzi na listę, więc park z #283 nie jedzie.
 
 ## Files likely touched
 
+- `src/lokay/proc/survey_ready.py`
 - `src/lokay/gh_issues.py`
 
 ## Test plan
 
-- Lista ma OPEN+CLOSED z work:ready → CLOSED nie ląduje w remaining_ready (park). OPEN zostaje.
+- Lista: CLOSED+work:ready (bez ai:ready) + OPEN+work:ready → CLOSED parkowany, OPEN zostaje. Inbox / inne etykiety dalej `--state open`.
 
 ## Non-goals
 
