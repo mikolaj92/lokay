@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from lokay.proc import wake as wake_proc
@@ -113,7 +114,9 @@ def test_execute_wake_skip_ok():
 
 
 def test_execute_wake_dispatches_injected_runners():
-    plan = route_wake(reason="issue_opened", repo="a/b", issue=2)
+    plan = route_wake(
+        reason="issue_opened", repo=wake_proc.MINI_MILL_REPO, issue=2
+    )
     calls: list[str] = []
 
     def issue_triage():
@@ -130,7 +133,12 @@ def test_execute_wake_dispatches_injected_runners():
     assert out["wake_path"] == "issue_triage"
     assert calls == ["issue_triage"]
 
-    plan_pr = route_wake(reason="pr", repo="a/b", pr=4, branch="ai/fix/4-x")
+    plan_pr = route_wake(
+        reason="pr",
+        repo=wake_proc.MINI_MILL_REPO,
+        pr=4,
+        branch="ai/fix/4-x",
+    )
     out_pr = wake_proc.execute_wake(
         plan_pr,
         config_path=None,
@@ -156,19 +164,74 @@ def test_plan_only_cli(capsys):
             "--reason",
             "issue_opened",
             "--repo",
-            "a/b",
+            wake_proc.MINI_MILL_REPO,
             "--issue",
             "5",
             "--plan-only",
         ]
     )
     assert code == 0
-    import json
-
     payload = json.loads(capsys.readouterr().out.strip())
     assert payload["ok"] is True
     assert payload["plan_only"] is True
     assert payload["path"] == "issue_triage"
+
+
+def test_product_repo_cli_skips_before_config_or_path(monkeypatch, capsys):
+    def unexpected(*args, **kwargs):
+        raise AssertionError("product wake must not load config or run a path")
+
+    monkeypatch.setattr(wake_proc, "load_cfg", unexpected)
+    monkeypatch.setattr(wake_proc, "run_path", unexpected)
+    monkeypatch.setattr(wake_proc, "compose_pr_triage", unexpected)
+    monkeypatch.setattr(wake_proc, "compose_mill", unexpected)
+
+    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
+        code = wake_proc.main(
+            ["--reason", "issue_opened", "--repo", repo, "--issue", "5", "--live"]
+        )
+        assert code == 0
+        payload = json.loads(capsys.readouterr().out.strip())
+        assert payload["ok"] is True
+        assert payload["skipped"] is True
+        assert payload["reason"] == "repo_not_delivered_by_mini_mill"
+        assert payload["repo"] == repo
+
+
+def test_product_repo_plan_only_skips_without_planning_path(capsys):
+    code = wake_proc.main(
+        [
+            "--reason",
+            "pr",
+            "--repo",
+            "mikolaj92/Temida",
+            "--pr",
+            "4",
+            "--branch",
+            "product-change",
+            "--plan-only",
+        ]
+    )
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert payload["ok"] is True
+    assert payload["plan_only"] is True
+    assert payload["skipped"] is True
+    assert payload["path"] is None
+    assert payload["reason"] == "repo_not_delivered_by_mini_mill"
+
+
+def test_execute_wake_defensively_skips_product_repo():
+    plan = route_wake(reason="mill", repo="mikolaj92/takt")
+    out = wake_proc.execute_wake(
+        plan,
+        config_path=None,
+        live=True,
+        runners={"factory_pass": lambda: (_ for _ in ()).throw(AssertionError())},
+    )
+    assert out["ok"] is True
+    assert out["skipped"] is True
+    assert out["reason"] == "repo_not_delivered_by_mini_mill"
 
 
 def test_wake_workflows_present():
