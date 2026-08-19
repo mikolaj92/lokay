@@ -1,22 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=317 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=319 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #317 — closeout_pr: atom >100 linii, test_local czerwony na main
+Issue: #319 — pick_survey_repos: pusty katalog nie wolno pełnych 29 repo
 
 ## Goal
 
-`src/lokay/proc/closeout_pr.py` ma 108 linii na `origin/main`. `tests/test_closeout_pr.py::test_closeout_pr_is_thin_glue` wymaga `<= 100`. Każdy `issue_to_pr` pada na `test_local`, potem pi „naprawia” closeout jako przyczepkę do obcego ticketu.
+Pusty katalog. `last-pass` ma `health=pass_ceiling` i `remaining=None`. `pick_survey_repos` przy pustym `prev_by_repo` (i przy zerowym hot) zwraca **całe 29 repo**. Jeden przebieg: 29× list_prs + list_inbox + list_issues. To zjada strop 180s zanim mill zdąży oddać idle.
 
 ## Files likely touched
 
-- `src/lokay/proc/closeout_pr.py`
-- `lokay.closeout`
+- `src/lokay/passkit/hot.py`
 
 ## Test plan
 
-- `test_closeout_pr_is_thin_glue` zielony. `len(splitlines()) <= 100` zostaje.
+- 29 nazw, `prev_by_repo={}` albo same zera → wynik ma lokay i `len <= 1+extra_cold`, nie 29.
 
 ## Non-goals
 
