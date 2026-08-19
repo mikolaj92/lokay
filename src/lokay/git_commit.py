@@ -78,6 +78,59 @@ def branch_ahead_of_upstream(runner: Runner, worktree: Path, *, live: bool) -> i
         return 0
 
 
+def is_configured_issue_worktree(
+    runner: Runner,
+    worktree: Path,
+    configured_checkouts: Iterable[Path],
+) -> bool:
+    """Whether *worktree* is a non-main linked worktree of a configured clone."""
+    try:
+        resolved = worktree.resolve(strict=True)
+    except OSError:
+        return False
+    branch = runner.run(
+        git_spec(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd=resolved),
+        live=True,
+    )
+    if branch.returncode != 0 or (branch.stdout or "").strip() == "main":
+        return False
+    common = runner.run(
+        git_spec(
+            ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=resolved,
+        ),
+        live=True,
+    )
+    if common.returncode != 0 or not (common.stdout or "").strip():
+        return False
+    try:
+        common_dir = Path(common.stdout.strip()).resolve(strict=True)
+    except OSError:
+        return False
+    for checkout in configured_checkouts:
+        try:
+            clone = Path(checkout).resolve(strict=True)
+        except OSError:
+            continue
+        if resolved == clone:
+            continue
+        clone_common = runner.run(
+            git_spec(
+                ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+                cwd=clone,
+            ),
+            live=True,
+        )
+        if clone_common.returncode != 0 or not (clone_common.stdout or "").strip():
+            continue
+        try:
+            if Path(clone_common.stdout.strip()).resolve(strict=True) == common_dir:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _is_protected_main_checkout(
     runner: Runner,
     worktree: Path,

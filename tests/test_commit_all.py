@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 from lokay.git_commit import commit_all
 from lokay.runner import Runner
@@ -44,6 +45,77 @@ def test_commit_all_refuses_configured_checkout_on_main(tmp_path: Path) -> None:
 
     assert _git(repo, "rev-parse", "HEAD").strip() == before
     assert _git(repo, "status", "--short").splitlines() == [" M tracked.txt"]
+
+
+def test_commit_all_token_mismatch_commits_verified_issue_worktree(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from lokay.proc import commit_all as commit_module
+
+    clone = tmp_path / "clone"
+    worktree = tmp_path / "issue-worktree"
+    _init_repo(clone)
+    source = clone / "src" / "foo.py"
+    source.parent.mkdir()
+    source.write_text("base\n", encoding="utf-8")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-m", "base")
+    _git(clone, "worktree", "add", "-b", "ai/fix/380", str(worktree))
+    source = worktree / "src" / "foo.py"
+    source.write_text("on goal\n", encoding="utf-8")
+    before = _git(worktree, "rev-parse", "HEAD").strip()
+
+    cfg = SimpleNamespace(repos=[SimpleNamespace(clone_path=clone)])
+    monkeypatch.setattr(commit_module, "load_cfg", lambda _args: cfg)
+
+    def reject_lease(**_kwargs):
+        raise RuntimeError("preflight failed; live mutation blocked (lease=token_mismatch)")
+
+    monkeypatch.setattr(commit_module, "mutations_allowed", reject_lease)
+
+    assert commit_module.main(
+        ["--live", "--worktree", str(worktree), "--message", "fix #380"]
+    ) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["committed"] is True
+    assert _git(worktree, "rev-parse", "HEAD").strip() != before
+    assert _git(worktree, "show", "HEAD:src/foo.py") == "on goal\n"
+
+
+def test_commit_all_token_mismatch_still_refuses_configured_main(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from lokay.proc import commit_all as commit_module
+
+    clone = tmp_path / "clone"
+    _init_repo(clone)
+    source = clone / "src" / "foo.py"
+    source.parent.mkdir()
+    source.write_text("base\n", encoding="utf-8")
+    _git(clone, "add", ".")
+    _git(clone, "commit", "-m", "base")
+    source.write_text("dirty\n", encoding="utf-8")
+    before = _git(clone, "rev-parse", "HEAD").strip()
+
+    cfg = SimpleNamespace(repos=[SimpleNamespace(clone_path=clone)])
+    monkeypatch.setattr(commit_module, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(
+        commit_module,
+        "mutations_allowed",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("preflight failed; live mutation blocked (lease=token_mismatch)")
+        ),
+    )
+
+    assert commit_module.main(
+        ["--live", "--worktree", str(clone), "--message", "must refuse"]
+    ) == 1
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert _git(clone, "rev-parse", "HEAD").strip() == before
+    assert _git(clone, "status", "--short").splitlines() == [" M src/foo.py"]
 
 
 def test_commit_all_commits_only_localized_changes(tmp_path: Path) -> None:
