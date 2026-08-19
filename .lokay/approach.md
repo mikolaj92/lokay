@@ -1,22 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=243 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=245 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #243 — test_global_pr_first.py: SyntaxError na main
+Issue: #245 — test: compileall tests+src (łap SyntaxError)
 
 ## Goal
 
-`tests/test_global_pr_first.py` na main nie kompiluje się. Linia 75: brak przecinka / popsuty dict po #209.
+#243: `test_global_pr_first.py` na main miał SyntaxError. test_local nie złapał, bo plik się nie kompilował w środku większego runu / merge poszedł mimo to. Kolejny popsuty test znowu zatruje main.
 
 ## Files likely touched
 
-- `tests/test_global_pr_first.py`
+- `test_global_pr_first.py`
+- `tests/test_suite_compiles.py`
 
 ## Test plan
 
-- `python3 -m py_compile tests/test_global_pr_first.py` wychodzi 0.
-- Nie ruszaj 180–192, 228, 235.
+- Sam plik: `pytest tests/test_suite_compiles.py` zielony.
+- Nie ruszaj 180–192, 228, 235. Nie ruszaj tomli timeoutów.
 
 ## Non-goals
 
