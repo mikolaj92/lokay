@@ -48,6 +48,33 @@ def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | No
     return str(pass_dir)
 
 
+def test_mini_mill_selects_lokay_but_skips_product_repo(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        begin={"repos": ["mikolaj92/Temida", "mikolaj92/lokay"]},
+        working={
+            "ready_by_repo": {
+                "mikolaj92/Temida": [{"number": 10, "title": "product work"}],
+                "mikolaj92/lokay": [{"number": 414, "title": "mill work"}],
+            },
+            "remaining_ready": 2,
+        },
+    )
+
+    result = run_select_implement(pass_dir=pass_dir)
+
+    assert result["ok"] is True
+    assert result["selected"] == 1
+    implement = pass_io.read_json(pass_io.implement_path(pass_dir))
+    assert implement["clean_repos"] == ["mikolaj92/lokay"]
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert any(
+        row.get("step") == "skip_issue_to_pr_outside_mini_scope"
+        and row.get("repo") == "mikolaj92/Temida"
+        for row in working["actions"]
+    )
+
+
 def test_blocked_ready_issue_is_not_selected_for_issue_to_pr(tmp_path):
     pass_dir = _pass(
         tmp_path,

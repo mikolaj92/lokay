@@ -13,6 +13,9 @@ from lokay.proc._common import add_config_live
 from lokay.stuck import excluded_numbers, load_stuck
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
     begin = pass_io.read_json(pass_io.begin_path(pass_dir))
     working = pass_io.read_json(pass_io.working_path(pass_dir))
@@ -35,6 +38,8 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
         if str(name or "")
     }
     clean_repos: list[str] = []
+    repos = list(begin.get("repos") or [])
+    lokay_mill = MINI_MILL_REPO in repos
 
     if not live or issue_budget <= 0:
         payload = {"clean_repos": [], "issue_budget": issue_budget, "reason": "no_live_budget"}
@@ -43,7 +48,16 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
         pass_io.write_json(pass_io.working_path(pass_dir), working)
         return ok(pass_dir=pass_dir, selected=0)
 
-    for repo_name in list(begin.get("repos") or []):
+    for repo_name in repos:
+        if lokay_mill and repo_name != MINI_MILL_REPO:
+            actions.append(
+                {
+                    "step": "skip_issue_to_pr_outside_mini_scope",
+                    "repo": repo_name,
+                    "reason": f"mini mill only implements {MINI_MILL_REPO}",
+                }
+            )
+            continue
         if repo_name in pr_survey_failed:
             actions.append(
                 {
