@@ -29,7 +29,7 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
     fake = _gh()
     monkeypatch.setattr(unbounded_park, "run_gh", fake)
     code = unbounded_park.main(
-        ["--repo", "owner/name", "--issue", "12", "--dry-run"]
+        ["--repo", "mikolaj92/lokay", "--issue", "12", "--dry-run"]
     )
     assert code == 0
     assert fake.calls == []
@@ -40,7 +40,7 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
     assert payload["removed"] is False
     assert payload["label"] == "ai:ready"
     assert payload["command"] == (
-        "gh issue edit 12 --repo owner/name --remove-label work:ready "
+        "gh issue edit 12 --repo mikolaj92/lokay --remove-label work:ready "
         "--remove-label ai:ready"
     )
     assert payload["argv"] == [
@@ -49,7 +49,7 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
         "edit",
         "12",
         "--repo",
-        "owner/name",
+        "mikolaj92/lokay",
         "--remove-label",
         "work:ready",
         "--remove-label",
@@ -60,7 +60,7 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
 def test_live_removes_ai_ready(monkeypatch, capsys):
     fake = _gh()
     monkeypatch.setattr(unbounded_park, "run_gh", fake)
-    code = unbounded_park.main(["--repo", "owner/name", "--issue", "7"])
+    code = unbounded_park.main(["--repo", "mikolaj92/lokay", "--issue", "7"])
     assert code == 0
     assert fake.calls == [
         [
@@ -69,7 +69,7 @@ def test_live_removes_ai_ready(monkeypatch, capsys):
             "edit",
             "7",
             "--repo",
-            "owner/name",
+            "mikolaj92/lokay",
             "--remove-label",
             "work:ready",
             "--remove-label",
@@ -81,8 +81,25 @@ def test_live_removes_ai_ready(monkeypatch, capsys):
     assert payload["dry_run"] is False
     assert payload["applied"] is True
     assert payload["removed"] is True
-    assert payload["repo"] == "owner/name"
+    assert payload["repo"] == "mikolaj92/lokay"
     assert payload["issue"] == 7
+
+
+def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
+    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
+        fake = _gh()
+        monkeypatch.setattr(unbounded_park, "run_gh", fake)
+        code = unbounded_park.main(["--repo", repo, "--issue", "7"])
+        assert code == 0
+        assert fake.calls == []
+        payload = _payload(capsys)
+        assert payload["ok"] is True
+        assert payload["skipped"] is True
+        assert payload["reason"] == "repo_not_delivered_by_mini_mill"
+        assert payload["applied"] is False
+        assert payload["removed"] is False
+        assert payload["repo"] == repo
+        assert payload["issue"] == 7
 
 
 def test_missing_repo_fails_closed(monkeypatch, capsys):
@@ -133,13 +150,13 @@ def test_non_positive_issue_fails_closed(monkeypatch, capsys):
 def test_gh_missing_issue_fails_closed(monkeypatch, capsys):
     fake = _gh(returncode=1, stderr="GraphQL: Could not resolve to an issue")
     monkeypatch.setattr(unbounded_park, "run_gh", fake)
-    code = unbounded_park.main(["--repo", "owner/name", "--issue", "99"])
+    code = unbounded_park.main(["--repo", "mikolaj92/lokay", "--issue", "99"])
     assert code == 1
     payload = _payload(capsys)
     assert payload["ok"] is False
     assert payload["returncode"] == 1
     assert "issue not found" in payload["error"]
-    assert fake.calls == [unbounded_park.park_argv("owner/name", 99)]
+    assert fake.calls == [unbounded_park.park_argv("mikolaj92/lokay", 99)]
 
 
 def test_dry_run_still_fail_closed_when_target_missing(monkeypatch, capsys):
