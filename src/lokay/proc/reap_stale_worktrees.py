@@ -289,14 +289,8 @@ def run_reap_stale_worktrees(
             continue
         base_ok = False
         published_heads: set[str] | None = None
-        if live and clone.exists():
-            # Local origin/main + one ls-remote. Fetch here used to be 300s
-            # per leftover repo and ate the implement slot.
-            published_heads = remote_heads(git, clone)
-            base_ok = published_heads is not None
-            fetch_err = "" if base_ok else "cannot list origin heads"
-        else:
-            fetch_err = "" if clone.exists() else "clone_path missing"
+        heads_checked = False
+        fetch_err = "" if clone.exists() else "clone_path missing"
 
         for path, branch in leftovers:
             issue = issue_number_from_branch(branch, branch_prefix=cfg.branch_prefix)
@@ -315,6 +309,36 @@ def run_reap_stale_worktrees(
                 covered=repo_covered,
                 heads=repo_heads,
             )
+            if reason is None and live and issue is not None:
+                closed = _issue_is_closed(repo.name, issue)
+                if closed:
+                    removed = remove_worktree(
+                        git,
+                        clone,
+                        path,
+                        managed_root=cfg.worktrees_root,
+                    )
+                    if not removed.get("ok"):
+                        row.update(
+                            kept=True,
+                            reason="remove_failed",
+                            error=removed.get("error"),
+                        )
+                        failed.append(row)
+                        kept.append(row)
+                        actions.append({"step": "keep_stale_worktree", **row})
+                        continue
+                    row.update(kept=False, removed=True, reason="closed_issue")
+                    reaped.append(row)
+                    actions.append({"step": "reap_stale_worktree", **row})
+                    continue
+            if reason is None and live and clone.exists() and not heads_checked:
+                # Closed issues do not need git classification. For all other
+                # leftovers, use local origin/main + one ls-remote per repo.
+                published_heads = remote_heads(git, clone)
+                heads_checked = True
+                base_ok = published_heads is not None
+                fetch_err = "" if base_ok else "cannot list origin heads"
             if reason is None and not (live and clone.exists() and base_ok):
                 reason = "unreadability" if live else "planned"
                 if live and fetch_err:
