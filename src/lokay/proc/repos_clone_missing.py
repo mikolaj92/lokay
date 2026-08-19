@@ -21,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
     failed: list[dict] = []
 
     for repo in cfg.active_repos():
+        if repo.name != "mikolaj92/lokay":
+            continue
         if repo.clone_path.exists():
             continue
         entry = {"name": repo.name, "clone_path": str(repo.clone_path)}
