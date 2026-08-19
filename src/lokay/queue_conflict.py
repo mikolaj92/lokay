@@ -47,6 +47,7 @@ class ConflictVerdict:
     comment: str = ""
     add_labels: list[str] = field(default_factory=list)
     remove_labels: list[str] = field(default_factory=list)
+    semantic: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

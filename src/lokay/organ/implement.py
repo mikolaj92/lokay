@@ -39,6 +39,7 @@ def handle_implement(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, 
         resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
         survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
         triage_issue, intake_issue, issue_split, worktree_add, assert_real_diff,
+        relocalize_off_goal,
         self_repair_activate, self_repair_close, self_repair_prepare,
         self_repair_preflight, self_repair_push_main, self_repair_validate,
     )
@@ -186,6 +187,14 @@ def handle_implement(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, 
             if checks_path:
                 Path(checks_path).unlink(missing_ok=True)
 
+
+    if atom == "relocalize_off_goal":
+        worktree = str(up.get("worktree_add", {}).get("worktree") or inputs.get("worktree") or "")
+        assert worktree
+        return _run_atom_main(
+            relocalize_off_goal.main,
+            [*cfg, *live, "--worktree", worktree],
+        )
 
     if atom == "cycle_start":
         assert repo and issue_number is not None

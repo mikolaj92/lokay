@@ -7,6 +7,8 @@ judges supersession, epic/child preference, and true path overlap.
 from __future__ import annotations
 
 import json
+import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -23,6 +25,7 @@ from lokay.queue_conflict import (
 )
 from lokay.runner import Runner
 from lokay.safety import untrusted_issue_block
+from lokay.semantic_trace import SemanticTrace
 from lokay.stuck import issue_number_from_branch, issue_numbers_covered_by_prs
 
 VALID_OUTCOMES = frozenset({"ready", "skip", "close"})
@@ -197,6 +200,18 @@ def evaluate_queue_conflict_with_agent(
     ready_label: str = "ai:ready",
     tracker_label: str = "ai:tracker",
 ) -> ConflictVerdict:
+    started = time.monotonic()
+
+    def traced(value: ConflictVerdict, source: str, status: str) -> ConflictVerdict:
+        trace = SemanticTrace(
+            kind="queue",
+            source=source,
+            status=status,
+            duration_ms=round((time.monotonic() - started) * 1000),
+            session_kind="queue" if execute else "",
+        )
+        return replace(value, semantic=trace.to_dict())
+
     issue = _as_issue(candidate)
     prs = [dict(p) for p in open_prs if isinstance(p, Mapping)]
     peers = [
@@ -206,7 +221,7 @@ def evaluate_queue_conflict_with_agent(
     ]
     covering = covering_pr_numbers(issue, prs, branch_prefix=branch_prefix)
     if covering:
-        return ConflictVerdict(
+        value = ConflictVerdict(
             outcome=CLOSE,
             reason="open_ai_pr_covers_issue",
             detail={"issue": issue.number, "prs": covering},
@@ -216,6 +231,7 @@ def evaluate_queue_conflict_with_agent(
             ),
             remove_labels=[ready_label],
         )
+        return traced(value, "bypass", "completed")
 
     fallback = evaluate_queue_conflict(
         issue,
@@ -226,7 +242,7 @@ def evaluate_queue_conflict_with_agent(
         tracker_label=tracker_label,
     )
     if not execute or runner is None or config is None:
-        return fallback
+        return traced(fallback, "fallback", "disabled")
 
     prompt = queue_conflict_prompt(issue, open_prs=prs, peer_issues=peers)
     cwd = worktree if worktree and Path(worktree).is_dir() else Path.cwd()
@@ -242,19 +258,21 @@ def evaluate_queue_conflict_with_agent(
             attach_collector_boundary=False,
         )
     except Exception:  # noqa: BLE001
-        return fallback
+        return traced(fallback, "fallback", "executor_failed")
     if agent_out.get("status") != "completed":
-        return fallback
+        status = "timeout" if agent_out.get("status") == "timeout" else "executor_failed"
+        return traced(fallback, "fallback", status)
     try:
         parsed = parse_queue_conflict_output(str(agent_out.get("stdout_tail") or ""))
     except (QueueConflictAgentError, PrReviewError):
-        return fallback
+        return traced(fallback, "fallback", "invalid_json")
     reason_blob = parsed["reason"].lower()
     if any(marker in reason_blob for marker in _POLICY_REASON_MARKERS):
-        return fallback
-    return _verdict_from_agent(
+        return traced(fallback, "fallback", "rejected")
+    value = _verdict_from_agent(
         parsed,
         issue=issue,
         ready_label=ready_label,
         tracker_label=tracker_label,
     )
+    return traced(value, "agent", "completed")

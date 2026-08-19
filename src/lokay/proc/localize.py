@@ -176,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             matched_tokens=list(loc.matched_tokens),
             source=loc.source,
             notes=list(loc.notes),
+            semantic=loc.semantic,
             repo=(issue.repo if issue else str(args.repo or "")),
             issue=(issue.number if issue else args.issue),
         )

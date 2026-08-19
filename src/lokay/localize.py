@@ -418,6 +418,7 @@ class Localization:
     worktree: str = ""
     wrote: bool = False
     localize_rel: str = LOCALIZE_REL_PATH
+    semantic: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

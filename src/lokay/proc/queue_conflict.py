@@ -169,6 +169,7 @@ def run_queue_conflict(
                 "outcome": verdict.outcome,
                 "reason": verdict.reason,
                 "detail": verdict.detail,
+                "semantic": verdict.semantic,
             }
             if verdict.outcome == READY:
                 kept_ready.append(issue)

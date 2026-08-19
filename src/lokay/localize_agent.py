@@ -6,6 +6,9 @@ paths, attaches product files next to tests, and fails closed if empty.
 
 from __future__ import annotations
 
+import re
+import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -21,9 +24,11 @@ from lokay.localize import (
 )
 from lokay.pr_review import PrReviewError, extract_json_object
 from lokay.runner import Runner
+from lokay.semantic_trace import SemanticTrace
 
 SEMANTIC_TIMEOUT_SECONDS = 180
 _MAX_AGENT_PATHS = 12
+_NUMERIC_PATH = re.compile(r"^[0-9]+(?:[/, -]+[0-9]+)+$|^[0-9]+$")
 
 
 class LocalizeAgentError(ValueError):
@@ -64,6 +69,20 @@ Seed:
 """
 
 
+def _specific_paths(paths: list[str], tree_set: set[str]) -> list[str]:
+    """Drop numeric prose and broad directories when concrete children exist."""
+    clean = [p for p in paths if not _NUMERIC_PATH.fullmatch(p)]
+    concrete = {p for p in clean if p in tree_set and "." in Path(p).name}
+    out: list[str] = []
+    for rel in clean:
+        if rel in out:
+            continue
+        if "." not in Path(rel).name and any(p.startswith(f"{rel}/") for p in concrete):
+            continue
+        out.append(rel)
+    return out
+
+
 def parse_localize_output(text: str) -> list[str]:
     data = extract_json_object(text)
     raw = data.get("paths")
@@ -96,6 +115,18 @@ def build_localization_with_agent(
     max_paths: int = 40,
     skip_agent: bool = False,
 ) -> Localization:
+    started = time.monotonic()
+
+    def traced(value: Localization, source: str, status: str) -> Localization:
+        trace = SemanticTrace(
+            kind="localize",
+            source=source,
+            status=status,
+            duration_ms=round((time.monotonic() - started) * 1000),
+            session_kind="localize" if execute else "",
+        )
+        return replace(value, semantic=trace.to_dict())
+
     fallback = build_localization(
         worktree=worktree,
         seed_text=seed_text,
@@ -107,7 +138,7 @@ def build_localization_with_agent(
             notes = list(fallback.notes) + [
                 "Explicit issue file hints bypassed semantic localization."
             ]
-            return Localization(
+            value = Localization(
                 paths=fallback.paths,
                 source=fallback.source,
                 seed_paths=fallback.seed_paths,
@@ -115,9 +146,10 @@ def build_localization_with_agent(
                 notes=tuple(notes),
                 worktree=fallback.worktree,
             )
-        return fallback
+            return traced(value, "bypass", "completed")
+        return traced(fallback, "fallback", "disabled")
     if worktree is None or not Path(worktree).is_dir():
-        return fallback
+        return traced(fallback, "fallback", "disabled")
 
     tree = walk_repo_tree(Path(worktree))
     extras = [_norm_rel(p) for p in extra_paths if _norm_rel(p)]
@@ -140,15 +172,17 @@ def build_localization_with_agent(
             attach_collector_boundary=False,
         )
     except Exception:  # noqa: BLE001
-        return fallback
+        return traced(fallback, "fallback", "executor_failed")
     if agent_out.get("status") != "completed":
-        return fallback
+        status = "timeout" if agent_out.get("status") == "timeout" else "executor_failed"
+        return traced(fallback, "fallback", status)
     try:
         proposed = parse_localize_output(str(agent_out.get("stdout_tail") or ""))
     except (LocalizeAgentError, PrReviewError):
-        return fallback
+        return traced(fallback, "fallback", "invalid_json")
 
     tree_set = set(tree)
+    proposed = _specific_paths(proposed, tree_set)
     extra_set = set(extras)
     seed_set = set(seed_paths)
     accepted = [
@@ -163,9 +197,9 @@ def build_localization_with_agent(
         max_paths=max(1, int(max_paths or 40)),
     )
     if not accepted:
-        return fallback
+        return traced(fallback, "fallback", "rejected")
     notes = list(fallback.notes) + ["Agent proposed paths; Python validated against the tree."]
-    return Localization(
+    value = Localization(
         paths=tuple(accepted),
         source="agent",
         seed_paths=tuple(dict.fromkeys(seed_paths)),
@@ -173,3 +207,4 @@ def build_localization_with_agent(
         notes=tuple(notes),
         worktree=str(Path(worktree)),
     )
+    return traced(value, "agent", "completed")

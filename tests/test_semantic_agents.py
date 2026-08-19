@@ -131,6 +131,9 @@ def test_agent_ready_overrides_shape_regex_when_json_valid(tmp_path: Path):
     )
     assert d.decision == "ready"
     assert d.implementable is True
+    assert d.semantic["source"] == "agent"
+    assert d.semantic["status"] == "completed"
+    assert d.semantic["session_kind"] == "intake"
     assert runner.specs
 
 
@@ -152,6 +155,8 @@ def test_bad_intake_json_falls_back_to_deterministic(tmp_path: Path):
     )
     assert d.decision == "close"
     assert d.reason == "wrong_product_shape"
+    assert d.semantic["source"] == "fallback"
+    assert d.semantic["status"] == "invalid_json"
 
 
 def test_queue_covering_pr_still_closes_without_agent():
@@ -186,6 +191,7 @@ def test_queue_agent_can_keep_ready_when_heuristics_skip():
     )
     assert v.outcome == READY
     assert v.reason == "different_modules"
+    assert v.semantic["source"] == "agent"
 
 
 def test_parse_queue_conflict_rejects_needs_human():
@@ -210,6 +216,7 @@ def test_localize_agent_keeps_existing_paths_and_drops_fantasy(tmp_path: Path):
     assert "src/a.py" in loc.paths
     assert "src/missing.py" not in loc.paths
     assert "/etc/passwd" not in loc.paths
+    assert loc.semantic["source"] == "agent"
 
 
 def test_localize_bad_json_falls_back(tmp_path: Path):
@@ -224,6 +231,24 @@ def test_localize_bad_json_falls_back(tmp_path: Path):
         seed_text="Change `src/a.py` for the bug.",
     )
     assert loc.source == "deterministic"
+    assert "src/a.py" in loc.paths
+    assert loc.semantic["source"] == "fallback"
+    assert loc.semantic["status"] == "invalid_json"
+
+
+def test_localize_drops_numeric_pseudopath_and_broad_directory(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("a\n", encoding="utf-8")
+    runner = _FakeRunner('{"paths":["291/303/321", "src", "src/a.py"]}')
+    loc = build_localization_with_agent(
+        runner=runner,
+        config=_cfg(),
+        execute=True,
+        worktree=tmp_path,
+        seed_text="Fix the parser.",
+    )
+    assert "291/303/321" not in loc.paths
+    assert "src" not in loc.paths
     assert "src/a.py" in loc.paths
 
 

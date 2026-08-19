@@ -172,7 +172,7 @@ def run_path(
         "issue_to_pr": (
             "get_issue", "assign_issue", "stage_implementing", "make_branch",
             "worktree_add", "plan_issue", "localize", "cycle_start", "run_agent",
-            "commit_all", "rebase_onto_base", "test_local", "repair_agent",
+            "relocalize_off_goal", "commit_all", "rebase_onto_base", "test_local", "repair_agent",
             "test_local_recheck", "assert_real_diff", "push", "pr_create",
             "cycle_end", "stage_pr_open",
             "list_prs", "pr_label",

@@ -177,6 +177,7 @@ class IntakeDecision:
     close: bool = False
     comment: str | None = None
     implementable: bool = False
+    semantic: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

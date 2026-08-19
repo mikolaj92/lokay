@@ -9,6 +9,14 @@ pass `health=progress`, green pytest, recovery plateau, or a spinning
 machine that consumes tickets without landing them. Those are intermediate
 signals. They may explain a miss. They never count as output.
 
+Read-only semantic atoms (`intake`, `queue`, `localize`) report a `semantic`
+object with `source=agent|fallback|bypass`, execution `status`, duration, and
+isolated `session_kind`. `lokay-yield-report --config config.yaml --hours 24`
+aggregates those traces and issue-to-PR outcomes from the existing state JSONL;
+GitHub merges remain the production source of truth. Before commit, one bounded
+semantic relocalization may admit a necessary source/test neighbour outside the
+initial scope; Python validates it and `assert_real_diff` remains the hard gate.
+
 The coding slot must actually run. Default Pi argv uses `--session-id`
 `{session}` so the first ticket *creates* the per-corner session and a
 timeout retry resumes it — unless a sibling already closed the issue

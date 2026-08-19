@@ -7,6 +7,8 @@ deterministic. The agent only judges shape / size / essence / satisfaction.
 from __future__ import annotations
 
 import json
+import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -26,6 +28,7 @@ from lokay.models import Issue
 from lokay.pr_review import PrReviewError, extract_json_object
 from lokay.runner import Runner
 from lokay.safety import untrusted_issue_block
+from lokay.semantic_trace import SemanticTrace
 
 VALID_DECISIONS = frozenset({"ready", "close", "split", "needs_human"})
 # Semantic intake must not answer execution-policy questions. Such output is
@@ -175,6 +178,18 @@ def decide_intake_with_agent(
     force_split: bool = False,
 ) -> IntakeDecision:
     """Hard facts first; one agent call for the semantic remainder."""
+    started = time.monotonic()
+
+    def traced(value: IntakeDecision, source: str, status: str) -> IntakeDecision:
+        trace = SemanticTrace(
+            kind="intake",
+            source=source,
+            status=status,
+            duration_ms=round((time.monotonic() - started) * 1000),
+            session_kind="intake" if execute else "",
+        )
+        return replace(value, semantic=trace.to_dict())
+
     fallback = decide_intake(
         issue,
         state=state,
@@ -189,7 +204,7 @@ def decide_intake_with_agent(
         force_split=force_split,
     )
     if not run:
-        return fallback
+        return traced(fallback, "bypass", "disabled")
 
     hard = (
         check_open(state=state),
@@ -197,16 +212,17 @@ def decide_intake_with_agent(
         check_duplicate_ai_pr(issue, covering_prs=covering_prs),
     )
     if any(c.verdict == "close" for c in hard):
-        return aggregate_intake(
+        value = aggregate_intake(
             hard,
             ready_label=ready_label,
             needs_feedback_label=needs_feedback_label,
             force_split=force_split,
         )
+        return traced(value, "bypass", "completed")
     if force_split:
-        return fallback
+        return traced(fallback, "bypass", "completed")
     if not execute:
-        return fallback
+        return traced(fallback, "fallback", "disabled")
 
     shape = probe_repo_shape(clone_path)
     prompt = intake_prompt(
@@ -230,19 +246,21 @@ def decide_intake_with_agent(
             attach_collector_boundary=False,
         )
     except Exception:  # noqa: BLE001
-        return fallback
+        return traced(fallback, "fallback", "executor_failed")
     if agent_out.get("status") != "completed":
-        return fallback
+        status = "timeout" if agent_out.get("status") == "timeout" else "executor_failed"
+        return traced(fallback, "fallback", status)
     try:
         parsed = parse_intake_output(str(agent_out.get("stdout_tail") or ""))
     except (IntakeAgentError, PrReviewError):
-        return fallback
+        return traced(fallback, "fallback", "invalid_json")
     reason_blob = parsed["reason"].lower()
     if any(marker in reason_blob for marker in _POLICY_REASON_MARKERS):
-        return fallback
-    return _decision_from_agent(
+        return traced(fallback, "fallback", "rejected")
+    value = _decision_from_agent(
         parsed,
         ready_label=ready_label,
         needs_feedback_label=needs_feedback_label,
         hard_checks=hard,
     )
+    return traced(value, "agent", "completed")
