@@ -131,7 +131,7 @@ def test_localize_cli_planned_no_write(tmp_path: Path, capsys):
             "--worktree",
             str(wt),
             "--repo",
-            "owner/repo",
+            "mikolaj92/lokay",
             "--issue",
             "88",
             "--title",
@@ -161,7 +161,7 @@ github:
   branch_prefix: ai/fix
   pr_labels: [ai:generated]
 repos:
-  - name: owner/repo
+  - name: mikolaj92/lokay
     clone_path: {tmp_path / "clone"}
 executor:
   enabled: false
@@ -183,6 +183,7 @@ state:
     issue_json.write_text(
         json.dumps(
             _issue(
+                repo="mikolaj92/lokay",
                 body="Patch `src/a.py` for the bug.\n",
                 title="patch a",
             ).to_dict()
@@ -206,6 +207,33 @@ state:
     assert out["wrote"] is True
     assert (wt / LOCALIZE_REL_PATH).is_file()
     assert "src/a.py" in out["paths"]
+
+
+def test_localize_cli_live_skips_product_repos_without_writing(tmp_path: Path, capsys):
+    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
+        wt = tmp_path / repo.rsplit("/", 1)[-1]
+        wt.mkdir()
+        code = localize.main(
+            [
+                "--live",
+                "--worktree",
+                str(wt),
+                "--repo",
+                repo,
+                "--issue",
+                "510",
+                "--body",
+                "Change `src/product.py`.",
+            ]
+        )
+        assert code == 0
+        out = json.loads(capsys.readouterr().out.strip())
+        assert out["ok"] is True
+        assert out["skipped"] is True
+        assert out["reason"] == "repo_not_delivered_by_mini_mill"
+        assert out["repo"] == repo
+        assert out["wrote"] is False
+        assert not (wt / LOCALIZE_REL_PATH).exists()
 
 
 def test_localize_cli_empty_seed_fails(tmp_path: Path, capsys):
