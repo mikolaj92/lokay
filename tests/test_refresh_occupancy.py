@@ -114,6 +114,11 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
         "live_issue_to_pr_receipts",
         lambda: [{"repo": "a/two", "issue": 3, "pid": 9}],
     )
+    monkeypatch.setattr(
+        refresh_occupancy.os,
+        "kill",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("OPEN worker terminated")),
+    )
     out = refresh_occupancy.run_refresh_occupancy(
         pass_dir=pass_dir, config_path=None, live=True
     )
@@ -146,6 +151,7 @@ def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch)
     )
     receipt = {"repo": "a/one", "issue": 2, "pid": 9}
     cleared: list[dict[str, Any]] = []
+    killed: list[tuple[int, int]] = []
 
     monkeypatch.setattr(
         refresh_occupancy, "live_issue_to_pr_receipts", lambda: [receipt]
@@ -154,6 +160,11 @@ def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch)
         refresh_occupancy,
         "clear_issue_to_pr_receipt",
         lambda row: not cleared.append(row),
+    )
+    monkeypatch.setattr(
+        refresh_occupancy.os,
+        "kill",
+        lambda pid, sig: killed.append((pid, sig)),
     )
 
     def fake_run(fn, argv):
@@ -171,6 +182,7 @@ def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch)
     assert out["cleared_issue_to_pr_receipts"] == [
         {"repo": "a/one", "issue": 2}
     ]
+    assert killed == [(9, refresh_occupancy.signal.SIGTERM)]
     assert cleared == [receipt]
 
 

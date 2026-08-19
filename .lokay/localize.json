@@ -2,7 +2,6 @@
   "paths": [
     "src/lokay/proc/refresh_occupancy.py",
     "lokay/proc/refresh_occupancy.py",
-    "src/lokay/proc/detach_issue_to_pr.py",
     "tests/test_refresh_occupancy.py"
   ],
   "source": "agent",
@@ -11,17 +10,17 @@
     "lokay/proc/refresh_occupancy.py"
   ],
   "matched_tokens": [
-    "refresh_occupancy",
-    "harvest",
-    "issue_to_pr",
-    "mutex",
-    "receipt",
-    "get_issue",
-    "proc",
-    "detach_issue_to_pr",
-    "Receipt",
     "reap",
+    "receipt",
+    "occupancy",
+    "issue_to_pr",
     "budget",
+    "worktree",
+    "harvest",
+    "reap_over_budget",
+    "proc",
+    "refresh_occupancy",
+    "Receipt",
     "review",
     "gate",
     "unbounded",
@@ -33,7 +32,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__289-refresh_occupancy-ywy-i2pr-na-closed-nie-3d39ef00",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__291-reap-term-i2pr-gdy-issue-closed-nie-czek-3eadfcb7",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

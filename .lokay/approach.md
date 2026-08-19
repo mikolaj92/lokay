@@ -1,13 +1,13 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=289 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=291 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #289 — refresh_occupancy: żywy i2pr na CLOSED nie zajmuje repo
+Issue: #291 — reap: TERM i2pr gdy issue CLOSED, nie czekaj 8 min
 
 ## Goal
 
-Po harvest merge issue jest CLOSED, a leftover `issue_to_pr` jeszcze żyje. `refresh_occupancy` liczy żywe receipty jako occupied. Last-pass: occupied=true, ready=0, procesu już nie ma albo zombie na CLOSED. Następny ticket czeka na mutex.
+#289 czyści receipt i occupancy, ale leftover `issue_to_pr` na CLOSED dalej żyje do reap over-budget (8 min). Palimy pi i trzymamy worktree.
 
 ## Files likely touched
 
@@ -15,8 +15,7 @@ Po harvest merge issue jest CLOSED, a leftover `issue_to_pr` jeszcze żyje. `ref
 
 ## Test plan
 
-- Receipt żywy, issue CLOSED → occupied_repos bez tego repo, receipt w cleared.
-- Receipt żywy, issue OPEN → occupied.
+- Receipt żywy, issue CLOSED, pid mock → kill + cleared. OPEN → bez kill.
 
 ## Non-goals
 
