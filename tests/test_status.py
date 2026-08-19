@@ -14,14 +14,18 @@ def _write_cfg(
     executor: bool,
     merge: bool,
     k: int = 1,
+    repos: tuple[str, ...] = ("mikolaj92/lokay",),
 ) -> Path:
     cfg_path = tmp_path / "config.yaml"
+    repo_yaml = "\n".join(
+        f"  - name: {repo}\n    clone_path: {tmp_path / repo.split('/')[-1]}"
+        for repo in repos
+    )
     cfg_path.write_text(
         f"""
 mode: {mode}
 repos:
-  - name: a/b
-    clone_path: {tmp_path}
+{repo_yaml}
 executor:
   enabled: {str(executor).lower()}
   agent: grok
@@ -121,6 +125,60 @@ def test_local_status_uses_last_pass_health(tmp_path: Path, monkeypatch):
     assert result["last_pass"]["health"] == "repairing"
     assert result["by_repo"][0]["repo"] == "a/b"
     assert result["human_residuals"]["count"] == 2
+
+
+def test_status_surveys_only_lokay_from_mixed_catalog(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    cfg_path = _write_cfg(
+        tmp_path,
+        mode="live",
+        executor=True,
+        merge=True,
+        repos=("mikolaj92/Temida", "mikolaj92/takt", "mikolaj92/lokay"),
+    )
+    surveyed: list[str] = []
+
+    def fake_proc(fn, argv):
+        repo = argv[argv.index("--repo") + 1]
+        surveyed.append(repo)
+        if fn.__module__ == "lokay.proc.list_prs":
+            return {"ok": True, "prs": []}
+        return {"ok": True, "issues": []}
+
+    monkeypatch.setattr("lokay.compose.tick._run", fake_proc)
+    monkeypatch.setattr(
+        "lokay.compose.status.compose_human_mailbox",
+        lambda **_kwargs: {"ok": True, "count": 0, "items": [], "errors": []},
+    )
+    result = compose_status(config_path=str(cfg_path))
+
+    assert result["ok"] is True
+    assert surveyed
+    assert set(surveyed) == {"mikolaj92/lokay"}
+    assert [row["repo"] for row in result["remaining"]["by_repo"]] == [
+        "mikolaj92/lokay"
+    ]
+    assert result["remaining"]["by_repo"][0]["survey_error"] is False
+
+
+def test_status_product_only_catalog_skips_survey(tmp_path: Path, monkeypatch):
+    cfg_path = _write_cfg(
+        tmp_path,
+        mode="live",
+        executor=True,
+        merge=True,
+        repos=("mikolaj92/Temida", "mikolaj92/takt"),
+    )
+
+    monkeypatch.setattr(
+        "lokay.compose.status.compose_tick",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("product survey")),
+    )
+    result = compose_status(config_path=str(cfg_path))
+
+    assert result["ok"] is True
+    assert result["idle"] is True
+    assert result["remaining"]["by_repo"] == []
 
 
 def test_status_survey_exposes_by_repo_and_human(tmp_path: Path, monkeypatch):
