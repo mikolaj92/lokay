@@ -12,6 +12,9 @@ from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
 from lokay.stuck import is_blocked_in_ledger, load_stuck
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+
 
 def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
     begin = pass_io.read_json(pass_io.begin_path(pass_dir))
@@ -36,10 +39,24 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
     ready_by_repo = dict(survey.get("ready_by_repo") or {})
     pr_survey_failed = set(survey.get("pr_survey_failed") or [])
 
+    repos = list(begin.get("repos") or [])
+    skipped_repos = [repo for repo in repos if repo != MINI_MILL_REPO]
+    repos = [repo for repo in repos if repo == MINI_MILL_REPO]
+    for repo_name in skipped_repos:
+        actions.append(
+            {
+                "step": "skip_repo_outside_mini_mill",
+                "repo": repo_name,
+                "ok": True,
+                "skipped": True,
+                "reason": _REPO_SKIP_REASON,
+            }
+        )
+
     # Triage: per-repo PR-first; skip receipts when survey failed or actionable AI PR.
     # Skip actions are recorded whenever live (even if triage_budget is already 0).
     if live:
-        for repo_name in list(begin.get("repos") or []):
+        for repo_name in repos:
             inbox = list(inbox_issues.get(repo_name) or [])
             if not inbox:
                 continue
@@ -91,7 +108,7 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
                 triage_budget -= 1
 
     # Closeout: every open AI PR (manual skipped at dispatch with a receipt).
-    for repo_name in list(begin.get("repos") or []):
+    for repo_name in repos:
         for pr in list(prs_by_repo.get(repo_name) or []):
             closeout_targets.append(
                 {
@@ -108,7 +125,7 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
             )
 
     # Provisional implement candidates (final select_implement re-checks after closeout).
-    for repo_name in list(begin.get("repos") or []):
+    for repo_name in repos:
         for issue in list(ready_by_repo.get(repo_name) or []):
             implement_candidates.append(
                 {
@@ -127,12 +144,19 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
     pass_io.write_json(pass_io.plan_path(pass_dir), plan)
     working["actions"] = actions
     pass_io.write_json(pass_io.working_path(pass_dir), working)
-    return ok(
+    result = ok(
         pass_dir=pass_dir,
         triage_count=len(triage_targets),
         closeout_count=len(closeout_targets),
         implement_candidate_count=len(implement_candidates),
     )
+    if skipped_repos:
+        result.update(
+            skipped=True,
+            reason=_REPO_SKIP_REASON,
+            skipped_repos=skipped_repos,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
