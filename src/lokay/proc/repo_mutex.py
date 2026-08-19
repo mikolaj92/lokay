@@ -92,6 +92,54 @@ def _is_issue_to_pr_command(command: str) -> bool:
     return False
 
 
+def _issue_number(command: str) -> int | None:
+    tokens = _command_tokens(command)
+    for index, token in enumerate(tokens):
+        if token == "--issue" and index + 1 < len(tokens):
+            value = tokens[index + 1]
+        elif token.startswith("--issue="):
+            value = token.removeprefix("--issue=")
+        else:
+            continue
+        try:
+            number = int(value)
+        except ValueError:
+            return None
+        return number if number > 0 else None
+    return None
+
+
+def _issue_is_closed(repo: str, issue: int) -> bool:
+    """Return true only when GitHub confirms that the issue is closed.
+
+    Mutex inspection must remain conservative when ``gh`` cannot answer: a
+    missing or failed status lookup leaves the live process as a holder.
+    """
+    try:
+        completed = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(issue),
+                "--repo",
+                repo,
+                "--json",
+                "state",
+                "--jq",
+                ".state",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0 and completed.stdout.strip().upper() == "CLOSED"
+
+
 def _mentions_issue_to_pr_repo(command: str, repo: str) -> bool:
     tokens = _command_tokens(command)
     for index, token in enumerate(tokens):
@@ -105,7 +153,10 @@ def _mentions_issue_to_pr_repo(command: str, repo: str) -> bool:
 
 def _holds_repo(command: str, repo: str) -> bool:
     if _is_issue_to_pr_command(command):
-        return _mentions_issue_to_pr_repo(command, repo)
+        if not _mentions_issue_to_pr_repo(command, repo):
+            return False
+        issue = _issue_number(command)
+        return issue is None or not _issue_is_closed(repo, issue)
     return _is_pi_command(command) and _mentions_repo(command, repo)
 
 

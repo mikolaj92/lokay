@@ -1,23 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=259 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=262 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #259 — plan_only fail-closed: close issue (wontfix), nie tylko park etykiet
+Issue: #262 — repo_mutex: nie busy gdy issue CLOSED
 
 ## Goal
 
-Fail-closed plan_only zdejmuje work:ready/ai:ready (unbounded_park) i wpisuje stuck.json, ale nie zamyka issue.
+Po merge issue zostaje i2pr/pi. repo_mutex widzi --issue N i trzyma repo occupied. Mill nie startuje nastepnego.
 
 ## Files likely touched
 
-- `src/lokay/proc/dispatch_implement.py`
-- `src/lokay/proc/reap_over_budget.py`
+- `src/lokay/proc/repo_mutex.py`
 
 ## Test plan
 
-- Plan_only failure -> close_issue.main wywołane z --repo i --issue.
-- Stuck-blocked park (survey) -> close_issue NIE wywołane.
+- Fixture ps z --repo mikolaj92/lokay --issue 99, issue CLOSED -> busy false.
+- To samo issue OPEN -> busy true.
 
 ## Non-goals
 
