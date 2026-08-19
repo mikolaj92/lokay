@@ -18,8 +18,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
+    repos = [
+        repo
+        for repo in (cfg.repos if args.all else cfg.active_repos())
+        if repo.name == "mikolaj92/lokay"
+    ]
     rows = []
-    for repo in cfg.repos if args.all else cfg.active_repos():
+    for repo in repos:
         rows.append(
             {
                 "name": repo.name,
@@ -33,8 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     return emit_exit(
         ok(
             count=len(rows),
-            enabled=sum(1 for r in cfg.repos if r.enabled),
-            disabled=sum(1 for r in cfg.repos if not r.enabled),
+            enabled=sum(1 for repo in repos if repo.enabled),
+            disabled=sum(1 for repo in repos if not repo.enabled),
             repos=rows,
         )
     )
