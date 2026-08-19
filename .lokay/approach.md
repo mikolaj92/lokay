@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=201 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=203 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #201 — repo mutex: zajęty też przez żywe issue_to_pr
+Issue: #203 — select_implement: stuck blocked nie idzie na i2pr
 
 ## Goal
 
-Przy #197 młyn odpalił drugi i2pr na #190 na tym samym repo. Mutex patrzy tylko na `pi`, nie na `compose.issue_to_pr`.
+#192 było w stuck (blocked), a młyn i tak odpalił i2pr przy #201. `select_implement` nie czyta ledgera.
 
 ## Files likely touched
 
-- `src/lokay/proc/repo_mutex.py`
-- `tests/test_repo_mutex.py`
+- `src/lokay/proc/select_implement.py`
+- `tests/test_select_implement.py`
 
 ## Test plan
 
-- Fixture `ps` z i2pr na `mikolaj92/lokay` → busy. Inne repo → nie busy.
+- Issue blocked w stuck → nie implementable. Issue bez blocked → jak dziś.
 
 ## Non-goals
 

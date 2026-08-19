@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
+from lokay.stuck import excluded_numbers, load_stuck
 
 
 def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
@@ -21,6 +23,10 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
     prs_by_repo = dict(working.get("prs_by_repo") or {})
     ready_by_repo = dict(working.get("ready_by_repo") or {})
     pr_survey_failed = set(working.get("pr_survey_failed") or [])
+    stuck = dict(working.get("stuck") or begin.get("stuck") or {})
+    stuck_path = str(begin.get("stuck_path") or "")
+    if stuck_path and Path(stuck_path).is_file():
+        stuck = load_stuck(Path(stuck_path))
     occupied = {
         str(name)
         for name in list(working.get("occupied_repos") or [])
@@ -71,7 +77,34 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
                 }
             )
             continue
-        implementable = list(ready_by_repo.get(repo_name) or [])
+        candidates = list(ready_by_repo.get(repo_name) or [])
+        excluded = excluded_numbers(stuck, repo_name)
+        blocked_candidates = [
+            issue
+            for issue in candidates
+            if int(issue.get("number", -1)) in excluded
+        ]
+        implementable = [
+            issue
+            for issue in candidates
+            if int(issue.get("number", -1)) not in excluded
+        ]
+        if blocked_candidates:
+            actions.append(
+                {
+                    "step": "skip_stuck",
+                    "repo": repo_name,
+                    "exclude": sorted(
+                        int(issue.get("number", -1)) for issue in blocked_candidates
+                    ),
+                    "reason": "issue is blocked in the stuck ledger; refuse issue_to_pr",
+                }
+            )
+            ready_by_repo[repo_name] = implementable
+            issue_budget_ready = len(blocked_candidates)
+            working["remaining_ready"] = max(
+                0, int(working.get("remaining_ready") or 0) - issue_budget_ready
+            )
         if not implementable:
             continue
         if not executor_enabled:
