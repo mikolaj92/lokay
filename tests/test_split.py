@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from lokay.models import Issue
 from lokay.proc import issue_split as atom
 from lokay.split import plan_split
@@ -60,7 +64,7 @@ def test_issue_split_atom_creates_children(monkeypatch, tmp_path, capsys):
         f"""
 mode: live
 repos:
-  - name: a/b
+  - name: mikolaj92/lokay
     clone_path: {tmp_path}
 executor:
   enabled: true
@@ -105,7 +109,7 @@ state:
             str(cfg),
             "--live",
             "--repo",
-            "a/b",
+            "mikolaj92/lokay",
             "--issue",
             "9",
             "--intake-decision",
@@ -124,6 +128,36 @@ state:
     assert out["parent_tracker"] is True
     assert len(out["children"]) == 4
     assert len(created) == 4
+    assert all(child["repo"] == "mikolaj92/lokay" for child in created)
+
+
+@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+def test_issue_split_skips_product_repo_without_config_or_gh(
+    repo, monkeypatch, capsys
+):
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("product repositories must not load config or call GitHub")
+
+    monkeypatch.setattr(atom, "load_cfg", fail_if_called)
+    monkeypatch.setattr(atom, "runner", fail_if_called)
+    monkeypatch.setattr(atom, "get_issue", fail_if_called)
+    monkeypatch.setattr(atom, "create_issue", fail_if_called)
+    monkeypatch.setattr(atom, "add_issue_labels", fail_if_called)
+    monkeypatch.setattr(atom, "remove_issue_labels", fail_if_called)
+    monkeypatch.setattr(atom, "comment_issue", fail_if_called)
+    monkeypatch.setattr(atom, "close_issue", fail_if_called)
+
+    assert atom.main(["--repo", repo, "--issue", "9", "--force", "--live"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": True,
+        "planned": False,
+        "applied": False,
+        "skipped": True,
+        "reason": "repo_not_delivered_by_mini_mill",
+        "repo": repo,
+        "issue": 9,
+        "children": [],
+    }
 
 
 def test_issue_split_skips_when_not_split_decision(tmp_path, capsys):
@@ -132,7 +166,7 @@ def test_issue_split_skips_when_not_split_decision(tmp_path, capsys):
         f"""
 mode: dry-run
 repos:
-  - name: a/b
+  - name: mikolaj92/lokay
     clone_path: {tmp_path}
 executor:
   enabled: false
@@ -150,7 +184,7 @@ state:
             "--config",
             str(cfg),
             "--repo",
-            "a/b",
+            "mikolaj92/lokay",
             "--issue",
             "9",
             "--intake-decision",
