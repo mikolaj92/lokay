@@ -244,6 +244,46 @@ state:
     assert out["passes"] == 2
 
 
+def test_mill_stops_after_first_idle_health_pass(monkeypatch, tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    calls = {"n": 0}
+    idle_tick = {
+        "ok": True,
+        "idle": False,
+        "health": "idle",
+        "progress": 0,
+        "remaining": {"ready": 0},
+    }
+
+    def fake_tick(**kwargs):
+        calls["n"] += 1
+        return idle_tick
+
+    monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(mill_mod, "compose_factory_pass", fake_tick)
+
+    out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=8)
+
+    assert out["ok"] is True
+    assert out["idle"] is True
+    assert out["health"] == "idle"
+    assert out["passes"] == calls["n"] == 1
+    assert out["last"] == idle_tick
+
+
 def test_mill_propagates_failed_parent_pass(monkeypatch, tmp_path):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(

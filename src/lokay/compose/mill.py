@@ -131,7 +131,7 @@ def _compose_mill(
         total_progress += int(tick.get("progress") or 0)
         work_key = _work_key(remaining)
 
-        if tick.get("idle"):
+        if tick.get("idle") or tick.get("health") == "idle":
             return ok(
                 mode=cfg.mode,
                 live=live,
