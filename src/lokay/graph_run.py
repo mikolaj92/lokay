@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -215,15 +216,18 @@ def run_path(
     if inherited_health_lease:
         os.environ["LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] = "1"
     try:
-        result = host_run_package(
-            db_path=db,
-            package_path=pkg_runtime,
-            path_id=path_id,
-            run_id=rid,
-            effector_inputs=effector_inputs,
-            max_ticks=max_ticks,
-            worker_id="lokay-graph",
-        )
+        # The host persists its detailed journal in ``db``; its stdout copy can
+        # be hundreds of kilobytes and must not leak into the daemon log.
+        with open(os.devnull, "w", encoding="utf-8") as sink, redirect_stdout(sink):
+            result = host_run_package(
+                db_path=db,
+                package_path=pkg_runtime,
+                path_id=path_id,
+                run_id=rid,
+                effector_inputs=effector_inputs,
+                max_ticks=max_ticks,
+                worker_id="lokay-graph",
+            )
     finally:
         if previous_issue_guard is None:
             os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
