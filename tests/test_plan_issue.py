@@ -80,7 +80,7 @@ def test_plan_issue_cli_planned_no_write(tmp_path: Path, capsys):
             "--worktree",
             str(wt),
             "--repo",
-            "owner/repo",
+            "mikolaj92/lokay",
             "--issue",
             "7",
             "--title",
@@ -110,7 +110,7 @@ github:
   branch_prefix: ai/fix
   pr_labels: [ai:generated]
 repos:
-  - name: owner/repo
+  - name: mikolaj92/lokay
     clone_path: {tmp_path / "clone"}
 executor:
   enabled: false
@@ -128,7 +128,9 @@ state:
     wt.mkdir()
     monkeypatch.setattr(plan_issue, "mutations_allowed", lambda **k: True)
     issue_json = tmp_path / "issue.json"
-    issue_json.write_text(json.dumps(_issue().to_dict()), encoding="utf-8")
+    issue_json.write_text(
+        json.dumps(_issue(repo="mikolaj92/lokay").to_dict()), encoding="utf-8"
+    )
     code = plan_issue.main(
         [
             "--config",
@@ -148,13 +150,40 @@ state:
     assert "plan_issue.py" in (wt / APPROACH_REL_PATH).read_text(encoding="utf-8")
 
 
+def test_plan_issue_live_skips_product_repos_without_writing(tmp_path: Path, capsys):
+    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
+        wt = tmp_path / repo.rsplit("/", 1)[-1]
+        wt.mkdir()
+        code = plan_issue.main(
+            [
+                "--live",
+                "--worktree",
+                str(wt),
+                "--repo",
+                repo,
+                "--issue",
+                "512",
+                "--body",
+                "Change `src/product.py`.",
+            ]
+        )
+        assert code == 0
+        out = json.loads(capsys.readouterr().out.strip())
+        assert out["ok"] is True
+        assert out["skipped"] is True
+        assert out["reason"] == "repo_not_delivered_by_mini_mill"
+        assert out["repo"] == repo
+        assert out["wrote"] is False
+        assert not (wt / APPROACH_REL_PATH).exists()
+
+
 def test_plan_issue_llm_flag_fail_closed(capsys):
     code = plan_issue.main(
         [
             "--worktree",
             "/tmp",
             "--repo",
-            "owner/repo",
+            "mikolaj92/lokay",
             "--issue",
             "1",
             "--llm",
