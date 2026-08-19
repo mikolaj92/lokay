@@ -6,12 +6,19 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from lokay.passkit import io as pass_io
 from lokay.proc import reap_stale_worktrees
 
 
 def _ok() -> SimpleNamespace:
     return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+
+@pytest.fixture(autouse=True)
+def _open_issues_by_default(monkeypatch):
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", lambda repo, issue: False)
 
 
 class _Git:
@@ -677,6 +684,70 @@ def test_reap_skips_repos_outside_survey_scope(tmp_path, monkeypatch):
     )
     assert out["reaped_count"] == 0
     assert out["kept_count"] == 0
+
+
+def test_closed_issue_reaps_without_waiting_for_over_cap(tmp_path, monkeypatch):
+    branch = "ai/fix/369-closed"
+    wt = _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda repo, issue: repo == "owner/repo" and issue == 369,
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remote_heads",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("closed issue must skip git classification")),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("closed issue must skip git classification")),
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    removed: list[Path] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda runner, clone, path, **kwargs: removed.append(path) or {"ok": True},
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+
+    assert out["reaped_count"] == 1
+    assert out["reaped"][0]["reason"] == "closed_issue"
+    assert removed == [wt]
+
+
+def test_closed_issue_with_live_i2pr_is_kept(tmp_path, monkeypatch):
+    branch = "ai/fix/369-closed"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "live_issue_to_pr_receipts",
+        lambda: [{"repo": "owner/repo", "issue": 369, "pid": 61281}],
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("live writer must be checked first")),
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("must keep live writer")),
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["reason"] == "live_issue_to_pr"
 
 
 def test_over_cap_reaps_at_most_oldest_closed_issues(tmp_path, monkeypatch):
