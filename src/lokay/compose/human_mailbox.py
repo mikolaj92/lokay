@@ -1,8 +1,8 @@
 """Residual human mailbox survey (exception reporting, not a mill brake).
 
-Lists issues labeled needs-feedback and PRs labeled needs-review across managed
-repos. Presence of these items does **not** mean the mill is stuck — humans are
-a mailbox for rare residuals while other repos continue.
+Lists issues labeled needs-feedback and PRs labeled needs-review for the Lokay
+mini mill repository. Presence of these items does **not** mean the mill is stuck —
+humans are a mailbox for rare residuals while other work continues.
 """
 
 from __future__ import annotations
@@ -16,13 +16,17 @@ from lokay.gh_prs import list_open_ai_prs
 from lokay.proc._common import load_cfg, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict[str, Any]:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     r = runner(cfg)
     items: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    repos = [repo for repo in cfg.active_repos() if repo.name == MINI_MILL_REPO]
 
-    for repo in cfg.active_repos():
+    for repo in repos:
         try:
             feedback = list_issues_with_label(
                 r,
@@ -75,5 +79,5 @@ def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict
         count=len(items),
         items=items,
         errors=errors,
-        repos=[repo.name for repo in cfg.active_repos()],
+        repos=[repo.name for repo in repos],
     )
