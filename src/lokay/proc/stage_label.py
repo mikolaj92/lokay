@@ -21,6 +21,9 @@ from lokay.stage_ledger import (
 )
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def _open_issue_removals(
     labels: tuple[str, ...], *, stage: str, ready_label: str
 ) -> list[str]:
@@ -53,6 +56,21 @@ def main(argv: list[str] | None = None) -> int:
         help="optional comment body (overrides --receipt text when set)",
     )
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                issue=args.issue,
+                stage=args.stage,
+                add_labels=[],
+                remove_labels=[],
+                receipt=False,
+                applied=False,
+            )
+        )
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
