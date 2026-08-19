@@ -13,6 +13,7 @@ from lokay.passkit.support import run_proc, run_select
 from lokay.proc import intake_issue as p_intake
 from lokay.proc import label_issue as p_label
 from lokay.proc import select_issue as p_select
+from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import (
     detach_issue_to_pr,
@@ -24,6 +25,14 @@ from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuc
 # In-process hook for compose_tick tests. Production / Fala leave this None
 # and detach. Tick binds a patched composer only when tests replace it.
 compose_issue_to_pr = None
+
+
+def _is_plan_only_failure(result: dict[str, Any]) -> bool:
+    """Recognize the terminal no-code result in either envelope field."""
+    return any(
+        str(result.get(field) or "").strip() == "plan_only"
+        for field in ("error", "reason")
+    )
 
 
 def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -207,6 +216,19 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     if lab.get("ok") and lab.get("applied"):
                         progress += 1
                         remaining_ready = max(0, remaining_ready - 1)
+                    if _is_plan_only_failure(result):
+                        park = run_proc(
+                            p_park.main,
+                            ["--repo", selected["repo"], "--issue", str(num)],
+                        )
+                        actions.append(
+                            {
+                                "step": "park_plan_only",
+                                "repo": selected["repo"],
+                                "issue": num,
+                                **park,
+                            }
+                        )
             implementable = [i for i in implementable if int(i.get("number", -1)) != num]
         ready_by_repo[repo_name] = list(implementable)
 

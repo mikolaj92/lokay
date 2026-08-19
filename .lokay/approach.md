@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=209 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=211 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #209 — testy: work:ready w mockach global_pr_first
+Issue: #211 — dispatch: po plan_only blocked — park
 
 ## Goal
 
-Po gate #193 suite: 12 czerwonych w `test_global_pr_first` / `test_autonomy_contracts`. Mocki issue bez `work:ready` nie przechodzą survey.
+Fail-closed `plan_only` zostaje w survey `work:ready` (180–192). Park (#205) już zdejmuje etykietę, ale nikt go nie woła.
 
 ## Files likely touched
 
-- `tests/test_global_pr_first.py`
-- `tests/test_autonomy_contracts.py`
+- `src/lokay/proc/dispatch_implement.py`
+- `tests/test_dispatch_detach.py`
 
 ## Test plan
 
-- `uv run --extra dev pytest -q tests/test_global_pr_first.py tests/test_autonomy_contracts.py` zielone.
+- Mock plan_only blocked → park wołany raz.
 
 ## Non-goals
 
