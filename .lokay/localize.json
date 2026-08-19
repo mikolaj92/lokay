@@ -1,29 +1,28 @@
 {
   "paths": [
-    "src/lokay/proc/unbounded_detect.py",
-    "src/lokay/proc/unbounded_park.py",
-    "src/lokay/pr_review.py",
-    "src/lokay/proc/pr_review.py",
-    "src/lokay/gh_issues.py",
-    "src/lokay/pr_review_io.py",
-    "src/lokay/proc/list_issues.py",
-    "tests/test_autonomy_contracts.py",
-    "tests/test_global_pr_first.py",
-    "tests/test_unbounded_detect.py",
-    "tests/test_unbounded_park.py",
-    "tests/test_intake_mill_gate.py",
-    "tests/test_pr_review.py",
-    "tests/test_pr_review_idempotency.py"
+    "src/lokay/fala_organ.py",
+    "organ/common.py",
+    "lokay/fala_organ.py",
+    "tests/test_fala_organ.py"
   ],
-  "source": "deterministic",
+  "source": "agent",
   "seed_paths": [
-    "tests/test_autonomy_contracts.py",
-    "tests/test_global_pr_first.py"
+    "src/lokay/fala_organ.py",
+    "organ/common.py",
+    "tests/test_fala_organ.py",
+    "lokay/fala_organ.py"
   ],
   "matched_tokens": [
-    "test_global_pr_first",
-    "issues",
-    "test_autonomy_contracts",
+    "fala_organ",
+    "pr_create",
+    "commit_all",
+    "pr_merge",
+    "organ",
+    "common",
+    "state",
+    "get_issue",
+    "localize",
+    "test_fala_organ",
     "review",
     "gate",
     "unbounded",
@@ -33,9 +32,9 @@
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
     "Repo tree entries considered: 289.",
-    "Explicit issue file hints bypassed semantic localization."
+    "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__251-test_global_pr_first-labels-na-issue-nie-083d5e01",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__254-fala_organ-skip-mutations-when-issue-clo-66b3523e",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
