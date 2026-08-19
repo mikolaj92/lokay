@@ -1,25 +1,25 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=235 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=239 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #235 — test_local Fala timeout 2100s → 300s
+Issue: #239 — pr_create: skip when issue closed
 
 ## Goal
 
-`run_agent`/`repair_agent`/`self_repair_run_agent` są na 480s. `test_local` w `lokay.fala-package.toml` nadal ma `timeout_seconds = 2100`. Po src i2pr wisi do 35 min na pytest — cykl 5–10 min pada, PR nie powstaje.
+#235 zamknięte jako wontfix (klon timeoutów). Leftover pi i tak napisało src, mill otworzył i zmergował PR 237. Zamknięte issue nie może dostać PR.
 
 ## Files likely touched
 
-- `lokay.fala-package.toml`
-- `fala/lokay.fala-package.toml`
-- `src/lokay/data/lokay.fala-package.toml`
-- `tests/test_graph.py`
+- `src/lokay/proc/pr_create.py`
+- `tests/test_pr_create.py`
 
 ## Test plan
 
-- `tests/test_graph.py`: każdy `test_local` ma timeout == 300.
-- Nie ruszaj 180–192, 228.
+- `tests/test_pr_create.py` (nowy):
+- issue CLOSED → create_pr nie wołane, reason `issue_closed`.
+- issue OPEN → create_pr jak dziś.
+- Nie ruszaj tomli timeoutów. Nie ruszaj 180–192, 228, 235.
 
 ## Non-goals
 

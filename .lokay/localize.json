@@ -1,43 +1,36 @@
 {
   "paths": [
-    "docs/GRAPH.md",
-    "lokay.fala-package.toml",
-    "fala/lokay.fala-package.toml",
-    "src/lokay/data/lokay.fala-package.toml",
-    "229/231/233",
-    "lokay/data/lokay.fala-package.toml",
-    "tests/test_graph.py"
+    "src/lokay/proc/pr_create.py",
+    "229/231/233/235",
+    "lokay/proc/pr_create.py",
+    "tests/test_pr_create.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "lokay.fala-package.toml",
-    "fala/lokay.fala-package.toml",
-    "src/lokay/data/lokay.fala-package.toml",
-    "tests/test_graph.py",
-    "229/231/233",
-    "lokay/data/lokay.fala-package.toml"
+    "src/lokay/proc/pr_create.py",
+    "tests/test_pr_create.py",
+    "229/231/233/235",
+    "lokay/proc/pr_create.py"
   ],
   "matched_tokens": [
-    "test_local",
-    "run_agent",
-    "self_repair_validate",
-    "test_graph",
+    "pr_create",
+    "proc",
+    "test_pr_create",
     "review",
-    "gate",
     "unbounded",
     "bounded",
-    "fala-package",
     "229",
     "231",
-    "233"
+    "233",
+    "235"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 286.",
+    "Repo tree entries considered: 287.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__235-test_local-fala-timeout-2100s-300s-9bcebbf4",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__239-pr_create-skip-when-issue-closed-7f670ac3",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
