@@ -12,6 +12,9 @@ from lokay.passkit import io as pass_io
 from lokay.proc._common import add_config_live
 from lokay.stuck import is_blocked_in_ledger, load_stuck
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+
 
 def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     plan = pass_io.read_json(pass_io.plan_path(pass_dir))
@@ -24,6 +27,7 @@ def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -
     remaining_inbox = int(working.get("remaining_inbox") or 0)
     inbox_by_repo = dict(working.get("inbox_by_repo") or {})
     ran = 0
+    skipped_repos: list[str] = []
 
     if not live:
         pass_io.write_json(pass_io.working_path(pass_dir), working)
@@ -32,6 +36,20 @@ def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -
     for target in list(plan.get("triage_targets") or []):
         repo_name = str(target["repo"])
         num = int(target["issue"])
+        if repo_name != MINI_MILL_REPO:
+            if repo_name not in skipped_repos:
+                skipped_repos.append(repo_name)
+            actions.append(
+                {
+                    "step": "skip_repo_outside_mini_mill",
+                    "repo": repo_name,
+                    "issue": num,
+                    "ok": True,
+                    "skipped": True,
+                    "reason": _REPO_SKIP_REASON,
+                }
+            )
+            continue
         if is_blocked_in_ledger(stuck, repo_name, num):
             actions.append(
                 {
@@ -96,7 +114,14 @@ def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -
         }
     )
     pass_io.write_json(pass_io.working_path(pass_dir), working)
-    return ok(pass_dir=pass_dir, ran=ran)
+    result = ok(pass_dir=pass_dir, ran=ran)
+    if skipped_repos:
+        result.update(
+            skipped=True,
+            reason=_REPO_SKIP_REASON,
+            skipped_repos=skipped_repos,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
