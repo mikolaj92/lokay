@@ -12,6 +12,7 @@ from lokay.proc import closeout_pr as closeout_pr
 from lokay.proc import closeout_prs as closeout_prs
 from lokay.proc import pr_checks as p_checks
 from lokay.proc import stage_label as p_stage
+from lokay.proc import unbounded_park as p_park
 from lokay.proc.closeout_pr import main, run_closeout_pr
 from lokay.passkit import io as pass_io
 
@@ -37,6 +38,7 @@ def _run(
     triage: dict[str, Any] | None = None,
     repair: dict[str, Any] | None = None,
     tmp_path: Path,
+    parked: list[list[str]] | None = None,
     **policy: Any,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     stages: list[str] = []
@@ -50,6 +52,10 @@ def _run(
             stage = str(argv[argv.index("--stage") + 1])
             stages.append(stage)
             return {"ok": True, "applied": True, "stage": stage}
+        if fn is p_park.main:
+            if parked is not None:
+                parked.append(list(argv))
+            return {"ok": True, "applied": True, "removed": True}
         raise AssertionError(f"unexpected atom: {fn} {argv}")
 
     def fake_triage(**kwargs: Any) -> dict[str, Any]:
@@ -153,6 +159,34 @@ def test_merge_dispatches_pr_triage(monkeypatch, tmp_path):
     assert repair == []
     assert stages == []
     assert any(a.get("step") == "pr_triage" for a in out["actions"])
+
+
+def test_merged_closed_issue_is_parked(monkeypatch, tmp_path):
+    parked: list[list[str]] = []
+    out, triage, repair, stages = _run(
+        monkeypatch,
+        checks={"status": "passed", "merge_ok": True},
+        triage={"ok": True, "merged": True},
+        tmp_path=tmp_path,
+        parked=parked,
+    )
+    assert out["ok"] is True
+    assert out["still_open"] is False
+    assert parked == [["--repo", "a/b", "--issue", "7"]]
+    assert any(a.get("step") == "park_closed_issue" for a in out["actions"])
+
+
+def test_open_issue_does_not_park(monkeypatch, tmp_path):
+    parked: list[list[str]] = []
+    out, triage, repair, stages = _run(
+        monkeypatch,
+        checks={"status": "pending"},
+        tmp_path=tmp_path,
+        parked=parked,
+    )
+    assert out["route"] == "wait"
+    assert out["still_open"] is True
+    assert parked == []
 
 
 def test_skip_manual_does_not_touch_fala(monkeypatch, tmp_path):
