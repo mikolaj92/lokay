@@ -74,7 +74,7 @@ github:
   branch_prefix: ai/fix
   pr_labels: [ai:generated]
 repos:
-  - name: owner/repo
+  - name: mikolaj92/lokay
     clone_path: {tmp_path / "clone"}
 executor:
   enabled: false
@@ -99,7 +99,7 @@ state:
             "--config",
             str(cfg),
             "--repo",
-            "owner/repo",
+            "mikolaj92/lokay",
             "--branch",
             "ai/fix/7-foo-..-bar",
             "--live",

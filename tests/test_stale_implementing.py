@@ -35,7 +35,7 @@ def test_covering_pr_from_branch_and_title():
 
 def _issue(number: int, title: str, labels: list[str]) -> Issue:
     return Issue(
-        repo="mikolaj92/Fala",
+        repo="mikolaj92/lokay",
         number=number,
         title=title,
         body="",
@@ -60,7 +60,7 @@ def test_atom_strips_leftover_cache_even_when_job_or_pr_exists(monkeypatch):
         "lokay.proc.reap_stale_implementing.load_cfg",
         lambda args: SimpleNamespace(
             branch_prefix="ai/fix",
-            active_repos=lambda: [SimpleNamespace(name="mikolaj92/Fala")],
+            active_repos=lambda: [SimpleNamespace(name="mikolaj92/lokay")],
         ),
     )
     staged: list[list[str]] = []

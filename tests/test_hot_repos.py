@@ -59,7 +59,7 @@ def test_all_cold_surveys_anchor_plus_bounded_cold():
     assert len(picked) < len(repos)
 
 
-def test_factory_begin_cold_survey_covers_configured_issue_budget(tmp_path, monkeypatch):
+def test_factory_begin_limits_mini_mill_survey_to_lokay(tmp_path, monkeypatch):
     repos = ["mikolaj92/lokay", "a/one", "a/two", "a/three"]
     cfg = SimpleNamespace(
         mode="dry_run",
@@ -87,8 +87,8 @@ def test_factory_begin_cold_survey_covers_configured_issue_budget(tmp_path, monk
 
     assert result["ok"] is True
     begin = json.loads((Path(result["pass_dir"]) / "begin.json").read_text(encoding="utf-8"))
-    assert len(begin["survey_repos"]) >= cfg.max_issue_to_pr_per_pass
-    assert set(begin["survey_repos"]) == set(repos)
+    assert begin["repos"] == ["mikolaj92/lokay"]
+    assert begin["survey_repos"] == ["mikolaj92/lokay"]
 
 
 def test_load_last_pass_by_repo(tmp_path):

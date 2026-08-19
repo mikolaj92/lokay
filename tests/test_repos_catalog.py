@@ -19,16 +19,16 @@ def test_catalog_loads_managed_source_repos():
         p = root / ".pytest_catalog_config.yaml"
         p.write_text(yaml.dump(data), encoding="utf-8")
         cfg = load_config(p)
-    assert len(cfg.repos) == 30
+    assert len(cfg.repos) == 29
     names = {r.name for r in cfg.repos}
     assert "mikolaj92/Temida" in names
     assert "mikolaj92/Fala" in names
     assert "mikolaj92/msds-portal" in names
     assert "mikolaj92/lokay" in names
-    assert "mikolaj92/heimdall" in names
-    heimdall = next(r for r in cfg.repos if r.name == "mikolaj92/heimdall")
-    assert heimdall.clone_path == Path("/Users/mikomac/Developer/OSS/heimdall")
+    assert "mikolaj92/takt" in names
+    takt = next(r for r in cfg.repos if r.name == "mikolaj92/takt")
+    assert takt.clone_path.name == "takt"
     assert "mikolaj92/dotfiles" in names  # in scope, even if clone missing
     # all catalog entries enabled by default (scope != clone presence)
     assert all(r.enabled for r in cfg.repos)
-    assert len(cfg.active_repos()) == 30
+    assert len(cfg.active_repos()) == 29

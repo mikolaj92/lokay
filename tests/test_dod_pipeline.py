@@ -48,7 +48,7 @@ def _envelope(capsys) -> dict:
 def test_assign_dry_run_reports_self_assignee(tmp_path, capsys):
     cfg = _cfg(tmp_path)
     code = assign_issue.main(
-        ["--config", str(cfg), "--repo", "mikolaj92/Fala", "--issue", "164"]
+        ["--config", str(cfg), "--repo", "mikolaj92/lokay", "--issue", "164"]
     )
     assert code == 0
     env = _envelope(capsys)
@@ -56,7 +56,7 @@ def test_assign_dry_run_reports_self_assignee(tmp_path, capsys):
     assert env["planned"] is True
     assert env["applied"] is False
     assert env["assignee"] == "mill-bot"
-    assert env["repo"] == "mikolaj92/Fala"
+    assert env["repo"] == "mikolaj92/lokay"
     assert env["issue"] == 164
 
 
@@ -66,7 +66,7 @@ def test_assign_live_fixture_applies_configured_self(tmp_path, monkeypatch, caps
     monkeypatch.setattr(assign_issue, "runner", lambda: runner)
     monkeypatch.setattr(assign_issue, "mutations_allowed", lambda **k: True)
     code = assign_issue.main(
-        ["--config", str(cfg), "--live", "--repo", "mikolaj92/Fala", "--issue", "164"]
+        ["--config", str(cfg), "--live", "--repo", "mikolaj92/lokay", "--issue", "164"]
     )
     assert code == 0
     env = _envelope(capsys)
@@ -80,7 +80,7 @@ def test_assign_live_fixture_applies_configured_self(tmp_path, monkeypatch, caps
 
 def test_pr_create_after_push_shaped_success_has_number(tmp_path, monkeypatch, capsys):
     cfg = _cfg(tmp_path, mode="live")
-    runner = _GhRunner(stdout="https://github.com/mikolaj92/Fala/pull/88\n")
+    runner = _GhRunner(stdout="https://github.com/mikolaj92/lokay/pull/88\n")
     monkeypatch.setattr(pr_create, "runner", lambda: runner)
     monkeypatch.setattr(pr_create, "mutations_allowed", lambda **k: True)
     code = pr_create.main(
@@ -89,13 +89,13 @@ def test_pr_create_after_push_shaped_success_has_number(tmp_path, monkeypatch, c
             str(cfg),
             "--live",
             "--repo",
-            "mikolaj92/Fala",
+            "mikolaj92/lokay",
             "--title",
-            "fix: Fala#164 readme",
+            "fix: shaped success",
             "--body",
-            "Closes #164",
+            "delivery body",
             "--head",
-            "ai/fix/164-x",
+            "ai/fix/shaped-success",
         ]
     )
     assert code == 0
