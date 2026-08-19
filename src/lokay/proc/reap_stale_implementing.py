@@ -6,7 +6,7 @@ import argparse
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import list_labeled_issues
+from lokay.gh_issues import is_github_rate_limit_error, list_labeled_issues
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working
@@ -30,40 +30,48 @@ def run_reap_stale_implementing(
     for repo in cfg.active_repos():
         if scope is not None and repo.name not in scope:
             continue
+        repo_issues: list[tuple[str, Any]] = []
         for label in sorted(LEDGER_ACTIVE_LABELS):
-            issues = list_labeled_issues(
-                runner(cfg), cfg, repo, label=label, live=live
-            )
-            for issue in issues:
-                num = int(issue.number)
-                key = (repo.name, num)
-                if key in seen:
-                    continue
-                seen.add(key)
-                if live:
-                    staged = run_proc(
-                        p_stage.main,
-                        [
-                            *cfg_flag,
-                            *live_flag,
-                            "--repo",
-                            repo.name,
-                            "--issue",
-                            str(num),
-                            "--stage",
-                            "ready",
-                        ],
-                    )
-                else:
-                    staged = {"ok": True, "planned": True, "stage": "ready"}
-                reaped.append(
-                    {
-                        "repo": repo.name,
-                        "issue": num,
-                        "label": label,
-                        **staged,
-                    }
+            try:
+                issues = list_labeled_issues(
+                    runner(cfg), cfg, repo, label=label, live=live
                 )
+            except RuntimeError as exc:
+                if is_github_rate_limit_error(exc):
+                    repo_issues = []
+                    break
+                raise
+            repo_issues.extend((label, issue) for issue in issues)
+        for label, issue in repo_issues:
+            num = int(issue.number)
+            key = (repo.name, num)
+            if key in seen:
+                continue
+            seen.add(key)
+            if live:
+                staged = run_proc(
+                    p_stage.main,
+                    [
+                        *cfg_flag,
+                        *live_flag,
+                        "--repo",
+                        repo.name,
+                        "--issue",
+                        str(num),
+                        "--stage",
+                        "ready",
+                    ],
+                )
+            else:
+                staged = {"ok": True, "planned": True, "stage": "ready"}
+            reaped.append(
+                {
+                    "repo": repo.name,
+                    "issue": num,
+                    "label": label,
+                    **staged,
+                }
+            )
     return ok(
         planned=not live,
         reaped=reaped,

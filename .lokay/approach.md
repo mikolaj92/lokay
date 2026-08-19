@@ -1,22 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=300 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=303 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #300 — daemon_cycle: SIGALRM w Fala native nie zrzuca lokay-daemon
+Issue: #303 — reap_stale_implementing: GraphQL 429 — skip repo, nie survey_error
 
 ## Goal
 
-Strop 180s (#296) jest na main, ale SIGALRM leci w `native.host_run_package` (Fala). Handler rzuca `_PassCeiling` na stosie Mojo — Python nie łapie, `lokay-daemon` pada na gołym `Exception` bez komunikatu. `last-pass.json` nie dostaje `reason=pass_ceiling`. LaunchAgent kończy tick exit 1.
+`gh issue list` GraphQL exhausted na jednym repo z katalogu. `reap_stale_implementing` / `gh_issues` pada adapter_failed. last-pass `health=survey_error`, LaunchAgent exit 1.
 
 ## Files likely touched
 
-- `last-pass.json`
-- `src/lokay/compose/daemon_cycle.py`
+- `src/lokay/proc/reap_stale_implementing.py`
+- `src/lokay/gh_issues.py`
+- `tests/test_reap_stale_implementing.py`
 
 ## Test plan
 
-- Sygnał / sztuczny native-like Exception po stropie → payload `pass_ceiling`, proces nie pada. Krótki przebieg bez zmian.
+- Sztuczny GraphQL 429 na jednym repo → skip, health nie survey_error.
 
 ## Non-goals
 

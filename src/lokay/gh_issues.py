@@ -11,6 +11,16 @@ from lokay.triage import is_parked, is_undecided
 
 WORK_READY_LABEL = "work:ready"
 
+
+def is_github_rate_limit_error(exc: BaseException) -> bool:
+    """Return whether a gh failure says GitHub has throttled the request."""
+    message = str(exc).lower()
+    return "rate limit" in message or any(
+        marker in message
+        for marker in ("http 429", "status 429", "status code 429", "returned 429")
+    )
+
+
 # Standard factory labels (create-if-missing so triage works on new repos).
 _LABEL_META: dict[str, tuple[str, str]] = {
     "ai:ready": ("0E8A16", "Ready for AI agent work"),

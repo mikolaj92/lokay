@@ -48,3 +48,54 @@ state:
         live=True,
     )
     assert out["reaped_count"] == 0
+
+
+def test_reap_stale_implementing_skips_rate_limited_repo(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: owner/exhausted
+    clone_path: {tmp_path / "exhausted"}
+  - name: owner/healthy
+    clone_path: {tmp_path / "healthy"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "exhausted").mkdir()
+    (tmp_path / "healthy").mkdir()
+    listed_repos = []
+
+    def _list(_runner, _cfg, repo, **_kwargs):
+        listed_repos.append(repo.name)
+        if repo.name == "owner/exhausted":
+            raise RuntimeError("GraphQL: API rate limit exceeded (HTTP 429)")
+        return []
+
+    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", _list)
+
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+
+    assert out["ok"] is True
+    assert out["reaped_count"] == 0
+    assert "owner/healthy" in listed_repos
