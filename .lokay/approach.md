@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=181 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=184 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #181 — Stare .lokay-preserved nie może zjadać worktree_add
+Issue: #184 — Real diff + pi over budget: commit/pr bez czekania na exit
 
 ## Goal
 
-Influenzer#177 (2026-08-19): `worktree_add` padło `worktree preservation archive already exists`. Sztuka zjedzona, restart ręczny (rm archive / prune). Katalog `.lokay-preserved` zostaje po starych przebiegach i blokuje następną.
+Influenzer#137 i #177: pi napisał kod, spał 8–10 min, `issue_to_pr` nie zrobił PR. Olej musiał odpalić `commit_all`+`push_branch`+`pr_create`. lokay#180 (to samo) padło plan_only — **nie wracać do #180**.
 
 ## Files likely touched
 
-- `src/lokay/git_worktree.py`
-- `tests/test_worktree_reset.py`
+- `lokay/approach.md`
+- `localize.json`
 
 ## Test plan
 
-- `tests/test_worktree_reset.py`: live worktree + istniejące `.corner.lokay-preserved` z `valuable` → remove ok, stare `valuable` nienaruszone, nowy `.corner-2.lokay-preserved` ma snapshot. Istniejący test `fails_closed_on_interrupted_preservation_archive` (brak live path) zostaje.
+- Real plik + over_budget → committed/pr attempted. Tylko `.lokay/*` → nie commit.
 
 ## Non-goals
 
