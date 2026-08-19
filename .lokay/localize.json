@@ -1,27 +1,29 @@
 {
   "paths": [
-    "mill.lock",
-    "lokay-mill-daemon.sh",
-    "scripts/lokay-mill-daemon.sh",
+    "last-pass.json",
+    "src/lokay/compose/daemon_cycle.py",
+    "lokay/compose/daemon_cycle.py",
     "tests/test_preflight_daemon.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "mill.lock",
-    "lokay-mill-daemon.sh",
-    "scripts/lokay-mill-daemon.sh"
+    "last-pass.json",
+    "src/lokay/compose/daemon_cycle.py",
+    "lokay/compose/daemon_cycle.py"
   ],
   "matched_tokens": [
-    "lock",
-    "host",
+    "daemon_cycle",
     "daemon",
-    "Lock",
-    "park",
+    "last",
+    "host",
+    "health",
+    "compose",
+    "run_path",
+    "receipt",
     "review",
-    "gate",
     "unbounded",
     "bounded",
-    "lokay-mill-daemon"
+    "last-pass"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -29,7 +31,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__298-mill.lock-busy-host-ff-i-tak-lock-nie-bl-53793fca",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__300-daemon_cycle-sigalrm-w-fala-native-nie-z-d42ad930",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

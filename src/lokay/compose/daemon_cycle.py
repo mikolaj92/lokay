@@ -46,25 +46,37 @@ def compose_daemon_cycle(
 ) -> dict[str, Any]:
     ceiling = max(0.001, float(pass_ceiling_seconds))
     previous_handler = signal.getsignal(signal.SIGALRM)
+    ceiling_expired = False
 
     def ceiling_reached(_signum: int, _frame: Any) -> None:
+        nonlocal ceiling_expired
+        ceiling_expired = True
         raise _PassCeiling
 
     signal.signal(signal.SIGALRM, ceiling_reached)
     previous_timer = signal.setitimer(signal.ITIMER_REAL, ceiling)
     try:
-        return finalize_daemon_payload(
-            run_path(
-                path_id="daemon_cycle",
-                repo="__lokay_daemon__",
-                config_path=config_path,
-                live=True,
-                package_path=str(trusted_fala_manifest()),
-                db_path=Path.home() / ".lokay" / "fala" / "daemon-cycle",
-                extra_inputs={"max_passes": max(1, int(max_passes))},
+        try:
+            return finalize_daemon_payload(
+                run_path(
+                    path_id="daemon_cycle",
+                    repo="__lokay_daemon__",
+                    config_path=config_path,
+                    live=True,
+                    package_path=str(trusted_fala_manifest()),
+                    db_path=Path.home() / ".lokay" / "fala" / "daemon-cycle",
+                    extra_inputs={"max_passes": max(1, int(max_passes))},
+                )
             )
-        )
-    except _PassCeiling:
+        except _PassCeiling:
+            pass
+        except Exception:
+            # Native Fala/Mojo may translate the signal exception into a plain
+            # (sometimes message-less) Exception. Only classify it as the
+            # ceiling when our alarm actually fired.
+            if not ceiling_expired:
+                raise
+
         # Workers started by issue-to-PR are detached. Do not signal them when
         # releasing the daemon/launchd slot for the next tick.
         payload = {

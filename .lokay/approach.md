@@ -1,23 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=298 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=300 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #298 — mill.lock busy: host-ff i tak, lock nie blokuje update main
+Issue: #300 — daemon_cycle: SIGALRM w Fala native nie zrzuca lokay-daemon
 
 ## Goal
 
-Gdy `mill.lock` jest zajęty, `lokay-mill-daemon.sh` pomija `lokay-host-ff`. Wiszący przebieg trzyma lock, main nie ląduje na dysku, nowy kod (np. #296) nie wchodzi do żywej maszyny.
+Strop 180s (#296) jest na main, ale SIGALRM leci w `native.host_run_package` (Fala). Handler rzuca `_PassCeiling` na stosie Mojo — Python nie łapie, `lokay-daemon` pada na gołym `Exception` bez komunikatu. `last-pass.json` nie dostaje `reason=pass_ceiling`. LaunchAgent kończy tick exit 1.
 
 ## Files likely touched
 
-- `mill.lock`
-- `lokay-mill-daemon.sh`
-- `scripts/lokay-mill-daemon.sh`
+- `last-pass.json`
+- `src/lokay/compose/daemon_cycle.py`
 
 ## Test plan
 
-- Lock busy → host-ff wołany, daemon nie. Lock wolny → jak dziś.
+- Sygnał / sztuczny native-like Exception po stropie → payload `pass_ceiling`, proces nie pada. Krótki przebieg bez zmian.
 
 ## Non-goals
 

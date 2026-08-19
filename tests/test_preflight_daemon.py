@@ -3,6 +3,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from lokay.compose import daemon_cycle
 from lokay.compose.daemon_cycle import finalize_daemon_payload
 from lokay.envelope import process_exit_code
@@ -375,6 +377,45 @@ def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
     assert out["reason"] == "pass_ceiling"
     receipt = tmp_path / "lokay-state" / "last-pass.json"
     assert json.loads(receipt.read_text())["reason"] == "pass_ceiling"
+
+
+def test_daemon_cycle_native_exception_after_ceiling_writes_receipt(
+    monkeypatch, tmp_path
+):
+    cfg = _write_cfg(tmp_path)
+
+    def native_like_failure(**_kwargs):
+        import time
+
+        try:
+            time.sleep(1)
+        except BaseException:
+            raise Exception("") from None
+
+    monkeypatch.setattr(daemon_cycle, "run_path", native_like_failure)
+    out = daemon_cycle.compose_daemon_cycle(
+        config_path=cfg,
+        pass_ceiling_seconds=0.02,
+    )
+
+    assert out["reason"] == "pass_ceiling"
+    receipt = tmp_path / "lokay-state" / "last-pass.json"
+    assert json.loads(receipt.read_text())["reason"] == "pass_ceiling"
+
+
+def test_daemon_cycle_native_exception_before_ceiling_propagates(monkeypatch, tmp_path):
+    cfg = _write_cfg(tmp_path)
+    monkeypatch.setattr(
+        daemon_cycle,
+        "run_path",
+        lambda **_kwargs: (_ for _ in ()).throw(Exception("native failure")),
+    )
+
+    with pytest.raises(Exception, match="native failure"):
+        daemon_cycle.compose_daemon_cycle(
+            config_path=cfg,
+            pass_ceiling_seconds=1,
+        )
 
 
 def test_daemon_cycle_short_pass_is_unchanged(monkeypatch, tmp_path):
