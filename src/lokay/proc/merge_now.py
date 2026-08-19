@@ -8,6 +8,7 @@ import subprocess
 from lokay.envelope import emit_exit, err, ok
 
 MERGE_TIMEOUT_SECONDS = 180
+ALLOWED_REPO = "mikolaj92/lokay"
 
 
 def merge_argv(repo: str, pr: int) -> list[str]:
@@ -27,6 +28,15 @@ def main(argv: list[str] | None = None) -> int:
     repo = str(args.repo)
     pr = int(args.pr)
     command = merge_argv(repo, pr)
+    if repo != ALLOWED_REPO:
+        return emit_exit(
+            err(
+                f"refusing to merge PR outside {ALLOWED_REPO}",
+                command=command,
+                repo=repo,
+                pr=pr,
+            )
+        )
     if args.dry_run:
         return emit_exit(ok(planned=True, dry_run=True, command=command, repo=repo, pr=pr))
     try:
