@@ -79,15 +79,24 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
         closeout,
         "load_cfg",
         lambda _args: SimpleNamespace(
-            repos=[SimpleNamespace(name="owner/repo")],
+            repos=[
+                SimpleNamespace(name="mikolaj92/Temida"),
+                SimpleNamespace(name="mikolaj92/lokay"),
+                SimpleNamespace(name="mikolaj92/takt"),
+            ],
             ready_label="ai:ready",
         ),
     )
     monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
     monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
-    monkeypatch.setattr(
-        closeout, "closed_ready_numbers", lambda *_args, **_kwargs: [7]
-    )
+    surveyed: list[tuple[str, str]] = []
+
+    def fake_closed_ready(_runner, repo, label, *, live):
+        assert live is True
+        surveyed.append((repo, label))
+        return [7]
+
+    monkeypatch.setattr(closeout, "closed_ready_numbers", fake_closed_ready)
     calls: list[dict[str, object]] = []
 
     def fake_closeout(**kwargs):
@@ -98,9 +107,23 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
     out = closeout.run_closeout_leftover(config_path=None, live=True)
     assert out["labels_removed"] is True
     assert out["issue_to_pr_started"] == 0
-    assert calls == [
-        {"repo": "owner/repo", "issue": 7, "config_path": None, "live": True}
+    assert surveyed == [
+        ("mikolaj92/lokay", "work:ready"),
+        ("mikolaj92/lokay", "ai:ready"),
     ]
+    assert calls == [
+        {"repo": "mikolaj92/lokay", "issue": 7, "config_path": None, "live": True}
+    ]
+
+
+def test_closed_ready_numbers_skips_product_repo_without_gh():
+    class NoGhRunner:
+        def run_checked(self, *_args, **_kwargs):
+            raise AssertionError("product repo must not call gh")
+
+    assert closeout.closed_ready_numbers(
+        NoGhRunner(), "mikolaj92/Temida", "work:ready", live=True
+    ) == []
 
 
 def test_mill_tick_leftover_closed_ready_does_not_start_i2pr(monkeypatch, tmp_path):
