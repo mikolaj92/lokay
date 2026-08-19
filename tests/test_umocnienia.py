@@ -373,6 +373,43 @@ def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
     assert tick["idle"] is False
 
 
+def test_compute_health_by_repo_contains_only_survey_scope(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    repos = [f"owner/repo-{number}" for number in range(29)]
+    survey_scope = [repos[2], repos[11], repos[23]]
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {
+            "live": True,
+            "mode": "live",
+            "repos": repos,
+            "survey_repos": survey_scope,
+            "max_issue_to_pr_per_pass": 1,
+            "executor_enabled": True,
+            "merge_enabled": True,
+            "planned": [],
+            "stuck_path": "",
+        },
+    )
+    pass_io.write_json(
+        pass_io.working_path(pass_dir),
+        {
+            "actions": [],
+            "progress": 0,
+            "prs_by_repo": {},
+            "ready_by_repo": {},
+            "inbox_by_repo": {},
+        },
+    )
+
+    run_compute_health(pass_dir=str(pass_dir))
+
+    tick = pass_io.read_json(pass_io.tick_path(pass_dir))
+    assert [row["repo"] for row in tick["remaining"]["by_repo"]] == survey_scope
+
+
 def test_activate_descendant_of_recovery_keeps_published_push(tmp_path, monkeypatch, capsys):
     clone = tmp_path / "lokay"
     bare = tmp_path / "origin.git"
