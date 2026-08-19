@@ -379,26 +379,28 @@ def remove_worktree(
                 "removed": False,
                 "error": "worktree path changed before preservation",
             }
-        try:
-            quarantine_state = os.stat(
-                archive.name,
-                dir_fd=parent_fd,
-                follow_symlinks=False,
+        archive_name = archive.name
+        archive_number = 2
+        while True:
+            try:
+                os.stat(
+                    archive_name,
+                    dir_fd=parent_fd,
+                    follow_symlinks=False,
+                )
+            except FileNotFoundError:
+                break
+            except OSError as exc:
+                return {
+                    "ok": False,
+                    "removed": False,
+                    "error": f"cannot preserve worktree before registry prune: {exc}",
+                }
+            archive_name = (
+                f".{worktree.name}-{archive_number}{_QUARANTINE_SUFFIX}"
             )
-        except FileNotFoundError:
-            pass
-        except OSError as exc:
-            return {
-                "ok": False,
-                "removed": False,
-                "error": f"cannot preserve worktree before registry prune: {exc}",
-            }
-        else:
-            return {
-                "ok": False,
-                "removed": False,
-                "error": "worktree preservation archive already exists",
-            }
+            archive_number += 1
+        archive = worktree.with_name(archive_name)
         try:
             os.rename(
                 worktree.name,
