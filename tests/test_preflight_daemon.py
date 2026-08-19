@@ -3,6 +3,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from lokay.compose import daemon_cycle
 from lokay.compose.daemon_cycle import finalize_daemon_payload
 from lokay.envelope import process_exit_code
 from lokay.proc import daemon
@@ -353,6 +354,40 @@ def test_finalize_daemon_payload_lifts_progress_and_drops_fala():
     assert out["progress"] == 3
     assert out["remaining"]["issue_to_pr_started"] == 1
     assert "fala" not in out
+
+
+def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
+    cfg = _write_cfg(tmp_path)
+
+    def wait_forever(**_kwargs):
+        import time
+
+        time.sleep(1)
+        return {"ok": True}
+
+    monkeypatch.setattr(daemon_cycle, "run_path", wait_forever)
+    out = daemon_cycle.compose_daemon_cycle(
+        config_path=cfg,
+        pass_ceiling_seconds=0.02,
+    )
+
+    assert out["ok"] is False
+    assert out["reason"] == "pass_ceiling"
+    receipt = tmp_path / "lokay-state" / "last-pass.json"
+    assert json.loads(receipt.read_text())["reason"] == "pass_ceiling"
+
+
+def test_daemon_cycle_short_pass_is_unchanged(monkeypatch, tmp_path):
+    cfg = _write_cfg(tmp_path)
+    expected = {"ok": True, "health": "idle"}
+    monkeypatch.setattr(daemon_cycle, "run_path", lambda **_kwargs: expected)
+    out = daemon_cycle.compose_daemon_cycle(
+        config_path=cfg,
+        pass_ceiling_seconds=1,
+    )
+    assert out["ok"] is True
+    assert out["health"] == "idle"
+    assert out.get("reason") != "pass_ceiling"
 
 
 def test_daemon_progress_despite_fala_ok_false_exits_zero(monkeypatch, tmp_path, capsys):
