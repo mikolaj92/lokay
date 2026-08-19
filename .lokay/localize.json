@@ -1,28 +1,34 @@
 {
   "paths": [
-    "src/lokay/gh_issues.py",
-    "ready/inbox/labeled",
-    "lokay/gh_issues.py"
+    "lokay-mill-daemon.sh",
+    "mill-latest.log",
+    "scripts/lokay-mill-daemon.sh",
+    "strop/digest/exit",
+    "tests/test_preflight_daemon.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/gh_issues.py",
-    "ready/inbox/labeled",
-    "lokay/gh_issues.py"
+    "lokay-mill-daemon.sh",
+    "mill-latest.log",
+    "scripts/lokay-mill-daemon.sh",
+    "strop/digest/exit"
   ],
   "matched_tokens": [
-    "gh_issues",
-    "reap",
-    "survey",
-    "list_",
-    "inbox",
-    "labeled",
-    "gh_rate",
-    "rate",
+    "daemon",
+    "latest",
+    "log",
+    "LOG",
+    "exit",
+    "bound",
+    "strop",
+    "digest",
+    "host",
     "review",
     "gate",
     "unbounded",
-    "bounded"
+    "bounded",
+    "lokay-mill-daemon",
+    "mill-latest"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -30,7 +36,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__310-gh_issues-_list_open_issues-przy-429-zwr-79433231",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__312-mill-daemon-na-starcie-ticka-od-wie-mill-a371a239",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
