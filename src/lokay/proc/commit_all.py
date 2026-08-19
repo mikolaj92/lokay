@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.git_commit import commit_all
+from lokay.git_commit import commit_all, is_configured_issue_worktree
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 from lokay.runner import git_spec
 
@@ -19,8 +19,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--message", required=True)
     args = p.parse_args(argv)
     cfg = load_cfg(args) if args.live else None
-    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     run = runner()
+    try:
+        live = mutations_allowed(live_flag=args.live, cfg=cfg)
+    except RuntimeError as exc:
+        # A coding run can outlive the mill lease that launched it. Preserve
+        # completed source only in a verified linked issue worktree; configured
+        # host checkouts (especially main) remain protected.
+        checkouts = tuple(repo.clone_path for repo in getattr(cfg, "repos", ()))
+        if "lease=token_mismatch)" not in str(exc) or not is_configured_issue_worktree(
+            run, Path(args.worktree), checkouts
+        ):
+            return emit_exit(err(str(exc)))
+        live = True
     try:
         did = commit_all(
             run,
