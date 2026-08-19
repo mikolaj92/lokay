@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 
 from lokay.config import load_config
-from lokay.envelope import emit_exit
+from lokay.envelope import emit_exit, ok
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
+
+MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def compose_pr_triage(
@@ -21,6 +23,17 @@ def compose_pr_triage(
     keep_issue_open: bool = False,
     package_path: str | None = None,
 ) -> dict:
+    if repo != MINI_MILL_REPO:
+        return ok(
+            kind="pr_triage",
+            engine="fala",
+            planned=False,
+            skipped=True,
+            reason="repo_not_delivered_by_mini_mill",
+            repo=repo,
+            pr=pr_number,
+            branch=branch,
+        )
     if live and load_config(config_path).mode != "live":
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
     if not branch:
