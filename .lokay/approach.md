@@ -1,26 +1,25 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=229 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=231 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #229 — run_agent Fala timeout 2100s → 480s (pi_budget)
+Issue: #231 — repair_agent Fala timeout 2100s → 480s (pi_budget)
 
 ## Goal
 
-`pi_budget` / `reap_over_budget` to 480s. W `lokay.fala-package.toml` effector `run_agent` ma `timeout_seconds = 2100`. Pi może pisać approach.md 35 min, a reap trzyma `coder_live`. Occupy stoi.
+#229 ścięło `run_agent` do 480s. `repair_agent` (issue_to_pr, drugi strzał po teście) nadal ma `timeout_seconds = 2100` w `lokay.fala-package.toml`. Drugi coding slot zjada 35 min.
 
 ## Files likely touched
 
 - `lokay.fala-package.toml`
-- `src/lokay/data/lokay.fala-package.toml`
 - `fala/lokay.fala-package.toml`
-- `tests/test_fala_package_lock.py`
+- `src/lokay/data/lokay.fala-package.toml`
 - `tests/test_graph.py`
 
 ## Test plan
 
-- Istniejący test pakietu/grafu (np. `tests/test_fala_package_lock.py` / `tests/test_graph.py`): run_agent timeout == 480 (DEFAULT_BUDGET_S).
-- Nie ruszaj 180–192 ani #228.
+- `tests/test_graph.py`: analogicznie do run_agent — repair_agent timeout == 480.
+- Nie ruszaj 180–192, 228, 229.
 
 ## Non-goals
 

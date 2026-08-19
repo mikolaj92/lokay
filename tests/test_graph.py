@@ -211,6 +211,10 @@ def test_run_agent_timeouts_match_pi_budget():
         agent = next(n for n in path["effectors"] if n["id"] == "run_agent")
         assert int(agent["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
 
+    issue_to_pr = next(p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr")
+    repair = next(n for n in issue_to_pr["effectors"] if n["id"] == "repair_agent")
+    assert int(repair["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
+
 
 def test_describe_includes_pr_repair():
     desc = describe_package()
