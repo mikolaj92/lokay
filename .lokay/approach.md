@@ -1,23 +1,27 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=245 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=247 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #245 — test: compileall tests+src (łap SyntaxError)
+Issue: #247 — list_inbox_issues: skip stuck blocked
 
 ## Goal
 
-#243: `test_global_pr_first.py` na main miał SyntaxError. test_local nie złapał, bo plik się nie kompilował w środku większego runu / merge poszedł mimo to. Kolejny popsuty test znowu zatruje main.
+#236 filtruje w `list_inbox.py` *po* `list_inbox_issues`. Sam helper `src/lokay/gh_issues.py` `list_inbox_issues` nadal zwraca zablokowane (190–192 wracały do każdego callera).
 
 ## Files likely touched
 
-- `test_global_pr_first.py`
-- `tests/test_suite_compiles.py`
+- `list_inbox.py`
+- `src/lokay/gh_issues.py`
+- `lokay.stuck`
+- `tests/test_gh_issues.py`
+- `tests/test_list_inbox_issues.py`
 
 ## Test plan
 
-- Sam plik: `pytest tests/test_suite_compiles.py` zielony.
-- Nie ruszaj 180–192, 228, 235. Nie ruszaj tomli timeoutów.
+- `tests/test_gh_issues.py` albo nowy `tests/test_list_inbox_issues.py`:
+- zablokowane issue nie ląduje w wyniku.
+- Nie ruszaj tomli timeoutów. Nie ruszaj 180–192, 228, 235.
 
 ## Non-goals
 

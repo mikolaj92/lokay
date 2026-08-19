@@ -122,6 +122,20 @@ def test_list_inbox_uses_full_page(tmp_path):
     assert runner.calls[0][runner.calls[0].index("--limit") + 1] == str(SURVEY_LIST_CAP)
 
 
+def test_list_inbox_skips_stuck_blocked_issue(tmp_path):
+    (tmp_path / "stuck.json").write_text(
+        json.dumps({"issues": {"mikolaj92/influenzer#3": {"blocked": True}}}),
+        encoding="utf-8",
+    )
+    runner = _ListRunner([_issue_row(3), _issue_row(4)])
+    cfg, repo = _cfg(tmp_path)
+    cfg.state_path = tmp_path / "state.jsonl"
+
+    issues = list_inbox_issues(runner, cfg, repo, live=True)
+
+    assert [i.number for i in issues] == [4]
+
+
 def test_list_issues_with_label_uses_full_page(tmp_path):
     runner = _ListRunner([_issue_row(9, "ai:needs-feedback")])
     cfg, repo = _cfg(tmp_path)

@@ -6,6 +6,7 @@ from lokay.config import Config, RepoConfig
 from lokay.gh_rate import parse_survey_list, survey_list_cap, survey_pace
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
+from lokay.stuck import is_blocked_in_ledger, load_stuck, stuck_path_for
 from lokay.triage import is_parked, is_undecided
 
 # Standard factory labels (create-if-missing so triage works on new repos).
@@ -170,9 +171,12 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
 def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
     """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
     rows = _list_open_issues(runner, config, repo, live=live, kind="inbox-issue")
+    stuck = load_stuck(stuck_path_for(config.state_path))
     out: list[Issue] = []
     for row in rows:
         issue = _issue_from_row(repo.name, row)
+        if is_blocked_in_ledger(stuck, repo.name, issue.number):
+            continue
         if not is_undecided(
             issue.labels,
             ready_label=config.ready_label,
