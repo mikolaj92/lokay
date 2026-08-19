@@ -48,6 +48,44 @@ def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | No
     return str(pass_dir)
 
 
+def test_blocked_ready_issue_is_not_selected_for_issue_to_pr(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "ready_by_repo": {"a/one": [{"number": 192, "title": "blocked"}]},
+            "remaining_ready": 1,
+            "stuck": {"issues": {"a/one#192": {"blocked": True}}},
+        },
+    )
+    result = run_select_implement(pass_dir=pass_dir)
+    assert result["ok"] is True
+    assert result["selected"] == 0
+    implement = pass_io.read_json(pass_io.implement_path(pass_dir))
+    assert implement["clean_repos"] == []
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["ready_by_repo"]["a/one"] == []
+    assert working["remaining_ready"] == 0
+    assert any(row.get("step") == "skip_stuck" for row in working["actions"])
+
+
+def test_blocked_ready_issue_is_read_from_stuck_ledger(tmp_path):
+    stuck_path = tmp_path / "stuck.json"
+    stuck_path.write_text(
+        '{"issues": {"a/one#192": {"blocked": true}}}\n', encoding="utf-8"
+    )
+    pass_dir = _pass(
+        tmp_path,
+        begin={"stuck_path": str(stuck_path)},
+        working={
+            "ready_by_repo": {"a/one": [{"number": 192, "title": "blocked"}]},
+            "remaining_ready": 1,
+        },
+    )
+    result = run_select_implement(pass_dir=pass_dir)
+    assert result["selected"] == 0
+    assert pass_io.read_json(pass_io.implement_path(pass_dir))["clean_repos"] == []
+
+
 def test_manual_needs_review_does_not_block_same_repo_ready(tmp_path):
     pass_dir = _pass(
         tmp_path,
