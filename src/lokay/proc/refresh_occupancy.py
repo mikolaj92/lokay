@@ -14,10 +14,12 @@ from typing import Any
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit.support import is_manual_pr, run_proc
 from lokay.passkit.working import load_begin_working, recount_prs, save_begin_working
+from lokay.proc import get_issue as p_get_issue
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import (
     clear_dead_issue_to_pr_receipts,
+    clear_issue_to_pr_receipt,
     has_unreadable_issue_to_pr_receipts,
     live_issue_to_pr_receipts,
 )
@@ -32,13 +34,41 @@ def _merged_this_pass(working: dict[str, Any]) -> list[str]:
     return seen
 
 
-def _live_repos() -> list[str]:
+def _live_repos(
+    *, cfg_flag: list[str], live_flag: list[str], actions: list[dict[str, Any]]
+) -> tuple[list[str], list[dict[str, Any]]]:
     live_repos: list[str] = []
-    for row in live_issue_to_pr_receipts():
-        repo_name = str(row.get("repo") or "")
+    cleared: list[dict[str, Any]] = []
+    for receipt in live_issue_to_pr_receipts():
+        repo_name = str(receipt.get("repo") or "")
+        try:
+            issue_number = int(receipt["issue"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        viewed = run_proc(
+            p_get_issue.main,
+            [*cfg_flag, *live_flag, "--repo", repo_name, "--issue", str(issue_number)],
+        )
+        actions.append(
+            {
+                "step": "get_live_issue_to_pr_issue",
+                **viewed,
+                "repo": repo_name,
+                "issue": issue_number,
+            }
+        )
+        # A failed lookup is uncertainty, so retain occupancy. Only an
+        # authoritative non-OPEN state makes a live worker's lane idle.
+        state = str((viewed.get("issue") or {}).get("state") or "").upper()
+        if viewed.get("ok") and state and state != "OPEN":
+            if clear_issue_to_pr_receipt(receipt):
+                cleared.append(receipt)
+                continue
+            # The receipt changed concurrently or could not be removed; keep
+            # the lane occupied rather than racing a replacement worker.
         if repo_name and repo_name not in live_repos:
             live_repos.append(repo_name)
-    return live_repos
+    return live_repos, cleared
 
 
 def _keep_parked_labels(
@@ -82,7 +112,18 @@ def run_refresh_occupancy(
             }
         )
     receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
-    live_repos = _live_repos()
+    live_repos, closed_receipts = _live_repos(
+        cfg_flag=cfg_flag, live_flag=live_flag, actions=actions
+    )
+    cleared_receipts.extend(closed_receipts)
+    for receipt in closed_receipts:
+        actions.append(
+            {
+                "step": "clear_closed_issue_to_pr_receipt",
+                "repo": receipt.get("repo"),
+                "issue": receipt.get("issue"),
+            }
+        )
     # Dead/stale/unreadable receipts are idle. Only a live coder or a merge
     # this pass occupies a repo. Occupying the whole catalog blocked dispatch.
     occupied = list(dict.fromkeys([*merged, *live_repos]))

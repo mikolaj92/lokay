@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=287 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=289 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #287 — survey_ready: listuj work:ready (state all), nie filtr z ai:ready
+Issue: #289 — refresh_occupancy: żywy i2pr na CLOSED nie zajmuje repo
 
 ## Goal
 
-`survey_ready` woła `list_issues` → `list_ready_issues` (etykieta `config.ready_label` = `ai:ready`), potem filtruje `work:ready`. CLOSED z samym `work:ready` nigdy nie wchodzi na listę, więc park z #283 nie jedzie.
+Po harvest merge issue jest CLOSED, a leftover `issue_to_pr` jeszcze żyje. `refresh_occupancy` liczy żywe receipty jako occupied. Last-pass: occupied=true, ready=0, procesu już nie ma albo zombie na CLOSED. Następny ticket czeka na mutex.
 
 ## Files likely touched
 
-- `src/lokay/proc/survey_ready.py`
-- `src/lokay/gh_issues.py`
+- `src/lokay/proc/refresh_occupancy.py`
 
 ## Test plan
 
-- Lista: CLOSED+work:ready (bez ai:ready) + OPEN+work:ready → CLOSED parkowany, OPEN zostaje. Inbox / inne etykiety dalej `--state open`.
+- Receipt żywy, issue CLOSED → occupied_repos bez tego repo, receipt w cleared.
+- Receipt żywy, issue OPEN → occupied.
 
 ## Non-goals
 
