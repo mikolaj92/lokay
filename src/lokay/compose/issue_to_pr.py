@@ -87,7 +87,10 @@ def _delivery_stop_reason(repo: str, issue_number: int) -> str | None:
             "--json", "body,state,mergedAt",
         ]
     )
-    closes_issue = re.compile(rf"(?im)\bfixes\s+#{issue_number}\b")
+    closes_issue = re.compile(
+        rf"\b(?:fixes|closes|resolves)\s+#{issue_number}\b",
+        re.IGNORECASE,
+    )
     for pr in prs if isinstance(prs, list) else []:
         if not isinstance(pr, dict) or not closes_issue.search(str(pr.get("body") or "")):
             continue
