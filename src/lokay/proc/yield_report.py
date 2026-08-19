@@ -60,6 +60,9 @@ def build_report(path: Path, *, since: datetime) -> dict[str, Any]:
                 reason = str(row.get("reason") or (row.get("error") or {}).get("code") or "")
                 if reason:
                     by_repo[repo][reason] += 1
+            # Factory actions (queue/intake) are not appended individually;
+            # their durable pass workspace is summarized in state elsewhere.
+            # Issue-to-PR embeds localize traces inside the Fala result.
             for trace in _semantic_traces(row):
                 skind = str(trace.get("kind") or "unknown")
                 semantic[skind][f"{trace.get('source', 'unknown')}:{trace.get('status', 'unknown')}"] += 1
