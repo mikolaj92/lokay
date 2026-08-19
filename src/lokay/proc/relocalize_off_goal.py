@@ -16,21 +16,25 @@ from lokay.runner import Runner, git_spec
 
 
 _FACTORY_BEGIN = "src/lokay/proc/factory_begin.py"
+_IMPLEMENT = "src/lokay/proc/implement.py"
+_ALWAYS_OFF_GOAL = (_FACTORY_BEGIN, _IMPLEMENT)
 
 
-def _issue_explicitly_names_factory_begin(issue_json: str) -> bool:
+def _issue_explicit_file_paths(issue_json: str) -> set[str]:
     if not issue_json:
-        return False
+        return set()
     payload = json.loads(Path(issue_json).read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("issue-json must be an object")
-    return _FACTORY_BEGIN in extract_issue_file_paths(str(payload.get("body") or ""))
+    return set(extract_issue_file_paths(str(payload.get("body") or "")))
 
 
-def _restore_factory_begin(run: Runner, root: Path, base: str, *, live: bool) -> None:
+def _restore_paths(
+    run: Runner, root: Path, base: str, paths: list[str], *, live: bool
+) -> None:
     run.run_checked(
         git_spec(
-            ["restore", "--source", base, "--staged", "--worktree", "--", _FACTORY_BEGIN],
+            ["restore", "--source", base, "--staged", "--worktree", "--", *paths],
             cwd=root,
         ),
         live=live,
@@ -54,31 +58,40 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.loads(evidence.read_text(encoding="utf-8"))
         localized = [str(p).removeprefix("./").rstrip("/") for p in payload.get("paths", [])]
         changed = list_changed_paths(run, root, base=args.base)
-        factory_off_goal = (
-            _FACTORY_BEGIN in changed
-            and not _issue_explicitly_names_factory_begin(args.issue_json)
-        )
+        explicit_paths = _issue_explicit_file_paths(args.issue_json)
+        restore_paths = [
+            path
+            for path in _ALWAYS_OFF_GOAL
+            if path in changed and path not in explicit_paths
+        ]
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc), reason="invalid_localize", worktree=str(root)))
 
     cfg = load_cfg(args)
     live = False
-    if factory_off_goal:
+    if restore_paths:
         try:
             live = mutations_allowed(live_flag=args.live, cfg=cfg)
-            _restore_factory_begin(run, root, args.base, live=live)
+            _restore_paths(run, root, args.base, restore_paths, live=live)
         except Exception as exc:  # noqa: BLE001
             return emit_exit(err(str(exc), reason="restore_failed", worktree=str(root)))
-        changed = [path for path in changed if path != _FACTORY_BEGIN]
+        changed = [path for path in changed if path not in restore_paths]
 
     off_goal = _off_goal_paths(changed, localized)
     if not off_goal:
+        reason = "on_goal"
+        if restore_paths == [_FACTORY_BEGIN]:
+            reason = "factory_begin_restored"
+        elif restore_paths == [_IMPLEMENT]:
+            reason = "implement_restored"
+        elif restore_paths:
+            reason = "off_goal_paths_restored"
         return emit_exit(
             ok(
-                skipped=not factory_off_goal,
-                reason="factory_begin_restored" if factory_off_goal else "on_goal",
-                planned=bool(factory_off_goal and not live),
-                restored_paths=[_FACTORY_BEGIN] if factory_off_goal else [],
+                skipped=not restore_paths,
+                reason=reason,
+                planned=bool(restore_paths and not live),
+                restored_paths=restore_paths,
                 worktree=str(root),
             )
         )
@@ -109,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
                 worktree=str(root),
             )
         )
-    if not factory_off_goal:
+    if not restore_paths:
         live = mutations_allowed(live_flag=args.live, cfg=cfg)
     merged = tuple(dict.fromkeys([*localized, *approved]))
     if live:
@@ -130,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             approved_paths=approved,
             paths=list(merged),
             semantic=loc.semantic,
-            restored_paths=[_FACTORY_BEGIN] if factory_off_goal else [],
+            restored_paths=restore_paths,
             worktree=str(root),
         )
     )
