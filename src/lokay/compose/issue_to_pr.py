@@ -38,7 +38,7 @@ def _await_detach_activation() -> bool:
 
 
 def _command_json(args: list[str]) -> Any | None:
-    """Return command JSON; callers fail closed when a survey is unavailable."""
+    """Return command JSON, or None when a survey is unavailable."""
     try:
         completed = subprocess.run(
             args,
@@ -78,9 +78,7 @@ def _delivery_stop_reason(repo: str, issue_number: int) -> str | None:
     issue = _command_json(
         ["gh", "issue", "view", str(issue_number), "--repo", repo, "--json", "state"]
     )
-    if not isinstance(issue, dict):
-        return "delivery_survey_unavailable"
-    if str(issue.get("state", "")).upper() == "CLOSED":
+    if isinstance(issue, dict) and str(issue.get("state", "")).upper() == "CLOSED":
         return "issue_closed"
 
     prs = _command_json(
@@ -89,10 +87,8 @@ def _delivery_stop_reason(repo: str, issue_number: int) -> str | None:
             "--json", "body,state,mergedAt",
         ]
     )
-    if not isinstance(prs, list):
-        return "delivery_survey_unavailable"
     closes_issue = re.compile(rf"(?im)\bfixes\s+#{issue_number}\b")
-    for pr in prs:
+    for pr in prs if isinstance(prs, list) else []:
         if not isinstance(pr, dict) or not closes_issue.search(str(pr.get("body") or "")):
             continue
         if str(pr.get("state", "")).upper() == "OPEN" or pr.get("mergedAt"):

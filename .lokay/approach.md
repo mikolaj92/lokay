@@ -1,22 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=329 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=331 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #329 — issue_to_pr: po on-goal commit/PR nie dokładaj off-goal na tej samej gałęzi
+Issue: #331 — issue_to_pr: 429/survey fail nie jest stopem dostarczenia
 
 ## Goal
 
-`issue_to_pr` po on-goal commit i PR dalej pisze na tej samej gałęzi — off-goal.
+#329: `_delivery_stop_reason` gdy `gh issue view` / `gh pr list` zwraca None (GraphQL 429) → `delivery_survey_unavailable` → `compose_issue_to_pr` **ok + stopped**. Fabryka traktuje to jak dostarczenie i nie jedzie.
 
 ## Files likely touched
 
-- `factory_begin.py`
 - `src/lokay/compose/issue_to_pr.py`
 
 ## Test plan
 
-- On-goal commit + PR istnieje → drugi krok nie dodaje obcego pliku. Issue CLOSED → zero mutacji.
+- `_command_json` → None → `stopped` jest False / reason nie `delivery_survey_unavailable`. CLOSED nadal stop.
 
 ## Non-goals
 

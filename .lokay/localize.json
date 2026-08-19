@@ -1,24 +1,22 @@
 {
   "paths": [
-    "factory_begin.py",
     "src/lokay/compose/issue_to_pr.py",
     "lokay/compose/issue_to_pr.py",
-    "src/lokay/proc/factory_begin.py",
     "tests/test_issue_to_pr_activation.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "factory_begin.py",
     "src/lokay/compose/issue_to_pr.py",
     "lokay/compose/issue_to_pr.py"
   ],
   "matched_tokens": [
     "issue_to_pr",
-    "reap_stale_worktrees",
-    "factory_begin",
-    "fala_organ",
+    "survey",
+    "view",
     "compose",
-    "organ",
+    "repos",
+    "issues",
+    "review",
     "gate",
     "unbounded",
     "bounded"
@@ -29,7 +27,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__329-issue_to_pr-po-on-goal-commit-pr-nie-dok-6e2a8ce1",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__331-issue_to_pr-429-survey-fail-nie-jest-sto-4c1ea5bb",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
