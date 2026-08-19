@@ -83,14 +83,22 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
     out = d.run_dispatch_implement(pass_dir=str(tmp_path), config_path=None, live=True)
     assert out.get("ok") is True
     assert out.get("detached") is True
-    assert out.get("started") == 2
-    assert len(seen) == 2
+    assert out.get("started") == 1
+    assert len(seen) == 1
     assert all(flag is True for _, flag in seen)
     argv0, _ = seen[0]
     # FakePopen only stored argv + start_new_session; log path is on the action.
     working = __import__("json").loads((tmp_path / "working.json").read_text())
     launched = [a for a in working["actions"] if a.get("step") == "issue_to_pr"]
-    assert len(launched) == 2
+    assert len(launched) == 1
+    assert [a for a in working["actions"] if a.get("step") == "skip_repo_outside_mini_mill"] == [
+        {
+            "step": "skip_repo_outside_mini_mill",
+            "repo": "mikolaj92/Fala",
+            "skipped": True,
+            "reason": "repo_not_delivered_by_mini_mill",
+        }
+    ]
     for row in launched:
         log = row.get("log") or ""
         assert "issue-to-pr-" in log
@@ -113,13 +121,13 @@ def test_blocked_plan_only_is_parked_once(monkeypatch, tmp_path):
         "progress": 0,
         "stuck": {},
         "ready_by_repo": {
-            "owner/repo": [{"repo": "owner/repo", "number": 11}]
+            "mikolaj92/lokay": [{"repo": "mikolaj92/lokay", "number": 11}]
         },
     }
     (tmp_path / "begin.json").write_text(__import__("json").dumps(begin))
     (tmp_path / "working.json").write_text(__import__("json").dumps(working))
     (tmp_path / "implement.json").write_text(
-        __import__("json").dumps({"clean_repos": ["owner/repo"], "issue_budget": 1})
+        __import__("json").dumps({"clean_repos": ["mikolaj92/lokay"], "issue_budget": 1})
     )
     monkeypatch.setattr(pass_io, "begin_path", lambda _p: tmp_path / "begin.json")
     monkeypatch.setattr(pass_io, "working_path", lambda _p: tmp_path / "working.json")
@@ -158,7 +166,7 @@ def test_blocked_plan_only_is_parked_once(monkeypatch, tmp_path):
     assert out.get("ok") is True
     park_calls = [(main, argv) for main, argv in calls if main is d.p_park.main]
     assert park_calls == [
-        (d.p_park.main, ["--repo", "owner/repo", "--issue", "11"])
+        (d.p_park.main, ["--repo", "mikolaj92/lokay", "--issue", "11"])
     ]
 
 
@@ -208,10 +216,10 @@ def test_dispatch_continues_when_receipt_state_is_unknown(monkeypatch, tmp_path)
     from lokay.passkit import io as pass_io
 
     begin = {"live": True, "issue_budget": 1, "stuck_path": str(tmp_path / "stuck.json")}
-    working = {"actions": [], "progress": 0, "stuck": {}, "ready_by_repo": {"owner/repo": [{"repo": "owner/repo", "number": 1}]}}
+    working = {"actions": [], "progress": 0, "stuck": {}, "ready_by_repo": {"mikolaj92/lokay": [{"repo": "mikolaj92/lokay", "number": 1}]}}
     (tmp_path / "begin.json").write_text(__import__("json").dumps(begin))
     (tmp_path / "working.json").write_text(__import__("json").dumps(working))
-    (tmp_path / "implement.json").write_text(__import__("json").dumps({"clean_repos": ["owner/repo"], "issue_budget": 1}))
+    (tmp_path / "implement.json").write_text(__import__("json").dumps({"clean_repos": ["mikolaj92/lokay"], "issue_budget": 1}))
     monkeypatch.setattr(pass_io, "begin_path", lambda _p: tmp_path / "begin.json")
     monkeypatch.setattr(pass_io, "working_path", lambda _p: tmp_path / "working.json")
     monkeypatch.setattr(pass_io, "implement_path", lambda _p: tmp_path / "implement.json")
