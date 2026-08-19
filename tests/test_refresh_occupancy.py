@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from lokay.passkit import io as pass_io
-from lokay.proc import refresh_occupancy
+from lokay.proc import detach_issue_to_pr, refresh_occupancy
 from lokay.proc.closeout_prs import run_closeout_prs
 from lokay.proc.select_implement import run_select_implement
 
@@ -139,6 +142,57 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
     assert selected["selected"] == 0
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
     assert implement["clean_repos"] == []
+
+
+@pytest.mark.parametrize(
+    ("pid_alive", "occupied", "started"),
+    [(False, [], 0), (True, ["a/one"], 1)],
+)
+def test_refresh_occupancy_uses_worker_liveness(
+    tmp_path, monkeypatch, pid_alive, occupied, started
+):
+    """A historical start is not occupancy after its i2pr/pi process exits."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "a__one-2.json").write_text(
+        json.dumps({"repo": "a/one", "issue": 2, "pid": 987654}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(detach_issue_to_pr, "coding_live_for_issue", lambda _issue: False)
+    monkeypatch.setattr(
+        refresh_occupancy,
+        "live_issue_to_pr_receipts",
+        lambda: detach_issue_to_pr.live_issue_to_pr_receipts(
+            cycle, pid_alive=lambda _pid: pid_alive
+        ),
+    )
+    monkeypatch.setattr(
+        refresh_occupancy,
+        "run_proc",
+        lambda fn, argv: (
+            {"ok": True, "issue": {"state": "OPEN"}}
+            if fn is refresh_occupancy.p_get_issue.main
+            else {"ok": True, "prs": []}
+        ),
+    )
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "issue_to_pr_started": 1,
+            "ready_by_repo": {"a/one": [{"number": 3, "title": "next"}]},
+            "remaining_ready": 1,
+        },
+    )
+
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+
+    assert out["occupied_repos"] == occupied
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["occupied_repos"] == occupied
+    assert working["issue_to_pr_started"] == started
 
 
 def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch):
