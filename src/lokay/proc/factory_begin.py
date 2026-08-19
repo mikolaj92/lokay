@@ -104,7 +104,9 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         repos,
         load_last_pass_by_repo(cfg.state_path),
         salt=str(pass_dir),
-        extra_cold=max(2, int(cfg.max_issue_to_pr_per_pass)),
+        # Survey one more cold repo than the dispatch budget so K exhaustion
+        # still reports known ready work instead of hiding it outside the pass.
+        extra_cold=max(2, int(cfg.max_issue_to_pr_per_pass) + 1),
     )
     begin = {
         "pass_dir": str(pass_dir),
