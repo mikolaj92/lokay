@@ -9,6 +9,9 @@ from lokay.gh_issues import add_issue_labels, remove_issue_labels
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-label-issue")
     add_config_live(p)
@@ -27,11 +30,24 @@ def main(argv: list[str] | None = None) -> int:
         help="remove labels instead of adding",
     )
     args = p.parse_args(argv)
-    cfg = load_cfg(args)
-    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     labels = [str(x) for x in (args.labels or []) if x]
     if not labels:
         return emit_exit(err("at least one --label required"))
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                issue=args.issue,
+                labels=labels,
+                removed=bool(args.remove),
+                applied=False,
+            )
+        )
+    cfg = load_cfg(args)
+    live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
         if args.remove:
             remove_issue_labels(runner(), args.repo, args.issue, labels, live=live)
