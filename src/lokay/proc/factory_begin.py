@@ -104,6 +104,9 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         repos,
         load_last_pass_by_repo(cfg.state_path),
         salt=str(pass_dir),
+        # The cold sample must be wide enough to spend an explicitly
+        # configured K>1 implementation budget and report remaining work.
+        extra_cold=max(2, int(cfg.max_issue_to_pr_per_pass) + 1),
     )
     begin = {
         "pass_dir": str(pass_dir),
