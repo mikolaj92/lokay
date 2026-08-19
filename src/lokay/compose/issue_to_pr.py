@@ -12,6 +12,8 @@ from typing import Any
 from lokay.config import load_config
 from lokay.envelope import emit_exit
 from lokay.graph_run import run_path
+from lokay.passkit.support import run_proc
+from lokay.proc import closeout as p_closeout
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
 
@@ -117,6 +119,13 @@ def compose_issue_to_pr(
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
 
     if live and (stop_reason := _delivery_stop_reason(repo, issue_number)):
+        closeout = None
+        if stop_reason == "delivery_pr_exists":
+            cfg = ["--config", config_path] if config_path else []
+            closeout = run_proc(
+                p_closeout.main,
+                [*cfg, "--live", "--repo", repo, "--issue", str(issue_number)],
+            )
         return {
             "ok": True,
             "kind": "issue_to_pr",
@@ -126,6 +135,7 @@ def compose_issue_to_pr(
             "reason": stop_reason,
             "repo": repo,
             "issue": issue_number,
+            "closeout": closeout,
         }
 
     result = run_path(
