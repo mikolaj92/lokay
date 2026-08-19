@@ -78,6 +78,35 @@ def test_ff_only_when_behind_and_clean(tmp_path: Path):
     assert (host / "README").read_text(encoding="utf-8") == "new\n"
 
 
+def test_clean_issue_branch_returns_to_main_and_fast_forwards(tmp_path: Path):
+    seed, host = _pair(tmp_path)
+    _git(host, "checkout", "-b", "ai/fix/361-host-ff")
+    _advance_origin(seed, "new\n")
+    remote = _git(seed, "rev-parse", "HEAD").stdout.strip()
+
+    result = fast_forward_origin_main(Runner(), host)
+
+    assert result["updated"] is True
+    assert _git(host, "branch", "--show-current").stdout.strip() == "main"
+    assert _git(host, "rev-parse", "HEAD").stdout.strip() == remote
+    assert (host / "README").read_text(encoding="utf-8") == "new\n"
+
+
+def test_dirty_issue_branch_is_refused_without_checkout(tmp_path: Path):
+    seed, host = _pair(tmp_path)
+    _git(host, "checkout", "-b", "ai/fix/361-host-ff")
+    _advance_origin(seed, "new\n")
+    (host / "README").write_text("local dirty\n", encoding="utf-8")
+
+    try:
+        fast_forward_origin_main(Runner(), host)
+        raise AssertionError("dirty issue checkout must fail closed")
+    except RuntimeError as exc:
+        assert "dirty" in str(exc)
+    assert _git(host, "branch", "--show-current").stdout.strip() == "ai/fix/361-host-ff"
+    assert (host / "README").read_text(encoding="utf-8") == "local dirty\n"
+
+
 def test_refuse_when_behind_and_dirty(tmp_path: Path):
     seed, host = _pair(tmp_path)
     old = _git(host, "rev-parse", "HEAD").stdout.strip()
