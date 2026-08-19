@@ -10,6 +10,7 @@ import pytest
 
 from lokay.proc import closeout_pr as closeout_pr
 from lokay.proc import closeout_prs as closeout_prs
+from lokay.proc import get_issue as p_get_issue
 from lokay.proc import pr_checks as p_checks
 from lokay.proc import stage_label as p_stage
 from lokay.proc import unbounded_park as p_park
@@ -39,6 +40,7 @@ def _run(
     repair: dict[str, Any] | None = None,
     tmp_path: Path,
     parked: list[list[str]] | None = None,
+    issue_state: str = "OPEN",
     **policy: Any,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     stages: list[str] = []
@@ -46,6 +48,8 @@ def _run(
     repair_calls: list[dict[str, Any]] = []
 
     def fake_proc(fn: Any, argv: list[str]) -> dict[str, Any]:
+        if fn is p_get_issue.main:
+            return {"ok": True, "issue": {"number": 7, "state": issue_state}}
         if fn is p_checks.main:
             return {"ok": True, **checks}
         if fn is p_stage.main:
@@ -176,6 +180,23 @@ def test_merged_closed_issue_is_parked(monkeypatch, tmp_path):
     assert any(a.get("step") == "park_closed_issue" for a in out["actions"])
 
 
+def test_closed_issue_is_parked_and_skips_merge(monkeypatch, tmp_path):
+    parked: list[list[str]] = []
+    out, triage, repair, stages = _run(
+        monkeypatch,
+        checks={"status": "passed", "merge_ok": True},
+        tmp_path=tmp_path,
+        parked=parked,
+        issue_state="CLOSED",
+    )
+    assert out["route"] == "skip"
+    assert out["reason"] == "issue_closed"
+    assert out["still_open"] is True
+    assert parked == [["--repo", "a/b", "--issue", "7"]]
+    assert triage == []
+    assert not any(a.get("step") == "pr_checks" for a in out["actions"])
+
+
 def test_open_issue_does_not_park(monkeypatch, tmp_path):
     parked: list[list[str]] = []
     out, triage, repair, stages = _run(
@@ -208,6 +229,8 @@ def test_skip_manual_does_not_touch_fala(monkeypatch, tmp_path):
 
 def test_cli_pending_envelope(capsys, monkeypatch):
     def fake_proc(fn: Any, argv: list[str]) -> dict[str, Any]:
+        if fn is p_get_issue.main:
+            return {"ok": True, "issue": {"number": 7, "state": "OPEN"}}
         if fn is p_checks.main:
             return {"ok": True, "status": "pending"}
         if fn is p_stage.main:

@@ -1,21 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=291 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=294 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #291 — reap: TERM i2pr gdy issue CLOSED, nie czekaj 8 min
+Issue: #294 — closeout_pr: park gdy issue CLOSED, nie tylko po merge w tym przebiegu
 
 ## Goal
 
-#289 czyści receipt i occupancy, ale leftover `issue_to_pr` na CLOSED dalej żyje do reap over-budget (8 min). Palimy pi i trzymamy worktree.
+`closeout_pr` parkuje dopiero po własnym merge w tym przebiegu (#267). Harvest / Fixes# zamyka issue wcześniej, PR jeszcze otwarty albo closeout idzie inną route — etykiety zostają do następnego `survey_ready`.
 
 ## Files likely touched
 
-- `src/lokay/proc/refresh_occupancy.py`
+- `src/lokay/proc/closeout_pr.py`
 
 ## Test plan
 
-- Receipt żywy, issue CLOSED, pid mock → kill + cleared. OPEN → bez kill.
+- PR open, issue CLOSED → park, route skip, bez merge.
+- PR open, issue OPEN → bez zmian.
 
 ## Non-goals
 
