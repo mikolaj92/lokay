@@ -1,21 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=307 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=310 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #307 — mill-daemon: zapisz digest po pass_ceiling — nie reinstall co tick
+Issue: #310 — gh_issues: _list_open_issues przy 429 zwraca puste, nie raise
 
 ## Goal
 
-Po stropie 180s last-pass ma `health=pass_ceiling`. Skrypt młyna zapisuje digest checkoutu tylko gdy log ma health z listy (progress/idle/…). `pass_ceiling` nie ma. Digest nie ląduje → następny tick znowu `--reinstall-package lokay --reinstall-package fala` → znowu strop. Pętla.
+#303 nauczył reap łapać GraphQL 429. #309 (owijka w list_ready) zdjęte jako klon. Źródło jest jedno: `_list_open_issues` woła `run_checked` i raise leci do survey. Każdy list_* (ready/inbox/labeled) pada.
 
 ## Files likely touched
 
-- `scripts/lokay-mill-daemon.sh`
+- `src/lokay/gh_issues.py`
 
 ## Test plan
 
-- Log z pass_ceiling → plik digest zapisany. Kolejny przebieg z tym samym digestem nie dodaje `--reinstall-package`.
+- Sztuczny 429 z run_checked → pusta lista, bez wyjątku. Inny błąd nadal raise.
 
 ## Non-goals
 

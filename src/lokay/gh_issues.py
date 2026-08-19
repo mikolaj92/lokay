@@ -148,7 +148,12 @@ def _list_open_issues(
             str(cap),
         ]
     )
-    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
+    try:
+        result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
+    except RuntimeError as exc:
+        if is_github_rate_limit_error(exc):
+            return []
+        raise
     if not live:
         return []
     return parse_survey_list(result.stdout, kind=kind, repo=repo.name, cap=cap)
