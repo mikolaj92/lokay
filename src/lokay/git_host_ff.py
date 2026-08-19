@@ -88,20 +88,73 @@ def _rev_parse(runner: Runner, checkout: Path, ref: str) -> str:
     return (result.stdout or "").strip()
 
 
-def _dirty_paths(runner: Runner, checkout: Path, skipped: list[str]) -> list[str]:
-    dirty = runner.run(
-        git_spec(["status", "--porcelain"], cwd=checkout), live=True
+def _dirty_entries(
+    runner: Runner, checkout: Path, skipped: list[str]
+) -> list[tuple[str, str]]:
+    dirty = runner.run_checked(
+        git_spec(
+            ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+            cwd=checkout,
+        ),
+        live=True,
     )
-    paths: list[str] = []
+    entries: list[tuple[str, str]] = []
     skipped_set = set(skipped)
-    for line in (dirty.stdout or "").splitlines():
-        rel = line[3:] if len(line) > 3 else ""
-        if " -> " in rel:
-            rel = rel.split(" -> ", 1)[-1]
-        rel = rel.strip()
+    fields = (dirty.stdout or "").split("\0")
+    index = 0
+    while index < len(fields):
+        field = fields[index]
+        index += 1
+        if not field:
+            continue
+        status = field[:2]
+        rel = field[3:] if len(field) > 3 else ""
+        # In -z format a rename's destination is in this field and its source
+        # follows as a second NUL-delimited field.
+        if "R" in status or "C" in status:
+            index += 1
         if rel and rel not in skipped_set:
-            paths.append(rel)
-    return paths
+            entries.append((status, rel))
+    return entries
+
+
+def _dirty_paths(runner: Runner, checkout: Path, skipped: list[str]) -> list[str]:
+    return [rel for _status, rel in _dirty_entries(runner, checkout, skipped)]
+
+
+def _is_harvest_leftover(status: str, rel: str) -> bool:
+    """Changes a finished child may leave in the non-writing mill checkout."""
+    if rel == ".lokay" or rel.startswith(".lokay/"):
+        return True
+    return status == "??" and (
+        rel.startswith("src/") or rel.startswith("tests/")
+    )
+
+
+def _recover_harvest_checkout(
+    runner: Runner, checkout: Path, skipped: list[str]
+) -> bool:
+    """Discard bounded harvest debris, but only in the primary host checkout."""
+    # Linked issue worktrees have a .git file. They are writer-owned and must
+    # never be repaired here, regardless of whether their receipt looks stale.
+    git_dir = checkout / ".git"
+    if not git_dir.is_dir() or git_dir.is_symlink():
+        return False
+    entries = _dirty_entries(runner, checkout, skipped)
+    if not entries or not all(
+        _is_harvest_leftover(status, rel) for status, rel in entries
+    ):
+        return False
+    untracked = [rel for status, rel in entries if status == "??"]
+    if untracked:
+        runner.run_checked(
+            git_spec(["clean", "-fd", "--", *untracked], cwd=checkout),
+            live=True,
+        )
+    runner.run_checked(
+        git_spec(["checkout", "-f", "main"], cwd=checkout), live=True
+    )
+    return True
 
 
 def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object]:
@@ -118,10 +171,12 @@ def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object
     if branch != "main":
         skipped = skip_worktree_paths(runner, checkout)
         if _dirty_paths(runner, checkout, skipped):
-            raise RuntimeError("refusing host-ff: checkout is dirty")
-        runner.run_checked(
-            git_spec(["checkout", "main"], cwd=checkout), live=True
-        )
+            if not _recover_harvest_checkout(runner, checkout, skipped):
+                raise RuntimeError("refusing host-ff: checkout is dirty")
+        else:
+            runner.run_checked(
+                git_spec(["checkout", "main"], cwd=checkout), live=True
+            )
 
     runner.run_checked(
         git_spec(["fetch", "origin", "main"], cwd=checkout, timeout_seconds=300),

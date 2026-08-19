@@ -38,6 +38,8 @@ def _pair(tmp_path: Path) -> tuple[Path, Path]:
     _identity(seed)
     (seed / "README").write_text("base\n", encoding="utf-8")
     (seed / "repos.mikolaj92.yaml").write_text("repos: []\n", encoding="utf-8")
+    (seed / ".lokay").mkdir()
+    (seed / ".lokay" / "approach.md").write_text("plan\n", encoding="utf-8")
     _git(seed, "add", "-A")
     _git(seed, "commit", "-m", "init")
     _git(seed, "push", "origin", "main")
@@ -90,6 +92,50 @@ def test_clean_issue_branch_returns_to_main_and_fast_forwards(tmp_path: Path):
     assert _git(host, "branch", "--show-current").stdout.strip() == "main"
     assert _git(host, "rev-parse", "HEAD").stdout.strip() == remote
     assert (host / "README").read_text(encoding="utf-8") == "new\n"
+
+
+def test_harvest_dirty_host_branch_returns_to_main_and_fast_forwards(tmp_path: Path):
+    seed, host = _pair(tmp_path)
+    _git(host, "checkout", "-b", "ai/fix/386-host-ff")
+    _advance_origin(seed, "new\n")
+    remote = _git(seed, "rev-parse", "HEAD").stdout.strip()
+    (host / ".lokay" / "approach.md").write_text("harvest plan\n", encoding="utf-8")
+    (host / "tests").mkdir()
+    (host / "tests" / "test_other_tick.py").write_text(
+        "assert True\n", encoding="utf-8"
+    )
+
+    result = fast_forward_origin_main(Runner(), host)
+
+    assert result["updated"] is True
+    assert _git(host, "branch", "--show-current").stdout.strip() == "main"
+    assert _git(host, "rev-parse", "HEAD").stdout.strip() == remote
+    assert (host / ".lokay" / "approach.md").read_text(encoding="utf-8") == "plan\n"
+    assert not (host / "tests" / "test_other_tick.py").exists()
+    assert _git(host, "status", "--porcelain").stdout == ""
+
+
+def test_dirty_linked_issue_worktree_is_refused_without_checkout(tmp_path: Path):
+    seed, host = _pair(tmp_path)
+    issue_worktree = tmp_path / "live-issue-worktree"
+    _git(host, "worktree", "add", "-b", "ai/fix/386-live", str(issue_worktree))
+    _advance_origin(seed, "new\n")
+    (issue_worktree / ".lokay" / "approach.md").write_text(
+        "live writer plan\n", encoding="utf-8"
+    )
+
+    try:
+        fast_forward_origin_main(Runner(), issue_worktree)
+        raise AssertionError("live issue worktree must fail closed")
+    except RuntimeError as exc:
+        assert "dirty" in str(exc)
+    assert (
+        _git(issue_worktree, "branch", "--show-current").stdout.strip()
+        == "ai/fix/386-live"
+    )
+    assert (issue_worktree / ".lokay" / "approach.md").read_text(
+        encoding="utf-8"
+    ) == "live writer plan\n"
 
 
 def test_dirty_issue_branch_is_refused_without_checkout(tmp_path: Path):
