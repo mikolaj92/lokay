@@ -15,6 +15,9 @@ from lokay.passkit.hot import survey_scope
 from lokay.stuck import is_blocked_in_ledger, load_stuck
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     live_flag = ["--live"] if live else []
     begin, working = load_begin_working(pass_dir)
@@ -34,8 +37,20 @@ def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> d
 
     scope = set(survey_scope(begin) or [])
     scoped = survey_scope(begin) is not None
-    for repo_name in list(begin.get("repos") or []):
-
+    repos = list(begin.get("repos") or [])
+    lokay_mill = MINI_MILL_REPO in repos
+    for repo_name in repos:
+        if lokay_mill and repo_name != MINI_MILL_REPO:
+            actions.append(
+                {
+                    "step": "skip_inbox_survey_outside_mini_scope",
+                    "repo": repo_name,
+                    "reason": f"mini mill only surveys inbox for {MINI_MILL_REPO}",
+                }
+            )
+            inbox_by_repo[repo_name] = 0
+            inbox_issues_by_repo[repo_name] = []
+            continue
         if scoped and repo_name not in scope:
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "inbox"})
             inbox_by_repo[repo_name] = 0
