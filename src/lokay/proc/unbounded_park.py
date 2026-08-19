@@ -1,6 +1,6 @@
-"""Atomic: park an unbounded issue by removing ai:ready.
+"""Atomic: park an unbounded issue by removing work:ready and ai:ready.
 
-Mill will not sit a Pi on an issue that is no longer ai:ready.
+Mill will not sit a Pi on an issue that is no longer ready.
 --dry-run prints the gh command and does not mutate.
 Fail-closed if repo or issue is missing.
 """
@@ -15,6 +15,7 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.safety import validate_argv
 
 READY_LABEL = "ai:ready"
+WORK_READY_LABEL = "work:ready"
 
 
 def park_argv(repo: str, issue: int) -> list[str]:
@@ -25,6 +26,8 @@ def park_argv(repo: str, issue: int) -> list[str]:
         str(issue),
         "--repo",
         repo,
+        "--remove-label",
+        WORK_READY_LABEL,
         "--remove-label",
         READY_LABEL,
     ]
