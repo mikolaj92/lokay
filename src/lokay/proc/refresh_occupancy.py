@@ -9,6 +9,8 @@ A 29-repo refresh after a full survey is what 429s the secondary budget.
 from __future__ import annotations
 
 import argparse
+import os
+import signal
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
@@ -32,6 +34,19 @@ def _merged_this_pass(working: dict[str, Any]) -> list[str]:
         if name and name not in seen:
             seen.append(name)
     return seen
+
+
+def _terminate_issue_to_pr(receipt: dict[str, Any]) -> bool:
+    try:
+        pid = int(receipt["pid"])
+        if pid <= 0:
+            return False
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+    except (KeyError, TypeError, ValueError, OSError):
+        return False
+    return True
 
 
 def _live_repos(
@@ -61,7 +76,7 @@ def _live_repos(
         # authoritative non-OPEN state makes a live worker's lane idle.
         state = str((viewed.get("issue") or {}).get("state") or "").upper()
         if viewed.get("ok") and state and state != "OPEN":
-            if clear_issue_to_pr_receipt(receipt):
+            if _terminate_issue_to_pr(receipt) and clear_issue_to_pr_receipt(receipt):
                 cleared.append(receipt)
                 continue
             # The receipt changed concurrently or could not be removed; keep
