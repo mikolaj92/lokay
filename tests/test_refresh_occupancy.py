@@ -103,6 +103,8 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
     called: list[str] = []
 
     def fake_run(fn, argv):
+        if fn is refresh_occupancy.p_get_issue.main:
+            return {"ok": True, "issue": {"state": "OPEN"}}
         called.append(argv[argv.index("--repo") + 1])
         return {"ok": True, "prs": []}
 
@@ -132,6 +134,44 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
     assert selected["selected"] == 0
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
     assert implement["clean_repos"] == []
+
+
+def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "ready_by_repo": {"a/one": [{"number": 3, "title": "next"}]},
+            "remaining_ready": 1,
+        },
+    )
+    receipt = {"repo": "a/one", "issue": 2, "pid": 9}
+    cleared: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(
+        refresh_occupancy, "live_issue_to_pr_receipts", lambda: [receipt]
+    )
+    monkeypatch.setattr(
+        refresh_occupancy,
+        "clear_issue_to_pr_receipt",
+        lambda row: not cleared.append(row),
+    )
+
+    def fake_run(fn, argv):
+        if fn is refresh_occupancy.p_get_issue.main:
+            return {"ok": True, "issue": {"state": "CLOSED"}}
+        return {"ok": True, "prs": []}
+
+    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+
+    assert out["occupied_repos"] == []
+    assert out["live_issue_to_pr_repos"] == []
+    assert out["cleared_issue_to_pr_receipts"] == [
+        {"repo": "a/one", "issue": 2}
+    ]
+    assert cleared == [receipt]
 
 
 def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):

@@ -476,6 +476,23 @@ def live_issue_to_pr_receipts(
     return live
 
 
+def clear_issue_to_pr_receipt(receipt: dict[str, Any]) -> bool:
+    """Remove the receipt only if it still describes the observed worker."""
+    try:
+        path = issue_to_pr_receipt_path(str(receipt["repo"]), int(receipt["issue"]))
+        with _receipt_write_lock(path):
+            current = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(current, dict):
+                return False
+            identity_keys = ("repo", "issue", "pid", "launch_id", "starting")
+            if any(current.get(key) != receipt.get(key) for key in identity_keys):
+                return False
+            path.unlink()
+    except (KeyError, OSError, TypeError, ValueError):
+        return False
+    return True
+
+
 def clear_dead_issue_to_pr_receipts(
     repos: Iterable[str],
     cycle_dir: Path | None = None,

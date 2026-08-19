@@ -1,27 +1,27 @@
 {
   "paths": [
-    "src/lokay/proc/survey_ready.py",
-    "src/lokay/gh_issues.py",
-    "lokay/proc/survey_ready.py",
-    "lokay/gh_issues.py",
-    "src/lokay/proc/list_issues.py",
-    "tests/test_survey_list.py"
+    "src/lokay/proc/refresh_occupancy.py",
+    "lokay/proc/refresh_occupancy.py",
+    "src/lokay/proc/detach_issue_to_pr.py",
+    "tests/test_refresh_occupancy.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/survey_ready.py",
-    "src/lokay/gh_issues.py",
-    "lokay/proc/survey_ready.py",
-    "lokay/gh_issues.py"
+    "src/lokay/proc/refresh_occupancy.py",
+    "lokay/proc/refresh_occupancy.py"
   ],
   "matched_tokens": [
-    "survey_ready",
-    "state",
-    "list_issues",
-    "park",
+    "refresh_occupancy",
+    "harvest",
+    "issue_to_pr",
+    "mutex",
+    "receipt",
+    "get_issue",
     "proc",
-    "gh_issues",
-    "Inbox",
+    "detach_issue_to_pr",
+    "Receipt",
+    "reap",
+    "budget",
     "review",
     "gate",
     "unbounded",
@@ -33,7 +33,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__287-survey_ready-listuj-work-ready-state-all-e238c01d",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__289-refresh_occupancy-ywy-i2pr-na-closed-nie-3d39ef00",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
