@@ -88,6 +88,22 @@ def _rev_parse(runner: Runner, checkout: Path, ref: str) -> str:
     return (result.stdout or "").strip()
 
 
+def _dirty_paths(runner: Runner, checkout: Path, skipped: list[str]) -> list[str]:
+    dirty = runner.run(
+        git_spec(["status", "--porcelain"], cwd=checkout), live=True
+    )
+    paths: list[str] = []
+    skipped_set = set(skipped)
+    for line in (dirty.stdout or "").splitlines():
+        rel = line[3:] if len(line) > 3 else ""
+        if " -> " in rel:
+            rel = rel.split(" -> ", 1)[-1]
+        rel = rel.strip()
+        if rel and rel not in skipped_set:
+            paths.append(rel)
+    return paths
+
+
 def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object]:
     """Fetch origin/main and fast-forward, or raise. Never reset --hard."""
     origin = runner.run_checked(
@@ -100,7 +116,12 @@ def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object
         git_spec(["rev-parse", "--abbrev-ref", "HEAD"], cwd=checkout), live=True
     ).stdout.strip()
     if branch != "main":
-        raise RuntimeError(f"refusing host-ff: checkout is on {branch!r}, not main")
+        skipped = skip_worktree_paths(runner, checkout)
+        if _dirty_paths(runner, checkout, skipped):
+            raise RuntimeError("refusing host-ff: checkout is dirty")
+        runner.run_checked(
+            git_spec(["checkout", "main"], cwd=checkout), live=True
+        )
 
     runner.run_checked(
         git_spec(["fetch", "origin", "main"], cwd=checkout, timeout_seconds=300),
@@ -125,19 +146,7 @@ def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object
     if ancestor.returncode != 0:
         raise RuntimeError("refusing host-ff: HEAD is not an ancestor of origin/main")
 
-    dirty = runner.run(
-        git_spec(["status", "--porcelain"], cwd=checkout), live=True
-    )
-    dirty_paths: list[str] = []
-    skipped_set = set(skipped)
-    for line in (dirty.stdout or "").splitlines():
-        rel = line[3:] if len(line) > 3 else ""
-        if " -> " in rel:
-            rel = rel.split(" -> ", 1)[-1]
-        rel = rel.strip()
-        if rel and rel not in skipped_set:
-            dirty_paths.append(rel)
-    if dirty_paths:
+    if _dirty_paths(runner, checkout, skipped):
         raise RuntimeError("refusing host-ff: checkout is dirty")
 
     incoming = runner.run_checked(
