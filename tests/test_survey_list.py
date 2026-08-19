@@ -109,7 +109,7 @@ def test_list_ready_asks_for_full_page_and_keeps_oldest(tmp_path):
     assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
-def test_list_ready_includes_closed_issues_for_parking(tmp_path):
+def test_list_ready_excludes_closed_issues_with_leftover_ready_label(tmp_path):
     runner = _ListRunner(
         [
             _issue_row(8, "ai:ready"),
@@ -120,10 +120,7 @@ def test_list_ready_includes_closed_issues_for_parking(tmp_path):
 
     issues = list_ready_issues(runner, cfg, repo, live=True)
 
-    assert [(issue.number, issue.state) for issue in issues] == [
-        (8, "OPEN"),
-        (7, "CLOSED"),
-    ]
+    assert [(issue.number, issue.state) for issue in issues] == [(8, "OPEN")]
 
 
 def test_list_ready_fail_closed_when_page_is_full(tmp_path):
@@ -169,19 +166,24 @@ def test_list_issues_with_label_uses_full_page(tmp_path):
     assert argv[argv.index("--state") + 1] == "open"
 
 
-def test_list_issues_with_ready_label_includes_closed_issues(tmp_path):
-    runner = _ListRunner([_issue_row(7, "ai:ready", state="CLOSED")])
+def test_list_issues_with_ready_label_excludes_closed_issues(tmp_path):
+    runner = _ListRunner(
+        [
+            _issue_row(7, "ai:ready", state="CLOSED"),
+            _issue_row(8, "ai:ready"),
+        ]
+    )
     cfg, repo = _cfg(tmp_path)
 
     issues = list_issues_with_label(runner, cfg, repo, label="ai:ready", live=True)
 
-    assert [(issue.number, issue.state) for issue in issues] == [(7, "CLOSED")]
+    assert [(issue.number, issue.state) for issue in issues] == [(8, "OPEN")]
     argv = runner.calls[0]
     assert argv[argv.index("--state") + 1] == "all"
     assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
-def test_list_issues_with_work_ready_label_includes_closed_issues(tmp_path):
+def test_list_issues_with_work_ready_label_excludes_closed_issues(tmp_path):
     runner = _ListRunner(
         [
             _issue_row(7, "work:ready", state="CLOSED"),
@@ -192,10 +194,7 @@ def test_list_issues_with_work_ready_label_includes_closed_issues(tmp_path):
 
     issues = list_issues_with_label(runner, cfg, repo, label="work:ready", live=True)
 
-    assert [(issue.number, issue.state) for issue in issues] == [
-        (7, "CLOSED"),
-        (8, "OPEN"),
-    ]
+    assert [(issue.number, issue.state) for issue in issues] == [(8, "OPEN")]
     argv = runner.calls[0]
     assert argv[argv.index("--state") + 1] == "all"
 
