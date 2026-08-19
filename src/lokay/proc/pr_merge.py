@@ -10,6 +10,8 @@ from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
+ALLOWED_REPO = "mikolaj92/lokay"
+
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-pr-merge")
@@ -20,6 +22,15 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
+    if args.repo != ALLOWED_REPO:
+        return emit_exit(
+            err(
+                f"refusing to merge PR outside {ALLOWED_REPO}",
+                planned=not live,
+                repo=args.repo,
+                pr=args.pr,
+            )
+        )
     if live and not cfg.merge_enabled:
         return emit_exit(err("merge.enabled is false in config", planned=True))
     try:
