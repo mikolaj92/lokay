@@ -50,6 +50,30 @@ def test_record_failure_blocks_after_threshold(tmp_path: Path):
     assert excluded_numbers(reloaded, "a/b") == set()
 
 
+def test_save_stuck_preserves_blocked_issue_missing_from_incoming(tmp_path: Path):
+    path = tmp_path / "stuck.json"
+    path.write_text(
+        json.dumps(
+            {
+                "issues": {
+                    "a/b#1": {"failures": 2, "blocked": True},
+                    "a/b#2": {"failures": 1, "blocked": True},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    save_stuck(path, {"issues": {"a/b#2": {"failures": 2}}})
+
+    # Incoming data wins when a blocked issue is present in both snapshots.
+
+    saved = load_stuck(path)
+    assert saved["issues"]["a/b#1"]["blocked"] is True
+    assert saved["issues"]["a/b#2"]["failures"] == 2
+    assert saved["issues"]["a/b#2"].get("blocked") is None
+
+
 def test_select_skips_excluded(monkeypatch, capsys):
     payload = {
         "issues": [
