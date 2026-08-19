@@ -18,7 +18,11 @@ from lokay.runner import Runner, git_spec
 _FACTORY_BEGIN = "src/lokay/proc/factory_begin.py"
 _IMPLEMENT = "src/lokay/proc/implement.py"
 _AGENT = "src/lokay/organ/agent.py"
-_ALWAYS_OFF_GOAL = (_FACTORY_BEGIN, _IMPLEMENT, _AGENT)
+_FALA_PACKAGES = (
+    "fala/lokay.fala-package.toml",
+    "src/lokay/data/lokay.fala-package.toml",
+)
+_ALWAYS_OFF_GOAL = (_FACTORY_BEGIN, _IMPLEMENT, _AGENT, *_FALA_PACKAGES)
 
 
 def _issue_explicit_file_paths(issue_json: str) -> set[str]:

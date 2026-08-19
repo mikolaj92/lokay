@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from lokay.localize import Localization
 from lokay.proc import relocalize_off_goal
 from lokay.runner import Runner
@@ -157,6 +159,73 @@ def test_relocalize_restores_agent_when_issue_does_not_name_it(
         "git", "restore", "--source", "origin/main", "--staged", "--worktree", "--", path,
     )
     assert live is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "fala/lokay.fala-package.toml",
+        "src/lokay/data/lokay.fala-package.toml",
+    ],
+)
+def test_relocalize_restores_fala_package_when_issue_does_not_name_it(
+    path: str, monkeypatch, tmp_path: Path, capsys
+):
+    (tmp_path / ".lokay").mkdir()
+    (tmp_path / ".lokay/localize.json").write_text(
+        json.dumps({"paths": ["src/a.py"]}), encoding="utf-8"
+    )
+    issue = tmp_path / "issue.json"
+    issue.write_text(json.dumps({"body": "## Files\n- `src/a.py`"}), encoding="utf-8")
+    run = RecordingRunner()
+    monkeypatch.setattr(relocalize_off_goal, "runner", lambda *a, **k: run)
+    monkeypatch.setattr(relocalize_off_goal, "list_changed_paths", lambda *a, **k: [path])
+    monkeypatch.setattr(relocalize_off_goal, "load_cfg", lambda _a: object())
+    monkeypatch.setattr(relocalize_off_goal, "mutations_allowed", lambda **k: True)
+
+    assert relocalize_off_goal.main(
+        ["--config", "x", "--live", "--worktree", str(tmp_path), "--issue-json", str(issue)]
+    ) == 0
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["reason"] == "off_goal_paths_restored"
+    assert out["restored_paths"] == [path]
+    spec, live = run.specs[0]
+    assert spec.argv == (
+        "git", "restore", "--source", "origin/main", "--staged", "--worktree", "--", path,
+    )
+    assert live is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "fala/lokay.fala-package.toml",
+        "src/lokay/data/lokay.fala-package.toml",
+    ],
+)
+def test_relocalize_keeps_fala_package_when_issue_names_it(
+    path: str, monkeypatch, tmp_path: Path, capsys
+):
+    (tmp_path / ".lokay").mkdir()
+    (tmp_path / ".lokay/localize.json").write_text(
+        json.dumps({"paths": [path]}), encoding="utf-8"
+    )
+    issue = tmp_path / "issue.json"
+    issue.write_text(json.dumps({"body": f"## Zmiana\n- `{path}`"}), encoding="utf-8")
+    run = RecordingRunner()
+    monkeypatch.setattr(relocalize_off_goal, "runner", lambda *a, **k: run)
+    monkeypatch.setattr(relocalize_off_goal, "list_changed_paths", lambda *a, **k: [path])
+    monkeypatch.setattr(relocalize_off_goal, "load_cfg", lambda _a: object())
+
+    assert relocalize_off_goal.main(
+        ["--config", "x", "--live", "--worktree", str(tmp_path), "--issue-json", str(issue)]
+    ) == 0
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["reason"] == "on_goal"
+    assert out["restored_paths"] == []
+    assert run.specs == []
 
 
 def test_relocalize_keeps_agent_when_issue_names_it(
