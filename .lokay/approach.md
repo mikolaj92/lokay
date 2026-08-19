@@ -1,24 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=188 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=193 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #188 — Issue z listą Files: localize bez czekania na pi
+Issue: #193 — survey_ready: bez work:ready nie idź na i2pr
 
 ## Goal
 
-#180, #184, #187: `localize` adapter_timeout → `run_agent` localize_empty → plan_only w ~3 min. Nawet gdy issue ma sekcję Files (187: pr_create.py, git_real_diff.py, pi_budget.py) pi localize i tak timeoutuje. #183 przeszło dopiero gdy ścieżki były w body **i** pi zdążył.
+Dziś młyn odpalał lokay#178 (tylko `ai:ready`, preflight) i zjadał mutex przy #183/#184. Alfred: survey `work:ready`. Produkty bez work:ready nie są kolejką.
 
 ## Files likely touched
 
-- `lokay/localize.json`
-- `src/lokay/localize.py`
-- `src/lokay/localize_agent.py`
-- `tests/test_localize.py`
+- `src/lokay/proc/survey_ready.py`
+- `tests/test_select_implement.py`
 
 ## Test plan
 
-- Issue body z `## Files` + `src/lokay/localize.py` → localize.json ma tę ścieżkę bez agenta. Puste Files → jak dziś (albo fail-closed, nie wisieć 3 min).
+- Issue tylko `ai:ready` → skip. Issue z `work:ready`+`ai:ready` → ready.
 
 ## Non-goals
 

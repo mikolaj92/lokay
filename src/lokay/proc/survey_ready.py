@@ -1,9 +1,12 @@
-"""One job: list ai:ready issues; skip those already covered by open AI PRs."""
+"""One job: list implementable ready issues; skip those covered by open AI PRs."""
 
 from __future__ import annotations
 
 import argparse
 from typing import Any
+
+
+WORK_READY_LABEL = "work:ready"
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
@@ -46,6 +49,12 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             ready_by_repo[repo_name] = []
             continue
         issues = list(listed.get("issues") or [])
+        work_ready = [
+            issue
+            for issue in issues
+            if isinstance(issue.get("labels"), list)
+            and WORK_READY_LABEL in issue["labels"]
+        ]
         covered = issue_numbers_covered_by_prs(
             prs_by_repo.get(repo_name) or [],
             branch_prefix=branch_prefix,
@@ -59,7 +68,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
                     "issues": sorted(covered),
                 }
             )
-            covered_ready = [i for i in issues if int(i.get("number", -1)) in covered]
+            covered_ready = [i for i in work_ready if int(i.get("number", -1)) in covered]
             remaining_ready_with_pr += len(covered_ready)
         if excluded_numbers(stuck, repo_name):
             actions.append(
@@ -69,7 +78,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
                     "exclude": sorted(excluded_numbers(stuck, repo_name)),
                 }
             )
-        implementable = [i for i in issues if int(i.get("number", -1)) not in skip]
+        implementable = [i for i in work_ready if int(i.get("number", -1)) not in skip]
         ready_by_repo[repo_name] = implementable
         remaining_ready += len(implementable)
 
