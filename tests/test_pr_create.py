@@ -40,7 +40,10 @@ class _GhRunner:
         self.calls.append(tuple(spec.argv))
         stdout = ""
         if spec.argv[1:3] == ("issue", "view"):
-            stdout = json.dumps({"number": 239, "state": self.issue_state})
+            issue_number = int(spec.argv[3])
+            stdout = json.dumps(
+                {"number": issue_number, "state": self.issue_state}
+            )
         return CommandResult(
             spec=spec, executed=live, returncode=0, stdout=stdout
         )
@@ -141,6 +144,35 @@ def test_existing_pr_closing_issue_skips_create(tmp_path, monkeypatch, capsys):
             assert not any(
                 call[1:3] == ("pr", "create") for call in runner.calls
             )
+
+
+def test_worktree_issue_overrides_stale_argument(
+    tmp_path, monkeypatch, capsys
+):
+    runner = _GhRunner(
+        "OPEN", pr_url="https://github.com/mikolaj92/lokay/pull/400\n"
+    )
+    monkeypatch.setattr(pr_create, "runner", lambda: runner)
+    monkeypatch.setattr(pr_create, "mutations_allowed", lambda **kwargs: True)
+    args = _args(_cfg(tmp_path))
+    args[args.index("--issue") + 1] = "397"
+    args[args.index("--body") + 1] = "Summary\n\nCloses #397"
+    args[args.index("--head") + 1] = "ai/fix/399-harvest"
+
+    code = pr_create.main(args)
+
+    assert code == 0
+    create_call = next(
+        call for call in runner.calls if call[1:3] == ("pr", "create")
+    )
+    body = create_call[create_call.index("--body") + 1]
+    assert "Closes #399" in body
+    assert "Fixes #399" in body
+    assert "#397" not in body
+    issue_view = next(
+        call for call in runner.calls if call[1:3] == ("issue", "view")
+    )
+    assert issue_view[3] == "399"
 
 
 def test_open_issue_creates_pr(tmp_path, monkeypatch, capsys):
