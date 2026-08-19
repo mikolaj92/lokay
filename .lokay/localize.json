@@ -7,24 +7,21 @@
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/fala_organ.py",
     "organ/common.py",
+    "src/lokay/fala_organ.py",
     "tests/test_fala_organ.py",
     "lokay/fala_organ.py"
   ],
   "matched_tokens": [
     "fala_organ",
-    "pr_create",
-    "commit_all",
-    "pr_merge",
+    "view",
+    "get_issue",
     "organ",
     "common",
-    "state",
-    "get_issue",
-    "localize",
+    "Organ",
     "test_fala_organ",
+    "pr_create",
     "review",
-    "gate",
     "unbounded",
     "bounded"
   ],
@@ -34,7 +31,7 @@
     "Repo tree entries considered: 289.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__254-fala_organ-skip-mutations-when-issue-clo-66b3523e",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__256-fala_organ-live-re-view-issue-before-mut-77649cb6",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

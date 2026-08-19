@@ -15,8 +15,8 @@ from fala import sdk
 from lokay.git_commit import branch_ahead_of_upstream  # noqa: F401 — tests patch this
 from lokay.organ.agent import handle_agent
 from lokay.organ.common import (  # noqa: F401
-    _closed_issue_payload,
     _conduction_values,
+    _issue_no_longer_open,
     _require_push,
     _require_real_diff,
     _require_test_local,
@@ -61,11 +61,20 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
     pr_number = inputs.get("pr") or inputs.get("pr_number")
     ctx["pr_number"] = int(pr_number) if pr_number is not None else None
 
-    # The organ is the single mutation boundary.  A stale or closed issue
-    # must stop every publishing atom before its handler can invoke a proc.
+    # The organ is the single mutation boundary.  Re-view live before every
+    # mutating atom so a close after get_issue conduction cannot reach a proc.
     if atom in _MUTATING_ATOMS and ctx["issue_number"] is not None:
-        issue = up.get("get_issue", {}).get("issue")
-        refused = _closed_issue_payload(issue if isinstance(issue, dict) else None)
+        from lokay.proc import get_issue
+
+        refused = _issue_no_longer_open(
+            up,
+            cfg=ctx["cfg"],
+            live=ctx["live"],
+            repo=ctx["repo"],
+            issue_number=ctx["issue_number"],
+            run=_run_atom_main,
+            get_issue_main=get_issue.main,
+        )
         if refused is not None:
             refused.setdefault("issue", ctx["issue_number"])
             refused.setdefault("repo", ctx["repo"])

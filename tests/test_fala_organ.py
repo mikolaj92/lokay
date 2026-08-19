@@ -168,6 +168,40 @@ def test_closed_issue_skips_all_mutating_atoms_at_organ_boundary(monkeypatch):
         assert result["reason"] == "issue_closed"
 
 
+def test_live_closed_issue_skips_mutating_atoms_before_handlers(monkeypatch):
+    def fake_run(main, argv):
+        if "--head" in argv or "--worktree" in argv:
+            raise AssertionError("mutating handler must not run after live CLOSED re-view")
+        return {
+            "ok": True,
+            "issue": {"repo": "a/b", "number": 7, "state": "CLOSED"},
+        }
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    push_up = {
+        "get_issue": {"issue": {"repo": "a/b", "number": 7, "state": "OPEN"}},
+        "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+        "commit_all": {"committed": True},
+        "test_local": _ok_test_local(),
+        "assert_real_diff": _ok_real_diff(),
+    }
+    for atom, inputs, up in (
+        (
+            "push",
+            {"repo": "a/b", "issue": 7, "branch": "ai/fix/7-x", "live": True},
+            push_up,
+        ),
+        (
+            "pr_create",
+            {"repo": "a/b", "issue": 7, "live": True},
+            _pr_create_up(),
+        ),
+    ):
+        result = fala_organ._handle(atom, inputs, up)
+        assert result["ok"] is False
+        assert result["reason"] == "issue_closed"
+
+
 def test_closed_issue_does_not_block_read_only_atoms(monkeypatch):
     called = []
 
