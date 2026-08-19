@@ -1,4 +1,8 @@
-"""One job: strip leftover in-flight cache; restore ai:ready.\n\nWalk only survey_scope (hot + rotated cold). A 29-repo ``gh issue list``\nfor every ledger label eats the 5–10 min implement slot.\n"""
+"""One job: strip leftover in-flight cache; restore ai:ready.
+
+This mini-mill owns only Lokay's delivery lane. Product repositories may share
+its config, but querying every ledger label on them eats the implement slot.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,9 @@ from lokay.proc._common import add_config_live, load_cfg, runner
 from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def run_reap_stale_implementing(
     *, pass_dir: str | None, config_path: str | None, live: bool
 ) -> dict[str, Any]:
@@ -28,6 +35,8 @@ def run_reap_stale_implementing(
         begin, _working = load_begin_working(pass_dir)
         scope = survey_scope(begin)
     for repo in cfg.active_repos():
+        if repo.name != MINI_MILL_REPO:
+            continue
         if scope is not None and repo.name not in scope:
             continue
         repo_issues: list[tuple[str, Any]] = []
