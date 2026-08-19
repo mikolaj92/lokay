@@ -7,17 +7,29 @@ from typing import Any
 from lokay.organ.common import _run_atom_main
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+_PR_FINALIZE_ATOMS = frozenset({"list_prs", "pr_label"})
+
+
 def handle_pr_finalize(
     atom: str,
     inputs: dict[str, Any],
     up: dict[str, dict[str, Any]],
     ctx: dict[str, Any],
 ) -> dict[str, Any] | None:
-    from lokay.proc import list_prs, pr_label
-
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
+
+    if atom in _PR_FINALIZE_ATOMS and repo != MINI_MILL_REPO:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "repo_not_delivered_by_mini_mill",
+            "repo": repo,
+        }
+
+    from lokay.proc import list_prs, pr_label
 
     if atom == "list_prs":
         assert repo
