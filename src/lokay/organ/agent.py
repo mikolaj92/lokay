@@ -260,7 +260,10 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                     "error": "refusing recheck: repair patch produced no commit",
                     "reason": "zero_diff",
                 }
-        out = _run_atom_main(test_local.main, ["--worktree", worktree])
+        argv = ["--worktree", worktree]
+        if inputs.get("changed_scope"):
+            argv.append("--changed-scope")
+        out = _run_atom_main(test_local.main, argv)
         if isinstance(out, dict):
             if out.get("ok") is False and not out.get("skipped"):
                 out = {
@@ -320,7 +323,10 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
     if atom == "test_local":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        out = _run_atom_main(test_local.main, ["--worktree", worktree])
+        argv = ["--worktree", worktree]
+        if inputs.get("changed_scope"):
+            argv.append("--changed-scope")
+        out = _run_atom_main(test_local.main, argv)
         if (
             inputs.get("record_red")
             and isinstance(out, dict)
