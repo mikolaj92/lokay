@@ -9,7 +9,7 @@ from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit
 from lokay.passkit.support import is_manual_pr, run_proc
-from lokay.proc import pr_checks as p_checks, unbounded_park as p_park
+from lokay.proc import get_issue as p_get_issue, pr_checks as p_checks, unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
@@ -40,6 +40,18 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
         actions.append({"step": step, "pr": n, "branch": head, **compose_pr_repair(**kw)})
         repair_budget -= 1
 
+    issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
+    if issue_n is not None:
+        fetched = run_proc(p_get_issue.main, [*cfg, "--repo", repo, "--issue", str(issue_n), "--live"])
+        actions.append({"step": "get_issue", "repo": repo, "issue": issue_n, "pr": n, **fetched})
+        state = str((fetched.get("issue") or {}).get("state") or "").upper()
+        if fetched.get("ok") and state != "OPEN":
+            if live:
+                parked = run_proc(p_park.main, ["--repo", repo, "--issue", str(issue_n)])
+                actions.append({"step": "park_closed_issue", "repo": repo, "issue": issue_n, "pr": n, **parked})
+                clear_issue(stuck, repo, issue_n)
+                save_stuck(stuck_path, stuck)
+            return done("skip", "issue_closed")
     if is_manual_pr(pr):
         actions.append({"step": "skip_manual_pr", "repo": repo, "pr": n, "reason": "ai:needs-review is terminal/manual"})
         return done("skip", "manual")
@@ -73,7 +85,6 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
         return done("merge", str(tri.get("reason") or ""))
     progress = remaining_closed = 1
     apply_deltas(c, {"mergeable_green": -1})
-    issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
     if issue_n is not None:
         parked = run_proc(p_park.main, ["--repo", repo, "--issue", str(issue_n)])
         actions.append({"step": "park_closed_issue", "repo": repo, "issue": issue_n, "pr": n, **parked})
