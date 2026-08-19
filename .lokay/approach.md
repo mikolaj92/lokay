@@ -1,22 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=283 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=285 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #283 — survey_ready: CLOSED przy live re-view — park, nie i2pr
+Issue: #285 — list_ready: work:ready ze state all, nie tylko OPEN
 
 ## Goal
 
-`survey_ready` ufa liście OPEN. W tym samym przebiegu merge zamyka ticket, a last-pass wciąż ma ready=1 / i2pr_started=1 i może odpiąć sibling albo zostawić etykiety.
+`survey_ready` po #283 parkuje CLOSED, ale `list_ready_issues` / `list_issues_with_label` woła `gh issue list --state open`. CLOSED z leftover `work:ready` nigdy nie wchodzą na listę, więc park się nie odpala.
 
 ## Files likely touched
 
-- `src/lokay/proc/survey_ready.py`
+- `src/lokay/gh_issues.py`
 
 ## Test plan
 
-- Lista ma CLOSED + work:ready → park, remaining_ready bez niego.
-- OPEN + work:ready → jak dziś.
+- Lista ma OPEN+CLOSED z work:ready → CLOSED nie ląduje w remaining_ready (park). OPEN zostaje.
 
 ## Non-goals
 
