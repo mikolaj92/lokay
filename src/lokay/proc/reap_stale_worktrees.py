@@ -11,12 +11,15 @@ Classify with one ``ls-remote`` per repo. Never fetch here: a 300s
 ``git fetch`` per leftover repo eats the 5–10 min cycle. Walk only
 survey_scope (hot + rotated cold). Cap leftover classification per pass
 (``CLASSIFY_CAP``): ``leftover_status`` (rev-list + ls-files) on 66
-corners ate the implement slot. Excess leftovers stay KEEP ``over_cap``.
+corners ate the implement slot. A fat set instead checks at most the oldest
+four issues and removes only corners whose issues are CLOSED.
 """
 
 from __future__ import annotations
 
 import argparse
+import subprocess
+from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
@@ -39,6 +42,45 @@ from lokay.stuck import issue_number_from_branch
 # leftover_status is seconds each (rev-list + ls-files). 66 leftovers
 # ate the 5–10 min implement slot. Classify a handful; skip the rest.
 CLASSIFY_CAP = 4
+
+
+def _issue_is_closed(repo: str, issue: int) -> bool | None:
+    """Return issue closure without doing the expensive git classification."""
+    try:
+        result = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "view",
+                str(issue),
+                "--repo",
+                repo,
+                "--json",
+                "state",
+                "--jq",
+                ".state",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    state = result.stdout.strip().upper()
+    return state == "CLOSED" if state in {"OPEN", "CLOSED"} else None
+
+
+def _oldest(leftovers: list[tuple[Path, str]]) -> list[tuple[Path, str]]:
+    def modified(item: tuple[Path, str]) -> float:
+        try:
+            return item[0].stat().st_mtime
+        except OSError:
+            return float("inf")
+
+    return sorted(leftovers, key=modified)
 
 
 def _live_keys(rows: list[dict[str, Any]]) -> set[tuple[str, int]]:
@@ -127,24 +169,6 @@ def run_reap_stale_worktrees(
         leftovers = iter_worktrees(cfg, repo)
         if not leftovers:
             continue
-        if len(leftovers) > CLASSIFY_CAP:
-            # leftover_status on a fat leftover set (66) ate the implement slot.
-            # Keep them; do not classify or ls-remote this pass.
-            for path, branch in leftovers:
-                issue = issue_number_from_branch(
-                    branch, branch_prefix=cfg.branch_prefix
-                )
-                row = {
-                    "repo": repo.name,
-                    "branch": branch,
-                    "issue": issue,
-                    "worktree": str(path),
-                    "reason": "over_cap",
-                    "kept": True,
-                }
-                kept.append(row)
-                actions.append({"step": "keep_stale_worktree", **row})
-            continue
         if receipt_state_unknown:
             # A malformed/unreadable receipt may be the only record of a
             # child that owns a clean, just-created worktree. Do not classify
@@ -202,6 +226,59 @@ def run_reap_stale_worktrees(
         clone = repo.clone_path
         repo_covered = covered.get(repo.name, set())
         repo_heads = heads.get(repo.name, set())
+        if len(leftovers) > CLASSIFY_CAP:
+            # Bound both GitHub lookups and removals. Closed issues are enough
+            # evidence to drain old corners without expensive leftover_status.
+            candidates = set(_oldest(leftovers)[:CLASSIFY_CAP])
+            for path, branch in leftovers:
+                issue = issue_number_from_branch(
+                    branch, branch_prefix=cfg.branch_prefix
+                )
+                row: dict[str, Any] = {
+                    "repo": repo.name,
+                    "branch": branch,
+                    "issue": issue,
+                    "worktree": str(path),
+                }
+                protected = _keep_reason(
+                    repo=repo.name,
+                    branch=branch,
+                    issue=issue,
+                    live=live_keys,
+                    live_repos=live_repos,
+                    covered=repo_covered,
+                    heads=repo_heads,
+                )
+                closed = (
+                    _issue_is_closed(repo.name, issue)
+                    if (path, branch) in candidates and issue is not None
+                    else False
+                )
+                if protected is not None or not (live and closed):
+                    row["reason"] = protected or (
+                        "planned" if not live and closed else "over_cap"
+                    )
+                    row["kept"] = True
+                    kept.append(row)
+                    actions.append({"step": "keep_stale_worktree", **row})
+                    continue
+                removed = remove_worktree(
+                    git, clone, path, managed_root=cfg.worktrees_root
+                )
+                if not removed.get("ok"):
+                    row.update(
+                        kept=True,
+                        reason="remove_failed",
+                        error=removed.get("error"),
+                    )
+                    failed.append(row)
+                    kept.append(row)
+                    actions.append({"step": "keep_stale_worktree", **row})
+                    continue
+                row.update(kept=False, removed=True, reason="closed_issue")
+                reaped.append(row)
+                actions.append({"step": "reap_stale_worktree", **row})
+            continue
         base_ok = False
         published_heads: set[str] | None = None
         if live and clone.exists():

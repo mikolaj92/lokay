@@ -1,21 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=321 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=324 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #321 — daemon_cycle: pass_ceiling nie może wycierać remaining z last-pass
+Issue: #324 — reap_stale_worktrees: over_cap nie może trzymać całego stosu
 
 ## Goal
 
-`compose_daemon_cycle` przy `pass_ceiling` zapisuje last-pass jako `{ok, health, reason, ts, pass_ceiling_seconds}`. Gubi `remaining.by_repo` z przebiegu, który właśnie skończył survey.
+`reap_stale_worktrees`: gdy leftovers > `CLASSIFY_CAP` (4), cały stos dostaje `keep_stale_worktree` / `over_cap` i **nic nie spada**.
 
 ## Files likely touched
 
-- `src/lokay/compose/daemon_cycle.py`
+- `src/lokay/proc/reap_stale_worktrees.py`
 
 ## Test plan
 
-- last-pass z `remaining.by_repo` → po pass_ceiling health=pass_ceiling i remaining.by_repo zostaje.
+- 5+ leftovers, issue CLOSED na najstarszych → max 4 reaped, nie 0. Żywe issue nietknięte.
 
 ## Non-goals
 
