@@ -1,30 +1,32 @@
 {
   "paths": [
-    "src/lokay/proc/refresh_occupancy.py",
-    "src/lokay/proc/detach_issue_to_pr.py",
-    "lokay/proc/detach_issue_to_pr.py",
-    "lokay/proc/refresh_occupancy.py",
-    "tests/test_refresh_occupancy.py"
+    "src/lokay/localize.py",
+    "src/lokay/proc/localize.py",
+    "lokay/localize.json",
+    "src/lokay/localize_agent.py",
+    "lokay/localize.py",
+    "lokay/localize_agent.py",
+    "tests/test_localize.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/detach_issue_to_pr.py",
-    "src/lokay/proc/refresh_occupancy.py",
-    "tests/test_refresh_occupancy.py",
-    "lokay/proc/detach_issue_to_pr.py",
-    "lokay/proc/refresh_occupancy.py"
+    "lokay/localize.json",
+    "src/lokay/localize.py",
+    "src/lokay/localize_agent.py",
+    "tests/test_localize.py",
+    "lokay/localize.py",
+    "lokay/localize_agent.py"
   ],
   "matched_tokens": [
-    "occupancy",
-    "receipt",
-    "mutex",
-    "proc",
-    "detach_issue_to_pr",
-    "refresh_occupancy",
-    "test_refresh_occupancy",
-    "cycle",
-    "Receipt",
+    "localize",
+    "run_agent",
+    "pr_create",
+    "git_real_diff",
+    "pi_budget",
+    "localize_agent",
+    "test_localize",
     "review",
+    "gate",
     "unbounded",
     "bounded"
   ],
@@ -34,7 +36,7 @@
     "Repo tree entries considered: 283.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__183-po-merge-occupancy-musi-spa-ghost-i2pr-n-9096d9c8",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__188-issue-z-list-files-localize-bez-czekania-984c0272",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
