@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=207 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=209 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #207 — select: zdejmij blocked z ready_by_repo
+Issue: #209 — testy: work:ready w mockach global_pr_first
 
 ## Goal
 
-Po #203 `test_blocked_ready_issue_is_not_selected_for_issue_to_pr` czerwony: skip jest, ale `ready_by_repo` dalej trzyma blocked.
+Po gate #193 suite: 12 czerwonych w `test_global_pr_first` / `test_autonomy_contracts`. Mocki issue bez `work:ready` nie przechodzą survey.
 
 ## Files likely touched
 
-- `src/lokay/proc/select_implement.py`
-- `tests/test_select_implement.py`
+- `tests/test_global_pr_first.py`
+- `tests/test_autonomy_contracts.py`
 
 ## Test plan
 
-- blocked w stuck → `ready_by_repo` puste dla tego repo. selected=0.
+- `uv run --extra dev pytest -q tests/test_global_pr_first.py tests/test_autonomy_contracts.py` zielone.
 
 ## Non-goals
 
