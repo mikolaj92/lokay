@@ -501,6 +501,27 @@ def test_remove_worktree_archives_bytes_after_registry_prune(tmp_path):
     assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
 
+def test_remove_worktree_uses_next_archive_name_without_overwriting_old_archive(tmp_path):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    corner = tmp_path / "corner"
+    corner.mkdir()
+    (corner / "snapshot.txt").write_text("new snapshot\n", encoding="utf-8")
+    old_archive = tmp_path / ".corner.lokay-preserved"
+    old_archive.mkdir()
+    (old_archive / "valuable").write_text("keep\n", encoding="utf-8")
+
+    out = remove_worktree(_ResetRunner(), clone, corner, managed_root=tmp_path)
+
+    archive = Path(out["preserved_path"])
+    assert out["ok"] is True
+    assert out["removed"] is True
+    assert archive == tmp_path / ".corner-2.lokay-preserved"
+    assert (old_archive / "valuable").read_text(encoding="utf-8") == "keep\n"
+    assert (archive / "snapshot.txt").read_text(encoding="utf-8") == "new snapshot\n"
+    assert not corner.exists()
+
+
 def test_remove_worktree_restores_path_when_registry_prune_fails(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
