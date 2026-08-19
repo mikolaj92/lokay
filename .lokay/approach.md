@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=281 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=283 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #281 — stage_label: nie nakładaj ai:ready na CLOSED
+Issue: #283 — survey_ready: CLOSED przy live re-view — park, nie i2pr
 
 ## Goal
 
-Po merge (Fixes #N) issue jest CLOSED i park zdejmuje ready. Potem `stage_label` / leftover i2pr znowu kładzie `ai:ready` na zamknięty ticket.
+`survey_ready` ufa liście OPEN. W tym samym przebiegu merge zamyka ticket, a last-pass wciąż ma ready=1 / i2pr_started=1 i może odpiąć sibling albo zostawić etykiety.
 
 ## Files likely touched
 
-- `src/lokay/proc/stage_label.py`
+- `src/lokay/proc/survey_ready.py`
 
 ## Test plan
 
-- CLOSED + stage ready → etykiet nie dodano.
-- OPEN → jak dziś.
+- Lista ma CLOSED + work:ready → park, remaining_ready bez niego.
+- OPEN + work:ready → jak dziś.
 
 ## Non-goals
 
