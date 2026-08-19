@@ -27,6 +27,10 @@ from lokay.proc.detach_issue_to_pr import (
 )
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+
+
 def _merged_this_pass(working: dict[str, Any]) -> list[str]:
     seen: list[str] = []
     for repo_name in list(working.get("merged_this_pass") or []):
@@ -147,10 +151,24 @@ def run_refresh_occupancy(
     occupied_set = set(occupied)
     prs_by_repo: dict[str, list[dict[str, Any]]] = {}
     pr_survey_failed = set(working.get("pr_survey_failed") or [])
+    skipped_repos: list[str] = []
 
     for repo_name in list(begin.get("repos") or []):
         prev_list = list(previous.get(repo_name) or [])
         ready = list(ready_by_repo.get(repo_name) or [])
+        if repo_name != MINI_MILL_REPO:
+            skipped_repos.append(repo_name)
+            actions.append(
+                {
+                    "step": "refresh_prs_skipped",
+                    "repo": repo_name,
+                    "ok": True,
+                    "skipped": True,
+                    "reason": _REPO_SKIP_REASON,
+                }
+            )
+            prs_by_repo[repo_name] = prev_list
+            continue
         if repo_name in occupied_set:
             actions.append(
                 {
@@ -217,7 +235,7 @@ def run_refresh_occupancy(
     )
     recount_prs(working)
     save_begin_working(pass_dir, begin, working)
-    return ok(
+    result = ok(
         pass_dir=pass_dir,
         occupied_repos=occupied,
         merged_this_pass=merged,
@@ -228,6 +246,13 @@ def run_refresh_occupancy(
         survey_errors=int(working.get("survey_errors") or 0),
         receipt_state_unknown=receipt_state_unknown,
     )
+    if skipped_repos:
+        result.update(
+            skipped=True,
+            reason=_REPO_SKIP_REASON,
+            skipped_repos=skipped_repos,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
