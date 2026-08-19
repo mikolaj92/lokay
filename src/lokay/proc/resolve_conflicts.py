@@ -19,6 +19,10 @@ from lokay.proc._common import add_config_live
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+SKIP_REASON = "repo_not_delivered_by_mini_mill"
+
+
 def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     begin, working = load_begin_working(pass_dir)
     cfg_flag = ["--config", config_path] if config_path else []
@@ -38,8 +42,19 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
     remaining_ready = int(working.get("remaining_ready") or 0)
     merge_conflicts = int(working.get("merge_conflicts") or 0)
     closed = 0
+    skipped_repos: list[str] = []
 
     for repo_name in list(begin.get("repos") or []):
+        if repo_name != MINI_MILL_REPO:
+            skipped_repos.append(repo_name)
+            actions.append(
+                {
+                    "step": "skip_resolve_conflicts_outside_mini_scope",
+                    "repo": repo_name,
+                    "reason": SKIP_REASON,
+                }
+            )
+            continue
         pr_list = list(prs_by_repo.get(repo_name) or [])
         still_open: list[dict[str, Any]] = []
         for pr in pr_list:
@@ -155,7 +170,13 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
     )
     recount_prs(working)
     save_begin_working(pass_dir, begin, working)
-    return ok(pass_dir=pass_dir, closed=closed, merge_conflicts=merge_conflicts)
+    return ok(
+        pass_dir=pass_dir,
+        closed=closed,
+        merge_conflicts=merge_conflicts,
+        skipped=bool(skipped_repos),
+        reason=SKIP_REASON if skipped_repos else None,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
