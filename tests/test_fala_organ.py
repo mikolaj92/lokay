@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from lokay import fala_organ
@@ -906,6 +907,56 @@ def test_repair_agent_fails_closed_after_empty_localize(monkeypatch):
     )
     assert result["ok"] is False
     assert result["reason"] == "localize_empty"
+
+
+def test_repair_agent_skips_when_head_has_on_goal_source(monkeypatch, tmp_path):
+    source = tmp_path / "src" / "a.py"
+    source.parent.mkdir()
+    source.write_text("fixed = True\n", encoding="utf-8")
+    evidence = tmp_path / ".lokay" / "localize.json"
+    evidence.parent.mkdir()
+    evidence.write_text('{"paths": ["src/a.py"]}\n', encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "src/a.py"], cwd=tmp_path, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "on-goal fix",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda _main, _argv: (_ for _ in ()).throw(
+            AssertionError("repair agent must not run after on-goal source commit")
+        ),
+    )
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": False},
+        {
+            "get_issue": {"issue": {"repo": "a/b", "number": 7, "title": "Fix x"}},
+            "worktree_add": {"worktree": str(tmp_path), "branch": "ai/fix/7-x"},
+            "run_agent": {"ok": True},
+            "test_local": _red_test_local(),
+        },
+    )
+
+    assert result == {
+        "ok": True,
+        "skipped": True,
+        "reason": "head_has_on_goal_src",
+    }
 
 
 def test_repair_agent_runs_after_localize_found_paths(monkeypatch):
