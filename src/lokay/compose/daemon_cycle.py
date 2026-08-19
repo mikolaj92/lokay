@@ -16,7 +16,7 @@ from lokay.preflight import trusted_fala_manifest
 
 
 def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Lift mill glance fields and drop the bulky Fala host dump.
+    """Lift mill glance fields and drop bulky orchestration details.
 
     The journal stays on disk. Launchd stdout must not inherit a multi-MiB
     JSON line when Fala wraps a productive mill in ``ok: false``.
@@ -30,7 +30,8 @@ def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
     remaining = glance.get("remaining")
     if isinstance(remaining, dict) and remaining and "remaining" not in out:
         out["remaining"] = remaining
-    out.pop("fala", None)
+    for key in ("fala", "terminal", "steps", "last"):
+        out.pop(key, None)
     return out
 
 
