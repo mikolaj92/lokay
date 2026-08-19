@@ -12,7 +12,6 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
-from lokay.proc import closeout as p_closeout
 from lokay.proc import get_issue as p_get_issue
 from lokay.proc import list_issues as p_list_issues
 from lokay.proc import unbounded_park as p_park
@@ -85,24 +84,19 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             if str((viewed.get("issue") or {}).get("state") or "").upper() == "OPEN":
                 open_work_ready.append(issue)
                 continue
-            closeout_argv = [
-                *cfg_flag,
-                *live_flag,
-                "--repo",
-                repo_name,
-                "--issue",
-                str(number),
-            ]
-            closed_out = run_proc(p_closeout.main, closeout_argv)
+            park_argv = ["--repo", repo_name, "--issue", str(number)]
+            if not live:
+                park_argv.append("--dry-run")
+            parked = run_proc(p_park.main, park_argv)
             actions.append(
                 {
-                    "step": "closeout_closed_ready",
+                    "step": "park_closed_ready",
                     "repo": repo_name,
                     "issue": number,
-                    **closed_out,
+                    **parked,
                 }
             )
-            if closed_out.get("ok") and closed_out.get("labels_removed"):
+            if parked.get("ok") and parked.get("applied"):
                 progress += 1
         work_ready = open_work_ready
         covered = issue_numbers_covered_by_prs(

@@ -14,6 +14,20 @@ from lokay import preflight
 from lokay.compose import mill as mill_mod
 
 
+@pytest.fixture(autouse=True)
+def _skip_leftover_closeout(monkeypatch):
+    monkeypatch.setattr(
+        mill_mod,
+        "closeout_leftover_ready",
+        lambda **_kwargs: {
+            "ok": True,
+            "labels_removed": False,
+            "issue_to_pr_started": 0,
+            "leftover_closed": 0,
+        },
+    )
+
+
 def test_direct_live_mill_delegates_and_revokes_preflight_lease(monkeypatch, tmp_path):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
