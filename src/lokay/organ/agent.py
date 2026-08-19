@@ -237,7 +237,13 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
     if atom == "commit_all":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        gate = _run_atom_main(assert_real_diff.main, ["--worktree", worktree])
+        issue_body = str(
+            up.get("get_issue", {}).get("issue", {}).get("body") or ""
+        )
+        gate = _run_atom_main(
+            assert_real_diff.main,
+            ["--worktree", worktree, "--issue-body", issue_body],
+        )
         if not (isinstance(gate, dict) and gate.get("real") is True):
             return {
                 "ok": False,
@@ -304,8 +310,14 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
 
     if atom == "assert_real_diff":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        issue_body = str(
+            up.get("get_issue", {}).get("issue", {}).get("body") or ""
+        )
         assert worktree
-        return _run_atom_main(assert_real_diff.main, ["--worktree", worktree])
+        return _run_atom_main(
+            assert_real_diff.main,
+            ["--worktree", worktree, "--issue-body", issue_body],
+        )
 
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")

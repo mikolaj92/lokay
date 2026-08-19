@@ -9,14 +9,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.git_real_diff import classify_changed_paths, list_changed_paths
+from lokay.localize import extract_issue_file_paths
 from lokay.proc._common import runner
 
 
 _SCOPED_ROOTS = {"fala", "src", "tests"}
+_TICKET_FILES_HEADING_RE = re.compile(
+    r"(?im)^\s*#{1,6}\s+(?:zmiana|files?)\s*:?[ \t]*$"
+)
 
 
 def _localize_paths(worktree: Path) -> list[str]:
@@ -48,6 +53,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-assert-real-diff")
     parser.add_argument("--worktree", required=True)
     parser.add_argument("--base", default="origin/main")
+    parser.add_argument(
+        "--issue-body",
+        help="issue body used to require a diff in an explicit Zmiana/Files scope",
+    )
     args = parser.parse_args(argv)
     worktree = Path(args.worktree).resolve()
     if not worktree.is_dir():
@@ -86,6 +95,23 @@ def main(argv: list[str] | None = None) -> int:
                 base=str(args.base),
             )
         )
+    issue_body = args.issue_body or ""
+    if _TICKET_FILES_HEADING_RE.search(issue_body):
+        required = list(extract_issue_file_paths(issue_body))
+        normalized_changed = {path.removeprefix("./") for path in paths}
+        if not required or normalized_changed.isdisjoint(required):
+            return emit_exit(
+                err(
+                    "refusing: diff does not contain a file declared by the issue",
+                    reason="ticket_scope_miss",
+                    kind="off_goal",
+                    real=False,
+                    paths=paths,
+                    required_paths=required,
+                    worktree=str(worktree),
+                    base=str(args.base),
+                )
+            )
     if kind == "real":
         return emit_exit(
             ok(

@@ -85,6 +85,60 @@ def test_worktree_with_unix_atom_is_real_progress(tmp_path: Path, capsys):
     assert "src/app.py" in payload["paths"]
 
 
+def test_issue_change_file_must_be_present_even_when_diff_is_localized(
+    tmp_path: Path, capsys
+):
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "checkout", "-b", "ai/fix/401-x")
+    lokay = repo / ".lokay"
+    lokay.mkdir()
+    (lokay / "localize.json").write_text(
+        '{"paths":["src/survey_ready.py"]}\n', encoding="utf-8"
+    )
+    (repo / "src" / "survey_ready.py").write_text("ready = True\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "add", "-f", "--", ".lokay/localize.json")
+    _git(repo, "commit", "-m", "survey only")
+
+    code = assert_real_diff.main(
+        [
+            "--worktree",
+            str(repo),
+            "--base",
+            "main",
+            "--issue-body",
+            "## Zmiana\n- `mill.py`\n",
+        ]
+    )
+    payload = _payload(capsys)
+    assert code == 1
+    assert payload["reason"] == "ticket_scope_miss"
+    assert payload["required_paths"] == ["mill.py"]
+
+
+def test_issue_change_file_in_diff_is_real_progress(tmp_path: Path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "checkout", "-b", "ai/fix/401-x")
+    (repo / "mill.py").write_text("fixed = True\n", encoding="utf-8")
+    _git(repo, "add", "mill.py")
+    _git(repo, "commit", "-m", "fix mill")
+
+    code = assert_real_diff.main(
+        [
+            "--worktree",
+            str(repo),
+            "--base",
+            "main",
+            "--issue-body",
+            "## Files\n- `mill.py`\n",
+        ]
+    )
+    payload = _payload(capsys)
+    assert code == 0
+    assert payload["ok"] is True
+    assert "mill.py" in payload["paths"]
+
+
 def test_worktree_with_source_outside_localize_is_off_goal(tmp_path: Path, capsys):
     repo = _init_repo(tmp_path / "repo")
     _git(repo, "checkout", "-b", "ai/fix/1-x")
