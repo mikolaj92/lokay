@@ -37,9 +37,9 @@ def _localize_paths(worktree: Path) -> list[str]:
     return [path.removeprefix("./").rstrip("/") for path in paths if path.rstrip("/")]
 
 
-def _off_goal_paths(changed: list[str], localized: list[str]) -> list[str]:
+def _paths_outside_scope(changed: list[str], scope: list[str]) -> list[str]:
     def allowed(path: str) -> bool:
-        return any(path == scope or path.startswith(f"{scope}/") for scope in localized)
+        return any(path == item or path.startswith(f"{item}/") for item in scope)
 
     normalized = [path.removeprefix("./") for path in changed]
     return [
@@ -47,6 +47,10 @@ def _off_goal_paths(changed: list[str], localized: list[str]) -> list[str]:
         for path in normalized
         if path.split("/", 1)[0] in _SCOPED_ROOTS and not allowed(path)
     ]
+
+
+def _off_goal_paths(changed: list[str], localized: list[str]) -> list[str]:
+    return _paths_outside_scope(changed, localized)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,21 +84,6 @@ def main(argv: list[str] | None = None) -> int:
                 base=str(args.base),
             )
         )
-    off_goal = _off_goal_paths(paths, localized) if localized else []
-    if off_goal:
-        return emit_exit(
-            err(
-                "refusing: changed source paths fall outside localize scope",
-                reason="off_goal",
-                kind="off_goal",
-                real=False,
-                paths=paths,
-                off_goal_paths=off_goal,
-                localized_paths=localized,
-                worktree=str(worktree),
-                base=str(args.base),
-            )
-        )
     issue_body = args.issue_body or ""
     if _TICKET_FILES_HEADING_RE.search(issue_body):
         required = list(extract_issue_file_paths(issue_body))
@@ -112,6 +101,36 @@ def main(argv: list[str] | None = None) -> int:
                     base=str(args.base),
                 )
             )
+        ticket_scope_extra = _paths_outside_scope(paths, required)
+        if ticket_scope_extra:
+            return emit_exit(
+                err(
+                    "refusing: changed source paths fall outside issue file scope",
+                    reason="ticket_scope_extra",
+                    kind="off_goal",
+                    real=False,
+                    paths=paths,
+                    extra_paths=ticket_scope_extra,
+                    required_paths=required,
+                    worktree=str(worktree),
+                    base=str(args.base),
+                )
+            )
+    off_goal = _off_goal_paths(paths, localized) if localized else []
+    if off_goal:
+        return emit_exit(
+            err(
+                "refusing: changed source paths fall outside localize scope",
+                reason="off_goal",
+                kind="off_goal",
+                real=False,
+                paths=paths,
+                off_goal_paths=off_goal,
+                localized_paths=localized,
+                worktree=str(worktree),
+                base=str(args.base),
+            )
+        )
     if kind == "real":
         return emit_exit(
             ok(
