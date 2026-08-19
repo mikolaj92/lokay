@@ -253,14 +253,17 @@ def test_commit_all_force_adds_approach_md(tmp_path: Path, monkeypatch):
     assert any(a[:2] == ["git", "commit"] for a in seen)
 
 
-def test_commit_all_force_adds_localize_json(tmp_path: Path):
-    """Localization evidence must stage even when `.lokay/` is gitignored."""
+def test_commit_all_uses_localize_paths_instead_of_evidence(tmp_path: Path):
+    """A localization file switches commit_all from add-all to scoped paths."""
     from lokay import git_commit
 
     wt = tmp_path / "wt"
     loc = wt / ".lokay" / "localize.json"
     loc.parent.mkdir(parents=True)
     loc.write_text('{"paths":["src/x.py"]}\n', encoding="utf-8")
+    source = wt / "src" / "x.py"
+    source.parent.mkdir()
+    source.write_text("changed\n", encoding="utf-8")
     seen: list[list[str]] = []
 
     class FakeRunner:
@@ -275,4 +278,7 @@ def test_commit_all_force_adds_localize_json(tmp_path: Path):
 
     did = git_commit.commit_all(FakeRunner(), wt, "msg", live=True)
     assert did is True
-    assert ["git", "add", "-f", "--", ".lokay/localize.json"] in seen
+    assert ["git", "add", "-A"] not in seen
+    assert ["git", "add", "-f", "--", ".lokay/localize.json"] not in seen
+    assert ["git", "add", "-A", "--", ":(literal)src/x.py"] in seen
+    assert any(a[:3] == ["git", "commit", "--only"] for a in seen)
