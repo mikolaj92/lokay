@@ -3,8 +3,9 @@
 Reports whether config can mill live and what work remains. Never mutates.
 Exit ok=false when work remains or mill is not configured for live progress.
 
-Default path surveys all repos. Use --local / --skip-survey for a cheap
-readiness/config/lease/preflight summary without the multi-repo gh survey.
+Default path surveys only Lokay's own delivery repository. Product repositories
+remain visible as configuration metadata but are never queried by status. Use
+--local / --skip-survey for a cheap readiness/config/lease/preflight summary.
 One command surfaces: mill_ready, merge_enabled, K limit, health, per-repo
 actionable PRs / ready / inbox, and a compact human_residuals count.
 """
@@ -22,6 +23,9 @@ from lokay.graph_run import describe_package
 from lokay.pass_receipt import read_pass_receipt
 from lokay.preflight import health_lease_status, run_preflight
 from lokay.proc._common import add_config, load_cfg
+
+
+MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def _offline() -> bool:
@@ -109,6 +113,7 @@ def compose_status(
         # Residual mailbox — never implies mill stuck / not-working.
         return compose_human_mailbox(config_path=config_path, live=True)
     cfg = load_cfg(argparse.Namespace(config=config_path))
+    active_repo_names = [repo.name for repo in cfg.active_repos()]
     # Hard blockers: mill cannot act at all (not policy tradeoffs).
     blockers: list[str] = []
     if cfg.mode != "live":
@@ -189,7 +194,7 @@ def compose_status(
             executor_enabled=cfg.executor_enabled,
             agent=cfg.agent,
             incident_repo=cfg.incident_repo,
-            repos=[r.name for r in cfg.active_repos()],
+            repos=active_repo_names,
             repos_disabled=[r.name for r in cfg.repos if not r.enabled],
             repos_total=len(cfg.repos),
             missing_clones=missing_clones,
@@ -217,7 +222,25 @@ def compose_status(
             payload["error"] = "not working: mill is not live-ready"
         return payload
 
-    survey_result = compose_tick(config_path=config_path, live=False)
+    # factory_begin narrows mixed catalogs to MINI_MILL_REPO. Keep the status
+    # boundary fail-closed too: a product-only catalog must not reach any survey
+    # atom (and therefore must make zero GitHub calls).
+    if MINI_MILL_REPO in active_repo_names:
+        survey_result = compose_tick(config_path=config_path, live=False)
+    else:
+        survey_result = {
+            "ok": True,
+            "idle": True,
+            "health": "idle",
+            "remaining": {
+                "inbox": 0,
+                "ready": 0,
+                "open_ai_prs": 0,
+                "actionable_open_ai_prs": 0,
+                "survey_errors": 0,
+                "by_repo": [],
+            },
+        }
     remaining = survey_result.get("remaining") or {}
     idle = bool(survey_result.get("idle"))
     # Production signal: either truly idle, or mill is ready and can act.
@@ -265,7 +288,7 @@ def compose_status(
         executor_enabled=cfg.executor_enabled,
         agent=cfg.agent,
         incident_repo=cfg.incident_repo,
-        repos=[r.name for r in cfg.active_repos()],
+        repos=active_repo_names,
         repos_disabled=[r.name for r in cfg.repos if not r.enabled],
         repos_total=len(cfg.repos),
         missing_clones=missing_clones,
@@ -316,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument(
         "--full",
         action="store_true",
-        help="full multi-repo remaining-work survey (default)",
+        help="full Lokay remaining-work survey (default; product repos are skipped)",
     )
     mode.add_argument(
         "--human",
