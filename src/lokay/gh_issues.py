@@ -182,7 +182,7 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
     issues: list[Issue] = []
     for row in rows:
         issue = _issue_from_row(repo.name, row)
-        if issue.state != "OPEN":
+        if issue.state == "CLOSED":
             continue
         if config.blocked_label in issue.labels:
             continue
@@ -464,5 +464,5 @@ def list_issues_with_label(
         )
     ]
     if label in {config.ready_label, WORK_READY_LABEL}:
-        return [issue for issue in issues if issue.state == "OPEN"]
+        return [issue for issue in issues if issue.state != "CLOSED"]
     return issues
