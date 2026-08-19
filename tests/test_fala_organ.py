@@ -859,6 +859,55 @@ def test_repair_agent_timeout_resume_when_live_issue_still_open(monkeypatch):
     assert "Resume" in captured["prompt"]
 
 
+def test_repair_agent_fails_closed_after_empty_localize(monkeypatch):
+    def boom(main, argv):
+        raise AssertionError("repair agent must not run after empty localize")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {
+                "ok": False,
+                "reason": "localize_empty",
+                "localize": {"ok": False, "reason": "empty_paths", "paths": []},
+            },
+            "test_local": _red_test_local(),
+        },
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "localize_empty"
+
+
+def test_repair_agent_runs_after_localize_found_paths(monkeypatch):
+    called = []
+
+    def fake_run(main, argv):
+        called.append(argv)
+        return {"ok": True, "status": "completed"}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
+        {
+            "get_issue": {"issue": {"repo": "a/b", "number": 7, "title": "Fix x"}},
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "run_agent": {
+                "ok": False,
+                "reason": "agent_failed",
+                "localize": {"ok": True, "paths": ["src/a.py"]},
+            },
+            "test_local": _red_test_local(),
+        },
+    )
+    assert result["ok"] is True
+    assert result["attempted"] is True
+    assert called
+
+
 def test_repair_agent_skips_when_first_probe_green(monkeypatch):
     def boom(main, argv):
         raise AssertionError("repair agent must not run after a green test_local")
