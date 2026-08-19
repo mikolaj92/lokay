@@ -82,9 +82,12 @@ def _canonical_github_ssh(repo_name: str) -> str:
 
 
 def _github_git_transport(cfg: Any) -> tuple[bool, str]:
-    """Prove every managed checkout uses the authenticated SSH carrier."""
+    """Prove the mill checkout uses the authenticated SSH carrier."""
+    from lokay.preflight_checks import preflight_repos
+
+    repos = preflight_repos(cfg)
     checked = 0
-    for repo in cfg.active_repos():
+    for repo in repos:
         if not (repo.clone_path / ".git").exists():
             continue
         checked += 1
@@ -108,9 +111,7 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
             return False, "non_ssh_origin"
     if checked == 0:
         return True, "ok"
-    probe = next(
-        repo for repo in cfg.active_repos() if (repo.clone_path / ".git").exists()
-    )
+    probe = next(repo for repo in repos if (repo.clone_path / ".git").exists())
     authenticated = False
     # Keep the original 20-second bound, but do not stop the mill for a single
     # transient SSH/network failure.  Both attempts remain non-interactive and
@@ -134,9 +135,11 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
 
 
 def _repair_github_git_transport(cfg: Any) -> bool:
-    """Replace only exact canonical GitHub HTTPS origins with their SSH form."""
+    """Replace the mill checkout's canonical HTTPS origin with its SSH form."""
+    from lokay.preflight_checks import preflight_repos
+
     changed = False
-    for repo in cfg.active_repos():
+    for repo in preflight_repos(cfg):
         if not (repo.clone_path / ".git").exists():
             continue
         try:
