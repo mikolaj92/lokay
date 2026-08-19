@@ -1,22 +1,24 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=294 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=296 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #294 — closeout_pr: park gdy issue CLOSED, nie tylko po merge w tym przebiegu
+Issue: #296 — daemon_cycle: strop przebiegu 180s — last-pass i exit, nie wisieć
 
 ## Goal
 
-`closeout_pr` parkuje dopiero po własnym merge w tym przebiegu (#267). Harvest / Fixes# zamyka issue wcześniej, PR jeszcze otwarty albo closeout idzie inną route — etykiety zostają do następnego `survey_ready`.
+Przebieg młyna wisi. `last-pass.json` stoi, katalog pusty, LaunchAgent trzyma jeden PID, następny tick nie startuje.
 
 ## Files likely touched
 
-- `src/lokay/proc/closeout_pr.py`
+- `last-pass.json`
+- `mill-latest.log`
+- `src/lokay/compose/daemon_cycle.py`
+- `scripts/lokay-mill-daemon.sh`
 
 ## Test plan
 
-- PR open, issue CLOSED → park, route skip, bez merge.
-- PR open, issue OPEN → bez zmian.
+- Sztucznie długi krok → po 180s receipt z `pass_ceiling`, proces kończy się. Krótki przebieg bez zmian.
 
 ## Non-goals
 
