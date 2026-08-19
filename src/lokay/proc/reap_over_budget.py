@@ -9,6 +9,7 @@ from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit.support import run_proc
+from lokay.proc import close_issue as p_close
 from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import (
@@ -37,7 +38,11 @@ def _stuck_path_for(pass_dir: str | None) -> Path:
 
 
 def run_reap_over_budget(
-    *, budget_s: int = DEFAULT_BUDGET_S, pass_dir: str | None = None
+    *,
+    budget_s: int = DEFAULT_BUDGET_S,
+    pass_dir: str | None = None,
+    config_path: str | None = None,
+    live: bool = False,
 ) -> dict[str, Any]:
     reaped: list[dict[str, Any]] = []
     kept: list[dict[str, Any]] = []
@@ -107,6 +112,23 @@ def run_reap_over_budget(
                 p_park.main,
                 ["--repo", repo, "--issue", str(issue)],
             )
+            if result["park"].get("ok"):
+                close_argv = []
+                if config_path:
+                    close_argv.extend(["--config", config_path])
+                if live:
+                    close_argv.append("--live")
+                close_argv.extend(
+                    [
+                        "--repo",
+                        repo,
+                        "--issue",
+                        str(issue),
+                        "--comment",
+                        "plan_only fail-closed",
+                    ]
+                )
+                result["close"] = run_proc(p_close.main, close_argv)
         reaped.append(result)
     return ok(
         reaped=reaped,
@@ -127,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
     payload = run_reap_over_budget(
         budget_s=int(args.budget),
         pass_dir=str(args.pass_dir or "") or None,
+        config_path=args.config,
+        live=bool(args.live),
     )
     payload["pass_dir"] = str(args.pass_dir or "")
     return emit_exit(payload)

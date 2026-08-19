@@ -1,24 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=258 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=259 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #258 — fala_organ: live re-view before run_agent
+Issue: #259 — plan_only fail-closed: close issue (wontfix), nie tylko park etykiet
 
 ## Goal
 
-#256 / PR 257 dodało live re-view (`_issue_no_longer_open`) tylko dla `_MUTATING_ATOMS` = `commit_all`, `push`, `pr_create`, `pr_merge`.
+Fail-closed plan_only zdejmuje work:ready/ai:ready (unbounded_park) i wpisuje stuck.json, ale nie zamyka issue.
 
 ## Files likely touched
 
-- `src/lokay/fala_organ.py`
-- `tests/test_fala_organ.py`
-- `run_agent.main`
+- `src/lokay/proc/dispatch_implement.py`
+- `src/lokay/proc/reap_over_budget.py`
 
 ## Test plan
 
-- `tests/test_fala_organ.py`: get_issue conduction OPEN, live re-view CLOSED → `run_agent.main` nie wołane, reason `issue_closed`. Analogicznie `repair_agent`.
-- Nie ruszaj 180–192, 228, 235, 247, 253.
+- Plan_only failure -> close_issue.main wywołane z --repo i --issue.
+- Stuck-blocked park (survey) -> close_issue NIE wywołane.
 
 ## Non-goals
 
