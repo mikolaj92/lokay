@@ -29,6 +29,9 @@ from lokay.proc.pi_budget import DEFAULT_BUDGET_S, check_pi_budget
 from lokay.stuck import load_stuck, record_failure, save_stuck
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+
 
 def _process_cwd(pid: int) -> Path | None:
     """Best-effort cwd lookup on Linux and macOS."""
@@ -131,8 +134,20 @@ def run_reap_over_budget(
     kept: list[dict[str, Any]] = []
     stuck: dict[str, Any] | None = None
     stuck_path = _stuck_path_for(pass_dir)
+    skipped_receipts: list[dict[str, Any]] = []
     for row in live_issue_to_pr_receipts():
         repo = str(row.get("repo") or "")
+        if repo and repo != MINI_MILL_REPO:
+            skipped_receipts.append(
+                {
+                    "repo": repo,
+                    "issue": row.get("issue"),
+                    "pid": row.get("pid"),
+                    "skipped": True,
+                    "reason": _REPO_SKIP_REASON,
+                }
+            )
+            continue
         try:
             issue = int(row.get("issue"))
             pid = int(row.get("pid"))
@@ -218,12 +233,19 @@ def run_reap_over_budget(
                 )
                 result["close"] = run_proc(p_close.main, close_argv)
         reaped.append(result)
-    return ok(
+    result = ok(
         reaped=reaped,
         kept=kept,
         reaped_count=len(reaped),
         budget_s=budget_s,
     )
+    if skipped_receipts:
+        result.update(
+            skipped=True,
+            reason=_REPO_SKIP_REASON,
+            skipped_receipts=skipped_receipts,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
