@@ -1,23 +1,24 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=251 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=254 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #251 — test_global_pr_first: labels na issue, nie obok
+Issue: #254 — fala_organ: skip mutations when issue closed
 
 ## Goal
 
-Na main `uv run --extra dev pytest -q` ma 6 faili. #243 naprawiło SyntaxError, ale w innych mockach `labels` nadal leżą *obok* `issues`, nie na issue. Intake widzi 0 ready → `len(intake) == 0`.
+#239 zamyka tylko `pr_create`. Leftover i tak commituje i pushuje (#235, #247). Bramka per-atom to klon (253 zdjęte).
 
 ## Files likely touched
 
-- `tests/test_autonomy_contracts.py`
-- `tests/test_global_pr_first.py`
+- `src/lokay/fala_organ.py`
+- `organ/common.py`
+- `tests/test_fala_organ.py`
 
 ## Test plan
 
-- Te 6 testów zielone. Nie osłabiać asercji.
-- Nie ruszaj 180–192, 228, 235, 247.
+- `tests/test_fala_organ.py`: issue CLOSED + atom `push` albo `pr_create` → nie woła create/push, reason `issue_closed`.
+- Nie ruszaj 180–192, 228, 235, 247, 253.
 
 ## Non-goals
 

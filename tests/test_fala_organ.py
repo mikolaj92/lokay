@@ -145,6 +145,42 @@ def test_pr_merge_secrets_fail_closed(tmp_path, monkeypatch):
     assert merged["needs_review"] is True
 
 
+def _closed_issue_up() -> dict:
+    return {
+        "get_issue": {
+            "issue": {
+                "repo": "a/b",
+                "number": 7,
+                "state": "CLOSED",
+            }
+        }
+    }
+
+
+def test_closed_issue_skips_all_mutating_atoms_at_organ_boundary(monkeypatch):
+    def boom(main, argv):
+        raise AssertionError("closed issue must not invoke a mutating atom")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
+    for atom in ("commit_all", "push", "pr_create", "pr_merge"):
+        result = fala_organ._handle(atom, {"repo": "a/b", "issue": 7}, _closed_issue_up())
+        assert result["ok"] is False
+        assert result["reason"] == "issue_closed"
+
+
+def test_closed_issue_does_not_block_read_only_atoms(monkeypatch):
+    called = []
+
+    def fake_run(main, argv):
+        called.append(argv)
+        return {"ok": True}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle("get_issue", {"repo": "a/b", "issue": 7}, {})
+    assert result["ok"] is True
+    assert called
+
+
 def test_push_accepts_agent_created_unpublished_commit(monkeypatch):
     monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 2)
     monkeypatch.setattr(
