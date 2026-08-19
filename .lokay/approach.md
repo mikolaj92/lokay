@@ -1,22 +1,28 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=333 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=345 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #333 — factory_begin: cold survey musi pokryć skonfigurowane K
+Issue: #345 — commit_all: po on-goal src nie dodawaj plików poza localize
 
 ## Goal
 
-`pick_survey_repos` przy pustym last-pass: `lokay` + `extra_cold=2`. `max_issue_to_pr_per_pass` (K) bywa 3–4. Survey widzi za mało czystych repo → tick startuje mniej i2pr niż K.
+#341: i2pr zrobił on-goal commit (`daemon_cycle.py` + test), potem w tym samym run `commit_all` (`git add -A`) dopisał `src/lokay/proc/factory_begin.py`. `assert_real_diff` odmówił (`off_goal`) — lokalny commit bez PR.
 
 ## Files likely touched
 
+- `daemon_cycle.py`
 - `src/lokay/proc/factory_begin.py`
-- `hot.py`
+- `src/lokay/proc/commit_all.py`
+- `lokay/localize.json`
+- `tests/test_commit_all.py`
+- `factory_begin.py`
 
 ## Test plan
 
-- K=3, 4 czyste repo z work:ready, pusty last-pass → survey ≥3 repo / i2pr start ≤K ale nie ślepo 2.
+- `tests/test_commit_all.py` (albo istniejący)
+- Worktree: on-goal plik z localize + obcy `factory_begin.py` → commit zawiera tylko localize, nie factory_begin.
+- Nie ruszaj produktów. Nie klon 291/303/321/329/336/341.
 
 ## Non-goals
 

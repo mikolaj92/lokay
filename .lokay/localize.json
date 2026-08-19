@@ -1,36 +1,64 @@
 {
   "paths": [
+    "src/lokay/proc/commit_all.py",
+    "src/lokay/proc/plan_issue.py",
+    "daemon_cycle.py",
     "src/lokay/proc/factory_begin.py",
-    "hot.py",
+    "lokay/localize.json",
+    "factory_begin.py",
     "lokay/proc/factory_begin.py",
-    "tests/test_hot_repos.py"
+    "lokay/proc/commit_all.py",
+    "291/303/321/329/336/341",
+    "src/lokay/git_commit.py",
+    "tests/test_commit_all.py",
+    "src/tests",
+    "tests/test_plan_issue.py"
   ],
   "source": "agent",
   "seed_paths": [
+    "daemon_cycle.py",
     "src/lokay/proc/factory_begin.py",
-    "hot.py",
-    "lokay/proc/factory_begin.py"
+    "src/lokay/proc/commit_all.py",
+    "lokay/localize.json",
+    "tests/test_commit_all.py",
+    "factory_begin.py",
+    "lokay/proc/factory_begin.py",
+    "lokay/proc/commit_all.py",
+    "src/tests",
+    "291/303/321/329/336/341"
   ],
   "matched_tokens": [
-    "factory_begin",
-    "survey",
-    "Survey",
-    "assert",
-    "worktree",
+    "commit_all",
+    "localize",
+    "daemon_cycle",
+    "git",
     "proc",
-    "hot",
+    "factory_begin",
+    "assert_real_diff",
     "start",
+    "run_path",
+    "worktree",
+    "gate",
+    "git_commit",
+    "test_commit_all",
+    "Worktree",
     "review",
     "unbounded",
-    "bounded"
+    "bounded",
+    "291",
+    "303",
+    "321",
+    "329",
+    "336",
+    "341"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 290.",
+    "Repo tree entries considered: 292.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__333-factory_begin-cold-survey-musi-pokry-sko-1ddbe4a4",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__345-commit_all-po-on-goal-src-nie-dodawaj-pl-0d59ee66",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
