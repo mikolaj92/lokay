@@ -20,6 +20,9 @@ from lokay.models import Issue
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def _issue_from_args(args: argparse.Namespace) -> Issue:
     if args.issue_json:
         raw = json.loads(Path(args.issue_json).read_text(encoding="utf-8"))
@@ -65,6 +68,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
+    try:
+        issue = _issue_from_args(args)
+    except Exception as exc:  # noqa: BLE001
+        return emit_exit(err(str(exc)))
+
+    worktree = Path(args.worktree)
+    if issue.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                wrote=False,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=issue.repo,
+                issue=issue.number,
+                worktree=str(worktree),
+            )
+        )
+
     if args.llm:
         # Skippable slot: default path is deterministic. Requesting LLM without a
         # configured assist fails closed rather than inventing a stub planner.
@@ -75,12 +97,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
-    try:
-        issue = _issue_from_args(args)
-    except Exception as exc:  # noqa: BLE001
-        return emit_exit(err(str(exc)))
-
-    worktree = Path(args.worktree)
     plan = build_approach(issue, worktree=worktree if worktree.is_dir() else None)
     content = render_approach_md(plan)
     rel = str(args.rel_path or APPROACH_REL_PATH)
