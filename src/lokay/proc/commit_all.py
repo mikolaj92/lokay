@@ -22,7 +22,15 @@ def main(argv: list[str] | None = None) -> int:
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     run = runner()
     try:
-        did = commit_all(run, Path(args.worktree), args.message, live=live)
+        did = commit_all(
+            run,
+            Path(args.worktree),
+            args.message,
+            live=live,
+            protected_checkouts=(
+                repo.clone_path for repo in getattr(cfg, "repos", ())
+            ) if cfg else (),
+        )
         commit = ""
         if did:
             commit = run.run_checked(
