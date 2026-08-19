@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 from lokay.proc import merge_now
 
-CMD = ["gh", "pr", "merge", "7", "--repo", "owner/name", "--merge"]
+REPO = "mikolaj92/lokay"
+CMD = ["gh", "pr", "merge", "7", "--repo", REPO, "--merge"]
 
 
 def _payload(capsys) -> dict:
@@ -19,7 +20,7 @@ def test_dry_run_prints_command_and_does_not_call_gh(monkeypatch, capsys):
         raise AssertionError("gh must not run in dry-run")
 
     monkeypatch.setattr(merge_now.subprocess, "run", boom)
-    code = merge_now.main(["--repo", "owner/name", "--pr", "7", "--dry-run"])
+    code = merge_now.main(["--repo", REPO, "--pr", "7", "--dry-run"])
     assert code == 0
     out = capsys.readouterr().out
     payload = json.loads(out.strip().splitlines()[-1])
@@ -28,7 +29,20 @@ def test_dry_run_prints_command_and_does_not_call_gh(monkeypatch, capsys):
     assert payload["dry_run"] is True
     assert payload["command"] == CMD
     assert "gh" in out and "pr" in out and "merge" in out
-    assert "owner/name" in out
+    assert REPO in out
+
+
+def test_other_repo_is_refused_without_calling_gh(monkeypatch, capsys):
+    def boom(*_a, **_k):
+        raise AssertionError("gh must not run for a product repo")
+
+    monkeypatch.setattr(merge_now.subprocess, "run", boom)
+    code = merge_now.main(["--repo", "mikolaj92/temida", "--pr", "7"])
+    assert code == 1
+    payload = _payload(capsys)
+    assert payload["ok"] is False
+    assert "refusing" in payload["error"]
+    assert payload["repo"] == "mikolaj92/temida"
 
 
 def test_merge_runs_exact_gh_argv(monkeypatch, capsys):
@@ -39,7 +53,7 @@ def test_merge_runs_exact_gh_argv(monkeypatch, capsys):
         return SimpleNamespace(returncode=0, stdout="Merged\n", stderr="")
 
     monkeypatch.setattr(merge_now.subprocess, "run", fake_run)
-    code = merge_now.main(["--repo", "owner/name", "--pr", "7"])
+    code = merge_now.main(["--repo", REPO, "--pr", "7"])
     assert code == 0
     assert calls == [CMD]
     payload = _payload(capsys)
@@ -47,7 +61,7 @@ def test_merge_runs_exact_gh_argv(monkeypatch, capsys):
     assert payload["merged"] is True
     assert payload["planned"] is False
     assert payload["command"] == CMD
-    assert payload["repo"] == "owner/name"
+    assert payload["repo"] == REPO
     assert payload["pr"] == 7
 
 
@@ -60,7 +74,7 @@ def test_gh_nonzero_fails_closed(monkeypatch, capsys):
         )
 
     monkeypatch.setattr(merge_now.subprocess, "run", fake_run)
-    code = merge_now.main(["--repo", "owner/name", "--pr", "7"])
+    code = merge_now.main(["--repo", REPO, "--pr", "7"])
     assert code == 1
     payload = _payload(capsys)
     assert payload["ok"] is False
@@ -74,7 +88,7 @@ def test_missing_gh_fails_closed(monkeypatch, capsys):
         raise FileNotFoundError("No such file or directory: 'gh'")
 
     monkeypatch.setattr(merge_now.subprocess, "run", fake_run)
-    code = merge_now.main(["--repo", "owner/name", "--pr", "7"])
+    code = merge_now.main(["--repo", REPO, "--pr", "7"])
     assert code == 1
     payload = _payload(capsys)
     assert payload["ok"] is False
