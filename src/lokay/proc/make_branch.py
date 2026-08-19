@@ -8,6 +8,9 @@ from lokay.envelope import emit_exit, ok
 from lokay.git_branch import branch_for_issue
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-make-branch")
     p.add_argument("--prefix", default="ai/fix")
@@ -15,6 +18,15 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--issue", required=True, type=int)
     p.add_argument("--title", default="")
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                issue=args.issue,
+            )
+        )
     branch = branch_for_issue(args.prefix, args.repo, args.issue, args.title)
     return emit_exit(ok(branch=branch, repo=args.repo, issue=args.issue))
 
