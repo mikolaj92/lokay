@@ -40,6 +40,15 @@ def test_reaps_over_budget_live_receipt(tmp_path, monkeypatch):
         "terminate_issue_to_pr_pid",
         lambda pid: killed.append(pid) or True,
     )
+    parked: list[list[str]] = []
+
+    def fake_park(argv=None):
+        parked.append(list(argv or []))
+        return reap_over_budget.emit_exit(
+            reap_over_budget.ok(applied=True, removed=True)
+        )
+
+    monkeypatch.setattr(reap_over_budget.p_park, "main", fake_park)
     out = reap_over_budget.run_reap_over_budget(budget_s=480)
     assert out["ok"] is True
     assert out["reaped_count"] == 1
@@ -49,6 +58,12 @@ def test_reaps_over_budget_live_receipt(tmp_path, monkeypatch):
     assert stamped["ok"] is False
     assert stamped["reason"] == "over_budget"
     assert stamped["pid"] == 4242
+    assert parked == [["--repo", "a/one", "--issue", "9"]]
+    stuck = json.loads((home / ".lokay" / "stuck.json").read_text(encoding="utf-8"))
+    row = stuck["issues"]["a/one#9"]
+    assert row["blocked"] is True
+    assert row["reason"] == "plan_only"
+    assert row["last_error"] == "plan_only"
 
 
 def test_keeps_under_budget_live_receipt(tmp_path, monkeypatch):
