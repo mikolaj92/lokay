@@ -201,6 +201,54 @@ def test_list_issues_with_work_ready_label_defaults_empty_state_to_open(tmp_path
     assert argv[argv.index("--state") + 1] == "all"
 
 
+def test_survey_ready_mini_mill_lists_only_lokay_issues(tmp_path, monkeypatch):
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {
+            "repos": ["mikolaj92/Temida", "mikolaj92/lokay"],
+            "branch_prefix": "ai/fix/",
+        },
+    )
+    pass_io.write_json(
+        pass_io.working_path(pass_dir),
+        {"actions": [], "progress": 0, "prs_by_repo": {}},
+    )
+    listed: list[str] = []
+
+    def fake_list(argv=None):
+        args = list(argv or [])
+        repo = args[args.index("--repo") + 1]
+        listed.append(repo)
+        return emit_exit(ok(issues=[{"number": 418, "labels": ["work:ready"]}]))
+
+    def fake_get(argv=None):
+        return emit_exit(ok(issue={"state": "OPEN"}))
+
+    monkeypatch.setattr(survey_ready.p_list_issues, "main", fake_list)
+    monkeypatch.setattr(survey_ready.p_get_issue, "main", fake_get)
+
+    result = survey_ready.run_survey_ready(
+        pass_dir=str(pass_dir), config_path=None, live=True
+    )
+
+    assert result["ok"] is True
+    assert listed == ["mikolaj92/lokay"]
+    survey = pass_io.read_json(pass_io.survey_path(pass_dir))
+    assert survey["ready_by_repo"] == {
+        "mikolaj92/Temida": [],
+        "mikolaj92/lokay": [{"number": 418, "labels": ["work:ready"]}],
+    }
+    assert survey["remaining_ready"] == 1
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert any(
+        action.get("step") == "skip_ready_survey_outside_mini_scope"
+        and action.get("repo") == "mikolaj92/Temida"
+        for action in working["actions"]
+    )
+
+
 def test_survey_ready_parks_blocked_ready_issue(tmp_path, monkeypatch):
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()

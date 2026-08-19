@@ -7,6 +7,7 @@ from typing import Any
 
 
 WORK_READY_LABEL = "work:ready"
+MINI_MILL_REPO = "mikolaj92/lokay"
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
@@ -37,8 +38,19 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
 
     scope = set(survey_scope(begin) or [])
     scoped = survey_scope(begin) is not None
-    for repo_name in list(begin.get("repos") or []):
-
+    repos = list(begin.get("repos") or [])
+    lokay_mill = MINI_MILL_REPO in repos
+    for repo_name in repos:
+        if lokay_mill and repo_name != MINI_MILL_REPO:
+            actions.append(
+                {
+                    "step": "skip_ready_survey_outside_mini_scope",
+                    "repo": repo_name,
+                    "reason": f"mini mill only surveys ready issues for {MINI_MILL_REPO}",
+                }
+            )
+            ready_by_repo[repo_name] = []
+            continue
         if scoped and repo_name not in scope:
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "ready"})
             ready_by_repo[repo_name] = []
