@@ -1,21 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=305 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=307 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #305 — process_exit_code: pass_ceiling to exit 0
+Issue: #307 — mill-daemon: zapisz digest po pass_ceiling — nie reinstall co tick
 
 ## Goal
 
-Strop przebiegu zapisuje last-pass `reason=pass_ceiling` / `ok=false` (#296/#300), ale `process_exit_code` nie zna tego health i zwraca 1. LaunchAgent traktuje tick jak crash (`last exit 1`).
+Po stropie 180s last-pass ma `health=pass_ceiling`. Skrypt młyna zapisuje digest checkoutu tylko gdy log ma health z listy (progress/idle/…). `pass_ceiling` nie ma. Digest nie ląduje → następny tick znowu `--reinstall-package lokay --reinstall-package fala` → znowu strop. Pętla.
 
 ## Files likely touched
 
-- `src/lokay/envelope.py`
+- `scripts/lokay-mill-daemon.sh`
 
 ## Test plan
 
-- Payload `health=pass_ceiling` / `reason=pass_ceiling` → kod 0. Inny `ok=false` bez produkcji → 1.
+- Log z pass_ceiling → plik digest zapisany. Kolejny przebieg z tym samym digestem nie dodaje `--reinstall-package`.
 
 ## Non-goals
 
