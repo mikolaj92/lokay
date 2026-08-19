@@ -1,4 +1,4 @@
-"""Atomic: git add -A && commit if staged diff."""
+"""Atomic: commit localized changes (or all changes without localization)."""
 
 from __future__ import annotations
 

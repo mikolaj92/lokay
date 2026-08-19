@@ -1,8 +1,38 @@
 from __future__ import annotations
 
-from pathlib import Path
+import json
+from pathlib import Path, PurePosixPath
 
 from lokay.runner import Runner, git_spec
+
+
+_EVIDENCE_PATHS = {".lokay/approach.md", ".lokay/localize.json"}
+
+
+def _localized_paths(worktree: Path) -> list[str] | None:
+    path = worktree / ".lokay" / "localize.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(".lokay/localize.json must contain an object")
+    raw_paths = payload.get("paths", [])
+    if not isinstance(raw_paths, list) or not all(isinstance(item, str) for item in raw_paths):
+        raise ValueError(".lokay/localize.json paths must be a list of strings")
+
+    paths: list[str] = []
+    for raw in raw_paths:
+        rel = raw.removeprefix("./").rstrip("/")
+        pure = PurePosixPath(rel)
+        if not rel or pure.is_absolute() or ".." in pure.parts or "\0" in rel:
+            raise ValueError(f"invalid localized path: {raw!r}")
+        if rel not in _EVIDENCE_PATHS and rel not in paths:
+            paths.append(rel)
+    return paths
+
+
+def _literal_pathspecs(paths: list[str]) -> list[str]:
+    return [f":(literal){path}" for path in paths]
 
 
 def worktree_has_diff(runner: Runner, worktree: Path, *, live: bool) -> bool:
@@ -50,9 +80,41 @@ def branch_ahead_of_upstream(runner: Runner, worktree: Path, *, live: bool) -> i
 def commit_all(runner: Runner, worktree: Path, message: str, *, live: bool) -> bool:
     if not live:
         return False
+
+    localized = _localized_paths(worktree)
+    if localized is not None:
+        tracked = runner.run_checked(
+            git_spec(["ls-files", "-z"], cwd=worktree), live=True
+        ).stdout.split("\0")
+        actionable = [
+            rel
+            for rel in localized
+            if (worktree / rel).exists()
+            or any(path == rel or path.startswith(f"{rel}/") for path in tracked)
+        ]
+        if not actionable:
+            return False
+        pathspecs = _literal_pathspecs(actionable)
+        runner.run_checked(
+            git_spec(["add", "-A", "--", *pathspecs], cwd=worktree), live=True
+        )
+        status = runner.run(
+            git_spec(["diff", "--cached", "--quiet", "--", *pathspecs], cwd=worktree),
+            live=True,
+        )
+        if status.returncode == 0:
+            return False
+        # --only prevents an already-staged off-goal file (or plan evidence)
+        # from hitching a ride in this commit.
+        runner.run_checked(
+            git_spec(["commit", "--only", "-m", message, "--", *pathspecs], cwd=worktree),
+            live=True,
+        )
+        return True
+
     runner.run_checked(git_spec(["add", "-A"], cwd=worktree), live=True)
-    # Plan / localization evidence must land even when a repo gitignores `.lokay/`.
-    for rel in (".lokay/approach.md", ".lokay/localize.json"):
+    # Legacy runs without localization still keep their plan evidence.
+    for rel in _EVIDENCE_PATHS:
         if (worktree / rel).is_file():
             runner.run_checked(
                 git_spec(["add", "-f", "--", rel], cwd=worktree),
