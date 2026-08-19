@@ -1,21 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=324 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=329 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #324 — reap_stale_worktrees: over_cap nie może trzymać całego stosu
+Issue: #329 — issue_to_pr: po on-goal commit/PR nie dokładaj off-goal na tej samej gałęzi
 
 ## Goal
 
-`reap_stale_worktrees`: gdy leftovers > `CLASSIFY_CAP` (4), cały stos dostaje `keep_stale_worktree` / `over_cap` i **nic nie spada**.
+`issue_to_pr` po on-goal commit i PR dalej pisze na tej samej gałęzi — off-goal.
 
 ## Files likely touched
 
-- `src/lokay/proc/reap_stale_worktrees.py`
+- `factory_begin.py`
+- `src/lokay/compose/issue_to_pr.py`
 
 ## Test plan
 
-- 5+ leftovers, issue CLOSED na najstarszych → max 4 reaped, nie 0. Żywe issue nietknięte.
+- On-goal commit + PR istnieje → drugi krok nie dodaje obcego pliku. Issue CLOSED → zero mutacji.
 
 ## Non-goals
 

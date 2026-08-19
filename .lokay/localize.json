@@ -1,21 +1,25 @@
 {
   "paths": [
-    "src/lokay/proc/reap_stale_worktrees.py",
-    "lokay/proc/reap_stale_worktrees.py",
-    "tests/test_reap_stale_worktrees.py"
+    "factory_begin.py",
+    "src/lokay/compose/issue_to_pr.py",
+    "lokay/compose/issue_to_pr.py",
+    "src/lokay/proc/factory_begin.py",
+    "tests/test_issue_to_pr_activation.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/reap_stale_worktrees.py",
-    "lokay/proc/reap_stale_worktrees.py"
+    "factory_begin.py",
+    "src/lokay/compose/issue_to_pr.py",
+    "lokay/compose/issue_to_pr.py"
   ],
   "matched_tokens": [
+    "issue_to_pr",
     "reap_stale_worktrees",
-    "factory",
-    "reap",
-    "proc",
-    "worktree",
-    "review",
+    "factory_begin",
+    "fala_organ",
+    "compose",
+    "organ",
+    "gate",
     "unbounded",
     "bounded"
   ],
@@ -25,7 +29,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__324-reap_stale_worktrees-over_cap-nie-mo-e-t-045d29dd",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__329-issue_to_pr-po-on-goal-commit-pr-nie-dok-6e2a8ce1",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
