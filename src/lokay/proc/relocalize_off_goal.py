@@ -22,7 +22,14 @@ _FALA_PACKAGES = (
     "fala/lokay.fala-package.toml",
     "src/lokay/data/lokay.fala-package.toml",
 )
-_ALWAYS_OFF_GOAL = (_FACTORY_BEGIN, _IMPLEMENT, _AGENT, *_FALA_PACKAGES)
+_HOT_REPOS_TEST = "tests/test_hot_repos.py"
+_ALWAYS_OFF_GOAL = (
+    _FACTORY_BEGIN,
+    _IMPLEMENT,
+    _AGENT,
+    *_FALA_PACKAGES,
+    _HOT_REPOS_TEST,
+)
 
 
 def _issue_explicit_file_paths(issue_json: str) -> set[str]:
