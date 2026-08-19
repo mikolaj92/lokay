@@ -1,29 +1,46 @@
 {
   "paths": [
     "src/lokay/fala_organ.py",
-    "organ/common.py",
+    "run_agent.main",
+    "229/231/233",
+    "239/241/248/254",
     "lokay/fala_organ.py",
     "tests/test_fala_organ.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "organ/common.py",
     "src/lokay/fala_organ.py",
     "tests/test_fala_organ.py",
+    "run_agent.main",
+    "229/231/233",
+    "239/241/248/254",
     "lokay/fala_organ.py"
   ],
   "matched_tokens": [
     "fala_organ",
     "view",
-    "get_issue",
-    "organ",
-    "common",
-    "Organ",
-    "test_fala_organ",
+    "run_agent",
+    "commit_all",
     "pr_create",
+    "pr_merge",
+    "get_issue",
+    "localize",
+    "pi_budget",
+    "git",
+    "gate",
+    "stale",
+    "stage_label",
+    "pr_triage",
+    "test_fala_organ",
     "review",
     "unbounded",
-    "bounded"
+    "bounded",
+    "229",
+    "231",
+    "233",
+    "239",
+    "241",
+    "248"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -31,7 +48,7 @@
     "Repo tree entries considered: 289.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__256-fala_organ-live-re-view-issue-before-mut-77649cb6",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__258-fala_organ-live-re-view-before-run_agent-850b90f4",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

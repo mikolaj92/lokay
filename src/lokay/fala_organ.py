@@ -30,7 +30,9 @@ from lokay.organ.recovery import handle_recovery
 from lokay.organ.self_repair import handle_self_repair
 
 
-_MUTATING_ATOMS = frozenset({"commit_all", "push", "pr_create", "pr_merge"})
+_MUTATING_ATOMS = frozenset(
+    {"run_agent", "repair_agent", "commit_all", "push", "pr_create", "pr_merge"}
+)
 
 
 def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:

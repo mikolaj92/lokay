@@ -1,23 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=256 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=258 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #256 — fala_organ: live re-view issue before mutate
+Issue: #258 — fala_organ: live re-view before run_agent
 
 ## Goal
 
-#254 bramkuje mutacje na `up.get_issue` z **początku** i2pr. Ticket zamknięty w locie (235, 247) nadal wygląda OPEN. W `organ/common.py` jest już `_issue_no_longer_open` (live re-view). Organ jej nie woła.
+#256 / PR 257 dodało live re-view (`_issue_no_longer_open`) tylko dla `_MUTATING_ATOMS` = `commit_all`, `push`, `pr_create`, `pr_merge`.
 
 ## Files likely touched
 
-- `organ/common.py`
 - `src/lokay/fala_organ.py`
 - `tests/test_fala_organ.py`
+- `run_agent.main`
 
 ## Test plan
 
-- `tests/test_fala_organ.py`: get_issue conduction OPEN, live re-view CLOSED → push/pr_create nie wołane, reason `issue_closed`.
+- `tests/test_fala_organ.py`: get_issue conduction OPEN, live re-view CLOSED → `run_agent.main` nie wołane, reason `issue_closed`. Analogicznie `repair_agent`.
 - Nie ruszaj 180–192, 228, 235, 247, 253.
 
 ## Non-goals

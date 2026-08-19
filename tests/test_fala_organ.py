@@ -202,6 +202,56 @@ def test_live_closed_issue_skips_mutating_atoms_before_handlers(monkeypatch):
         assert result["reason"] == "issue_closed"
 
 
+def test_live_closed_issue_skips_run_agent_before_handler(monkeypatch):
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {
+                "ok": True,
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "state": "CLOSED",
+                },
+            }
+        raise AssertionError("run_agent must not run after a live CLOSED re-view")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "run_agent",
+        {"repo": "a/b", "issue": 7, "live": True},
+        {
+            "get_issue": {"issue": {"repo": "a/b", "number": 7, "state": "OPEN"}},
+        },
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+
+
+def test_live_closed_issue_skips_repair_agent_before_handler(monkeypatch):
+    def fake_run(main, argv):
+        if "--issue" in argv:
+            return {
+                "ok": True,
+                "issue": {
+                    "repo": "a/b",
+                    "number": 7,
+                    "state": "CLOSED",
+                },
+            }
+        raise AssertionError("repair_agent must not run after a live CLOSED re-view")
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "repair_agent",
+        {"repo": "a/b", "issue": 7, "live": True},
+        {
+            "get_issue": {"issue": {"repo": "a/b", "number": 7, "state": "OPEN"}},
+        },
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "issue_closed"
+
+
 def test_closed_issue_does_not_block_read_only_atoms(monkeypatch):
     called = []
 
