@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
+from lokay.stuck import is_blocked_in_ledger, load_stuck
 
 
 def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
@@ -18,6 +20,12 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
     live = bool(begin.get("live"))
     triage_budget = int(begin.get("triage_budget") or 0)
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
+    stuck_path = str(begin.get("stuck_path") or "")
+    stuck = (
+        load_stuck(Path(stuck_path))
+        if stuck_path
+        else dict(working.get("stuck") or {})
+    )
 
     triage_targets: list[dict[str, Any]] = []
     closeout_targets: list[dict[str, Any]] = []
@@ -63,11 +71,23 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
                 )
                 continue
             for issue in inbox:
+                issue_number = int(issue["number"])
+                if is_blocked_in_ledger(stuck, repo_name, issue_number):
+                    actions.append(
+                        {
+                            "step": "skip_inbox_triage_stuck_blocked",
+                            "repo": repo_name,
+                            "issue": issue_number,
+                            "ok": True,
+                            "skipped": True,
+                            "blocked": True,
+                            "reason": "blocked_in_stuck_ledger",
+                        }
+                    )
+                    continue
                 if triage_budget <= 0:
                     break
-                triage_targets.append(
-                    {"repo": repo_name, "issue": int(issue["number"])}
-                )
+                triage_targets.append({"repo": repo_name, "issue": issue_number})
                 triage_budget -= 1
 
     # Closeout: every open AI PR (manual skipped at dispatch with a receipt).
