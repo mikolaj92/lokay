@@ -1,27 +1,21 @@
 {
   "paths": [
-    "src/lokay/proc/reap_stale_implementing.py",
-    "src/lokay/gh_issues.py",
-    "lokay/proc/reap_stale_implementing.py",
-    "lokay/gh_issues.py",
-    "tests/test_reap_stale_implementing.py"
+    "src/lokay/envelope.py",
+    "lokay/envelope.py",
+    "tests/test_preflight_daemon.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/reap_stale_implementing.py",
-    "src/lokay/gh_issues.py",
-    "tests/test_reap_stale_implementing.py",
-    "lokay/proc/reap_stale_implementing.py",
-    "lokay/gh_issues.py"
+    "src/lokay/envelope.py",
+    "lokay/envelope.py"
   ],
   "matched_tokens": [
-    "reap_stale_implementing",
-    "gh_issues",
     "health",
-    "closeout_pr",
-    "proc",
-    "test_reap_stale_implementing",
+    "mikolaj",
+    "envelope",
+    "mikolaj92",
     "review",
+    "gate",
     "unbounded",
     "bounded"
   ],
@@ -31,7 +25,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__303-reap_stale_implementing-graphql-429-skip-d95275d8",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__305-process_exit_code-pass_ceiling-to-exit-0-ab6c7804",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

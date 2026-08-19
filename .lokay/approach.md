@@ -1,23 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=303 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=305 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #303 — reap_stale_implementing: GraphQL 429 — skip repo, nie survey_error
+Issue: #305 — process_exit_code: pass_ceiling to exit 0
 
 ## Goal
 
-`gh issue list` GraphQL exhausted na jednym repo z katalogu. `reap_stale_implementing` / `gh_issues` pada adapter_failed. last-pass `health=survey_error`, LaunchAgent exit 1.
+Strop przebiegu zapisuje last-pass `reason=pass_ceiling` / `ok=false` (#296/#300), ale `process_exit_code` nie zna tego health i zwraca 1. LaunchAgent traktuje tick jak crash (`last exit 1`).
 
 ## Files likely touched
 
-- `src/lokay/proc/reap_stale_implementing.py`
-- `src/lokay/gh_issues.py`
-- `tests/test_reap_stale_implementing.py`
+- `src/lokay/envelope.py`
 
 ## Test plan
 
-- Sztuczny GraphQL 429 na jednym repo → skip, health nie survey_error.
+- Payload `health=pass_ceiling` / `reason=pass_ceiling` → kod 0. Inny `ok=false` bez produkcji → 1.
 
 ## Non-goals
 
