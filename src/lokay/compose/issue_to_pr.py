@@ -104,6 +104,30 @@ def _delivery_stop_reason(repo: str, issue_number: int) -> str | None:
     return None
 
 
+def _stopped_delivery(
+    *, config_path: str | None, repo: str, issue_number: int, reason: str
+) -> dict[str, Any]:
+    """Retire a delivery that became terminal before or during its Fala run."""
+    closeout = None
+    if reason in {"issue_closed", "delivery_pr_exists"}:
+        cfg = ["--config", config_path] if config_path else []
+        closeout = run_proc(
+            p_closeout.main,
+            [*cfg, "--live", "--repo", repo, "--issue", str(issue_number)],
+        )
+    return {
+        "ok": True,
+        "kind": "issue_to_pr",
+        "engine": "fala",
+        "planned": False,
+        "stopped": True,
+        "reason": reason,
+        "repo": repo,
+        "issue": issue_number,
+        "closeout": closeout,
+    }
+
+
 def compose_issue_to_pr(
     *,
     config_path: str | None,
@@ -119,24 +143,12 @@ def compose_issue_to_pr(
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
 
     if live and (stop_reason := _delivery_stop_reason(repo, issue_number)):
-        closeout = None
-        if stop_reason == "delivery_pr_exists":
-            cfg = ["--config", config_path] if config_path else []
-            closeout = run_proc(
-                p_closeout.main,
-                [*cfg, "--live", "--repo", repo, "--issue", str(issue_number)],
-            )
-        return {
-            "ok": True,
-            "kind": "issue_to_pr",
-            "engine": "fala",
-            "planned": False,
-            "stopped": True,
-            "reason": stop_reason,
-            "repo": repo,
-            "issue": issue_number,
-            "closeout": closeout,
-        }
+        return _stopped_delivery(
+            config_path=config_path,
+            repo=repo,
+            issue_number=issue_number,
+            reason=stop_reason,
+        )
 
     result = run_path(
         path_id="issue_to_pr", repo=repo, issue=issue_number,
@@ -144,6 +156,16 @@ def compose_issue_to_pr(
         extra_inputs={"incident_fingerprint": incident_fingerprint, "keep_issue_open": bool(incident_fingerprint)},
     )
     result.update(kind="issue_to_pr", engine="fala", planned=not live)
+    # Every mutating organ re-views the issue, so a close during the coding
+    # slot prevents push/pr_create. Treat that terminal guard as a normal stop,
+    # rather than surfacing the atom's refusal as a failed delivery.
+    if live and result.get("reason") == "issue_closed":
+        result = _stopped_delivery(
+            config_path=config_path,
+            repo=repo,
+            issue_number=issue_number,
+            reason="issue_closed",
+        )
     try:
         append_event(load_config(config_path).state_path, result)
     except Exception:

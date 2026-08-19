@@ -43,6 +43,7 @@ def test_closed_issue_stops_before_graph_mutation(monkeypatch):
     monkeypatch.delenv("LOKAY_ISSUE_TO_PR_ACTIVATION_FD", raising=False)
     monkeypatch.setattr(issue_to_pr, "load_config", lambda _path: SimpleNamespace(mode="live"))
     monkeypatch.setattr(issue_to_pr, "_delivery_stop_reason", lambda _repo, _issue: "issue_closed")
+    monkeypatch.setattr(issue_to_pr, "run_proc", lambda _main, _argv: {"ok": True})
     monkeypatch.setattr(
         issue_to_pr,
         "run_path",
@@ -56,6 +57,47 @@ def test_closed_issue_stops_before_graph_mutation(monkeypatch):
     assert result["ok"] is True
     assert result["stopped"] is True
     assert result["reason"] == "issue_closed"
+
+
+def test_issue_closed_during_graph_stops_without_pr_create_failure(monkeypatch):
+    monkeypatch.delenv("LOKAY_ISSUE_TO_PR_ACTIVATION_FD", raising=False)
+    monkeypatch.setattr(
+        issue_to_pr,
+        "load_config",
+        lambda _path: SimpleNamespace(mode="live", state_path="state.jsonl"),
+    )
+    monkeypatch.setattr(issue_to_pr, "_delivery_stop_reason", lambda *_args: None)
+    monkeypatch.setattr(
+        issue_to_pr,
+        "run_path",
+        lambda **_kwargs: {
+            "ok": False,
+            "reason": "issue_closed",
+            "error": "pr_create refused CLOSED issue",
+        },
+    )
+    closeout_calls: list[list[str]] = []
+
+    def run_proc(_main, argv):
+        closeout_calls.append(argv)
+        return {"ok": True, "delivered": True, "labels_removed": True}
+
+    monkeypatch.setattr(issue_to_pr, "run_proc", run_proc)
+    events: list[dict] = []
+    monkeypatch.setattr(issue_to_pr, "append_event", lambda _path, event: events.append(event))
+
+    result = issue_to_pr.compose_issue_to_pr(
+        config_path="config.yaml", repo="owner/repo", issue_number=408, live=True
+    )
+
+    assert result["ok"] is True
+    assert result["stopped"] is True
+    assert result["reason"] == "issue_closed"
+    assert result["closeout"]["labels_removed"] is True
+    assert closeout_calls == [
+        ["--config", "config.yaml", "--live", "--repo", "owner/repo", "--issue", "408"]
+    ]
+    assert events == [result]
 
 
 def test_unavailable_delivery_survey_does_not_stop_implementation(monkeypatch):
