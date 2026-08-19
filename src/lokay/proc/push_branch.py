@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.git_push import push_branch
+from lokay.git_push import is_configured_issue_branch, push_branch
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 
 
@@ -18,9 +18,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--branch", required=True)
     args = p.parse_args(argv)
     cfg = load_cfg(args) if args.live else None
-    live = mutations_allowed(live_flag=args.live, cfg=cfg)
+    run = runner()
     try:
-        push_branch(runner(), Path(args.worktree), args.branch, live=live)
+        live = mutations_allowed(live_flag=args.live, cfg=cfg)
+    except RuntimeError as exc:
+        # A completed issue branch can outlive the mill lease that launched it.
+        # Allow only the exact branch in a verified linked issue worktree;
+        # configured host checkouts (especially main) remain protected.
+        checkouts = tuple(repo.clone_path for repo in getattr(cfg, "repos", ()))
+        if "lease=token_mismatch)" not in str(exc) or not is_configured_issue_branch(
+            run, Path(args.worktree), args.branch, checkouts
+        ):
+            return emit_exit(err(str(exc)))
+        live = True
+    try:
+        push_branch(run, Path(args.worktree), args.branch, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(ok(planned=not live, branch=args.branch, worktree=args.worktree))
