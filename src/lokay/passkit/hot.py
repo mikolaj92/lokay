@@ -56,13 +56,16 @@ def pick_survey_repos(
     names = [str(name) for name in repos if name]
     if not names:
         return []
-    if not prev_by_repo:
-        return names
     hot = [name for name in names if repo_is_hot(prev_by_repo.get(name))]
     if not hot:
-        # Empty last-pass must not stay blind: rotating 2/29 cold
-        # never sees Influenzer dual-label after Temida empties.
-        return names
+        # Keep the mill repo visible while sampling a bounded number of products.
+        anchor = [name for name in names if name == "mikolaj92/lokay"]
+        cold = [name for name in names if name not in set(anchor)]
+        if extra_cold <= 0 or not cold:
+            return anchor
+        start = zlib.adler32(salt.encode("utf-8")) % len(cold)
+        rotated = [cold[(start + i) % len(cold)] for i in range(min(extra_cold, len(cold)))]
+        return [*anchor, *rotated]
     cold = [name for name in names if name not in set(hot)]
     if not cold or extra_cold <= 0:
         return hot or names

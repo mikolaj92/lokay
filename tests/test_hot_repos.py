@@ -32,15 +32,21 @@ def test_pick_surveys_hot_plus_rotated_cold():
     assert set(first) != set(second) or first != second
 
 
-def test_no_last_pass_walks_all():
-    repos = ["a/one", "a/two"]
-    assert pick_survey_repos(repos, {}) == repos
+def test_no_last_pass_surveys_anchor_plus_bounded_cold():
+    repos = ["mikolaj92/lokay", *(f"mikolaj92/product-{i}" for i in range(28))]
+    picked = pick_survey_repos(repos, {}, salt="empty", extra_cold=2)
+    assert "mikolaj92/lokay" in picked
+    assert len(picked) <= 3
+    assert len(picked) < len(repos)
 
 
-def test_all_cold_walks_all():
-    repos = ["a/one", "a/two", "a/three"]
+def test_all_cold_surveys_anchor_plus_bounded_cold():
+    repos = ["mikolaj92/lokay", *(f"mikolaj92/product-{i}" for i in range(28))]
     prev = {name: {"repo": name, "ready": 0, "inbox": 0, "open_ai_prs": 0} for name in repos}
-    assert pick_survey_repos(repos, prev, extra_cold=2) == repos
+    picked = pick_survey_repos(repos, prev, salt="all-cold", extra_cold=2)
+    assert "mikolaj92/lokay" in picked
+    assert len(picked) <= 3
+    assert len(picked) < len(repos)
 
 
 def test_load_last_pass_by_repo(tmp_path):
