@@ -714,17 +714,33 @@ def test_over_cap_reaps_at_most_oldest_closed_issues(tmp_path, monkeypatch):
     monkeypatch.setattr(reap_stale_worktrees, "_oldest", lambda rows: rows)
     monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
 
+    pass_dir = _pass(tmp_path)
     out = reap_stale_worktrees.run_reap_stale_worktrees(
-        pass_dir=_pass(tmp_path),
+        pass_dir=pass_dir,
         config_path=str(_config(tmp_path)),
         live=True,
     )
 
     assert checked == list(range(cap))
     assert out["reaped_count"] == cap
+    assert out["kept_count"] == 3
     assert len(removed) == cap
     assert all(row["reason"] == "closed_issue" for row in out["reaped"])
-    assert len([row for row in out["kept"] if row["reason"] == "over_cap"]) == 3
+    assert out["kept"] == [
+        {
+            "repo": "owner/repo",
+            "reason": "over_cap",
+            "kept": True,
+            "kept_over_cap": 3,
+            "reaped": cap,
+            "leftover_count": cap + 3,
+        }
+    ]
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    keep_actions = [
+        row for row in working["actions"] if row["step"] == "keep_stale_worktree"
+    ]
+    assert keep_actions == [{"step": "keep_stale_worktree", **out["kept"][0]}]
 
 
 def test_over_cap_keeps_open_issues(tmp_path, monkeypatch):
@@ -749,4 +765,7 @@ def test_over_cap_keeps_open_issues(tmp_path, monkeypatch):
 
     assert out["reaped_count"] == 0
     assert out["kept_count"] == cap + 1
-    assert all(row["reason"] == "over_cap" for row in out["kept"])
+    assert len(out["kept"]) == 1
+    assert out["kept"][0]["reason"] == "over_cap"
+    assert out["kept"][0]["kept_over_cap"] == cap + 1
+    assert out["kept"][0]["leftover_count"] == cap + 1

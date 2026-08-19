@@ -229,7 +229,11 @@ def run_reap_stale_worktrees(
         if len(leftovers) > CLASSIFY_CAP:
             # Bound both GitHub lookups and removals. Closed issues are enough
             # evidence to drain old corners without expensive leftover_status.
+            # Keep one aggregate row: a fat stack must not flood the pass
+            # transcript with one keep action (and result row) per leftover.
             candidates = set(_oldest(leftovers)[:CLASSIFY_CAP])
+            reaped_before = len(reaped)
+            kept_over_cap = 0
             for path, branch in leftovers:
                 issue = issue_number_from_branch(
                     branch, branch_prefix=cfg.branch_prefix
@@ -255,12 +259,7 @@ def run_reap_stale_worktrees(
                     else False
                 )
                 if protected is not None or not (live and closed):
-                    row["reason"] = protected or (
-                        "planned" if not live and closed else "over_cap"
-                    )
-                    row["kept"] = True
-                    kept.append(row)
-                    actions.append({"step": "keep_stale_worktree", **row})
+                    kept_over_cap += 1
                     continue
                 removed = remove_worktree(
                     git, clone, path, managed_root=cfg.worktrees_root
@@ -272,12 +271,21 @@ def run_reap_stale_worktrees(
                         error=removed.get("error"),
                     )
                     failed.append(row)
-                    kept.append(row)
-                    actions.append({"step": "keep_stale_worktree", **row})
+                    kept_over_cap += 1
                     continue
                 row.update(kept=False, removed=True, reason="closed_issue")
                 reaped.append(row)
                 actions.append({"step": "reap_stale_worktree", **row})
+            summary = {
+                "repo": repo.name,
+                "reason": "over_cap",
+                "kept": True,
+                "kept_over_cap": kept_over_cap,
+                "reaped": len(reaped) - reaped_before,
+                "leftover_count": len(leftovers),
+            }
+            kept.append(summary)
+            actions.append({"step": "keep_stale_worktree", **summary})
             continue
         base_ok = False
         published_heads: set[str] | None = None
@@ -395,7 +403,7 @@ def run_reap_stale_worktrees(
         kept=kept,
         reaped=reaped,
         failed=failed,
-        kept_count=len(kept),
+        kept_count=sum(int(row.get("kept_over_cap", 1)) for row in kept),
         reaped_count=len(reaped),
         receipt_state_unknown=receipt_state_unknown,
     )
