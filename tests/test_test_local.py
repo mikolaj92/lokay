@@ -49,6 +49,33 @@ def test_this_repo_declares_pytest():
     assert test_local.declared_test_argv(root) == LOKAY_PYTEST
 
 
+def test_product_repo_skips_without_inspecting_or_running_worktree(
+    tmp_path: Path, monkeypatch, capsys
+):
+    product = tmp_path / "missing-product-worktree"
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("product repositories must not inspect or run tests")
+
+    monkeypatch.setattr(test_local, "declared_test_argv", fail_if_called)
+    monkeypatch.setattr(test_local, "runner", fail_if_called)
+
+    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
+        code = test_local.main(
+            ["--repo", repo, "--worktree", str(product)]
+        )
+        assert code == 0
+        payload = _payload(capsys)
+        assert payload == {
+            "ok": True,
+            "skipped": True,
+            "reason": "repo_not_delivered_by_mini_mill",
+            "tested": False,
+            "repo": repo,
+            "worktree": str(product),
+        }
+
+
 def test_no_declaration_skips(tmp_path: Path, capsys):
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 0
@@ -203,7 +230,7 @@ def test_red_changed_scope_still_refuses(tmp_path: Path, monkeypatch, capsys):
     assert "test_ticket" in payload["stdout_tail"]
 
 
-def test_declared_string_command_runs(tmp_path: Path, monkeypatch, capsys):
+def test_declared_string_command_runs_for_lokay(tmp_path: Path, monkeypatch, capsys):
     _declare_test(tmp_path, "pixi run core-smoke")
     argv = ("pixi", "run", "core-smoke")
     spec = CommandSpec(argv, cwd=str(tmp_path.resolve()), timeout_seconds=1800)
@@ -212,7 +239,9 @@ def test_declared_string_command_runs(tmp_path: Path, monkeypatch, capsys):
         "runner",
         lambda: _fake_runner(argv, CommandResult(spec=spec, executed=True, returncode=0)),
     )
-    code = test_local.main(["--worktree", str(tmp_path)])
+    code = test_local.main(
+        ["--repo", "mikolaj92/lokay", "--worktree", str(tmp_path)]
+    )
     assert code == 0
     payload = _payload(capsys)
     assert payload["ok"] is True

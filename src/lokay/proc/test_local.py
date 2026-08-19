@@ -18,6 +18,7 @@ from lokay.proc._common import runner
 from lokay.runner import CommandSpec, Runner
 
 TEST_TIMEOUT_SECONDS = 1800
+MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def _argv_from_raw(raw: object) -> tuple[str, ...] | None:
@@ -86,6 +87,7 @@ def declared_test_argv(worktree: Path) -> tuple[str, ...] | None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-test-local")
+    p.add_argument("--repo", default=MINI_MILL_REPO)
     p.add_argument("--worktree", required=True)
     p.add_argument(
         "--changed-scope",
@@ -93,6 +95,16 @@ def main(argv: list[str] | None = None) -> int:
         help="if the full pytest suite is red, verify tests covering changed src",
     )
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                tested=False,
+                repo=args.repo,
+                worktree=args.worktree,
+            )
+        )
     worktree = Path(args.worktree).resolve()
     if not worktree.is_dir():
         return emit_exit(err("worktree is not a directory", worktree=str(worktree)))
