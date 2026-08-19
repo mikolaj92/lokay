@@ -8,6 +8,7 @@ from typing import Any
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.health import health_payload
+from lokay.passkit.hot import survey_scope
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
@@ -31,8 +32,10 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         + list(working.get("live_issue_to_pr_repos") or [])
         if str(name or "")
     }
+    scoped_repos = survey_scope(begin)
+
     by_repo: list[dict[str, Any]] = []
-    for repo_name in list(begin.get("repos") or []):
+    for repo_name in scoped_repos or list(begin.get("repos") or []):
         pr_list = list(prs_by_repo.get(repo_name) or [])
         ready_list = list(ready_by_repo.get(repo_name) or [])
         by_repo.append(
