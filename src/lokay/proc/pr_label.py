@@ -9,6 +9,9 @@ from lokay.gh_prs import add_pr_labels
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-pr-label")
     add_config_live(p)
@@ -16,6 +19,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--label", action="append", dest="labels", default=[])
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                pr=args.pr,
+                labels=args.labels,
+                applied=False,
+            )
+        )
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     labels = args.labels or list(cfg.pr_labels)
