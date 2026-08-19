@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
+import os
 from pathlib import Path
+import signal
 from typing import Any
 
+from lokay.config import load_config
 from lokay.envelope import mill_glance
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
@@ -29,17 +34,60 @@ def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+class _PassCeiling(BaseException):
+    """Interrupt orchestration without terminating its detached workers."""
+
+
 def compose_daemon_cycle(
-    *, config_path: str, max_passes: int = 8
+    *,
+    config_path: str,
+    max_passes: int = 8,
+    pass_ceiling_seconds: float = 180,
 ) -> dict[str, Any]:
-    return finalize_daemon_payload(
-        run_path(
-            path_id="daemon_cycle",
-            repo="__lokay_daemon__",
-            config_path=config_path,
-            live=True,
-            package_path=str(trusted_fala_manifest()),
-            db_path=Path.home() / ".lokay" / "fala" / "daemon-cycle",
-            extra_inputs={"max_passes": max(1, int(max_passes))},
+    ceiling = max(0.001, float(pass_ceiling_seconds))
+    previous_handler = signal.getsignal(signal.SIGALRM)
+
+    def ceiling_reached(_signum: int, _frame: Any) -> None:
+        raise _PassCeiling
+
+    signal.signal(signal.SIGALRM, ceiling_reached)
+    previous_timer = signal.setitimer(signal.ITIMER_REAL, ceiling)
+    try:
+        return finalize_daemon_payload(
+            run_path(
+                path_id="daemon_cycle",
+                repo="__lokay_daemon__",
+                config_path=config_path,
+                live=True,
+                package_path=str(trusted_fala_manifest()),
+                db_path=Path.home() / ".lokay" / "fala" / "daemon-cycle",
+                extra_inputs={"max_passes": max(1, int(max_passes))},
+            )
         )
-    )
+    except _PassCeiling:
+        # Workers started by issue-to-PR are detached. Do not signal them when
+        # releasing the daemon/launchd slot for the next tick.
+        payload = {
+            "ok": False,
+            "health": "pass_ceiling",
+            "reason": "pass_ceiling",
+            "pass_ceiling_seconds": ceiling,
+            "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        try:
+            receipt = load_config(config_path).state_path.parent / "last-pass.json"
+        except (OSError, ValueError, FileNotFoundError):
+            receipt = Path.home() / ".lokay" / "last-pass.json"
+        try:
+            receipt.parent.mkdir(parents=True, exist_ok=True)
+            temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
+            temporary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            temporary.replace(receipt)
+        except OSError:
+            pass
+        return payload
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer != (0.0, 0.0):
+            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
