@@ -78,7 +78,7 @@ def _run(
     monkeypatch.setattr(closeout_pr, "compose_pr_triage", fake_triage)
     monkeypatch.setattr(closeout_pr, "compose_pr_repair", fake_repair)
     kwargs: dict[str, Any] = {
-        "repo": "a/b",
+        "repo": "mikolaj92/lokay",
         "pr": pr or _pr(),
         "config_path": None,
         "live": True,
@@ -93,6 +93,27 @@ def _run(
     kwargs.update(policy)
     out = run_closeout_pr(**kwargs)
     return out, triage_calls, repair_calls, stages
+
+
+@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+def test_product_repo_skips_without_any_effect(repo, monkeypatch, tmp_path):
+    def fail(*_args, **_kwargs):
+        raise AssertionError("product repositories must not reach GitHub or composers")
+
+    monkeypatch.setattr(closeout_pr, "run_proc", fail)
+    monkeypatch.setattr(closeout_pr, "compose_pr_triage", fail)
+    monkeypatch.setattr(closeout_pr, "compose_pr_repair", fail)
+    out = run_closeout_pr(
+        repo=repo, pr=_pr(), config_path=None, live=True, merge_enabled=True,
+        require_checks=False, repair_budget=1, executor_enabled=True,
+        branch_prefix="ai/fix/", stuck={"issues": {}},
+        stuck_path=tmp_path / "stuck.json",
+    )
+    assert out["route"] == "skip"
+    assert out["reason"] == "repo_not_delivered_by_mini_mill"
+    assert out["still_open"] is True
+    assert out["actions"] == []
+    assert out["repair_budget"] == 1
 
 
 def test_pending_waits_without_ci_waiting_label(monkeypatch, tmp_path):
@@ -176,7 +197,7 @@ def test_merged_closed_issue_is_parked(monkeypatch, tmp_path):
     )
     assert out["ok"] is True
     assert out["still_open"] is False
-    assert parked == [["--repo", "a/b", "--issue", "7"]]
+    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "7"]]
     assert any(a.get("step") == "park_closed_issue" for a in out["actions"])
 
 
@@ -192,7 +213,7 @@ def test_closed_issue_is_parked_and_skips_merge(monkeypatch, tmp_path):
     assert out["route"] == "skip"
     assert out["reason"] == "issue_closed"
     assert out["still_open"] is True
-    assert parked == [["--repo", "a/b", "--issue", "7"]]
+    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "7"]]
     assert triage == []
     assert not any(a.get("step") == "pr_checks" for a in out["actions"])
 
@@ -251,7 +272,7 @@ def test_cli_pending_envelope(capsys, monkeypatch):
     code = main(
         [
             "--repo",
-            "a/b",
+            "mikolaj92/lokay",
             "--pr",
             "7",
             "--head-ref",

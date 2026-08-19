@@ -14,6 +14,7 @@ from lokay.proc._common import add_config_live
 from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 
+MINI_MILL_REPO = "mikolaj92/lokay"
 def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, live: bool, merge_enabled: bool, require_checks: bool, repair_budget: int, executor_enabled: bool, branch_prefix: str, stuck: dict[str, Any], stuck_path: Path) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
     c = {key: 0 for key in COUNTERS}
@@ -23,7 +24,8 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
 
     def done(route: str, reason: str = "", still_open: bool = True) -> dict[str, Any]:
         return pr_envelope(repo=repo, pr=n, route=route, reason=reason, still_open=still_open, actions=actions, repair_budget=repair_budget, progress=progress, remaining_closed=remaining_closed, counters=c)
-
+    if repo != MINI_MILL_REPO:
+        return done("skip", "repo_not_delivered_by_mini_mill")
     def repair(*, review: dict[str, Any] | None = None, step: str = "pr_repair") -> None:
         nonlocal repair_budget
         if not head or repair_budget <= 0 or not executor_enabled:
@@ -33,7 +35,6 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
             kw["review"] = review
         actions.append({"step": step, "pr": n, "branch": head, **compose_pr_repair(**kw)})
         repair_budget -= 1
-
     issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
     if issue_n is not None:
         fetched = run_proc(p_get_issue.main, [*cfg, "--repo", repo, "--issue", str(issue_n), "--live"])
@@ -85,7 +86,6 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
         clear_issue(stuck, repo, issue_n)
         save_stuck(stuck_path, stuck)
     return done("merge", reason, still_open=False)
-
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-closeout-pr")
