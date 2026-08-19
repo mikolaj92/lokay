@@ -1,33 +1,30 @@
 {
   "paths": [
-    "src/lokay/proc/reap_over_budget.py",
+    "src/lokay/proc/dispatch_triage.py",
     "stuck.json",
-    "lokay/proc/reap_over_budget.py",
-    "tests/test_reap_over_budget.py"
+    "lokay/proc/dispatch_triage.py",
+    "tests/test_dispatch_triage.py"
   ],
   "source": "agent",
   "seed_paths": [
     "stuck.json",
-    "src/lokay/proc/reap_over_budget.py",
-    "tests/test_reap_over_budget.py",
-    "lokay/proc/reap_over_budget.py"
+    "src/lokay/proc/dispatch_triage.py",
+    "tests/test_dispatch_triage.py",
+    "lokay/proc/dispatch_triage.py"
   ],
   "matched_tokens": [
-    "reap_over_budget",
-    "over_budget",
-    "park",
+    "dispatch_triage",
     "stuck",
-    "survey",
+    "park",
+    "Survey",
     "harvest",
-    "pr_create",
     "run_agent",
     "start",
     "occupancy",
-    "dispatch_implement",
     "proc",
-    "reap",
-    "unbounded_park",
-    "test_reap_over_budget",
+    "run_path",
+    "test_dispatch_triage",
+    "dispatch",
     "review",
     "gate",
     "unbounded",
@@ -39,7 +36,7 @@
     "Repo tree entries considered: 283.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__215-reap_over_budget-po-kill-over_budget-par-99f390be",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__222-dispatch_triage-stuck-blocked-skip-nie-n-6b24ffb7",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
