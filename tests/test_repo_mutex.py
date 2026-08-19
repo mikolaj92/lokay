@@ -35,6 +35,11 @@ PREFIX = """\
   41002 pi --cwd /wt/mikolaj92__lokay-web/ai__fix__4 -p x
 """
 
+ISSUE_TO_PR = """\
+  42001 /opt/homebrew/bin/python -u -m lokay.compose.issue_to_pr --live --repo mikolaj92/lokay --issue 190
+  42002 /opt/homebrew/bin/python -u -m lokay.compose.issue_to_pr --live --repo acme/other --issue 12
+"""
+
 
 def _payload(capsys) -> dict:
     return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
@@ -67,6 +72,18 @@ def test_busy_when_worktree_owner_dunder_name():
 
 def test_other_repo_is_idle():
     out = repo_mutex.inspect_mutex(repo="acme/other", ps_text=PID_CMD)
+    assert out == {"ok": True, "busy": False}
+
+
+def test_busy_when_live_issue_to_pr_has_repo_argument():
+    out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR)
+    assert out == {"ok": True, "busy": True, "pids": [42001]}
+
+
+def test_issue_to_pr_for_other_repo_is_idle():
+    out = repo_mutex.inspect_mutex(repo="acme/other", ps_text=ISSUE_TO_PR)
+    assert out == {"ok": True, "busy": True, "pids": [42002]}
+    out = repo_mutex.inspect_mutex(repo="mikolaj92/lokay", ps_text=ISSUE_TO_PR.splitlines()[1])
     assert out == {"ok": True, "busy": False}
 
 
