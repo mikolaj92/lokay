@@ -1,23 +1,24 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=183 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=188 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #183 — Po merge occupancy musi spaść — ghost i2pr nie trzyma repo
+Issue: #188 — Issue z listą Files: localize bez czekania na pi
 
 ## Goal
 
-2026-08-19: po merge last-pass zostaje occupied przy issue_to_pr_started=0 / martwym pid. Ghost receipt zjada mutex.
+#180, #184, #187: `localize` adapter_timeout → `run_agent` localize_empty → plan_only w ~3 min. Nawet gdy issue ma sekcję Files (187: pr_create.py, git_real_diff.py, pi_budget.py) pi localize i tak timeoutuje. #183 przeszło dopiero gdy ścieżki były w body **i** pi zdążył.
 
 ## Files likely touched
 
-- `src/lokay/proc/detach_issue_to_pr.py`
-- `src/lokay/proc/refresh_occupancy.py`
-- `tests/test_refresh_occupancy.py`
+- `lokay/localize.json`
+- `src/lokay/localize.py`
+- `src/lokay/localize_agent.py`
+- `tests/test_localize.py`
 
 ## Test plan
 
-- Receipt z martwym pid → repo nie occupied. Żywy pid na otwartym issue → occupied. `uv run` test zielony.
+- Issue body z `## Files` + `src/lokay/localize.py` → localize.json ma tę ścieżkę bez agenta. Puste Files → jak dziś (albo fail-closed, nie wisieć 3 min).
 
 ## Non-goals
 

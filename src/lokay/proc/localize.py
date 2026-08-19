@@ -14,6 +14,8 @@ from lokay.approach_plan import APPROACH_REL_PATH
 from lokay.envelope import emit_exit, err, ok
 from lokay.localize import (
     LOCALIZE_REL_PATH,
+    extract_issue_file_paths,
+    has_issue_files_section,
     write_localize_file,
 )
 from lokay.localize_agent import build_localization_with_agent
@@ -108,6 +110,11 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(str(exc)))
 
     seed = _seed_text(args, issue, worktree if worktree.is_dir() else Path("."))
+    issue_file_paths = extract_issue_file_paths(issue.body) if issue is not None else ()
+    bypass_agent = bool(
+        issue is not None
+        and (has_issue_files_section(issue.body) or issue_file_paths)
+    )
     if not seed.strip():
         return emit_exit(
             err(
@@ -127,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
         seed_text=seed,
         extra_paths=list(args.extra_path or []),
         max_paths=max(1, int(args.max_paths or 40)),
+        skip_agent=bypass_agent,
     )
     if not loc.paths:
         return emit_exit(

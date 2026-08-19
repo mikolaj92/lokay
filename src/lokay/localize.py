@@ -78,6 +78,7 @@ _PLATFORM_ALIASES = {
 _PATHISH_RE = re.compile(
     r"(?<![`\w])((?:[\w.-]+/)+[\w.-]+(?:\.[A-Za-z0-9]{1,12})?)"
 )
+_FILES_HEADING_RE = re.compile(r"(?im)^\s*#{1,6}\s+files?\s*:?[ \t]*$")
 _STOP_TOKENS = frozenset(
     {
         "the",
@@ -537,6 +538,34 @@ def extract_seed_paths(text: str) -> tuple[str, ...]:
         if _looks_like_repo_path(rel):
             cleaned.append(rel)
     return tuple(dict.fromkeys(cleaned))
+
+
+def has_issue_files_section(body: str) -> bool:
+    """Whether an issue body explicitly declares a ``Files`` section."""
+    return bool(_FILES_HEADING_RE.search(body or ""))
+
+
+def extract_issue_file_paths(body: str) -> tuple[str, ...]:
+    """Extract paths from an issue's explicit file list.
+
+    This is intentionally narrower than :func:`extract_seed_paths`: approach
+    plans and repair evidence can contain paths, but only paths stated by the
+    issue itself should bypass the semantic localization call.
+    """
+    text = body or ""
+    found: list[str] = []
+    headings = list(_FILES_HEADING_RE.finditer(text))
+    for heading in headings:
+        next_heading = re.search(r"(?im)^\s*#{1,6}\s+.+$", text[heading.end() :])
+        end = heading.end() + next_heading.start() if next_heading else len(text)
+        found.extend(extract_seed_paths(text[heading.end() : end]))
+
+    # A path at the start of a markdown bullet is an explicit file hint even
+    # when the issue omits the Files heading.
+    for line in text.splitlines():
+        if re.match(r"^\s*[-*+]\s+(?:\[[ xX]\]\s*)?(?:`|(?:\*\*)?)(?:src|tests|docs|fala|scripts|config)/", line):
+            found.extend(extract_seed_paths(line))
+    return tuple(dict.fromkeys(found))
 
 
 def extract_seed_tokens(text: str) -> tuple[str, ...]:

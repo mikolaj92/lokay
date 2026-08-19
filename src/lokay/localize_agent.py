@@ -94,6 +94,7 @@ def build_localization_with_agent(
     seed_text: str,
     extra_paths: Iterable[str] = (),
     max_paths: int = 40,
+    skip_agent: bool = False,
 ) -> Localization:
     fallback = build_localization(
         worktree=worktree,
@@ -101,7 +102,19 @@ def build_localization_with_agent(
         extra_paths=extra_paths,
         max_paths=max_paths,
     )
-    if not execute or runner is None or config is None:
+    if skip_agent or not execute or runner is None or config is None:
+        if skip_agent:
+            notes = list(fallback.notes) + [
+                "Explicit issue file hints bypassed semantic localization."
+            ]
+            return Localization(
+                paths=fallback.paths,
+                source=fallback.source,
+                seed_paths=fallback.seed_paths,
+                matched_tokens=fallback.matched_tokens,
+                notes=tuple(notes),
+                worktree=fallback.worktree,
+            )
         return fallback
     if worktree is None or not Path(worktree).is_dir():
         return fallback
