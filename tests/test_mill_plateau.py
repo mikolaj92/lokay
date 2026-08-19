@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from lokay import preflight
 from lokay.compose import mill as mill_mod
 
@@ -242,6 +244,65 @@ state:
     # first pass records baseline, second pass detects plateau
     assert calls["n"] == 2
     assert out["passes"] == 2
+
+
+@pytest.mark.parametrize("in_flight_signal", ["started", "occupied"])
+def test_mill_waits_when_ready_is_unchanged_during_issue_to_pr(
+    monkeypatch, tmp_path, in_flight_signal
+):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(
+        f"""
+mode: live
+repos:
+  - name: a/b
+    clone_path: {tmp_path}
+executor:
+  enabled: true
+  command: worker
+  args: ["{{prompt}}"]
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    remaining = {
+        "inbox": 0,
+        "ready": 1,
+        "open_ai_prs": 0,
+        "issue_to_pr_started": int(in_flight_signal == "started"),
+        "by_repo": [
+            {
+                "repo": "a/b",
+                "ready": 1,
+                "occupied": in_flight_signal == "occupied",
+            }
+        ],
+    }
+    calls = {"n": 0}
+
+    def fake_tick(**kwargs):
+        calls["n"] += 1
+        return {
+            "ok": True,
+            "idle": False,
+            "health": "progress",
+            "progress": 1,
+            "remaining": remaining,
+        }
+
+    monkeypatch.setattr(mill_mod, "run_preflight", lambda *a, **kw: {"ok": True})
+    monkeypatch.setattr(mill_mod, "compose_factory_pass", fake_tick)
+
+    out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=8)
+
+    assert out["ok"] is True
+    assert out["health"] == "waiting"
+    assert out["last"]["health"] == "waiting"
+    assert out["last"]["progress"] == 0
+    assert out["passes"] == calls["n"] == 2
 
 
 def test_mill_stops_after_first_idle_health_pass(monkeypatch, tmp_path):

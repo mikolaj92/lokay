@@ -114,6 +114,16 @@ def _compose_mill(
             int(remaining.get("survey_errors") or 0),
         )
 
+    def _issue_to_pr_in_flight(remaining: Any) -> bool:
+        if not isinstance(remaining, dict):
+            return False
+        if int(remaining.get("issue_to_pr_started") or 0) > 0:
+            return True
+        by_repo = remaining.get("by_repo")
+        return isinstance(by_repo, list) and any(
+            isinstance(row, dict) and bool(row.get("occupied")) for row in by_repo
+        )
+
     for i in range(max_passes):
         tick = compose_factory_pass(config_path=config_path, live=live)
         remaining = tick.get("remaining")
@@ -156,7 +166,13 @@ def _compose_mill(
             }
 
         if prev_work_key is not None and work_key == prev_work_key:
-            tick = {**tick, "health": "plateau"}
+            in_flight = _issue_to_pr_in_flight(remaining)
+            if in_flight and tick.get("health") in {"progress", "running", "waiting"}:
+                # A detached worker keeps the issue ready until it opens a PR.
+                # The unchanged catalog is an honest wait, not a green noop.
+                tick = {**tick, "health": "waiting", "progress": 0}
+            elif not in_flight:
+                tick = {**tick, "health": "plateau"}
         decision = evaluate_mill_stop(tick)
         if decision["stop"] and decision["health"] == "plateau":
             return err(
