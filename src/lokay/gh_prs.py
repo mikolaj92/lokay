@@ -117,9 +117,14 @@ def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: 
 
 
 def find_pr_fixing_issue(
-    runner: Runner, repo: str, issue: int, *, live: bool
+    runner: Runner,
+    repo: str,
+    issue: int,
+    *,
+    live: bool,
+    merged_only: bool = False,
 ) -> dict[str, Any] | None:
-    """Return an open or merged PR whose body closes the issue."""
+    """Return a closing PR, optionally requiring it to be merged."""
     result = runner.run_checked(
         gh_spec(
             [
@@ -155,7 +160,9 @@ def find_pr_fixing_issue(
             str(row.get("body") or "")
         ):
             continue
-        if str(row.get("state") or "").upper() == "OPEN" or row.get("merged_at"):
+        if row.get("merged_at"):
+            return row
+        if not merged_only and str(row.get("state") or "").upper() == "OPEN":
             return row
     return None
 
