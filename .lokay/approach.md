@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=224 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=226 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #224 — plan_pass: stuck blocked — nie wstawiaj do triage_targets
+Issue: #226 — survey_inbox: stuck blocked — nie wrzucaj do inbox
 
 ## Goal
 
-`dispatch_triage` (#222) już skipuje `blocked` w stuck.json. `plan_pass` nadal pakuje te issue do `triage_targets` z inboxu — zjada `triage_budget` i woła intake, które maluje z powrotem `ai:ready` (190–192).
+`plan_pass` (#224) i `dispatch_triage` (#222) skipują `blocked` w stuck.json. `survey_inbox` nadal wrzuca te issue do `inbox_issues_by_repo` — inbox się pęcznieje, triage_budget się marnuje zanim plan je wyfiltruje.
 
 ## Files likely touched
 
-- `src/lokay/proc/plan_pass.py`
-- `tests/test_plan_pass.py`
+- `src/lokay/proc/survey_inbox.py`
+- `tests/test_survey_inbox.py`
 
 ## Test plan
 
-- Nowy `tests/test_plan_pass.py`: inbox ma blocked + zwykły; w planie tylko zwykły.
+- Nowy `tests/test_survey_inbox.py` (albo dopisek): listed issues ma blocked + zwykły; w working tylko zwykły.
 - Nie ruszaj 180–192.
 
 ## Non-goals
