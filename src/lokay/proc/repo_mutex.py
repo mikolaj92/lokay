@@ -1,7 +1,8 @@
-"""Atomic: is a live Pi already running for this repo?
+"""Atomic: is a live coder already running for this repo?
 
 One job: inspect a process listing (live ``ps``, or ``--ps-file`` fixture text)
-and report whether ``owner/name`` already has a Pi. Mutex: one live Pi per repo.
+and report whether ``owner/name`` already has a Pi or issue-to-PR process.
+Mutex: one live coder per repo.
 
 JSON: ``{busy: false}`` or ``{busy: true, pids: [...]}``.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -70,14 +72,42 @@ def _is_pi_command(command: str) -> bool:
 
 
 
+def _command_tokens(command: str) -> list[str]:
+    try:
+        return shlex.split(command)
+    except ValueError:
+        # A process command can contain an incomplete quoted prompt. Keep
+        # mutex inspection useful for the rest of the argv rather than
+        # treating an unparsable ps row as a live holder.
+        return command.split()
+
+
 def _is_issue_to_pr_command(command: str) -> bool:
-    return "lokay.compose.issue_to_pr" in command or "lokay-issue-to-pr" in command
+    tokens = _command_tokens(command)
+    for index, token in enumerate(tokens):
+        if token == "lokay.compose.issue_to_pr":
+            return index > 0 and tokens[index - 1] == "-m"
+        if token.rsplit("/", 1)[-1] == "lokay-issue-to-pr":
+            return True
+    return False
+
+
+def _mentions_issue_to_pr_repo(command: str, repo: str) -> bool:
+    tokens = _command_tokens(command)
+    for index, token in enumerate(tokens):
+        if token == "--repo" and index + 1 < len(tokens):
+            if tokens[index + 1] == repo:
+                return True
+        elif token.startswith("--repo=") and token.removeprefix("--repo=") == repo:
+            return True
+    return False
 
 
 def _holds_repo(command: str, repo: str) -> bool:
-    if not _mentions_repo(command, repo):
-        return False
-    return _is_pi_command(command) or _is_issue_to_pr_command(command)
+    if _is_issue_to_pr_command(command):
+        return _mentions_issue_to_pr_repo(command, repo)
+    return _is_pi_command(command) and _mentions_repo(command, repo)
+
 
 def _mentions_repo(command: str, repo: str) -> bool:
     # Bare ``owner/name`` inside a quoted fixture/prompt is not a hold.

@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=199 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=201 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #199 — save_stuck: nie kasuj blocked z dysku
+Issue: #201 — repo mutex: zajęty też przez żywe issue_to_pr
 
 ## Goal
 
-Oil zablokował #190/#192 w stuck.json. Kolejny pass młyna zapisał ledger bez tych kluczy — młyn znowu wziął #190.
+Przy #197 młyn odpalił drugi i2pr na #190 na tym samym repo. Mutex patrzy tylko na `pi`, nie na `compose.issue_to_pr`.
 
 ## Files likely touched
 
-- `src/lokay/stuck.py`
-- `tests/test_stuck.py`
+- `src/lokay/proc/repo_mutex.py`
+- `tests/test_repo_mutex.py`
 
 ## Test plan
 
-- Plik ma blocked A. save bez A — A nadal na dysku.
+- Fixture `ps` z i2pr na `mikolaj92/lokay` → busy. Inne repo → nie busy.
 
 ## Non-goals
 
