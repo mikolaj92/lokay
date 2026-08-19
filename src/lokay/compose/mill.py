@@ -16,7 +16,12 @@ from lokay.compose.factory import compose_factory_pass
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit.health import evaluate_mill_stop
 from lokay.proc._common import add_config_live, load_cfg
+from lokay.proc.closeout import run_closeout_leftover
 from lokay.preflight import health_lease_status, revoke_health_lease, run_preflight
+
+
+def closeout_leftover_ready(*, config_path: str | None, live: bool) -> dict[str, Any]:
+    return run_closeout_leftover(config_path=config_path, live=live)
 
 
 def compose_mill(
@@ -126,7 +131,17 @@ def _compose_mill(
 
     for i in range(max_passes):
         tick = compose_factory_pass(config_path=config_path, live=live)
+        leftover = closeout_leftover_ready(config_path=config_path, live=live)
         remaining = tick.get("remaining")
+        if leftover.get("labels_removed") and isinstance(remaining, dict):
+            remaining = {**remaining, "issue_to_pr_started": 0}
+            tick = {
+                **tick,
+                "remaining": remaining,
+                "progress": int(tick.get("progress") or 0)
+                + int(leftover.get("leftover_closed") or 1),
+                "leftover_closeout": leftover,
+            }
         results.append(
             {
                 "pass": i + 1,

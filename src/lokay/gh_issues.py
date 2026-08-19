@@ -434,7 +434,7 @@ def list_issues_with_label(
     live: bool,
     limit: int | None = None,
 ) -> list[Issue]:
-    """Issues carrying a label; ready-label queries include closed rows for closeout."""
+    """Open issues carrying a label; ready-label queries defensively filter stale closed rows."""
     if not label:
         return []
     if live:
@@ -463,4 +463,6 @@ def list_issues_with_label(
             result.stdout, kind="labeled-issue", repo=repo.name, cap=cap
         )
     ]
+    if label in {config.ready_label, WORK_READY_LABEL}:
+        return [issue for issue in issues if issue.state != "CLOSED"]
     return issues
