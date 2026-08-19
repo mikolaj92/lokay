@@ -1,23 +1,30 @@
 {
   "paths": [
-    "src/lokay/git_worktree.py",
-    "lokay/git_worktree.py",
-    "tests/test_worktree_reset.py"
+    "src/lokay/proc/refresh_occupancy.py",
+    "src/lokay/proc/detach_issue_to_pr.py",
+    "lokay/proc/detach_issue_to_pr.py",
+    "lokay/proc/refresh_occupancy.py",
+    "tests/test_refresh_occupancy.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/git_worktree.py",
-    "tests/test_worktree_reset.py",
-    "lokay/git_worktree.py"
+    "src/lokay/proc/detach_issue_to_pr.py",
+    "src/lokay/proc/refresh_occupancy.py",
+    "tests/test_refresh_occupancy.py",
+    "lokay/proc/detach_issue_to_pr.py",
+    "lokay/proc/refresh_occupancy.py"
   ],
   "matched_tokens": [
-    "worktree_add",
-    "worktree",
-    "git_worktree",
-    "test_worktree_reset",
-    "dispatch",
+    "occupancy",
+    "receipt",
+    "mutex",
+    "proc",
+    "detach_issue_to_pr",
+    "refresh_occupancy",
+    "test_refresh_occupancy",
+    "cycle",
+    "Receipt",
     "review",
-    "gate",
     "unbounded",
     "bounded"
   ],
@@ -27,7 +34,7 @@
     "Repo tree entries considered: 283.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__181-stare-.lokay-preserved-nie-mo-e-zjada-wo-a89cefb7",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__183-po-merge-occupancy-musi-spa-ghost-i2pr-n-9096d9c8",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

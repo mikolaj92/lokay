@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Iterable
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -467,11 +468,55 @@ def live_issue_to_pr_receipts(
             continue
         try:
             pid = int(data["pid"])
+            issue = int(data["issue"])
         except (TypeError, ValueError):
             continue
-        if check(pid) or coding_live_for_issue(int(data["issue"])):
+        if check(pid) or coding_live_for_issue(issue):
             live.append(data)
     return live
+
+
+def clear_dead_issue_to_pr_receipts(
+    repos: Iterable[str],
+    cycle_dir: Path | None = None,
+    *,
+    pid_alive=None,
+) -> list[dict[str, Any]]:
+    """Remove finished issue-to-PR receipts after a repo's PR was merged.
+
+    A receipt is the harvest record for a detached child, so only a receipt
+    whose wrapper and issue coder are both gone is safe to remove. In
+    particular, a dead wrapper does not prove that a still-running pi is
+    finished; keep that receipt until the open issue's coder exits.
+    """
+    root = Path(cycle_dir) if cycle_dir is not None else Path.home() / ".lokay" / "cycle"
+    repo_names = {str(repo) for repo in repos if str(repo)}
+    check = pid_alive or is_live_issue_to_pr_pid
+    if not repo_names or not root.is_dir():
+        return []
+
+    cleared: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.json")):
+        try:
+            with _receipt_write_lock(path):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict) or data.get("repo") not in repo_names:
+                    continue
+                # Metric receipts and pipe-gated reservations are not detached
+                # child receipts. Leave them for their owning lifecycle atom.
+                if data.get("starting") is True or "pid" not in data:
+                    continue
+                pid = int(data["pid"])
+                issue = int(data["issue"])
+                if pid > 0 and (check(pid) or coding_live_for_issue(issue)):
+                    continue
+                path.unlink()
+                cleared.append(data)
+        except (FileNotFoundError, OSError, TypeError, ValueError):
+            # A concurrent lifecycle transition or malformed receipt is not
+            # evidence that a live worker is safe to remove.
+            continue
+    return cleared
 
 
 def detach_issue_to_pr(

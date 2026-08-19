@@ -1,22 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=181 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=183 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #181 — Stare .lokay-preserved nie może zjadać worktree_add
+Issue: #183 — Po merge occupancy musi spaść — ghost i2pr nie trzyma repo
 
 ## Goal
 
-Influenzer#177 (2026-08-19): `worktree_add` padło `worktree preservation archive already exists`. Sztuka zjedzona, restart ręczny (rm archive / prune). Katalog `.lokay-preserved` zostaje po starych przebiegach i blokuje następną.
+2026-08-19: po merge last-pass zostaje occupied przy issue_to_pr_started=0 / martwym pid. Ghost receipt zjada mutex.
 
 ## Files likely touched
 
-- `src/lokay/git_worktree.py`
-- `tests/test_worktree_reset.py`
+- `src/lokay/proc/detach_issue_to_pr.py`
+- `src/lokay/proc/refresh_occupancy.py`
+- `tests/test_refresh_occupancy.py`
 
 ## Test plan
 
-- `tests/test_worktree_reset.py`: live worktree + istniejące `.corner.lokay-preserved` z `valuable` → remove ok, stare `valuable` nienaruszone, nowy `.corner-2.lokay-preserved` ma snapshot. Istniejący test `fails_closed_on_interrupted_preservation_archive` (brak live path) zostaje.
+- Receipt z martwym pid → repo nie occupied. Żywy pid na otwartym issue → occupied. `uv run` test zielony.
 
 ## Non-goals
 
