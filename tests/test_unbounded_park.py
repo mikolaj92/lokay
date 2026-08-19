@@ -40,7 +40,8 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
     assert payload["removed"] is False
     assert payload["label"] == "ai:ready"
     assert payload["command"] == (
-        "gh issue edit 12 --repo owner/name --remove-label ai:ready"
+        "gh issue edit 12 --repo owner/name --remove-label work:ready "
+        "--remove-label ai:ready"
     )
     assert payload["argv"] == [
         "gh",
@@ -49,6 +50,8 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
         "12",
         "--repo",
         "owner/name",
+        "--remove-label",
+        "work:ready",
         "--remove-label",
         "ai:ready",
     ]
@@ -67,6 +70,8 @@ def test_live_removes_ai_ready(monkeypatch, capsys):
             "7",
             "--repo",
             "owner/name",
+            "--remove-label",
+            "work:ready",
             "--remove-label",
             "ai:ready",
         ]

@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=203 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=205 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #203 — select_implement: stuck blocked nie idzie na i2pr
+Issue: #205 — park: zdejmij też work:ready
 
 ## Goal
 
-#192 było w stuck (blocked), a młyn i tak odpalił i2pr przy #201. `select_implement` nie czyta ledgera.
+`unbounded_park` zdejmuje tylko `ai:ready`. Fail-closed (180–192) zostają w survey `work:ready` i młyn je zjada.
 
 ## Files likely touched
 
-- `src/lokay/proc/select_implement.py`
-- `tests/test_select_implement.py`
+- `src/lokay/proc/unbounded_park.py`
+- `tests/test_unbounded_park.py`
 
 ## Test plan
 
-- Issue blocked w stuck → nie implementable. Issue bez blocked → jak dziś.
+- argv zawiera `--remove-label work:ready` i `--remove-label ai:ready`.
 
 ## Non-goals
 
