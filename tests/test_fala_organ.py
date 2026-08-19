@@ -644,6 +644,29 @@ def test_repair_agent_treats_missing_live_issue_as_closed(monkeypatch):
     assert result["issue_state"] == "MISSING"
 
 
+def test_recheck_requests_changed_scope_after_red_full_suite(monkeypatch):
+    captured = []
+
+    def fake_run(main, argv):
+        captured.append(argv)
+        return {"ok": True, "tested": True, "scoped": True}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "test_local_recheck",
+        {"live": False, "changed_scope": True},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree"},
+            "commit_all": {"committed": True},
+            "test_local": _red_test_local(),
+            "repair_agent": {"ok": True},
+        },
+    )
+    assert result["ok"] is True
+    assert result["recheck"] is True
+    assert captured == [["--worktree", "/tmp/worktree", "--changed-scope"]]
+
+
 def test_push_red_recheck_does_not_push(monkeypatch):
     def boom(main, argv):
         raise AssertionError("push must not run after a red recheck")
@@ -1148,7 +1171,7 @@ def test_recheck_reruns_once_after_committed_repair(monkeypatch):
     monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 1)
     result = fala_organ._handle(
         "test_local_recheck",
-        {"repo": "a/b", "live": True},
+        {"repo": "a/b", "live": True, "changed_scope": True},
         {
             "worktree_add": {"worktree": "/tmp/worktree"},
             "commit_all": {"committed": False},
@@ -1158,7 +1181,7 @@ def test_recheck_reruns_once_after_committed_repair(monkeypatch):
     )
     assert result["ok"] is True
     assert result["recheck"] is True
-    assert captured == [["--worktree", "/tmp/worktree"]]
+    assert captured == [["--worktree", "/tmp/worktree", "--changed-scope"]]
 
 
 def test_recheck_red_marks_bounded_loop_exhausted(monkeypatch):

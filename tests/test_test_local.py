@@ -127,6 +127,82 @@ def test_red_declared_suite_fails_closed(tmp_path: Path, monkeypatch, capsys):
     assert payload["stderr_tail"] == "1 failed\n"
 
 
+def test_changed_pytest_scope_maps_src_and_changed_ticket_tests(
+    tmp_path: Path, monkeypatch
+):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_foo.py").write_text("", encoding="utf-8")
+    (tmp_path / "tests" / "test_ticket.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        test_local,
+        "list_changed_paths",
+        lambda run, worktree, base: ["src/foo.py", "tests/test_ticket.py"],
+    )
+    argv = test_local._changed_pytest_argv(object(), tmp_path, LOKAY_PYTEST)
+    assert argv == (*LOKAY_PYTEST, "tests/test_foo.py", "tests/test_ticket.py")
+
+
+def test_red_full_suite_accepts_green_changed_scope(tmp_path: Path, monkeypatch, capsys):
+    _declare_test(tmp_path)
+    scoped_argv = (*LOKAY_PYTEST, "tests/test_foo.py")
+    monkeypatch.setattr(
+        test_local,
+        "_changed_pytest_argv",
+        lambda run, worktree, argv: scoped_argv,
+    )
+
+    class SequentialRunner:
+        def __init__(self):
+            self.calls = []
+
+        def run(self, spec, *, live):
+            self.calls.append(spec.argv)
+            return CommandResult(
+                spec=spec,
+                executed=True,
+                returncode=1 if len(self.calls) == 1 else 0,
+                stdout="FAILED tests/test_unrelated.py" if len(self.calls) == 1 else "",
+            )
+
+    run = SequentialRunner()
+    monkeypatch.setattr(test_local, "runner", lambda: run)
+    code = test_local.main(["--worktree", str(tmp_path), "--changed-scope"])
+    assert code == 0
+    assert run.calls == [LOKAY_PYTEST, scoped_argv]
+    payload = _payload(capsys)
+    assert payload["ok"] is True
+    assert payload["scoped"] is True
+    assert payload["full_suite_returncode"] == 1
+    assert payload["tests"].endswith("tests/test_foo.py")
+
+
+def test_red_changed_scope_still_refuses(tmp_path: Path, monkeypatch, capsys):
+    _declare_test(tmp_path)
+    scoped_argv = (*LOKAY_PYTEST, "tests/test_foo.py")
+    monkeypatch.setattr(
+        test_local,
+        "_changed_pytest_argv",
+        lambda run, worktree, argv: scoped_argv,
+    )
+
+    class RedRunner:
+        def run(self, spec, *, live):
+            return CommandResult(
+                spec=spec,
+                executed=True,
+                returncode=1,
+                stdout=f"FAILED {spec.argv[-1]}::test_ticket\n",
+            )
+
+    monkeypatch.setattr(test_local, "runner", lambda: RedRunner())
+    code = test_local.main(["--worktree", str(tmp_path), "--changed-scope"])
+    assert code == 1
+    payload = _payload(capsys)
+    assert payload["ok"] is False
+    assert payload["tests"].endswith("tests/test_foo.py")
+    assert "test_ticket" in payload["stdout_tail"]
+
+
 def test_declared_string_command_runs(tmp_path: Path, monkeypatch, capsys):
     _declare_test(tmp_path, "pixi run core-smoke")
     argv = ("pixi", "run", "core-smoke")
