@@ -97,41 +97,64 @@ def test_closed_issue_skips_create_pr(tmp_path, monkeypatch, capsys):
     assert not any(call[1:3] == ("pr", "create") for call in runner.calls)
 
 
-def test_existing_pr_fixing_issue_skips_create(tmp_path, monkeypatch, capsys):
-    for existing in (
-        {
-            "number": 334,
-            "state": "closed",
-            "merged_at": "2025-01-01T12:00:00Z",
-            "body": "Done\n\nFixes #239",
-            "head": {"ref": "ai/fix/239"},
-        },
-        {
-            "number": 335,
-            "state": "open",
-            "merged_at": None,
-            "body": "Fixes #239",
-            "head": {"ref": "ai/fix/239"},
-        },
-    ):
-        runner = _GhRunner("OPEN", existing_prs=[existing])
-        monkeypatch.setattr(pr_create, "runner", lambda: runner)
-        monkeypatch.setattr(pr_create, "mutations_allowed", lambda **kwargs: True)
+def test_existing_pr_closing_issue_skips_create(tmp_path, monkeypatch, capsys):
+    keywords = (
+        "Close",
+        "Closes",
+        "Closed",
+        "Fix",
+        "Fixes",
+        "Fixed",
+        "Resolve",
+        "Resolves",
+        "Resolved",
+    )
+    states = (
+        ("open", None),
+        ("closed", "2025-01-01T12:00:00Z"),
+    )
+    for keyword in keywords:
+        for state, merged_at in states:
+            existing = {
+                "number": 334,
+                "state": state,
+                "merged_at": merged_at,
+                "body": f"Done\n\n{keyword} #239",
+                "head": {"ref": "ai/fix/239"},
+            }
+            runner = _GhRunner("OPEN", existing_prs=[existing])
+            monkeypatch.setattr(pr_create, "runner", lambda: runner)
+            monkeypatch.setattr(
+                pr_create, "mutations_allowed", lambda **kwargs: True
+            )
 
-        code = pr_create.main(_args(_cfg(tmp_path)))
+            code = pr_create.main(_args(_cfg(tmp_path)))
 
-        assert code == 0
-        env = _envelope(capsys)
-        assert env["ok"] is True
-        assert env["existing"] is True
-        assert env["pr"] == existing["number"]
-        assert not any(call[1:3] == ("issue", "view") for call in runner.calls)
-        assert not any(call[1:3] == ("pr", "create") for call in runner.calls)
+            assert code == 0
+            env = _envelope(capsys)
+            assert env["ok"] is True
+            assert env["existing"] is True
+            assert env["pr"] == existing["number"]
+            assert not any(
+                call[1:3] == ("issue", "view") for call in runner.calls
+            )
+            assert not any(
+                call[1:3] == ("pr", "create") for call in runner.calls
+            )
 
 
 def test_open_issue_creates_pr(tmp_path, monkeypatch, capsys):
     runner = _GhRunner(
-        "OPEN", pr_url="https://github.com/mikolaj92/lokay/pull/239\n"
+        "OPEN",
+        pr_url="https://github.com/mikolaj92/lokay/pull/239\n",
+        existing_prs=[
+            {
+                "number": 334,
+                "state": "open",
+                "merged_at": None,
+                "body": "References #239",
+            }
+        ],
     )
     monkeypatch.setattr(pr_create, "runner", lambda: runner)
     monkeypatch.setattr(pr_create, "mutations_allowed", lambda **kwargs: True)

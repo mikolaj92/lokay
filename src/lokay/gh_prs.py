@@ -119,7 +119,7 @@ def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: 
 def find_pr_fixing_issue(
     runner: Runner, repo: str, issue: int, *, live: bool
 ) -> dict[str, Any] | None:
-    """Return an open or merged PR whose body contains ``Fixes #<issue>``."""
+    """Return an open or merged PR whose body closes the issue."""
     result = runner.run_checked(
         gh_spec(
             [
@@ -146,9 +146,14 @@ def find_pr_fixing_issue(
         if pages and isinstance(pages[0], dict)
         else [row for page in pages for row in page]
     )
-    fixes = re.compile(rf"(?i)\bfixes\s+#{issue}\b")
+    closes_issue = re.compile(
+        rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#{issue}\b",
+        re.IGNORECASE,
+    )
     for row in rows:
-        if not isinstance(row, dict) or not fixes.search(str(row.get("body") or "")):
+        if not isinstance(row, dict) or not closes_issue.search(
+            str(row.get("body") or "")
+        ):
             continue
         if str(row.get("state") or "").upper() == "OPEN" or row.get("merged_at"):
             return row
