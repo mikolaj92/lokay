@@ -135,7 +135,7 @@ def test_daemon_exposes_local_pi_to_preflight(tmp_path):
     assert "fala" not in glance
 
 
-def test_launchd_skips_host_ff_when_mill_lock_busy(tmp_path):
+def test_launchd_runs_host_ff_but_not_daemon_when_mill_lock_busy(tmp_path):
     import fcntl
 
     lock = tmp_path / ".lokay" / "mill.lock"
@@ -150,8 +150,8 @@ def test_launchd_skips_host_ff_when_mill_lock_busy(tmp_path):
     assert completed.returncode == 0, completed.stderr
     argv_log = tmp_path / "uv-argv.log"
     calls = argv_log.read_text(encoding="utf-8").splitlines()
-    assert all("lokay-host-ff" not in line for line in calls)
-    assert any("lokay-daemon" in line for line in calls)
+    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
     logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
     body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
     assert "lock_busy" in body
