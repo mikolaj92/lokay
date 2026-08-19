@@ -1,13 +1,13 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=231 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=235 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #231 — repair_agent Fala timeout 2100s → 480s (pi_budget)
+Issue: #235 — test_local Fala timeout 2100s → 300s
 
 ## Goal
 
-#229 ścięło `run_agent` do 480s. `repair_agent` (issue_to_pr, drugi strzał po teście) nadal ma `timeout_seconds = 2100` w `lokay.fala-package.toml`. Drugi coding slot zjada 35 min.
+`run_agent`/`repair_agent`/`self_repair_run_agent` są na 480s. `test_local` w `lokay.fala-package.toml` nadal ma `timeout_seconds = 2100`. Po src i2pr wisi do 35 min na pytest — cykl 5–10 min pada, PR nie powstaje.
 
 ## Files likely touched
 
@@ -18,8 +18,8 @@ Issue: #231 — repair_agent Fala timeout 2100s → 480s (pi_budget)
 
 ## Test plan
 
-- `tests/test_graph.py`: analogicznie do run_agent — repair_agent timeout == 480.
-- Nie ruszaj 180–192, 228, 229.
+- `tests/test_graph.py`: każdy `test_local` ma timeout == 300.
+- Nie ruszaj 180–192, 228.
 
 ## Non-goals
 

@@ -4,6 +4,7 @@
     "lokay.fala-package.toml",
     "fala/lokay.fala-package.toml",
     "src/lokay/data/lokay.fala-package.toml",
+    "229/231/233",
     "lokay/data/lokay.fala-package.toml",
     "tests/test_graph.py"
   ],
@@ -13,18 +14,22 @@
     "fala/lokay.fala-package.toml",
     "src/lokay/data/lokay.fala-package.toml",
     "tests/test_graph.py",
+    "229/231/233",
     "lokay/data/lokay.fala-package.toml"
   ],
   "matched_tokens": [
-    "pi_budget",
+    "test_local",
     "run_agent",
-    "issue_to_pr",
+    "self_repair_validate",
     "test_graph",
     "review",
     "gate",
     "unbounded",
     "bounded",
-    "fala-package"
+    "fala-package",
+    "229",
+    "231",
+    "233"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -32,7 +37,7 @@
     "Repo tree entries considered: 286.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__231-repair_agent-fala-timeout-2100s-480s-pi_-6e18375f",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__235-test_local-fala-timeout-2100s-300s-9bcebbf4",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
