@@ -1,29 +1,21 @@
 {
   "paths": [
-    "src/lokay/proc/assert_real_diff.py",
-    "tick.py",
-    "pr_finalize.py",
-    "lokay/localize.json",
-    "src/a.py",
-    "src/b.py",
-    "tests/test_assert_real_diff.py"
+    "src/lokay/stage_ledger.py",
+    "src/lokay/proc/stage_label.py",
+    "lokay/proc/stage_label.py",
+    "tests/test_stage_ledger.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "tick.py",
-    "pr_finalize.py",
-    "lokay/localize.json",
-    "src/a.py",
-    "src/b.py"
+    "src/lokay/proc/stage_label.py",
+    "lokay/proc/stage_label.py"
   ],
   "matched_tokens": [
-    "assert_real_diff",
-    "localize",
-    "real",
-    "pr_finalize",
-    "proc",
-    "commit_all",
+    "stage_label",
     "park",
+    "proc",
+    "organ",
+    "stage",
     "review",
     "unbounded",
     "bounded"
@@ -34,7 +26,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__279-assert_real_diff-src-poza-localize-off-g-1348f684",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__281-stage_label-nie-nak-adaj-ai-ready-na-clo-7046e706",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

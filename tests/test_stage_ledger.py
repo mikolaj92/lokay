@@ -154,6 +154,17 @@ repos: []
     class _R:
         def run(self, spec, *, live):
             argv = list(spec.argv)
+            if "view" in argv:
+                return CommandResult(
+                    spec=spec,
+                    executed=True,
+                    returncode=0,
+                    stdout=(
+                        '{"number":7,"title":"test","body":"","labels":[],'
+                        '"assignees":[],"url":"https://example.test/7",'
+                        '"state":"OPEN"}'
+                    ),
+                )
             if "--remove-label" in argv:
                 label = argv[argv.index("--remove-label") + 1]
                 if label == LABEL_CI_WAITING:
@@ -194,3 +205,62 @@ repos: []
     assert env["ok"] is True
     assert env["applied"] is True
     assert env["stage"] == "ready"
+
+
+def test_stage_label_closed_issue_skips_all_mutations(
+    tmp_path, monkeypatch, capsys
+):
+    import json
+    from types import SimpleNamespace
+
+    from lokay.proc import stage_label as atom
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        """
+mode: live
+github:
+  assignee: mikolaj92
+repos: []
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
+    monkeypatch.setattr(
+        atom,
+        "get_issue",
+        lambda *a, **k: SimpleNamespace(state="CLOSED"),
+    )
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError("closed issue must not be mutated")
+
+    monkeypatch.setattr(atom, "add_issue_labels", unexpected)
+    monkeypatch.setattr(atom, "remove_issue_labels", unexpected)
+    monkeypatch.setattr(atom, "comment_issue", unexpected)
+
+    code = atom.main(
+        [
+            "--config",
+            str(cfg),
+            "--live",
+            "--repo",
+            "a/b",
+            "--issue",
+            "7",
+            "--stage",
+            "ready",
+            "--receipt",
+        ]
+    )
+
+    assert code == 0
+    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert env["ok"] is True
+    assert env["skipped"] is True
+    assert env["reason"] == "issue_closed"
+    assert env["issue_state"] == "CLOSED"
+    assert env["add_labels"] == []
+    assert env["remove_labels"] == []
+    assert env["receipt"] is False
+    assert env["applied"] is False
