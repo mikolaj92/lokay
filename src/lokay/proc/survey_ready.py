@@ -43,20 +43,24 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "ready"})
             ready_by_repo[repo_name] = []
             continue
-        listed = run_proc(p_list_issues.main, [*cfg_flag, *live_flag, "--repo", repo_name])
+        listed = run_proc(
+            p_list_issues.main,
+            [
+                *cfg_flag,
+                *live_flag,
+                "--repo",
+                repo_name,
+                "--label",
+                WORK_READY_LABEL,
+            ],
+        )
         actions.append({"step": "list_issues", "repo": repo_name, **listed})
         if not listed.get("ok"):
             survey_errors += 1
             ready_survey_failed.append(repo_name)
             ready_by_repo[repo_name] = []
             continue
-        issues = list(listed.get("issues") or [])
-        work_ready = [
-            issue
-            for issue in issues
-            if isinstance(issue.get("labels"), list)
-            and WORK_READY_LABEL in issue["labels"]
-        ]
+        work_ready = list(listed.get("issues") or [])
         open_work_ready: list[dict[str, Any]] = []
         for issue in work_ready:
             number = int(issue["number"])

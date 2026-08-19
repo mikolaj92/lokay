@@ -181,6 +181,25 @@ def test_list_issues_with_ready_label_includes_closed_issues(tmp_path):
     assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
+def test_list_issues_with_work_ready_label_includes_closed_issues(tmp_path):
+    runner = _ListRunner(
+        [
+            _issue_row(7, "work:ready", state="CLOSED"),
+            _issue_row(8, "work:ready"),
+        ]
+    )
+    cfg, repo = _cfg(tmp_path)
+
+    issues = list_issues_with_label(runner, cfg, repo, label="work:ready", live=True)
+
+    assert [(issue.number, issue.state) for issue in issues] == [
+        (7, "CLOSED"),
+        (8, "OPEN"),
+    ]
+    argv = runner.calls[0]
+    assert argv[argv.index("--state") + 1] == "all"
+
+
 def test_survey_ready_parks_blocked_ready_issue(tmp_path, monkeypatch):
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()
@@ -246,8 +265,10 @@ def test_survey_ready_live_rechecks_and_parks_closed_issue(tmp_path, monkeypatch
         {"actions": [], "progress": 0, "prs_by_repo": {}},
     )
     parked: list[list[str]] = []
+    listed: list[list[str]] = []
 
     def fake_list(argv=None):
+        listed.append(list(argv or []))
         return emit_exit(
             ok(
                 issues=[
@@ -274,6 +295,7 @@ def test_survey_ready_live_rechecks_and_parks_closed_issue(tmp_path, monkeypatch
     )
 
     assert result["ok"] is True
+    assert listed == [["--live", "--repo", "owner/repo", "--label", "work:ready"]]
     assert parked == [["--repo", "owner/repo", "--issue", "7"]]
     survey = pass_io.read_json(pass_io.survey_path(pass_dir))
     assert [issue["number"] for issue in survey["ready_by_repo"]["owner/repo"]] == [8]

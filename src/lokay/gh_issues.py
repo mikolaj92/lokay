@@ -9,6 +9,8 @@ from lokay.runner import Runner, gh_spec
 from lokay.stuck import is_blocked_in_ledger, load_stuck, stuck_path_for
 from lokay.triage import is_parked, is_undecided
 
+WORK_READY_LABEL = "work:ready"
+
 # Standard factory labels (create-if-missing so triage works on new repos).
 _LABEL_META: dict[str, tuple[str, str]] = {
     "ai:ready": ("0E8A16", "Ready for AI agent work"),
@@ -415,7 +417,7 @@ def list_issues_with_label(
     live: bool,
     limit: int | None = None,
 ) -> list[Issue]:
-    """Issues carrying a label; ready includes closed issues so they can be parked."""
+    """Issues carrying a label; ready labels include closed issues for parking."""
     if not label:
         return []
     if live:
@@ -427,7 +429,7 @@ def list_issues_with_label(
         "--repo",
         repo.name,
         "--state",
-        "all" if label == config.ready_label else "open",
+        "all" if label in {config.ready_label, WORK_READY_LABEL} else "open",
         "--label",
         label,
         "--json",
