@@ -1,5 +1,24 @@
+from pathlib import Path
+
 from lokay.proc import dispatch_implement as d
 from lokay.proc import detach_issue_to_pr as detach_mod
+
+
+def test_detach_writes_start_and_pid_to_log(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    class FakePopen:
+        def __init__(self, _argv, **_kwargs):
+            self.pid = 4242
+
+    out = detach_mod.detach_issue_to_pr(
+        repo="owner/repo", issue=9, config_path=None, popen=FakePopen
+    )
+
+    assert out["ok"] is True
+    assert Path(out["log"]).read_text(encoding="ascii") == (
+        "started issue=9 pid-pending\npid=4242\n"
+    )
 
 
 def test_detach_does_not_wait(monkeypatch, tmp_path):

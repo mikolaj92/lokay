@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=193 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=195 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #193 — survey_ready: bez work:ready nie idź na i2pr
+Issue: #195 — detach: pierwsza linia w logu i2pr przy starcie
 
 ## Goal
 
-Dziś młyn odpalał lokay#178 (tylko `ai:ready`, preflight) i zjadał mutex przy #183/#184. Alfred: survey `work:ready`. Produkty bez work:ready nie są kolejką.
+#193 miał log 0 bajtów przez cały lot. Olej nie widzi czy i2pr żyje.
 
 ## Files likely touched
 
-- `src/lokay/proc/survey_ready.py`
-- `tests/test_select_implement.py`
+- `src/lokay/proc/detach_issue_to_pr.py`
+- `tests/test_dispatch_detach.py`
 
 ## Test plan
 
-- Issue tylko `ai:ready` → skip. Issue z `work:ready`+`ai:ready` → ready.
+- Po `detach_issue_to_pr` (mock spawn) plik logu nie jest pusty i zawiera `started`.
 
 ## Non-goals
 

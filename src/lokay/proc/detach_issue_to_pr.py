@@ -607,6 +607,21 @@ def detach_issue_to_pr(
             "issue": issue_number,
         }
     try:
+        log_fh.write(f"started issue={issue_number} pid-pending\n".encode("ascii"))
+        log_fh.flush()
+    except OSError as exc:
+        log_fh.close()
+        os.close(read_fd)
+        os.close(write_fd)
+        _discard_starting_receipt(receipt_path, launch_id)
+        return {
+            "ok": False,
+            "reason": "log_unavailable",
+            "error": f"cannot write issue_to_pr log: {exc}",
+            "repo": repo_name,
+            "issue": issue_number,
+        }
+    try:
         proc = spawn(
             argv,
             cwd=root,
@@ -626,6 +641,25 @@ def detach_issue_to_pr(
             "error": f"cannot start issue_to_pr: {exc}",
             "repo": repo_name,
             "issue": issue_number,
+        }
+    try:
+        log_fh.write(f"pid={int(proc.pid)}\n".encode("ascii"))
+        log_fh.flush()
+    except OSError as exc:
+        log_fh.close()
+        os.close(read_fd)
+        os.close(write_fd)
+        terminated = _terminate_detached_process_group(proc)
+        if terminated:
+            _discard_starting_receipt(receipt_path, launch_id)
+        return {
+            "ok": False,
+            "reason": "log_unavailable",
+            "error": f"cannot write issue_to_pr pid to log: {exc}",
+            "repo": repo_name,
+            "issue": issue_number,
+            "pid": int(proc.pid),
+            "cleanup_confirmed": terminated,
         }
     finally:
         log_fh.close()
