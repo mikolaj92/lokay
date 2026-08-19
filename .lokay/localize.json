@@ -1,30 +1,19 @@
 {
   "paths": [
-    "src/lokay/fala_organ.py",
-    "229/231/233/235",
-    "implement/factory/common",
-    "src/lokay/organ/agent.py",
-    "tests/test_fala_organ.py"
+    "tests/test_global_pr_first.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "229/231/233/235",
-    "implement/factory/common"
+    "tests/test_global_pr_first.py"
   ],
   "matched_tokens": [
-    "organ",
-    "pr_create",
-    "Organ",
-    "factory",
-    "common",
+    "test_global_pr_first",
+    "issues",
+    "test_local",
     "review",
     "gate",
     "unbounded",
-    "bounded",
-    "229",
-    "231",
-    "233",
-    "235"
+    "bounded"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -32,7 +21,7 @@
     "Repo tree entries considered: 288.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__241-organ-pass-issue-to-pr_create-f986d8b3",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__243-test_global_pr_first.py-syntaxerror-na-m-628471c3",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

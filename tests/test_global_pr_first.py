@@ -72,10 +72,18 @@ def test_actionable_pr_in_other_repo_allows_intake(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}]
-                "labels": ["work:ready", "ai:ready"],
-                if repo == "a/two"
-                else [],
+                "issues": (
+                    [
+                        {
+                            "number": 2,
+                            "repo": repo,
+                            "title": "next",
+                            "labels": ["work:ready", "ai:ready"],
+                        }
+                    ]
+                    if repo == "a/two"
+                    else []
+                ),
             }
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "pending"}
@@ -153,10 +161,18 @@ def test_merge_then_intake_when_repo_queue_is_clear(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}]
-                "labels": ["work:ready", "ai:ready"],
-                if repo == "a/two"
-                else [],
+                "issues": (
+                    [
+                        {
+                            "number": 2,
+                            "repo": repo,
+                            "title": "next",
+                            "labels": ["work:ready", "ai:ready"],
+                        }
+                    ]
+                    if repo == "a/two"
+                    else []
+                ),
             }
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "none", "merge_ok": True}
@@ -238,10 +254,18 @@ def test_manual_only_pr_allows_unrelated_repo_intake(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}]
-                "labels": ["work:ready", "ai:ready"],
-                if repo == "a/two"
-                else [],
+                "issues": (
+                    [
+                        {
+                            "number": 2,
+                            "repo": repo,
+                            "title": "next",
+                            "labels": ["work:ready", "ai:ready"],
+                        }
+                    ]
+                    if repo == "a/two"
+                    else []
+                ),
             }
         if fn is tick.p_intake.main:
             return _intake_ok()
@@ -399,10 +423,18 @@ def test_needs_human_discovered_this_pass_becomes_manual(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}]
-                "labels": ["work:ready", "ai:ready"],
-                if repo == "a/two"
-                else [],
+                "issues": (
+                    [
+                        {
+                            "number": 2,
+                            "repo": repo,
+                            "title": "next",
+                            "labels": ["work:ready", "ai:ready"],
+                        }
+                    ]
+                    if repo == "a/two"
+                    else []
+                ),
             }
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "none", "merge_ok": True}
@@ -542,10 +574,18 @@ def test_never_second_ai_pr_in_same_repo(tmp_path, monkeypatch):
             return {
                 "ok": True,
                 "issues": [
-                    {"number": 2, "repo": "a/one", "title": "first"},
-                    "labels": ["work:ready", "ai:ready"],
-                    {"number": 3, "repo": "a/one", "title": "second"},
-                    "labels": ["work:ready", "ai:ready"],
+                    {
+                        "number": 2,
+                        "repo": "a/one",
+                        "title": "first",
+                        "labels": ["work:ready", "ai:ready"],
+                    },
+                    {
+                        "number": 3,
+                        "repo": "a/one",
+                        "title": "second",
+                        "labels": ["work:ready", "ai:ready"],
+                    },
                 ],
             }
         if fn is tick.p_intake.main:
@@ -583,8 +623,17 @@ def test_needs_feedback_issue_does_not_block_other_repo_intake(tmp_path, monkeyp
             if repo == "a/one":
                 # Ready survey never returns needs-feedback; simulate empty ready there.
                 return {"ok": True, "issues": []}
-            return {"ok": True, "issues": [{"number": 2, "repo": repo, "title": "next"}]}
-            "labels": ["work:ready", "ai:ready"],
+            return {
+                "ok": True,
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": "next",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
+            }
         if fn is tick.p_intake.main:
             return _intake_ok()
         raise AssertionError(fn)
