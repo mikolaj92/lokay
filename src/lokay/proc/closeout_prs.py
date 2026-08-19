@@ -14,7 +14,7 @@ from lokay.passkit.working import (
 )
 from lokay.closeout import COUNTERS
 from lokay.proc._common import add_config_live
-from lokay.proc.closeout_pr import run_closeout_pr
+from lokay.proc.closeout_pr import MINI_MILL_REPO, run_closeout_pr
 from lokay.stuck import save_stuck
 
 
@@ -31,8 +31,21 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     remaining_prs = int(working.get("remaining_prs") or 0)
     totals = {key: int(working.get(key) or 0) for key in COUNTERS}
     merged_this_pass = [str(n) for n in list(working.get("merged_this_pass") or []) if n]
+    skipped_repos: list[str] = []
 
     for repo_name in list(begin.get("repos") or []):
+        if repo_name != MINI_MILL_REPO:
+            skipped_repos.append(repo_name)
+            actions.append(
+                {
+                    "step": "skip_repo_outside_mini_mill",
+                    "repo": repo_name,
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "repo_not_delivered_by_mini_mill",
+                }
+            )
+            continue
         still_open: list[dict[str, Any]] = []
         for pr in list(prs_by_repo.get(repo_name) or []):
             out = run_closeout_pr(
@@ -77,7 +90,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     )
     recount_prs(working)
     save_begin_working(pass_dir, begin, working)
-    return ok(
+    result = ok(
         pass_dir=pass_dir,
         remaining_prs=int(working.get("remaining_prs") or 0),
         actionable_prs=int(working.get("actionable_prs") or 0),
@@ -85,6 +98,13 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
         mergeable_green=totals["mergeable_green"],
         merge_disabled=totals["merge_disabled"],
     )
+    if skipped_repos:
+        result.update(
+            skipped=True,
+            reason="repo_not_delivered_by_mini_mill",
+            skipped_repos=skipped_repos,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

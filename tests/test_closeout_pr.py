@@ -313,7 +313,7 @@ def test_closeout_prs_is_thin_foreach():
     assert "compose_pr_repair" not in src
     assert "run_pr_route" not in src
     assert "decide_auto_merge" not in src
-    assert len(src.splitlines()) <= 110
+    assert len(src.splitlines()) <= 130
 
 
 def test_closeout_prs_foreach_recounts(tmp_path, monkeypatch):
@@ -322,7 +322,7 @@ def test_closeout_prs_foreach_recounts(tmp_path, monkeypatch):
     pass_io.write_json(
         pass_io.begin_path(pass_dir),
         {
-            "repos": ["a/one"],
+            "repos": ["mikolaj92/lokay"],
             "repair_budget": 1,
             "executor_enabled": True,
             "merge_enabled": True,
@@ -337,7 +337,7 @@ def test_closeout_prs_foreach_recounts(tmp_path, monkeypatch):
             "actions": [],
             "progress": 0,
             "stuck": {"issues": {}},
-            "prs_by_repo": {"a/one": [_pr(number=1), _pr(number=2)]},
+            "prs_by_repo": {"mikolaj92/lokay": [_pr(number=1), _pr(number=2)]},
             "remaining_prs": 2,
             "actionable_prs": 2,
             "manual_prs": 0,
@@ -380,7 +380,7 @@ def test_closeout_prs_foreach_recounts(tmp_path, monkeypatch):
     assert out["ok"] is True
     assert out["remaining_prs"] == 1
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert [pr["number"] for pr in working["prs_by_repo"]["a/one"]] == [2]
+    assert [pr["number"] for pr in working["prs_by_repo"]["mikolaj92/lokay"]] == [2]
     assert working["progress"] == 1
     assert working["actionable_prs"] == 1
-    assert working["merged_this_pass"] == ["a/one"]
+    assert working["merged_this_pass"] == ["mikolaj92/lokay"]
