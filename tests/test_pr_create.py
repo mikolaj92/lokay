@@ -24,9 +24,16 @@ repos: []
 
 
 class _GhRunner:
-    def __init__(self, issue_state: str, *, pr_url: str = "") -> None:
+    def __init__(
+        self,
+        issue_state: str,
+        *,
+        pr_url: str = "",
+        existing_prs: list[dict] | None = None,
+    ) -> None:
         self.issue_state = issue_state
         self.pr_url = pr_url
+        self.existing_prs = existing_prs or []
         self.calls: list[tuple[str, ...]] = []
 
     def run(self, spec: CommandSpec, *, live: bool) -> CommandResult:
@@ -40,9 +47,12 @@ class _GhRunner:
 
     def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:
         self.calls.append(tuple(spec.argv))
-        return CommandResult(
-            spec=spec, executed=live, returncode=0, stdout=self.pr_url
+        stdout = (
+            json.dumps([self.existing_prs])
+            if spec.argv[1:2] == ("api",)
+            else self.pr_url
         )
+        return CommandResult(spec=spec, executed=live, returncode=0, stdout=stdout)
 
 
 def _envelope(capsys) -> dict:
@@ -85,6 +95,38 @@ def test_closed_issue_skips_create_pr(tmp_path, monkeypatch, capsys):
     assert env["issue_state"] == "CLOSED"
     assert any(call[1:3] == ("issue", "view") for call in runner.calls)
     assert not any(call[1:3] == ("pr", "create") for call in runner.calls)
+
+
+def test_existing_pr_fixing_issue_skips_create(tmp_path, monkeypatch, capsys):
+    for existing in (
+        {
+            "number": 334,
+            "state": "closed",
+            "merged_at": "2025-01-01T12:00:00Z",
+            "body": "Done\n\nFixes #239",
+            "head": {"ref": "ai/fix/239"},
+        },
+        {
+            "number": 335,
+            "state": "open",
+            "merged_at": None,
+            "body": "Fixes #239",
+            "head": {"ref": "ai/fix/239"},
+        },
+    ):
+        runner = _GhRunner("OPEN", existing_prs=[existing])
+        monkeypatch.setattr(pr_create, "runner", lambda: runner)
+        monkeypatch.setattr(pr_create, "mutations_allowed", lambda **kwargs: True)
+
+        code = pr_create.main(_args(_cfg(tmp_path)))
+
+        assert code == 0
+        env = _envelope(capsys)
+        assert env["ok"] is True
+        assert env["existing"] is True
+        assert env["pr"] == existing["number"]
+        assert not any(call[1:3] == ("issue", "view") for call in runner.calls)
+        assert not any(call[1:3] == ("pr", "create") for call in runner.calls)
 
 
 def test_open_issue_creates_pr(tmp_path, monkeypatch, capsys):

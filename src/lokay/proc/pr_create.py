@@ -7,7 +7,7 @@ from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.gh_issues import get_issue
-from lokay.gh_prs import create_pr
+from lokay.gh_prs import create_pr, find_pr_fixing_issue
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
@@ -31,6 +31,20 @@ def main(argv: list[str] | None = None) -> int:
         body = f"{body}\nFixes #{args.issue}" if body else f"Fixes #{args.issue}"
     try:
         if args.issue is not None:
+            existing = find_pr_fixing_issue(
+                runner(), args.repo, args.issue, live=live
+            )
+            if existing is not None:
+                return emit_exit(
+                    ok(
+                        planned=False,
+                        existing=True,
+                        pr=existing.get("number"),
+                        pull=existing,
+                        repo=args.repo,
+                        head=existing.get("head", {}).get("ref", args.head),
+                    )
+                )
             issue = get_issue(
                 runner(), cfg, args.repo, args.issue, live=live
             )
