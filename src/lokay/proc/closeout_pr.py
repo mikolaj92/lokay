@@ -9,7 +9,7 @@ from lokay.compose.pr_repair import compose_pr_repair
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit
 from lokay.passkit.support import is_manual_pr, run_proc
-from lokay.proc import pr_checks as p_checks
+from lokay.proc import pr_checks as p_checks, unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
@@ -75,6 +75,8 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
     apply_deltas(c, {"mergeable_green": -1})
     issue_n = issue_number_from_branch(head, branch_prefix=branch_prefix)
     if issue_n is not None:
+        parked = run_proc(p_park.main, ["--repo", repo, "--issue", str(issue_n)])
+        actions.append({"step": "park_closed_issue", "repo": repo, "issue": issue_n, "pr": n, **parked})
         clear_issue(stuck, repo, issue_n)
         save_stuck(stuck_path, stuck)
     return done("merge", reason, still_open=False)

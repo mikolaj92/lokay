@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=264 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=267 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #264 — reap i2pr/pi gdy issue CLOSED
+Issue: #267 — closeout: zdejmij work:ready/ai:ready gdy issue CLOSED
 
 ## Goal
 
-Po merge zostaje zywy i2pr/pi. #262 sprawia, ze mutex ich nie liczy, ale proces zyje dalej: pali lease, pi_budget, trzyma worktree.
+Po merge (Fixes #N) issue jest CLOSED, ale zostaja work:ready i ai:ready.
 
 ## Files likely touched
 
-- `src/lokay/proc/reap_over_budget.py`
+- `src/lokay/proc/closeout_pr.py`
 
 ## Test plan
 
-- Live pid + issue CLOSED -> process na liscie reaped.
-- Live pid + issue OPEN -> kept.
+- Issue CLOSED z etykietami ready -> park/remove-label wywolane.
+- Issue OPEN -> etykiet nie ruszac.
 
 ## Non-goals
 
