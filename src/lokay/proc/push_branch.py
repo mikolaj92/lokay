@@ -10,13 +10,28 @@ from lokay.git_push import is_configured_issue_branch, push_branch
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-push")
     add_config(p)
     p.add_argument("--live", action="store_true")
+    p.add_argument("--repo", required=True)
     p.add_argument("--worktree", required=True)
     p.add_argument("--branch", required=True)
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                branch=args.branch,
+                worktree=args.worktree,
+            )
+        )
     cfg = load_cfg(args) if args.live else None
     run = runner()
     try:
@@ -35,7 +50,14 @@ def main(argv: list[str] | None = None) -> int:
         push_branch(run, Path(args.worktree), args.branch, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
-    return emit_exit(ok(planned=not live, branch=args.branch, worktree=args.worktree))
+    return emit_exit(
+        ok(
+            planned=not live,
+            repo=args.repo,
+            branch=args.branch,
+            worktree=args.worktree,
+        )
+    )
 
 
 if __name__ == "__main__":
