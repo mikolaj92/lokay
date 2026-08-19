@@ -145,13 +145,13 @@ def test_pr_merge_mergeable_reports_merged(tmp_path, monkeypatch, capsys):
         ),
     )
     code = pr_merge.main(
-        ["--config", str(cfg), "--live", "--repo", "mikolaj92/Fala", "--pr", "88"]
+        ["--config", str(cfg), "--live", "--repo", "mikolaj92/lokay", "--pr", "88"]
     )
     assert code == 0
     env = _envelope(capsys)
     assert env["ok"] is True
     assert env["merged"] is True
-    assert env["repo"] == "mikolaj92/Fala"
+    assert env["repo"] == "mikolaj92/lokay"
     assert env["pr"] == 88
     joined = " ".join(runner.calls[0])
     assert "pr merge" in joined and "88" in joined
@@ -175,7 +175,7 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
             str(cfg),
             "--live",
             "--repo",
-            "mikolaj92/Fala",
+            "mikolaj92/lokay",
             "--pr",
             "88",
             "--issue",
@@ -189,7 +189,32 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
     assert env["merged"] is True
     assert env["issue"] == 164
     assert env["parked"]["removed"] is True
-    assert parked == [["--repo", "mikolaj92/Fala", "--issue", "164"]]
+    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "164"]]
+
+
+def test_pr_merge_refuses_product_repo_without_calling_gh(
+    tmp_path, monkeypatch, capsys
+):
+    cfg = _cfg(tmp_path, mode="live")
+    monkeypatch.setattr(pr_merge, "mutations_allowed", lambda **k: True)
+    monkeypatch.setattr(
+        pr_merge,
+        "runner",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("gh must not run for a product repo")
+        ),
+    )
+
+    code = pr_merge.main(
+        ["--config", str(cfg), "--live", "--repo", "mikolaj92/temida", "--pr", "88"]
+    )
+
+    assert code == 1
+    env = _envelope(capsys)
+    assert env["ok"] is False
+    assert "refusing" in env["error"]
+    assert env["repo"] == "mikolaj92/temida"
+    assert env["pr"] == 88
 
 
 def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):
@@ -204,7 +229,7 @@ def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):
             "--config",
             str(cfg),
             "--repo",
-            "mikolaj92/Fala",
+            "mikolaj92/lokay",
             "--pr",
             "88",
             "--issue",
