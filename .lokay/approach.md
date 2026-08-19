@@ -1,24 +1,27 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=277 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=279 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #277 — organ: pass --issue to pr_merge
+Issue: #279 — assert_real_diff: src poza localize = off-goal, fail-closed
 
 ## Goal
 
-#275 / PR 276 dodało `--issue` w `pr_merge.py` i park po merge. Organ tego nie podaje — park nigdy nie odpala.
+`assert_real_diff` uznaje każdy src za „real”. Pi/repair może wgrać obcy plik (nie z localize) i mill merdżuje to jako Fixes #N.
 
 ## Files likely touched
 
-- `pr_merge.py`
-- `src/lokay/organ/lanes.py`
-- `pr_merge.main`
+- `tick.py`
+- `pr_finalize.py`
+- `lokay/localize.json`
+- `src/a.py`
+- `src/b.py`
 
 ## Test plan
 
-- Znany issue → argv ma `--issue`.
-- Brak issue → jak dziś, bez flagi.
+- localize=[src/a.py], diff src/a.py → real.
+- localize=[src/a.py], diff src/b.py → off_goal.
+- localize puste + tylko approach.md → plan_only.
 
 ## Non-goals
 

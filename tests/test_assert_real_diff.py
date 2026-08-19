@@ -53,7 +53,7 @@ def test_worktree_only_approach_and_localize_is_not_progress(tmp_path: Path, cap
     lokay = repo / ".lokay"
     lokay.mkdir()
     (lokay / "approach.md").write_text("# Approach plan\n", encoding="utf-8")
-    (lokay / "localize.json").write_text('{"paths":["src/app.py"]}\n', encoding="utf-8")
+    (lokay / "localize.json").write_text('{"paths":[]}\n', encoding="utf-8")
     _git(repo, "add", "-f", "--", ".lokay/approach.md", ".lokay/localize.json")
     _git(repo, "commit", "-m", "plan only")
 
@@ -83,6 +83,26 @@ def test_worktree_with_unix_atom_is_real_progress(tmp_path: Path, capsys):
     assert payload["ok"] is True
     assert payload["real"] is True
     assert "src/app.py" in payload["paths"]
+
+
+def test_worktree_with_source_outside_localize_is_off_goal(tmp_path: Path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "checkout", "-b", "ai/fix/1-x")
+    lokay = repo / ".lokay"
+    lokay.mkdir()
+    (lokay / "localize.json").write_text('{"paths":["src/app.py"]}\n', encoding="utf-8")
+    (repo / "src" / "other.py").write_text("print('off goal')\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "add", "-f", "--", ".lokay/localize.json")
+    _git(repo, "commit", "-m", "off-goal source")
+
+    code = assert_real_diff.main(["--worktree", str(repo), "--base", "main"])
+    payload = _payload(capsys)
+    assert code == 1
+    assert payload["ok"] is False
+    assert payload["reason"] == "off_goal"
+    assert payload["real"] is False
+    assert payload["off_goal_paths"] == ["src/other.py"]
 
 
 def test_empty_diff_is_not_progress(tmp_path: Path, capsys):
