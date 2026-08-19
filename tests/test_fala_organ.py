@@ -412,6 +412,33 @@ def test_pr_merge_skipped_suite_still_merges(tmp_path, monkeypatch):
     assert called, "pr_merge atom must execute after skipped local suite"
 
 
+def test_pr_merge_passes_issue_only_when_known(tmp_path, monkeypatch):
+    cfg = _config(tmp_path, required=False, executor=False)
+    up = {
+        "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
+        "pr_review": {"ok": True, "merge_ok": True},
+        "test_local": _ok_test_local(),
+    }
+
+    for issue in (23, None):
+        called = []
+        monkeypatch.setattr(
+            fala_organ,
+            "_run_atom_main",
+            lambda main, argv: called.append(argv) or {"ok": True, "merged": True},
+        )
+        inputs = {"config_path": cfg, "repo": "a/b", "pr": 7, "live": False}
+        if issue is not None:
+            inputs["issue"] = issue
+
+        merged = fala_organ._handle("pr_merge", inputs, up)
+
+        assert merged["merged"] is True
+        assert ("--issue" in called[0]) is (issue is not None)
+        if issue is not None:
+            assert called[0][called[0].index("--issue") + 1] == str(issue)
+
+
 def test_pr_merge_red_suite_does_not_merge(tmp_path, monkeypatch):
     cfg = _config(tmp_path, required=False, executor=False)
 
