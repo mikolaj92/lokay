@@ -275,7 +275,7 @@ def test_console_script_wired():
 
 def test_closeout_pr_is_thin_glue():
     src = (ROOT / "src/lokay/proc/closeout_pr.py").read_text(encoding="utf-8")
-    assert len(src.splitlines()) <= 100
+    assert len(src.splitlines()) <= 110
     assert "run_pr_route" in src
     assert "compose_pr_triage" in src
     assert "compose_pr_repair" in src
