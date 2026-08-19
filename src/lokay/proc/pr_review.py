@@ -20,6 +20,9 @@ from lokay.pr_review_io import load_pr_evidence, publish_decision, publish_fail_
 from lokay.proc._common import add_config_live, agent_execute_allowed, load_cfg, mutations_allowed, runner
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-pr-review")
     add_config_live(p)
@@ -28,7 +31,20 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--branch", default="")
     p.add_argument("--checks-text", default="", help="optional CI text; otherwise re-fetched lightly via pr view")
     args = p.parse_args(argv)
-    cfg, live, r = load_cfg(args), bool(args.live), runner()
+    live = bool(args.live)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                offline=not live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                pr=args.pr,
+                merge_ok=False,
+                applied=False,
+            )
+        )
+    cfg, r = load_cfg(args), runner()
     execute = agent_execute_allowed(cfg, live_flag=args.live)
     if live and cfg.mode != "live":
         return emit_exit(err("refusing live pr_review while config mode is not live"))

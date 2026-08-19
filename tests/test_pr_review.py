@@ -1,7 +1,10 @@
-"""Structured PR review parse + policy."""
+"""Structured PR review parse + policy and repository boundary."""
+
+import json
 
 import pytest
 
+from lokay.proc import pr_review as pr_review_proc
 from lokay.pr_review import (
     PrReviewError,
     build_review_comment_body,
@@ -17,6 +20,68 @@ from lokay.pr_review import (
     should_repair,
     review_prompt,
 )
+
+
+@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+def test_product_repo_skips_without_gh_agent_or_config(
+    repo: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fail_if_called(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("product repositories must not call GitHub, agent, or config")
+
+    monkeypatch.setattr(pr_review_proc, "load_cfg", fail_if_called)
+    monkeypatch.setattr(pr_review_proc, "runner", fail_if_called)
+    monkeypatch.setattr(pr_review_proc, "load_pr_evidence", fail_if_called)
+    monkeypatch.setattr(pr_review_proc, "run_agent", fail_if_called)
+
+    assert pr_review_proc.main(["--repo", repo, "--pr", "490", "--live"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": True,
+        "offline": False,
+        "skipped": True,
+        "reason": "repo_not_delivered_by_mini_mill",
+        "repo": repo,
+        "pr": 490,
+        "merge_ok": False,
+        "applied": False,
+    }
+
+
+def test_lokay_repo_still_loads_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = type("Cfg", (), {"mode": "live", "executor_enabled": True})()
+    sentinel_runner = object()
+    calls: list[tuple[object, str, int, bool]] = []
+
+    monkeypatch.setattr(pr_review_proc, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(pr_review_proc, "runner", lambda: sentinel_runner)
+    monkeypatch.setattr(pr_review_proc, "agent_execute_allowed", lambda *_args, **_kwargs: True)
+
+    def load_evidence(
+        evidence_runner: object, repo: str, pr: int, *, live: bool, **_kwargs: object
+    ) -> dict[str, object]:
+        calls.append((evidence_runner, repo, pr, live))
+        return {
+            "title": "title", "body": "", "head": "branch", "head_sha": "sha",
+            "comments": [], "diff": "diff", "checks_text": "checks",
+        }
+
+    monkeypatch.setattr(pr_review_proc, "load_pr_evidence", load_evidence)
+    monkeypatch.setattr(
+        pr_review_proc,
+        "run_agent",
+        lambda *_args, **_kwargs: {"status": "planned"},
+    )
+    monkeypatch.setattr(pr_review_proc, "review_worktree", lambda *_args: tmp_path)
+
+    assert pr_review_proc.main(["--repo", "mikolaj92/lokay", "--pr", "490"]) == 0
+    assert calls == [(sentinel_runner, "mikolaj92/lokay", 490, False)]
+    assert json.loads(capsys.readouterr().out)["planned"] is True
 
 
 def test_parse_plain_json():
