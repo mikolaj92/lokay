@@ -32,17 +32,21 @@ def test_dry_run_prints_command_and_does_not_call_gh(monkeypatch, capsys):
     assert REPO in out
 
 
-def test_other_repo_is_refused_without_calling_gh(monkeypatch, capsys):
+def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
     def boom(*_a, **_k):
         raise AssertionError("gh must not run for a product repo")
 
     monkeypatch.setattr(merge_now.subprocess, "run", boom)
-    code = merge_now.main(["--repo", "mikolaj92/temida", "--pr", "7"])
-    assert code == 1
-    payload = _payload(capsys)
-    assert payload["ok"] is False
-    assert "refusing" in payload["error"]
-    assert payload["repo"] == "mikolaj92/temida"
+    for repo in ("mikolaj92/temida", "mikolaj92/takt"):
+        code = merge_now.main(["--repo", repo, "--pr", "7"])
+        assert code == 0
+        payload = _payload(capsys)
+        assert payload["ok"] is True
+        assert payload["skipped"] is True
+        assert payload["reason"] == "repo_not_delivered_by_mini_mill"
+        assert payload["repo"] == repo
+        assert payload["pr"] == 7
+        assert payload["command"] == merge_now.merge_argv(repo, 7)
 
 
 def test_merge_runs_exact_gh_argv(monkeypatch, capsys):
