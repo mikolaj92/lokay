@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 from lokay.runner import Runner, git_spec
@@ -77,8 +78,31 @@ def branch_ahead_of_upstream(runner: Runner, worktree: Path, *, live: bool) -> i
         return 0
 
 
-def commit_all(runner: Runner, worktree: Path, message: str, *, live: bool) -> bool:
-    if not live:
+def _is_protected_main_checkout(
+    runner: Runner,
+    worktree: Path,
+    protected_checkouts: Iterable[Path],
+) -> bool:
+    """Whether this is a configured host checkout currently on ``main``."""
+    resolved = worktree.resolve()
+    if not any(resolved == Path(checkout).resolve() for checkout in protected_checkouts):
+        return False
+    branch = runner.run(
+        git_spec(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd=resolved),
+        live=True,
+    )
+    return branch.returncode == 0 and (branch.stdout or "").strip() == "main"
+
+
+def commit_all(
+    runner: Runner,
+    worktree: Path,
+    message: str,
+    *,
+    live: bool,
+    protected_checkouts: Iterable[Path] = (),
+) -> bool:
+    if not live or _is_protected_main_checkout(runner, worktree, protected_checkouts):
         return False
 
     localized = _localized_paths(worktree)

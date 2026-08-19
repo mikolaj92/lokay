@@ -17,12 +17,38 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout
 
 
-def test_commit_all_commits_only_localized_changes(tmp_path: Path) -> None:
-    repo = tmp_path / "repo"
+def _init_repo(repo: Path) -> None:
     repo.mkdir()
     _git(repo, "init", "-b", "main")
     _git(repo, "config", "user.name", "test")
     _git(repo, "config", "user.email", "test@example.com")
+
+
+def test_commit_all_refuses_configured_checkout_on_main(tmp_path: Path) -> None:
+    repo = tmp_path / "mill-checkout"
+    _init_repo(repo)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("base\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "base")
+    before = _git(repo, "rev-parse", "HEAD").strip()
+    tracked.write_text("dirty\n", encoding="utf-8")
+
+    assert commit_all(
+        Runner(),
+        repo,
+        "must not land on main",
+        live=True,
+        protected_checkouts=[repo],
+    ) is False
+
+    assert _git(repo, "rev-parse", "HEAD").strip() == before
+    assert _git(repo, "status", "--short").splitlines() == [" M tracked.txt"]
+
+
+def test_commit_all_commits_only_localized_changes(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
 
     source = repo / "src" / "app.py"
     foreign = repo / "src" / "lokay" / "proc" / "factory_begin.py"
