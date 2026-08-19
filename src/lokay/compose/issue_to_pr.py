@@ -53,7 +53,7 @@ def _command_json(args: list[str]) -> Any | None:
 
 
 def _head_has_on_goal_src(repo: str, issue_number: int) -> bool:
-    """Recognize a resumed issue branch without mistaking main for delivered."""
+    """Recognize source committed anywhere on a resumed issue branch."""
     try:
         current = subprocess.run(
             ["git", "branch", "--show-current"], check=True, capture_output=True,
@@ -64,7 +64,7 @@ def _head_has_on_goal_src(repo: str, issue_number: int) -> bool:
             text=True, timeout=10,
         ).stdout.strip().removesuffix(".git")
         files = subprocess.run(
-            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            ["git", "diff", "--name-only", "origin/main...HEAD"],
             check=True, capture_output=True, text=True, timeout=10,
         ).stdout.splitlines()
     except (OSError, subprocess.SubprocessError):

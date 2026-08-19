@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -82,6 +83,34 @@ def test_confirmed_closed_issue_remains_a_delivery_stop(monkeypatch):
     monkeypatch.setattr(issue_to_pr, "_command_json", lambda _args: {"state": "CLOSED"})
 
     assert issue_to_pr._delivery_stop_reason("owner/repo", 331) == "issue_closed"
+
+
+def test_on_goal_src_in_earlier_branch_commit_is_a_delivery_stop(tmp_path, monkeypatch):
+    def git(*args):
+        subprocess.run(
+            ["git", *args], cwd=tmp_path, check=True, capture_output=True, text=True
+        )
+
+    git("init", "-b", "main")
+    git("config", "user.name", "Test")
+    git("config", "user.email", "test@example.com")
+    git("remote", "add", "origin", "https://github.com/owner/repo.git")
+    (tmp_path / "README.md").write_text("base\n", encoding="utf-8")
+    git("add", "README.md")
+    git("commit", "-m", "base")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("switch", "-c", "ai/fix/363-issue")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "foo.py").write_text("value = 1\n", encoding="utf-8")
+    git("add", "src/foo.py")
+    git("commit", "-m", "implement fix")
+    (tmp_path / ".lokay").mkdir()
+    (tmp_path / ".lokay" / "approach.md").write_text("plan\n", encoding="utf-8")
+    git("add", ".lokay/approach.md")
+    git("commit", "-m", "record approach")
+    monkeypatch.chdir(tmp_path)
+
+    assert issue_to_pr._head_has_on_goal_src("owner/repo", 363) is True
 
 
 @pytest.mark.parametrize(
