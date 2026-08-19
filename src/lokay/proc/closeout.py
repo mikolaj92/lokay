@@ -14,6 +14,7 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 from lokay.runner import gh_spec
 
 WORK_READY_LABEL = "work:ready"
+MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def run_closeout(
@@ -43,7 +44,7 @@ def run_closeout(
 def closed_ready_numbers(
     issue_runner: Any, repo: str, label: str, *, live: bool
 ) -> list[int]:
-    if not live or not label:
+    if repo != MINI_MILL_REPO or not live or not label:
         return []
     result = issue_runner.run_checked(
         gh_spec(
@@ -83,6 +84,8 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     seen: set[tuple[str, int]] = set()
     for repo in list(cfg.repos or []):
         name = str(repo.name)
+        if name != MINI_MILL_REPO:
+            continue
         for label in labels:
             for number in closed_ready_numbers(issue_runner, name, label, live=allowed):
                 key = (name, number)
