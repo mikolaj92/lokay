@@ -8,6 +8,9 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import describe_package, run_path
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-run-path")
     p.add_argument("--config", help="lokay config.yaml")
@@ -27,6 +30,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.repo:
         return emit_exit(err("--repo is required"))
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+            )
+        )
     if args.path in {"issue_to_pr", "issue_triage"} and args.issue is None:
         return emit_exit(err(f"--issue is required for {args.path}"))
     if args.path in {"pr_repair", "pr_triage"}:
