@@ -13,6 +13,9 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 from lokay.stuck import issue_number_from_branch
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-pr-create")
     add_config_live(p)
@@ -24,6 +27,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--head", required=True)
     p.add_argument("--base", default="main")
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                head=args.head,
+                pr=None,
+            )
+        )
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     # The PR head identifies the issue worktree.  Prefer it over a stale issue
