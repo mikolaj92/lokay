@@ -1,18 +1,29 @@
 {
   "paths": [
-    "test_global_pr_first.py",
-    "tests/test_suite_compiles.py",
-    "tests/test_global_pr_first.py"
+    "src/lokay/gh_issues.py",
+    "list_inbox.py",
+    "lokay.stuck",
+    "lokay/gh_issues.py",
+    "tests/test_gh_issues.py",
+    "tests/test_list_inbox_issues.py",
+    "tests/test_survey_list.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "test_global_pr_first.py",
-    "tests/test_suite_compiles.py"
+    "list_inbox.py",
+    "src/lokay/gh_issues.py",
+    "lokay.stuck",
+    "tests/test_gh_issues.py",
+    "tests/test_list_inbox_issues.py",
+    "lokay/gh_issues.py"
   ],
   "matched_tokens": [
-    "test_global_pr_first",
-    "test_local",
-    "test_suite_compiles",
+    "list_inbox_issues",
+    "stuck",
+    "list_inbox",
+    "gh_issues",
+    "test_gh_issues",
+    "test_list_inbox_issues",
     "review",
     "gate",
     "unbounded",
@@ -21,10 +32,10 @@
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 288.",
+    "Repo tree entries considered: 289.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__245-test-compileall-tests-src-ap-syntaxerror-f6ce1502",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__247-list_inbox_issues-skip-stuck-blocked-bf5db246",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
