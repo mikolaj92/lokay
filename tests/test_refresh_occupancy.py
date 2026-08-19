@@ -23,7 +23,7 @@ def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | No
         "executor_enabled": True,
         "merge_enabled": True,
         "mode": "live",
-        "repos": ["a/one"],
+        "repos": ["mikolaj92/lokay"],
         "planned": [],
         "stuck_path": "",
     }
@@ -59,9 +59,9 @@ def test_select_skips_repo_merged_this_pass(tmp_path):
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"a/one": [{"number": 142, "title": "next"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 142, "title": "next"}]},
             "remaining_ready": 1,
-            "merged_this_pass": ["a/one"],
+            "merged_this_pass": ["mikolaj92/lokay"],
         },
     )
     result = run_select_implement(pass_dir=pass_dir)
@@ -77,10 +77,10 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"a/one": [{"number": 59, "title": "in flight"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 59, "title": "in flight"}]},
             "remaining_ready": 1,
-            "live_issue_to_pr_repos": ["a/one"],
-            "occupied_repos": ["a/one"],
+            "live_issue_to_pr_repos": ["mikolaj92/lokay"],
+            "occupied_repos": ["mikolaj92/lokay"],
         },
     )
     result = run_select_implement(pass_dir=pass_dir)
@@ -92,11 +92,11 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
 def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
     pass_dir = _pass(
         tmp_path,
-        begin={"repos": ["a/one", "a/two"]},
+        begin={"repos": ["mikolaj92/lokay", "a/two"]},
         working={
-            "merged_this_pass": ["a/one"],
+            "merged_this_pass": ["mikolaj92/lokay"],
             "ready_by_repo": {
-                "a/one": [{"number": 2, "title": "next"}],
+                "mikolaj92/lokay": [{"number": 2, "title": "next"}],
                 "a/two": [{"number": 3, "title": "other"}],
             },
             "remaining_ready": 2,
@@ -113,6 +113,9 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
 
     monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
     monkeypatch.setattr(
+        refresh_occupancy, "clear_dead_issue_to_pr_receipts", lambda _merged: []
+    )
+    monkeypatch.setattr(
         refresh_occupancy,
         "live_issue_to_pr_receipts",
         lambda: [{"repo": "a/two", "issue": 3, "pid": 9}],
@@ -126,16 +129,16 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
         pass_dir=pass_dir, config_path=None, live=True
     )
     assert out["ok"] is True
-    assert out["merged_this_pass"] == ["a/one"]
+    assert out["merged_this_pass"] == ["mikolaj92/lokay"]
     assert out["live_issue_to_pr_repos"] == ["a/two"]
-    assert out["occupied_repos"] == ["a/one", "a/two"]
+    assert out["occupied_repos"] == ["mikolaj92/lokay", "a/two"]
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["occupied_repos"] == ["a/one", "a/two"]
-    assert working["prs_by_repo"] == {"a/one": [], "a/two": []}
+    assert working["occupied_repos"] == ["mikolaj92/lokay", "a/two"]
+    assert working["prs_by_repo"] == {"mikolaj92/lokay": [], "a/two": []}
     assert called == []
     assert [a.get("reason") for a in working["actions"] if a.get("step") == "refresh_prs_skipped"] == [
         "occupied",
-        "occupied",
+        "repo_not_delivered_by_mini_mill",
     ]
 
     selected = run_select_implement(pass_dir=pass_dir)
@@ -146,7 +149,7 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     ("pid_alive", "occupied", "started"),
-    [(False, [], 0), (True, ["a/one"], 1)],
+    [(False, [], 0), (True, ["mikolaj92/lokay"], 1)],
 )
 def test_refresh_occupancy_uses_worker_liveness(
     tmp_path, monkeypatch, pid_alive, occupied, started
@@ -156,7 +159,7 @@ def test_refresh_occupancy_uses_worker_liveness(
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "a__one-2.json").write_text(
-        json.dumps({"repo": "a/one", "issue": 2, "pid": 987654}),
+        json.dumps({"repo": "mikolaj92/lokay", "issue": 2, "pid": 987654}),
         encoding="utf-8",
     )
     monkeypatch.setattr(detach_issue_to_pr, "coding_live_for_issue", lambda _issue: False)
@@ -180,7 +183,7 @@ def test_refresh_occupancy_uses_worker_liveness(
         tmp_path,
         working={
             "issue_to_pr_started": 1,
-            "ready_by_repo": {"a/one": [{"number": 3, "title": "next"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 3, "title": "next"}]},
             "remaining_ready": 1,
         },
     )
@@ -199,11 +202,11 @@ def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch)
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"a/one": [{"number": 3, "title": "next"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 3, "title": "next"}]},
             "remaining_ready": 1,
         },
     )
-    receipt = {"repo": "a/one", "issue": 2, "pid": 9}
+    receipt = {"repo": "mikolaj92/lokay", "issue": 2, "pid": 9}
     cleared: list[dict[str, Any]] = []
     killed: list[tuple[int, int]] = []
 
@@ -234,7 +237,7 @@ def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch)
     assert out["occupied_repos"] == []
     assert out["live_issue_to_pr_repos"] == []
     assert out["cleared_issue_to_pr_receipts"] == [
-        {"repo": "a/one", "issue": 2}
+        {"repo": "mikolaj92/lokay", "issue": 2}
     ]
     assert killed == [(9, refresh_occupancy.signal.SIGTERM)]
     assert cleared == [receipt]
@@ -244,7 +247,7 @@ def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 2, "title": "next"}]},
             "remaining_ready": 1,
         },
     )
@@ -259,7 +262,7 @@ def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
     )
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["pr_survey_failed"] == ["a/one"]
+    assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
     selected = run_select_implement(pass_dir=pass_dir)
     assert selected["selected"] == 0
     working = pass_io.read_json(pass_io.working_path(pass_dir))
@@ -273,7 +276,7 @@ def test_closeout_records_merged_this_pass(tmp_path, monkeypatch):
         tmp_path,
         working={
             "prs_by_repo": {
-                "a/one": [{"number": 287, "head_ref": "ai/fix/141-x", "labels": ["ai:generated"]}]
+                "mikolaj92/lokay": [{"number": 287, "head_ref": "ai/fix/141-x", "labels": ["ai:generated"]}]
             },
             "remaining_prs": 1,
             "actionable_prs": 1,
@@ -287,7 +290,7 @@ def test_closeout_records_merged_this_pass(tmp_path, monkeypatch):
             "stuck": {"issues": {}},
         },
         begin={
-            "repos": ["a/one"],
+            "repos": ["mikolaj92/lokay"],
             "repair_budget": 1,
             "stuck_path": str(tmp_path / "stuck.json"),
             "require_checks": False,
@@ -316,8 +319,8 @@ def test_closeout_records_merged_this_pass(tmp_path, monkeypatch):
     out = run_closeout_prs(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["merged_this_pass"] == ["a/one"]
-    assert working["prs_by_repo"]["a/one"] == []
+    assert working["merged_this_pass"] == ["mikolaj92/lokay"]
+    assert working["prs_by_repo"]["mikolaj92/lokay"] == []
 
 
 def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
@@ -326,7 +329,7 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
         tmp_path,
         working={
             "prs_by_repo": {
-                "a/one": [
+                "mikolaj92/lokay": [
                     {
                         "number": 69,
                         "head_ref": "ai/fix/68-x",
@@ -334,7 +337,7 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
                     }
                 ]
             },
-            "ready_by_repo": {"a/one": [{"number": 70, "title": "next"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 70, "title": "next"}]},
             "remaining_ready": 1,
             "remaining_prs": 1,
             "actionable_prs": 0,
@@ -355,23 +358,20 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
     )
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    parked = working["prs_by_repo"]["a/one"][0]
+    parked = working["prs_by_repo"]["mikolaj92/lokay"][0]
     assert "ai:needs-review" in parked["labels"]
     selected = run_select_implement(pass_dir=pass_dir)
     assert selected["selected"] == 1
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
-    assert implement["clean_repos"] == ["a/one"]
+    assert implement["clean_repos"] == ["mikolaj92/lokay"]
 
 
 def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
     """No leftover ready and no leftover PRs — do not spend a gh list."""
     pass_dir = _pass(
         tmp_path,
-        begin={"repos": ["a/idle", "a/ready"]},
-        working={
-            "ready_by_repo": {"a/idle": [], "a/ready": [{"number": 4, "title": "next"}]},
-            "remaining_ready": 1,
-        },
+        begin={"repos": ["mikolaj92/lokay"]},
+        working={"ready_by_repo": {"mikolaj92/lokay": []}},
     )
     called: list[str] = []
 
@@ -385,11 +385,56 @@ def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
         pass_dir=pass_dir, config_path=None, live=True
     )
     assert out["ok"] is True
-    assert called == ["a/ready"]
+    assert called == []
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["prs_by_repo"]["a/idle"] == []
+    assert working["prs_by_repo"]["mikolaj92/lokay"] == []
     skips = [a for a in working["actions"] if a.get("step") == "refresh_prs_skipped"]
-    assert skips == [{"step": "refresh_prs_skipped", "repo": "a/idle", "reason": "no_ready"}]
+    assert skips == [
+        {"step": "refresh_prs_skipped", "repo": "mikolaj92/lokay", "reason": "no_ready"}
+    ]
+
+
+def test_refresh_skips_product_repo_without_listing_prs(tmp_path, monkeypatch):
+    product_repo = "mikolaj92/Temida"
+    pass_dir = _pass(
+        tmp_path,
+        begin={"repos": [product_repo, "mikolaj92/lokay"]},
+        working={
+            "prs_by_repo": {product_repo: [{"number": 8}]},
+            "ready_by_repo": {
+                product_repo: [{"number": 9, "title": "product"}],
+                "mikolaj92/lokay": [{"number": 548, "title": "lokay"}],
+            },
+            "remaining_ready": 2,
+        },
+    )
+    called: list[str] = []
+
+    def fake_run(fn, argv):
+        called.append(argv[argv.index("--repo") + 1])
+        return {"ok": True, "prs": []}
+
+    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
+    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
+
+    out = refresh_occupancy.run_refresh_occupancy(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+
+    assert out["ok"] is True
+    assert out["skipped"] is True
+    assert out["reason"] == "repo_not_delivered_by_mini_mill"
+    assert out["skipped_repos"] == [product_repo]
+    assert called == ["mikolaj92/lokay"]
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    assert working["prs_by_repo"][product_repo] == [{"number": 8}]
+    assert {
+        "step": "refresh_prs_skipped",
+        "repo": product_repo,
+        "ok": True,
+        "skipped": True,
+        "reason": "repo_not_delivered_by_mini_mill",
+    } in working["actions"]
 
 
 def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
@@ -402,8 +447,8 @@ def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
     pass_dir = _pass(
         tmp_path,
         working={
-            "prs_by_repo": {"a/one": [parked]},
-            "ready_by_repo": {"a/one": [{"number": 33, "title": "next"}]},
+            "prs_by_repo": {"mikolaj92/lokay": [parked]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 33, "title": "next"}]},
             "remaining_ready": 1,
             "remaining_prs": 1,
             "actionable_prs": 1,
@@ -420,8 +465,8 @@ def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
     )
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["pr_survey_failed"] == ["a/one"]
-    assert working["prs_by_repo"]["a/one"] == [parked]
+    assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
+    assert working["prs_by_repo"]["mikolaj92/lokay"] == [parked]
     selected = run_select_implement(pass_dir=pass_dir)
     assert selected["selected"] == 0
 
@@ -429,13 +474,13 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
     """An occupied 429 from survey_prs must stay on the board."""
     pass_dir = _pass(
         tmp_path,
-        begin={"repos": ["a/one"]},
+        begin={"repos": ["mikolaj92/lokay"]},
         working={
-            "merged_this_pass": ["a/one"],
-            "pr_survey_failed": ["a/one"],
+            "merged_this_pass": ["mikolaj92/lokay"],
+            "pr_survey_failed": ["mikolaj92/lokay"],
             "inbox_survey_failed": [],
             "ready_survey_failed": [],
-            "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
+            "ready_by_repo": {"mikolaj92/lokay": [{"number": 2, "title": "next"}]},
             "remaining_ready": 1,
             "survey_errors": 1,
         },
@@ -455,7 +500,7 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
     assert called == []
     assert out["survey_errors"] == 1
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["pr_survey_failed"] == ["a/one"]
+    assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
     assert working["survey_errors"] == 1
 
 
@@ -465,10 +510,10 @@ def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeyp
     """Stale/unreadable receipts are idle — they do not occupy every repo."""
     pass_dir = _pass(
         tmp_path,
-        begin={"repos": ["a/one", "a/two"]},
+        begin={"repos": ["mikolaj92/lokay", "a/two"]},
         working={
             "ready_by_repo": {
-                "a/one": [{"number": 1, "title": "one"}],
+                "mikolaj92/lokay": [{"number": 1, "title": "one"}],
                 "a/two": [{"number": 2, "title": "two"}],
             },
             "remaining_ready": 2,
