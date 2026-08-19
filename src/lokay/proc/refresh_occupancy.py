@@ -17,6 +17,7 @@ from lokay.passkit.working import load_begin_working, recount_prs, save_begin_wo
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import (
+    clear_dead_issue_to_pr_receipts,
     has_unreadable_issue_to_pr_receipts,
     live_issue_to_pr_receipts,
 )
@@ -71,6 +72,15 @@ def run_refresh_occupancy(
     previous = dict(working.get("prs_by_repo") or {})
     ready_by_repo = dict(working.get("ready_by_repo") or {})
     merged = _merged_this_pass(working)
+    cleared_receipts = clear_dead_issue_to_pr_receipts(merged)
+    for receipt in cleared_receipts:
+        actions.append(
+            {
+                "step": "clear_issue_to_pr_receipt",
+                "repo": receipt.get("repo"),
+                "issue": receipt.get("issue"),
+            }
+        )
     receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
     live_repos = _live_repos()
     # Dead/stale/unreadable receipts are idle. Only a live coder or a merge
@@ -134,6 +144,13 @@ def run_refresh_occupancy(
             "merged_this_pass": merged,
             "live_issue_to_pr_repos": live_repos,
             "occupied_repos": occupied,
+            "cleared_issue_to_pr_receipts": [
+                {
+                    "repo": receipt.get("repo"),
+                    "issue": receipt.get("issue"),
+                }
+                for receipt in cleared_receipts
+            ],
         }
     )
     recount_prs(working)
@@ -143,6 +160,7 @@ def run_refresh_occupancy(
         occupied_repos=occupied,
         merged_this_pass=merged,
         live_issue_to_pr_repos=live_repos,
+        cleared_issue_to_pr_receipts=working["cleared_issue_to_pr_receipts"],
         remaining_prs=int(working.get("remaining_prs") or 0),
         actionable_prs=int(working.get("actionable_prs") or 0),
         survey_errors=int(working.get("survey_errors") or 0),
