@@ -184,10 +184,10 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         refused = _require_test_local(up)
         if refused is not None:
             return refused
-        return _run_atom_main(
-            pr_merge.main,
-            [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],
-        )
+        argv = [*cfg, *live, "--repo", repo, "--pr", str(pr_number)]
+        if issue_number is not None:
+            argv.extend(["--issue", str(issue_number)])
+        return _run_atom_main(pr_merge.main, argv)
 
     if atom == "close_issue":
         assert repo

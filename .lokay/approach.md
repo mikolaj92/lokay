@@ -1,23 +1,24 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=275 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=277 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #275 — pr_merge: zdejmij work:ready po udanym merge
+Issue: #277 — organ: pass --issue to pr_merge
 
 ## Goal
 
-`closeout_pr` (#267) parkuje etykiety tylko gdy sam merdżuje w tym przebiegu. Merge przez `pr_merge` / `gh pr merge` (Fixes #N) zamyka issue, ale `work:ready`/`ai:ready` zostają — closeout kolejnego przebiegu nie widzi już otwartego PR.
+#275 / PR 276 dodało `--issue` w `pr_merge.py` i park po merge. Organ tego nie podaje — park nigdy nie odpala.
 
 ## Files likely touched
 
 - `pr_merge.py`
-- `src/lokay/proc/pr_merge.py`
+- `src/lokay/organ/lanes.py`
+- `pr_merge.main`
 
 ## Test plan
 
-- Merge + znany issue → park/remove-label.
-- Merge bez issue / dry-run → etykiet nie ruszać.
+- Znany issue → argv ma `--issue`.
+- Brak issue → jak dziś, bez flagi.
 
 ## Non-goals
 
