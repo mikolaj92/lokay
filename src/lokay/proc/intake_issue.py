@@ -24,6 +24,9 @@ from lokay.proc._common import (
 )
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-intake-issue")
     add_config_live(p)
@@ -33,6 +36,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--candidate-ready", action="store_true", help="upstream triage decided ready")
     p.add_argument("--candidate-split", action="store_true", help="upstream triage decided split")
     args = p.parse_args(argv)
+    if args.repo != MINI_MILL_REPO:
+        return emit_exit(
+            ok(
+                planned=not args.live,
+                skipped=True,
+                reason="repo_not_delivered_by_mini_mill",
+                repo=args.repo,
+                issue=args.issue,
+                applied=False,
+            )
+        )
     cfg, r = load_cfg(args), runner()
     live_mut, fetch = mutations_allowed(live_flag=args.live, cfg=cfg), read_live(args)
     try:
