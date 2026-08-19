@@ -17,7 +17,8 @@ from lokay.runner import Runner, git_spec
 
 _FACTORY_BEGIN = "src/lokay/proc/factory_begin.py"
 _IMPLEMENT = "src/lokay/proc/implement.py"
-_ALWAYS_OFF_GOAL = (_FACTORY_BEGIN, _IMPLEMENT)
+_AGENT = "src/lokay/organ/agent.py"
+_ALWAYS_OFF_GOAL = (_FACTORY_BEGIN, _IMPLEMENT, _AGENT)
 
 
 def _issue_explicit_file_paths(issue_json: str) -> set[str]:
@@ -84,6 +85,8 @@ def main(argv: list[str] | None = None) -> int:
             reason = "factory_begin_restored"
         elif restore_paths == [_IMPLEMENT]:
             reason = "implement_restored"
+        elif restore_paths == [_AGENT]:
+            reason = "agent_restored"
         elif restore_paths:
             reason = "off_goal_paths_restored"
         return emit_exit(
