@@ -121,6 +121,7 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
 
     payload = {"clean_repos": clean_repos, "issue_budget": issue_budget}
     pass_io.write_json(pass_io.implement_path(pass_dir), payload)
+    working["ready_by_repo"] = ready_by_repo
     working["actions"] = actions
     pass_io.write_json(pass_io.working_path(pass_dir), working)
     return ok(pass_dir=pass_dir, selected=len(clean_repos), issue_budget=issue_budget)
