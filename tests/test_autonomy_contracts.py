@@ -88,7 +88,14 @@ def test_contract_busy_repo_a_does_not_block_clean_repo_b(tmp_path, monkeypatch)
             return {
                 "ok": True,
                 "issues": (
-                    [{"number": 2, "repo": repo, "title": "ready-work"}]
+                    [
+                        {
+                            "number": 2,
+                            "repo": repo,
+                            "title": "ready-work",
+                            "labels": ["work:ready", "ai:ready"],
+                        }
+                    ]
                     if repo == "a/clean"
                     else []
                 ),
@@ -353,7 +360,7 @@ def test_contract_intake_reject_gates_issue_to_pr(
                         "number": 9,
                         "repo": "a/lib",
                         "title": "Work",
-                        "labels": ["ai:ready"],
+                        "labels": ["work:ready", "ai:ready"],
                     }
                 ],
             }
@@ -388,7 +395,14 @@ def test_contract_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 4, "repo": "a/lib", "title": "Fix parser"}],
+                "issues": [
+                    {
+                        "number": 4,
+                        "repo": "a/lib",
+                        "title": "Fix parser",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             assert "--require-ready" in argv

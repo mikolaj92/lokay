@@ -54,7 +54,7 @@ def test_ready_without_intake_pass_cannot_implement(tmp_path, monkeypatch):
                         "number": 9,
                         "repo": "a/lib",
                         "title": "Adopt product_shell",
-                        "labels": ["ai:ready"],
+                        "labels": ["work:ready", "ai:ready"],
                     }
                 ],
             }
@@ -127,7 +127,14 @@ def test_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 4, "repo": "a/lib", "title": "Fix parser"}],
+                "issues": [
+                    {
+                        "number": 4,
+                        "repo": "a/lib",
+                        "title": "Fix parser",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             return {
