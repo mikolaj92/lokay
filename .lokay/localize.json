@@ -1,34 +1,19 @@
 {
   "paths": [
-    "lokay-mill-daemon.sh",
-    "mill-latest.log",
-    "scripts/lokay-mill-daemon.sh",
-    "strop/digest/exit",
-    "tests/test_preflight_daemon.py"
+    "src/lokay/compose/mill.py",
+    "tests/test_mill_plateau.py"
   ],
   "source": "agent",
-  "seed_paths": [
-    "lokay-mill-daemon.sh",
-    "mill-latest.log",
-    "scripts/lokay-mill-daemon.sh",
-    "strop/digest/exit"
-  ],
+  "seed_paths": [],
   "matched_tokens": [
     "daemon",
-    "latest",
-    "log",
-    "LOG",
-    "exit",
-    "bound",
-    "strop",
-    "digest",
-    "host",
+    "survey",
+    "compose",
+    "health",
+    "run_path",
     "review",
-    "gate",
     "unbounded",
-    "bounded",
-    "lokay-mill-daemon",
-    "mill-latest"
+    "bounded"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
@@ -36,7 +21,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__312-mill-daemon-na-starcie-ticka-od-wie-mill-a371a239",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__315-lokay-daemon-po-pierwszym-idle-exit-nie-506a0f6f",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }

@@ -1,23 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=312 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=315 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #312 — mill-daemon: na starcie ticka odśwież mill-latest
+Issue: #315 — lokay-daemon: po pierwszym idle — exit, nie kręć max_passes
 
 ## Goal
 
-`lokay-mill-daemon.sh` czyści log na starcie (`: >LOG`), ale `mill-latest.log` kopiowane jest dopiero po `lokay-daemon`. Przez cały przebieg (do 180s) olej czyta stary ogon — np. poprzedni `pass_ceiling` — i diagnostyka kłamie.
+Pusty katalog. Jeden survey już długi. LaunchAgent podaje `--max-passes 8`. compose kręci puste przebiegi aż `pass_ceiling` 180s.
 
 ## Files likely touched
 
-- `lokay-mill-daemon.sh`
-- `mill-latest.log`
-- `scripts/lokay-mill-daemon.sh`
+- (infer from repo inspection)
 
 ## Test plan
 
-- Po host-ff, przed długim daemonem, mill-latest ma linię host-ff / current, nie stary pass_ceiling.
+- run_path idle przy max_passes=8 → jedno wywołanie, payload idle.
 
 ## Non-goals
 
@@ -28,3 +26,4 @@ Issue: #312 — mill-daemon: na starcie ticka odśwież mill-latest
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
 - Collector boundary: if implementation introduces unbounded collection, ship only a bounded collector patch that starts durably in the background after merge. The coding agent and mill must not populate data or wait for collection to finish.
+- No explicit file paths in issue; infer from repo inspection.
