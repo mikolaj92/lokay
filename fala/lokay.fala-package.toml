@@ -347,7 +347,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "push"
 capability = "lokay_atom"
-conduction = ["make_branch", "worktree_add", "commit_all", "rebase_onto_base", "test_local", "test_local_recheck", "assert_real_diff"]
+conduction = ["make_branch", "worktree_add", "commit_all", "rebase_onto_base", "test_local", "test_local_recheck", "relocalize_off_goal", "assert_real_diff"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "push" }
 retry_policy = "none"

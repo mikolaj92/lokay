@@ -159,7 +159,7 @@ def test_describe_issue_to_pr_graph():
     assert "repair_agent" in recheck["conduction"]
     push = next(n for n in path["nodes"] if n["id"] == "push")
     assert "test_local_recheck" in push["conduction"]
-    assert "assert_real_diff" in push["conduction"]
+    assert push["conduction"].index("relocalize_off_goal") < push["conduction"].index("assert_real_diff")
     assert "rebase_onto_base" in push["conduction"]
     rebase = next(n for n in path["nodes"] if n["id"] == "rebase_onto_base")
     assert "commit_all" in rebase["conduction"]
