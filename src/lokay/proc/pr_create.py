@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
+from lokay.gh_issues import get_issue
 from lokay.gh_prs import create_pr
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
@@ -14,6 +15,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-pr-create")
     add_config_live(p)
     p.add_argument("--repo", required=True)
+    p.add_argument("--issue", type=int)
     p.add_argument("--title", required=True)
     p.add_argument("--body-file", help="PR body file")
     p.add_argument("--body", default="")
@@ -26,6 +28,31 @@ def main(argv: list[str] | None = None) -> int:
     if args.body_file:
         body = Path(args.body_file).read_text(encoding="utf-8")
     try:
+        if args.issue is not None:
+            issue = get_issue(
+                runner(), cfg, args.repo, args.issue, live=live
+            )
+            if issue is None:
+                return emit_exit(
+                    err(
+                        f"refusing: issue {args.repo}#{args.issue} was not found",
+                        reason="issue_closed",
+                        issue_state="MISSING",
+                        issue=args.issue,
+                        repo=args.repo,
+                    )
+                )
+            issue_state = str(issue.state or "").upper()
+            if issue_state != "OPEN":
+                return emit_exit(
+                    err(
+                        f"refusing: issue {args.repo}#{args.issue} is {issue_state}",
+                        reason="issue_closed",
+                        issue_state=issue_state,
+                        issue=args.issue,
+                        repo=args.repo,
+                    )
+                )
         pr = create_pr(
             runner(),
             repo=args.repo,
