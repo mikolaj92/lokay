@@ -139,6 +139,64 @@ def test_issue_change_file_in_diff_is_real_progress(tmp_path: Path, capsys):
     assert "mill.py" in payload["paths"]
 
 
+def test_issue_file_scope_refuses_extra_source_even_when_localized(
+    tmp_path: Path, capsys
+):
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "checkout", "-b", "ai/fix/404-x")
+    lokay = repo / ".lokay"
+    lokay.mkdir()
+    (lokay / "localize.json").write_text(
+        '{"paths":["src/app.py","src/organ/agent.py"]}\n', encoding="utf-8"
+    )
+    (repo / "src" / "app.py").write_text("fixed = True\n", encoding="utf-8")
+    (repo / "src" / "organ").mkdir()
+    (repo / "src" / "organ" / "agent.py").write_text(
+        "off_goal = True\n", encoding="utf-8"
+    )
+    _git(repo, "add", "-A")
+    _git(repo, "add", "-f", "--", ".lokay/localize.json")
+    _git(repo, "commit", "-m", "fix plus extra source")
+
+    code = assert_real_diff.main(
+        [
+            "--worktree",
+            str(repo),
+            "--base",
+            "main",
+            "--issue-body",
+            "## Zmiana\n- `src/app.py`\n",
+        ]
+    )
+    payload = _payload(capsys)
+    assert code == 1
+    assert payload["reason"] == "ticket_scope_extra"
+    assert payload["extra_paths"] == ["src/organ/agent.py"]
+    assert payload["required_paths"] == ["src/app.py"]
+
+
+def test_issue_file_scope_accepts_only_named_source_files(tmp_path: Path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _git(repo, "checkout", "-b", "ai/fix/404-x")
+    (repo / "src" / "app.py").write_text("fixed = True\n", encoding="utf-8")
+    _git(repo, "add", "src/app.py")
+    _git(repo, "commit", "-m", "scoped fix")
+
+    code = assert_real_diff.main(
+        [
+            "--worktree",
+            str(repo),
+            "--base",
+            "main",
+            "--issue-body",
+            "## Files\n- `src/app.py`\n",
+        ]
+    )
+    payload = _payload(capsys)
+    assert code == 0
+    assert payload["ok"] is True
+
+
 def test_worktree_with_source_outside_localize_is_off_goal(tmp_path: Path, capsys):
     repo = _init_repo(tmp_path / "repo")
     _git(repo, "checkout", "-b", "ai/fix/1-x")
