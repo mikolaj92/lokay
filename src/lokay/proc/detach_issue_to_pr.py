@@ -18,6 +18,8 @@ from typing import Any
 
 
 _ACTIVATION_PROTOCOL = "pipe-v1"
+MINI_MILL_REPO = "mikolaj92/lokay"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
 
 
 def issue_to_pr_log_path(repo: str, number: int) -> Path:
@@ -550,9 +552,19 @@ def detach_issue_to_pr(
     the child exits without touching a worktree. That makes a later recovery
     of the pre-spawn reservation safe rather than a second-worker race.
     """
-    spawn = popen or subprocess.Popen
     repo_name = str(repo)
     issue_number = int(issue)
+    if repo_name != MINI_MILL_REPO:
+        return {
+            "ok": True,
+            "detached": False,
+            "skipped": True,
+            "reason": _REPO_SKIP_REASON,
+            "repo": repo_name,
+            "issue": issue_number,
+        }
+
+    spawn = popen or subprocess.Popen
     argv = [sys.executable, "-u", "-m", "lokay.compose.issue_to_pr"]
     if config_path:
         argv.extend(["--config", str(config_path)])

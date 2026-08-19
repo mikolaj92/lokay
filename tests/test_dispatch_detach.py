@@ -12,7 +12,7 @@ def test_detach_writes_start_and_pid_to_log(monkeypatch, tmp_path):
             self.pid = 4242
 
     out = detach_mod.detach_issue_to_pr(
-        repo="owner/repo", issue=9, config_path=None, popen=FakePopen
+        repo=detach_mod.MINI_MILL_REPO, issue=9, config_path=None, popen=FakePopen
     )
 
     assert out["ok"] is True
