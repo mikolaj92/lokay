@@ -1,21 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=331 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=333 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #331 — issue_to_pr: 429/survey fail nie jest stopem dostarczenia
+Issue: #333 — factory_begin: cold survey musi pokryć skonfigurowane K
 
 ## Goal
 
-#329: `_delivery_stop_reason` gdy `gh issue view` / `gh pr list` zwraca None (GraphQL 429) → `delivery_survey_unavailable` → `compose_issue_to_pr` **ok + stopped**. Fabryka traktuje to jak dostarczenie i nie jedzie.
+`pick_survey_repos` przy pustym last-pass: `lokay` + `extra_cold=2`. `max_issue_to_pr_per_pass` (K) bywa 3–4. Survey widzi za mało czystych repo → tick startuje mniej i2pr niż K.
 
 ## Files likely touched
 
-- `src/lokay/compose/issue_to_pr.py`
+- `src/lokay/proc/factory_begin.py`
+- `hot.py`
 
 ## Test plan
 
-- `_command_json` → None → `stopped` jest False / reason nie `delivery_survey_unavailable`. CLOSED nadal stop.
+- K=3, 4 czyste repo z work:ready, pusty last-pass → survey ≥3 repo / i2pr start ≤K ale nie ślepo 2.
 
 ## Non-goals
 

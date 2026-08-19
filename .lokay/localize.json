@@ -1,23 +1,26 @@
 {
   "paths": [
-    "src/lokay/compose/issue_to_pr.py",
-    "lokay/compose/issue_to_pr.py",
-    "tests/test_issue_to_pr_activation.py"
+    "src/lokay/proc/factory_begin.py",
+    "hot.py",
+    "lokay/proc/factory_begin.py",
+    "tests/test_hot_repos.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/compose/issue_to_pr.py",
-    "lokay/compose/issue_to_pr.py"
+    "src/lokay/proc/factory_begin.py",
+    "hot.py",
+    "lokay/proc/factory_begin.py"
   ],
   "matched_tokens": [
-    "issue_to_pr",
+    "factory_begin",
     "survey",
-    "view",
-    "compose",
-    "repos",
-    "issues",
+    "Survey",
+    "assert",
+    "worktree",
+    "proc",
+    "hot",
+    "start",
     "review",
-    "gate",
     "unbounded",
     "bounded"
   ],
@@ -27,7 +30,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__331-issue_to_pr-429-survey-fail-nie-jest-sto-4c1ea5bb",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__333-factory_begin-cold-survey-musi-pokry-sko-1ddbe4a4",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
