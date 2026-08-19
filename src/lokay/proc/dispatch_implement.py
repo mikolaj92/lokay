@@ -27,6 +27,9 @@ from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuc
 # and detach. Tick binds a patched composer only when tests replace it.
 compose_issue_to_pr = None
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+
 
 def _is_plan_only_failure(result: dict[str, Any]) -> bool:
     """Recognize the terminal no-code result in either envelope field."""
@@ -53,6 +56,7 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
     actionable_prs = int(working.get("actionable_prs") or 0)
     blocked_this_pass = int(working.get("blocked_this_pass") or 0)
     issue_to_pr_started = int(working.get("issue_to_pr_started") or 0)
+    skipped_repos: list[str] = []
     issue_budget = int(implement.get("issue_budget") or begin.get("issue_budget") or 0)
     prs_by_repo: dict[str, list[dict[str, Any]]] = {
         k: list(v) for k, v in dict(working.get("prs_by_repo") or {}).items()
@@ -85,6 +89,17 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
     for repo_name in list(implement.get("clean_repos") or []):
         if issue_budget <= 0:
             break
+        if repo_name != MINI_MILL_REPO:
+            skipped_repos.append(str(repo_name))
+            actions.append(
+                {
+                    "step": "skip_repo_outside_mini_mill",
+                    "repo": repo_name,
+                    "skipped": True,
+                    "reason": _REPO_SKIP_REASON,
+                }
+            )
+            continue
         mutex = inspect_mutex(repo=str(repo_name), ps_text=ps_text)
         if mutex.get("busy"):
             actions.append({"step": "skip_repo_mutex", "repo": repo_name, "pids": mutex.get("pids")})
@@ -299,7 +314,18 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
         write_pass_receipt(receipt, state_path=state_path)
     except OSError:
         pass
-    return ok(pass_dir=pass_dir, started=issue_to_pr_started, detached=True)
+    result = ok(
+        pass_dir=pass_dir,
+        started=issue_to_pr_started,
+        detached=issue_to_pr_started > 0,
+    )
+    if skipped_repos:
+        result.update(
+            skipped=True,
+            reason=_REPO_SKIP_REASON,
+            skipped_repos=skipped_repos,
+        )
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
