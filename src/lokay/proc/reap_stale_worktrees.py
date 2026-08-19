@@ -43,6 +43,10 @@ from lokay.stuck import issue_number_from_branch
 # ate the 5–10 min implement slot. Classify a handful; skip the rest.
 CLASSIFY_CAP = 4
 
+# The mini mill only delivers Lokay. Product repositories can remain in the
+# shared catalog, but this atom must not inspect or classify their worktrees.
+MINI_MILL_REPO = "mikolaj92/lokay"
+
 
 def _issue_is_closed(repo: str, issue: int) -> bool | None:
     """Return issue closure without doing the expensive git classification."""
@@ -164,6 +168,8 @@ def run_reap_stale_worktrees(
     classified = 0
 
     for repo in cfg.active_repos():
+        if repo.name != MINI_MILL_REPO:
+            continue
         if scope is not None and repo.name not in scope:
             continue
         leftovers = iter_worktrees(cfg, repo)
