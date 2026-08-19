@@ -134,6 +134,85 @@ repos: []
     assert calls and all(live is False for _, live in calls)
 
 
+def test_stage_label_open_pr_keeps_both_ready_labels(tmp_path, monkeypatch, capsys):
+    import json
+    from types import SimpleNamespace
+
+    from lokay.proc import stage_label as atom
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        """
+mode: live
+github:
+  assignee: mikolaj92
+  ready_label: work:ready
+repos: []
+""",
+        encoding="utf-8",
+    )
+    removed: list[str] = []
+    added: list[str] = []
+    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
+    monkeypatch.setattr(
+        atom,
+        "plan_stage_transition",
+        lambda *a, **k: SimpleNamespace(
+            stage="pr-open",
+            add_labels=(),
+            remove_labels=("work:ready", LABEL_READY, LABEL_PR_OPEN),
+            receipt=None,
+        ),
+    )
+    monkeypatch.setattr(
+        atom,
+        "get_issue",
+        lambda *a, **k: SimpleNamespace(state="OPEN"),
+    )
+    monkeypatch.setattr(
+        atom,
+        "remove_issue_labels",
+        lambda runner, repo, issue, labels, *, live: removed.extend(labels),
+    )
+    monkeypatch.setattr(
+        atom,
+        "add_issue_labels",
+        lambda runner, repo, issue, labels, *, live: added.extend(labels),
+    )
+
+    code = atom.main(
+        [
+            "--config",
+            str(cfg),
+            "--live",
+            "--repo",
+            "a/b",
+            "--issue",
+            "7",
+            "--stage",
+            "pr-open",
+        ]
+    )
+
+    assert code == 0
+    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert env["ok"] is True
+    assert added == []
+    assert removed == [LABEL_PR_OPEN]
+    assert "work:ready" not in env["remove_labels"]
+    assert LABEL_READY not in env["remove_labels"]
+
+
+def test_stage_label_clear_may_remove_ready_after_merge():
+    from lokay.proc.stage_label import _open_issue_removals
+
+    assert _open_issue_removals(
+        ("work:ready", LABEL_READY),
+        stage="clear",
+        ready_label="work:ready",
+    ) == ["work:ready", LABEL_READY]
+
+
 def test_stage_label_live_missing_ci_waiting_does_not_abort(tmp_path, monkeypatch, capsys):
     import json
 
