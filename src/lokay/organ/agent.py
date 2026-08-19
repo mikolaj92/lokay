@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from lokay.models import Issue
+from lokay.organ.agent_evidence import head_has_on_goal_src
 from lokay.organ.common import (
     _issue_no_longer_open,
     _localize_paths,
@@ -19,53 +19,7 @@ from lokay.organ.common import (
     _run_atom_main,
     _test_local_ok,
 )
-from lokay.prompts import (
-    issue_fix_prompt,
-    local_test_repair_prompt,
-    pr_body,
-    repair_pr_prompt,
-)
-
-
-def _head_has_on_goal_src(worktree: str, localized: dict[str, Any] | None) -> bool:
-    """Return true when the issue branch HEAD already committed scoped source."""
-    if not isinstance(localized, dict):
-        try:
-            payload = json.loads(
-                (Path(worktree) / ".lokay" / "localize.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-        except (OSError, json.JSONDecodeError):
-            return False
-        localized = payload if isinstance(payload, dict) else None
-    scopes = _localize_paths({"localize": localized}) if localized else []
-    if not scopes:
-        return False
-    try:
-        changed = subprocess.run(
-            [
-                "git",
-                "diff-tree",
-                "--root",
-                "--no-commit-id",
-                "--name-only",
-                "-r",
-                "HEAD",
-            ],
-            cwd=worktree,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        ).stdout.splitlines()
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return any(
-        path.startswith("src/")
-        and any(path == scope or path.startswith(f"{scope}/") for scope in scopes)
-        for path in changed
-    )
+from lokay.prompts import issue_fix_prompt, local_test_repair_prompt, pr_body, repair_pr_prompt
 
 
 def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
@@ -173,7 +127,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                 "error": "refusing: test_local conduction missing",
                 "reason": "test_local_missing",
             }
-        if _head_has_on_goal_src(worktree, localized):
+        if head_has_on_goal_src(worktree, localized):
             return {
                 "ok": True,
                 "skipped": True,
