@@ -18,6 +18,9 @@ def _ok() -> SimpleNamespace:
 
 @pytest.fixture(autouse=True)
 def _open_issues_by_default(monkeypatch):
+    # Most unit fixtures use a neutral repository name. Individual scope tests
+    # restore the production mini-mill repository explicitly.
+    monkeypatch.setattr(reap_stale_worktrees, "MINI_MILL_REPO", "owner/repo")
     monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", lambda repo, issue: False)
 
 
@@ -659,6 +662,54 @@ def test_reap_does_not_fetch_origin_main(tmp_path, monkeypatch):
         config_path=str(_config(tmp_path)),
         live=True,
     )
+    assert out["reaped_count"] == 1
+
+
+def test_reap_only_inspects_mini_mill_repo(tmp_path, monkeypatch):
+    """Catalog products must cause no worktree, GitHub, or remote calls."""
+    mini_repo = "mikolaj92/lokay"
+    product_repos = ("mikolaj92/Temida", "mikolaj92/takt")
+    monkeypatch.setattr(reap_stale_worktrees, "MINI_MILL_REPO", mini_repo)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+
+    branch = "ai/fix/445-reap"
+    wt = tmp_path / "wt" / "mikolaj92__lokay" / "ai__fix__445-reap"
+    wt.mkdir(parents=True)
+    inspected: list[str] = []
+
+    def _worktrees(cfg, repo):
+        inspected.append(repo.name)
+        return [(wt, branch)]
+
+    github_calls: list[tuple[str, int]] = []
+
+    def _closed(repo, issue):
+        github_calls.append((repo, issue))
+        return True
+
+    removed: list[Path] = []
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", _worktrees)
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", _closed)
+    def _no_remote_heads(*args, **kwargs):
+        raise AssertionError("closed mini-mill issue skips ls-remote")
+
+    monkeypatch.setattr(reap_stale_worktrees, "remote_heads", _no_remote_heads)
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda runner, clone, path, **kwargs: removed.append(path) or {"ok": True},
+    )
+
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path),
+        config_path=str(_config(tmp_path, repos=(*product_repos, mini_repo))),
+        live=True,
+    )
+
+    assert inspected == [mini_repo]
+    assert github_calls == [(mini_repo, 445)]
+    assert removed == [wt]
     assert out["reaped_count"] == 1
 
 
