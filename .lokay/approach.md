@@ -1,22 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=273 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=275 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #273 — issue_to_pr: wyjdź gdy issue CLOSED po merge
+Issue: #275 — pr_merge: zdejmij work:ready po udanym merge
 
 ## Goal
 
-Po udanym merge (Fixes #N) wrapper `issue_to_pr` zostaje żywy i trzyma mutex. `reap_over_budget` (#264) ma zabić z zewnątrz na następnym przebiegu — ale ten sam przebieg, który merdżuje, jeszcze widzi i2pr jako started, a wrapper sam nie wychodzi.
+`closeout_pr` (#267) parkuje etykiety tylko gdy sam merdżuje w tym przebiegu. Merge przez `pr_merge` / `gh pr merge` (Fixes #N) zamyka issue, ale `work:ready`/`ai:ready` zostają — closeout kolejnego przebiegu nie widzi już otwartego PR.
 
 ## Files likely touched
 
-- `compose/issue_to_pr.py`
+- `pr_merge.py`
+- `src/lokay/proc/pr_merge.py`
 
 ## Test plan
 
-- Issue CLOSED w trakcie i2pr → wrapper kończy (nie zostaje detached).
-- Issue OPEN → jedzie jak dziś.
+- Merge + znany issue → park/remove-label.
+- Merge bez issue / dry-run → etykiet nie ruszać.
 
 ## Non-goals
 

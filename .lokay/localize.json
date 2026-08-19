@@ -1,44 +1,35 @@
 {
   "paths": [
-    "src/lokay/fala_organ.py",
-    "src/lokay/compose/tick.py",
-    "lokay/compose/tick.py",
-    "229/231/233",
-    "src/lokay/organ/agent.py",
-    "fala/lokay.fala-package.toml",
-    "tests/test_fala_organ.py"
+    "pr_merge.py",
+    "src/lokay/proc/pr_merge.py",
+    "lokay/proc/pr_merge.py",
+    "tests/test_dod_pipeline.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/compose/tick.py",
-    "lokay/compose/tick.py",
-    "229/231/233"
+    "pr_merge.py",
+    "src/lokay/proc/pr_merge.py",
+    "lokay/proc/pr_merge.py"
   ],
   "matched_tokens": [
-    "issue_to_pr",
-    "localize",
-    "run_agent",
-    "test_local",
-    "compose",
-    "stub",
+    "pr_merge",
+    "closeout_pr",
+    "closeout",
     "unbounded_park",
-    "park",
+    "proc",
     "organ",
+    "park",
     "review",
-    "gate",
     "unbounded",
-    "bounded",
-    "229",
-    "231",
-    "233"
+    "bounded"
   ],
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 289.",
+    "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__271-issue_to_pr-nie-wo-aj-repair_agent-gdy-l-a748c8e8",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__275-pr_merge-zdejmij-work-ready-po-udanym-me-85131947",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
