@@ -1,21 +1,21 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=319 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=321 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #319 — pick_survey_repos: pusty katalog nie wolno pełnych 29 repo
+Issue: #321 — daemon_cycle: pass_ceiling nie może wycierać remaining z last-pass
 
 ## Goal
 
-Pusty katalog. `last-pass` ma `health=pass_ceiling` i `remaining=None`. `pick_survey_repos` przy pustym `prev_by_repo` (i przy zerowym hot) zwraca **całe 29 repo**. Jeden przebieg: 29× list_prs + list_inbox + list_issues. To zjada strop 180s zanim mill zdąży oddać idle.
+`compose_daemon_cycle` przy `pass_ceiling` zapisuje last-pass jako `{ok, health, reason, ts, pass_ceiling_seconds}`. Gubi `remaining.by_repo` z przebiegu, który właśnie skończył survey.
 
 ## Files likely touched
 
-- `src/lokay/passkit/hot.py`
+- `src/lokay/compose/daemon_cycle.py`
 
 ## Test plan
 
-- 29 nazw, `prev_by_repo={}` albo same zera → wynik ma lokay i `len <= 1+extra_cold`, nie 29.
+- last-pass z `remaining.by_repo` → po pass_ceiling health=pass_ceiling i remaining.by_repo zostaje.
 
 ## Non-goals
 

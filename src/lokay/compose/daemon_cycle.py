@@ -91,6 +91,12 @@ def compose_daemon_cycle(
         except (OSError, ValueError, FileNotFoundError):
             receipt = Path.home() / ".lokay" / "last-pass.json"
         try:
+            previous = json.loads(receipt.read_text(encoding="utf-8"))
+            if isinstance(previous, dict) and isinstance(previous.get("remaining"), dict):
+                payload["remaining"] = previous["remaining"]
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            pass
+        try:
             receipt.parent.mkdir(parents=True, exist_ok=True)
             temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
             temporary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
