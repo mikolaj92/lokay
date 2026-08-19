@@ -497,6 +497,18 @@ def detach_issue_to_pr(
     argv.extend(["--live", "--repo", repo_name, "--issue", str(issue_number)])
     root = os.environ.get("LOKAY_ROOT") or str(Path.cwd())
     env = os.environ.copy()
+    root = env.get("LOKAY_ROOT") or str(Path.cwd())
+    if not env.get("LOKAY_PROCESS_HEAD"):
+        from lokay.git_host_ff import snapshot_process_head
+        snapshot_process_head(Path(root))
+        if os.environ.get("LOKAY_PROCESS_HEAD"):
+            env["LOKAY_PROCESS_HEAD"] = os.environ["LOKAY_PROCESS_HEAD"]
+    if not env.get("LOKAY_HEALTH_LEASE"):
+        from lokay.preflight import issue_health_lease
+        issue_health_lease()
+        for key in ("LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH"):
+            if os.environ.get(key):
+                env[key] = os.environ[key]
     if env.get("LOKAY_HEALTH_LEASE") and not env.get("LOKAY_HEALTH_LEASE_PATH"):
         env["LOKAY_HEALTH_LEASE_PATH"] = str(Path.home() / ".lokay" / "health-lease")
 

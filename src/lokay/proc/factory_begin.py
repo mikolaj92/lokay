@@ -29,6 +29,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         if not lease_ok and (
             str(lease_reason).startswith("lease_unavailable_FileNotFound")
             or str(lease_reason).startswith("lease_unavailable_ProcessLookup")
+            or str(lease_reason) == "lock_not_held"
         ):
             from lokay.preflight import issue_health_lease
 

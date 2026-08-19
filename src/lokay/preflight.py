@@ -261,9 +261,11 @@ def issue_health_lease(
             return
         # File gone: rewrite the record for the same token so nested atoms can
         # still mutate. Never overwrite an expired/mismatched/present record.
-        restorable = str(reason).startswith("lease_unavailable_FileNotFound") or str(
-            reason
-        ).startswith("lease_unavailable_ProcessLookup")
+        restorable = (
+            str(reason).startswith("lease_unavailable_FileNotFound")
+            or str(reason).startswith("lease_unavailable_ProcessLookup")
+            or str(reason) == "lock_not_held"
+        )
         if not restorable:
             if disabled:
                 return
@@ -990,9 +992,11 @@ def require_healthy(config_path: str | None) -> None:
         return
     # Inherited token + missing file: restore the record (same token) so a live
     # mill can keep mutating. Other rejected leases stay fail-closed.
-    restorable = str(lease_reason).startswith("lease_unavailable_FileNotFound") or str(
-        lease_reason
-    ).startswith("lease_unavailable_ProcessLookup")
+    restorable = (
+        str(lease_reason).startswith("lease_unavailable_FileNotFound")
+        or str(lease_reason).startswith("lease_unavailable_ProcessLookup")
+        or str(lease_reason) == "lock_not_held"
+    )
     if os.environ.get("LOKAY_HEALTH_LEASE") and restorable:
         try:
             issue_health_lease()
