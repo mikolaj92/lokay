@@ -398,7 +398,7 @@ def test_pr_create_failed_push_never_creates(monkeypatch):
     assert result["reason"] == "push_failed"
 
 
-def test_pr_create_green_tests_and_successful_push_runs(monkeypatch):
+def test_pr_create_passes_issue_number_to_create(monkeypatch):
     called = []
 
     def fake_run(main, argv):
@@ -408,7 +408,8 @@ def test_pr_create_green_tests_and_successful_push_runs(monkeypatch):
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
     result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, _pr_create_up())
     assert result["ok"] is True
-    assert called and "--head" in called[0]
+    assert called
+    assert called[0][called[0].index("--issue") + 1] == "7"
 
 
 def test_pr_create_does_not_open_when_issue_already_closed(monkeypatch):
@@ -447,7 +448,7 @@ def test_pr_create_runs_when_live_issue_still_open(monkeypatch):
     called = []
 
     def fake_run(main, argv):
-        if "--issue" in argv:
+        if "--issue" in argv and "--head" not in argv:
             return {
                 "ok": True,
                 "issue": {

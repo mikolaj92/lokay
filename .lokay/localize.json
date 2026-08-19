@@ -1,22 +1,24 @@
 {
   "paths": [
-    "src/lokay/proc/pr_create.py",
+    "src/lokay/fala_organ.py",
     "229/231/233/235",
-    "lokay/proc/pr_create.py",
-    "tests/test_pr_create.py"
+    "implement/factory/common",
+    "src/lokay/organ/agent.py",
+    "tests/test_fala_organ.py"
   ],
   "source": "agent",
   "seed_paths": [
-    "src/lokay/proc/pr_create.py",
-    "tests/test_pr_create.py",
     "229/231/233/235",
-    "lokay/proc/pr_create.py"
+    "implement/factory/common"
   ],
   "matched_tokens": [
+    "organ",
     "pr_create",
-    "proc",
-    "test_pr_create",
+    "Organ",
+    "factory",
+    "common",
     "review",
+    "gate",
     "unbounded",
     "bounded",
     "229",
@@ -27,10 +29,10 @@
   "notes": [
     "Deterministic fallback paths only (no embeddings).",
     "Empty path list fails closed — run_agent must not start.",
-    "Repo tree entries considered: 287.",
+    "Repo tree entries considered: 288.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__239-pr_create-skip-when-issue-closed-7f670ac3",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__241-organ-pass-issue-to-pr_create-f986d8b3",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
