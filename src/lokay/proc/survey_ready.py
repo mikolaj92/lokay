@@ -13,6 +13,7 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import list_issues as p_list_issues
+from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.passkit.hot import survey_scope
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
@@ -59,7 +60,8 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             prs_by_repo.get(repo_name) or [],
             branch_prefix=branch_prefix,
         )
-        skip = excluded_numbers(stuck, repo_name) | covered
+        excluded = excluded_numbers(stuck, repo_name)
+        skip = excluded | covered
         if covered:
             actions.append(
                 {
@@ -70,14 +72,33 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             )
             covered_ready = [i for i in work_ready if int(i.get("number", -1)) in covered]
             remaining_ready_with_pr += len(covered_ready)
-        if excluded_numbers(stuck, repo_name):
+        blocked_ready = [
+            issue for issue in work_ready if int(issue.get("number", -1)) in excluded
+        ]
+        if excluded:
             actions.append(
                 {
                     "step": "skip_stuck",
                     "repo": repo_name,
-                    "exclude": sorted(excluded_numbers(stuck, repo_name)),
+                    "exclude": sorted(excluded),
                 }
             )
+        for issue in blocked_ready:
+            number = int(issue["number"])
+            park_argv = ["--repo", repo_name, "--issue", str(number)]
+            if not live:
+                park_argv.append("--dry-run")
+            parked = run_proc(p_park.main, park_argv)
+            actions.append(
+                {
+                    "step": "park_stuck",
+                    "repo": repo_name,
+                    "issue": number,
+                    **parked,
+                }
+            )
+            if parked.get("ok") and parked.get("applied"):
+                progress += 1
         implementable = [i for i in work_ready if int(i.get("number", -1)) not in skip]
         ready_by_repo[repo_name] = implementable
         remaining_ready += len(implementable)
