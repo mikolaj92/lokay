@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import re
+import subprocess
+from typing import Any
 
 from lokay.config import load_config
 from lokay.envelope import emit_exit
@@ -33,6 +37,72 @@ def _await_detach_activation() -> bool:
                 pass
 
 
+def _command_json(args: list[str]) -> Any | None:
+    """Return command JSON; callers fail closed when a survey is unavailable."""
+    try:
+        completed = subprocess.run(
+            args,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return json.loads(completed.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+
+
+def _head_has_on_goal_src(repo: str, issue_number: int) -> bool:
+    """Recognize a resumed issue branch without mistaking main for delivered."""
+    try:
+        current = subprocess.run(
+            ["git", "branch", "--show-current"], check=True, capture_output=True,
+            text=True, timeout=10,
+        ).stdout.strip()
+        remote = subprocess.run(
+            ["git", "remote", "get-url", "origin"], check=True, capture_output=True,
+            text=True, timeout=10,
+        ).stdout.strip().removesuffix(".git")
+        files = subprocess.run(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            check=True, capture_output=True, text=True, timeout=10,
+        ).stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    remote_matches = remote.endswith(f"github.com/{repo}") or remote.endswith(f":{repo}")
+    issue_branch = re.search(rf"(?:^|[/_-]){issue_number}(?:$|[/_-])", current) is not None
+    return remote_matches and issue_branch and any(path.startswith("src/") for path in files)
+
+
+def _delivery_stop_reason(repo: str, issue_number: int) -> str | None:
+    issue = _command_json(
+        ["gh", "issue", "view", str(issue_number), "--repo", repo, "--json", "state"]
+    )
+    if not isinstance(issue, dict):
+        return "delivery_survey_unavailable"
+    if str(issue.get("state", "")).upper() == "CLOSED":
+        return "issue_closed"
+
+    prs = _command_json(
+        [
+            "gh", "pr", "list", "--repo", repo, "--state", "all", "--limit", "100",
+            "--json", "body,state,mergedAt",
+        ]
+    )
+    if not isinstance(prs, list):
+        return "delivery_survey_unavailable"
+    closes_issue = re.compile(rf"(?im)\bfixes\s+#{issue_number}\b")
+    for pr in prs:
+        if not isinstance(pr, dict) or not closes_issue.search(str(pr.get("body") or "")):
+            continue
+        if str(pr.get("state", "")).upper() == "OPEN" or pr.get("mergedAt"):
+            return "delivery_pr_exists"
+
+    if _head_has_on_goal_src(repo, issue_number):
+        return "head_has_on_goal_src"
+    return None
+
+
 def compose_issue_to_pr(
     *,
     config_path: str | None,
@@ -46,6 +116,18 @@ def compose_issue_to_pr(
         return {"ok": False, "reason": "detachment_not_activated"}
     if live and load_config(config_path).mode != "live":
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
+
+    if live and (stop_reason := _delivery_stop_reason(repo, issue_number)):
+        return {
+            "ok": True,
+            "kind": "issue_to_pr",
+            "engine": "fala",
+            "planned": False,
+            "stopped": True,
+            "reason": stop_reason,
+            "repo": repo,
+            "issue": issue_number,
+        }
 
     result = run_path(
         path_id="issue_to_pr", repo=repo, issue=issue_number,
