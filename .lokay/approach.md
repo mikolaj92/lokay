@@ -1,23 +1,26 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=226 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=229 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #226 — survey_inbox: stuck blocked — nie wrzucaj do inbox
+Issue: #229 — run_agent Fala timeout 2100s → 480s (pi_budget)
 
 ## Goal
 
-`plan_pass` (#224) i `dispatch_triage` (#222) skipują `blocked` w stuck.json. `survey_inbox` nadal wrzuca te issue do `inbox_issues_by_repo` — inbox się pęcznieje, triage_budget się marnuje zanim plan je wyfiltruje.
+`pi_budget` / `reap_over_budget` to 480s. W `lokay.fala-package.toml` effector `run_agent` ma `timeout_seconds = 2100`. Pi może pisać approach.md 35 min, a reap trzyma `coder_live`. Occupy stoi.
 
 ## Files likely touched
 
-- `src/lokay/proc/survey_inbox.py`
-- `tests/test_survey_inbox.py`
+- `lokay.fala-package.toml`
+- `src/lokay/data/lokay.fala-package.toml`
+- `fala/lokay.fala-package.toml`
+- `tests/test_fala_package_lock.py`
+- `tests/test_graph.py`
 
 ## Test plan
 
-- Nowy `tests/test_survey_inbox.py` (albo dopisek): listed issues ma blocked + zwykły; w working tylko zwykły.
-- Nie ruszaj 180–192.
+- Istniejący test pakietu/grafu (np. `tests/test_fala_package_lock.py` / `tests/test_graph.py`): run_agent timeout == 480 (DEFAULT_BUDGET_S).
+- Nie ruszaj 180–192 ani #228.
 
 ## Non-goals
 
