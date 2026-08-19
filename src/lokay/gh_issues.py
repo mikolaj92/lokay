@@ -182,6 +182,8 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
     issues: list[Issue] = []
     for row in rows:
         issue = _issue_from_row(repo.name, row)
+        if issue.state != "OPEN":
+            continue
         if config.blocked_label in issue.labels:
             continue
         if is_parked(issue.labels):
@@ -432,7 +434,7 @@ def list_issues_with_label(
     live: bool,
     limit: int | None = None,
 ) -> list[Issue]:
-    """Issues carrying a label; ready labels include closed issues for parking."""
+    """Open issues carrying a label; ready-label queries defensively filter stale closed rows."""
     if not label:
         return []
     if live:
@@ -455,9 +457,12 @@ def list_issues_with_label(
     result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     if not live:
         return []
-    return [
+    issues = [
         _issue_from_row(repo.name, row)
         for row in parse_survey_list(
             result.stdout, kind="labeled-issue", repo=repo.name, cap=cap
         )
     ]
+    if label in {config.ready_label, WORK_READY_LABEL}:
+        return [issue for issue in issues if issue.state == "OPEN"]
+    return issues
