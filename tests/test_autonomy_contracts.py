@@ -151,8 +151,14 @@ def test_contract_default_k_is_serial_one(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": f"work-{repo}"}],
-                "labels": ["work:ready", "ai:ready"],
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": f"work-{repo}",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             return intake_ready_envelope()
@@ -195,8 +201,14 @@ def test_contract_k_caps_issue_to_pr_across_repos(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": f"work-{repo}"}],
-                "labels": ["work:ready", "ai:ready"],
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": f"work-{repo}",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             return intake_ready_envelope()

@@ -1,22 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=248 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=251 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #248 — pr_create: body Fixes #<issue>
+Issue: #251 — test_global_pr_first: labels na issue, nie obok
 
 ## Goal
 
-#236 zmergowane (PR 238), issue zostało OPEN — body PR nie miało `Fixes #<n>`. Mill nie zamyka ticketu po merge.
+Na main `uv run --extra dev pytest -q` ma 6 faili. #243 naprawiło SyntaxError, ale w innych mockach `labels` nadal leżą *obok* `issues`, nie na issue. Intake widzi 0 ready → `len(intake) == 0`.
 
 ## Files likely touched
 
-- `src/lokay/proc/pr_create.py`
+- `tests/test_autonomy_contracts.py`
+- `tests/test_global_pr_first.py`
 
 ## Test plan
 
-- Test pr_create/organ: body zawiera `Fixes #7` (albo dany numer).
-- Nie ruszaj tomli timeoutów. Nie ruszaj 180–192, 228, 235, 236, 247.
+- Te 6 testów zielone. Nie osłabiać asercji.
+- Nie ruszaj 180–192, 228, 235, 247.
 
 ## Non-goals
 

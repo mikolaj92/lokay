@@ -302,8 +302,14 @@ def test_manual_only_pr_does_not_block_same_repo_intake(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}],
-                "labels": ["work:ready", "ai:ready"],
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": "next",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             return _intake_ok()
@@ -373,8 +379,14 @@ def test_pr_survey_failure_blocks_only_failed_repo(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}],
-                "labels": ["work:ready", "ai:ready"],
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": "next",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             return _intake_ok()
@@ -480,8 +492,14 @@ def test_configured_k_budget_honors_breadth_across_clean_repos(tmp_path, monkeyp
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": f"work-{repo}"}],
-                "labels": ["work:ready", "ai:ready"],
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": f"work-{repo}",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_intake.main:
             return _intake_ok()
@@ -534,8 +552,14 @@ def test_stuck_repo_does_not_block_ready_repo_under_k(tmp_path, monkeypatch):
         if fn is tick.p_list_issues.main:
             return {
                 "ok": True,
-                "issues": [{"number": 2, "repo": repo, "title": "next"}],
-                "labels": ["work:ready", "ai:ready"],
+                "issues": [
+                    {
+                        "number": 2,
+                        "repo": repo,
+                        "title": "next",
+                        "labels": ["work:ready", "ai:ready"],
+                    }
+                ],
             }
         if fn is tick.p_checks.main:
             return {"ok": True, "status": "pending"}
