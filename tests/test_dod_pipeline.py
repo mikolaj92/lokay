@@ -114,7 +114,7 @@ def test_pr_create_dry_run_has_planned_pr_fields(tmp_path, capsys):
             "--config",
             str(cfg),
             "--repo",
-            "mikolaj92/Fala",
+            "mikolaj92/lokay",
             "--title",
             "fix: planned",
             "--body",
