@@ -109,11 +109,13 @@ def test_list_ready_asks_for_full_page_and_keeps_oldest(tmp_path):
     assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
-def test_list_ready_excludes_closed_issues_with_leftover_ready_label(tmp_path):
+def test_list_ready_defaults_missing_state_to_open_and_excludes_closed(tmp_path):
+    missing_state = _issue_row(8, "ai:ready")
+    missing_state.pop("state")
     runner = _ListRunner(
         [
-            _issue_row(8, "ai:ready"),
-            _issue_row(7, "ai:ready", state="CLOSED"),
+            missing_state,
+            _issue_row(7, "ai:ready", state="closed"),
         ]
     )
     cfg, repo = _cfg(tmp_path)
@@ -183,11 +185,11 @@ def test_list_issues_with_ready_label_excludes_closed_issues(tmp_path):
     assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
-def test_list_issues_with_work_ready_label_excludes_closed_issues(tmp_path):
+def test_list_issues_with_work_ready_label_defaults_empty_state_to_open(tmp_path):
     runner = _ListRunner(
         [
             _issue_row(7, "work:ready", state="CLOSED"),
-            _issue_row(8, "work:ready"),
+            _issue_row(8, "work:ready", state=""),
         ]
     )
     cfg, repo = _cfg(tmp_path)
