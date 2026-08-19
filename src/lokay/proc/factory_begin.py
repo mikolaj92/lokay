@@ -104,6 +104,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         repos,
         load_last_pass_by_repo(cfg.state_path),
         salt=str(pass_dir),
+        extra_cold=max(2, int(cfg.max_issue_to_pr_per_pass)),
     )
     begin = {
         "pass_dir": str(pass_dir),
