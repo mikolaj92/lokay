@@ -536,21 +536,29 @@ bound_launchd_stdio
 
 # Tick starts on current origin/main or fail-closed (do not mill on stale host code).
 # Keep host-ff out of launchd stdout; the mill transcript owns that line.
-# A live mill (i2pr / factory_pass) holds mill.lock. Launchd-ff under that
-# lock eats updated=true so the already-imported daemon never lifts
-# health=host_updated. Skip the caretaker ff; factory_begin compares
-# LOKAY_PROCESS_HEAD and refuses if HEAD moved under the live process.
-: >"${LOG}"
+# A live mill (i2pr / factory_pass) holds mill.lock. It blocks a second daemon,
+# but must not freeze origin/main updates on disk.
+MILL_LOCK_WAS_BUSY=0
 if mill_lock_busy; then
-  printf '%s\n' '{"ok":true,"health":"current","updated":false,"already_current":true,"reason":"lock_busy"}' >>"${LOG}"
-else
-  if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}" 2>&1; then
-    bootstrap_incident "host_behind"
-    bound_file "${LOG}" "${MILL_LOG_MAX}" || true
-    emit_launchd_glance || true
-    bound_launchd_stdio
-    exit 78
-  fi
+  MILL_LOCK_WAS_BUSY=1
+fi
+: >"${LOG}"
+if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}" 2>&1; then
+  bootstrap_incident "host_behind"
+  bound_file "${LOG}" "${MILL_LOG_MAX}" || true
+  emit_launchd_glance || true
+  bound_launchd_stdio
+  exit 78
+fi
+if [[ "${MILL_LOCK_WAS_BUSY}" -eq 1 ]]; then
+  printf '%s\n' '{"ok":true,"health":"current","reason":"lock_busy"}' >>"${LOG}"
+  cp "${LOG}" "${LATEST}" 2>/dev/null || true
+  bound_file "${LOG}" "${MILL_LOG_MAX}" || true
+  bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
+  prune_mill_logs || true
+  emit_launchd_glance || true
+  bound_launchd_stdio
+  exit 0
 fi
 
 UV_REINSTALL_ARGS=()

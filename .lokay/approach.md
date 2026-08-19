@@ -1,24 +1,23 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=296 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=298 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #296 — daemon_cycle: strop przebiegu 180s — last-pass i exit, nie wisieć
+Issue: #298 — mill.lock busy: host-ff i tak, lock nie blokuje update main
 
 ## Goal
 
-Przebieg młyna wisi. `last-pass.json` stoi, katalog pusty, LaunchAgent trzyma jeden PID, następny tick nie startuje.
+Gdy `mill.lock` jest zajęty, `lokay-mill-daemon.sh` pomija `lokay-host-ff`. Wiszący przebieg trzyma lock, main nie ląduje na dysku, nowy kod (np. #296) nie wchodzi do żywej maszyny.
 
 ## Files likely touched
 
-- `last-pass.json`
-- `mill-latest.log`
-- `src/lokay/compose/daemon_cycle.py`
+- `mill.lock`
+- `lokay-mill-daemon.sh`
 - `scripts/lokay-mill-daemon.sh`
 
 ## Test plan
 
-- Sztucznie długi krok → po 180s receipt z `pass_ceiling`, proces kończy się. Krótki przebieg bez zmian.
+- Lock busy → host-ff wołany, daemon nie. Lock wolny → jak dziś.
 
 ## Non-goals
 
