@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from types import SimpleNamespace
 
+import pytest
+
 import lokay.compose.issue_to_pr as issue_to_pr
 from lokay.compose.issue_to_pr import _await_detach_activation
 
@@ -82,12 +84,22 @@ def test_confirmed_closed_issue_remains_a_delivery_stop(monkeypatch):
     assert issue_to_pr._delivery_stop_reason("owner/repo", 331) == "issue_closed"
 
 
-def test_existing_on_goal_pr_is_a_delivery_stop(monkeypatch):
+@pytest.mark.parametrize(
+    ("body", "state", "merged_at"),
+    [
+        ("Fixes #329", "CLOSED", "2025-01-01T00:00:00Z"),
+        ("Closes #329", "OPEN", None),
+        ("resolves #329", "OPEN", None),
+    ],
+)
+def test_existing_on_goal_pr_is_a_delivery_stop(
+    monkeypatch, body, state, merged_at
+):
     def command_json(args):
         if args[1:3] == ["issue", "view"]:
             return {"state": "OPEN"}
         return [
-            {"body": "Fixes #329", "state": "CLOSED", "mergedAt": "2025-01-01T00:00:00Z"},
+            {"body": body, "state": state, "mergedAt": merged_at},
             {"body": "Fixes #12", "state": "OPEN", "mergedAt": None},
         ]
 
