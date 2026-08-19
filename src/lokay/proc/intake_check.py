@@ -24,6 +24,7 @@ from lokay.proc._common import add_config_read, load_cfg, read_live, resolve_rep
 
 
 _CHECKS = ("open", "superseded", "shape", "satisfied", "ambiguity", "duplicate_ai_pr")
+_INTAKE_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -51,6 +52,17 @@ def main(argv: list[str] | None = None) -> int:
         help="covering AI PR evidence as N[:merged|open] (repeatable)",
     )
     args = p.parse_args(argv)
+    if args.repo != _INTAKE_REPO:
+        return emit_exit(
+            ok(
+                skipped=True,
+                reason="repo_not_intake_target",
+                repo=args.repo,
+                issue=args.issue,
+                check=args.check,
+            )
+        )
+
     cfg = load_cfg(args)
     live = read_live(args)
     try:
