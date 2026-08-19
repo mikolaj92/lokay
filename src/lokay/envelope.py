@@ -92,8 +92,8 @@ def process_exit_code(
     if _productive(current):
         return 0
     if isinstance(payload, dict) and (
-        str(payload.get("health") or "") == "host_updated"
-        or str(payload.get("reason") or "") == "host_updated"
+        str(payload.get("health") or "") in {"host_updated", "pass_ceiling"}
+        or str(payload.get("reason") or "") in {"host_updated", "pass_ceiling"}
     ):
         return 0
     current_health = str(current.get("health") or "")

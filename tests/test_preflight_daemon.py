@@ -339,6 +339,12 @@ def test_process_exit_zero_when_pass_did_work():
     ) == 1
 
 
+def test_process_exit_zero_at_pass_ceiling():
+    assert process_exit_code({"ok": False, "health": "pass_ceiling"}) == 0
+    assert process_exit_code({"ok": False, "reason": "pass_ceiling"}) == 0
+    assert process_exit_code({"ok": False}) == 1
+
+
 def test_finalize_daemon_payload_lifts_progress_and_drops_fala():
     out = finalize_daemon_payload(
         {
