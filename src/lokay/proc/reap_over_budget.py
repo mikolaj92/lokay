@@ -7,11 +7,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from lokay.config import Config
 from lokay.envelope import emit_exit, err, ok
+from lokay.gh_issues import get_issue
 from lokay.passkit.support import run_proc
 from lokay.proc import close_issue as p_close
 from lokay.proc import unbounded_park as p_park
-from lokay.proc._common import add_config_live
+from lokay.proc._common import add_config_live, runner
 from lokay.proc.detach_issue_to_pr import (
     issue_to_pr_receipt_path,
     live_issue_to_pr_receipts,
@@ -37,6 +39,19 @@ def _stuck_path_for(pass_dir: str | None) -> Path:
     return Path.home() / ".lokay" / "stuck.json"
 
 
+def _issue_is_closed(repo: str, issue: int, *, live: bool) -> bool:
+    """Read GitHub state before applying an immediate closed-issue reap."""
+    if not live:
+        return False
+    try:
+        current = get_issue(runner(), Config(), repo, issue, live=True)
+    except Exception:  # noqa: BLE001
+        # An unavailable state lookup is not evidence that a live coder is
+        # obsolete. The normal budget policy below remains the fallback.
+        return False
+    return current is not None and current.state.upper() == "CLOSED"
+
+
 def run_reap_over_budget(
     *,
     budget_s: int = DEFAULT_BUDGET_S,
@@ -57,16 +72,18 @@ def run_reap_over_budget(
             continue
         if pid <= 0 or not repo:
             continue
+        closed = _issue_is_closed(repo, issue, live=live)
         check = check_pi_budget(pid, budget_s)
         elapsed = float(check.get("elapsed_s") or 0)
-        if not check.get("over_budget"):
+        if not closed and not check.get("over_budget"):
             kept.append(
                 {"repo": repo, "issue": issue, "pid": pid, "elapsed_s": elapsed}
             )
             continue
-        # Killing the wrapper while Fala/pi still codes orphans the coder:
-        # commit/push/pr_create never run, so the ticket dies without a PR.
-        if wrapper_has_coding_descendant(pid):
+        # Killing an over-budget wrapper while Fala/pi still codes orphans the
+        # coder. A closed issue is different: its coder can no longer produce
+        # a useful PR, so reap the whole process group immediately.
+        if not closed and wrapper_has_coding_descendant(pid):
             kept.append(
                 {
                     "repo": repo,
@@ -78,12 +95,13 @@ def run_reap_over_budget(
             )
             continue
         killed = terminate_issue_to_pr_pid(pid)
+        reason = "issue_closed" if closed else "over_budget"
         path = issue_to_pr_receipt_path(repo, issue)
         # Leave the dead receipt. Unlinking it hides the child from harvest,
         # so a reaped pi vanishes with no PR and no fail-closed.
         try:
             stamped = dict(row)
-            stamped.update(ok=False, reason="over_budget", reaped=True)
+            stamped.update(ok=False, reason=reason, reaped=True)
             path.write_text(json.dumps(stamped), encoding="utf-8")
         except OSError:
             pass
@@ -94,9 +112,9 @@ def run_reap_over_budget(
             "elapsed_s": elapsed,
             "budget_s": budget_s,
             "killed": killed,
-            "reason": "over_budget",
+            "reason": reason,
         }
-        if killed:
+        if killed and not closed:
             if stuck is None:
                 stuck = load_stuck(stuck_path)
             row = record_failure(

@@ -1,22 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=262 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=264 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #262 — repo_mutex: nie busy gdy issue CLOSED
+Issue: #264 — reap i2pr/pi gdy issue CLOSED
 
 ## Goal
 
-Po merge issue zostaje i2pr/pi. repo_mutex widzi --issue N i trzyma repo occupied. Mill nie startuje nastepnego.
+Po merge zostaje zywy i2pr/pi. #262 sprawia, ze mutex ich nie liczy, ale proces zyje dalej: pali lease, pi_budget, trzyma worktree.
 
 ## Files likely touched
 
-- `src/lokay/proc/repo_mutex.py`
+- `src/lokay/proc/reap_over_budget.py`
 
 ## Test plan
 
-- Fixture ps z --repo mikolaj92/lokay --issue 99, issue CLOSED -> busy false.
-- To samo issue OPEN -> busy true.
+- Live pid + issue CLOSED -> process na liscie reaped.
+- Live pid + issue OPEN -> kept.
 
 ## Non-goals
 
