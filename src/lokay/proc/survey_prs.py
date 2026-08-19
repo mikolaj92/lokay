@@ -13,6 +13,9 @@ from lokay.proc._common import add_config_live
 from lokay.passkit.hot import survey_scope
 
 
+MINI_MILL_REPO = "mikolaj92/lokay"
+
+
 def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     live_flag = ["--live"] if live else []
     begin, working = load_begin_working(pass_dir)
@@ -27,8 +30,19 @@ def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dic
 
     scope = set(survey_scope(begin) or [])
     scoped = survey_scope(begin) is not None
-    for repo_name in list(begin.get("repos") or []):
-
+    repos = list(begin.get("repos") or [])
+    lokay_mill = MINI_MILL_REPO in repos
+    for repo_name in repos:
+        if lokay_mill and repo_name != MINI_MILL_REPO:
+            actions.append(
+                {
+                    "step": "skip_pr_survey_outside_mini_scope",
+                    "repo": repo_name,
+                    "reason": f"mini mill only surveys PRs for {MINI_MILL_REPO}",
+                }
+            )
+            prs_by_repo[repo_name] = []
+            continue
         if scoped and repo_name not in scope:
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "prs"})
             prs_by_repo[repo_name] = []
