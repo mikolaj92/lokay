@@ -175,6 +175,25 @@ def test_second_tick_skips_uv_reinstall_when_digest_matches(tmp_path):
     assert any(line.startswith("run lokay-daemon") for line in second_calls)
 
 
+def test_pass_ceiling_persists_digest_and_next_tick_skips_reinstall(tmp_path):
+    first = _run_daemon(
+        tmp_path,
+        extra_env={"LOKAY_UV_ENVELOPE": '{"ok":false,"health":"pass_ceiling"}'},
+    )
+    assert first.returncode == 0, first.stderr
+    digest = tmp_path / ".lokay" / "uv-install.digest"
+    assert digest.is_file()
+
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    second_calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert second_calls
+    assert all("--reinstall-package" not in line for line in second_calls)
+    assert any(line.startswith("run lokay-daemon") for line in second_calls)
+
+
 def test_mill_log_and_launchd_stdout_are_bounded(tmp_path):
     logs = tmp_path / ".lokay" / "logs"
     logs.mkdir(parents=True)

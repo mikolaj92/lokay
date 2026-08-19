@@ -590,7 +590,7 @@ cp "${LOG}" "${LATEST}" 2>/dev/null || true
 # Overlap means this tick never loaded the new package into a factory pass.
 # Do not close the digest gate on a contended lock — the next idle tick
 # must still reinstall if the wheel drifted.
-if [[ -n "${CURRENT_DIGEST}" ]] && ! grep -Eq '"health"[[:space:]]*:[[:space:]]*"overlap"' "${LOG}" 2>/dev/null && grep -Eq '"(engine|path_id|preflight|self_repair)"|"health"[[:space:]]*:[[:space:]]*"(progress|idle|waiting|repairing|stall|survey_error|self_repair|carrier_failed|work_remaining|host_updated)' "${LOG}" 2>/dev/null; then
+if [[ -n "${CURRENT_DIGEST}" ]] && ! grep -Eq '"health"[[:space:]]*:[[:space:]]*"overlap"' "${LOG}" 2>/dev/null && grep -Eq '"(engine|path_id|preflight|self_repair)"|"health"[[:space:]]*:[[:space:]]*"(progress|idle|waiting|repairing|stall|survey_error|self_repair|carrier_failed|work_remaining|host_updated|pass_ceiling)' "${LOG}" 2>/dev/null; then
   printf '%s\n' "${CURRENT_DIGEST}" > "${DIGEST_FILE}" || true
 fi
 bound_file "${LOG}" "${MILL_LOG_MAX}" || true
