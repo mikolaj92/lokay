@@ -5,7 +5,12 @@ from __future__ import annotations
 import argparse
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import add_issue_labels, comment_issue, remove_issue_labels
+from lokay.gh_issues import (
+    add_issue_labels,
+    comment_issue,
+    get_issue,
+    remove_issue_labels,
+)
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 from lokay.stage_ledger import STAGES, plan_stage_transition
 
@@ -44,6 +49,26 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(str(exc)))
     comment = str(args.comment or "").strip() or (plan.receipt or "")
     try:
+        issue = get_issue(runner(), cfg, args.repo, args.issue, live=live)
+        if issue is None:
+            return emit_exit(err(f"issue not found: {args.repo}#{args.issue}"))
+        issue_state = str(issue.state or "").upper()
+        if issue_state != "OPEN":
+            return emit_exit(
+                ok(
+                    planned=False,
+                    repo=args.repo,
+                    issue=args.issue,
+                    issue_state=issue_state,
+                    stage=plan.stage,
+                    add_labels=[],
+                    remove_labels=[],
+                    receipt=False,
+                    applied=False,
+                    skipped=True,
+                    reason="issue_closed",
+                )
+            )
         if plan.remove_labels:
             remove_issue_labels(
                 runner(), args.repo, args.issue, list(plan.remove_labels), live=live

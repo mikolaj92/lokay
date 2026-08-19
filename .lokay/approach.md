@@ -1,27 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=279 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=281 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #279 — assert_real_diff: src poza localize = off-goal, fail-closed
+Issue: #281 — stage_label: nie nakładaj ai:ready na CLOSED
 
 ## Goal
 
-`assert_real_diff` uznaje każdy src za „real”. Pi/repair może wgrać obcy plik (nie z localize) i mill merdżuje to jako Fixes #N.
+Po merge (Fixes #N) issue jest CLOSED i park zdejmuje ready. Potem `stage_label` / leftover i2pr znowu kładzie `ai:ready` na zamknięty ticket.
 
 ## Files likely touched
 
-- `tick.py`
-- `pr_finalize.py`
-- `lokay/localize.json`
-- `src/a.py`
-- `src/b.py`
+- `src/lokay/proc/stage_label.py`
 
 ## Test plan
 
-- localize=[src/a.py], diff src/a.py → real.
-- localize=[src/a.py], diff src/b.py → off_goal.
-- localize puste + tylko approach.md → plan_only.
+- CLOSED + stage ready → etykiet nie dodano.
+- OPEN → jak dziś.
 
 ## Non-goals
 
