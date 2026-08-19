@@ -1,24 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=197 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=199 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #197 — testy: dual work:ready+ai:ready po gate #193
+Issue: #199 — save_stuck: nie kasuj blocked z dysku
 
 ## Goal
 
-Po #193/#194 `survey_ready` wymaga `work:ready`. Suite na main: 18 czerwonych (`test_intake_mill_gate`, `test_autonomy_contracts`, `test_global_pr_first`) — mocki mają tylko `ai:ready`.
+Oil zablokował #190/#192 w stuck.json. Kolejny pass młyna zapisał ledger bez tych kluczy — młyn znowu wziął #190.
 
 ## Files likely touched
 
-- `survey_ready.py`
-- `tests/test_intake_mill_gate.py`
-- `tests/test_autonomy_contracts.py`
-- `tests/test_global_pr_first.py`
+- `src/lokay/stuck.py`
+- `tests/test_stuck.py`
 
 ## Test plan
 
-- `uv run --extra dev pytest -q tests/test_intake_mill_gate.py tests/test_autonomy_contracts.py tests/test_global_pr_first.py` zielone.
+- Plik ma blocked A. save bez A — A nadal na dysku.
 
 ## Non-goals
 

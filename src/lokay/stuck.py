@@ -38,6 +38,30 @@ def load_stuck(path: Path) -> dict[str, Any]:
 
 def save_stuck(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    on_disk = load_stuck(path)
+    on_disk_issues = on_disk.get("issues")
+    incoming_issues = data.get("issues")
+    if isinstance(on_disk_issues, dict) and isinstance(incoming_issues, dict):
+        blocked_not_incoming = {
+            key: row
+            for key, row in on_disk_issues.items()
+            if key not in incoming_issues
+            and isinstance(row, dict)
+            and row.get("blocked") is True
+        }
+        if blocked_not_incoming:
+            data = {
+                **data,
+                "issues": {**blocked_not_incoming, **incoming_issues},
+            }
+    elif isinstance(on_disk_issues, dict):
+        blocked_on_disk = {
+            key: row
+            for key, row in on_disk_issues.items()
+            if isinstance(row, dict) and row.get("blocked") is True
+        }
+        if blocked_on_disk:
+            data = {**data, "issues": blocked_on_disk}
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
