@@ -1,27 +1,22 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=247 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=248 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #247 — list_inbox_issues: skip stuck blocked
+Issue: #248 — pr_create: body Fixes #<issue>
 
 ## Goal
 
-#236 filtruje w `list_inbox.py` *po* `list_inbox_issues`. Sam helper `src/lokay/gh_issues.py` `list_inbox_issues` nadal zwraca zablokowane (190–192 wracały do każdego callera).
+#236 zmergowane (PR 238), issue zostało OPEN — body PR nie miało `Fixes #<n>`. Mill nie zamyka ticketu po merge.
 
 ## Files likely touched
 
-- `list_inbox.py`
-- `src/lokay/gh_issues.py`
-- `lokay.stuck`
-- `tests/test_gh_issues.py`
-- `tests/test_list_inbox_issues.py`
+- `src/lokay/proc/pr_create.py`
 
 ## Test plan
 
-- `tests/test_gh_issues.py` albo nowy `tests/test_list_inbox_issues.py`:
-- zablokowane issue nie ląduje w wyniku.
-- Nie ruszaj tomli timeoutów. Nie ruszaj 180–192, 228, 235.
+- Test pr_create/organ: body zawiera `Fixes #7` (albo dany numer).
+- Nie ruszaj tomli timeoutów. Nie ruszaj 180–192, 228, 235, 236, 247.
 
 ## Non-goals
 

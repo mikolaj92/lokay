@@ -27,6 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     body = args.body
     if args.body_file:
         body = Path(args.body_file).read_text(encoding="utf-8")
+    if args.issue is not None:
+        body = f"{body}\nFixes #{args.issue}" if body else f"Fixes #{args.issue}"
     try:
         if args.issue is not None:
             issue = get_issue(

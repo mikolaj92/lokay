@@ -99,4 +99,5 @@ def test_open_issue_creates_pr(tmp_path, monkeypatch, capsys):
     env = _envelope(capsys)
     assert env["ok"] is True
     assert env["pr"] == 239
-    assert any(call[1:3] == ("pr", "create") for call in runner.calls)
+    create_call = next(call for call in runner.calls if call[1:3] == ("pr", "create"))
+    assert create_call[create_call.index("--body") + 1] == "body\nFixes #239"
