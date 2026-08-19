@@ -51,15 +51,17 @@ def _terminate_issue_to_pr(receipt: dict[str, Any]) -> bool:
 
 def _live_repos(
     *, cfg_flag: list[str], live_flag: list[str], actions: list[dict[str, Any]]
-) -> tuple[list[str], list[dict[str, Any]]]:
+) -> tuple[list[str], list[dict[str, Any]], int]:
     live_repos: list[str] = []
     cleared: list[dict[str, Any]] = []
+    live_count = 0
     for receipt in live_issue_to_pr_receipts():
         repo_name = str(receipt.get("repo") or "")
         try:
             issue_number = int(receipt["issue"])
         except (KeyError, TypeError, ValueError):
             continue
+        live_count += 1
         viewed = run_proc(
             p_get_issue.main,
             [*cfg_flag, *live_flag, "--repo", repo_name, "--issue", str(issue_number)],
@@ -83,7 +85,7 @@ def _live_repos(
             # the lane occupied rather than racing a replacement worker.
         if repo_name and repo_name not in live_repos:
             live_repos.append(repo_name)
-    return live_repos, cleared
+    return live_repos, cleared, live_count - len(cleared)
 
 
 def _keep_parked_labels(
@@ -127,7 +129,7 @@ def run_refresh_occupancy(
             }
         )
     receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
-    live_repos, closed_receipts = _live_repos(
+    live_repos, closed_receipts, live_receipt_count = _live_repos(
         cfg_flag=cfg_flag, live_flag=live_flag, actions=actions
     )
     cleared_receipts.extend(closed_receipts)
@@ -200,6 +202,10 @@ def run_refresh_occupancy(
             "merged_this_pass": merged,
             "live_issue_to_pr_repos": live_repos,
             "occupied_repos": occupied,
+            # This pass-local counter is a liveness signal, not launch history.
+            # A previous pass may have started a detached worker that has since
+            # exited; only receipts confirmed live above may keep it non-zero.
+            "issue_to_pr_started": live_receipt_count,
             "cleared_issue_to_pr_receipts": [
                 {
                     "repo": receipt.get("repo"),
