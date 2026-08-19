@@ -14,11 +14,7 @@ from lokay.proc._common import add_config_live
 from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
 
-
-def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, live: bool,
-                    merge_enabled: bool, require_checks: bool, repair_budget: int,
-                    executor_enabled: bool, branch_prefix: str, stuck: dict[str, Any],
-                    stuck_path: Path) -> dict[str, Any]:
+def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, live: bool, merge_enabled: bool, require_checks: bool, repair_budget: int, executor_enabled: bool, branch_prefix: str, stuck: dict[str, Any], stuck_path: Path) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
     c = {key: 0 for key in COUNTERS}
     progress = remaining_closed = 0
@@ -26,9 +22,7 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
     cfg = ["--config", config_path] if config_path else []
 
     def done(route: str, reason: str = "", still_open: bool = True) -> dict[str, Any]:
-        return pr_envelope(repo=repo, pr=n, route=route, reason=reason, still_open=still_open,
-                           actions=actions, repair_budget=repair_budget, progress=progress,
-                           remaining_closed=remaining_closed, counters=c)
+        return pr_envelope(repo=repo, pr=n, route=route, reason=reason, still_open=still_open, actions=actions, repair_budget=repair_budget, progress=progress, remaining_closed=remaining_closed, counters=c)
 
     def repair(*, review: dict[str, Any] | None = None, step: str = "pr_repair") -> None:
         nonlocal repair_budget
@@ -101,8 +95,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--head-ref", default="")
     p.add_argument("--merge-enabled", action="store_true")
     a = p.parse_args(argv)
-    return emit_exit(run_closeout_pr(
-        repo=str(a.repo), pr={"number": a.pr, "head_ref": a.head_ref, "labels": []},
-        config_path=a.config, live=bool(a.live), merge_enabled=bool(a.merge_enabled),
-        require_checks=False, repair_budget=0, executor_enabled=False,
-        branch_prefix="ai/fix/", stuck={"issues": {}}, stuck_path=Path("")))
+    return emit_exit(run_closeout_pr(repo=str(a.repo), pr={"number": a.pr, "head_ref": a.head_ref, "labels": []},
+        config_path=a.config, live=bool(a.live), merge_enabled=bool(a.merge_enabled), require_checks=False,
+        repair_budget=0, executor_enabled=False, branch_prefix="ai/fix/", stuck={"issues": {}}, stuck_path=Path("")))

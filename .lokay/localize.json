@@ -1,17 +1,27 @@
 {
   "paths": [
-    "src/lokay/compose/mill.py",
-    "tests/test_mill_plateau.py"
+    "src/lokay/proc/closeout_pr.py",
+    "lokay.closeout",
+    "lokay/proc/closeout_pr.py"
   ],
   "source": "agent",
-  "seed_paths": [],
+  "seed_paths": [
+    "src/lokay/proc/closeout_pr.py",
+    "lokay.closeout",
+    "lokay/proc/closeout_pr.py"
+  ],
   "matched_tokens": [
-    "daemon",
-    "survey",
+    "closeout_pr",
+    "test_local",
+    "proc",
+    "test_closeout_pr",
+    "issue_to_pr",
+    "closeout",
+    "park",
+    "route",
     "compose",
-    "health",
-    "run_path",
     "review",
+    "gate",
     "unbounded",
     "bounded"
   ],
@@ -21,7 +31,7 @@
     "Repo tree entries considered: 290.",
     "Agent proposed paths; Python validated against the tree."
   ],
-  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__315-lokay-daemon-po-pierwszym-idle-exit-nie-506a0f6f",
+  "worktree": "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/ai__fix__317-closeout_pr-atom-100-linii-test_local-cz-ff4839a3",
   "wrote": false,
   "localize_rel": ".lokay/localize.json"
 }
