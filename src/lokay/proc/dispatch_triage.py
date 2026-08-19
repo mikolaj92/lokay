@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
 from lokay.passkit import io as pass_io
 from lokay.proc._common import add_config_live
+from lokay.stuck import is_blocked_in_ledger, load_stuck
 
 
 def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
     plan = pass_io.read_json(pass_io.plan_path(pass_dir))
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
+    stuck_path = str(begin.get("stuck_path") or "")
+    stuck = load_stuck(Path(stuck_path)) if stuck_path else dict(working.get("stuck") or {})
     progress = int(working.get("progress") or 0)
     remaining_inbox = int(working.get("remaining_inbox") or 0)
     inbox_by_repo = dict(working.get("inbox_by_repo") or {})
@@ -27,6 +32,20 @@ def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -
     for target in list(plan.get("triage_targets") or []):
         repo_name = str(target["repo"])
         num = int(target["issue"])
+        if is_blocked_in_ledger(stuck, repo_name, num):
+            actions.append(
+                {
+                    "step": "skip_stuck",
+                    "action": "issue_triage",
+                    "repo": repo_name,
+                    "issue": num,
+                    "ok": True,
+                    "skipped": True,
+                    "blocked": True,
+                    "reason": "blocked_in_stuck_ledger",
+                }
+            )
+            continue
         try:
             tri = run_path(
                 path_id="issue_triage",

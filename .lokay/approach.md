@@ -1,25 +1,24 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=215 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=222 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #215 — reap_over_budget: po kill over_budget — park + stuck plan_only
+Issue: #222 — dispatch_triage: stuck blocked — skip, nie nakładaj ai:ready
 
 ## Goal
 
-`reap_over_budget` po `terminate_issue_to_pr_pid` stempluje receipt `reason=over_budget`, ale **nie** zdejmuje `work:ready`/`ai:ready` i **nie** zapisuje `stuck.json` (`plan_only`). Ticket wraca do survey.
+Po park/plan_only issue (np. 190–192) wraca `ai:ready` przez `issue_triage`. `dispatch_triage` odpala każdy `triage_targets` bez spojrzenia w `stuck.json`. Survey zdejmuje `work:ready`, intake z powrotem maluje `ai:ready`.
 
 ## Files likely touched
 
 - `stuck.json`
-- `src/lokay/proc/reap_over_budget.py`
-- `tests/test_reap_over_budget.py`
+- `src/lokay/proc/dispatch_triage.py`
+- `tests/test_dispatch_triage.py`
 
 ## Test plan
 
-- `tests/test_reap_over_budget.py`
-- W `test_reaps_over_budget_live_receipt`: po `run_reap_over_budget` zassertuj, że wywołano park dla `a/one#9` oraz `stuck` ma ten issue jako blocked/`plan_only` (mock `unbounded_park` / `record_failure`/`save_stuck`).
-- Nie ruszaj 180–192.
+- Nowy `tests/test_dispatch_triage.py` (albo dopisek w istniejącym, jeśli jest): target blocked w stuck.json nie woła `run_path`; target nie-blocked woła.
+- Nie ruszaj 180–192 (nie re-label, nie dispatch).
 
 ## Non-goals
 
