@@ -20,6 +20,7 @@ from lokay.intake import (
     aggregate_intake,
     check_duplicate_ai_pr,
     check_open,
+    check_preflight_incident,
     check_superseded,
     decide_intake,
     probe_repo_shape,
@@ -208,10 +209,11 @@ def decide_intake_with_agent(
 
     hard = (
         check_open(state=state),
+        check_preflight_incident(issue),
         check_superseded(issue, merged_prs=merged_prs),
         check_duplicate_ai_pr(issue, covering_prs=covering_prs),
     )
-    if any(c.verdict == "close" for c in hard):
+    if any(c.verdict in {"close", "blocked"} for c in hard):
         value = aggregate_intake(
             hard,
             ready_label=ready_label,

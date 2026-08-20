@@ -14,6 +14,9 @@ from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY, LEDGER_ACTIVE_LABELS
 
+_PREFLIGHT_MARKER = re.compile(r"<!--\s*lokay-preflight:[0-9a-fA-F]+\s*-->")
+_PREFLIGHT_TITLE = re.compile(r"(?i)^preflight failure\b")
+
 # Title markers for whole-issue OOS (substring match on title only).
 OOS_TITLE_MARKERS = (
     "out of scope",
@@ -105,6 +108,13 @@ def is_parked(labels: Iterable[str], *, park_labels: Iterable[str] = PARK_LABELS
     return bool(set(labels) & frozenset(park_labels))
 
 
+def is_preflight_incident(*, title: str, body: str) -> bool:
+    """True when GitHub issue is a mill preflight incident, not product work."""
+    if _PREFLIGHT_MARKER.search(body or ""):
+        return True
+    return bool(_PREFLIGHT_TITLE.search((title or "").strip()))
+
+
 def _checkbox_count(body: str) -> int:
     return work_checkbox_count(body)
 
@@ -166,6 +176,17 @@ def decide_issue(
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
     blob = f"{title}\n{body}".lower()
+
+    if is_preflight_incident(title=title, body=body):
+        return TriageDecision(
+            decision="blocked",
+            reason="preflight_incident",
+            add_labels=(blocked_label,),
+            comment=(
+                "Blocked: mill preflight incident. Self-repair owns this, "
+                "not issue_to_pr."
+            ),
+        )
 
     if _is_out_of_scope(title, body):
         return TriageDecision(

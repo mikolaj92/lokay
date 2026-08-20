@@ -23,7 +23,7 @@ from typing import Any, Iterable
 from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY
-from lokay.triage import is_parked, is_undecided
+from lokay.triage import is_parked, is_preflight_incident, is_undecided
 
 # --- Verdicts for one check ---
 PASS = "pass"
@@ -31,6 +31,7 @@ CLOSE = "close"
 SPLIT = "split"
 NEEDS_HUMAN = "needs_human"
 INCONCLUSIVE = "inconclusive"
+BLOCKED = "blocked"
 
 MAX_CHECKBOXES_ONE_PASS = 5
 
@@ -348,6 +349,22 @@ def check_open(*, state: str | None) -> CheckResult:
     )
 
 
+def check_preflight_incident(issue: Issue) -> CheckResult:
+    """Self-repair incidents are not product work for issue_to_pr."""
+    if is_preflight_incident(title=issue.title or "", body=issue.body or ""):
+        return CheckResult(
+            check="preflight_incident",
+            verdict=BLOCKED,
+            reason="preflight_incident",
+            detail={"title": issue.title or ""},
+        )
+    return CheckResult(
+        check="preflight_incident",
+        verdict=PASS,
+        reason="not_preflight_incident",
+    )
+
+
 def check_superseded(
     issue: Issue,
     *,
@@ -619,6 +636,21 @@ def aggregate_intake(
             implementable=False,
         )
 
+    blocked_hit = next((c for c in checked if c.verdict == BLOCKED), None)
+    if blocked_hit is not None:
+        return IntakeDecision(
+            decision="blocked",
+            reason=blocked_hit.reason,
+            checks=checked,
+            add_labels=("ai:blocked",),
+            remove_labels=(ready_label, LABEL_WORK_READY),
+            comment=(
+                "Blocked: mill preflight incident. Self-repair owns this, "
+                "not issue_to_pr."
+            ),
+            implementable=False,
+        )
+
     close_hit = next((c for c in checked if c.verdict == CLOSE), None)
     if close_hit is not None:
         comment = _close_comment(close_hit, checked)
@@ -804,6 +836,7 @@ def decide_intake(
     shape = probe_repo_shape(clone_path)
     checks = (
         check_open(state=state),
+        check_preflight_incident(issue),
         check_superseded(
             issue,
             merged_prs=merged_prs,

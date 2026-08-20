@@ -50,6 +50,20 @@ def test_decide_ready():
     assert "work:ready" in d.add_labels
 
 
+def test_decide_preflight_incident_is_blocked():
+    d = decide_issue(
+        _issue(
+            title="Preflight failure acae6d25447dc85e",
+            body="<!-- lokay-preflight:acae6d25447dc85e -->\nBounded checks failed: fala_smoke",
+        )
+    )
+    assert d.decision == "blocked"
+    assert d.reason == "preflight_incident"
+    assert "ai:blocked" in d.add_labels
+    assert "work:ready" not in d.add_labels
+    assert "ai:ready" not in d.add_labels
+
+
 def test_decide_title_short():
     d = decide_issue(_issue(title="fix"))
     assert d.decision == "needs_feedback"

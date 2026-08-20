@@ -161,6 +161,24 @@ def test_apply_intake_ready_adds_work_ready_when_only_ai_ready():
     assert not any("--add-label ai:ready" in j for j in joined)
 
 
+def test_apply_intake_blocked_demotes_ready():
+    cfg = Config()
+    issue = _issue(labels=["ai:ready", "work:ready"])
+    decision = IntakeDecision(
+        decision="blocked",
+        reason="preflight_incident",
+        add_labels=("ai:blocked",),
+        remove_labels=("ai:ready", "work:ready"),
+        comment="Blocked: mill preflight incident.",
+    )
+    runner = _FakeRunner()
+    assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
+    joined = [" ".join(c) for c in runner.calls]
+    assert any("--add-label ai:blocked" in j for j in joined)
+    assert any("--remove-label ai:ready" in j for j in joined)
+    assert any("--remove-label work:ready" in j for j in joined)
+
+
 def test_apply_intake_close_mutates():
     cfg = Config()
     issue = _issue(labels=["ai:ready"])

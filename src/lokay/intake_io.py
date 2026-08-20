@@ -131,6 +131,20 @@ def apply_intake(
     """Apply intake labels / comment / close. Mutates only when live."""
     if not live or decision.decision == "skip":
         return False
+    if decision.decision == "blocked":
+        applied = False
+        if decision.remove_labels:
+            to_remove = [x for x in decision.remove_labels if x in (issue.labels or [])]
+            if to_remove:
+                remove_issue_labels(runner, repo, issue_number, to_remove, live=True)
+                applied = True
+        if decision.add_labels:
+            add_issue_labels(runner, repo, issue_number, list(decision.add_labels), live=True)
+            applied = True
+        if decision.comment:
+            comment_issue(runner, repo, issue_number, decision.comment, live=True)
+            applied = True
+        return applied
     if decision.decision == "ready":
         applied = False
         have = set(issue.labels or [])
