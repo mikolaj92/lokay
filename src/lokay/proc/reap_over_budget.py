@@ -13,7 +13,6 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.gh_issues import get_issue
 from lokay.git_real_diff import classify_changed_paths, list_changed_paths
 from lokay.passkit.support import run_proc
-from lokay.proc import close_issue as p_close
 from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live, runner
 from lokay.proc.detach_issue_to_pr import (
@@ -215,23 +214,7 @@ def run_reap_over_budget(
                 p_park.main,
                 ["--repo", repo, "--issue", str(issue)],
             )
-            if result["park"].get("ok"):
-                close_argv = []
-                if config_path:
-                    close_argv.extend(["--config", config_path])
-                if live:
-                    close_argv.append("--live")
-                close_argv.extend(
-                    [
-                        "--repo",
-                        repo,
-                        "--issue",
-                        str(issue),
-                        "--comment",
-                        "plan_only fail-closed",
-                    ]
-                )
-                result["close"] = run_proc(p_close.main, close_argv)
+            # Park leaves the slot. Harvest must not CLOSE the issue.
         reaped.append(result)
     result = ok(
         reaped=reaped,

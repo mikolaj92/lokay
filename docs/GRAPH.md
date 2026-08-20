@@ -86,7 +86,7 @@ host_ff
 | `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |
 | `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied) |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
-| `dispatch_implement` | intake gate + `issue_to_pr` (serial by design). If its live `ps` mutex survey fails, it refuses every launch: unknown is not idle. |
+| `dispatch_implement` | intake gate + `issue_to_pr` (serial by design). If its live `ps` mutex survey fails, it refuses every launch: unknown is not idle. `plan_only` parks the slot; it does not CLOSE the issue. |
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
@@ -292,7 +292,7 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   unique-run N. At/above its reason's bound the miss row is terminal and is
   preserved verbatim: an old dead receipt cannot refresh its timestamp/error or
   re-enable it. Crash reasons (`local_repair_exhausted`, red recheck, bad ref)
-  still block at 1 and stay buried. Harvest does not CLOSE the issue. The repo
+  still block at 1 and stay buried. Harvest, dispatch, and reap do not CLOSE the issue. The repo
   mutex must not stay on one corpse.
 - Everything else is deterministic (`gh` / `git` / pure functions).
 

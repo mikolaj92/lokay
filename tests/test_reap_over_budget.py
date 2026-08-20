@@ -370,6 +370,11 @@ def test_reaps_coder_with_plan_only_diff(tmp_path, monkeypatch):
 
     monkeypatch.setattr(reap_over_budget.p_park, "main", fake_park)
 
+    def fake_close(argv=None):
+        raise AssertionError(f"plan_only must not close the issue: {argv}")
+
+    monkeypatch.setattr("lokay.proc.close_issue.main", fake_close)
+
     out = reap_over_budget.run_reap_over_budget(budget_s=480)
 
     assert out["ok"] is True
