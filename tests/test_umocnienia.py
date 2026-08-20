@@ -312,6 +312,31 @@ def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
     assert live[0]["repo"] == "mikolaj92/Fala" and live[0]["issue"] == 164
 
 
+def test_reaped_plan_only_receipt_is_not_occupancy(tmp_path, monkeypatch):
+    """#192: over-budget plan_only must drop the slot without waiting for pi exit."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr(
+        "lokay.proc.detach_issue_to_pr.coding_live_for_issue", lambda _issue: True
+    )
+    cycle = tmp_path / ".lokay" / "cycle"
+    cycle.mkdir(parents=True)
+    (cycle / "mikolaj92__lokay-192.json").write_text(
+        json.dumps(
+            {
+                "ok": False,
+                "pid": os.getpid(),
+                "repo": "mikolaj92/lokay",
+                "issue": 192,
+                "reason": "over_budget",
+                "reaped": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert live_issue_to_pr_receipts() == []
+
+
 def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
