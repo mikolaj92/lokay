@@ -141,6 +141,44 @@ def test_issue_closed_clears_stale_no_pr_row(tmp_path: Path):
     assert "a/b#5" not in stuck["issues"]
 
 
+def test_github_closed_mill_issue_clears_stuck_without_journal(tmp_path: Path, monkeypatch):
+    """Compacted state.jsonl still leaves CLOSED corpses; GitHub is the source of truth."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    stuck = {
+        "issues": {
+            "mikolaj92/lokay#528": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "no_pr",
+                "last_error": "issue_to_pr produced no PR",
+            },
+            "mikolaj92/lokay#178": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "rebase_conflict",
+            },
+        }
+    }
+
+    def fake_closed(_repo: str) -> set[int]:
+        return {528}
+
+    monkeypatch.setattr(
+        "lokay.child_harvest._github_closed_mill_issues", fake_closed
+    )
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert "mikolaj92/lokay#528" not in stuck["issues"]
+    assert excluded_numbers(stuck, "mikolaj92/lokay") == {178}
+
+
 def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
     """ok=True and no PR is a stop/race, not FAIL_CLOSED no_pr."""
     cycle = tmp_path / "cycle"
