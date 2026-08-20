@@ -268,6 +268,33 @@ def test_declared_suite_strips_mill_lease(tmp_path: Path, monkeypatch, capsys):
     assert _payload(capsys)["tested"] is True
 
 
+def test_green_receipt_reuses_identical_head_and_origin_main(tmp_path: Path, monkeypatch, capsys):
+    _declare_test(tmp_path)
+    (tmp_path / ".git").mkdir()
+
+    class CachedRunner:
+        def __init__(self):
+            self.suite_runs = 0
+
+        def run(self, spec, *, live):
+            if spec.argv[:2] == ("git", "rev-parse"):
+                value = "head" if spec.argv[-1] == "HEAD" else "base"
+                return CommandResult(spec=spec, executed=True, returncode=0, stdout=value + "\n")
+            self.suite_runs += 1
+            return CommandResult(spec=spec, executed=True, returncode=0)
+
+    run = CachedRunner()
+    monkeypatch.setattr(test_local, "runner", lambda: run)
+
+    assert test_local.main(["--worktree", str(tmp_path)]) == 0
+    first = _payload(capsys)
+    assert first["cached"] is False
+    assert test_local.main(["--worktree", str(tmp_path)]) == 0
+    second = _payload(capsys)
+    assert second["cached"] is True
+    assert run.suite_runs == 1
+
+
 def test_declared_list_command_runs(tmp_path: Path, monkeypatch, capsys):
     _declare_test(tmp_path, list(LOKAY_PYTEST))
     spec = CommandSpec(LOKAY_PYTEST, cwd=str(tmp_path.resolve()), timeout_seconds=1800)

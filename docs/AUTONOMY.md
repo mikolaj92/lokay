@@ -199,8 +199,9 @@ jq '{health, idle, progress, merge_enabled, require_checks, require_llm_review, 
 ### Light observability (not a metrics product)
 
 Glance ratios from the receipt are fine — ready / open AI PRs / mergeable-green /
-progress / residual human count. Do **not** grow a heavy metrics subsystem,
-dashboards, or second ledger around them.
+progress / residual human count. `lokay-yield-report --hours N` reads local
+failure traces plus GitHub merge throughput without persisting a second ledger.
+Do **not** grow a heavy metrics subsystem or dashboards around them.
 
 ```bash
 jq '{

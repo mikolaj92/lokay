@@ -38,7 +38,7 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
         resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
         reap_stale_implementing, reap_stale_worktrees, refresh_occupancy,
-        survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
+        ready_hygiene, compact_state, survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
         triage_issue, intake_issue, issue_split, worktree_add, assert_real_diff,
         self_repair_activate, self_repair_close, self_repair_prepare,
         self_repair_preflight, self_repair_push_main, self_repair_validate,
@@ -124,6 +124,9 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         return _run_atom_main(
             survey_ready.main, [*cfg, *live, "--pass-dir", pass_dir]
         )
+
+    if atom == "ready_hygiene":
+        return _run_atom_main(ready_hygiene.main, [*cfg, *live])
 
     if atom == "plan_pass":
         pass_dir = str(
@@ -219,6 +222,9 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         # Domain health (stall/work_remaining) is successful conduction; the
         # tick envelope inside may still set ok=false for the mill.
         return _run_atom_main(record_pass.main, [*cfg, *live, "--pass-dir", pass_dir])
+
+    if atom == "compact_state":
+        return _run_atom_main(compact_state.main, [*cfg])
 
 
     return None

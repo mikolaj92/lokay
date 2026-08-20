@@ -16,6 +16,7 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.git_real_diff import list_changed_paths
 from lokay.proc._common import runner
 from lokay.runner import CommandSpec, Runner
+from lokay.test_cache import cache_key, read_green, write_green
 
 TEST_TIMEOUT_SECONDS = 1800
 MINI_MILL_REPO = "mikolaj92/lokay"
@@ -129,6 +130,18 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
     run = runner()
+    key = cache_key(run, worktree, test_argv)
+    cached = read_green(worktree, key)
+    if cached is not None:
+        return emit_exit(
+            ok(
+                skipped=False,
+                tested=True,
+                cached=True,
+                worktree=str(worktree),
+                tests=str(cached.get("tests") or " ".join(test_argv)),
+            )
+        )
     try:
         tests = run.run(
             CommandSpec(
@@ -163,14 +176,17 @@ def main(argv: list[str] | None = None) -> int:
                     live=True,
                 )
                 if scoped.returncode == 0:
+                    command = " ".join(scoped_argv)
+                    write_green(worktree, key, command)
                     return emit_exit(
                         ok(
                             skipped=False,
                             tested=True,
+                            cached=False,
                             scoped=True,
                             full_suite_returncode=tests.returncode,
                             worktree=str(worktree),
-                            tests=" ".join(scoped_argv),
+                            tests=command,
                         )
                     )
                 tests = scoped
@@ -190,10 +206,12 @@ def main(argv: list[str] | None = None) -> int:
                 stderr_tail=(tests.stderr or "")[-2000:],
             )
         )
+    write_green(worktree, key, command)
     return emit_exit(
         ok(
             skipped=False,
             tested=True,
+            cached=False,
             worktree=str(worktree),
             tests=command,
         )

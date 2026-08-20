@@ -53,7 +53,8 @@ host_ff
     → survey_prs
       → survey_inbox
         → survey_ready
-          → plan_pass
+          → ready_hygiene       → remove legacy ai:ready without work:ready
+            → plan_pass
             → dispatch_triage          → issue_triage child Fala
               → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
                 → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
@@ -64,7 +65,8 @@ host_ff
                       → queue_conflict   → SKIP/CLOSE/READY queue hygiene
                       → dispatch_implement → issue_to_pr child Fala
                         → compute_health
-                          → record_pass    → last-pass.json
+                          → compact_state  → bound the existing state.jsonl
+                            → record_pass  → last-pass.json
 ```
 
 | Atom | One job |
@@ -73,7 +75,8 @@ host_ff
 | `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token |
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error) |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error) |
-| `survey_ready` | list all ai:ready (full page; cap is survey_error); skip those covered by open AI PRs (label stays ready) |
+| `survey_ready` | list implementable `work:ready`; skip those covered by open AI PRs |
+| `ready_hygiene` | remove legacy `ai:ready` from issues without `work:ready`; no new ledger |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
@@ -86,6 +89,7 @@ host_ff
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design). If its live `ps` mutex survey fails, it refuses every launch: unknown is not idle. |
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
+| `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in

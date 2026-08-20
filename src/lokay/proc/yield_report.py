@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from lokay.config import load_config
-from lokay.envelope import emit_exit, ok
+from lokay.envelope import emit_exit, err, ok
+from lokay.github_yield import github_delivery
+from lokay.proc._common import runner
 
 
 def _ts(raw: Any) -> datetime | None:
@@ -25,8 +27,14 @@ def _semantic_traces(value: Any):
         trace = value.get("semantic")
         if isinstance(trace, dict) and trace.get("kind"):
             yield trace
-        for child in value.values():
-            yield from _semantic_traces(child)
+        traces = value.get("semantic_traces")
+        if isinstance(traces, list):
+            for item in traces:
+                if isinstance(item, dict) and item.get("kind"):
+                    yield item
+        for key, child in value.items():
+            if key != "semantic_traces":
+                yield from _semantic_traces(child)
     elif isinstance(value, list):
         for child in value:
             yield from _semantic_traces(child)
@@ -80,7 +88,7 @@ def build_report(path: Path, *, since: datetime) -> dict[str, Any]:
             }
             for kind, counts in sorted(semantic.items())
         },
-        "note": "Merge counts require merged events in state.jsonl; GitHub remains the production source of truth.",
+        "note": "Local failures/traces come from state.jsonl; GitHub is the production source for merged delivery.",
     }
 
 
@@ -88,10 +96,20 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-yield-report")
     p.add_argument("--config")
     p.add_argument("--hours", type=float, default=24.0)
+    p.add_argument("--local-only", action="store_true")
     args = p.parse_args(argv)
+    hours = max(0.0, args.hours)
     cfg = load_config(args.config)
-    since = datetime.now(timezone.utc) - timedelta(hours=max(0.0, args.hours))
-    return emit_exit(ok(kind="yield_report", **build_report(cfg.state_path, since=since)))
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    report = build_report(cfg.state_path, since=since)
+    if not args.local_only:
+        try:
+            report["delivery"] = github_delivery(
+                runner(cfg), cfg.incident_repo, since=since, hours=hours
+            )
+        except Exception as exc:  # noqa: BLE001
+            return emit_exit(err(str(exc), kind="yield_report", **report))
+    return emit_exit(ok(kind="yield_report", **report))
 
 
 if __name__ == "__main__":

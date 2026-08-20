@@ -15,6 +15,7 @@ def test_describe_parent_factory_graph():
         "survey_prs",
         "survey_inbox",
         "survey_ready",
+        "ready_hygiene",
         "plan_pass",
         "dispatch_triage",
         "resolve_conflicts",
@@ -27,6 +28,7 @@ def test_describe_parent_factory_graph():
         "queue_conflict",
         "dispatch_implement",
         "compute_health",
+        "compact_state",
         "record_pass",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}

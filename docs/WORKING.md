@@ -12,8 +12,8 @@ signals. They may explain a miss. They never count as output.
 Read-only semantic atoms (`intake`, `queue`, `localize`) report a `semantic`
 object with `source=agent|fallback|bypass`, execution `status`, duration, and
 isolated `session_kind`. `lokay-yield-report --config config.yaml --hours 24`
-aggregates those traces and issue-to-PR outcomes from the existing state JSONL;
-GitHub merges remain the production source of truth. Before commit, one bounded
+aggregates traces/failures from the existing compacted state JSONL and reads
+merged PR / closed issue throughput from GitHub, the production source of truth. Before commit, one bounded
 semantic relocalization may admit a necessary source/test neighbour outside the
 initial scope; Python validates it and `assert_real_diff` remains the hard gate.
 
@@ -97,7 +97,9 @@ human digest and does **not** freeze other repos because one issue is parked
 `ai:needs-feedback` or a PR is `ai:needs-review`.
 
 Light glance metrics from `last-pass.json` (ready / PR / mergeable / progress)
-are fine observability — not a metrics product. See [`AUTONOMY.md`](AUTONOMY.md).
+and the read-only `lokay-yield-report` are fine observability — not a metrics
+product. Green repository verification may be reused only for the identical
+`HEAD`, `origin/main`, and declared test command. See [`AUTONOMY.md`](AUTONOMY.md).
 
 ## Full pass (one tick)
 
