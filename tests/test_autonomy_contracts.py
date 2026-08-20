@@ -233,6 +233,8 @@ def test_contract_k_caps_issue_to_pr_across_repos(tmp_path, monkeypatch):
     assert result["remaining"]["issue_to_pr_started"] == 3
     assert result["remaining"]["max_issue_to_pr_per_pass"] == 3
     by_repo = {row["repo"]: row for row in result["remaining"]["by_repo"]}
+    # The list rows intentionally omit state. Missing state is still OPEN ready.
+    assert result["remaining"]["ready"] == 1
     # One clean repo must remain ready after K is exhausted.
     assert sum(1 for r in by_repo.values() if r.get("ready")) == 1
 

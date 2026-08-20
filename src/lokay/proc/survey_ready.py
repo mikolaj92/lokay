@@ -96,7 +96,9 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 if repo_name not in ready_survey_failed:
                     ready_survey_failed.append(repo_name)
                 continue
-            if str((viewed.get("issue") or {}).get("state") or "").upper() == "OPEN":
+            state = str((viewed.get("issue") or {}).get("state") or "").strip().upper()
+            # Missing / empty state is still OPEN. Only explicit CLOSED parks.
+            if state != "CLOSED":
                 open_work_ready.append(issue)
                 continue
             park_argv = ["--repo", repo_name, "--issue", str(number)]
