@@ -11,9 +11,10 @@ from lokay.graph_run import run_path
 from lokay.passkit import io as pass_io
 from lokay.proc._common import add_config_live
 from lokay.stuck import is_blocked_in_ledger, load_stuck
+from lokay.mill_scope import SKIP_REASON, in_scope, mill_repo
 
-MINI_MILL_REPO = "mikolaj92/lokay"
-_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+MINI_MILL_REPO = mill_repo()
+_REPO_SKIP_REASON = SKIP_REASON
 
 
 def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -36,7 +37,7 @@ def run_dispatch_triage(*, pass_dir: str, config_path: str | None, live: bool) -
     for target in list(plan.get("triage_targets") or []):
         repo_name = str(target["repo"])
         num = int(target["issue"])
-        if repo_name != MINI_MILL_REPO:
+        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
             if repo_name not in skipped_repos:
                 skipped_repos.append(repo_name)
             actions.append(

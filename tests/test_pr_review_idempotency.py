@@ -16,7 +16,7 @@ def _cfg(tmp_path, *, max_rc: int = 2) -> str:
         f"""
 mode: live
 repos:
-  - name: a/b
+  - name: mikolaj92/lokay
     clone_path: {tmp_path}
 executor:
   enabled: true
@@ -92,7 +92,7 @@ def test_same_head_skips_llm_and_does_not_repost(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(pr_review_io, "review_worktree", lambda *a, **k: tmp_path)
 
     code = pr_review_mod.main(
-        ["--config", _cfg(tmp_path), "--live", "--repo", "a/b", "--pr", "7"]
+        ["--config", _cfg(tmp_path), "--live", "--repo", "mikolaj92/lokay", "--pr", "7"]
     )
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert code == 0
@@ -143,7 +143,7 @@ def test_request_changes_cap_escalates_to_needs_review(tmp_path, monkeypatch, ca
     monkeypatch.setattr(pr_review_io, "review_worktree", lambda *a, **k: tmp_path)
 
     code = pr_review_mod.main(
-        ["--config", _cfg(tmp_path, max_rc=2), "--live", "--repo", "a/b", "--pr", "7"]
+        ["--config", _cfg(tmp_path, max_rc=2), "--live", "--repo", "mikolaj92/lokay", "--pr", "7"]
     )
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert code == 0
@@ -164,7 +164,7 @@ def test_tick_escalated_review_is_manual_not_repair(tmp_path, monkeypatch):
         f"""
 mode: live
 repos:
-  - name: a/b
+  - name: mikolaj92/lokay
     clone_path: {tmp_path}
 executor:
   enabled: true

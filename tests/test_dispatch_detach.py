@@ -39,6 +39,7 @@ def test_detach_does_not_wait(monkeypatch, tmp_path):
         "max_fail": 2,
         "blocked_label": "ai:blocked",
         "merge_enabled": True,
+        "repos": ["mikolaj92/lokay", "mikolaj92/Fala"],
     }
     working = {
         "actions": [],
@@ -115,6 +116,7 @@ def test_blocked_plan_only_is_parked_once(monkeypatch, tmp_path):
         "stuck_path": str(tmp_path / "stuck.json"),
         "max_fail": 1,
         "blocked_label": "ai:blocked",
+        "repos": ["mikolaj92/lokay"],
     }
     working = {
         "actions": [],
@@ -215,7 +217,12 @@ def test_dispatch_continues_when_receipt_state_is_unknown(monkeypatch, tmp_path)
     """Stale/unreadable receipts are idle — dispatch still detaches K=1."""
     from lokay.passkit import io as pass_io
 
-    begin = {"live": True, "issue_budget": 1, "stuck_path": str(tmp_path / "stuck.json")}
+    begin = {
+        "live": True,
+        "issue_budget": 1,
+        "stuck_path": str(tmp_path / "stuck.json"),
+        "repos": ["mikolaj92/lokay"],
+    }
     working = {"actions": [], "progress": 0, "stuck": {}, "ready_by_repo": {"mikolaj92/lokay": [{"repo": "mikolaj92/lokay", "number": 1}]}}
     (tmp_path / "begin.json").write_text(__import__("json").dumps(begin))
     (tmp_path / "working.json").write_text(__import__("json").dumps(working))

@@ -11,9 +11,10 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
 from lokay.stuck import is_blocked_in_ledger, load_stuck
+from lokay.mill_scope import SKIP_REASON, mill_repo, scoped_repos
 
-MINI_MILL_REPO = "mikolaj92/lokay"
-_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+MINI_MILL_REPO = mill_repo()
+_REPO_SKIP_REASON = SKIP_REASON
 
 
 def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
@@ -39,9 +40,7 @@ def run_plan_pass(*, pass_dir: str) -> dict[str, Any]:
     ready_by_repo = dict(survey.get("ready_by_repo") or {})
     pr_survey_failed = set(survey.get("pr_survey_failed") or [])
 
-    repos = list(begin.get("repos") or [])
-    skipped_repos = [repo for repo in repos if repo != MINI_MILL_REPO]
-    repos = [repo for repo in repos if repo == MINI_MILL_REPO]
+    repos, skipped_repos = scoped_repos(list(begin.get("repos") or []), mill=MINI_MILL_REPO)
     for repo_name in skipped_repos:
         actions.append(
             {

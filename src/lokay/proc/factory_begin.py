@@ -13,9 +13,10 @@ from lokay.proc._common import add_config_live, load_cfg
 from lokay.preflight import health_lease_status, run_preflight
 from lokay.child_harvest import harvest_fail_closed_children
 from lokay.stuck import load_stuck, save_stuck, stuck_path_for
+from lokay.mill_scope import mill_repo, scoped_repos
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def _offline() -> bool:
@@ -69,11 +70,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
     # The mini mill is Lokay's own delivery lane. Product repositories may
     # remain in the shared catalog, but must never enter its pass workspace:
     # every later survey atom treats begin.repos as permission to call GitHub.
-    repos = (
-        [MINI_MILL_REPO]
-        if MINI_MILL_REPO in configured_repos
-        else configured_repos
-    )
+    repos, _ = scoped_repos(configured_repos, mill=MINI_MILL_REPO)
 
     pipeline = [
         "survey: list-prs + list-inbox + list-issues (hot repos + rotated cold)",

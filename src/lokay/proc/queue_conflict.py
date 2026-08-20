@@ -18,9 +18,10 @@ from lokay.proc import label_issue as p_label
 from lokay.proc._common import add_config_live, load_cfg, runner, semantic_agent_allowed
 from lokay.queue_conflict import READY, SKIP, ConflictVerdict
 from lokay.queue_conflict_agent import evaluate_queue_conflict_with_agent
+from lokay.mill_scope import SKIP_REASON, delivers, in_scope, mill_repo
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def evaluate_stdin(payload: dict[str, Any]) -> dict[str, Any]:
@@ -29,10 +30,10 @@ def evaluate_stdin(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return err("stdin must include issue{} object")
     issue = Issue.from_dict(raw)
-    if issue.repo != MINI_MILL_REPO:
+    if not delivers(issue.repo, mill=MINI_MILL_REPO):
         verdict = ConflictVerdict(
             outcome=SKIP,
-            reason="repo_not_delivered_by_mini_mill",
+            reason=SKIP_REASON,
             detail={"repo": issue.repo, "issue": issue.number},
         )
     else:
@@ -148,7 +149,7 @@ def run_queue_conflict(
 
     for repo_name in scan_repos:
         ready = list(ready_by_repo.get(repo_name) or [])
-        if repo_name != MINI_MILL_REPO:
+        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
             # This mill delivers Lokay only. Do not let a stale/malformed pass
             # invoke the semantic agent (and therefore gh) for product repos.
             for issue in ready:
@@ -235,7 +236,7 @@ def run_queue_conflict(
         clean = [
             r
             for r in list(implement.get("clean_repos") or [])
-            if r == MINI_MILL_REPO and ready_by_repo.get(r)
+            if in_scope(r, begin.get("repos") or [], mill=MINI_MILL_REPO) and ready_by_repo.get(r)
         ]
         implement["clean_repos"] = clean
         pass_io.write_json(impl_path, implement)

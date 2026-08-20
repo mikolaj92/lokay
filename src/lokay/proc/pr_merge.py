@@ -9,8 +9,9 @@ from lokay.gh_prs import merge_pr
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.mill_scope import SKIP_REASON, mill_repo
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +26,7 @@ def main(argv: list[str] | None = None) -> int:
             ok(
                 planned=False,
                 skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
+                reason=SKIP_REASON,
                 repo=args.repo,
                 pr=args.pr,
                 merged=False,

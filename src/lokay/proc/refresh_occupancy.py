@@ -19,6 +19,7 @@ from lokay.passkit.working import load_begin_working, recount_prs, save_begin_wo
 from lokay.proc import get_issue as p_get_issue
 from lokay.proc import list_prs as p_list_prs
 from lokay.proc._common import add_config_live
+from lokay.mill_scope import SKIP_REASON, in_scope, mill_repo
 from lokay.proc.detach_issue_to_pr import (
     clear_dead_issue_to_pr_receipts,
     clear_issue_to_pr_receipt,
@@ -27,8 +28,8 @@ from lokay.proc.detach_issue_to_pr import (
 )
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
-_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+MINI_MILL_REPO = mill_repo()
+_REPO_SKIP_REASON = SKIP_REASON
 
 
 def _merged_this_pass(working: dict[str, Any]) -> list[str]:
@@ -156,7 +157,7 @@ def run_refresh_occupancy(
     for repo_name in list(begin.get("repos") or []):
         prev_list = list(previous.get(repo_name) or [])
         ready = list(ready_by_repo.get(repo_name) or [])
-        if repo_name != MINI_MILL_REPO:
+        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
             skipped_repos.append(repo_name)
             actions.append(
                 {

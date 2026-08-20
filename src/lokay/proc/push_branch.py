@@ -8,9 +8,10 @@ from pathlib import Path
 from lokay.envelope import emit_exit, err, ok
 from lokay.git_push import is_configured_issue_branch, push_branch
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
+from lokay.mill_scope import SKIP_REASON, mill_repo
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
             ok(
                 planned=not args.live,
                 skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
+                reason=SKIP_REASON,
                 repo=args.repo,
                 branch=args.branch,
                 worktree=args.worktree,

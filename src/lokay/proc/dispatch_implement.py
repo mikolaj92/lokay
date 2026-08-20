@@ -22,13 +22,14 @@ from lokay.proc.detach_issue_to_pr import (
 )
 from lokay.proc.repo_mutex import inspect_mutex, _live_ps_text
 from lokay.stuck import clear_issue, excluded_numbers, record_failure, save_stuck
+from lokay.mill_scope import SKIP_REASON, in_scope, mill_repo
 
 # In-process hook for compose_tick tests. Production / Fala leave this None
 # and detach. Tick binds a patched composer only when tests replace it.
 compose_issue_to_pr = None
 
-MINI_MILL_REPO = "mikolaj92/lokay"
-_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+MINI_MILL_REPO = mill_repo()
+_REPO_SKIP_REASON = SKIP_REASON
 
 
 def _is_plan_only_failure(result: dict[str, Any]) -> bool:
@@ -89,7 +90,7 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
     for repo_name in list(implement.get("clean_repos") or []):
         if issue_budget <= 0:
             break
-        if repo_name != MINI_MILL_REPO:
+        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
             skipped_repos.append(str(repo_name))
             actions.append(
                 {

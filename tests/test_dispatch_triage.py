@@ -9,7 +9,11 @@ def _pass_dir(tmp_path: Path, *, stuck_path: Path) -> Path:
     pass_dir.mkdir()
     pass_io.write_json(
         pass_io.begin_path(pass_dir),
-        {"stuck_path": str(stuck_path), "live": True},
+        {
+            "stuck_path": str(stuck_path),
+            "live": True,
+            "repos": [dispatch_triage.MINI_MILL_REPO],
+        },
     )
     pass_io.write_json(
         pass_io.plan_path(pass_dir),
@@ -80,6 +84,10 @@ def test_dispatch_triage_skips_repos_outside_mini_mill(tmp_path, monkeypatch):
     stuck_path.write_text("{}\n", encoding="utf-8")
     pass_dir = _pass_dir(tmp_path, stuck_path=stuck_path)
     plan_path = pass_io.plan_path(pass_dir)
+    begin_path = pass_io.begin_path(pass_dir)
+    begin = pass_io.read_json(begin_path)
+    begin["repos"] = ["Temida/takt", dispatch_triage.MINI_MILL_REPO]
+    pass_io.write_json(begin_path, begin)
     pass_io.write_json(
         plan_path,
         {

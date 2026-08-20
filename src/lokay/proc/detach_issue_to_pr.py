@@ -16,10 +16,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from lokay.mill_scope import SKIP_REASON, delivers, mill_repo
+
 
 _ACTIVATION_PROTOCOL = "pipe-v1"
-MINI_MILL_REPO = "mikolaj92/lokay"
-_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+MINI_MILL_REPO = mill_repo()
+_REPO_SKIP_REASON = SKIP_REASON
 
 
 def issue_to_pr_log_path(repo: str, number: int) -> Path:
@@ -554,7 +556,7 @@ def detach_issue_to_pr(
     """
     repo_name = str(repo)
     issue_number = int(issue)
-    if repo_name != MINI_MILL_REPO:
+    if not delivers(repo_name, mill=MINI_MILL_REPO):
         return {
             "ok": True,
             "detached": False,

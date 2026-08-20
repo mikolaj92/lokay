@@ -226,7 +226,7 @@ def test_agent_argv_from_template_not_vendor_branch():
 
 def test_make_branch_atomic(capsys):
     code = make_branch_main(
-        ["--prefix", "ai/fix", "--repo", "a/b", "--issue", "3", "--title", "Hello World"]
+        ["--prefix", "ai/fix", "--repo", "mikolaj92/lokay", "--issue", "3", "--title", "Hello World"]
     )
     assert code == 0
     import json
@@ -234,7 +234,7 @@ def test_make_branch_atomic(capsys):
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert out["ok"] is True
     assert out["branch"].startswith("ai/fix/3-")
-    assert branch_for_issue("ai/fix", "a/b", 3, "Hello World") == out["branch"]
+    assert branch_for_issue("ai/fix", "mikolaj92/lokay", 3, "Hello World") == out["branch"]
 
 
 def test_tick_offline_survey(tmp_path: Path, monkeypatch):

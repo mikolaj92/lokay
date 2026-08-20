@@ -16,6 +16,7 @@ from lokay.closeout import COUNTERS
 from lokay.proc._common import add_config_live
 from lokay.proc.closeout_pr import MINI_MILL_REPO, run_closeout_pr
 from lokay.stuck import save_stuck
+from lokay.mill_scope import SKIP_REASON, in_scope
 
 
 def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -34,7 +35,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     skipped_repos: list[str] = []
 
     for repo_name in list(begin.get("repos") or []):
-        if repo_name != MINI_MILL_REPO:
+        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
             skipped_repos.append(repo_name)
             actions.append(
                 {
@@ -42,7 +43,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                     "repo": repo_name,
                     "ok": True,
                     "skipped": True,
-                    "reason": "repo_not_delivered_by_mini_mill",
+                    "reason": SKIP_REASON,
                 }
             )
             continue
@@ -60,6 +61,7 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
                 branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
                 stuck=stuck,
                 stuck_path=stuck_path,
+                catalog=list(begin.get("repos") or []),
             )
             actions.extend(out.get("actions") or [])
             repair_budget = int(out.get("repair_budget") or 0)

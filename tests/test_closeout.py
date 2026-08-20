@@ -46,8 +46,11 @@ def test_open_issue_with_merged_fixes_pr_removes_ready_labels(monkeypatch):
 def test_existing_merged_delivery_is_closed_out_before_graph_can_start(monkeypatch):
     monkeypatch.delenv("LOKAY_ISSUE_TO_PR_ACTIVATION_FD", raising=False)
     monkeypatch.setattr(
-        issue_to_pr, "load_config", lambda _path: SimpleNamespace(mode="live")
+        issue_to_pr,
+        "load_config",
+        lambda _path: SimpleNamespace(mode="live", state_path="state.jsonl"),
     )
+    monkeypatch.setattr(issue_to_pr, "append_event", lambda *_a, **_k: None)
     monkeypatch.setattr(
         issue_to_pr, "_delivery_stop_reason", lambda _repo, _issue: "delivery_pr_exists"
     )
@@ -65,12 +68,12 @@ def test_existing_merged_delivery_is_closed_out_before_graph_can_start(monkeypat
     )
 
     out = issue_to_pr.compose_issue_to_pr(
-        config_path=None, repo="owner/repo", issue_number=7, live=True
+        config_path=None, repo="mikolaj92/lokay", issue_number=7, live=True
     )
 
     assert out["stopped"] is True
     assert out["closeout"]["labels_removed"] is True
-    assert calls == [["--live", "--repo", "owner/repo", "--issue", "7"]]
+    assert calls == [["--live", "--repo", "mikolaj92/lokay", "--issue", "7"]]
 
 
 
