@@ -60,6 +60,7 @@ def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):
     from lokay import graph_run
 
     captured = {}
+    monkeypatch.setattr("lokay.preflight.require_healthy", lambda config: None)
 
     def fake_host_run_package(**kwargs):
         captured.update(kwargs)
