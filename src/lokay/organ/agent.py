@@ -32,6 +32,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
+    repo_flags = ["--repo", repo] if repo else []
     issue_number = ctx["issue_number"]
     pr_number = ctx["pr_number"]
     repair_mode = ctx["repair_mode"]
@@ -214,7 +215,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                     "error": "refusing recheck: repair patch produced no commit",
                     "reason": "zero_diff",
                 }
-        argv = ["--repo", repo, "--worktree", worktree]
+        argv = [*repo_flags, "--worktree", worktree]
         if inputs.get("changed_scope"):
             argv.append("--changed-scope")
         out = _run_atom_main(test_local.main, argv)
@@ -272,15 +273,12 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
     if atom == "rebase_onto_base":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        return _run_atom_main(
-            rebase_onto_base.main,
-            [*cfg, *live, "--repo", repo, "--worktree", worktree],
-        )
+        return _run_atom_main(rebase_onto_base.main, [*cfg, *live, *repo_flags, "--worktree", worktree])
 
     if atom == "test_local":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        argv = ["--repo", repo, "--worktree", worktree]
+        argv = [*repo_flags, "--worktree", worktree]
         if inputs.get("changed_scope"):
             argv.append("--changed-scope")
         out = _run_atom_main(test_local.main, argv)
@@ -341,7 +339,7 @@ def handle_agent(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                 }
         return _run_atom_main(
             push_branch.main,
-            [*cfg, *live, "--repo", repo, "--worktree", worktree, "--branch", branch],
+            [*cfg, *live, *repo_flags, "--worktree", worktree, "--branch", branch],
         )
 
     if atom == "pr_create":

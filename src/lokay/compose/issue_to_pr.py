@@ -155,12 +155,17 @@ def compose_issue_to_pr(
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
 
     if live and (stop_reason := _delivery_stop_reason(repo, issue_number)):
-        return _stopped_delivery(
+        result = _stopped_delivery(
             config_path=config_path,
             repo=repo,
             issue_number=issue_number,
             reason=stop_reason,
         )
+        try:
+            append_event(load_config(config_path).state_path, result)
+        except Exception:
+            pass
+        return result
 
     result = run_path(
         path_id="issue_to_pr", repo=repo, issue=issue_number,

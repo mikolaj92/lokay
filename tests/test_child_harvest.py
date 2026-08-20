@@ -96,6 +96,42 @@ def test_cycle_start_without_pid_does_not_block_live_sibling(tmp_path: Path):
     assert excluded_numbers(stuck, "mikolaj92/lokay") == set()
 
 
+def test_ok_true_issue_closed_is_not_no_pr(tmp_path: Path):
+    """A stopped/delivered child writes ok=True. That is not a vanished crash."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-5.json", repo="a/b", issue=5, pid=11)
+    _event(state, repo="a/b", issue=5, ok=True, reason="issue_closed")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert stuck["issues"] == {}
+
+
+def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
+    """ok=True and no PR is a stop/race, not FAIL_CLOSED no_pr."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-9.json", repo="a/b", issue=9, pid=12)
+    _event(state, repo="a/b", issue=9, ok=True)
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert "a/b#9" not in stuck["issues"]
+
+
 def test_dead_pid_without_event_or_reason_is_fail_closed(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
