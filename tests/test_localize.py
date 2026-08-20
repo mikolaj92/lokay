@@ -149,6 +149,80 @@ def test_localize_cli_planned_no_write(tmp_path: Path, capsys):
     assert not (wt / LOCALIZE_REL_PATH).exists()
 
 
+def test_localize_cli_skips_agent_when_localize_json_has_paths(tmp_path: Path, monkeypatch, capsys):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: true
+  agent: grok
+  command: grok
+  args: ['prompt']
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wts"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    wt = tmp_path / "wt"
+    (wt / "src").mkdir(parents=True)
+    (wt / "src" / "a.py").write_text("a\n", encoding="utf-8")
+    loc_dir = wt / ".lokay"
+    loc_dir.mkdir()
+    (loc_dir / "localize.json").write_text(
+        '{"paths":["src/a.py"],"source":"deterministic"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(localize, "mutations_allowed", lambda **k: True)
+    monkeypatch.setattr(
+        localize,
+        "semantic_agent_allowed",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("existing localize.json must skip the localize agent")
+        ),
+    )
+    issue_json = tmp_path / "issue.json"
+    issue_json.write_text(
+        json.dumps(
+            _issue(
+                repo="mikolaj92/lokay",
+                body="Patch `src/a.py` for the bug.\n",
+                title="patch a",
+            ).to_dict()
+        ),
+        encoding="utf-8",
+    )
+    code = localize.main(
+        [
+            "--config",
+            str(cfg),
+            "--live",
+            "--worktree",
+            str(wt),
+            "--issue-json",
+            str(issue_json),
+        ]
+    )
+    assert code == 0
+    out = json.loads(capsys.readouterr().out.strip())
+    assert out["ok"] is True
+    assert "src/a.py" in out["paths"]
+    assert out.get("source") in {"existing", "bypass", "deterministic"}
+
+
 def test_localize_cli_live_writes(tmp_path: Path, monkeypatch, capsys):
     cfg = tmp_path / "config.yaml"
     cfg.write_text(

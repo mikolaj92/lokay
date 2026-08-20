@@ -176,7 +176,8 @@ sees ticket + code diff + tests, not `.lokay/approach.md` and not a
 compare-to-plan instruction.
 
 `localize` (`lokay-localize`) remains one job: a non-empty edit path list
-written to `.lokay/localize.json` before `run_agent`. Live mode asks the
+written to `.lokay/localize.json` before `run_agent`. If that file already
+has paths, skip the localize executor and start `run_agent`. Live mode asks the
 configured executor for a structured path proposal; Python still validates
 against the tree, keeps extra/seed paths, and fails closed on an empty list.
 Invalid JSON / timeout falls back to the deterministic scorer. Not an
@@ -261,7 +262,8 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the mill do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
 - **localize** proposes paths immediately before the coding slot (serial path:
-  `worktree_add → plan_issue → localize → run_agent`). Live mode may call the
+  `worktree_add → plan_issue → localize → run_agent`). Existing
+  `.lokay/localize.json` paths skip the localize executor. Live mode may call the
   configured executor once for a JSON path list; Python validates and still
   fails closed on missing/empty localize — the coding agent does not start.
   `plan_issue.files_likely` is passed as `--extra-path`. Weak token hits do not
