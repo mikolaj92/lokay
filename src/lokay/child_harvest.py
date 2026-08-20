@@ -12,7 +12,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Callable
 
+from lokay.mill_scope import mill_repo
 from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
+from lokay.runner import Runner, gh_spec
 from lokay.stuck import clear_issue, is_blocked_in_ledger, issue_key, record_failure
 
 FAIL_CLOSED = frozenset(
@@ -94,6 +96,67 @@ def _clear_stale_no_pr(stuck: dict[str, Any], repo: str, issue: int) -> None:
     if reason != "no_pr" and "produced no PR" not in error:
         return
     clear_issue(stuck, repo, issue)
+
+
+def _github_closed_mill_issues(repo: str) -> set[int]:
+    """GitHub CLOSED numbers for this mill repo. Empty on probe failure."""
+    name = str(repo or "").strip()
+    if not name:
+        return set()
+    try:
+        result = Runner().run_checked(
+            gh_spec(
+                [
+                    "issue",
+                    "list",
+                    "--repo",
+                    name,
+                    "--state",
+                    "closed",
+                    "--json",
+                    "number,state",
+                    "--limit",
+                    "1000",
+                ],
+                timeout_seconds=60,
+            ),
+            live=True,
+        )
+        rows = json.loads(result.stdout or "[]")
+    except (OSError, RuntimeError, ValueError):
+        return set()
+    if not isinstance(rows, list):
+        return set()
+    out: set[int] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("state") or "").upper() != "CLOSED":
+            continue
+        number = _as_int(row.get("number"))
+        if number is not None:
+            out.add(number)
+    return out
+
+
+def _clear_github_closed_mill_rows(stuck: dict[str, Any]) -> None:
+    """Compacted journals lose issue_closed; GitHub CLOSED is still delivery."""
+    mill = mill_repo()
+    prefix = f"{mill}#"
+    mill_rows = [
+        key
+        for key in (stuck.get("issues") or {})
+        if str(key).startswith(prefix)
+    ]
+    if not mill_rows:
+        return
+    closed = _github_closed_mill_issues(mill)
+    if not closed:
+        return
+    for key in mill_rows:
+        issue = _as_int(str(key).rpartition("#")[2])
+        if issue in closed:
+            clear_issue(stuck, mill, issue)
 
 
 _REASON_PRIORITY = (
@@ -527,4 +590,5 @@ def harvest_fail_closed_children(
             miss_runs=miss_runs,
             error=str(row.get("last_error") or counted),
         )
+    _clear_github_closed_mill_rows(stuck)
     return stuck
