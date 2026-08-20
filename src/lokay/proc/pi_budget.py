@@ -10,7 +10,7 @@ from typing import Any, Callable
 
 from lokay.envelope import emit_exit, err, ok
 
-DEFAULT_BUDGET_S = 480
+DEFAULT_BUDGET_S = 1800
 OVER_BUDGET_EXIT = 2
 
 
