@@ -41,7 +41,11 @@ def test_no_activation_fd_preserves_direct_issue_to_pr_entry(monkeypatch):
 
 def test_closed_issue_stops_before_graph_mutation(monkeypatch):
     monkeypatch.delenv("LOKAY_ISSUE_TO_PR_ACTIVATION_FD", raising=False)
-    monkeypatch.setattr(issue_to_pr, "load_config", lambda _path: SimpleNamespace(mode="live"))
+    monkeypatch.setattr(
+        issue_to_pr,
+        "load_config",
+        lambda _path: SimpleNamespace(mode="live", state_path="state.jsonl"),
+    )
     monkeypatch.setattr(issue_to_pr, "_delivery_stop_reason", lambda _repo, _issue: "issue_closed")
     monkeypatch.setattr(issue_to_pr, "run_proc", lambda _main, _argv: {"ok": True})
     monkeypatch.setattr(
@@ -49,14 +53,18 @@ def test_closed_issue_stops_before_graph_mutation(monkeypatch):
         "run_path",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("graph must not run")),
     )
+    events: list[dict] = []
+    monkeypatch.setattr(issue_to_pr, "append_event", lambda _path, event: events.append(event))
 
     result = issue_to_pr.compose_issue_to_pr(
-        config_path=None, repo="owner/repo", issue_number=329, live=True
+        config_path=None, repo="mikolaj92/lokay", issue_number=329, live=True
     )
 
     assert result["ok"] is True
     assert result["stopped"] is True
     assert result["reason"] == "issue_closed"
+    assert events and events[0]["reason"] == "issue_closed"
+    assert events[0]["kind"] == "issue_to_pr"
 
 
 def test_issue_closed_during_graph_stops_without_pr_create_failure(monkeypatch):
@@ -87,7 +95,7 @@ def test_issue_closed_during_graph_stops_without_pr_create_failure(monkeypatch):
     monkeypatch.setattr(issue_to_pr, "append_event", lambda _path, event: events.append(event))
 
     result = issue_to_pr.compose_issue_to_pr(
-        config_path="config.yaml", repo="owner/repo", issue_number=408, live=True
+        config_path="config.yaml", repo="mikolaj92/lokay", issue_number=408, live=True
     )
 
     assert result["ok"] is True
@@ -95,7 +103,7 @@ def test_issue_closed_during_graph_stops_without_pr_create_failure(monkeypatch):
     assert result["reason"] == "issue_closed"
     assert result["closeout"]["labels_removed"] is True
     assert closeout_calls == [
-        ["--config", "config.yaml", "--live", "--repo", "owner/repo", "--issue", "408"]
+        ["--config", "config.yaml", "--live", "--repo", "mikolaj92/lokay", "--issue", "408"]
     ]
     assert events == [result]
 
@@ -113,7 +121,7 @@ def test_unavailable_delivery_survey_does_not_stop_implementation(monkeypatch):
     monkeypatch.setattr(issue_to_pr, "append_event", lambda _path, _result: None)
 
     result = issue_to_pr.compose_issue_to_pr(
-        config_path=None, repo="owner/repo", issue_number=331, live=True
+        config_path=None, repo="mikolaj92/lokay", issue_number=331, live=True
     )
 
     assert result["ok"] is True

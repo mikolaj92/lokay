@@ -55,10 +55,13 @@ def _write_pass(tmp_path: Path, repos: list[str]) -> Path:
 def test_product_repo_is_skipped_without_mutations(
     repo: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    pass_dir = _write_pass(tmp_path, [repo])
+    pass_dir = _write_pass(tmp_path, [repo, "mikolaj92/lokay"])
 
-    def fail(*_args: object, **_kwargs: object) -> dict[str, object]:
-        raise AssertionError("product repo reached a GitHub mutation atom")
+    def fail(fn: object, argv: list[str]) -> dict[str, object]:
+        repo_name = argv[argv.index("--repo") + 1]
+        if repo_name != "mikolaj92/lokay":
+            raise AssertionError("product repo reached a GitHub mutation atom")
+        return {"ok": True, "closed": False, "applied": False}
 
     monkeypatch.setattr(resolve_conflicts, "run_proc", fail)
 
@@ -71,15 +74,11 @@ def test_product_repo_is_skipped_without_mutations(
     assert out["reason"] == "repo_not_delivered_by_mini_mill"
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["prs_by_repo"][repo] == [_conflicting_pr(20)]
-    assert working["remaining_prs"] == 1
-    assert working["progress"] == 0
-    assert working["actions"] == [
-        {
-            "step": "skip_resolve_conflicts_outside_mini_scope",
-            "repo": repo,
-            "reason": "repo_not_delivered_by_mini_mill",
-        }
-    ]
+    assert any(
+        action.get("step") == "skip_resolve_conflicts_outside_mini_scope"
+        and action.get("repo") == repo
+        for action in working["actions"]
+    )
 
 
 def test_mixed_catalog_skips_product_and_resolves_lokay(

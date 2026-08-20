@@ -379,6 +379,25 @@ def test_organ_dispatches_worktree_from_worktree_add(monkeypatch):
     assert captured == [(test_local.main, ["--worktree", "/tmp/wt"])]
 
 
+def test_organ_omits_empty_repo_on_test_local(monkeypatch):
+    captured: list[tuple] = []
+
+    def fake_run(main, argv):
+        captured.append((main, argv))
+        return {"ok": True, "tested": True}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "test_local",
+        {"repo": ""},
+        {"worktree_add": {"worktree": "/tmp/wt"}},
+    )
+    assert result["ok"] is True
+    argv = captured[0][1]
+    assert "--repo" not in argv
+    assert argv == ["--worktree", "/tmp/wt"]
+
+
 def test_organ_red_gate_does_not_reach_push(monkeypatch):
     """Fail-closed atom result: Fala would raise before conducting push."""
     monkeypatch.setattr(

@@ -398,13 +398,16 @@ def harvest_fail_closed_children(
                 event_pr = _as_int((event or {}).get("pr")) if event else None
                 if receipt_pr or event_pr:
                     continue
-                # Vanished: dead child and no PR. A classified miss/crash
-                # already has a reason. An unknown ok=False is not no_pr.
-                vanished = event is None or event.get("ok") is True
-                if not vanished:
+                # ok=True is a recorded stop/delivery (issue_closed,
+                # delivery_pr_exists, skipped). That is not a vanished crash.
+                if event is not None and event.get("ok") is True:
+                    continue
+                # Vanished: dead child, no PR, no journal event.
+                # An unknown ok=False is not no_pr.
+                if event is not None:
                     continue
                 reason = "no_pr"
-                event = event or {
+                event = {
                     "ok": False,
                     "reason": "no_pr",
                     "error": "issue_to_pr produced no PR",

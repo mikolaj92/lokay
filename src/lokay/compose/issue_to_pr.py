@@ -16,8 +16,9 @@ from lokay.passkit.support import run_proc
 from lokay.proc import closeout as p_closeout
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
+from lokay.mill_scope import SKIP_REASON, delivers, mill_repo
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def _await_detach_activation() -> bool:
@@ -139,13 +140,13 @@ def compose_issue_to_pr(
     incident_fingerprint: str = "",
     package_path: str | None = None,
 ) -> dict:
-    if repo != MINI_MILL_REPO:
+    if not delivers(repo, mill=MINI_MILL_REPO):
         return ok(
             kind="issue_to_pr",
             engine="fala",
             planned=False,
             skipped=True,
-            reason="repo_not_delivered_by_mini_mill",
+            reason=SKIP_REASON,
             repo=repo,
             issue=issue_number,
         )
@@ -155,12 +156,17 @@ def compose_issue_to_pr(
         return {"ok": False, "error": "refusing live compose while config mode is not live"}
 
     if live and (stop_reason := _delivery_stop_reason(repo, issue_number)):
-        return _stopped_delivery(
+        result = _stopped_delivery(
             config_path=config_path,
             repo=repo,
             issue_number=issue_number,
             reason=stop_reason,
         )
+        try:
+            append_event(load_config(config_path).state_path, result)
+        except Exception:
+            pass
+        return result
 
     result = run_path(
         path_id="issue_to_pr", repo=repo, issue=issue_number,

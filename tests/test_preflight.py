@@ -891,7 +891,7 @@ def test_commit_and_push_dry_run_do_not_require_config(tmp_path, monkeypatch, ca
     from lokay.proc import commit_all, push_branch
     monkeypatch.delenv("LOKAY_CONFIG", raising=False)
     assert commit_all.main(["--worktree", str(tmp_path), "--message", "x"]) == 0
-    assert push_branch.main(["--worktree", str(tmp_path), "--branch", "x"]) == 0
+    assert push_branch.main(["--repo", "mikolaj92/lokay", "--worktree", str(tmp_path), "--branch", "x"]) == 0
 
 
 def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):

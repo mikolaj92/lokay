@@ -13,6 +13,7 @@ from lokay.gh_issues import (
     remove_issue_labels,
 )
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.mill_scope import SKIP_REASON, mill_repo
 from lokay.stage_ledger import (
     INFLIGHT_STAGES,
     LABEL_READY,
@@ -21,7 +22,7 @@ from lokay.stage_ledger import (
 )
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def _open_issue_removals(
@@ -61,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
             ok(
                 planned=not args.live,
                 skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
+                reason=SKIP_REASON,
                 repo=args.repo,
                 issue=args.issue,
                 stage=args.stage,

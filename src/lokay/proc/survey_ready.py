@@ -7,7 +7,6 @@ from typing import Any
 
 
 WORK_READY_LABEL = "work:ready"
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
@@ -19,6 +18,9 @@ from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.passkit.hot import survey_scope
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
+from lokay.mill_scope import mill_repo, scoped_repos
+
+MINI_MILL_REPO = mill_repo()
 
 
 def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -39,9 +41,10 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     scope = set(survey_scope(begin) or [])
     scoped = survey_scope(begin) is not None
     repos = list(begin.get("repos") or [])
-    lokay_mill = MINI_MILL_REPO in repos
+    _, skipped_repos = scoped_repos(repos, mill=MINI_MILL_REPO)
+    skipped = set(skipped_repos)
     for repo_name in repos:
-        if lokay_mill and repo_name != MINI_MILL_REPO:
+        if repo_name in skipped:
             actions.append(
                 {
                     "step": "skip_ready_survey_outside_mini_scope",

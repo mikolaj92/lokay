@@ -6,9 +6,10 @@ import argparse
 
 from lokay.envelope import emit_exit, ok
 from lokay.git_branch import branch_for_issue
+from lokay.mill_scope import SKIP_REASON, mill_repo
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -22,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(
             ok(
                 skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
+                reason=SKIP_REASON,
                 repo=args.repo,
                 issue=args.issue,
             )

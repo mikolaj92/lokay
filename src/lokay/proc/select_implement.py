@@ -11,9 +11,10 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
 from lokay.stuck import excluded_numbers, load_stuck
+from lokay.mill_scope import mill_repo, scoped_repos
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_MILL_REPO = mill_repo()
 
 
 def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
@@ -39,7 +40,8 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
     }
     clean_repos: list[str] = []
     repos = list(begin.get("repos") or [])
-    lokay_mill = MINI_MILL_REPO in repos
+    _, skipped_repos = scoped_repos(repos, mill=MINI_MILL_REPO)
+    skipped = set(skipped_repos)
 
     if not live or issue_budget <= 0:
         payload = {"clean_repos": [], "issue_budget": issue_budget, "reason": "no_live_budget"}
@@ -49,7 +51,7 @@ def run_select_implement(*, pass_dir: str) -> dict[str, Any]:
         return ok(pass_dir=pass_dir, selected=0)
 
     for repo_name in repos:
-        if lokay_mill and repo_name != MINI_MILL_REPO:
+        if repo_name in skipped:
             actions.append(
                 {
                     "step": "skip_issue_to_pr_outside_mini_scope",

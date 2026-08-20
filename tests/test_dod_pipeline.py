@@ -209,12 +209,14 @@ def test_pr_merge_refuses_product_repo_without_calling_gh(
         ["--config", str(cfg), "--live", "--repo", "mikolaj92/temida", "--pr", "88"]
     )
 
-    assert code == 1
+    assert code == 0
     env = _envelope(capsys)
-    assert env["ok"] is False
-    assert "refusing" in env["error"]
+    assert env["ok"] is True
+    assert env["skipped"] is True
+    assert env["reason"] == "repo_not_delivered_by_mini_mill"
     assert env["repo"] == "mikolaj92/temida"
     assert env["pr"] == 88
+    assert env["merged"] is False
 
 
 def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):

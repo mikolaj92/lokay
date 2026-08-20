@@ -55,7 +55,7 @@ def test_push_token_mismatch_pushes_verified_issue_branch(
     monkeypatch.setattr(push_module, "mutations_allowed", _reject_token_mismatch)
 
     assert push_module.main(
-        ["--live", "--worktree", str(worktree), "--branch", branch]
+        ["--live", "--repo", "mikolaj92/lokay", "--worktree", str(worktree), "--branch", branch]
     ) == 0
 
     payload = json.loads(capsys.readouterr().out)
@@ -75,7 +75,7 @@ def test_push_token_mismatch_still_refuses_configured_main(
     monkeypatch.setattr(push_module, "mutations_allowed", _reject_token_mismatch)
 
     assert push_module.main(
-        ["--live", "--worktree", str(clone), "--branch", "main"]
+        ["--live", "--repo", "mikolaj92/lokay", "--worktree", str(clone), "--branch", "main"]
     ) == 1
 
     payload = json.loads(capsys.readouterr().out)
@@ -102,6 +102,6 @@ def test_push_token_mismatch_refuses_branch_other_than_worktree_head(
     monkeypatch.setattr(push_module, "mutations_allowed", _reject_token_mismatch)
 
     assert push_module.main(
-        ["--live", "--worktree", str(worktree), "--branch", "other"]
+        ["--live", "--repo", "mikolaj92/lokay", "--worktree", str(worktree), "--branch", "other"]
     ) == 1
     assert json.loads(capsys.readouterr().out)["ok"] is False
