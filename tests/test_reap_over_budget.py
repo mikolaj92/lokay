@@ -253,6 +253,72 @@ def test_keeps_live_receipt_when_issue_is_open(tmp_path, monkeypatch):
 
 
 
+def test_harvests_over_budget_coder_with_real_diff(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    worktree = tmp_path / "wt"
+    worktree.mkdir()
+    (home / ".lokay" / "cycle").mkdir(parents=True)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path.write_text(
+        json.dumps({"ok": True, "pid": 4242, "repo": "mikolaj92/lokay", "issue": 9}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        reap_over_budget,
+        "live_issue_to_pr_receipts",
+        lambda: [{"repo": "mikolaj92/lokay", "issue": 9, "pid": 4242}],
+    )
+    monkeypatch.setattr(
+        reap_over_budget,
+        "check_pi_budget",
+        lambda pid, budget: {
+            "ok": True,
+            "over_budget": True,
+            "elapsed_s": 900,
+            "budget_s": budget,
+            "pid": pid,
+        },
+    )
+    monkeypatch.setattr(
+        reap_over_budget, "wrapper_has_coding_descendant", lambda pid: True
+    )
+    monkeypatch.setattr(reap_over_budget, "_coder_has_real_diff", lambda pid: True)
+    monkeypatch.setattr(reap_over_budget, "_coder_worktree", lambda pid: worktree)
+    monkeypatch.setattr(reap_over_budget, "_worktree_branch", lambda wt: "ai/fix/9-real")
+    monkeypatch.setattr(
+        reap_over_budget,
+        "terminate_issue_to_pr_pid",
+        lambda pid: (_ for _ in ()).throw(AssertionError("must not kill coder")),
+    )
+    calls: list[tuple[str, list[str]]] = []
+
+    def fake_run_proc(main, argv):
+        name = getattr(main, "__module__", "")
+        calls.append((name, list(argv)))
+        if name.endswith("commit_all"):
+            return {"ok": True, "committed": True, "commit": "abc"}
+        if name.endswith("push_branch"):
+            return {"ok": True}
+        if name.endswith("pr_create"):
+            return {"ok": True, "pr": 77, "head": "ai/fix/9-real"}
+        raise AssertionError(main)
+
+    monkeypatch.setattr(reap_over_budget, "run_proc", fake_run_proc)
+
+    out = reap_over_budget.run_reap_over_budget(budget_s=1800, live=True)
+
+    assert out["ok"] is True
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["reason"] == "harvested"
+    assert out["kept"][0]["pr"] == 77
+    assert any(name.endswith("commit_all") for name, _ in calls)
+    assert any(name.endswith("push_branch") for name, _ in calls)
+    assert any(name.endswith("pr_create") for name, _ in calls)
+    stamped = json.loads(path.read_text(encoding="utf-8"))
+    assert stamped.get("reaped") is not True
+
+
 def test_does_not_reap_wrapper_while_coder_lives(tmp_path, monkeypatch):
     home = tmp_path / "home"
     (home / ".lokay" / "cycle").mkdir(parents=True)
