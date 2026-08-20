@@ -20,6 +20,7 @@ from lokay.localize import (
     _norm_rel,
     build_localization,
     extract_seed_paths,
+    load_existing_localize_paths,
     walk_repo_tree,
 )
 from lokay.pr_review import PrReviewError, extract_json_object
@@ -126,6 +127,17 @@ def build_localization_with_agent(
             session_kind="localize" if execute else "",
         )
         return replace(value, semantic=trace.to_dict())
+
+    existing = load_existing_localize_paths(worktree)
+    if existing:
+        value = Localization(
+            paths=tuple(existing[: max(1, int(max_paths or 40))]),
+            source="existing",
+            seed_paths=tuple(existing),
+            notes=("Existing localize.json skipped semantic localization.",),
+            worktree=str(Path(worktree)) if worktree is not None else "",
+        )
+        return traced(value, "existing", "completed")
 
     fallback = build_localization(
         worktree=worktree,

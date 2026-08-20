@@ -944,6 +944,32 @@ def build_localization(
     )
 
 
+def load_existing_localize_paths(
+    worktree: Path | None,
+    *,
+    rel_path: str = LOCALIZE_REL_PATH,
+) -> list[str]:
+    """Non-empty paths already written to localize.json, if any."""
+    if worktree is None:
+        return []
+    path = Path(worktree) / rel_path
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, dict):
+        return []
+    rows = raw.get("paths") or []
+    if not isinstance(rows, list):
+        return []
+    out: list[str] = []
+    for item in rows:
+        rel = _norm_rel(str(item or ""))
+        if rel and ".." not in rel.split("/"):
+            out.append(rel)
+    return list(dict.fromkeys(out))
+
+
 def write_localize_file(
     worktree: Path,
     localization: Localization,

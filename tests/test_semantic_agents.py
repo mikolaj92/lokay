@@ -199,6 +199,34 @@ def test_parse_queue_conflict_rejects_needs_human():
         parse_queue_conflict_output('{"outcome":"needs_human"}')
 
 
+def test_existing_localize_json_skips_semantic_agent(tmp_path: Path, monkeypatch):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("a\n", encoding="utf-8")
+    loc_dir = tmp_path / ".lokay"
+    loc_dir.mkdir()
+    (loc_dir / "localize.json").write_text(
+        '{"paths":["src/a.py"],"source":"deterministic"}\n',
+        encoding="utf-8",
+    )
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("semantic localize must not start when localize.json has paths")
+
+    import lokay.localize_agent as localize_agent
+
+    monkeypatch.setattr(localize_agent, "run_agent", boom)
+    loc = build_localization_with_agent(
+        runner=_FakeRunner('{"paths":["src/a.py"]}'),
+        config=_cfg(),
+        execute=True,
+        worktree=tmp_path,
+        seed_text="Change src/a.py",
+    )
+    assert "src/a.py" in loc.paths
+    assert loc.semantic["source"] == "existing"
+    assert loc.semantic["status"] == "completed"
+
+
 def test_localize_agent_keeps_existing_paths_and_drops_fantasy(tmp_path: Path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "a.py").write_text("a\n", encoding="utf-8")

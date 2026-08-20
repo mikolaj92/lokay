@@ -16,6 +16,7 @@ from lokay.localize import (
     LOCALIZE_REL_PATH,
     extract_issue_file_paths,
     has_issue_files_section,
+    load_existing_localize_paths,
     write_localize_file,
 )
 from lokay.localize_agent import build_localization_with_agent
@@ -128,11 +129,17 @@ def main(argv: list[str] | None = None) -> int:
 
     seed = _seed_text(args, issue, worktree if worktree.is_dir() else Path("."))
     issue_file_paths = extract_issue_file_paths(issue.body) if issue is not None else ()
-    bypass_agent = bool(
-        issue is not None
-        and (has_issue_files_section(issue.body) or issue_file_paths)
+    existing_paths = load_existing_localize_paths(
+        worktree if worktree.is_dir() else None
     )
-    if not seed.strip():
+    bypass_agent = bool(
+        existing_paths
+        or (
+            issue is not None
+            and (has_issue_files_section(issue.body) or issue_file_paths)
+        )
+    )
+    if not seed.strip() and not existing_paths:
         return emit_exit(
             err(
                 "localize seed empty: need issue body, approach.md, checks, or --seed",
@@ -142,7 +149,11 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     cfg = load_cfg(args) if args.config or args.live else None
-    execute = bool(cfg and semantic_agent_allowed(cfg, live_flag=args.live))
+    execute = bool(
+        cfg
+        and not existing_paths
+        and semantic_agent_allowed(cfg, live_flag=args.live)
+    )
     loc = build_localization_with_agent(
         runner=runner(cfg) if execute and cfg is not None else None,
         config=cfg,
