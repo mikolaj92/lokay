@@ -1,7 +1,8 @@
 """One job: mill host checkout is origin/main (fetch + ff-only) or fail-closed.
 
-Does not overwrite skip-worktree host files (``repos.mikolaj92.yaml`` on mini).
-Never ``reset --hard``. Product ``issue_to_pr`` must not run on stale mill code.
+Does not overwrite the skip-worktree host catalog (``repos.mikolaj92.yaml`` on mini).
+Product files such as ``config.yaml`` follow origin/main. Never ``reset --hard``.
+Product ``issue_to_pr`` must not run on stale mill code.
 
 This is host maintenance (not a GitHub product mutation): ``--live`` means
 fetch + ff-only. It does not take the mill health lease, so the LaunchAgent

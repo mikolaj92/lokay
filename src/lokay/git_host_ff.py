@@ -83,6 +83,27 @@ def skip_worktree_paths(runner: Runner, checkout: Path) -> list[str]:
     return paths
 
 
+def protected_skip_worktree_paths(skipped: list[str]) -> list[str]:
+    """Only the host catalog is local. Product policy must follow origin/main."""
+    return [rel for rel in skipped if rel == SKIP_WORKTREE_CATALOG]
+
+
+def release_unprotected_skip_worktree(
+    runner: Runner, checkout: Path, skipped: list[str], incoming: set[str]
+) -> list[str]:
+    """Drop skip-worktree on product files so mill policy can land."""
+    released: list[str] = []
+    for rel in skipped:
+        if rel == SKIP_WORKTREE_CATALOG or rel not in incoming:
+            continue
+        runner.run_checked(
+            git_spec(["update-index", "--no-skip-worktree", "--", rel], cwd=checkout),
+            live=True,
+        )
+        released.append(rel)
+    return released
+
+
 def _rev_parse(runner: Runner, checkout: Path, ref: str) -> str:
     result = runner.run_checked(git_spec(["rev-parse", ref], cwd=checkout), live=True)
     return (result.stdout or "").strip()
@@ -211,12 +232,16 @@ def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object
     incoming_paths = {
         line.strip() for line in (incoming.stdout or "").splitlines() if line.strip()
     }
-    blocked = sorted(set(skipped) & incoming_paths)
+    blocked = sorted(set(protected_skip_worktree_paths(skipped)) & incoming_paths)
     if blocked:
         raise RuntimeError(
             "refusing host-ff: origin/main would overwrite skip-worktree files: "
             + ", ".join(blocked)
         )
+    released = release_unprotected_skip_worktree(
+        runner, checkout, skipped, incoming_paths
+    )
+    skipped = [rel for rel in skipped if rel not in set(released)]
 
     runner.run_checked(
         git_spec(["merge", "--ff-only", "origin/main"], cwd=checkout, timeout_seconds=120),

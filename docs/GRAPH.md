@@ -71,7 +71,7 @@ host_ff
 
 | Atom | One job |
 | --- | --- |
-| `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / skip-worktree would overwrite. Launchd caretaker skips this when `mill.lock` is held |
+| `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / host catalog skip-worktree would overwrite. Product `config.yaml` follows origin/main. Launchd caretaker skips the mill pass when `mill.lock` is held |
 | `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token |
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error) |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error) |

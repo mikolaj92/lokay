@@ -182,6 +182,31 @@ def test_skip_worktree_catalog_is_preserved_on_unrelated_ff(tmp_path: Path):
     assert listed.startswith("S ") or listed.startswith("s ")
 
 
+def test_skip_worktree_product_config_fast_forwards(tmp_path: Path):
+    """Product config is mill policy, not a host catalog. origin/main must land."""
+    seed, host = _pair(tmp_path)
+    (seed / "config.yaml").write_text("require_llm_review: false\n", encoding="utf-8")
+    _git(seed, "add", "config.yaml")
+    _git(seed, "commit", "-m", "config")
+    _git(seed, "push", "origin", "main")
+    fast_forward_origin_main(Runner(), host)
+
+    _git(host, "update-index", "--skip-worktree", "--", "config.yaml")
+    (seed / "config.yaml").write_text("require_llm_review: true\n", encoding="utf-8")
+    _git(seed, "add", "config.yaml")
+    _git(seed, "commit", "-m", "reviewer")
+    _git(seed, "push", "origin", "main")
+    remote = _git(seed, "rev-parse", "HEAD").stdout.strip()
+
+    result = fast_forward_origin_main(Runner(), host)
+
+    assert result["updated"] is True
+    assert _git(host, "rev-parse", "HEAD").stdout.strip() == remote
+    assert (host / "config.yaml").read_text(encoding="utf-8") == "require_llm_review: true\n"
+    listed = _git(host, "ls-files", "-v", "--", "config.yaml").stdout
+    assert listed.startswith("H ") or listed.startswith("h ")
+
+
 def test_refuse_when_skip_worktree_would_be_overwritten(tmp_path: Path):
     seed, host = _pair(tmp_path)
     local = "clone_path: /Users/mini-m4-main/Developer\n"
