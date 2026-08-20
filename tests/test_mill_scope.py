@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from lokay.mill_scope import (
     DEFAULT_MILL_REPO,
     SKIP_REASON,
@@ -63,3 +65,16 @@ def test_empty_catalog_fails_closed_to_mill():
     assert in_scope("mikolaj92/lokay", []) is True
     assert in_scope("mikolaj92/Temida", []) is False
     assert in_scope("mikolaj92/lokay", None) is True
+
+
+def test_working_docs_name_this_host_mill_scope():
+    """DoD is still merge-to-main; this host delivers lokay only."""
+    root = Path(__file__).resolve().parents[1]
+    working = (root / "docs" / "WORKING.md").read_text(encoding="utf-8")
+    autonomy = (root / "docs" / "AUTONOMY.md").read_text(encoding="utf-8")
+    graph = (root / "docs" / "GRAPH.md").read_text(encoding="utf-8")
+    for text in (working, autonomy, graph):
+        assert "mill_scope" in text
+        assert "mikolaj92/lokay" in text
+    assert "all work across\nconfigured repos (`repos.mikolaj92.yaml`)" not in working
+    assert "mini mill" in working.lower()

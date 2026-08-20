@@ -51,8 +51,11 @@ receipt or old journal event. Crash / red-recheck rows stay buried. Tests and
 pass health are not a representation of whether the mill works. Merges of
 intended issues are.
 
-Lokay is **working** only if it continuously mills **all** work across
-configured repos (`repos.mikolaj92.yaml`) **to that DoD**. Order: survey →
+Lokay is **working** only if it continuously mills its **delivery catalog**
+**to that DoD**. Catalog is `repos.mikolaj92.yaml`; this host's mini mill
+(`mill_scope`, `LOKAY_MILL_REPO`, default `mikolaj92/lokay`) delivers only
+that one repo. Product mill for Temida and the rest is a host/CEO decision,
+not an un-clamp on this machine. Order: survey →
 **per-repo PR-first** (close-out) → inbox triage / implement in repos with no
 open AI PR. Agent must be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize
 human: humans write issues; the mill consumes them to merged results — do not

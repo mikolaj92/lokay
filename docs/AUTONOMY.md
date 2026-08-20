@@ -1,9 +1,11 @@
 # Autonomy (Definition of Working)
 
 Lokay is **working as an autonomous mill** when it continuously turns human-authored
-issues into **merged quality code on `main`** across the managed catalog — without
+issues into **merged quality code on `main`** across its delivery catalog — without
 new human gates, without freezing clean repos behind a busy peer, and without
-treating honest waits as recovery stalls.
+treating honest waits as recovery stalls. Catalog is `repos.mikolaj92.yaml`;
+this host's mini mill (`mill_scope`, default `mikolaj92/lokay`) delivers that
+one repo. Un-clamping the rest is a host decision.
 
 That merge is the **only Definition of Done** ([`WORKING.md`](WORKING.md)).
 A green agent, a plan-only worktree, a pass receipt, or a green test suite is
