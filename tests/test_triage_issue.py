@@ -80,7 +80,7 @@ def test_lokay_repo_still_triages_and_applies(
         == 0
     )
     assert calls == [
-        (sentinel_runner, "mikolaj92/lokay", 506, ["ai:ready"], True)
+        (sentinel_runner, "mikolaj92/lokay", 506, ["ai:ready", "work:ready"], True)
     ]
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True

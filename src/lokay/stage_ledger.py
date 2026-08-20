@@ -2,7 +2,7 @@
 
 Hermetic helpers only — no network. Fala still calls stage names
 (`implementing` / `pr-open` / …); those plans strip leftover cache and
-keep `ai:ready`. Mutex is the live job or covering open PR.
+keep `ai:ready` and `work:ready`. Mutex is the live job or covering open PR.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
 LABEL_READY = "ai:ready"
+LABEL_WORK_READY = "work:ready"
 # Retired cache. Still stripped by stage/reap; never awarded.
 LABEL_IMPLEMENTING = "ai:in-progress"
 LABEL_PR_OPEN = "ai:pr-open"
@@ -65,7 +66,7 @@ class StagePlan:
 
 def ledger_labels(*, ready_label: str = LABEL_READY) -> frozenset[str]:
     """All labels that participate in the exclusive issue ledger."""
-    return frozenset({ready_label}) | LEDGER_ACTIVE_LABELS
+    return frozenset({ready_label, LABEL_WORK_READY}) | LEDGER_ACTIVE_LABELS
 
 
 def plan_stage_transition(
@@ -86,7 +87,7 @@ def plan_stage_transition(
     all_ledger = ledger_labels(ready_label=ready_label)
     add: tuple[str, ...]
     if name == "ready":
-        add = (ready_label,)
+        add = tuple(dict.fromkeys((ready_label, LABEL_WORK_READY)))
     else:  # clear
         add = ()
     remove = tuple(sorted(lab for lab in all_ledger if lab not in add))
@@ -107,6 +108,7 @@ def current_ledger_stage(
         ("pr-open", LABEL_PR_OPEN),
         ("implementing", LABEL_IMPLEMENTING),
         ("ready", ready_label),
+        ("ready", LABEL_WORK_READY),
     ):
         if label in have:
             return stage

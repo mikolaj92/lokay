@@ -7,6 +7,7 @@ from typing import Any
 
 from lokay.config import Config
 from lokay.gh_issues import (
+    WORK_READY_LABEL,
     add_issue_labels,
     assign_issue,
     close_issue,
@@ -132,8 +133,14 @@ def apply_intake(
         return False
     if decision.decision == "ready":
         applied = False
-        if cfg.ready_label not in (issue.labels or []):
-            add_issue_labels(runner, repo, issue_number, [cfg.ready_label], live=True)
+        have = set(issue.labels or [])
+        wanted: list[str] = []
+        for label in (cfg.ready_label, WORK_READY_LABEL, *decision.add_labels):
+            if label and label not in wanted:
+                wanted.append(label)
+        to_add = [label for label in wanted if label not in have]
+        if to_add:
+            add_issue_labels(runner, repo, issue_number, to_add, live=True)
             applied = True
         if cfg.assignee and cfg.assignee not in (issue.assignees or []):
             assign_issue(runner, cfg, repo, issue_number, live=True)

@@ -75,8 +75,8 @@ host_ff
 | `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token |
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error) |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error) |
-| `survey_ready` | list implementable `work:ready`; skip those covered by open AI PRs |
-| `ready_hygiene` | remove legacy `ai:ready` from issues without `work:ready`; no new ledger |
+| `survey_ready` | list implementable `work:ready` (intake/triage/stage award it with `ai:ready`); skip those covered by open AI PRs |
+| `ready_hygiene` | remove leftover `ai:ready` from issues without `work:ready`. READY awards both labels. |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
