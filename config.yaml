@@ -39,7 +39,8 @@ merge:
   require_checks: false
   # Still prefer agent-visible local test evidence when present; not a remote check.
   require_test_evidence: false
-  require_llm_review: false
+  # Blind pr_review before auto-merge. Builder is not reviewer.
+  require_llm_review: true
 
 worktrees:
   root: ~/.lokay/worktrees

@@ -127,6 +127,17 @@ merge:
     assert cfg.active_repos() == []
 
 
+def test_committed_live_config_requires_llm_review(monkeypatch):
+    """Quality gate: mill must not merge without a structured reviewer."""
+    from pathlib import Path
+
+    from lokay.config import load_config
+
+    monkeypatch.delenv("LOKAY_REQUIRE_LLM_REVIEW", raising=False)
+    cfg = load_config(Path(__file__).resolve().parents[1] / "config.yaml")
+    assert cfg.require_llm_review is True
+
+
 def test_garbage_yaml_bool_fails_closed(tmp_path: Path, monkeypatch):
     for key in ("LOKAY_MODE", "LOKAY_EXECUTOR_ENABLED", "LOKAY_AGENT", "LOKAY_CONFIG"):
         monkeypatch.delenv(key, raising=False)
