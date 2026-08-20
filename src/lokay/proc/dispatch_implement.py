@@ -13,7 +13,6 @@ from lokay.passkit.support import run_proc, run_select
 from lokay.proc import intake_issue as p_intake
 from lokay.proc import label_issue as p_label
 from lokay.proc import select_issue as p_select
-from lokay.proc import close_issue as p_close
 from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import (
@@ -246,28 +245,7 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                                 **park,
                             }
                         )
-                        if park.get("ok"):
-                            close = run_proc(
-                                p_close.main,
-                                [
-                                    *cfg_flag,
-                                    *live_flag,
-                                    "--repo",
-                                    selected["repo"],
-                                    "--issue",
-                                    str(num),
-                                    "--comment",
-                                    "plan_only fail-closed",
-                                ],
-                            )
-                            actions.append(
-                                {
-                                    "step": "close_plan_only",
-                                    "repo": selected["repo"],
-                                    "issue": num,
-                                    **close,
-                                }
-                            )
+                        # Park leaves the slot. Harvest must not CLOSE the issue.
             implementable = [i for i in implementable if int(i.get("number", -1)) != num]
         ready_by_repo[repo_name] = list(implementable)
 

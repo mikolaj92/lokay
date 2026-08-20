@@ -170,6 +170,9 @@ def test_blocked_plan_only_is_parked_once(monkeypatch, tmp_path):
     assert park_calls == [
         (d.p_park.main, ["--repo", "mikolaj92/lokay", "--issue", "11"])
     ]
+    from lokay.proc import close_issue
+
+    assert [(main, argv) for main, argv in calls if main is close_issue.main] == []
 
 
 def test_dispatch_refuses_to_launch_when_repo_mutex_is_unknown(monkeypatch, tmp_path):
