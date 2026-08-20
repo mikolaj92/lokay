@@ -62,6 +62,33 @@ with open(path, "wb") as handle:
 PY
 }
 
+host_ff_updated() {
+  # Last host-ff envelope in this tick. True when ff-only moved HEAD.
+  local log="${1:-${LOG:-}}"
+  [[ -n "${log}" && -f "${log}" ]] || return 1
+  _python - "${log}" <<'PY'
+import json, sys
+from pathlib import Path
+
+updated = False
+try:
+    text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+except OSError:
+    raise SystemExit(1)
+for line in text.splitlines():
+    raw = line.strip()
+    if "{" not in raw:
+        continue
+    try:
+        parsed = json.loads(raw)
+    except ValueError:
+        continue
+    if isinstance(parsed, dict) and "updated" in parsed:
+        updated = bool(parsed.get("updated"))
+raise SystemExit(0 if updated else 1)
+PY
+}
+
 mill_lock_busy() {
   # Singleton lock stays: a parallel tick must not start a second mill,
   # and a busy lock means the caretaker must not reload launchd.
@@ -557,6 +584,18 @@ bound_file "${LOG}" "${MILL_LOG_MAX}" || true
 bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
 if [[ "${MILL_LOCK_WAS_BUSY}" -eq 1 ]]; then
   printf '%s\n' '{"ok":true,"health":"current","reason":"lock_busy"}' >>"${LOG}"
+  cp "${LOG}" "${LATEST}" 2>/dev/null || true
+  bound_file "${LOG}" "${MILL_LOG_MAX}" || true
+  bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
+  prune_mill_logs || true
+  emit_launchd_glance || true
+  bound_launchd_stdio
+  exit 0
+fi
+# HEAD moved: this process still imported the previous package. Exit 0 so
+# LaunchAgent starts a new daemon. Do not kill a live i2pr (lock_busy above).
+if host_ff_updated "${LOG}"; then
+  printf '%s\n' '{"ok":true,"health":"host_updated","reason":"host_updated"}' >>"${LOG}"
   cp "${LOG}" "${LATEST}" 2>/dev/null || true
   bound_file "${LOG}" "${MILL_LOG_MAX}" || true
   bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
