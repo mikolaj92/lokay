@@ -210,7 +210,7 @@ def handle_implement(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, 
 
     if atom == "pi_budget":
         pid = int(inputs.get("pid") or 0)
-        budget = int(inputs.get("budget") or 480)
+        budget = int(inputs.get("budget") or 1800)
         return _run_atom_main(
             pi_budget.main, ["--pid", str(pid), "--budget", str(budget)]
         )

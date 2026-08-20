@@ -53,15 +53,15 @@ def test_not_running_is_not_over_budget():
     assert payload["budget_s"] == 480
 
 
-def test_default_budget_is_480():
+def test_default_budget_matches_executor():
     payload = pi_budget.check_pi_budget(
         1,
-        clock=lambda: 481.0,
+        clock=lambda: 1801.0,
         started_at=lambda pid: 0.0,
     )
-    assert payload["budget_s"] == pi_budget.DEFAULT_BUDGET_S == 480
+    assert payload["budget_s"] == pi_budget.DEFAULT_BUDGET_S == 1800
     assert payload["over_budget"] is True
-    assert payload["elapsed_s"] == 481.0
+    assert payload["elapsed_s"] == 1801.0
 
 
 def test_at_budget_is_not_past():
@@ -77,14 +77,14 @@ def test_at_budget_is_not_past():
 
 def test_cli_over_budget_exits_2(monkeypatch, capsys):
     monkeypatch.setattr(pi_budget, "process_started_at", lambda pid: 100.0)
-    monkeypatch.setattr(pi_budget.time, "time", lambda: 700.0)
+    monkeypatch.setattr(pi_budget.time, "time", lambda: 2000.0)
     code = pi_budget.main(["--pid", "42"])
     assert code == 2
     out = _payload(capsys)
     assert out["over_budget"] is True
     assert out["pid"] == 42
-    assert out["elapsed_s"] == 600.0
-    assert out["budget_s"] == 480
+    assert out["elapsed_s"] == 1900.0
+    assert out["budget_s"] == 1800
 
 
 def test_cli_within_budget_exits_0(monkeypatch, capsys):

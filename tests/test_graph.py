@@ -205,10 +205,10 @@ def test_issue_to_pr_relocalizes_before_commit_then_test_then_assert_is_a_dag():
 
 
 def test_run_agent_timeouts_match_pi_budget():
-    """All coding paths use the bounded Pi budget rather than the old 2100s cap."""
+    """Coding slots match executor.timeout_seconds, not the old 480s Pi kill."""
     import tomllib
 
-    DEFAULT_BUDGET_S = 480
+    DEFAULT_BUDGET_S = 1800
     raw = (Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml").read_bytes()
     pkg = tomllib.loads(raw.decode())
     for path_id in ("issue_to_pr", "pr_repair"):
