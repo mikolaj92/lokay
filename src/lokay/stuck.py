@@ -41,11 +41,13 @@ def save_stuck(path: Path, data: dict[str, Any]) -> None:
     on_disk = load_stuck(path)
     on_disk_issues = on_disk.get("issues")
     incoming_issues = data.get("issues")
+    cleared = {str(key) for key in list(data.get("cleared") or []) if str(key)}
     if isinstance(on_disk_issues, dict) and isinstance(incoming_issues, dict):
         blocked_not_incoming = {
             key: row
             for key, row in on_disk_issues.items()
             if key not in incoming_issues
+            and key not in cleared
             and isinstance(row, dict)
             and row.get("blocked") is True
         }
@@ -58,11 +60,14 @@ def save_stuck(path: Path, data: dict[str, Any]) -> None:
         blocked_on_disk = {
             key: row
             for key, row in on_disk_issues.items()
-            if isinstance(row, dict) and row.get("blocked") is True
+            if key not in cleared
+            and isinstance(row, dict)
+            and row.get("blocked") is True
         }
         if blocked_on_disk:
             data = {**data, "issues": blocked_on_disk}
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    persist = {key: value for key, value in data.items() if key != "cleared"}
+    path.write_text(json.dumps(persist, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def failure_count(data: dict[str, Any], repo: str, number: int) -> int:
