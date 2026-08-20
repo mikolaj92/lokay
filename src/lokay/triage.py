@@ -12,7 +12,7 @@ from typing import Any, Iterable
 
 from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
-from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
+from lokay.stage_ledger import LABEL_WORK_READY, LEDGER_ACTIVE_LABELS
 
 # Title markers for whole-issue OOS (substring match on title only).
 OOS_TITLE_MARKERS = (
@@ -219,6 +219,6 @@ def decide_issue(
     return TriageDecision(
         decision="ready",
         reason="spec_ok",
-        add_labels=(ready_label,),
+        add_labels=tuple(dict.fromkeys((ready_label, LABEL_WORK_READY))),
         comment=None,
     )

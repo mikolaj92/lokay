@@ -1,4 +1,4 @@
-"""One job: remove legacy ai:ready when work:ready is absent."""
+"""One job: remove leftover ai:ready when work:ready is absent."""
 
 from __future__ import annotations
 

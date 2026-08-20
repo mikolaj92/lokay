@@ -214,6 +214,8 @@ def test_decide_intake_ready_path(tmp_path: Path):
     d = decide_intake(_issue(), clone_path=tmp_path, state="OPEN")
     assert d.decision == "ready", d
     assert d.implementable is True
+    assert "ai:ready" in d.add_labels
+    assert "work:ready" in d.add_labels
 
 
 def test_decide_intake_obsolete_close_on_library(tmp_path: Path):

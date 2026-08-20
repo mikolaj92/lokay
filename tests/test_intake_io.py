@@ -137,16 +137,28 @@ def test_apply_intake_ready_adds_label_and_assignee():
     assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
     joined = [" ".join(c) for c in runner.calls]
     assert any("--add-label ai:ready" in j for j in joined)
+    assert any("--add-label work:ready" in j for j in joined)
     assert any("--add-assignee mikolaj92" in j for j in joined)
 
 
 def test_apply_intake_ready_idempotent_when_already_set():
     cfg = Config(assignee="mikolaj92")
-    issue = _issue(labels=["ai:ready"], assignees=["mikolaj92"])
+    issue = _issue(labels=["ai:ready", "work:ready"], assignees=["mikolaj92"])
     decision = IntakeDecision(decision="ready", reason="intake_ok")
     runner = _FakeRunner()
     assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is False
     assert runner.calls == []
+
+
+def test_apply_intake_ready_adds_work_ready_when_only_ai_ready():
+    cfg = Config(assignee="mikolaj92", ready_label="ai:ready")
+    issue = _issue(labels=["ai:ready"], assignees=["mikolaj92"])
+    decision = IntakeDecision(decision="ready", reason="intake_ok")
+    runner = _FakeRunner()
+    assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
+    joined = [" ".join(c) for c in runner.calls]
+    assert any("--add-label work:ready" in j for j in joined)
+    assert not any("--add-label ai:ready" in j for j in joined)
 
 
 def test_apply_intake_close_mutates():

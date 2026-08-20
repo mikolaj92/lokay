@@ -24,7 +24,7 @@ def test_new_ledger_labels_budget():
 
 def test_exclusive_ready_clears_in_flight():
     plan = plan_stage_transition("ready")
-    assert plan.add_labels == (LABEL_READY,)
+    assert plan.add_labels == (LABEL_READY, "work:ready")
     assert LABEL_IMPLEMENTING in plan.remove_labels
     assert LABEL_PR_OPEN in plan.remove_labels
     assert LABEL_CI_WAITING in plan.remove_labels
@@ -36,7 +36,7 @@ def test_inflight_stage_names_keep_ready():
     for name in ("implementing", "pr-open", "ci-waiting", "repairing"):
         plan = plan_stage_transition(name)
         assert plan.stage == "ready"
-        assert plan.add_labels == (LABEL_READY,)
+        assert plan.add_labels == (LABEL_READY, "work:ready")
         assert LABEL_IMPLEMENTING in plan.remove_labels
         assert LABEL_PR_OPEN in plan.remove_labels
         assert LABEL_READY not in plan.remove_labels
@@ -47,6 +47,7 @@ def test_clear_strips_ready_and_cache():
     assert clear.add_labels == ()
     assert set(clear.remove_labels) == {
         LABEL_READY,
+        "work:ready",
         LABEL_IMPLEMENTING,
         LABEL_PR_OPEN,
         LABEL_CI_WAITING,
@@ -127,7 +128,7 @@ repos: []
     assert env["planned"] is True
     assert env["applied"] is False
     assert env["stage"] == "ready"
-    assert env["add_labels"] == [LABEL_READY]
+    assert env["add_labels"] == [LABEL_READY, "work:ready"]
     assert LABEL_IMPLEMENTING in env["remove_labels"]
     assert LABEL_READY not in env["remove_labels"]
     # dry-run still plans through gh helpers with live=False

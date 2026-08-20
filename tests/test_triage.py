@@ -47,6 +47,7 @@ def test_decide_ready():
     d = decide_issue(_issue())
     assert d.decision == "ready"
     assert "ai:ready" in d.add_labels
+    assert "work:ready" in d.add_labels
 
 
 def test_decide_title_short():

@@ -22,6 +22,7 @@ from typing import Any, Iterable
 
 from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
+from lokay.stage_ledger import LABEL_WORK_READY
 from lokay.triage import is_parked, is_undecided
 
 # --- Verdicts for one check ---
@@ -681,7 +682,7 @@ def aggregate_intake(
         decision="ready",
         reason="intake_ok",
         checks=checked,
-        add_labels=(ready_label,),
+        add_labels=tuple(dict.fromkeys((ready_label, LABEL_WORK_READY))),
         implementable=True,
         comment=None,
     )
