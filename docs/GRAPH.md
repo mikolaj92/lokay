@@ -283,7 +283,8 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   Re-view the issue first: if a sibling already closed it, skip with
   `reason=issue_closed` — do not continue or open a second PR.
   Harvest does not bury that reason (the ticket is already done) and
-  clears a stale `no_pr` stuck row so `save_stuck` cannot restore it.
+  clears a stale `no_pr` stuck row. `clear_issue` marks `cleared` so
+  `save_stuck` cannot restore a delivered corpse.
 - **Published-tip retry** (`origin/<branch>` exists — including a closed
   CONFLICTING tip that matches HEAD) resets the corner from `origin/<base>`
   and deletes the stale remote tip. KEEP only unpublished ahead that already

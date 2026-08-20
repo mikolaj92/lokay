@@ -48,6 +48,8 @@ def test_record_failure_blocks_after_threshold(tmp_path: Path):
     assert excluded_numbers(reloaded, "other/r") == set()
     clear_issue(reloaded, "a/b", 7)
     assert excluded_numbers(reloaded, "a/b") == set()
+    save_stuck(path, reloaded)
+    assert excluded_numbers(load_stuck(path), "a/b") == set()
 
 
 def test_save_stuck_preserves_blocked_issue_missing_from_incoming(tmp_path: Path):
@@ -72,6 +74,29 @@ def test_save_stuck_preserves_blocked_issue_missing_from_incoming(tmp_path: Path
     assert saved["issues"]["a/b#1"]["blocked"] is True
     assert saved["issues"]["a/b#2"]["failures"] == 2
     assert saved["issues"]["a/b#2"].get("blocked") is None
+
+
+def test_clear_issue_marks_cleared_so_save_stuck_cannot_restore(tmp_path: Path):
+    """Merge/closeout pops a blocked row; save_stuck must not put it back."""
+    path = tmp_path / "stuck.json"
+    path.write_text(
+        json.dumps(
+            {
+                "issues": {
+                    "a/b#5": {"failures": 1, "blocked": True, "reason": "no_pr"},
+                    "a/b#6": {"failures": 1, "blocked": True, "reason": "plan_only"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    data = load_stuck(path)
+    clear_issue(data, "a/b", 5)
+    save_stuck(path, data)
+    saved = load_stuck(path)
+    assert "a/b#5" not in saved["issues"]
+    assert saved["issues"]["a/b#6"]["blocked"] is True
+    assert "cleared" not in saved
 
 
 def test_save_stuck_cleared_no_pr_is_not_restored(tmp_path: Path):

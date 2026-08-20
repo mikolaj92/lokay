@@ -121,8 +121,13 @@ def record_failure(
 
 
 def clear_issue(data: dict[str, Any], repo: str, number: int) -> None:
+    """Drop a ledger row and remember it so save_stuck cannot restore it."""
+    key = issue_key(repo, number)
     issues = data.get("issues") or {}
-    issues.pop(issue_key(repo, number), None)
+    issues.pop(key, None)
+    cleared = data.setdefault("cleared", [])
+    if key not in cleared:
+        cleared.append(key)
 
 
 def issue_number_from_branch(head_ref: str, *, branch_prefix: str = "ai/fix") -> int | None:
