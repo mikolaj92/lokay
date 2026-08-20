@@ -59,6 +59,7 @@ host_ff
               → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
                 → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
                   → reap_stale_implementing  → leftover in-flight cache → ai:ready
+                    → reap_over_budget  → kill plan_only over budget; harvest real diff to PR
                     → refresh_occupancy  → occupy live/merged; re-list leftover-ready only
                       → reap_stale_worktrees → drop leftover corners that cannot resume
                       → select_implement
@@ -82,6 +83,7 @@ host_ff
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
 | `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels) |
+| `reap_over_budget` | kill over-budget plan_only i2pr and park the slot. A live coder with a **real** diff is harvested (`commit_all` → `push` → `pr_create`) without SIGTERM |
 | `refresh_occupancy` | union just-merged + live i2pr; re-list PRs only on leftover-ready repos that are not occupied. A live receipt whose process command is unreadable remains occupied; an unreadable lifecycle receipt occupies every configured repo. Unknown is not idle. |
 | `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |
 | `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied) |

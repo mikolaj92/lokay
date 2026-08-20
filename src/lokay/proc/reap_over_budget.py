@@ -1,4 +1,4 @@
-"""One job: kill detached issue_to_pr past pi_budget so occupy cannot last 40 min."""
+"""One job: bound over-budget i2pr: harvest a real diff, else kill plan_only."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from lokay.gh_issues import get_issue
 from lokay.git_real_diff import classify_changed_paths, list_changed_paths
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park as p_park
+from lokay.proc import commit_all, pr_create, push_branch
 from lokay.proc._common import add_config_live, runner
 from lokay.proc.detach_issue_to_pr import (
     _child_pids,
@@ -56,12 +57,8 @@ def _process_cwd(pid: int) -> Path | None:
     return None
 
 
-def _coder_has_real_diff(pid: int) -> bool | None:
-    """Whether the deepest live coder has non-plan worktree changes.
-
-    ``None`` means the process/worktree could not be inspected and therefore
-    must retain the existing coder-live protection.
-    """
+def _coder_worktree(pid: int) -> Path | None:
+    """Cwd of the deepest live coder, or None when it cannot be inspected."""
     seen: set[int] = set()
     stack = [(int(pid), 0)]
     coders: list[tuple[int, int]] = []
@@ -75,23 +72,104 @@ def _coder_has_real_diff(pid: int) -> bool | None:
         stack.extend((child, depth + 1) for child in _child_pids(current))
     if not coders:
         return None
-
     deepest = max(depth for depth, _ in coders)
-    inspected = False
     for depth, coder_pid in coders:
         if depth != deepest:
             continue
         worktree = _process_cwd(coder_pid)
         if worktree is None or not worktree.is_dir():
             return None
-        try:
-            paths = list_changed_paths(runner(), worktree, base="origin/main")
-        except Exception:  # noqa: BLE001 - uncertainty must keep a live coder
-            return None
-        inspected = True
-        if classify_changed_paths(paths) == "real":
-            return True
-    return False if inspected else None
+        return worktree
+    return None
+
+
+def _coder_has_real_diff(pid: int) -> bool | None:
+    """Whether the deepest live coder has non-plan worktree changes.
+
+    ``None`` means the process/worktree could not be inspected and therefore
+    must retain the existing coder-live protection.
+    """
+    worktree = _coder_worktree(pid)
+    if worktree is None:
+        return None
+    try:
+        paths = list_changed_paths(runner(), worktree, base="origin/main")
+    except Exception:  # noqa: BLE001 - uncertainty must keep a live coder
+        return None
+    return classify_changed_paths(paths) == "real"
+
+
+def _worktree_branch(worktree: Path) -> str:
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(worktree), "symbolic-ref", "--quiet", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if done.returncode != 0:
+        return ""
+    return (done.stdout or "").strip()
+
+
+def _harvest_real_diff(
+    *,
+    repo: str,
+    issue: int,
+    worktree: Path,
+    branch: str,
+    config_path: str | None,
+    live: bool,
+) -> dict[str, Any]:
+    """Commit/push/PR a real over-budget diff. Do not kill the coder."""
+    if not live or not branch:
+        return {"ok": False, "reason": "harvest_unavailable"}
+    cfg = ["--config", config_path] if config_path else []
+    live_flag = ["--live"]
+    committed = run_proc(
+        commit_all.main,
+        [
+            *cfg,
+            *live_flag,
+            "--repo",
+            repo,
+            "--worktree",
+            str(worktree),
+            "--message",
+            f"fix: {repo}#{issue}",
+        ],
+    )
+    if not committed.get("ok"):
+        return {"ok": False, "reason": "harvest_commit_failed"}
+    pushed = run_proc(
+        push_branch.main,
+        [*cfg, *live_flag, "--repo", repo, "--worktree", str(worktree), "--branch", branch],
+    )
+    if not pushed.get("ok"):
+        return {"ok": False, "reason": "harvest_push_failed"}
+    created = run_proc(
+        pr_create.main,
+        [
+            *cfg,
+            *live_flag,
+            "--repo",
+            repo,
+            "--issue",
+            str(issue),
+            "--title",
+            f"fix: {repo}#{issue}",
+            "--head",
+            branch,
+            "--body",
+            f"Harvested over-budget real diff for {repo}#{issue}.",
+        ],
+    )
+    if not (created.get("ok") and created.get("pr")):
+        return {"ok": False, "reason": "harvest_pr_failed"}
+    return {"ok": True, "pr": created.get("pr"), "head": branch}
 
 
 def _stuck_path_for(pass_dir: str | None) -> Path:
@@ -167,6 +245,29 @@ def run_reap_over_budget(
         # a useful PR, so reap the whole process group immediately.
         if not closed and wrapper_has_coding_descendant(pid):
             has_real_diff = _coder_has_real_diff(pid)
+            if has_real_diff is True:
+                worktree = _coder_worktree(pid)
+                branch = _worktree_branch(worktree) if worktree is not None else ""
+                harvest = _harvest_real_diff(
+                    repo=repo,
+                    issue=issue,
+                    worktree=worktree or Path("."),
+                    branch=branch,
+                    config_path=config_path,
+                    live=live,
+                )
+                if harvest.get("ok"):
+                    kept.append(
+                        {
+                            "repo": repo,
+                            "issue": issue,
+                            "pid": pid,
+                            "elapsed_s": elapsed,
+                            "reason": "harvested",
+                            "pr": harvest.get("pr"),
+                        }
+                    )
+                    continue
             if has_real_diff is not False:
                 kept.append(
                     {
