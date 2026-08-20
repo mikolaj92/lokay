@@ -155,6 +155,7 @@ def run_path(
             "survey_prs",
             "survey_inbox",
             "survey_ready",
+            "ready_hygiene",
             "plan_pass",
             "dispatch_triage",
             "resolve_conflicts",
@@ -167,6 +168,7 @@ def run_path(
             "queue_conflict",
             "dispatch_implement",
             "compute_health",
+            "compact_state",
             "record_pass",
         ),
         "issue_to_pr": (

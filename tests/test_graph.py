@@ -55,6 +55,34 @@ def test_describe_parent_factory_graph():
     assert "dispatch_closeout" not in ids
 
 
+def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):
+    """Fala runs every factory_pass atom; missing live injection is planned-only."""
+    from lokay import graph_run
+
+    captured = {}
+    monkeypatch.setattr("lokay.preflight.require_healthy", lambda config: None)
+
+    def fake_host_run_package(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
+    desc = describe_package()
+    path = next(item for item in desc["paths"] if item["id"] == "factory_pass")
+    ids = [node["id"] for node in path["nodes"]]
+    graph_run.run_path(
+        path_id="factory_pass",
+        repo="mikolaj92/lokay",
+        live=True,
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+    )
+    injected = captured["effector_inputs"]
+    assert set(injected) == set(ids)
+    assert all(injected[step].get("live") is True for step in ids)
+    assert injected["ready_hygiene"]["live"] is True
+
+
 def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
     from lokay import graph_run
 
@@ -463,6 +491,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "survey_prs",
             "survey_inbox",
             "survey_ready",
+            "ready_hygiene",
             "plan_pass",
             "dispatch_triage",
             "resolve_conflicts",
@@ -475,6 +504,7 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "queue_conflict",
             "dispatch_implement",
             "compute_health",
+            "compact_state",
             "record_pass",
         },
         "issue_to_pr": {
