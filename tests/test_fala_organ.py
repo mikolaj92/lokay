@@ -654,7 +654,7 @@ def test_recheck_requests_changed_scope_after_red_full_suite(monkeypatch):
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
     result = fala_organ._handle(
         "test_local_recheck",
-        {"live": False, "changed_scope": True},
+        {"repo": "a/b", "live": False, "changed_scope": True},
         {
             "worktree_add": {"worktree": "/tmp/worktree"},
             "commit_all": {"committed": True},
@@ -664,7 +664,7 @@ def test_recheck_requests_changed_scope_after_red_full_suite(monkeypatch):
     )
     assert result["ok"] is True
     assert result["recheck"] is True
-    assert captured == [["--worktree", "/tmp/worktree", "--changed-scope"]]
+    assert captured == [["--repo", "a/b", "--worktree", "/tmp/worktree", "--changed-scope"]]
 
 
 def test_push_red_recheck_does_not_push(monkeypatch):
@@ -1181,7 +1181,7 @@ def test_recheck_reruns_once_after_committed_repair(monkeypatch):
     )
     assert result["ok"] is True
     assert result["recheck"] is True
-    assert captured == [["--worktree", "/tmp/worktree", "--changed-scope"]]
+    assert captured == [["--repo", "a/b", "--worktree", "/tmp/worktree", "--changed-scope"]]
 
 
 def test_recheck_red_marks_bounded_loop_exhausted(monkeypatch):
@@ -1212,6 +1212,72 @@ def test_recheck_red_marks_bounded_loop_exhausted(monkeypatch):
     # Machine reason must precede the big log tail so the organ's truncated
     # failure raise still carries it.
     assert list(result).index("reason") < list(result).index("stdout_tail")
+
+
+def test_rebase_onto_base_forwards_repo(monkeypatch):
+    captured = []
+
+    def fake_run(main, argv):
+        captured.append(argv)
+        return {"ok": True, "rebased": True}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "rebase_onto_base",
+        {"repo": "mikolaj92/lokay", "live": True},
+        {"worktree_add": {"worktree": "/tmp/worktree"}},
+    )
+    assert result["ok"] is True
+    assert captured
+    argv = captured[0]
+    assert argv[argv.index("--repo") + 1] == "mikolaj92/lokay"
+    assert argv[argv.index("--worktree") + 1] == "/tmp/worktree"
+
+
+def test_push_forwards_repo(monkeypatch):
+    captured = []
+
+    def fake_run(main, argv):
+        captured.append(argv)
+        return {"ok": True, "pushed": True}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "push",
+        {"repo": "mikolaj92/lokay", "branch": "ai/fix/7-x", "live": False},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "commit_all": {"committed": True},
+            "test_local": _ok_test_local(),
+            "assert_real_diff": _ok_real_diff(),
+        },
+    )
+    assert result["ok"] is True
+    assert captured
+    argv = captured[0]
+    assert argv[argv.index("--repo") + 1] == "mikolaj92/lokay"
+    assert argv[argv.index("--worktree") + 1] == "/tmp/worktree"
+    assert argv[argv.index("--branch") + 1] == "ai/fix/7-x"
+
+
+def test_test_local_forwards_repo(monkeypatch):
+    captured = []
+
+    def fake_run(main, argv):
+        captured.append(argv)
+        return {"ok": True, "tested": True}
+
+    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    result = fala_organ._handle(
+        "test_local",
+        {"repo": "mikolaj92/lokay", "live": False},
+        {"worktree_add": {"worktree": "/tmp/worktree"}},
+    )
+    assert result["ok"] is True
+    assert captured
+    argv = captured[0]
+    assert argv[argv.index("--repo") + 1] == "mikolaj92/lokay"
+    assert argv[argv.index("--worktree") + 1] == "/tmp/worktree"
 
 
 def test_ensure_project_cwd_prefers_lokay_root(tmp_path, monkeypatch):
