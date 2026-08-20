@@ -94,9 +94,6 @@ def _clear_stale_no_pr(stuck: dict[str, Any], repo: str, issue: int) -> None:
     if reason != "no_pr" and "produced no PR" not in error:
         return
     clear_issue(stuck, repo, issue)
-    cleared = stuck.setdefault("cleared", [])
-    if key not in cleared:
-        cleared.append(key)
 
 
 _REASON_PRIORITY = (
