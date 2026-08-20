@@ -74,6 +74,29 @@ def test_save_stuck_preserves_blocked_issue_missing_from_incoming(tmp_path: Path
     assert saved["issues"]["a/b#2"].get("blocked") is None
 
 
+def test_save_stuck_cleared_no_pr_is_not_restored(tmp_path: Path):
+    path = tmp_path / "stuck.json"
+    path.write_text(
+        json.dumps(
+            {
+                "issues": {
+                    "a/b#5": {"failures": 1, "blocked": True, "reason": "no_pr"},
+                    "a/b#6": {"failures": 1, "blocked": True, "reason": "plan_only"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    save_stuck(
+        path,
+        {"issues": {}, "cleared": ["a/b#5"]},
+    )
+    saved = load_stuck(path)
+    assert "a/b#5" not in saved["issues"]
+    assert saved["issues"]["a/b#6"]["blocked"] is True
+    assert "cleared" not in saved
+
+
 def test_select_skips_excluded(monkeypatch, capsys):
     payload = {
         "issues": [

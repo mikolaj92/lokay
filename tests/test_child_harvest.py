@@ -114,6 +114,33 @@ def test_ok_true_issue_closed_is_not_no_pr(tmp_path: Path):
     assert stuck["issues"] == {}
 
 
+def test_issue_closed_clears_stale_no_pr_row(tmp_path: Path):
+    """Delivered tickets must not stay buried as vanished no_pr."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-5.json", repo="a/b", issue=5, pid=11)
+    _event(state, repo="a/b", issue=5, ok=True, reason="issue_closed")
+    stuck = {
+        "issues": {
+            "a/b#5": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "no_pr",
+                "last_error": "issue_to_pr produced no PR",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert "a/b#5" not in stuck["issues"]
+
+
 def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
     """ok=True and no PR is a stop/race, not FAIL_CLOSED no_pr."""
     cycle = tmp_path / "cycle"

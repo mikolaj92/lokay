@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
-from lokay.stuck import is_blocked_in_ledger, record_failure
+from lokay.stuck import clear_issue, is_blocked_in_ledger, issue_key, record_failure
 
 FAIL_CLOSED = frozenset(
     {
@@ -60,11 +60,43 @@ _WORKTREE_FAIL_MARKERS = (
 )
 
 
+_DELIVERED_REASONS = frozenset(
+    {"issue_closed", "delivery_pr_exists", "skipped"}
+)
+
+
 def _as_int(value: Any) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _event_delivered(event: dict[str, Any] | None) -> bool:
+    """ok=True / issue_closed / a PR is delivery, not a vanished crash."""
+    if not isinstance(event, dict) or not event:
+        return False
+    if event.get("ok") is True:
+        return True
+    reason = event.get("reason")
+    if isinstance(reason, str) and reason in _DELIVERED_REASONS:
+        return True
+    return _as_int(event.get("pr")) is not None
+
+
+def _clear_stale_no_pr(stuck: dict[str, Any], repo: str, issue: int) -> None:
+    key = issue_key(repo, issue)
+    row = (stuck.get("issues") or {}).get(key)
+    if not isinstance(row, dict):
+        return
+    reason = str(row.get("reason") or "")
+    error = str(row.get("last_error") or "")
+    if reason != "no_pr" and "produced no PR" not in error:
+        return
+    clear_issue(stuck, repo, issue)
+    cleared = stuck.setdefault("cleared", [])
+    if key not in cleared:
+        cleared.append(key)
 
 
 _REASON_PRIORITY = (
@@ -396,11 +428,9 @@ def harvest_fail_closed_children(
             if not reason:
                 receipt_pr = _as_int(data.get("pr"))
                 event_pr = _as_int((event or {}).get("pr")) if event else None
-                if receipt_pr or event_pr:
-                    continue
-                # ok=True is a recorded stop/delivery (issue_closed,
-                # delivery_pr_exists, skipped). That is not a vanished crash.
-                if event is not None and event.get("ok") is True:
+                if receipt_pr or event_pr or _event_delivered(event):
+                    # Delivery already happened. Drop a stale vanished row.
+                    _clear_stale_no_pr(stuck, repo, issue)
                     continue
                 # Vanished: dead child, no PR, no journal event.
                 # An unknown ok=False is not no_pr.
@@ -468,6 +498,12 @@ def harvest_fail_closed_children(
             miss_runs=miss_runs,
             error=str(ev.get("error") or ev.get("reason") or "plan_only"),
         )
+
+    # Receipts can be pruned. A later issue_closed / ok=True event must still
+    # drop a vanished no_pr corpse so save_stuck cannot restore it.
+    for (repo, issue), event in events.items():
+        if _event_delivered(event):
+            _clear_stale_no_pr(stuck, repo, issue)
 
     # Receipts can be pruned. Reconcile stale blocked miss rows from the
     # journal so unique-run N still owns the slot.
