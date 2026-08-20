@@ -78,7 +78,7 @@ host_ff
 | `survey_ready` | list implementable `work:ready` (intake/triage/stage award it with `ai:ready`); skip those covered by open AI PRs |
 | `ready_hygiene` | remove leftover `ai:ready` from issues without `work:ready`. READY awards both labels. |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
-| `dispatch_triage` | run planned `issue_triage` children |
+| `dispatch_triage` | run planned `issue_triage` children. Preflight incident tickets (`<!-- lokay-preflight:… -->`) are `ai:blocked`, not `work:ready`. |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
 | `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels) |

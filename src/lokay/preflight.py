@@ -817,6 +817,8 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
                 f"Preflight failure {fp}",
                 "--body",
                 f"{marker}\nBounded checks failed: {summary}",
+                "--label",
+                "ai:blocked",
             ],
             capture_output=True,
             text=True,

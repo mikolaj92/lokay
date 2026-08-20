@@ -10,6 +10,7 @@ from lokay.intake import (
     check_duplicate_ai_pr,
     check_essence_objection,
     check_open,
+    check_preflight_incident,
     check_satisfied,
     check_shape,
     check_superseded,
@@ -216,6 +217,24 @@ def test_decide_intake_ready_path(tmp_path: Path):
     assert d.implementable is True
     assert "ai:ready" in d.add_labels
     assert "work:ready" in d.add_labels
+
+
+def test_decide_intake_blocks_preflight_incident(tmp_path: Path):
+    (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\n', encoding="utf-8")
+    issue = _issue(
+        title="Preflight failure 7a069cefb68040e2",
+        body="<!-- lokay-preflight:7a069cefb68040e2 -->\nBounded checks failed: disk_headroom",
+        labels=["ai:ready", "work:ready"],
+    )
+    hit = check_preflight_incident(issue)
+    assert hit.verdict == "blocked"
+    d = decide_intake(issue, clone_path=tmp_path, state="OPEN")
+    assert d.decision == "blocked"
+    assert d.implementable is False
+    assert "ai:blocked" in d.add_labels
+    assert "work:ready" in d.remove_labels
 
 
 def test_decide_intake_obsolete_close_on_library(tmp_path: Path):
