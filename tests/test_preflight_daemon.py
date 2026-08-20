@@ -61,7 +61,11 @@ def _fake_uv(local_bin: Path) -> Path:
         "    ;;\n"
         "esac\n"
         "if [ \"$1 $2\" = 'run lokay-host-ff' ]; then\n"
-        "  printf '%s\\n' '{\"ok\":true,\"health\":\"current\"}'\n"
+        "  if [ -n \"$LOKAY_UV_HOST_FF_ENVELOPE\" ]; then\n"
+        "    printf '%s\\n' \"$LOKAY_UV_HOST_FF_ENVELOPE\"\n"
+        "  else\n"
+        "    printf '%s\\n' '{\"ok\":true,\"health\":\"current\",\"updated\":false,\"already_current\":true}'\n"
+        "  fi\n"
         "  exit 0\n"
         "fi\n"
         "if [ \"$LOKAY_UV_REINSTALL_FAIL\" = 1 ] && "
@@ -181,6 +185,37 @@ def test_latest_log_is_current_before_daemon_finishes(tmp_path):
         thread.join(timeout=5)
     assert not thread.is_alive()
     assert result["completed"].returncode == 0, result["completed"].stderr
+
+
+def test_host_ff_updated_exits_without_starting_daemon(tmp_path):
+    completed = _run_daemon(
+        tmp_path,
+        extra_env={
+            "LOKAY_UV_HOST_FF_ENVELOPE": (
+                '{"ok":true,"health":"current","updated":true,'
+                '"already_current":false,"head":"abc"}'
+            )
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    argv_log = tmp_path / "uv-argv.log"
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
+    body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
+    assert "host_updated" in body
+    glance = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert glance["health"] == "host_updated"
+
+
+def test_host_ff_already_current_still_starts_daemon(tmp_path):
+    completed = _run_daemon(tmp_path)
+    assert completed.returncode == 0, completed.stderr
+    argv_log = tmp_path / "uv-argv.log"
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
 
 
 def test_launchd_runs_host_ff_but_not_daemon_when_mill_lock_busy(tmp_path):

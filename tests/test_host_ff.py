@@ -235,6 +235,19 @@ def test_already_current_is_ok(tmp_path: Path):
     assert result["already_current"] is True
 
 
+def test_host_ff_payload_tells_caretaker_whether_head_moved(tmp_path: Path):
+    seed, host = _pair(tmp_path)
+    current = fast_forward_origin_main(Runner(), host)
+    assert current["updated"] is False
+    assert current["already_current"] is True
+    _advance_origin(seed, "next\n")
+    moved = fast_forward_origin_main(Runner(), host)
+    assert moved["updated"] is True
+    assert moved["already_current"] is False
+    assert moved["head"]
+    assert moved["head"] != current["head"]
+
+
 def test_cli_planned_without_live(tmp_path: Path, capsys):
     _seed, host = _pair(tmp_path)
     code = host_ff.main(["--checkout", str(host)])
