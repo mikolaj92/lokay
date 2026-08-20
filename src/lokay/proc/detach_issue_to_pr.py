@@ -470,6 +470,10 @@ def live_issue_to_pr_receipts(
             continue
         if "pid" not in data:
             continue
+        if data.get("reaped") is True:
+            # Over-budget plan_only already left the slot. A sleeping pi
+            # must not keep occupancy until exit.
+            continue
         try:
             pid = int(data["pid"])
             issue = int(data["issue"])
