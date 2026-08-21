@@ -388,6 +388,67 @@ def test_idle_stamps_skip_lokay_daemon_after_digest(tmp_path):
     assert "recent_empty_survey" in body
 
 
+def test_idle_stamps_skip_github_sha_probe(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "config.yaml").touch()
+    _github_checkout(root)
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text("#!/bin/sh\necho fail >&2\nexit 1\n", encoding="utf-8")
+    gh.chmod(0o755)
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-host-ff" not in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_survey" in body
+    assert "already_current" in body
+
+
+def test_busy_lock_still_probes_github_sha(tmp_path):
+    import fcntl
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "config.yaml").touch()
+    _github_checkout(root)
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text("#!/bin/sh\necho fail >&2\nexit 1\n", encoding="utf-8")
+    gh.chmod(0o755)
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    lock = lokay / "mill.lock"
+    handle = lock.open("a+", encoding="utf-8")
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        second = _run_daemon(tmp_path)
+    finally:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        handle.close()
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+
+
 def test_idle_skip_hosts_when_survey_stamp_missing(tmp_path):
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
