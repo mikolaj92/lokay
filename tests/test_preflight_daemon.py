@@ -39,6 +39,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "reopen_stdio_on_path" in script
     assert "loaded_plist_path" in script
     assert "os.ftruncate" in script
+    assert "wc -c <" in script
+    assert 'size="${size// /}"' in script
     assert "| tee " not in script
     assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
     assert script.index('export LOKAY_HOST_FF_FETCHED="${LOKAY_HOST_FF_FETCHED:-}"') < script.index("uv run lokay-host-ff")
