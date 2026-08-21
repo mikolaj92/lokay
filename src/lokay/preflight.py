@@ -640,9 +640,15 @@ def _list_open_incidents(repo: str) -> list[dict[str, Any]]:
         timeout=30,
         check=False,
     )
-    if listed.returncode != 0:
+    raw = getattr(listed, "stdout", "") or ""
+    if listed.returncode != 0 or not raw.strip():
         return []
-    pages = json.loads(getattr(listed, "stdout", "") or "[]")
+    try:
+        pages = json.loads(raw)
+    except ValueError:
+        return []
+    if not isinstance(pages, list):
+        return []
     return [
         row
         for page in pages
@@ -650,6 +656,48 @@ def _list_open_incidents(repo: str) -> list[dict[str, Any]]:
         for row in page
         if isinstance(row, dict) and "pull_request" not in row
     ]
+
+
+def _close_resolved_incidents(repo: str) -> dict[str, Any]:
+    """Close leftover preflight tickets after the mill is healthy."""
+    name = str(repo or "").strip()
+    if not name:
+        return {"ok": True, "closed": []}
+    try:
+        from lokay.triage import is_preflight_incident
+    except ImportError:
+        return {"ok": True, "closed": []}
+    closed: list[int] = []
+    for row in _list_open_incidents(name):
+        number = row.get("number")
+        try:
+            issue_n = int(number)
+        except (TypeError, ValueError):
+            continue
+        if not is_preflight_incident(
+            title=str(row.get("title") or ""),
+            body=str(row.get("body") or ""),
+        ):
+            continue
+        done = subprocess.run(
+            [
+                "gh",
+                "issue",
+                "close",
+                str(issue_n),
+                "--repo",
+                name,
+                "--comment",
+                "Preflight recovered; mill is healthy.",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+        if done.returncode == 0:
+            closed.append(issue_n)
+    return {"ok": True, "closed": closed}
 
 
 def _reopen_issue(repo: str, number: int, summary: str) -> bool:
@@ -978,6 +1026,12 @@ def run_preflight(
         result["operational_overlap"] = True
     if checked["ok"] and issue_lease:
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
+        try:
+            result["resolved_incidents"] = _close_resolved_incidents(
+                _incident_repo(cfg)
+            )
+        except OSError:
+            result["resolved_incidents"] = {"ok": False, "closed": []}
     if not checked["ok"]:
         if operational_overlap:
             # Overlap is already represented by the structured result. Do not

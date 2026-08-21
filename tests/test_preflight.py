@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pytest
 
@@ -340,6 +341,66 @@ def test_github_incident_refuses_operational_inventory_failures(
     }
 
     assert preflight._github_incident(result) is None
+
+
+def test_healthy_preflight_closes_open_incident_tickets(monkeypatch):
+    """Stale preflight issues must not stay open after the mill is healthy."""
+    closed: list[list[str]] = []
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            payload = json.dumps(
+                [
+                    [
+                        {
+                            "number": 178,
+                            "body": "<!-- lokay-preflight:7a069cefb68040e2 -->\nBounded checks failed",
+                            "title": "Preflight failure 7a069cefb68040e2",
+                        },
+                        {
+                            "number": 99,
+                            "body": "ordinary product ticket",
+                            "title": "fix mill",
+                        },
+                    ]
+                ]
+            )
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": payload, "stderr": ""},
+            )()
+        if cmd[:3] == ["gh", "issue", "close"]:
+            closed.append(cmd)
+            return type(
+                "Completed", (), {"returncode": 0, "stdout": "", "stderr": ""}
+            )()
+        return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    out = preflight._close_resolved_incidents("mikolaj92/lokay")
+    assert out == {"ok": True, "closed": [178]}
+    assert any(c[:4] == ["gh", "issue", "close", "178"] for c in closed)
+    assert all("99" not in c for c in closed)
+
+
+def test_daemon_healthy_preflight_closes_resolved_incidents(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+    called: list[str] = []
+
+    def fake_close(repo: str) -> dict:
+        called.append(repo)
+        return {"ok": True, "closed": [178]}
+
+    monkeypatch.setattr(preflight, "_close_resolved_incidents", fake_close)
+    result = preflight.run_preflight(str(cfg), issue_lease=True)
+    assert result["ok"] is True
+    assert called == ["mikolaj92/lokay"]
+    assert result["resolved_incidents"]["closed"] == [178]
 
 
 @pytest.mark.parametrize(
