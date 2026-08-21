@@ -40,7 +40,8 @@ when the survey stamp is fresh. After survey-stamp expiry, a cheap empty
 GitHub probe of mill PR / inbox / ready lists refreshes the survey stamp.
 Probe failure, remaining leftovers, occupied last-pass, digest mismatch,
 or host-ff update still starts the daemon. Fresh idle skip with a persisted
-digest skips `checkout_digest` and `package_matches`. Probe skip, missing
+digest skips `checkout_digest` and `package_matches`. An `already_current`
+host-ff envelope skips python `host_ff_updated`. Probe skip, missing
 digest, host-ff update, or a hosted daemon still checks the wheel.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
