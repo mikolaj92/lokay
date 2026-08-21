@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 import os
 import time
@@ -197,6 +198,73 @@ state:
     assert out["reason"] == "recent_empty"
     assert out["reaped_count"] == 0
     assert stamp.stat().st_mtime == before
+
+
+def test_pytest_does_not_skip_leftover_cache_github_lists_using_the_mill_stamp(
+    tmp_path, monkeypatch
+):
+    mill = tmp_path / ".lokay"
+    mill.mkdir()
+    stamp = mill / "reap-stale-implementing.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv(
+        "PYTEST_CURRENT_TEST",
+        "test_pytest_does_not_skip_leftover_cache_github_lists_using_the_mill_stamp",
+    )
+    assert reap_stale_implementing.stale_recently_empty(stamp) is False
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {mill / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    listed: list[str] = []
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "list_labeled_issues",
+        lambda *_a, **_k: listed.append("gh") or [],
+    )
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert out.get("skipped") is not True
+    assert listed
+    hermetic = tmp_path / "reap-stale-implementing.stamp"
+    hermetic.write_text("1", encoding="utf-8")
+    assert reap_stale_implementing.stale_recently_empty(hermetic) is True
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Pytest must not skip leftover-cache GitHub lists using the mill stamp." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_stale_probes_when_empty_stamp_expired(tmp_path, monkeypatch):
