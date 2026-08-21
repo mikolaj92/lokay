@@ -318,7 +318,8 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   `save_stuck` cannot restore a delivered corpse. GitHub CLOSED on the
   mill repo (`mill_scope`) also drops leftover stuck rows after compact
   dropped the journal event. Harvest then drops stuck rows outside the
-  mill catalog so a mini mill cannot keep Temida/test corpses.
+  mill catalog, including top-level Temida keys, so a mini mill cannot
+  keep Temida/test corpses.
   `cycle_end` unlinks the start receipt after measuring. Harvest also
   drops leftover start-only cycle files outside mill catalog or GitHub-CLOSED.
 - **Published-tip retry** (`origin/<branch>` exists — including a closed

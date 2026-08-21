@@ -219,6 +219,48 @@ def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
     assert "a/one#2" in (stuck.get("cleared") or [])
 
 
+def test_harvest_drops_toplevel_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
+    """Top-level Temida keys are still mill-ledger corpses, not issues[] rows."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    stuck = {
+        "issues": {
+            "mikolaj92/lokay#178": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "rebase_conflict",
+            },
+        },
+        "mikolaj92/Temida#4805": {
+            "reason": "plan_only",
+            "blocked": True,
+            "ts": "2026-08-18T22:43:45Z",
+        },
+        "mikolaj92/Temida#4806": {
+            "reason": "plan_only",
+            "blocked": True,
+            "ts": "2026-08-18T22:43:45Z",
+        },
+    }
+    monkeypatch.setattr(
+        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+    )
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        repos=["mikolaj92/lokay"],
+    )
+    assert set(stuck["issues"]) == {"mikolaj92/lokay#178"}
+    assert "mikolaj92/Temida#4805" not in stuck
+    assert "mikolaj92/Temida#4806" not in stuck
+    assert "mikolaj92/Temida#4805" in (stuck.get("cleared") or [])
+    assert "mikolaj92/Temida#4806" in (stuck.get("cleared") or [])
+
+
 def test_harvest_without_repos_keeps_hermetic_rows(tmp_path: Path):
     """Harvest unit tests omit repos; do not wipe physics fixtures."""
     cycle = tmp_path / "cycle"
@@ -237,7 +279,11 @@ def test_harvest_without_repos_keeps_hermetic_rows(tmp_path: Path):
                 "blocked": True,
                 "reason": "plan_only",
             },
-        }
+        },
+        "a/one#9": {
+            "reason": "plan_only",
+            "blocked": True,
+        },
     }
     harvest_fail_closed_children(
         stuck,
@@ -246,6 +292,7 @@ def test_harvest_without_repos_keeps_hermetic_rows(tmp_path: Path):
         is_live=lambda _pid: False,
     )
     assert set(stuck["issues"]) == {"a/one#2", "a/two#2"}
+    assert "a/one#9" in stuck
 
 
 def test_harvest_drops_out_of_scope_cycle_start_files(tmp_path: Path, monkeypatch):
