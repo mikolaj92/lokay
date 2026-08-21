@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import lokay.compose.issue_to_pr as issue_to_pr
@@ -134,6 +135,46 @@ def test_leftover_skips_github_when_recent_empty_stamp(monkeypatch, tmp_path):
     assert out["reason"] == "recent_empty"
     assert out["labels_removed"] is False
     assert out["closed_out"] == []
+
+
+def test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp(
+    monkeypatch, tmp_path
+):
+    mill = tmp_path / ".lokay"
+    mill.mkdir()
+    stamp = mill / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv(
+        "PYTEST_CURRENT_TEST",
+        "test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp",
+    )
+    assert closeout.leftover_recently_empty(stamp) is False
+    listed: list[str] = []
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=mill / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        closeout, "closed_ready_numbers", lambda *_a, **_k: listed.append("gh") or []
+    )
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out.get("skipped") is not True
+    assert listed == ["gh", "gh"]
+    hermetic = tmp_path / "leftover-closeout.stamp"
+    hermetic.write_text("1", encoding="utf-8")
+    assert closeout.leftover_recently_empty(hermetic) is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Pytest must not skip leftover GitHub lists using the mill stamp." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_leftover_probes_when_empty_stamp_expired(monkeypatch, tmp_path):

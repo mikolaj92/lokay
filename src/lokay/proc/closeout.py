@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -59,8 +60,24 @@ def leftover_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / LEFTOVER_STAMP_NAME
 
 
+def mill_leftover_stamp_path() -> Path:
+    """Operator mill leftover stamp beside last-pass / state.jsonl."""
+    return Path.home() / ".lokay" / LEFTOVER_STAMP_NAME
+
+
+def _is_operator_mill_leftover_stamp(stamp: Path) -> bool:
+    mill = mill_leftover_stamp_path()
+    try:
+        return stamp.expanduser().resolve() == mill.resolve()
+    except OSError:
+        return stamp.expanduser() == mill
+
+
 def leftover_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
+        return False
+    # Pytest must not skip leftover GitHub lists using the mill stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_leftover_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
