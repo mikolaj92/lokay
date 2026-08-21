@@ -6,7 +6,11 @@ import json
 import subprocess
 from pathlib import Path
 
-from lokay.git_host_ff import fast_forward_origin_main, origin_is_lokay
+from lokay.git_host_ff import (
+    fast_forward_origin_main,
+    origin_is_github_lokay,
+    origin_is_lokay,
+)
 from lokay.graph_run import describe_package
 from lokay.proc import host_ff
 from lokay.runner import Runner
@@ -65,6 +69,13 @@ def test_origin_is_lokay_accepts_canonical_and_local_path():
     assert origin_is_lokay("https://github.com/mikolaj92/lokay")
     assert origin_is_lokay("/tmp/mikolaj92/lokay.git")
     assert not origin_is_lokay("git@github.com:mikolaj92/temida.git")
+
+
+def test_origin_is_github_lokay_rejects_local_clone():
+    assert origin_is_github_lokay("git@github.com:mikolaj92/lokay.git")
+    assert origin_is_github_lokay("https://github.com/mikolaj92/lokay")
+    assert origin_is_github_lokay("ssh://git@github.com/mikolaj92/lokay")
+    assert not origin_is_github_lokay("/tmp/mikolaj92/lokay.git")
 
 
 def test_ff_only_when_behind_and_clean(tmp_path: Path):
@@ -244,6 +255,50 @@ def test_caretaker_fetch_skips_second_git_fetch(tmp_path: Path, monkeypatch):
     assert skipped["already_current"] is True
     assert skipped["head"] == current["head"]
     monkeypatch.delenv("LOKAY_HOST_FF_FETCHED")
+    moved = fast_forward_origin_main(Runner(), host)
+    assert moved["updated"] is True
+    assert moved["head"] != current["head"]
+
+
+def test_github_sha_match_skips_git_fetch(tmp_path: Path, monkeypatch):
+    seed, host = _pair(tmp_path)
+    current = fast_forward_origin_main(Runner(), host)
+    remote = _git(host, "rev-parse", "origin/main").stdout.strip()
+    monkeypatch.setattr("lokay.git_host_ff.origin_is_github_lokay", lambda url: True)
+    monkeypatch.setattr("lokay.git_host_ff.github_main_sha", lambda runner: remote)
+    fetched: list[tuple[str, ...]] = []
+    real = Runner.run_checked
+
+    def wrapped(self, spec, *, live):
+        if spec.argv[:3] == ("git", "fetch", "origin"):
+            fetched.append(spec.argv)
+        return real(self, spec, live=live)
+
+    monkeypatch.setattr(Runner, "run_checked", wrapped)
+    skipped = fast_forward_origin_main(Runner(), host)
+    assert skipped["already_current"] is True
+    assert skipped["head"] == current["head"]
+    assert fetched == []
+
+
+def test_github_sha_mismatch_still_fetches(tmp_path: Path, monkeypatch):
+    seed, host = _pair(tmp_path)
+    current = fast_forward_origin_main(Runner(), host)
+    _advance_origin(seed, "next\n")
+    new_remote = _git(seed, "rev-parse", "HEAD").stdout.strip()
+    monkeypatch.setattr("lokay.git_host_ff.origin_is_github_lokay", lambda url: True)
+    monkeypatch.setattr("lokay.git_host_ff.github_main_sha", lambda runner: new_remote)
+    moved = fast_forward_origin_main(Runner(), host)
+    assert moved["updated"] is True
+    assert moved["head"] != current["head"]
+
+
+def test_github_sha_probe_failure_still_fetches(tmp_path: Path, monkeypatch):
+    seed, host = _pair(tmp_path)
+    current = fast_forward_origin_main(Runner(), host)
+    _advance_origin(seed, "next\n")
+    monkeypatch.setattr("lokay.git_host_ff.origin_is_github_lokay", lambda url: True)
+    monkeypatch.setattr("lokay.git_host_ff.github_main_sha", lambda runner: "")
     moved = fast_forward_origin_main(Runner(), host)
     assert moved["updated"] is True
     assert moved["head"] != current["head"]

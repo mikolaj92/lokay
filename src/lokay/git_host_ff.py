@@ -6,7 +6,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from lokay.runner import Runner, git_spec
+from lokay.runner import Runner, gh_spec, git_spec
 
 CANONICAL_REPO = "mikolaj92/lokay"
 SKIP_WORKTREE_CATALOG = "repos.mikolaj92.yaml"
@@ -23,6 +23,25 @@ def caretaker_already_fetched() -> bool:
         "true",
         "yes",
     }
+
+
+def github_main_sha(runner: Runner) -> str:
+    """GitHub SHA for origin/main. Empty means probe failed."""
+    result = runner.run(
+        gh_spec(
+            [
+                "api",
+                f"repos/{CANONICAL_REPO}/git/ref/heads/main",
+                "--jq",
+                ".object.sha",
+            ],
+            timeout_seconds=30,
+        ),
+        live=True,
+    )
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip()
 
 
 def checkout_head(checkout: Path) -> str:
@@ -74,6 +93,16 @@ def origin_is_lokay(url: str) -> bool:
     text = (url or "").strip().removesuffix(".git")
     if text.endswith(CANONICAL_REPO):
         return True
+    return text in {
+        f"https://github.com/{CANONICAL_REPO}",
+        f"git@github.com:{CANONICAL_REPO}",
+        f"ssh://git@github.com/{CANONICAL_REPO}",
+    }
+
+
+def origin_is_github_lokay(url: str) -> bool:
+    """True only for the GitHub remote. Local test clones still fetch."""
+    text = (url or "").strip().removesuffix(".git")
     return text in {
         f"https://github.com/{CANONICAL_REPO}",
         f"git@github.com:{CANONICAL_REPO}",
@@ -210,10 +239,16 @@ def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object
             )
 
     if not caretaker_already_fetched():
-        runner.run_checked(
-            git_spec(["fetch", "origin", "main"], cwd=checkout, timeout_seconds=300),
-            live=True,
-        )
+        skip_fetch = False
+        if origin_is_github_lokay(origin):
+            remote_now = _rev_parse(runner, checkout, "origin/main")
+            github = github_main_sha(runner)
+            skip_fetch = bool(github) and github == remote_now
+        if not skip_fetch:
+            runner.run_checked(
+                git_spec(["fetch", "origin", "main"], cwd=checkout, timeout_seconds=300),
+                live=True,
+            )
     head = _rev_parse(runner, checkout, "HEAD")
     remote = _rev_parse(runner, checkout, "origin/main")
     skipped = skip_worktree_paths(runner, checkout)
