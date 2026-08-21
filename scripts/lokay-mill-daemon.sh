@@ -264,6 +264,7 @@ idle_skip_daemon() {
     "${LOKAY_HOME}/factory-survey.stamp" \
     "${LOKAY_HOME}/leftover-closeout.stamp" <<'PY'
 import json, os, re, subprocess, sys, time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 receipt_path, survey_stamp, leftover_stamp = sys.argv[1:4]
@@ -377,18 +378,19 @@ if 0 <= survey_age < 120:
     print("recent_empty_leftover_probe" if leftover_probed else "recent_empty_survey")
     raise SystemExit(0)
 
-prs = gh_list(["pr", "list", "--repo", repo, "--state", "open", "--json", "headRefName", "--limit", "1000"])
-if prs is None:
+# Mill-probe GitHub lists run together. Probe failure still hosts.
+with ThreadPoolExecutor(max_workers=3) as pool:
+    fut_prs = pool.submit(gh_list, ["pr", "list", "--repo", repo, "--state", "open", "--json", "headRefName", "--limit", "1000"])
+    fut_ready = pool.submit(gh_list, ["issue", "list", "--repo", repo, "--state", "open", "--label", "work:ready", "--json", "number,state", "--limit", "1000"])
+    fut_inbox = pool.submit(gh_list, ["issue", "list", "--repo", repo, "--state", "open", "--json", "labels", "--limit", "1000"])
+    prs = fut_prs.result()
+    ready = fut_ready.result()
+    inbox = fut_inbox.result()
+if prs is None or ready is None or inbox is None:
     raise SystemExit(1)
 if any(str(row.get("headRefName") or "").startswith("ai/fix/") for row in prs if isinstance(row, dict)):
     raise SystemExit(1)
-ready = gh_list(["issue", "list", "--repo", repo, "--state", "open", "--label", "work:ready", "--json", "number,state", "--limit", "1000"])
-if ready is None:
-    raise SystemExit(1)
 if any(isinstance(row, dict) and str(row.get("state") or "").upper() != "CLOSED" and int(row.get("number") or 0) > 0 for row in ready):
-    raise SystemExit(1)
-inbox = gh_list(["issue", "list", "--repo", repo, "--state", "open", "--json", "labels", "--limit", "1000"])
-if inbox is None:
     raise SystemExit(1)
 for row in inbox:
     if not isinstance(row, dict):
