@@ -162,6 +162,19 @@ def test_unused_self_repair_and_approve_knobs_are_gone():
     assert "max_self_repair_attempts" not in Config.__dataclass_fields__
 
 
+def test_dead_require_test_evidence_knob_is_gone():
+    """String matcher was never a merge gate. YAML must not pretend it is."""
+    from pathlib import Path
+
+    from lokay import safety
+
+    root = Path(__file__).resolve().parents[1]
+    yaml = (root / "config.yaml").read_text(encoding="utf-8")
+    assert "require_test_evidence" not in yaml
+    assert "require_test_evidence" not in Config.__dataclass_fields__
+    assert not hasattr(safety, "looks_like_test_evidence")
+
+
 def test_env_overrides_enable_live_mill(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(

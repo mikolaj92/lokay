@@ -1,6 +1,6 @@
 import pytest
 
-from lokay.safety import SafetyError, looks_like_test_evidence, validate_argv
+from lokay.safety import SafetyError, validate_argv
 
 
 def test_blocks_force_push():
@@ -24,8 +24,3 @@ def test_allows_normal_push():
 
 def test_allows_gh_pr_create():
     validate_argv(["gh", "pr", "create", "--title", "t", "--body", "b"])
-
-
-def test_test_evidence_markers():
-    assert looks_like_test_evidence("pytest: 3 passed")
-    assert not looks_like_test_evidence("looks fine to me")

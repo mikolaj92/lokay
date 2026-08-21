@@ -37,8 +37,6 @@ merge:
   enabled: true
   # Local trust only — do NOT gate merges on GitHub Actions / remote CI providers.
   require_checks: false
-  # Still prefer agent-visible local test evidence when present; not a remote check.
-  require_test_evidence: false
   # Blind pr_review before auto-merge. Builder is not reviewer.
   require_llm_review: true
 
