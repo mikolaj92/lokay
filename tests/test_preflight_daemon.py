@@ -60,6 +60,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "loaded_keepalive_crash_only" in script
     assert '{"SuccessfulExit": False}' in script
     assert "Already 60s crash KeepAlive skips python plistlib" in script
+    assert "Cache python3 so later helpers skip command -v." in script
     assert "plutil -extract StartInterval raw" in script
     assert '[[ "${HOME}" == /Users/* ]]' in script
     assert "os.setsid()" in script
@@ -689,6 +690,22 @@ def test_install_writes_crash_keepalive_on_existing_plist(tmp_path):
     assert data["KeepAlive"] == {"SuccessfulExit": False}
     stamp = tmp_path / ".lokay" / "launchd-keepalive.stamp"
     assert stamp.exists()
+
+
+def test_lokay_python3_env_is_cached_for_helpers(tmp_path):
+    wrapper = tmp_path / "pywrap"
+    log = tmp_path / "pywrap.log"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        f"printf called\\n >> '{log}'\n"
+        'exec /usr/bin/python3 "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    completed = _run_daemon(tmp_path, extra_env={"LOKAY_PYTHON3": str(wrapper)})
+    assert completed.returncode == 0, completed.stderr
+    assert log.is_file()
+    assert log.read_text(encoding="utf-8").count("called") >= 1
 
 
 def test_already_crash_keepalive_skips_python_plistlib(tmp_path):

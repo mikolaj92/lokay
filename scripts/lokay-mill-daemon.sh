@@ -27,13 +27,15 @@ LOKAY_MILL_LOCK="${LOKAY_MILL_LOCK:-${LOKAY_HOME}/mill.lock}"
 LOKAY_KEEPALIVE_STAMP="${LOKAY_KEEPALIVE_STAMP:-${LOKAY_HOME}/launchd-keepalive.stamp}"
 
 _python() {
-  if command -v python3 >/dev/null 2>&1; then
-    python3 "$@"
-  elif [[ -x /usr/bin/python3 ]]; then
-    /usr/bin/python3 "$@"
-  else
-    return 127
+  # Cache python3 so later helpers skip command -v.
+  if [[ -z "${LOKAY_PYTHON3:-}" ]]; then
+    LOKAY_PYTHON3="$(command -v python3 2>/dev/null || true)"
+    if [[ -z "${LOKAY_PYTHON3}" && -x /usr/bin/python3 ]]; then
+      LOKAY_PYTHON3="/usr/bin/python3"
+    fi
   fi
+  [[ -n "${LOKAY_PYTHON3}" ]] || return 127
+  "${LOKAY_PYTHON3}" "$@"
 }
 
 bootstrap_incident() {
