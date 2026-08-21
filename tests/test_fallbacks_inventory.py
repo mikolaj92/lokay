@@ -80,8 +80,8 @@ limits:
   max_triage_per_tick: 3
   max_issues_per_tick: 0
   max_repairs_per_tick: 0
-paths:
-  state: {state}
+state:
+  path: {state}
 merge:
   enabled: false
 """,

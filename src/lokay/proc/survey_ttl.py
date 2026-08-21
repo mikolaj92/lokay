@@ -51,8 +51,24 @@ def survey_stamp_path(begin: dict[str, Any] | None) -> Path | None:
     return parent / SURVEY_STAMP_NAME
 
 
+def mill_survey_stamp_path() -> Path:
+    """Operator mill stamp beside last-pass / state.jsonl."""
+    return Path.home() / ".lokay" / SURVEY_STAMP_NAME
+
+
+def _is_operator_mill_stamp(stamp: Path) -> bool:
+    mill = mill_survey_stamp_path()
+    try:
+        return stamp.expanduser().resolve() == mill.resolve()
+    except OSError:
+        return stamp.expanduser() == mill
+
+
 def survey_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
+        return False
+    # Pytest must not skip GitHub surveys using the mill stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -78,11 +94,6 @@ def clear_survey_stamp(stamp: Path | None) -> None:
         stamp.unlink()
     except OSError:
         pass
-
-
-def mill_survey_stamp_path() -> Path:
-    """Operator mill stamp beside last-pass / state.jsonl."""
-    return Path.home() / ".lokay" / SURVEY_STAMP_NAME
 
 
 def last_pass_is_empty_idle(receipt: dict[str, Any] | None) -> bool:
@@ -127,7 +138,9 @@ def skip_idle_factory_pass(
     """
     if not live:
         return None
-    if os.environ.get("PYTEST_CURRENT_TEST") and stamp is None:
+    if os.environ.get("PYTEST_CURRENT_TEST") and (
+        stamp is None or _is_operator_mill_stamp(stamp)
+    ):
         return None
     if stamp is None:
         stamp = mill_survey_stamp_path()
