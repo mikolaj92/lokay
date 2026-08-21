@@ -187,7 +187,7 @@ def test_latest_log_is_current_before_daemon_finishes(tmp_path):
     assert result["completed"].returncode == 0, result["completed"].stderr
 
 
-def test_host_ff_updated_exits_without_starting_daemon(tmp_path):
+def test_host_ff_updated_starts_daemon_same_tick(tmp_path):
     completed = _run_daemon(
         tmp_path,
         extra_env={
@@ -201,12 +201,13 @@ def test_host_ff_updated_exits_without_starting_daemon(tmp_path):
     argv_log = tmp_path / "uv-argv.log"
     calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert any("lokay-host-ff" in line for line in calls)
-    assert all("lokay-daemon" not in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
     logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
     body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
-    assert "host_updated" in body
+    assert '"updated": true' in body or '"updated":true' in body
     glance = json.loads(completed.stdout.strip().splitlines()[-1])
-    assert glance["health"] == "host_updated"
+    assert glance["health"] == "progress"
+    assert any("--reinstall-package" in line and "lokay-daemon" in line for line in calls)
 
 
 def test_host_ff_already_current_still_starts_daemon(tmp_path):

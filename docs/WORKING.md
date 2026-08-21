@@ -275,8 +275,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
   refresh_occupancy → reap_stale_worktrees → select_implement →
   queue_conflict → dispatch_implement → compute_health → record_pass`.
-  `factory_begin` fail-closes when `host_ff` just fast-forwarded (`health=host_updated`)
-  so the next launchd tick reinstalls and imports the new checkout.
+  `factory_begin` fail-closes when in-cycle `host_ff` just fast-forwarded (`health=host_updated`)
+  so a later launchd tick reinstalls and imports the new checkout. Launchd host-ff
+  that already moved HEAD continues into uv reinstall + `lokay-daemon` in the same tick.
   Launchd does not `host_ff` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
   Dispatch atoms start the smaller workflow Falas through a separate journal
