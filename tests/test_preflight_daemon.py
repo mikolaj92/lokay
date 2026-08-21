@@ -48,6 +48,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Mill-probe skips GitHub SHA when leftover stamp is still fresh." in script
     assert "Combined leftover+survey expiry still probes SHA." in script
     assert "Trailing delayed --install checks keepalive stamp before mill_lock_busy." in script
+    assert "Fresh idle skip defers caretaker plist write; hosted/probe ticks still write." in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
@@ -974,6 +975,42 @@ def test_lokay_python3_env_is_cached_for_helpers(tmp_path):
     assert completed.returncode == 0, completed.stderr
     assert log.is_file()
     assert log.read_text(encoding="utf-8").count("called") >= 1
+
+
+def test_fresh_idle_skip_defers_caretaker_plist_write(tmp_path):
+    """Fresh idle skip defers caretaker plist write; hosted/probe ticks still write."""
+    import plistlib
+
+    plist = tmp_path / "Library" / "LaunchAgents" / "ai.mikolaj.lokay-mill.plist"
+    plist.parent.mkdir(parents=True)
+    stale = {
+        "Label": "ai.mikolaj.lokay-mill",
+        "StartInterval": 600,
+        "KeepAlive": {"SuccessfulExit": False},
+    }
+    plistlib.dump(stale, plist.open("wb"))
+    extra = {
+        "LOKAY_LAUNCHD_PLIST": str(plist),
+        "LOKAY_LAUNCHD_LABEL": "ai.mikolaj.lokay-mill",
+    }
+    first = _run_daemon(tmp_path, extra_env=extra)
+    assert first.returncode == 0, first.stderr
+    data = plistlib.load(plist.open("rb"))
+    assert data["StartInterval"] == 60
+    plistlib.dump(stale, plist.open("wb"))
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    second = _run_daemon(tmp_path, extra_env=extra)
+    assert second.returncode == 0, second.stderr
+    data = plistlib.load(plist.open("rb"))
+    assert data["StartInterval"] == 600
+    _expire(lokay / "factory-survey.stamp", 200)
+    third = _run_daemon(tmp_path, extra_env=extra)
+    assert third.returncode == 0, third.stderr
+    data = plistlib.load(plist.open("rb"))
+    assert data["StartInterval"] == 60
 
 
 def test_already_crash_keepalive_skips_python_plistlib(tmp_path):

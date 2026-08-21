@@ -664,7 +664,10 @@ fi
 
 # Keep the on-disk host interval at 60s. Do not launchctl here — this process
 # is the live cycle. Caretaker (--install) loads after idle when the lock is free.
-caretaker_write_interval
+# Fresh idle skip defers caretaker plist write; hosted/probe ticks still write.
+if ! last_pass_idle_stamps_fresh; then
+  caretaker_write_interval
+fi
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="${LOG_DIR}/mill-${STAMP}.log"
