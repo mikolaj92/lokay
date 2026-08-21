@@ -302,7 +302,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   every mill PR; GitHub CLOSED is enough. After an empty leftover, skip
   those GitHub lists for 300s so idle ticks do not pay them twice a minute.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
-  those GitHub lists for 120s without refreshing the stamp.
+  those GitHub lists for 120s without refreshing the stamp. A live mill with
+  that fresh stamp and an idle last-pass also skips hosting `factory_pass`
+  (20 organ spawns) until the stamp expires. Missing stamp, occupied last-pass,
+  or pytest always hosts.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.

@@ -156,3 +156,99 @@ def test_nonempty_ready_clears_stamp(tmp_path: Path, monkeypatch) -> None:
     )
     assert out["remaining_ready"] == 1
     assert not stamp.exists()
+
+
+def _idle_receipt(**remaining):
+    base = {
+        "inbox": 0,
+        "ready": 0,
+        "open_ai_prs": 0,
+        "issue_to_pr_started": 0,
+        "survey_errors": 0,
+        "by_repo": [{"repo": "mikolaj92/lokay", "occupied": False}],
+    }
+    base.update(remaining)
+    return {"health": "idle", "idle": True, "remaining": base}
+
+
+def test_skip_idle_factory_pass_does_not_refresh_stamp(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    before = stamp.stat().st_mtime
+    out = survey_ttl.skip_idle_factory_pass(
+        live=True, stamp=stamp, receipt=_idle_receipt()
+    )
+    assert out is not None
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty_survey"
+    assert out["health"] == "idle"
+    assert stamp.stat().st_mtime == before
+
+
+def test_skip_idle_factory_pass_hosts_when_stamp_missing(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    assert (
+        survey_ttl.skip_idle_factory_pass(
+            live=True, stamp=stamp, receipt=_idle_receipt()
+        )
+        is None
+    )
+
+
+def test_skip_idle_factory_pass_hosts_when_occupied(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    receipt = _idle_receipt(
+        by_repo=[{"repo": "mikolaj92/lokay", "occupied": True}]
+    )
+    assert (
+        survey_ttl.skip_idle_factory_pass(
+            live=True, stamp=stamp, receipt=receipt
+        )
+        is None
+    )
+
+
+def test_skip_idle_factory_pass_hosts_when_ready(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    assert (
+        survey_ttl.skip_idle_factory_pass(
+            live=True, stamp=stamp, receipt=_idle_receipt(ready=1)
+        )
+        is None
+    )
+
+
+def test_live_idle_factory_pass_skips_fala(monkeypatch, tmp_path: Path) -> None:
+    from lokay.compose import factory as factory_mod
+
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+
+    def boom(**_kwargs):
+        raise AssertionError("idle mill must not host factory_pass Fala")
+
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    monkeypatch.setattr(factory_mod, "run_path", boom)
+    monkeypatch.setattr(
+        factory_mod,
+        "skip_idle_factory_pass",
+        lambda **_k: {
+            "ok": True,
+            "health": "idle",
+            "idle": True,
+            "live": True,
+            "progress": 0,
+            "remaining": {"ready": 0, "inbox": 0},
+            "skipped": True,
+            "reason": "recent_empty_survey",
+        },
+    )
+    out = factory_mod.compose_factory_pass(
+        config_path="config.yaml", live=True, db_path=str(tmp_path / "factory")
+    )
+    assert out["ok"] is True
+    assert out["skipped"] is True
+    assert out["engine"] == "fala"
+    assert out["kind"] == "factory_pass"
