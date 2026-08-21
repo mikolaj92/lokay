@@ -753,7 +753,14 @@ PY
 }
 
 launchd_stdout_paths() {
-  _python - "${LOKAY_LAUNCHD_PLIST}" "${LOKAY_HOME}" "${LOG_DIR}" <<'PY'
+  # Missing or XML plist skips python plistlib. Binary plist still python.
+  local plist="${LOKAY_LAUNCHD_PLIST}"
+  local magic="" stdout_path="" stderr_path=""
+  if [[ -f "${plist}" ]]; then
+    magic="$(head -c 8 "${plist}" 2>/dev/null || true)"
+    if [[ "${magic}" == "bplist00" ]] \
+      || { ! grep -Fq '<?xml' "${plist}" && ! grep -Fq '<plist' "${plist}" && ! grep -Fq '<key>StandardOutPath</key>' "${plist}"; }; then
+      _python - "${plist}" "${LOKAY_HOME}" "${LOG_DIR}" <<'PY'
 import plistlib, sys
 from pathlib import Path
 
@@ -777,6 +784,30 @@ add(str(Path(sys.argv[2]) / "launchd-stdout.log"))
 add(str(Path(sys.argv[3]) / "launchd-stdout.log"))
 print("\n".join(seen))
 PY
+      return
+    fi
+    stdout_path="$(awk '
+      $0 ~ "<key>StandardOutPath</key>" { want=1; next }
+      want && /<string>/ {
+        sub(/^.*<string>/, "")
+        sub(/<\/string>.*$/, "")
+        print
+        exit
+      }
+    ' "${plist}" 2>/dev/null || true)"
+    stderr_path="$(awk '
+      $0 ~ "<key>StandardErrorPath</key>" { want=1; next }
+      want && /<string>/ {
+        sub(/^.*<string>/, "")
+        sub(/<\/string>.*$/, "")
+        print
+        exit
+      }
+    ' "${plist}" 2>/dev/null || true)"
+  fi
+  printf '%s\n' "${stdout_path}" "${stderr_path}" \
+    "${LOKAY_HOME}/launchd-stdout.log" "${LOG_DIR}/launchd-stdout.log" \
+    | awk 'NF && !seen[$0]++'
 }
 
 prune_mill_logs() {

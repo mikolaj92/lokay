@@ -34,10 +34,12 @@ matches HEAD and `origin/main`. Fresh idle stamps skip python
 probes. Probe failure or SHA mismatch still runs host-ff. Local clones
 still run host-ff. Small mill / launchd logs skip
 python truncate. Small launchd stdio skips python inode reopen; fat logs
-still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
-later idle lines stay under the cap. When last-pass is idle, it
-skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
-fresh; mill-daemon skips python `idle_skip_daemon` on that path. After
+still bound in place, then reopen. Missing or XML plist skips python
+`launchd_stdout_paths`; binary plist still python. Fat truncate leaves
+1KiB glance headroom so later idle lines stay under the cap. When
+last-pass is idle, it skips `lokay-daemon` while empty-survey and
+leftover-closeout stamps are fresh; mill-daemon skips python
+`idle_skip_daemon` on that path. After
 leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 `work:ready` / `ai:ready` mill issues refreshes that stamp and still skips
 when the survey stamp is fresh. mill-daemon runs those two leftover lists
