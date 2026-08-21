@@ -16,6 +16,7 @@ from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 from lokay.child_harvest import harvest_idle_mill_stuck
 from lokay.proc.closeout import run_closeout_leftover
+from lokay.proc.ready_hygiene import hygiene_idle_leftover_ready
 from lokay.proc.reap_stale_worktrees import reap_idle_closed_worktrees
 from lokay.proc.survey_ttl import skip_idle_factory_pass
 
@@ -73,6 +74,10 @@ def compose_daemon_cycle(
                     config_path=config_path, live=True
                 )
                 reap_idle_closed_worktrees(
+                    config_path=config_path, live=True
+                )
+                # Idle daemon_cycle skip still runs leftover-ready.
+                hygiene_idle_leftover_ready(
                     config_path=config_path, live=True
                 )
                 leftover = run_closeout_leftover(
