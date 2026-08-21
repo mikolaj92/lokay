@@ -62,6 +62,7 @@ state:
         encoding="utf-8",
     )
     (tmp_path / "clone").mkdir()
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
     monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", lambda *_a, **_k: [])
     monkeypatch.setattr("lokay.proc.ready_hygiene.remove_issue_labels", lambda *_a, **_k: None)
     out = run_ready_hygiene(config_path=str(cfg), live=True)
@@ -99,6 +100,7 @@ state:
     stamp = tmp_path / "ready-hygiene.stamp"
     stamp.write_text("1", encoding="utf-8")
     before = stamp.stat().st_mtime
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
 
     def boom(*_a, **_k):
         raise AssertionError("recent empty leftover ready must not list GitHub")
@@ -146,6 +148,7 @@ state:
     stamp.write_text("1", encoding="utf-8")
     old = time.time() - hygiene.HYGIENE_TTL_SECONDS - 1
     os.utime(stamp, (old, old))
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
     monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", lambda *_a, **_k: [])
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert out.get("skipped") is not True
@@ -189,6 +192,7 @@ state:
     stamp.write_text("1", encoding="utf-8")
     old = time.time() - hygiene.HYGIENE_TTL_SECONDS - 1
     os.utime(stamp, (old, old))
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
     monkeypatch.setattr(
         "lokay.proc.ready_hygiene.list_labeled_issues",
         lambda *_a, **_k: [_issue(1, ["ai:ready"])],
