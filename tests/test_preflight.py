@@ -1,5 +1,6 @@
 from pathlib import Path
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -421,6 +422,46 @@ def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
     }
     assert listed == [1]
     assert stamp.stat().st_mtime == mtime
+
+
+def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stamp(
+    tmp_path, monkeypatch
+):
+    mill = tmp_path / ".lokay"
+    mill.mkdir()
+    stamp = mill / "preflight-incident-close.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv(
+        "PYTEST_CURRENT_TEST",
+        "test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stamp",
+    )
+    assert preflight.incident_recently_empty(stamp) is False
+    listed: list[int] = []
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            listed.append(1)
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": "[[]]", "stderr": ""},
+            )()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    cfg = SimpleNamespace(state_path=mill / "state.jsonl")
+    out = preflight._close_resolved_incidents("mikolaj92/lokay", cfg)
+    assert out.get("skipped") is not True
+    assert listed == [1]
+    hermetic = tmp_path / "preflight-incident-close.stamp"
+    hermetic.write_text("1", encoding="utf-8")
+    assert preflight.incident_recently_empty(hermetic) is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Pytest must not skip leftover-incident GitHub lists using the mill stamp." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_incident_probe_failure_does_not_write_stamp(tmp_path, monkeypatch):
