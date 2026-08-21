@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import os
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -422,6 +424,59 @@ def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
     }
     assert listed == [1]
     assert stamp.stat().st_mtime == mtime
+
+
+def test_idle_leftover_incident_skip_outlives_leftover_probe(tmp_path, monkeypatch):
+    """Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass stays at 300s."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    stamp = preflight.incident_stamp_path(loaded)
+    assert stamp is not None
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text("1", encoding="utf-8")
+    leftover_age = time.time() - 301
+    os.utime(stamp, (leftover_age, leftover_age))
+    listed: list[int] = []
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            listed.append(1)
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": "[[]]", "stderr": ""},
+            )()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    monkeypatch.delenv("LOKAY_LEFTOVER_PROBE_GH_OK", raising=False)
+    hosted = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert hosted.get("skipped") is not True
+    assert listed == [1]
+    leftover_age = time.time() - 301
+    os.utime(stamp, (leftover_age, leftover_age))
+    listed.clear()
+    monkeypatch.setenv("LOKAY_LEFTOVER_PROBE_GH_OK", "1")
+    idle = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert idle == {
+        "ok": True,
+        "closed": [],
+        "skipped": True,
+        "reason": "recent_empty",
+    }
+    assert listed == []
+    assert stamp.stat().st_mtime == leftover_age
+    assert preflight.incident_recently_empty(stamp) is False
+    assert preflight.incident_recently_empty(
+        stamp, ttl=preflight.IDLE_INCIDENT_TTL_SECONDS
+    ) is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Idle leftover-incident skip outlives leftover-probe." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stamp(
