@@ -50,8 +50,8 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     _, skipped_repos = scoped_repos(repos, mill=MINI_MILL_REPO)
     skipped = set(skipped_repos)
     stamp = survey_stamp_path(begin)
-    skip = survey_recently_empty(stamp)
-    if skip:
+    skip_github = survey_recently_empty(stamp)
+    if skip_github:
         actions.append(
             {
                 "step": "skip_ready_survey_recent_empty",
@@ -73,7 +73,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "ready"})
             ready_by_repo[repo_name] = []
             continue
-        if skip:
+        if skip_github:
             ready_by_repo[repo_name] = []
             continue
         listed = run_proc(
@@ -212,7 +212,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     )
     remaining_prs = int(working.get("remaining_prs") or 0)
     remaining_inbox = int(working.get("remaining_inbox") or 0)
-    if not skip:
+    if not skip_github:
         if (
             remaining_ready
             or remaining_prs
@@ -229,7 +229,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
         "remaining_ready": remaining_ready,
         "survey_errors": survey_errors,
     }
-    if skip:
+    if skip_github:
         out["skipped"] = True
         out["reason"] = "recent_empty"
     return ok(**out)
