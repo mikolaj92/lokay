@@ -50,6 +50,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert 'size="${size// /}"' in script
     assert '[[ -n "${size}" && "${size}" -le "${LAUNCHD_STDOUT_MAX}" ]]' in script
     assert "skips python inode reopen" in script
+    assert "Leave glance headroom so the next idle line stays under the cap." in script
     assert "| tee " not in script
     assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
     assert script.index('export LOKAY_HOST_FF_FETCHED="${LOKAY_HOST_FF_FETCHED:-}"') < script.index("uv run lokay-host-ff")
@@ -897,6 +898,27 @@ def test_small_launchd_stdout_skips_python_reopen(tmp_path):
     assert completed.returncode == 0, completed.stderr
     assert small.read_bytes() == body
     assert b"truncated" not in small.read_bytes()
+
+
+def test_fat_launchd_stdout_leaves_glance_headroom(tmp_path):
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    fat = logs / "launchd-stdout.log"
+    fat.write_bytes(b"x" * 8000)
+    first = _run_daemon(
+        tmp_path,
+        extra_env={"LOKAY_LAUNCHD_STDOUT_MAX": "2048"},
+    )
+    assert first.returncode == 0, first.stderr
+    assert fat.stat().st_size <= 2048 - 256
+    assert b"truncated" in fat.read_bytes()
+    body = fat.read_bytes()
+    second = _run_daemon(
+        tmp_path,
+        extra_env={"LOKAY_LAUNCHD_STDOUT_MAX": "2048"},
+    )
+    assert second.returncode == 0, second.stderr
+    assert fat.read_bytes() == body
 
 
 def test_mill_logs_under_keep_skip_python_prune(tmp_path):

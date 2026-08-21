@@ -650,8 +650,12 @@ except OSError:
     raise SystemExit(0)
 if size <= limit:
     raise SystemExit(0)
-head_n = max(256, limit // 4)
-tail_n = max(256, limit - head_n - 32)
+# Leave glance headroom so the next idle line stays under the cap.
+target = limit - 256
+if target < 512:
+    target = limit
+head_n = max(256, target // 4)
+tail_n = max(256, target - head_n - 32)
 marker = b"\n... truncated ...\n"
 try:
     fd = os.open(path, os.O_RDWR)
