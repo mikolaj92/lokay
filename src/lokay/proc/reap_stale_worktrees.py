@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -42,10 +43,49 @@ from lokay.stuck import issue_number_from_branch
 # leftover_status is seconds each (rev-list + ls-files). 66 leftovers
 # ate the 5–10 min implement slot. Classify a handful; skip the rest.
 CLASSIFY_CAP = 4
+OVER_CAP_TTL_SECONDS = 300
+OVER_CAP_STAMP_NAME = "reap-over-cap.stamp"
 
 # The mini mill only delivers Lokay. Product repositories can remain in the
 # shared catalog, but this atom must not inspect or classify their worktrees.
 MINI_MILL_REPO = "mikolaj92/lokay"
+
+
+def over_cap_stamp_path(cfg: Any) -> Path | None:
+    """Stamp lives beside mill state. Missing path means always probe."""
+    path = getattr(cfg, "state_path", None)
+    if not path:
+        return None
+    return Path(path).expanduser().parent / OVER_CAP_STAMP_NAME
+
+
+def over_cap_recently_idle(stamp: Path | None, *, now: float | None = None) -> bool:
+    if stamp is None:
+        return False
+    try:
+        age = (now if now is not None else time.time()) - stamp.stat().st_mtime
+    except OSError:
+        return False
+    return 0 <= age < OVER_CAP_TTL_SECONDS
+
+
+def _touch_over_cap_stamp(stamp: Path | None) -> None:
+    if stamp is None:
+        return
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(int(time.time())), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _clear_over_cap_stamp(stamp: Path | None) -> None:
+    if stamp is None:
+        return
+    try:
+        stamp.unlink()
+    except OSError:
+        pass
 
 
 def _issue_is_closed(repo: str, issue: int) -> bool | None:
@@ -150,6 +190,8 @@ def run_reap_stale_worktrees(
     live: bool,
 ) -> dict[str, Any]:
     cfg = load_cfg(argparse.Namespace(config=config_path))
+    stamp = over_cap_stamp_path(cfg)
+    skip_over_cap_github = over_cap_recently_idle(stamp)
     begin, working = load_begin_working(pass_dir)
     actions: list[dict[str, Any]] = list(working.get("actions") or [])
     receipt_state_unknown = has_unreadable_issue_to_pr_receipts()
@@ -260,7 +302,9 @@ def run_reap_stale_worktrees(
                     heads=repo_heads,
                 )
                 closed = (
-                    _issue_is_closed(repo.name, issue)
+                    False
+                    if skip_over_cap_github
+                    else _issue_is_closed(repo.name, issue)
                     if (path, branch) in candidates and issue is not None
                     else False
                 )
@@ -282,14 +326,22 @@ def run_reap_stale_worktrees(
                 row.update(kept=False, removed=True, reason="closed_issue")
                 reaped.append(row)
                 actions.append({"step": "reap_stale_worktree", **row})
+            reaped_here = len(reaped) - reaped_before
+            if reaped_here:
+                _clear_over_cap_stamp(stamp)
+            else:
+                _touch_over_cap_stamp(stamp)
             summary = {
                 "repo": repo.name,
                 "reason": "over_cap",
                 "kept": True,
                 "kept_over_cap": kept_over_cap,
-                "reaped": len(reaped) - reaped_before,
+                "reaped": reaped_here,
                 "leftover_count": len(leftovers),
             }
+            if skip_over_cap_github:
+                summary["skipped"] = True
+                summary["skip_reason"] = "recent_over_cap"
             kept.append(summary)
             actions.append({"step": "keep_stale_worktree", **summary})
             continue

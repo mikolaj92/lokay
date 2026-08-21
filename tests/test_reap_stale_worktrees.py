@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -891,3 +893,96 @@ def test_over_cap_keeps_open_issues(tmp_path, monkeypatch):
     assert out["kept"][0]["reason"] == "over_cap"
     assert out["kept"][0]["kept_over_cap"] == cap + 1
     assert out["kept"][0]["leftover_count"] == cap + 1
+
+
+def test_over_cap_no_reap_writes_stamp(tmp_path, monkeypatch):
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", lambda repo, issue: False)
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    leftovers = [
+        (_corner(tmp_path, f"ai/fix/{i}"), f"ai/fix/{i}")
+        for i in range(cap + 1)
+    ]
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
+    stamp = tmp_path / "reap-over-cap.stamp"
+    reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+    assert stamp.is_file()
+
+
+def test_over_cap_skips_github_when_recent_idle_stamp(tmp_path, monkeypatch):
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    stamp = tmp_path / "reap-over-cap.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+
+    def boom(*_a, **_k):
+        raise AssertionError("recent over_cap idle must not view GitHub issues")
+
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", boom)
+    leftovers = [
+        (_corner(tmp_path, f"ai/fix/{i}"), f"ai/fix/{i}")
+        for i in range(cap + 1)
+    ]
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["skipped"] is True
+    assert out["kept"][0]["skip_reason"] == "recent_over_cap"
+
+
+def test_over_cap_probes_when_idle_stamp_expired(tmp_path, monkeypatch):
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    stamp = tmp_path / "reap-over-cap.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - reap_stale_worktrees.OVER_CAP_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    checked: list[int] = []
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda repo, issue: checked.append(issue) or False,
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    leftovers = [
+        (_corner(tmp_path, f"ai/fix/{i}"), f"ai/fix/{i}")
+        for i in range(cap + 1)
+    ]
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
+    reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+    assert checked == list(range(cap))
+    assert stamp.stat().st_mtime >= old + reap_stale_worktrees.OVER_CAP_TTL_SECONDS
+
+
+def test_over_cap_reap_clears_idle_stamp(tmp_path, monkeypatch):
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    stamp = tmp_path / "reap-over-cap.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - reap_stale_worktrees.OVER_CAP_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", lambda repo, issue: True)
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda *a, **k: {"ok": True},
+    )
+    leftovers = [
+        (_corner(tmp_path, f"ai/fix/{i}"), f"ai/fix/{i}")
+        for i in range(cap + 1)
+    ]
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+    assert out["reaped_count"] == cap
+    assert not stamp.exists()
