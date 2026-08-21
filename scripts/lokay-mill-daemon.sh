@@ -449,6 +449,7 @@ if 0 <= survey_age < 120:
     print("recent_empty_leftover_probe" if leftover_probed else "recent_empty_survey")
     raise SystemExit(0)
 
+# Leftover-probe still hosts lokay-daemon even when mill-probe would also run.
 # Mill-probe GitHub lists run together. Probe failure still hosts.
 with ThreadPoolExecutor(max_workers=3) as pool:
     fut_prs = pool.submit(gh_list, ["pr", "list", "--repo", repo, "--state", "open", "--json", "headRefName", "--limit", "1000"])
@@ -479,7 +480,7 @@ try:
     Path(survey_stamp).write_text(str(int(now)), encoding="utf-8")
 except OSError:
     pass
-print("recent_empty_survey_probe")
+print("recent_empty_leftover_probe" if leftover_probed else "recent_empty_survey_probe")
 raise SystemExit(0)
 PY
 }
