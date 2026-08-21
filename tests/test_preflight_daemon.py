@@ -71,6 +71,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Cache python3 so later helpers skip command -v." in script
     assert "Fresh idle stamps skip python host_ff_already_current." in script
     assert "Fresh idle host proof uses two Git processes instead of four." in script
+    assert "Fresh idle proof is cached within one tick; stamp expiry is cross-tick." in script
     assert "Fresh idle stamps skip python idle_skip_daemon." in script
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
     assert 'stat -c %Y' in script
@@ -534,6 +535,8 @@ def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
         assert str(root) not in log.read_text(encoding="utf-8")
     assert "rev-parse HEAD origin/main --abbrev-ref HEAD" in _script().read_text()
     assert _script().read_text().count('git -C "${checkout}"') == 2
+    assert 'LOKAY_IDLE_STAMPS_FRESH=1' in _script().read_text()
+    assert _script().read_text().count('_stamp_age_seconds "${LOKAY_HOME}/') == 2
 
 
 def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):
