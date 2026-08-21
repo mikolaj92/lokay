@@ -312,3 +312,11 @@ def test_mill_daemon_does_not_override_configured_executor_metadata():
     script = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")
     assert 'export LOKAY_AGENT=' not in script
     assert 'LOKAY_AGENT:-grok' not in script
+
+
+def test_mill_daemon_does_not_default_require_checks():
+    """YAML/plist own merge.require_checks. A :-1 default would override local trust."""
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")
+    assert "LOKAY_REQUIRE_CHECKS:-1" not in script
+    assert 'export LOKAY_REQUIRE_CHECKS=' not in script

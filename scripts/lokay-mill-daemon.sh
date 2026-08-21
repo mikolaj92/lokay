@@ -197,7 +197,9 @@ export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export LOKAY_MODE="${LOKAY_MODE:-live}"
 export LOKAY_EXECUTOR_ENABLED="${LOKAY_EXECUTOR_ENABLED:-1}"
 export LOKAY_MERGE_ENABLED="${LOKAY_MERGE_ENABLED:-1}"
-export LOKAY_REQUIRE_CHECKS="${LOKAY_REQUIRE_CHECKS:-1}"
+# merge.require_checks lives in config.yaml / LaunchAgent plist. Do not
+# default 1 here: that would override local-trust YAML when the caretaker
+# runs without a plist env.
 
 if [[ -d "${HOME}/Developer/OSS/Fala/mojo/fala" ]]; then
   export FALA_HOME="${FALA_HOME:-${HOME}/Developer/OSS/Fala}"
