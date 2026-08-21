@@ -72,6 +72,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Fresh idle stamps skip python host_ff_already_current." in script
     assert "Fresh idle host proof uses two Git processes instead of four." in script
     assert "Fresh idle proof is cached within one tick; stamp expiry is cross-tick." in script
+    assert "Fresh idle stamp age reuses one date +%s." in script
     assert "Fresh idle skip already bounded launchd stdio and defers mill-log pruning" in script
     assert "Fresh idle stamps skip python idle_skip_daemon." in script
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
@@ -538,6 +539,9 @@ def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
     assert _script().read_text().count('git -C "${checkout}"') == 2
     assert 'LOKAY_IDLE_STAMPS_FRESH=1' in _script().read_text()
     assert _script().read_text().count('_stamp_age_seconds "${LOKAY_HOME}/') == 2
+    assert 'now="$(date +%s)" || return 1' in _script().read_text()
+    assert '_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp" "${now}"' in _script().read_text()
+    assert '_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}"' in _script().read_text()
 
 
 def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):
