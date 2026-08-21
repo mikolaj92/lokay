@@ -66,6 +66,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Already 60s crash KeepAlive skips python plistlib" in script
     assert "Cache python3 so later helpers skip command -v." in script
     assert "Fresh idle stamps skip python host_ff_already_current." in script
+    assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
+    assert 'stat -c %Y' in script
     assert "plutil -extract StartInterval raw" in script
     assert '[[ "${HOME}" == /Users/* ]]' in script
     assert "os.setsid()" in script

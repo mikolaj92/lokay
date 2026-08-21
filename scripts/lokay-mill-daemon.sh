@@ -123,7 +123,8 @@ _stamp_age_seconds() {
   local path="$1" now mtime
   [[ -f "${path}" ]] || return 1
   now="$(date +%s)" || return 1
-  mtime="$(stat -f %m "${path}" 2>/dev/null || stat -c %Y "${path}" 2>/dev/null || true)"
+  # GNU epoch first. Linux stat -f is filesystem, not mtime.
+  mtime="$(stat -c %Y "${path}" 2>/dev/null || stat -f %m "${path}" 2>/dev/null || true)"
   [[ "${mtime}" =~ ^[0-9]+$ && "${now}" =~ ^[0-9]+$ ]] || return 1
   printf '%s\n' "$((now - mtime))"
 }
