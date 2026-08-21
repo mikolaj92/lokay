@@ -1173,11 +1173,12 @@ if [[ -n "${CURRENT_DIGEST}" ]] && ! grep -Eq '"health"[[:space:]]*:[[:space:]]*
 fi
 bound_file "${LOG}" "${MILL_LOG_MAX}" || true
 bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
-prune_mill_logs || true
-# Fresh idle skip already bounded launchd stdio. Do not spawn python glance.
+# Fresh idle skip already bounded launchd stdio and defers mill-log pruning;
+# hosted/probe ticks still prune.
 if [[ -n "${SKIP_REASON}" ]]; then
   printf '{"ok":true,"health":"idle","progress":0}\n'
 else
+  prune_mill_logs || true
   bound_launchd_stdio
   emit_launchd_glance || true
   bound_launchd_stdio

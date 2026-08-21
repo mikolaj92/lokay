@@ -72,6 +72,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Fresh idle stamps skip python host_ff_already_current." in script
     assert "Fresh idle host proof uses two Git processes instead of four." in script
     assert "Fresh idle proof is cached within one tick; stamp expiry is cross-tick." in script
+    assert "Fresh idle skip already bounded launchd stdio and defers mill-log pruning" in script
     assert "Fresh idle stamps skip python idle_skip_daemon." in script
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
     assert 'stat -c %Y' in script
@@ -1253,6 +1254,24 @@ def test_mill_logs_under_keep_skip_python_prune(tmp_path):
     assert completed.returncode == 0, completed.stderr
     for path in kept:
         assert path.exists()
+
+
+def test_fresh_idle_skip_defers_mill_log_prune(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    logs = lokay / "logs"
+    stale = logs / "mill-20260821T110001Z.log"
+    stale.write_text("old\n", encoding="utf-8")
+    os.utime(stale, (1, 1))
+    second = _run_daemon(tmp_path, extra_env={"LOKAY_MILL_LOG_KEEP": "1"})
+    assert second.returncode == 0, second.stderr
+    assert stale.exists()
+    logs_body = chr(10).join(path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log"))
+    assert "recent_empty_survey" in logs_body
 
 
 def test_mill_logs_over_keep_still_prune(tmp_path):
