@@ -33,3 +33,171 @@ def test_ready_hygiene_removes_only_orphan_ready(monkeypatch):
 
     assert out["cleaned_count"] == 1
     assert removed == [("mikolaj92/lokay", 1, ["ai:ready"], True)]
+
+
+def test_hygiene_empty_probe_writes_stamp(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", lambda *_a, **_k: [])
+    monkeypatch.setattr("lokay.proc.ready_hygiene.remove_issue_labels", lambda *_a, **_k: None)
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out["cleaned_count"] == 0
+    assert (tmp_path / "ready-hygiene.stamp").is_file()
+
+
+def test_hygiene_skips_github_when_recent_empty_stamp(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    before = stamp.stat().st_mtime
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
+
+    def boom(*_a, **_k):
+        raise AssertionError("recent empty leftover ready must not list GitHub")
+
+    monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", boom)
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty"
+    assert out["cleaned_count"] == 0
+    assert stamp.stat().st_mtime == before
+
+
+def test_hygiene_probes_when_empty_stamp_expired(tmp_path, monkeypatch):
+    import os
+    import time
+    from lokay.proc import ready_hygiene as hygiene
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - hygiene.HYGIENE_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", lambda *_a, **_k: [])
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out.get("skipped") is not True
+    assert out["cleaned_count"] == 0
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime >= old + hygiene.HYGIENE_TTL_SECONDS
+
+
+def test_hygiene_clean_clears_empty_stamp(tmp_path, monkeypatch):
+    import os
+    import time
+    from lokay.proc import ready_hygiene as hygiene
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - hygiene.HYGIENE_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        "lokay.proc.ready_hygiene.list_labeled_issues",
+        lambda *_a, **_k: [_issue(1, ["ai:ready"])],
+    )
+    monkeypatch.setattr("lokay.proc.ready_hygiene.remove_issue_labels", lambda *_a, **_k: None)
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out["cleaned_count"] == 1
+    assert not stamp.exists()
