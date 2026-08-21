@@ -342,7 +342,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   healthy. Hosted leftover parks still do. Leftover-probe
   still hosts `lokay-daemon` so idle reap continues. Leftover-probe still
   hosts `lokay-daemon` even when mill-probe would also run.
-  Leftover-probe skips GitHub SHA when survey stamp is still fresh. mill-daemon runs
+  Leftover-probe skips GitHub SHA when survey stamp is still fresh.
+  Mill-probe skips GitHub SHA when leftover stamp is still fresh.
+  Combined leftover+survey expiry still probes SHA. mill-daemon runs
   those two leftover lists together. After survey-stamp expiry, a cheap empty GitHub
   probe of mill PR / inbox / ready lists refreshes the survey stamp.
   mill-daemon runs those three lists together. Probe failure still hosts.
