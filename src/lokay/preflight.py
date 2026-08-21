@@ -23,6 +23,7 @@ _DEFAULT_INCIDENT_REPO = "mikolaj92/lokay"
 _DEFAULT_INCIDENT_COOLDOWN_HOURS = 12.0
 _ISSUE_NUMBER_RE = re.compile(r"/issues/(\d+)(?:\s|$)")
 INCIDENT_TTL_SECONDS = 300
+IDLE_INCIDENT_TTL_SECONDS = 900
 INCIDENT_STAMP_NAME = "preflight-incident-close.stamp"
 
 
@@ -649,7 +650,9 @@ def _is_operator_mill_incident_stamp(stamp: Path) -> bool:
         return stamp.expanduser() == mill
 
 
-def incident_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
+def incident_recently_empty(
+    stamp: Path | None, *, now: float | None = None, ttl: int | None = None
+) -> bool:
     if stamp is None:
         return False
     # Pytest must not skip leftover-incident GitHub lists using the mill stamp.
@@ -659,7 +662,8 @@ def incident_recently_empty(stamp: Path | None, *, now: float | None = None) -> 
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:
         return False
-    return 0 <= age < INCIDENT_TTL_SECONDS
+    limit = INCIDENT_TTL_SECONDS if ttl is None else ttl
+    return 0 <= age < limit
 
 
 def _touch_incident_stamp(stamp: Path | None) -> None:
@@ -726,7 +730,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     if not name:
         return {"ok": True, "closed": []}
     stamp = incident_stamp_path(cfg)
-    if incident_recently_empty(stamp):
+    # Idle leftover-incident skip outlives leftover-probe.
+    # Hosted factory_pass stays at 300s. Leftover-probe host still lists when stamp is missing.
+    idle_ttl = (
+        IDLE_INCIDENT_TTL_SECONDS
+        if os.environ.get("LOKAY_LEFTOVER_PROBE_GH_OK") == "1"
+        else None
+    )
+    if incident_recently_empty(stamp, ttl=idle_ttl):
         return {"ok": True, "closed": [], "skipped": True, "reason": "recent_empty"}
     try:
         from lokay.triage import is_preflight_incident
