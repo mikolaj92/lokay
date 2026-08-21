@@ -322,7 +322,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
   later idle lines stay under the cap. When last-pass is idle,
   it skips `lokay-daemon` (preflight + Fala) while empty-survey (120s) and
-  leftover-closeout (300s) stamps are fresh. After leftover-stamp expiry, a
+  leftover-closeout (300s) stamps are fresh; mill-daemon skips python
+  `idle_skip_daemon` on that path. After leftover-stamp expiry, a
   cheap empty GitHub probe of CLOSED `work:ready` / `ai:ready` mill issues
   refreshes that stamp and still skips when the survey stamp is fresh.
   mill-daemon runs those two leftover lists together.
