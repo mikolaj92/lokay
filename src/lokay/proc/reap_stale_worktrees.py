@@ -327,10 +327,11 @@ def run_reap_stale_worktrees(
                 reaped.append(row)
                 actions.append({"step": "reap_stale_worktree", **row})
             reaped_here = len(reaped) - reaped_before
-            if reaped_here:
-                _clear_over_cap_stamp(stamp)
-            else:
-                _touch_over_cap_stamp(stamp)
+            if not skip_over_cap_github:
+                if reaped_here:
+                    _clear_over_cap_stamp(stamp)
+                else:
+                    _touch_over_cap_stamp(stamp)
             summary = {
                 "repo": repo.name,
                 "reason": "over_cap",

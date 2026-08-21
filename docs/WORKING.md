@@ -168,7 +168,7 @@ product. Green repository verification may be reused only for the identical
    tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
    Classify with one `ls-remote --heads` per repo — a per-branch fetch
    stalls the pass. Over-cap leftover stacks view at most four oldest
-   issues; after a no-reap over_cap, skip those GitHub views for 300s. The plan atom is trust-with-evidence,
+   issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. The plan atom is trust-with-evidence,
    not a human gate. `pr_review` is blind to `.lokay/approach.md`
    (ticket + code diff + tests only). For a seed classified separately as unbounded collection
    work, the executor may make only the bounded collector/bootstrap patch: the

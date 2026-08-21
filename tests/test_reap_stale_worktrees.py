@@ -928,12 +928,14 @@ def test_over_cap_skips_github_when_recent_idle_stamp(tmp_path, monkeypatch):
         for i in range(cap + 1)
     ]
     monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers)
+    before = stamp.stat().st_mtime
     out = reap_stale_worktrees.run_reap_stale_worktrees(
         pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
     )
     assert out["reaped_count"] == 0
     assert out["kept"][0]["skipped"] is True
     assert out["kept"][0]["skip_reason"] == "recent_over_cap"
+    assert stamp.stat().st_mtime == before
 
 
 def test_over_cap_probes_when_idle_stamp_expired(tmp_path, monkeypatch):
