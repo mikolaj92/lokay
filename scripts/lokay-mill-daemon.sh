@@ -166,14 +166,19 @@ last_pass_idle_stamps_fresh() {
 
 last_pass_survey_idle_fresh() {
   # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
-  # Occupied last-pass, remaining work, or missing survey stamp still hosts.
+  # Mill-probe skips GitHub SHA when leftover stamp is still fresh.
+  # Combined leftover+survey expiry still probes SHA. Busy lock still probes.
+  # Occupied last-pass, remaining work, or missing stamps still host.
   # Do not cache leftover expiry as LOKAY_IDLE_STAMPS_FRESH.
   local receipt="${LOKAY_HOME}/last-pass.json"
-  local survey_age now
+  local leftover_age survey_age now leftover_ok=0 survey_ok=0
   last_pass_idle_stamps_fresh && return 0
   now="$(date +%s)" || return 1
-  survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}")" || return 1
-  [[ "${survey_age}" -ge 0 && "${survey_age}" -lt 120 ]] || return 1
+  leftover_age="$(_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp" "${now}")" || leftover_age=""
+  survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}")" || survey_age=""
+  [[ "${leftover_age}" =~ ^[0-9]+$ && "${leftover_age}" -lt 300 ]] && leftover_ok=1
+  [[ "${survey_age}" =~ ^[0-9]+$ && "${survey_age}" -lt 120 ]] && survey_ok=1
+  [[ "${leftover_ok}" -eq 1 || "${survey_ok}" -eq 1 ]] || return 1
   [[ -f "${receipt}" ]] || return 1
   grep -Eq '"occupied"[[:space:]]*:[[:space:]]*true' "${receipt}" && return 1
   grep -Eq '"health"[[:space:]]*:[[:space:]]*"idle"' "${receipt}"     || grep -Eq '"idle"[[:space:]]*:[[:space:]]*true' "${receipt}"     || return 1
@@ -192,6 +197,8 @@ last_pass_survey_idle_fresh() {
 host_ff_idle_stamps_current() {
   # Fresh idle stamps skip python host_ff_already_current.
   # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
+  # Mill-probe skips GitHub SHA when leftover stamp is still fresh.
+  # Combined leftover+survey expiry still probes SHA.
   # Busy lock / stamp expiry / local clones still python+git.
   # Fresh idle host proof uses two Git processes instead of four.
   local checkout="$1"
@@ -318,7 +325,11 @@ if lock_busy != "1":
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         idle = False
     # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
-    if idle and survey_age is not None and 0 <= survey_age < 120:
+    # Mill-probe skips GitHub SHA when leftover stamp is still fresh.
+    if idle and (
+        (survey_age is not None and 0 <= survey_age < 120)
+        or (leftover_age is not None and 0 <= leftover_age < 300)
+    ):
         emit()
         raise SystemExit(0)
 
@@ -1104,6 +1115,8 @@ fi
 # GitHub SHA already matches HEAD and origin/main. Skip caretaker host-ff.
 # Fresh idle stamps skip the GitHub SHA probe. Busy lock still probes.
 # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
+# Mill-probe skips GitHub SHA when leftover stamp is still fresh.
+# Combined leftover+survey expiry still probes SHA.
 # Probe failure or SHA mismatch still hosts caretaker host-ff.
 if host_ff_already_current "${ROOT}" "${MILL_LOCK_WAS_BUSY}" >>"${LOG}" 2>/dev/null; then
   :
