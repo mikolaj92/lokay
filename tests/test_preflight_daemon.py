@@ -44,6 +44,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Leftover-probe GitHub lists run together. Probe failure still hosts." in script
     assert "Leftover-probe still hosts lokay-daemon so idle reap continues." in script
     assert "Leftover-probe still hosts lokay-daemon even when mill-probe would also run." in script
+    assert "Leftover-probe skips GitHub SHA when survey stamp is still fresh." in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
@@ -539,7 +540,7 @@ def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
     assert "rev-parse HEAD origin/main --abbrev-ref HEAD" in _script().read_text()
     assert _script().read_text().count('git -C "${checkout}"') == 2
     assert 'LOKAY_IDLE_STAMPS_FRESH=1' in _script().read_text()
-    assert _script().read_text().count('_stamp_age_seconds "${LOKAY_HOME}/') == 2
+    assert _script().read_text().count('_stamp_age_seconds "${LOKAY_HOME}/') == 3
     assert 'now="$(date +%s)" || return 1' in _script().read_text()
     assert '_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp" "${now}"' in _script().read_text()
     assert '_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}"' in _script().read_text()
@@ -745,6 +746,10 @@ def test_idle_expired_survey_probe_failure_hosts(tmp_path):
 
 def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
     """Leftover-probe still hosts lokay-daemon so idle reap continues."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "config.yaml").touch()
+    _github_checkout(root)
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
     lokay = tmp_path / ".lokay"
@@ -754,17 +759,34 @@ def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
     survey.write_text("1", encoding="utf-8")
     _expire(leftover, 400)
     before = leftover.stat().st_mtime
-    _write_empty_gh(tmp_path)
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text(
+        chr(10).join(
+            [
+                "#!/bin/sh",
+                'case " $* " in',
+                "  *git/ref/heads/main*) echo fail >&2; exit 1 ;;",
+                "  *) printf '%s\n' '[]' ;;",
+                "esac",
+                "exit 0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
     argv_log = tmp_path / "uv-argv.log"
     argv_log.write_text("", encoding="utf-8")
     second = _run_daemon(tmp_path)
     assert second.returncode == 0, second.stderr
     calls = argv_log.read_text(encoding="utf-8").splitlines()
-    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-host-ff" not in line for line in calls)
     assert any("lokay-daemon" in line for line in calls)
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_leftover_probe" in body
+    assert "already_current" in body
     assert leftover.stat().st_mtime > before
 
 
