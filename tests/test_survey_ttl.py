@@ -68,6 +68,37 @@ def test_surveys_skip_github_when_recent_empty_stamp(tmp_path: Path, monkeypatch
     assert stamp.stat().st_mtime == before
 
 
+def test_pytest_does_not_skip_github_surveys_using_the_mill_stamp(
+    tmp_path: Path, monkeypatch
+) -> None:
+    mill = tmp_path / ".lokay"
+    mill.mkdir()
+    stamp = mill / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_pytest_does_not_skip_github_surveys_using_the_mill_stamp")
+    assert survey_ttl.survey_recently_empty(stamp) is False
+    assert (
+        survey_ttl.skip_idle_factory_pass(
+            live=True,
+            stamp=stamp,
+            receipt={
+                "health": "idle",
+                "idle": True,
+                "remaining": {"inbox": 0, "ready": 0, "open_ai_prs": 0},
+            },
+        )
+        is None
+    )
+    hermetic = tmp_path / "factory-survey.stamp"
+    hermetic.write_text("1", encoding="utf-8")
+    assert survey_ttl.survey_recently_empty(hermetic) is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "survey_ttl.py"
+    assert "Pytest must not skip GitHub surveys using the mill stamp." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_survey_probes_when_empty_stamp_expired(tmp_path: Path, monkeypatch) -> None:
     stamp = tmp_path / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")

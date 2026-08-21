@@ -319,7 +319,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers
   cannot freeze mill porcelain.
   Nested clones are not mill leftover
-  worktrees. Mill worktrees keep a .git file. Missing stamp, occupied last-pass, or pytest
+  worktrees. Mill worktrees keep a .git file. Pytest must not skip GitHub surveys
+  using the mill stamp. Missing stamp, occupied last-pass, or pytest
   always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
   `main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
   `host_ff_already_current` and the GitHub SHA probe. Busy lock still
