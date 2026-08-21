@@ -27,11 +27,13 @@ this parent path; leftover closeout still runs. After the stamp expires, a
 cheap GitHub probe of mill PR / inbox / ready lists refreshes the stamp and
 skips Fala when all three are still empty. Probe failure or remaining work
 hosts. Missing stamp, occupied last-pass, or pytest always hosts.
-mill-daemon still runs caretaker `lokay-host-ff`. When last-pass is idle and
-the leftover-closeout stamp is fresh, it skips `lokay-daemon` while the
-empty-survey stamp is fresh, or after a cheap empty GitHub probe of mill
-PR / inbox / ready lists. An empty probe refreshes the survey stamp.
-Probe failure, leftover-stamp expiry, occupied last-pass, digest mismatch,
+mill-daemon still runs caretaker `lokay-host-ff`. When last-pass is idle, it
+skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
+fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
+`work:ready` / `ai:ready` mill issues refreshes that stamp and still skips
+when the survey stamp is fresh. After survey-stamp expiry, a cheap empty
+GitHub probe of mill PR / inbox / ready lists refreshes the survey stamp.
+Probe failure, remaining leftovers, occupied last-pass, digest mismatch,
 or host-ff update still starts the daemon.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
