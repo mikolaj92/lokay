@@ -958,7 +958,7 @@ fi
 # StartInterval leaves the mill dark after every absorb. Live i2pr holds
 # mill.lock (lock_busy above) and is not killed.
 UV_REINSTALL_ARGS=()
-CURRENT_DIGEST="$(checkout_digest || true)"
+CURRENT_DIGEST=""
 PREVIOUS_DIGEST=""
 if [[ -f "${DIGEST_FILE}" ]]; then
   PREVIOUS_DIGEST="$(cat "${DIGEST_FILE}" 2>/dev/null || true)"
@@ -967,23 +967,31 @@ fi
 # wheel still shadows a different checkout (digest can match after an
 # overlap tick that never rebuilt). host-ff updated=true also forces a
 # rebuild: fake/partial digest must not start the mill on a stale wheel.
-if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]] || ! package_matches || host_ff_updated "${LOG}"; then
-  UV_REINSTALL_ARGS=(--reinstall-package lokay --reinstall-package fala)
+# Fresh idle skip with a persisted digest skips checkout_digest and
+# package_matches. Missing digest, host-ff update, or a hosted daemon
+# still checks the wheel.
+HOST_FF_MOVED=0
+if host_ff_updated "${LOG}"; then
+  HOST_FF_MOVED=1
 fi
-
-# Transcript stays in mill-*.log. Do not tee the Fala envelope into launchd stdout.
-# Empty array + set -u is fatal on macOS bash 3.2, so branch the argv.
-# Fresh empty-survey + leftover stamps and idle last-pass already proved the
-# mill is empty. Skip lokay-daemon (preflight + Fala) until a stamp expires.
-# Missing stamp, remaining work, digest drift, or host-ff update still hosts.
 SKIP_REASON=""
-if [[ ${#UV_REINSTALL_ARGS[@]} -eq 0 ]]; then
+if [[ "${HOST_FF_MOVED}" -eq 0 && -n "${PREVIOUS_DIGEST}" ]]; then
   SKIP_REASON="$(idle_skip_daemon)" || SKIP_REASON=""
 fi
 case "${SKIP_REASON}" in
   recent_empty_survey|recent_empty_survey_probe|recent_empty_leftover_probe) ;;
   *) SKIP_REASON="" ;;
 esac
+# Fresh idle skip (both stamps fresh) skips checkout_digest / package_matches.
+# Probe skip still checks the wheel. Stale wheel, missing digest, or host-ff
+# update still hosts and reinstalls.
+if [[ "${SKIP_REASON}" != "recent_empty_survey" ]]; then
+  CURRENT_DIGEST="$(checkout_digest || true)"
+  if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]] || ! package_matches || [[ "${HOST_FF_MOVED}" -eq 1 ]]; then
+    SKIP_REASON=""
+    UV_REINSTALL_ARGS=(--reinstall-package lokay --reinstall-package fala)
+  fi
+fi
 if [[ -n "${SKIP_REASON}" ]]; then
   printf '{"ok":true,"health":"idle","idle":true,"skipped":true,"reason":"%s","engine":"fala","path_id":"daemon_cycle","leftover_closeout":{"ok":true,"skipped":true,"reason":"recent_empty"}}\n' "${SKIP_REASON}" >>"${LOG}"
   MILL_RC=0

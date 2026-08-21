@@ -39,7 +39,9 @@ fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 when the survey stamp is fresh. After survey-stamp expiry, a cheap empty
 GitHub probe of mill PR / inbox / ready lists refreshes the survey stamp.
 Probe failure, remaining leftovers, occupied last-pass, digest mismatch,
-or host-ff update still starts the daemon.
+or host-ff update still starts the daemon. Fresh idle skip with a persisted
+digest skips `checkout_digest` and `package_matches`. Probe skip, missing
+digest, host-ff update, or a hosted daemon still checks the wheel.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
 durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not

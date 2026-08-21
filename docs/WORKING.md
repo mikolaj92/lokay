@@ -324,7 +324,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After survey-stamp expiry, a cheap empty GitHub probe of mill PR / inbox
   / ready lists refreshes the survey stamp. Probe failure, remaining
   leftovers, occupied last-pass, digest mismatch, or host-ff update still
-  starts the daemon.
+  starts the daemon. Fresh idle skip with a persisted digest skips
+  `checkout_digest` and `package_matches`. Probe skip, missing digest,
+  host-ff update, or a hosted daemon still checks the wheel.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
