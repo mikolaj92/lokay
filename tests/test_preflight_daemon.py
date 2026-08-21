@@ -26,6 +26,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "uv-install.digest" in script
     assert 'export PYTHONPATH="${ROOT}/src' in script
     assert "package_matches()" in script
+    assert "idle_skip_daemon()" in script
+    assert "recent_empty_survey" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
     assert "host_updated" in script
     assert "emit_launchd_glance" in script
@@ -224,6 +226,73 @@ def test_host_ff_already_current_still_starts_daemon(tmp_path):
     argv_log = tmp_path / "uv-argv.log"
     calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert any("lokay-host-ff" in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
+
+
+def _idle_receipt() -> str:
+    return json.dumps(
+        {
+            "health": "idle",
+            "idle": True,
+            "remaining": {
+                "inbox": 0,
+                "ready": 0,
+                "open_ai_prs": 0,
+                "issue_to_pr_started": 0,
+                "survey_errors": 0,
+                "by_repo": [{"repo": "mikolaj92/lokay", "occupied": False}],
+            },
+        }
+    )
+
+
+def test_idle_stamps_skip_lokay_daemon_after_digest(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_survey" in body
+
+
+def test_idle_skip_hosts_when_survey_stamp_missing(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-daemon" in line for line in calls)
+
+
+def test_idle_skip_hosts_when_occupied(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    receipt = json.loads(_idle_receipt())
+    receipt["remaining"]["by_repo"] = [{"repo": "mikolaj92/lokay", "occupied": True}]
+    (lokay / "last-pass.json").write_text(json.dumps(receipt), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert any("lokay-daemon" in line for line in calls)
 
 
