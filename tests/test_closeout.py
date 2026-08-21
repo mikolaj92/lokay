@@ -137,6 +137,40 @@ def test_leftover_skips_github_when_recent_empty_stamp(monkeypatch, tmp_path):
     assert out["closed_out"] == []
 
 
+def test_fresh_leftover_skip_does_not_require_healthy(monkeypatch, tmp_path):
+    """Fresh leftover skip does not require healthy. Hosted leftover parks still do."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+
+    def boom(**_kwargs):
+        raise AssertionError("fresh leftover skip does not require healthy")
+
+    monkeypatch.setattr(closeout, "mutations_allowed", boom)
+    monkeypatch.setattr(
+        closeout,
+        "closed_ready_numbers",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("recent empty leftover must not list GitHub")
+        ),
+    )
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty"
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Fresh leftover skip does not require healthy." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp(
     monkeypatch, tmp_path
 ):
