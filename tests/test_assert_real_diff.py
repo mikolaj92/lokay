@@ -45,6 +45,10 @@ def test_classify_plan_only_lockstep():
     assert classify_changed_paths([]) == "empty"
     assert classify_changed_paths(["src/lokay/proc/host_ff.py"]) == "real"
     assert classify_changed_paths(["src/x.py", ".lokay/approach.md"]) == "real"
+    assert classify_changed_paths(["uv.lock"]) == "empty"
+    assert classify_changed_paths(["./uv.lock"]) == "empty"
+    assert classify_changed_paths(["uv.lock", ".lokay/approach.md"]) == "plan_only"
+    assert classify_changed_paths(["src/x.py", "uv.lock"]) == "real"
 
 
 def test_worktree_only_approach_and_localize_is_not_progress(tmp_path: Path, capsys):

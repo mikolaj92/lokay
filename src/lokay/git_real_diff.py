@@ -10,6 +10,8 @@ from lokay.runner import Runner, git_spec
 
 # Plan/localize evidence (and trivial lockstep of those two files).
 EVIDENCE_PATHS = frozenset({APPROACH_REL_PATH, LOCALIZE_REL_PATH})
+# uv.lock-only is not real uncommitted content.
+_DISPOSABLE_TRACKED_NAMES = frozenset({"uv.lock"})
 
 
 def normalize_rel(path: str) -> str:
@@ -43,9 +45,17 @@ def is_disposable_ignored_path(path: str) -> bool:
     )
 
 
+def is_disposable_tracked_path(path: str) -> bool:
+    """uv.lock-only is not real uncommitted content."""
+    rel = normalize_rel(path)
+    parts = tuple(part for part in rel.split("/") if part)
+    return bool(parts) and parts[-1] in _DISPOSABLE_TRACKED_NAMES
+
+
 def classify_changed_paths(paths: list[str] | tuple[str, ...]) -> str:
     """empty | plan_only | real."""
     cleaned = [normalize_rel(p) for p in paths if normalize_rel(p)]
+    cleaned = [p for p in cleaned if not is_disposable_tracked_path(p)]
     if not cleaned:
         return "empty"
     if all(is_evidence_path(p) for p in cleaned):
