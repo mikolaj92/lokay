@@ -37,7 +37,8 @@ python truncate. Small launchd stdio skips python inode reopen; fat logs
 still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
 later idle lines stay under the cap. When last-pass is idle, it
 skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
-fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
+fresh; mill-daemon skips python `idle_skip_daemon` on that path. After
+leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 `work:ready` / `ai:ready` mill issues refreshes that stamp and still skips
 when the survey stamp is fresh. mill-daemon runs those two leftover lists
 together. After survey-stamp expiry, a cheap empty

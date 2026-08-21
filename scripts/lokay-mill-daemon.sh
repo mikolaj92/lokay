@@ -129,12 +129,11 @@ _stamp_age_seconds() {
   printf '%s\n' "$((now - mtime))"
 }
 
-host_ff_idle_stamps_current() {
-  # Fresh idle stamps skip python host_ff_already_current.
-  # Busy lock / stamp expiry / local clones still python+git.
-  local checkout="$1"
+last_pass_idle_stamps_fresh() {
+  # Fresh idle stamps skip python idle_skip_daemon.
+  # Occupied last-pass, remaining work, or missing stamp still hosts.
   local receipt="${LOKAY_HOME}/last-pass.json"
-  local leftover_age survey_age head remote branch origin
+  local leftover_age survey_age
   leftover_age="$(_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp")" || return 1
   survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp")" || return 1
   [[ "${leftover_age}" -ge 0 && "${leftover_age}" -lt 300 ]] || return 1
@@ -154,6 +153,14 @@ host_ff_idle_stamps_current() {
   grep -Eq '"open_ai_prs"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
   grep -Eq '"issue_to_pr_started"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
   grep -Eq '"survey_errors"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+}
+
+host_ff_idle_stamps_current() {
+  # Fresh idle stamps skip python host_ff_already_current.
+  # Busy lock / stamp expiry / local clones still python+git.
+  local checkout="$1"
+  local head remote branch origin
+  last_pass_idle_stamps_fresh || return 1
   [[ -n "${checkout}" && "${checkout}" != *'"'* && "${checkout}" != *$'\n'* ]] || return 1
   head="$(git -C "${checkout}" rev-parse HEAD 2>/dev/null)" || return 1
   remote="$(git -C "${checkout}" rev-parse origin/main 2>/dev/null)" || return 1
@@ -312,6 +319,11 @@ PY
 idle_skip_daemon() {
   # 0 + reason on stdout = skip lokay-daemon. Missing leftover stamp,
   # occupied last-pass, remaining work, or a failed GitHub probe hosts.
+  # Fresh idle stamps skip python idle_skip_daemon.
+  if last_pass_idle_stamps_fresh; then
+    printf '%s\n' "recent_empty_survey"
+    return 0
+  fi
   _python - \
     "${LOKAY_HOME}/last-pass.json" \
     "${LOKAY_HOME}/factory-survey.stamp" \
