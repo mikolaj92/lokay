@@ -158,16 +158,21 @@ last_pass_idle_stamps_fresh() {
 host_ff_idle_stamps_current() {
   # Fresh idle stamps skip python host_ff_already_current.
   # Busy lock / stamp expiry / local clones still python+git.
+  # Fresh idle host proof uses two Git processes instead of four.
   local checkout="$1"
-  local head remote branch origin
+  local refs rest head remote branch origin
   last_pass_idle_stamps_fresh || return 1
   [[ -n "${checkout}" && "${checkout}" != *'"'* && "${checkout}" != *$'\n'* ]] || return 1
-  head="$(git -C "${checkout}" rev-parse HEAD 2>/dev/null)" || return 1
-  remote="$(git -C "${checkout}" rev-parse origin/main 2>/dev/null)" || return 1
-  branch="$(git -C "${checkout}" rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  refs="$(git -C "${checkout}" rev-parse HEAD origin/main --abbrev-ref HEAD 2>/dev/null)" || return 1
+  [[ "${refs}" == *$'\n'*$'\n'* ]] || return 1
+  head="${refs%%$'\n'*}"
+  rest="${refs#*$'\n'}"
+  remote="${rest%%$'\n'*}"
+  branch="${rest#*$'\n'}"
+  [[ -n "${head}" && -n "${remote}" && -n "${branch}" && "${branch}" != *$'\n'* ]] || return 1
   origin="$(git -C "${checkout}" remote get-url origin 2>/dev/null)" || return 1
   origin="${origin%.git}"
-  [[ -n "${head}" && "${head}" == "${remote}" && "${branch}" == "main" ]] || return 1
+  [[ "${head}" == "${remote}" && "${branch}" == "main" ]] || return 1
   case "${origin}" in
     https://github.com/mikolaj92/lokay|git@github.com:mikolaj92/lokay|ssh://git@github.com/mikolaj92/lokay) ;;
     *) return 1 ;;
