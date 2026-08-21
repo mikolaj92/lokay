@@ -18,6 +18,7 @@ four issues and removes only corners whose issues are CLOSED.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -60,8 +61,24 @@ def over_cap_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / OVER_CAP_STAMP_NAME
 
 
+def mill_over_cap_stamp_path() -> Path:
+    """Operator mill over-cap stamp beside last-pass / state.jsonl."""
+    return Path.home() / ".lokay" / OVER_CAP_STAMP_NAME
+
+
+def _is_operator_mill_over_cap_stamp(stamp: Path) -> bool:
+    mill = mill_over_cap_stamp_path()
+    try:
+        return stamp.expanduser().resolve() == mill.resolve()
+    except OSError:
+        return stamp.expanduser() == mill
+
+
 def over_cap_recently_idle(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
+        return False
+    # Pytest must not skip over-cap GitHub views using the mill stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_over_cap_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
