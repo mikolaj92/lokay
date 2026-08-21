@@ -76,9 +76,13 @@ def check_github_authentication() -> Finding:
 
     Mini froze closeout of a MERGEABLE PR for 15+ ticks because GitHub
     503'd ``gh api user`` while ``gh auth status`` and ``rate_limit`` worked.
+    Leftover-probe host skips GitHub /user this tick. Hosted ticks without
+    leftover lists still probe.
     """
     if not shutil.which("gh"):
         return finding("github_authentication", False, "unavailable")
+    if os.environ.get("LOKAY_LEFTOVER_PROBE_GH_OK") == "1":
+        return finding("github_authentication", True, "ok")
     try:
         probed = _gh_run(["gh", "api", "user", "--silent"])
     except (OSError, subprocess.TimeoutExpired):

@@ -49,6 +49,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Combined leftover+survey expiry still probes SHA." in script
     assert "Trailing delayed --install checks keepalive stamp before mill_lock_busy." in script
     assert "Fresh idle skip defers caretaker plist write; hosted/probe ticks still write." in script
+    assert "Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe." in script
+    assert "export LOKAY_LEFTOVER_PROBE_GH_OK=1" in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
@@ -793,6 +795,7 @@ def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
                 "#!/bin/sh",
                 'case " $* " in',
                 "  *git/ref/heads/main*) echo fail >&2; exit 1 ;;",
+                '  *" api user "*) echo fail >&2; exit 1 ;;',
                 "  *) printf '%s\n' '[]' ;;",
                 "esac",
                 "exit 0",

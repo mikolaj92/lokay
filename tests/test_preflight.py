@@ -1364,6 +1364,22 @@ def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypat
     assert issued == []
     assert next(x for x in result["findings"] if x["name"] == "fala_manifest_provenance")["ok"] is False
 
+def test_github_auth_skips_user_when_leftover_probe_already_proved(monkeypatch):
+    """Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe."""
+    from lokay import preflight_checks
+
+    monkeypatch.setenv("LOKAY_LEFTOVER_PROBE_GH_OK", "1")
+
+    def fake_run(argv, **kwargs):
+        raise AssertionError(f"must not probe GitHub /user: {argv}")
+
+    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
+    out = preflight_checks.check_github_authentication()
+    assert out["ok"] is True
+    assert out["code"] == "ok"
+
+
 def test_github_auth_treats_user_503_as_ok_when_token_present(monkeypatch):
     """Mini froze closeout while /user was 503 and gh auth status was fine."""
     from lokay import preflight_checks

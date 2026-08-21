@@ -57,6 +57,8 @@ leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 Leftover-probe
 still hosts `lokay-daemon` so idle reap continues. Leftover-probe still
 hosts `lokay-daemon` even when mill-probe would also run.
+Leftover-probe host skips GitHub `/user` this tick. Hosted ticks without
+leftover lists still probe.
 Leftover-probe skips GitHub SHA when survey stamp is still fresh.
 Mill-probe skips GitHub SHA when leftover stamp is still fresh.
 Combined leftover+survey expiry still probes SHA. mill-daemon runs
