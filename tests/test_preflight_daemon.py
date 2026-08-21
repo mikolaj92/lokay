@@ -47,6 +47,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Leftover-probe skips GitHub SHA when survey stamp is still fresh." in script
     assert "Mill-probe skips GitHub SHA when leftover stamp is still fresh." in script
     assert "Combined leftover+survey expiry still probes SHA." in script
+    assert "Trailing delayed --install checks keepalive stamp before mill_lock_busy." in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
