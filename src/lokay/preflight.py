@@ -1008,9 +1008,14 @@ def run_preflight(
             if cfg.live and cfg.executor_enabled and _repair_runtime_path(cfg.agent_command):
                 repaired.add("executor_path")
                 repairs.append({"kind": "extend_runtime_path", "ok": True})
-    checked, cfg = _check(
-        config_path, repaired, inherited_singleton=inherited_singleton
-    )  # complete rerun, always
+    if initial.get("ok"):
+        # First host check already healthy. A second pass would only
+        # re-hit GitHub /user and re-parse every lokay module.
+        checked = initial
+    else:
+        checked, cfg = _check(
+            config_path, repaired, inherited_singleton=inherited_singleton
+        )
     failed = sorted(f"{x['name']}:{x['code']}" for x in checked["findings"] if not x["ok"])
     fp = hashlib.sha256("\n".join(failed).encode()).hexdigest()[:16]
     failed_findings = [x for x in checked["findings"] if not x["ok"]]

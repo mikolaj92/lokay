@@ -288,7 +288,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After caretaker `lokay-host-ff`, mill-daemon sets `LOKAY_HOST_FF_FETCHED=1`
   so in-cycle `factory_pass` `host_ff` skips a second `git fetch origin/main`
   and preflight skips a second `git ls-remote origin HEAD`. Origin URL is
-  still checked. Standalone `lokay-daemon` still probes.
+  still checked. Standalone `lokay-daemon` still probes. Healthy first host
+  check is not rerun (`gh api user` / ast.parse every lokay module). Repair
+  still reruns `_check`.
   Fala inherit_env is a whitelist: every atom, including nested `recovery_mill`,
   must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the mill.
   Mill Fala sqlite under `~/.lokay/fala/daemon-cycle` and `factory` rotates
