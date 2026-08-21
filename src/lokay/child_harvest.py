@@ -492,6 +492,16 @@ def _drop_out_of_scope_stuck_rows(
             continue
         if repo not in allowed:
             clear_issue(stuck, repo, issue)
+    for key in list(stuck):
+        if key in {"issues", "cleared"}:
+            continue
+        repo, sep, num_s = str(key).rpartition("#")
+        issue = _as_int(num_s)
+        if not sep or not repo or issue is None:
+            continue
+        if repo not in allowed:
+            stuck.pop(key, None)
+            clear_issue(stuck, repo, issue)
 
 
 def harvest_fail_closed_children(
