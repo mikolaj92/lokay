@@ -592,19 +592,10 @@ if [[ "${MILL_LOCK_WAS_BUSY}" -eq 1 ]]; then
   bound_launchd_stdio
   exit 0
 fi
-# HEAD moved: this process still imported the previous package. Exit 0 so
-# LaunchAgent starts a new daemon. Do not kill a live i2pr (lock_busy above).
-if host_ff_updated "${LOG}"; then
-  printf '%s\n' '{"ok":true,"health":"host_updated","reason":"host_updated"}' >>"${LOG}"
-  cp "${LOG}" "${LATEST}" 2>/dev/null || true
-  bound_file "${LOG}" "${MILL_LOG_MAX}" || true
-  bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
-  prune_mill_logs || true
-  emit_launchd_glance || true
-  bound_launchd_stdio
-  exit 0
-fi
-
+# HEAD moved on disk: this bash wrapper has not imported lokay. Continue
+# into uv reinstall + lokay-daemon in the same tick. Waiting for
+# StartInterval leaves the mill dark after every absorb. Live i2pr holds
+# mill.lock (lock_busy above) and is not killed.
 UV_REINSTALL_ARGS=()
 CURRENT_DIGEST="$(checkout_digest || true)"
 PREVIOUS_DIGEST=""
@@ -613,8 +604,9 @@ if [[ -f "${DIGEST_FILE}" ]]; then
 fi
 # Reinstall when lokay/Fala HEAD or lockfile moved, or the installed
 # wheel still shadows a different checkout (digest can match after an
-# overlap tick that never rebuilt).
-if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]] || ! package_matches; then
+# overlap tick that never rebuilt). host-ff updated=true also forces a
+# rebuild: fake/partial digest must not start the mill on a stale wheel.
+if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]] || ! package_matches || host_ff_updated "${LOG}"; then
   UV_REINSTALL_ARGS=(--reinstall-package lokay --reinstall-package fala)
 fi
 
