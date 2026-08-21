@@ -44,6 +44,7 @@ def test_minutes_within_budget(tmp_path: Path, capsys):
     assert out["issue"] == 42
     assert out["minutes"] == 8
     assert out["ok_budget"] is True
+    assert not (tmp_path / "owner__name__42.json").exists()
 
 
 def test_exactly_ten_minutes_is_within_budget(tmp_path: Path, capsys):
@@ -64,6 +65,7 @@ def test_exactly_ten_minutes_is_within_budget(tmp_path: Path, capsys):
     out = _payload(capsys)
     assert out["minutes"] == 10
     assert out["ok_budget"] is True
+    assert not (tmp_path / "acme__lib__7.json").exists()
 
 
 def test_over_budget(tmp_path: Path, capsys):
@@ -85,6 +87,7 @@ def test_over_budget(tmp_path: Path, capsys):
     assert out["ok"] is True
     assert out["minutes"] == 11
     assert out["ok_budget"] is False
+    assert not (tmp_path / "owner__name__3.json").exists()
 
 
 def test_missing_start_file_fails_closed(tmp_path: Path, capsys):
@@ -114,6 +117,7 @@ def test_default_dir_is_home_lokay_cycle(tmp_path: Path, monkeypatch, capsys):
     assert out["ok"] is True
     assert out["minutes"] == 4
     assert out["ok_budget"] is True
+    assert not (dest / "a__b__1.json").exists()
 
 
 def test_now_when_pr_opened_ts_omitted(tmp_path: Path, capsys):
@@ -127,6 +131,7 @@ def test_now_when_pr_opened_ts_omitted(tmp_path: Path, capsys):
     assert out["ok"] is True
     assert out["minutes"] == 0
     assert out["ok_budget"] is True
+    assert not (tmp_path / "owner__name__5.json").exists()
 
 
 def test_invalid_repo_fails_closed(tmp_path: Path, capsys):
@@ -149,3 +154,4 @@ def test_malformed_start_file_fails_closed(tmp_path: Path, capsys):
     out = _payload(capsys)
     assert out["ok"] is False
     assert out["path"] == str(path)
+    assert path.exists()

@@ -429,6 +429,53 @@ def _isolated_mill_roots(state_path: Path, home: Path) -> tuple[Path, Path]:
     return state.parent / "cycle", state.parent
 
 
+def _clear_stale_cycle_start_receipts(
+    cycle_dir: Path, *, repos: list[str] | None
+) -> None:
+    """Drop start-only metric files outside mill catalog or GitHub-CLOSED.
+
+    Detach receipts have ``pid`` / ``starting``. Those stay. Unit tests that
+    omit ``repos=`` keep hermetic fixtures.
+    """
+    if repos is None or not cycle_dir.is_dir():
+        return
+    allowed = {str(name).strip() for name in repos if str(name).strip()}
+    if not allowed:
+        return
+    mill = mill_repo()
+    mill_paths: dict[int, Path] = {}
+    for path in cycle_dir.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, ValueError):
+            continue
+        if not isinstance(data, dict) or "pid" in data or data.get("starting") is True:
+            continue
+        repo = str(data.get("repo") or "")
+        issue = _as_int(data.get("issue"))
+        if not repo or issue is None:
+            continue
+        if repo not in allowed:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            continue
+        if repo == mill:
+            mill_paths[issue] = path
+    if not mill_paths:
+        return
+    closed = _github_closed_mill_issues(mill)
+    if not closed:
+        return
+    for issue, path in mill_paths.items():
+        if issue in closed:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
 def _drop_out_of_scope_stuck_rows(
     stuck: dict[str, Any], repos: list[str] | None
 ) -> None:
@@ -611,4 +658,5 @@ def harvest_fail_closed_children(
         )
     _clear_github_closed_mill_rows(stuck)
     _drop_out_of_scope_stuck_rows(stuck, repos)
+    _clear_stale_cycle_start_receipts(root, repos=repos)
     return stuck

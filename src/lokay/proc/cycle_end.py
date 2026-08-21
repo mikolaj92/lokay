@@ -94,6 +94,10 @@ def run_cycle_end(
         return err(str(exc), repo=str(repo).strip(), issue=n, path=str(path))
 
     minutes = max(0, int((end - started).total_seconds() // 60))
+    try:
+        path.unlink()
+    except OSError:
+        pass
     return ok(
         repo=str(repo).strip(),
         issue=n,
