@@ -1,4 +1,6 @@
 from types import SimpleNamespace
+import os
+import time
 
 from lokay.passkit import io as pass_io
 from lokay.proc import reap_stale_implementing
@@ -112,3 +114,179 @@ state:
     assert out["reaped_count"] == 1
     assert out["reaped"][0]["repo"] == "mikolaj92/lokay"
     assert set(listed_repos) == {"mikolaj92/lokay"}
+
+
+def test_stale_empty_probe_writes_stamp(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", lambda *_a, **_k: [])
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert out["reaped_count"] == 0
+    assert (tmp_path / "reap-stale-implementing.stamp").is_file()
+
+
+def test_stale_skips_github_when_recent_empty_stamp(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "reap-stale-implementing.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    before = stamp.stat().st_mtime
+
+    def boom(*_a, **_k):
+        raise AssertionError("recent empty leftover cache must not list GitHub")
+
+    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", boom)
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty"
+    assert out["reaped_count"] == 0
+    assert stamp.stat().st_mtime == before
+
+
+def test_stale_probes_when_empty_stamp_expired(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "reap-stale-implementing.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", lambda *_a, **_k: [])
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert out.get("skipped") is not True
+    assert out["reaped_count"] == 0
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime >= old + reap_stale_implementing.STALE_TTL_SECONDS
+
+
+def test_stale_reap_clears_empty_stamp(tmp_path, monkeypatch):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "reap-stale-implementing.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "list_labeled_issues",
+        lambda *_a, **k: [SimpleNamespace(number=443)] if k.get("label") == "ai:in-progress" else [],
+    )
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "run_proc",
+        lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
+    )
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert out["reaped_count"] == 1
+    assert not stamp.exists()

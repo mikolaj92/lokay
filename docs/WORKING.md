@@ -301,6 +301,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   those GitHub lists for 300s so idle ticks do not pay them twice a minute.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
   those GitHub lists for 120s without refreshing the stamp.
+  After an empty leftover in-flight cache probe (`ai:in-progress` /
+  `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
+  for 300s without refreshing the stamp.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy
