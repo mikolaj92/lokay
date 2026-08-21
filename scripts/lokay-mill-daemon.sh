@@ -110,6 +110,90 @@ raise SystemExit(1)
 PY
 }
 
+host_ff_already_current() {
+  # 0 = GitHub main already matches HEAD and origin/main. Probe failure hosts.
+  local checkout="${1:-${ROOT}}"
+  _python - "${checkout}" <<'PY'
+import json, os, re, subprocess, sys
+from pathlib import Path
+
+checkout = Path(sys.argv[1])
+csi = re.compile("\x1b\[[0-9;]*[mK]")
+
+def git(*args: str) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(checkout), *args],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip()
+
+head = git("rev-parse", "HEAD")
+remote = git("rev-parse", "origin/main")
+branch = git("rev-parse", "--abbrev-ref", "HEAD")
+origin = git("remote", "get-url", "origin").removesuffix(".git")
+if (
+    not head
+    or not remote
+    or head != remote
+    or branch != "main"
+    or origin
+    not in {
+        "https://github.com/mikolaj92/lokay",
+        "git@github.com:mikolaj92/lokay",
+        "ssh://git@github.com/mikolaj92/lokay",
+    }
+):
+    raise SystemExit(1)
+env = os.environ.copy()
+env["GH_NO_COLOR"] = "1"
+env["NO_COLOR"] = "1"
+try:
+    result = subprocess.run(
+        [
+            "gh",
+            "api",
+            "repos/mikolaj92/lokay/git/ref/heads/main",
+            "--jq",
+            ".object.sha",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+        env=env,
+    )
+except (OSError, subprocess.TimeoutExpired):
+    raise SystemExit(1)
+if result.returncode != 0:
+    raise SystemExit(1)
+sha = csi.sub("", result.stdout or "").strip()
+if not sha or sha != head:
+    raise SystemExit(1)
+print(
+    json.dumps(
+        {
+            "ok": True,
+            "planned": False,
+            "checkout": str(checkout),
+            "health": "current",
+            "updated": False,
+            "already_current": True,
+            "head": head,
+            "origin_main": remote,
+        }
+    )
+)
+PY
+}
+
 idle_skip_daemon() {
   # 0 + reason on stdout = skip lokay-daemon. Missing leftover stamp,
   # occupied last-pass, remaining work, or a failed GitHub probe hosts.
@@ -763,7 +847,11 @@ if mill_lock_busy; then
   MILL_LOCK_WAS_BUSY=1
 fi
 : >"${LOG}"
-if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}" 2>&1; then
+# GitHub SHA already matches HEAD and origin/main. Skip caretaker host-ff.
+# Probe failure or SHA mismatch still hosts caretaker host-ff.
+if host_ff_already_current "${ROOT}" >>"${LOG}" 2>/dev/null; then
+  :
+elif ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}" 2>&1; then
   bootstrap_incident "host_behind"
   bound_file "${LOG}" "${MILL_LOG_MAX}" || true
   emit_launchd_glance || true

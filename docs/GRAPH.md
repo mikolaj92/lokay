@@ -27,7 +27,9 @@ this parent path; leftover closeout still runs. After the stamp expires, a
 cheap GitHub probe of mill PR / inbox / ready lists refreshes the stamp and
 skips Fala when all three are still empty. Probe failure or remaining work
 hosts. Missing stamp, occupied last-pass, or pytest always hosts.
-mill-daemon still runs caretaker `lokay-host-ff`. When last-pass is idle, it
+mill-daemon skips caretaker `lokay-host-ff` when GitHub `main` already
+matches HEAD and `origin/main`. Probe failure or SHA mismatch still runs
+host-ff. Local clones still run host-ff. When last-pass is idle, it
 skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
 fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 `work:ready` / `ai:ready` mill issues refreshes that stamp and still skips
