@@ -315,7 +315,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   matches HEAD and `origin/main`. Fresh idle stamps skip the GitHub SHA
   probe. Busy lock still probes. Probe failure or SHA mismatch still runs
   host-ff. Local clones still run host-ff. Small mill / launchd logs skip
-  python truncate; fat logs still bound in place. When last-pass is idle,
+  python truncate. Small launchd stdio skips python inode reopen; fat logs
+  still bound in place, then reopen. When last-pass is idle,
   it skips `lokay-daemon` (preflight + Fala) while empty-survey (120s) and
   leftover-closeout (300s) stamps are fresh. After leftover-stamp expiry, a
   cheap empty GitHub probe of CLOSED `work:ready` / `ai:ready` mill issues
