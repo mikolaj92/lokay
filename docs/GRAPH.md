@@ -26,6 +26,7 @@ A live mill with a fresh empty-survey stamp and idle last-pass skips hosting
 this parent path; leftover closeout still runs, mill stuck is still
 harvested, and CLOSED leftover mill worktrees are still reaped.
 Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
+Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
 `uv.lock`-only is not real uncommitted content. After the
 stamp expires, a cheap GitHub probe of mill PR / inbox / ready lists
 refreshes the stamp and skips Fala when all three are still empty. Probe
