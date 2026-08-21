@@ -30,7 +30,8 @@ hosts. Missing stamp, occupied last-pass, or pytest always hosts.
 mill-daemon skips caretaker `lokay-host-ff` when GitHub `main` already
 matches HEAD and `origin/main`. Fresh idle stamps skip the GitHub SHA
 probe. Busy lock still probes. Probe failure or SHA mismatch still runs
-host-ff. Local clones still run host-ff. When last-pass is idle, it
+host-ff. Local clones still run host-ff. Small mill / launchd logs skip
+python truncate; fat logs still bound in place. When last-pass is idle, it
 skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
 fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 `work:ready` / `ai:ready` mill issues refreshes that stamp and still skips

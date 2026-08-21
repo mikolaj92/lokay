@@ -613,7 +613,19 @@ bound_file() {
   # and keep the same inode so an already-open stdout fd can be rebound.
   local path="$1"
   local max_bytes="$2"
+  local size=""
   [[ -f "${path}" ]] || return 0
+  # Small idle transcripts skip python. Fat logs still truncate in place.
+  size="$(wc -c < "${path}" 2>/dev/null || true)"
+  size="${size// /}"
+  case "${max_bytes}" in
+    ''|*[!0-9]*) ;;
+    *)
+      if [[ -n "${size}" && "${size}" -le "${max_bytes}" ]]; then
+        return 0
+      fi
+      ;;
+  esac
   _python - "${path}" "${max_bytes}" <<'PY'
 import os, sys
 from pathlib import Path
