@@ -131,7 +131,10 @@ def _oldest(leftovers: list[tuple[Path, str]]) -> list[tuple[Path, str]]:
 def _oldest_issued(
     leftovers: list[tuple[Path, str]], *, branch_prefix: str
 ) -> list[tuple[Path, str]]:
-    """Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues."""
+    """Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
+
+    Harvest leftovers are not mill issues.
+    """
     issued = [
         item
         for item in leftovers
@@ -533,7 +536,8 @@ def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) ->
     over-cap stamp still skips GitHub. No leftover_status and no
     push --delete on this path. Idle CLASSIFY_CAP skips no-issue leftovers
     so Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real
-    leftovers so KEEP cannot starve mill issues.
+    leftovers so KEEP cannot starve mill issues. Harvest leftovers are not
+    mill issues.
     """
     if not live:
         return
@@ -565,6 +569,7 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
             continue
         # Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
         # Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
+        # Harvest leftovers are not mill issues.
         candidates = set(
             _oldest_issued_clean(leftovers, branch_prefix=cfg.branch_prefix)[:CLASSIFY_CAP]
         )
