@@ -830,6 +830,48 @@ def test_remove_registered_worktree_preserves_ignored_user_data(tmp_path):
     assert important.read_text(encoding="utf-8") == "do not delete\n"
 
 
+def test_remove_worktree_archives_uv_lock_only_dirt(tmp_path):
+    """uv.lock-only is not real uncommitted content."""
+    import subprocess
+
+    clone = tmp_path / "clone"
+    managed = tmp_path / "managed"
+    corner = managed / "owner__repo" / "ai__fix__16-x"
+    clone.mkdir()
+    managed.mkdir()
+    subprocess.run(["git", "init"], cwd=clone, check=True, capture_output=True)
+    (clone / "uv.lock").write_text("old\n", encoding="utf-8")
+    (clone / "src.py").write_text("ok\n", encoding="utf-8")
+    subprocess.run(["git", "add", "uv.lock", "src.py"], cwd=clone, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "base"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(corner), "HEAD"],
+        cwd=clone,
+        check=True,
+        capture_output=True,
+    )
+    (corner / "uv.lock").write_text("new\n", encoding="utf-8")
+
+    out = remove_worktree(
+        Runner(),
+        clone,
+        corner,
+        managed_root=managed,
+    )
+
+    archive = Path(out["preserved_path"])
+    assert out["ok"] is True
+    assert out["removed"] is True
+    assert not corner.exists()
+    assert (archive / "uv.lock").read_text(encoding="utf-8") == "new\n"
+    assert (archive / "src.py").read_text(encoding="utf-8") == "ok\n"
+
+
 def test_remove_worktree_never_recursively_deletes_late_content(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()

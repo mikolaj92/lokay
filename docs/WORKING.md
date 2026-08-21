@@ -159,10 +159,11 @@ product. Green repository verification may be reused only for the identical
    and re-lists PRs only on leftover-ready repos that are not already
    occupied, so a 29-repo catalog does not 429 the secondary budget
    before `select_implement`. Then `reap_stale_worktrees` drops leftover corners
-   that cannot resume (merged, closed CONFLICTING, unpublished-behind-main)
-   and KEEPs a live i2pr (from receipts **or** `working.json`), a repo
-   whose PR survey failed, an open covering PR, or a dirty unpublished
-   timeout leftover. A failed `list_prs` is unknown, not idle — wiping
+   that cannot resume (merged, closed CONFLICTING, unpublished-behind-main).
+   `uv.lock`-only is not real uncommitted content, so a CLOSED leftover with
+   only a dirty lockfile can archive. KEEP a live i2pr (from receipts **or**
+   `working.json`), a repo whose PR survey failed, an open covering PR, or a
+   dirty unpublished timeout leftover. A failed `list_prs` is unknown, not idle — wiping
    `prs_by_repo` must not let reap `push --delete` a published MERGEABLE
    tip (that closes the GitHub PR). A ready published
    tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
