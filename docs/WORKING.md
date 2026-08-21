@@ -315,7 +315,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   own 300s TTL, mill stuck is still harvested, and CLOSED leftover mill
   worktrees are still reaped. Idle CLASSIFY_CAP skips no-issue leftovers so
   Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real leftovers
-  so KEEP cannot starve mill issues. Missing stamp, occupied last-pass, or pytest
+  so KEEP cannot starve mill issues. Nested clones are not mill leftover
+  worktrees. Mill worktrees keep a .git file. Missing stamp, occupied last-pass, or pytest
   always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
   `main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
   `host_ff_already_current` and the GitHub SHA probe. Busy lock still
