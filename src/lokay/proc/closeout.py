@@ -140,11 +140,12 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
 
     GitHub CLOSED is enough. A leftover label after close is not a second
     delivery hunt: paginating every mill PR per leftover ate idle ticks and
-    still missed commit-closed issues.
+    still missed commit-closed issues. Fresh leftover skip does not require
+    healthy. Hosted leftover parks still do.
     """
     cfg = load_cfg(argparse.Namespace(config=config_path))
-    allowed = mutations_allowed(live_flag=live, cfg=cfg)
     stamp = leftover_stamp_path(cfg)
+    # Fresh leftover skip does not require healthy. Hosted leftover parks still do.
     if leftover_recently_empty(stamp):
         return ok(
             leftover_closed=0,
@@ -154,6 +155,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
             skipped=True,
             reason="recent_empty",
         )
+    allowed = mutations_allowed(live_flag=live, cfg=cfg)
     issue_runner = runner(cfg)
     labels = [WORK_READY_LABEL]
     ready = str(getattr(cfg, "ready_label", "") or "")
