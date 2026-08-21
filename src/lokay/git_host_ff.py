@@ -13,6 +13,16 @@ SKIP_WORKTREE_CATALOG = "repos.mikolaj92.yaml"
 
 
 PROCESS_HEAD_ENV = "LOKAY_PROCESS_HEAD"
+HOST_FF_FETCHED_ENV = "LOKAY_HOST_FF_FETCHED"
+
+
+def caretaker_already_fetched() -> bool:
+    """True when mill-daemon already fetched origin/main this tick."""
+    return os.environ.get(HOST_FF_FETCHED_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 def checkout_head(checkout: Path) -> str:
@@ -199,10 +209,11 @@ def fast_forward_origin_main(runner: Runner, checkout: Path) -> dict[str, object
                 git_spec(["checkout", "main"], cwd=checkout), live=True
             )
 
-    runner.run_checked(
-        git_spec(["fetch", "origin", "main"], cwd=checkout, timeout_seconds=300),
-        live=True,
-    )
+    if not caretaker_already_fetched():
+        runner.run_checked(
+            git_spec(["fetch", "origin", "main"], cwd=checkout, timeout_seconds=300),
+            live=True,
+        )
     head = _rev_parse(runner, checkout, "HEAD")
     remote = _rev_parse(runner, checkout, "origin/main")
     skipped = skip_worktree_paths(runner, checkout)

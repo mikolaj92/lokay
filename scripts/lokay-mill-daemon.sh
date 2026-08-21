@@ -613,6 +613,8 @@ if ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG
   bound_launchd_stdio
   exit 78
 fi
+# factory_pass host_ff is the same checkout this tick. Do not fetch origin/main twice.
+export LOKAY_HOST_FF_FETCHED=1
 # Publish this tick immediately: lokay-daemon may run for minutes, and readers
 # must not keep seeing the previous tick's terminal state in mill-latest.log.
 cp "${LOG}" "${LATEST}" 2>/dev/null || true

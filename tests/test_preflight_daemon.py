@@ -34,6 +34,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "os.ftruncate" in script
     assert "| tee " not in script
     assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
+    assert script.index("uv run lokay-host-ff") < script.index("export LOKAY_HOST_FF_FETCHED=1")
     assert "lock_busy" in script
     assert "mill_lock_busy" in script
     assert "loaded_keepalive_crash_only" in script

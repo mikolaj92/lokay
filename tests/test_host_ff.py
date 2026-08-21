@@ -235,6 +235,20 @@ def test_already_current_is_ok(tmp_path: Path):
     assert result["already_current"] is True
 
 
+def test_caretaker_fetch_skips_second_git_fetch(tmp_path: Path, monkeypatch):
+    seed, host = _pair(tmp_path)
+    current = fast_forward_origin_main(Runner(), host)
+    _advance_origin(seed, "next\n")
+    monkeypatch.setenv("LOKAY_HOST_FF_FETCHED", "1")
+    skipped = fast_forward_origin_main(Runner(), host)
+    assert skipped["already_current"] is True
+    assert skipped["head"] == current["head"]
+    monkeypatch.delenv("LOKAY_HOST_FF_FETCHED")
+    moved = fast_forward_origin_main(Runner(), host)
+    assert moved["updated"] is True
+    assert moved["head"] != current["head"]
+
+
 def test_host_ff_payload_tells_caretaker_whether_head_moved(tmp_path: Path):
     seed, host = _pair(tmp_path)
     current = fast_forward_origin_main(Runner(), host)
