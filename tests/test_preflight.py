@@ -1314,3 +1314,44 @@ def test_preflight_releases_gate_when_user_api_is_503(tmp_path, monkeypatch):
     finding = next(x for x in result["findings"] if x["name"] == "github_authentication")
     assert finding["ok"] is True
 
+
+def test_healthy_preflight_does_not_rerun_host_checks(tmp_path, monkeypatch):
+    """Idle mill already passed host checks; a second _check only re-hits GitHub."""
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    (tmp_path / "runtime" / "logs").mkdir(parents=True)
+    (tmp_path / "runtime" / "state").mkdir(parents=True)
+    (tmp_path / "runtime" / "worktrees").mkdir(parents=True)
+    _host_ok(monkeypatch)
+    calls = {"n": 0}
+    real = preflight._check
+
+    def counted(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(preflight, "_check", counted)
+    result = preflight.run_preflight(str(cfg))
+    assert result["ok"] is True, result
+    assert calls["n"] == 1
+
+
+def test_unhealthy_preflight_still_reruns_host_checks(tmp_path, monkeypatch):
+    """Repair still needs a second _check so locale / PATH / dirs take effect."""
+    cfg = _config(tmp_path)
+    monkeypatch.delenv("LANG", raising=False)
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+    calls = {"n": 0}
+    real = preflight._check
+
+    def counted(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(preflight, "_check", counted)
+    result = preflight.run_preflight(str(cfg))
+    assert result["ok"] is True, result
+    assert calls["n"] == 2
+
