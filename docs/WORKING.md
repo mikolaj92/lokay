@@ -304,9 +304,11 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
   those GitHub lists for 120s without refreshing the stamp. A live mill with
   that fresh stamp and an idle last-pass also skips hosting `factory_pass`
-  (20 organ spawns) and the parent `daemon_cycle` Fala (6 recovery organs)
-  until the stamp expires. Leftover closeout still runs after that skip via
-  its own 300s TTL. Missing stamp, occupied last-pass, or pytest always hosts.
+  (20 organ spawns) and the parent `daemon_cycle` Fala (6 recovery organs).
+  When the stamp expires, the same idle mill cheap-probes those three GitHub
+  lists. An empty probe refreshes the stamp and skips Fala; probe failure or
+  remaining work hosts. Leftover closeout still runs after that skip via its
+  own 300s TTL. Missing stamp, occupied last-pass, or pytest always hosts.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
