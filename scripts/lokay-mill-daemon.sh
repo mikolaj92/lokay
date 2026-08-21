@@ -1179,6 +1179,8 @@ fi
 if [[ "${SKIP_REASON}" == "recent_empty_leftover_probe" ]]; then
   printf '{"ok":true,"health":"idle","idle":true,"reason":"recent_empty_leftover_probe"}\n' >>"${LOG}"
   SKIP_REASON=""
+  # Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe.
+  export LOKAY_LEFTOVER_PROBE_GH_OK=1
 fi
 case "${SKIP_REASON}" in
   recent_empty_survey|recent_empty_survey_probe) ;;
