@@ -131,9 +131,13 @@ _stamp_age_seconds() {
 
 last_pass_idle_stamps_fresh() {
   # Fresh idle stamps skip python idle_skip_daemon.
+  # Fresh idle proof is cached within one tick; stamp expiry is cross-tick.
   # Occupied last-pass, remaining work, or missing stamp still hosts.
   local receipt="${LOKAY_HOME}/last-pass.json"
   local leftover_age survey_age
+  if [[ "${LOKAY_IDLE_STAMPS_FRESH:-}" == "1" ]]; then
+    return 0
+  fi
   leftover_age="$(_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp")" || return 1
   survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp")" || return 1
   [[ "${leftover_age}" -ge 0 && "${leftover_age}" -lt 300 ]] || return 1
@@ -153,6 +157,7 @@ last_pass_idle_stamps_fresh() {
   grep -Eq '"open_ai_prs"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
   grep -Eq '"issue_to_pr_started"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
   grep -Eq '"survey_errors"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  LOKAY_IDLE_STAMPS_FRESH=1
 }
 
 host_ff_idle_stamps_current() {
