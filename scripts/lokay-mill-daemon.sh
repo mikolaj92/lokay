@@ -120,9 +120,11 @@ PY
 }
 
 _stamp_age_seconds() {
-  local path="$1" now mtime
+  local path="$1" now="${2:-}" mtime
   [[ -f "${path}" ]] || return 1
-  now="$(date +%s)" || return 1
+  if [[ -z "${now}" ]]; then
+    now="$(date +%s)" || return 1
+  fi
   # GNU epoch first. Linux stat -f is filesystem, not mtime.
   mtime="$(stat -c %Y "${path}" 2>/dev/null || stat -f %m "${path}" 2>/dev/null || true)"
   [[ "${mtime}" =~ ^[0-9]+$ && "${now}" =~ ^[0-9]+$ ]] || return 1
@@ -133,13 +135,15 @@ last_pass_idle_stamps_fresh() {
   # Fresh idle stamps skip python idle_skip_daemon.
   # Fresh idle proof is cached within one tick; stamp expiry is cross-tick.
   # Occupied last-pass, remaining work, or missing stamp still hosts.
+  # Fresh idle stamp age reuses one date +%s.
   local receipt="${LOKAY_HOME}/last-pass.json"
-  local leftover_age survey_age
+  local leftover_age survey_age now
   if [[ "${LOKAY_IDLE_STAMPS_FRESH:-}" == "1" ]]; then
     return 0
   fi
-  leftover_age="$(_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp")" || return 1
-  survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp")" || return 1
+  now="$(date +%s)" || return 1
+  leftover_age="$(_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp" "${now}")" || return 1
+  survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}")" || return 1
   [[ "${leftover_age}" -ge 0 && "${leftover_age}" -lt 300 ]] || return 1
   [[ "${survey_age}" -ge 0 && "${survey_age}" -lt 120 ]] || return 1
   [[ -f "${receipt}" ]] || return 1

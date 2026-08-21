@@ -37,7 +37,8 @@ refreshes the stamp and skips Fala when all three are still empty. Probe
 failure or remaining work hosts. Missing stamp, occupied last-pass, or
 pytest always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
 `main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
-`host_ff_already_current` and the GitHub SHA probe. Busy lock still
+`host_ff_already_current` and the GitHub SHA probe. Fresh idle stamp age
+reuses one date +%s. Busy lock still
 probes. Probe failure or SHA mismatch still runs host-ff. Local clones
 still run host-ff. Small mill / launchd logs skip
 python truncate. Small launchd stdio skips python inode reopen; fat logs
