@@ -1,4 +1,4 @@
-"""One job: retire a ready issue already delivered by a merged closing PR."""
+"""One job: park leftover ready labels on a delivered mill issue."""
 
 from __future__ import annotations
 
@@ -17,6 +17,15 @@ WORK_READY_LABEL = "work:ready"
 MINI_MILL_REPO = "mikolaj92/lokay"
 
 
+def _park_ready(
+    *, repo: str, issue: int, allowed: bool
+) -> dict[str, Any]:
+    argv = ["--repo", repo, "--issue", str(issue)]
+    if not allowed:
+        argv.append("--dry-run")
+    return run_proc(p_park.main, argv)
+
+
 def run_closeout(
     *, repo: str, issue: int, config_path: str | None, live: bool
 ) -> dict[str, Any]:
@@ -27,10 +36,7 @@ def run_closeout(
     )
     if pull is None:
         return ok(repo=repo, issue=issue, delivered=False, labels_removed=False)
-    argv = ["--repo", repo, "--issue", str(issue)]
-    if not allowed:
-        argv.append("--dry-run")
-    parked = run_proc(p_park.main, argv)
+    parked = _park_ready(repo=repo, issue=issue, allowed=allowed)
     return ok(
         repo=repo,
         issue=issue,
@@ -72,7 +78,12 @@ def closed_ready_numbers(
 
 
 def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, Any]:
-    """Strip leftover ready labels on CLOSED issues that already have a merged PR."""
+    """Strip leftover ready labels on CLOSED mill issues.
+
+    GitHub CLOSED is enough. A leftover label after close is not a second
+    delivery hunt: paginating every mill PR per leftover ate idle ticks and
+    still missed commit-closed issues.
+    """
     cfg = load_cfg(argparse.Namespace(config=config_path))
     allowed = mutations_allowed(live_flag=live, cfg=cfg)
     issue_runner = runner(cfg)
@@ -92,11 +103,9 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
                 if key in seen:
                     continue
                 seen.add(key)
-                out = run_closeout(
-                    repo=name, issue=number, config_path=config_path, live=live
-                )
-                if out.get("labels_removed"):
-                    closed_out.append({"repo": name, "issue": number, "pr": out.get("pr")})
+                parked = _park_ready(repo=name, issue=number, allowed=allowed)
+                if parked.get("ok") and parked.get("removed"):
+                    closed_out.append({"repo": name, "issue": number})
     return ok(
         leftover_closed=len(closed_out),
         labels_removed=bool(closed_out),

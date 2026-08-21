@@ -288,6 +288,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   when oversized (default 64 MiB) so idle ticks do not reopen a multi-GB
   journal. Product recovery stays on `state.jsonl`. Live `fala/i2pr/`
   journals stay.
+  After each factory pass, leftover closeout parks leftover `work:ready` /
+  `ai:ready` on GitHub-CLOSED mill issues. That is not a second hunt through
+  every mill PR; GitHub CLOSED is enough.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy
