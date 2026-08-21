@@ -886,9 +886,21 @@ PY
 }
 
 bound_launchd_stdio() {
-  local stdout_path fds fd
+  # Small / missing StandardOutPath skips python inode reopen.
+  # Fat logs still truncate in place, then reopen the truncated inode.
+  local stdout_path fds fd size
   while IFS= read -r stdout_path; do
-    [[ -n "${stdout_path}" ]] || continue
+    [[ -n "${stdout_path}" && -f "${stdout_path}" ]] || continue
+    size="$(wc -c < "${stdout_path}" 2>/dev/null || true)"
+    size="${size// /}"
+    case "${LAUNCHD_STDOUT_MAX}" in
+      ''|*[!0-9]*) ;;
+      *)
+        if [[ -n "${size}" && "${size}" -le "${LAUNCHD_STDOUT_MAX}" ]]; then
+          continue
+        fi
+        ;;
+    esac
     bound_file "${stdout_path}" "${LAUNCHD_STDOUT_MAX}" || true
     fds="$(reopen_stdio_on_path "${stdout_path}" || true)"
     for fd in ${fds}; do
