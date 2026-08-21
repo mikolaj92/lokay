@@ -123,6 +123,7 @@ def run_factory_begin(*, config_path: str | None, live: bool) -> dict[str, Any]:
         "repos": repos,
         "survey_repos": survey_repos,
         "stuck_path": str(stuck_path),
+        "state_path": str(cfg.state_path),
         "stuck": stuck,
         "planned": planned,
         "triage_budget": max(0, int(cfg.max_triage_per_tick)) if live else 0,
