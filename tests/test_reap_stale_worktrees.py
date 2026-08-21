@@ -988,3 +988,109 @@ def test_over_cap_reap_clears_idle_stamp(tmp_path, monkeypatch):
     )
     assert out["reaped_count"] == cap
     assert not stamp.exists()
+
+
+def test_reap_idle_closed_worktrees_reaps_oldest_closed(tmp_path, monkeypatch):
+    """Idle daemon_cycle skip still reaps CLOSED leftover mill worktrees."""
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda repo, issue: True,
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("idle reap must not leftover_status")
+        ),
+    )
+    removed: list[str] = []
+
+    def fake_remove(_git, _clone, path, **_k):
+        removed.append(str(path))
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(reap_stale_worktrees, "remove_worktree", fake_remove)
+    leftovers = [
+        (_corner(tmp_path, f"ai/fix/{i}"), f"ai/fix/{i}")
+        for i in range(cap + 2)
+    ]
+    monkeypatch.setattr(
+        reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
+    )
+    stamp = tmp_path / "reap-over-cap.stamp"
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert len(removed) == cap
+    assert not stamp.exists()
+
+
+def test_reap_idle_closed_worktrees_skips_when_not_live(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("not-live skip does not reap")),
+    )
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(tmp_path / "missing.yaml"), live=False
+    )
+
+
+def test_reap_idle_closed_worktrees_skips_fresh_over_cap_stamp(tmp_path, monkeypatch):
+    stamp = tmp_path / "reap-over-cap.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    before = stamp.stat().st_mtime
+
+    def boom(*_a, **_k):
+        raise AssertionError("fresh over_cap idle must not view GitHub issues")
+
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", boom)
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert stamp.stat().st_mtime == before
+
+
+def test_reap_idle_closed_worktrees_keeps_live_i2pr(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "live_issue_to_pr_receipts",
+        lambda: [{"repo": "owner/repo", "issue": 54, "pid": 61281}],
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+
+    def boom(*_a, **_k):
+        raise AssertionError("live i2pr must not classify leftover worktrees")
+
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", boom)
+    monkeypatch.setattr(reap_stale_worktrees, "remove_worktree", boom)
+    leftovers = [(_corner(tmp_path, "ai/fix/16"), "ai/fix/16")]
+    monkeypatch.setattr(
+        reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
+    )
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+
+
+def test_reap_idle_closed_worktrees_oserror_cannot_stall(tmp_path, monkeypatch):
+    def boom(*_a, **_k):
+        raise OSError("config unreadable")
+
+    monkeypatch.setattr(reap_stale_worktrees, "load_cfg", boom)
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(tmp_path / "missing.yaml"), live=True
+    )

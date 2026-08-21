@@ -492,6 +492,69 @@ def run_reap_stale_worktrees(
     )
 
 
+def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) -> None:
+    """Idle daemon_cycle skip still reaps CLOSED leftover mill worktrees.
+
+    OSError cannot stall. Not-live skip does not reap. Hosted ticks still
+    reap from factory_pass. Live i2pr / unreadable receipts keep. Fresh
+    over-cap stamp still skips GitHub. No leftover_status and no
+    push --delete on this path.
+    """
+    if not live:
+        return
+    try:
+        _reap_idle_closed_worktrees(config_path=config_path)
+    except OSError:
+        return
+
+
+def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
+    cfg = load_cfg(argparse.Namespace(config=config_path))
+    stamp = over_cap_stamp_path(cfg)
+    if over_cap_recently_idle(stamp):
+        return
+    if has_unreadable_issue_to_pr_receipts():
+        return
+    live_keys = _live_keys(live_issue_to_pr_receipts())
+    live_repos = {name for name, _ in live_keys}
+    reaped_here = 0
+    probed = False
+    git = None
+    for repo in cfg.active_repos():
+        if repo.name != MINI_MILL_REPO:
+            continue
+        if repo.name in live_repos:
+            return
+        leftovers = iter_worktrees(cfg, repo)
+        if not leftovers:
+            continue
+        candidates = set(_oldest(leftovers)[:CLASSIFY_CAP])
+        for path, branch in leftovers:
+            if (path, branch) not in candidates:
+                continue
+            issue = issue_number_from_branch(
+                branch, branch_prefix=cfg.branch_prefix
+            )
+            if issue is None or (repo.name, issue) in live_keys:
+                continue
+            probed = True
+            if not _issue_is_closed(repo.name, issue):
+                continue
+            if git is None:
+                git = make_runner(cfg)
+            removed = remove_worktree(
+                git, repo.clone_path, path, managed_root=cfg.worktrees_root
+            )
+            if removed.get("ok"):
+                reaped_here += 1
+    if not probed:
+        return
+    if reaped_here:
+        _clear_over_cap_stamp(stamp)
+    else:
+        _touch_over_cap_stamp(stamp)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-reap-stale-worktrees")
     add_config_live(parser)

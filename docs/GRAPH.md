@@ -23,13 +23,13 @@ preflight. Fala owns product/recovery order. Every node above is a separate
 `lokay-recovery-*` Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
 A live mill with a fresh empty-survey stamp and idle last-pass skips hosting
-this parent path; leftover closeout still runs and mill stuck is still
-harvested. After the stamp expires, a
-cheap GitHub probe of mill PR / inbox / ready lists refreshes the stamp and
-skips Fala when all three are still empty. Probe failure or remaining work
-hosts. Missing stamp, occupied last-pass, or pytest always hosts.
-mill-daemon skips caretaker `lokay-host-ff` when GitHub `main` already
-matches HEAD and `origin/main`. Fresh idle stamps skip python
+this parent path; leftover closeout still runs, mill stuck is still
+harvested, and CLOSED leftover mill worktrees are still reaped. After the
+stamp expires, a cheap GitHub probe of mill PR / inbox / ready lists
+refreshes the stamp and skips Fala when all three are still empty. Probe
+failure or remaining work hosts. Missing stamp, occupied last-pass, or
+pytest always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
+`main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
 `host_ff_already_current` and the GitHub SHA probe. Busy lock still
 probes. Probe failure or SHA mismatch still runs host-ff. Local clones
 still run host-ff. Small mill / launchd logs skip
