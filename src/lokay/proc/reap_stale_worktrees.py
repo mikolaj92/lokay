@@ -46,6 +46,7 @@ from lokay.stuck import issue_number_from_branch
 # ate the 5–10 min implement slot. Classify a handful; skip the rest.
 CLASSIFY_CAP = 4
 OVER_CAP_TTL_SECONDS = 300
+IDLE_OVER_CAP_TTL_SECONDS = 900
 OVER_CAP_STAMP_NAME = "reap-over-cap.stamp"
 
 # The mini mill only delivers Lokay. Product repositories can remain in the
@@ -74,7 +75,9 @@ def _is_operator_mill_over_cap_stamp(stamp: Path) -> bool:
         return stamp.expanduser() == mill
 
 
-def over_cap_recently_idle(stamp: Path | None, *, now: float | None = None) -> bool:
+def over_cap_recently_idle(
+    stamp: Path | None, *, now: float | None = None, ttl: int | None = None
+) -> bool:
     if stamp is None:
         return False
     # Pytest must not skip over-cap GitHub views using the mill stamp.
@@ -84,7 +87,8 @@ def over_cap_recently_idle(stamp: Path | None, *, now: float | None = None) -> b
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:
         return False
-    return 0 <= age < OVER_CAP_TTL_SECONDS
+    limit = OVER_CAP_TTL_SECONDS if ttl is None else ttl
+    return 0 <= age < limit
 
 
 def _touch_over_cap_stamp(stamp: Path | None) -> None:
@@ -580,7 +584,7 @@ def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) ->
     leftovers so KEEP cannot starve mill issues. Harvest leftovers are not
     mill issues. Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest
     leftovers cannot freeze mill porcelain. Idle KEEP-only leftovers still
-    write the over-cap stamp.
+    write the over-cap stamp. Idle over-cap skip outlives leftover-probe.
     """
     if not live:
         return
@@ -593,7 +597,7 @@ def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) ->
 def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     stamp = over_cap_stamp_path(cfg)
-    if over_cap_recently_idle(stamp):
+    if over_cap_recently_idle(stamp, ttl=IDLE_OVER_CAP_TTL_SECONDS):
         return
     if has_unreadable_issue_to_pr_receipts():
         return

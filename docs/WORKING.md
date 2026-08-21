@@ -319,7 +319,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   so KEEP cannot starve mill issues. Harvest leftovers are not mill issues.
   Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers
   cannot freeze mill porcelain. Idle KEEP-only leftovers still write the
-  over-cap stamp.
+  over-cap stamp. Idle over-cap skip outlives leftover-probe.
   Nested clones are not mill leftover
   worktrees. Mill worktrees keep a .git file. Pytest must not skip GitHub surveys
   using the mill stamp. Missing stamp, occupied last-pass, or pytest
