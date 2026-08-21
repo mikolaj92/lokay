@@ -24,7 +24,8 @@ preflight. Fala owns product/recovery order. Every node above is a separate
 actually publishes or merges work records no systemic stall fingerprint.
 A live mill with a fresh empty-survey stamp and idle last-pass skips hosting
 this parent path; leftover closeout still runs, mill stuck is still
-harvested, and CLOSED leftover mill worktrees are still reaped.
+harvested, CLOSED leftover mill worktrees are still reaped, and leftover-ready
+still runs.
 Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
 Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
 Harvest leftovers are not mill issues. Idle CLASSIFY_CAP reaps empty
@@ -130,7 +131,7 @@ host_ff
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error). After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. A live mill with that fresh stamp and idle last-pass also skips hosting `factory_pass` and parent `daemon_cycle` Fala. After the stamp expires, a cheap GitHub probe refreshes it and skips Fala when PR / inbox / ready are still empty. Leftover closeout still runs after that skip. Pytest must not skip GitHub surveys using the mill stamp. |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error). Shares the 120s empty-survey stamp with `survey_prs` / `survey_ready`. |
 | `survey_ready` | list implementable `work:ready` (intake/triage/stage award it with `ai:ready`); skip those covered by open AI PRs. Missing `state` is still OPEN ready; only explicit CLOSED parks. After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. |
-| `ready_hygiene` | remove leftover `ai:ready` from issues without `work:ready`. READY awards both labels. After an empty leftover-ready probe, skip that GitHub list for 300s without refreshing the stamp. Pytest must not skip leftover-ready GitHub lists using the mill stamp. |
+| `ready_hygiene` | remove leftover `ai:ready` from issues without `work:ready`. READY awards both labels. After an empty leftover-ready probe, skip that GitHub list for 300s without refreshing the stamp. Idle daemon_cycle skip still runs leftover-ready. Pytest must not skip leftover-ready GitHub lists using the mill stamp. |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
 | `dispatch_triage` | run planned `issue_triage` children. Preflight incident tickets (`<!-- lokay-preflight:… -->`) are `ai:blocked`, not `work:ready`. A later healthy preflight closes those leftover tickets |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |

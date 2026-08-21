@@ -381,6 +381,12 @@ def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
         reaped.append(kwargs)
 
     monkeypatch.setattr(daemon_mod, "reap_idle_closed_worktrees", fake_reap)
+    hygiened: list[dict] = []
+
+    def fake_hygiene(**kwargs):
+        hygiened.append(kwargs)
+
+    monkeypatch.setattr(daemon_mod, "hygiene_idle_leftover_ready", fake_hygiene)
     monkeypatch.setattr(daemon_mod, "run_closeout_leftover", lambda **_k: leftover)
     out = daemon_mod.compose_daemon_cycle(
         config_path=str(tmp_path / "config.yaml"),
@@ -395,6 +401,9 @@ def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
         {"config_path": str(tmp_path / "config.yaml"), "live": True}
     ]
     assert reaped == [
+        {"config_path": str(tmp_path / "config.yaml"), "live": True}
+    ]
+    assert hygiened == [
         {"config_path": str(tmp_path / "config.yaml"), "live": True}
     ]
     assert stamp.stat().st_mtime == before
@@ -421,6 +430,11 @@ def test_live_idle_daemon_cycle_hosts_when_stamp_missing(
         raise AssertionError("hosting daemon_cycle must not short-circuit leftover via skip")
 
     monkeypatch.setattr(daemon_mod, "run_closeout_leftover", leftover_boom)
+    monkeypatch.setattr(
+        daemon_mod,
+        "hygiene_idle_leftover_ready",
+        leftover_boom,
+    )
     out = daemon_mod.compose_daemon_cycle(
         config_path=str(tmp_path / "config.yaml"),
         pass_ceiling_seconds=5,

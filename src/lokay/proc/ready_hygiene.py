@@ -124,5 +124,15 @@ def main(argv: list[str] | None = None) -> int:
     return emit_exit(payload)
 
 
+def hygiene_idle_leftover_ready(*, config_path: str | None, live: bool = True) -> None:
+    """Idle daemon_cycle skip still runs leftover-ready. OSError cannot stall."""
+    if not live:
+        return
+    try:
+        run_ready_hygiene(config_path=config_path, live=True)
+    except OSError:
+        return
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

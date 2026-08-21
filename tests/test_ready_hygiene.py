@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from lokay.models import Issue
+from lokay.proc import ready_hygiene
 from lokay.proc.ready_hygiene import run_ready_hygiene
 
 
@@ -261,3 +262,50 @@ state:
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert out["cleaned_count"] == 1
     assert not stamp.exists()
+
+
+def test_hygiene_idle_leftover_ready_runs_when_live(tmp_path, monkeypatch):
+    """Idle daemon_cycle skip still runs leftover-ready."""
+    from lokay.proc import ready_hygiene as hygiene
+
+    called: list[dict] = []
+
+    def fake_run(**kwargs):
+        called.append(kwargs)
+        return {"ok": True, "cleaned_count": 0}
+
+    monkeypatch.setattr(hygiene, "run_ready_hygiene", fake_run)
+    hygiene.hygiene_idle_leftover_ready(
+        config_path=str(tmp_path / "config.yaml"), live=True
+    )
+    assert called == [
+        {"config_path": str(tmp_path / "config.yaml"), "live": True}
+    ]
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Idle daemon_cycle skip still runs leftover-ready." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_hygiene_idle_leftover_ready_skips_when_not_live(tmp_path, monkeypatch):
+    from lokay.proc import ready_hygiene as hygiene
+
+    def boom(**_k):
+        raise AssertionError("not-live skip does not run leftover-ready")
+
+    monkeypatch.setattr(hygiene, "run_ready_hygiene", boom)
+    hygiene.hygiene_idle_leftover_ready(
+        config_path=str(tmp_path / "missing.yaml"), live=False
+    )
+
+
+def test_hygiene_idle_leftover_ready_oserror_cannot_stall(tmp_path, monkeypatch):
+    from lokay.proc import ready_hygiene as hygiene
+
+    def boom(**_k):
+        raise OSError("config unreadable")
+
+    monkeypatch.setattr(hygiene, "run_ready_hygiene", boom)
+    hygiene.hygiene_idle_leftover_ready(
+        config_path=str(tmp_path / "missing.yaml"), live=True
+    )
