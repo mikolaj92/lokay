@@ -317,8 +317,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   probe. Busy lock still probes. Probe failure or SHA mismatch still runs
   host-ff. Local clones still run host-ff. Small mill / launchd logs skip
   python truncate. Small launchd stdio skips python inode reopen; fat logs
-  still bound in place, then reopen. Fat truncate leaves glance headroom so
-  the next idle line stays under the cap. When last-pass is idle,
+  still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
+  later idle lines stay under the cap. When last-pass is idle,
   it skips `lokay-daemon` (preflight + Fala) while empty-survey (120s) and
   leftover-closeout (300s) stamps are fresh. After leftover-stamp expiry, a
   cheap empty GitHub probe of CLOSED `work:ready` / `ai:ready` mill issues

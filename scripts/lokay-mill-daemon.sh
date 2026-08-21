@@ -660,8 +660,8 @@ except OSError:
     raise SystemExit(0)
 if size <= limit:
     raise SystemExit(0)
-# Leave glance headroom so the next idle line stays under the cap.
-target = limit - 256
+# Leave 1KiB glance headroom so later idle lines stay under the cap.
+target = limit - 1024
 if target < 512:
     target = limit
 head_n = max(256, target // 4)

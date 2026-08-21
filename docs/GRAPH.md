@@ -32,8 +32,8 @@ matches HEAD and `origin/main`. Fresh idle stamps skip the GitHub SHA
 probe. Busy lock still probes. Probe failure or SHA mismatch still runs
 host-ff. Local clones still run host-ff. Small mill / launchd logs skip
 python truncate. Small launchd stdio skips python inode reopen; fat logs
-still bound in place, then reopen. Fat truncate leaves glance headroom so
-the next idle line stays under the cap. When last-pass is idle, it
+still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
+later idle lines stay under the cap. When last-pass is idle, it
 skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
 fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
 `work:ready` / `ai:ready` mill issues refreshes that stamp and still skips
