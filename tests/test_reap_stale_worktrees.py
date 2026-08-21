@@ -1012,6 +1012,11 @@ def test_reap_idle_closed_worktrees_reaps_oldest_closed(tmp_path, monkeypatch):
             AssertionError("idle reap must not leftover_status")
         ),
     )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "list_uncommitted_paths",
+        lambda *_a, **_k: [],
+    )
     removed: list[str] = []
 
     def fake_remove(_git, _clone, path, **_k):
@@ -1059,6 +1064,11 @@ def test_reap_idle_closed_worktrees_classify_skips_no_issue_leftovers(
             AssertionError("idle reap must not leftover_status")
         ),
     )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "list_uncommitted_paths",
+        lambda *_a, **_k: [],
+    )
     removed: list[str] = []
 
     def fake_remove(_git, _clone, path, **_k):
@@ -1087,6 +1097,80 @@ def test_reap_idle_closed_worktrees_classify_skips_no_issue_leftovers(
         "ai__fix__187",
         "ai__fix__188",
         "ai__fix__191",
+    ]
+    assert cap == 4
+
+
+def test_reap_idle_closed_worktrees_classify_skips_dirty_real_leftovers(
+    tmp_path, monkeypatch
+):
+    """Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues."""
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+    checked: list[int] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda repo, issue: checked.append(issue) or True,
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("idle reap must not leftover_status")
+        ),
+    )
+    dirty = {
+        "ai/fix/123": ["src/lokay/proc/compute_health.py"],
+        "ai/fix/188": ["src/lokay/localize.py"],
+        "ai/fix/192": ["src/lokay/proc/detach_issue_to_pr.py"],
+        "ai/fix/193": ["src/lokay/proc/survey_ready.py"],
+    }
+
+    def fake_uncommitted(_git, path):
+        branch = path.name.replace("__", "/")
+        return list(dirty.get(branch, []))
+
+    monkeypatch.setattr(
+        reap_stale_worktrees, "list_uncommitted_paths", fake_uncommitted
+    )
+    removed: list[str] = []
+
+    def fake_remove(_git, _clone, path, **_k):
+        removed.append(Path(path).name)
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(reap_stale_worktrees, "remove_worktree", fake_remove)
+    leftovers = [
+        (_corner(tmp_path, "Fala"), "Fala"),
+        *[
+            (_corner(tmp_path, f"ai/fix/{n}"), f"ai/fix/{n}")
+            for n in (123, 188, 192, 193, 195, 197, 199, 201)
+        ],
+    ]
+    monkeypatch.setattr(
+        reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
+    )
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert "Fala" not in removed
+    assert "ai__fix__123" not in removed
+    assert "ai__fix__188" not in removed
+    assert "ai__fix__192" not in removed
+    assert "ai__fix__193" not in removed
+    assert checked == [195, 197, 199, 201]
+    assert removed == [
+        "ai__fix__195",
+        "ai__fix__197",
+        "ai__fix__199",
+        "ai__fix__201",
     ]
     assert cap == 4
 
