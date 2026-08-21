@@ -22,6 +22,8 @@ _LOCKS: dict[str, Any] = {}
 _DEFAULT_INCIDENT_REPO = "mikolaj92/lokay"
 _DEFAULT_INCIDENT_COOLDOWN_HOURS = 12.0
 _ISSUE_NUMBER_RE = re.compile(r"/issues/(\d+)(?:\s|$)")
+INCIDENT_TTL_SECONDS = 300
+INCIDENT_STAMP_NAME = "preflight-incident-close.stamp"
 
 
 def trusted_fala_manifest() -> Path:
@@ -626,7 +628,45 @@ def _parse_issue_number(url: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _list_open_incidents(repo: str) -> list[dict[str, Any]]:
+def incident_stamp_path(cfg: Any | None) -> Path | None:
+    """Stamp lives beside mill state. Missing path means always probe."""
+    path = getattr(cfg, "state_path", None) if cfg is not None else None
+    if not path:
+        return None
+    return Path(path).expanduser().parent / INCIDENT_STAMP_NAME
+
+
+def incident_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
+    if stamp is None:
+        return False
+    try:
+        age = (now if now is not None else time.time()) - stamp.stat().st_mtime
+    except OSError:
+        return False
+    return 0 <= age < INCIDENT_TTL_SECONDS
+
+
+def _touch_incident_stamp(stamp: Path | None) -> None:
+    if stamp is None:
+        return
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(int(time.time())), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _clear_incident_stamp(stamp: Path | None) -> None:
+    if stamp is None:
+        return
+    try:
+        stamp.unlink()
+    except OSError:
+        pass
+
+
+def _list_open_incidents(repo: str) -> list[dict[str, Any]] | None:
+    """Open issues for the mill repo. None means the GitHub probe failed."""
     listed = subprocess.run(
         [
             "gh",
@@ -648,13 +688,13 @@ def _list_open_incidents(repo: str) -> list[dict[str, Any]]:
     )
     raw = getattr(listed, "stdout", "") or ""
     if listed.returncode != 0 or not raw.strip():
-        return []
+        return None
     try:
         pages = json.loads(raw)
     except ValueError:
-        return []
+        return None
     if not isinstance(pages, list):
-        return []
+        return None
     return [
         row
         for page in pages
@@ -664,17 +704,23 @@ def _list_open_incidents(repo: str) -> list[dict[str, Any]]:
     ]
 
 
-def _close_resolved_incidents(repo: str) -> dict[str, Any]:
+def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, Any]:
     """Close leftover preflight tickets after the mill is healthy."""
     name = str(repo or "").strip()
     if not name:
         return {"ok": True, "closed": []}
+    stamp = incident_stamp_path(cfg)
+    if incident_recently_empty(stamp):
+        return {"ok": True, "closed": [], "skipped": True, "reason": "recent_empty"}
     try:
         from lokay.triage import is_preflight_incident
     except ImportError:
         return {"ok": True, "closed": []}
+    rows = _list_open_incidents(name)
+    if rows is None:
+        return {"ok": True, "closed": []}
     closed: list[int] = []
-    for row in _list_open_incidents(name):
+    for row in rows:
         number = row.get("number")
         try:
             issue_n = int(number)
@@ -703,6 +749,10 @@ def _close_resolved_incidents(repo: str) -> dict[str, Any]:
         )
         if done.returncode == 0:
             closed.append(issue_n)
+    if closed:
+        _clear_incident_stamp(stamp)
+    else:
+        _touch_incident_stamp(stamp)
     return {"ok": True, "closed": closed}
 
 
@@ -793,6 +843,8 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
     )
     try:
         rows = _list_open_incidents(repo)
+        if rows is None:
+            return None
         match = next((r for r in rows if marker in str(r.get("body") or "")), None)
         if match:
             number = int(match["number"])
@@ -830,6 +882,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
                 entry["created_at"] = now
             ledger[fp] = entry
             _write_incident_ledger(cfg, ledger)
+            _clear_incident_stamp(incident_stamp_path(cfg))
             return url
 
         cached_url = str(entry.get("incident_url") or "")
@@ -858,6 +911,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
                 entry["created_at"] = now
             ledger[fp] = entry
             _write_incident_ledger(cfg, ledger)
+            _clear_incident_stamp(incident_stamp_path(cfg))
             return url
 
         made = subprocess.run(
@@ -899,6 +953,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
         )
         ledger[fp] = entry
         _write_incident_ledger(cfg, ledger)
+        _clear_incident_stamp(incident_stamp_path(cfg))
         return url
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return None
@@ -1039,7 +1094,7 @@ def run_preflight(
         issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
         try:
             result["resolved_incidents"] = _close_resolved_incidents(
-                _incident_repo(cfg)
+                _incident_repo(cfg), cfg
             )
         except OSError:
             result["resolved_incidents"] = {"ok": False, "closed": []}

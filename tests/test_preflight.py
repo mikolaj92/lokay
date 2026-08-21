@@ -385,6 +385,106 @@ def test_healthy_preflight_closes_open_incident_tickets(monkeypatch):
     assert all("99" not in c for c in closed)
 
 
+def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
+    tmp_path, monkeypatch
+):
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    stamp = preflight.incident_stamp_path(loaded)
+    listed: list[int] = []
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            listed.append(1)
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": "[[]]", "stderr": ""},
+            )()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    first = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert first == {"ok": True, "closed": []}
+    assert listed == [1]
+    assert stamp is not None and stamp.is_file()
+    mtime = stamp.stat().st_mtime
+    second = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert second == {
+        "ok": True,
+        "closed": [],
+        "skipped": True,
+        "reason": "recent_empty",
+    }
+    assert listed == [1]
+    assert stamp.stat().st_mtime == mtime
+
+
+def test_incident_probe_failure_does_not_write_stamp(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    stamp = preflight.incident_stamp_path(loaded)
+
+    def fake_run(argv, *args, **kwargs):
+        return type(
+            "Completed", (), {"returncode": 1, "stdout": "", "stderr": "HTTP 429"}
+        )()
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert out == {"ok": True, "closed": []}
+    assert stamp is not None and not stamp.exists()
+
+
+def test_closing_an_incident_clears_the_empty_stamp(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    stamp = preflight.incident_stamp_path(loaded)
+    assert stamp is not None
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text("stale", encoding="utf-8")
+    stamp.touch()
+    import os
+    os.utime(stamp, (0, 0))
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            payload = json.dumps(
+                [
+                    [
+                        {
+                            "number": 178,
+                            "body": "<!-- lokay-preflight:7a069cefb68040e2 -->\nBounded checks failed",
+                            "title": "Preflight failure 7a069cefb68040e2",
+                        }
+                    ]
+                ]
+            )
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": payload, "stderr": ""},
+            )()
+        if cmd[:3] == ["gh", "issue", "close"]:
+            return type(
+                "Completed", (), {"returncode": 0, "stdout": "", "stderr": ""}
+            )()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert out == {"ok": True, "closed": [178]}
+    assert not stamp.exists()
+
+
 def test_daemon_healthy_preflight_closes_resolved_incidents(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
@@ -392,7 +492,7 @@ def test_daemon_healthy_preflight_closes_resolved_incidents(tmp_path, monkeypatc
     _host_ok(monkeypatch)
     called: list[str] = []
 
-    def fake_close(repo: str) -> dict:
+    def fake_close(repo: str, cfg=None) -> dict:
         called.append(repo)
         return {"ok": True, "closed": [178]}
 
