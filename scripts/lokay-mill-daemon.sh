@@ -164,13 +164,39 @@ last_pass_idle_stamps_fresh() {
   LOKAY_IDLE_STAMPS_FRESH=1
 }
 
+last_pass_survey_idle_fresh() {
+  # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
+  # Occupied last-pass, remaining work, or missing survey stamp still hosts.
+  # Do not cache leftover expiry as LOKAY_IDLE_STAMPS_FRESH.
+  local receipt="${LOKAY_HOME}/last-pass.json"
+  local survey_age now
+  last_pass_idle_stamps_fresh && return 0
+  now="$(date +%s)" || return 1
+  survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}")" || return 1
+  [[ "${survey_age}" -ge 0 && "${survey_age}" -lt 120 ]] || return 1
+  [[ -f "${receipt}" ]] || return 1
+  grep -Eq '"occupied"[[:space:]]*:[[:space:]]*true' "${receipt}" && return 1
+  grep -Eq '"health"[[:space:]]*:[[:space:]]*"idle"' "${receipt}"     || grep -Eq '"idle"[[:space:]]*:[[:space:]]*true' "${receipt}"     || return 1
+  grep -Eq '"inbox"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"ready"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"open_ai_prs"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"issue_to_pr_started"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"survey_errors"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"inbox"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"ready"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"open_ai_prs"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"issue_to_pr_started"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"survey_errors"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+}
+
 host_ff_idle_stamps_current() {
   # Fresh idle stamps skip python host_ff_already_current.
+  # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
   # Busy lock / stamp expiry / local clones still python+git.
   # Fresh idle host proof uses two Git processes instead of four.
   local checkout="$1"
   local refs rest head remote branch origin
-  last_pass_idle_stamps_fresh || return 1
+  last_pass_survey_idle_fresh || return 1
   [[ -n "${checkout}" && "${checkout}" != *'"'* && "${checkout}" != *$'\n'* ]] || return 1
   refs="$(git -C "${checkout}" rev-parse HEAD origin/main --abbrev-ref HEAD 2>/dev/null)" || return 1
   [[ "${refs}" == *$'\n'*$'\n'* ]] || return 1
@@ -291,13 +317,8 @@ if lock_busy != "1":
             idle = work == 0 and not occupied
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
         idle = False
-    if (
-        idle
-        and leftover_age is not None
-        and 0 <= leftover_age < 300
-        and survey_age is not None
-        and 0 <= survey_age < 120
-    ):
+    # Leftover-probe skips GitHub SHA when survey stamp is still fresh.
+    if idle and survey_age is not None and 0 <= survey_age < 120:
         emit()
         raise SystemExit(0)
 
@@ -1082,6 +1103,7 @@ fi
 : >"${LOG}"
 # GitHub SHA already matches HEAD and origin/main. Skip caretaker host-ff.
 # Fresh idle stamps skip the GitHub SHA probe. Busy lock still probes.
+# Leftover-probe skips GitHub SHA when survey stamp is still fresh.
 # Probe failure or SHA mismatch still hosts caretaker host-ff.
 if host_ff_already_current "${ROOT}" "${MILL_LOCK_WAS_BUSY}" >>"${LOG}" 2>/dev/null; then
   :
