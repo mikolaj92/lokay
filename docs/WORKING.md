@@ -192,7 +192,9 @@ product. Green repository verification may be reused only for the identical
 LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
 the mill turning; event wake (`lokay-wake` on a self-hosted `lokay-mill`
 runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
-complete. Same serial mill (K=1), same lock — not a parallel fleet. Details:
+complete. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
+restarts immediately; idle 0 waits the 60s StartInterval. Same serial mill
+(K=1), same lock — not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 
 LaunchAgent or:

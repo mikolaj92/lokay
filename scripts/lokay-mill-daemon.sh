@@ -24,6 +24,7 @@ LOKAY_LAUNCHD_LABEL="${LOKAY_LAUNCHD_LABEL:-ai.mikolaj.lokay-mill}"
 LOKAY_LAUNCHD_START_INTERVAL=60
 LOKAY_LAUNCHD_PLIST="${LOKAY_LAUNCHD_PLIST:-${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist}"
 LOKAY_MILL_LOCK="${LOKAY_MILL_LOCK:-${LOKAY_HOME}/mill.lock}"
+LOKAY_KEEPALIVE_STAMP="${LOKAY_KEEPALIVE_STAMP:-${LOKAY_HOME}/launchd-keepalive.stamp}"
 
 _python() {
   if command -v python3 >/dev/null 2>&1; then
@@ -44,7 +45,7 @@ bootstrap_incident() {
 }
 
 write_host_plist_interval() {
-  # Plist is host-only. Write 60s; do not invent a LaunchAgent from the repo.
+  # Plist is host-only. Write 60s + crash KeepAlive; do not invent a job.
   local plist="$1"
   local want="$2"
   [[ -f "${plist}" ]] || return 0
@@ -54,9 +55,11 @@ import plistlib, sys
 path, want = sys.argv[1], int(sys.argv[2])
 with open(path, "rb") as handle:
     data = plistlib.load(handle)
-if data.get("StartInterval") == want:
+want_keep = {"SuccessfulExit": False}
+if data.get("StartInterval") == want and data.get("KeepAlive") == want_keep:
     raise SystemExit(0)
 data["StartInterval"] = want
+data["KeepAlive"] = want_keep
 with open(path, "wb") as handle:
     plistlib.dump(data, handle, fmt=plistlib.FMT_XML)
 PY
@@ -125,6 +128,32 @@ loaded_plist_path() {
   launchctl print "user/${uid}/${label}" 2>/dev/null | awk '/^[[:space:]]*path = / {print $3; exit}'
 }
 
+loaded_keepalive_crash_only() {
+  # 0 when the loaded job restarts on unsuccessful exit, not on idle 0.
+  local label="$1"
+  local uid text
+  uid="$(id -u)"
+  command -v launchctl >/dev/null 2>&1 || return 1
+  text="$(launchctl print "user/${uid}/${label}" 2>/dev/null || true)"
+  [[ -n "${text}" ]] || return 1
+  printf '%s' "${text}" | _python - <<'PY'
+import sys
+
+text = sys.stdin.read().lower()
+if "keep alive" not in text and "keepalive" not in text:
+    raise SystemExit(1)
+compact = "".join(text.split())
+if (
+    "successfulexit=>false" in compact
+    or "successfulexit=>0" in compact
+    or "successfulexit=false" in compact
+    or "successfulexit=0" in compact
+):
+    raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
 reload_launchagent() {
   local plist="$1"
   local label="$2"
@@ -144,17 +173,19 @@ caretaker_write_interval() {
 
 caretaker_reload_if_idle() {
   # Load the host plist only after idle. Never launchctl while mill.lock
-  # is held (lokay is still in a cycle).
+  # is held (lokay is still in a cycle). pytest HOME is not the host.
   local plist="${LOKAY_LAUNCHD_PLIST}"
   local label="${LOKAY_LAUNCHD_LABEL}"
   local want="${LOKAY_LAUNCHD_START_INTERVAL}"
   local loaded=""
   local loaded_path=""
   [[ -f "${plist}" ]] || return 0
+  [[ "${HOME}" == /Users/* ]] || return 0
+  [[ "${plist}" == "${HOME}/Library/LaunchAgents/${label}.plist" ]] || return 0
   command -v launchctl >/dev/null 2>&1 || return 0
   loaded="$(loaded_start_interval "${label}")"
   loaded_path="$(loaded_plist_path "${label}")"
-  if [[ "${loaded}" == "${want}" && -n "${loaded_path}" && -f "${loaded_path}" ]]; then
+  if [[ "${loaded}" == "${want}" && -n "${loaded_path}" && -f "${loaded_path}" ]] && loaded_keepalive_crash_only "${label}"; then
     return 0
   fi
   if mill_lock_busy; then
@@ -167,6 +198,9 @@ if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "${LOKAY_HOME}" || exit 70
   caretaker_write_interval
   caretaker_reload_if_idle
+  if ! mill_lock_busy; then
+    : > "${LOKAY_KEEPALIVE_STAMP}" || true
+  fi
   exit 0
 fi
 
@@ -644,5 +678,11 @@ if [[ -f "${LOKAY_HOME}/restart-required" ]]; then
   if ! mill_lock_busy; then
     reload_launchagent "${LOKAY_LAUNCHD_PLIST}" "${LOKAY_LAUNCHD_LABEL}" || true
   fi
+fi
+# Crash KeepAlive must load after this process exits. bootout here would
+# kill the live mill. HOME=/Users is the operator host; pytest HOME is not.
+# Stamp so a missed launchctl KeepAlive probe cannot RunAtLoad every tick.
+if ! mill_lock_busy   && [[ "${HOME}" == /Users/* ]]   && [[ "${LOKAY_LAUNCHD_PLIST}" == "${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist" ]]   && [[ -f "${LOKAY_LAUNCHD_PLIST}" ]]   && [[ ! -f "${LOKAY_KEEPALIVE_STAMP}" ]]   && ! loaded_keepalive_crash_only "${LOKAY_LAUNCHD_LABEL}"; then
+  ( sleep 2; exec /bin/bash "$0" --install ) >/dev/null 2>&1 &
 fi
 exit "${MILL_RC}"
