@@ -127,6 +127,18 @@ def _oldest(leftovers: list[tuple[Path, str]]) -> list[tuple[Path, str]]:
     return sorted(leftovers, key=modified)
 
 
+def _oldest_issued(
+    leftovers: list[tuple[Path, str]], *, branch_prefix: str
+) -> list[tuple[Path, str]]:
+    """Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues."""
+    issued = [
+        item
+        for item in leftovers
+        if issue_number_from_branch(item[1], branch_prefix=branch_prefix) is not None
+    ]
+    return _oldest(issued)
+
+
 def _live_keys(rows: list[dict[str, Any]]) -> set[tuple[str, int]]:
     keys: set[tuple[str, int]] = set()
     for row in rows:
@@ -498,7 +510,8 @@ def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) ->
     OSError cannot stall. Not-live skip does not reap. Hosted ticks still
     reap from factory_pass. Live i2pr / unreadable receipts keep. Fresh
     over-cap stamp still skips GitHub. No leftover_status and no
-    push --delete on this path.
+    push --delete on this path. Idle CLASSIFY_CAP skips no-issue leftovers
+    so Fala cannot starve mill issues.
     """
     if not live:
         return
@@ -528,7 +541,10 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
         leftovers = iter_worktrees(cfg, repo)
         if not leftovers:
             continue
-        candidates = set(_oldest(leftovers)[:CLASSIFY_CAP])
+        # Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
+        candidates = set(
+            _oldest_issued(leftovers, branch_prefix=cfg.branch_prefix)[:CLASSIFY_CAP]
+        )
         for path, branch in leftovers:
             if (path, branch) not in candidates:
                 continue

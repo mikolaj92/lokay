@@ -313,7 +313,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   lists. An empty probe refreshes the stamp and skips Fala; probe failure or
   remaining work hosts. Leftover closeout still runs after that skip via its
   own 300s TTL, mill stuck is still harvested, and CLOSED leftover mill
-  worktrees are still reaped. Missing stamp, occupied last-pass, or pytest
+  worktrees are still reaped. Idle CLASSIFY_CAP skips no-issue leftovers so
+  Fala cannot starve mill issues. Missing stamp, occupied last-pass, or pytest
   always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
   `main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
   `host_ff_already_current` and the GitHub SHA probe. Busy lock still
