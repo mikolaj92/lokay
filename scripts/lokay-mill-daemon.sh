@@ -1020,14 +1020,14 @@ fi
 bound_file "${LOG}" "${MILL_LOG_MAX}" || true
 bound_file "${LATEST}" "${MILL_LOG_MAX}" || true
 prune_mill_logs || true
-bound_launchd_stdio
-# Fresh idle skip already wrote health=idle. Do not spawn python glance.
+# Fresh idle skip already bounded launchd stdio. Do not spawn python glance.
 if [[ -n "${SKIP_REASON}" ]]; then
   printf '{"ok":true,"health":"idle","progress":0}\n'
 else
+  bound_launchd_stdio
   emit_launchd_glance || true
+  bound_launchd_stdio
 fi
-bound_launchd_stdio
 
 # Self-repair writes this flag when activate+preflight released the gate.
 if [[ -f "${LOKAY_HOME}/restart-required" ]]; then

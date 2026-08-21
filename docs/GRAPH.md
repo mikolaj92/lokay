@@ -42,8 +42,9 @@ Probe failure, remaining leftovers, occupied last-pass, digest mismatch,
 or host-ff update still starts the daemon. Fresh idle skip with a persisted
 digest skips `checkout_digest` and `package_matches`. An `already_current`
 host-ff envelope skips python `host_ff_updated`. Fresh idle skip writes the
-launchd glance in bash and skips python `emit_launchd_glance`. Hosted ticks
-still scrape the mill log. Probe skip, missing digest, host-ff update, or a
+launchd glance in bash and skips python `emit_launchd_glance` plus extra
+`bound_launchd_stdio`. Hosted ticks still scrape the mill log and bound
+launchd stdio around glance. Probe skip, missing digest, host-ff update, or a
 hosted daemon still checks the wheel.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's

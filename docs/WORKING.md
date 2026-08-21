@@ -327,8 +327,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   starts the daemon. Fresh idle skip with a persisted digest skips
   `checkout_digest` and `package_matches`. An `already_current` host-ff
   envelope skips python `host_ff_updated`. Fresh idle skip writes the
-  launchd glance in bash and skips python `emit_launchd_glance`. Hosted
-  ticks still scrape the mill log. Probe skip, missing digest, host-ff
+  launchd glance in bash and skips python `emit_launchd_glance` plus extra
+  `bound_launchd_stdio`. Hosted ticks still scrape the mill log and bound
+  launchd stdio around glance. Probe skip, missing digest, host-ff
   update, or a hosted daemon still checks the wheel.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
