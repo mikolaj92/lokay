@@ -40,6 +40,7 @@ def test_open_issue_with_merged_fixes_pr_removes_ready_labels(monkeypatch):
 
     assert out["delivered"] is True
     assert out["labels_removed"] is True
+    assert out["pr"] == 41
     assert parked == [["--repo", "owner/repo", "--issue", "7"]]
 
 
@@ -77,6 +78,36 @@ def test_existing_merged_delivery_is_closed_out_before_graph_can_start(monkeypat
 
 
 
+def test_leftover_closed_ready_parks_without_searching_prs(monkeypatch):
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    monkeypatch.setattr(closeout, "closed_ready_numbers", lambda *_a, **_k: [429])
+
+    def boom(*_a, **_k):
+        raise AssertionError("leftover closeout must not paginate mill PRs")
+
+    monkeypatch.setattr(closeout, "find_pr_fixing_issue", boom)
+    parked: list[list[str]] = []
+
+    def run_proc(_main, argv):
+        parked.append(argv)
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(closeout, "run_proc", run_proc)
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["labels_removed"] is True
+    assert out["closed_out"] == [{"repo": "mikolaj92/lokay", "issue": 429}]
+    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "429"]]
+
+
 def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeypatch):
     monkeypatch.setattr(
         closeout,
@@ -102,11 +133,11 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
     monkeypatch.setattr(closeout, "closed_ready_numbers", fake_closed_ready)
     calls: list[dict[str, object]] = []
 
-    def fake_closeout(**kwargs):
-        calls.append(kwargs)
-        return {"ok": True, "delivered": True, "labels_removed": True, "pr": 41}
+    def fake_park(*, repo, issue, allowed):
+        calls.append({"repo": repo, "issue": issue, "allowed": allowed})
+        return {"ok": True, "removed": True}
 
-    monkeypatch.setattr(closeout, "run_closeout", fake_closeout)
+    monkeypatch.setattr(closeout, "_park_ready", fake_park)
     out = closeout.run_closeout_leftover(config_path=None, live=True)
     assert out["labels_removed"] is True
     assert out["issue_to_pr_started"] == 0
@@ -115,7 +146,7 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
         ("mikolaj92/lokay", "ai:ready"),
     ]
     assert calls == [
-        {"repo": "mikolaj92/lokay", "issue": 7, "config_path": None, "live": True}
+        {"repo": "mikolaj92/lokay", "issue": 7, "allowed": True}
     ]
 
 
