@@ -248,6 +248,117 @@ def test_harvest_without_repos_keeps_hermetic_rows(tmp_path: Path):
     assert set(stuck["issues"]) == {"a/one#2", "a/two#2"}
 
 
+def test_harvest_drops_out_of_scope_cycle_start_files(tmp_path: Path, monkeypatch):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    start = cycle / "mikolaj92__lokay__178.json"
+    start.write_text(
+        json.dumps(
+            {
+                "repo": "mikolaj92/lokay",
+                "issue": 178,
+                "started_ts": "2026-08-19T10:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    foreign = cycle / "mikolaj92__Temida__4094.json"
+    foreign.write_text(
+        json.dumps(
+            {
+                "repo": "mikolaj92/Temida",
+                "issue": 4094,
+                "started_ts": "2026-08-19T10:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    live = cycle / "mikolaj92__lokay-9.json"
+    _receipt(live, repo="mikolaj92/lokay", issue=9, pid=12)
+    monkeypatch.setattr(
+        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+    )
+    harvest_fail_closed_children(
+        {"issues": {}},
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: True,
+        repos=["mikolaj92/lokay"],
+    )
+    assert start.exists()
+    assert not foreign.exists()
+    assert live.exists()
+
+
+def test_harvest_drops_github_closed_mill_cycle_start_files(
+    tmp_path: Path, monkeypatch
+):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    closed = cycle / "mikolaj92__lokay__528.json"
+    closed.write_text(
+        json.dumps(
+            {
+                "repo": "mikolaj92/lokay",
+                "issue": 528,
+                "started_ts": "2026-08-19T10:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    open_start = cycle / "mikolaj92__lokay__178.json"
+    open_start.write_text(
+        json.dumps(
+            {
+                "repo": "mikolaj92/lokay",
+                "issue": 178,
+                "started_ts": "2026-08-19T10:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: {528}
+    )
+    harvest_fail_closed_children(
+        {"issues": {}},
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        repos=["mikolaj92/lokay"],
+    )
+    assert not closed.exists()
+    assert open_start.exists()
+
+
+def test_harvest_without_repos_keeps_cycle_start_files(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    start = cycle / "a__one__2.json"
+    start.write_text(
+        json.dumps({"repo": "a/one", "issue": 2, "started_ts": "2026-08-19T10:00:00Z"})
+        + "\n",
+        encoding="utf-8",
+    )
+    harvest_fail_closed_children(
+        {"issues": {}},
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert start.exists()
+
+
 def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
     """ok=True and no PR is a stop/race, not FAIL_CLOSED no_pr."""
     cycle = tmp_path / "cycle"
