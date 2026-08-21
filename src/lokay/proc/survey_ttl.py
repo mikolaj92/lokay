@@ -2,17 +2,37 @@
 
 Idle ticks listed open PRs, inbox, and work:ready every pass (~2s) even when
 all three were empty. After a complete empty mill survey, stamp beside mill
-state and skip those GitHub lists for 120s. Missing stamp always probes.
-Skip does not refresh the stamp, matching leftover closeout / over_cap TTL.
-A non-empty survey or a survey_error clears the stamp.
+state and skip those GitHub lists for 120s. Missing stamp always hosts Fala.
+Skip while the stamp is fresh does not refresh it, matching leftover closeout
+/ over_cap TTL. A non-empty survey or a survey_error clears the stamp.
+
+After the stamp expires, a live idle mill cheap-probes those three GitHub
+lists. An empty probe refreshes the stamp and skips Fala. Probe failure or
+any open PR / inbox / ready hosts.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import subprocess
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+from lokay.gh_rate import SURVEY_LIST_CAP
+from lokay.mill_scope import mill_repo
+from lokay.stage_ledger import LABEL_WORK_READY, LEDGER_ACTIVE_LABELS
+from lokay.triage import PARK_LABELS
+
+_CSI = re.compile(r"\[[0-9;]*[mK]")
+_DECIDED_LABELS = (
+    frozenset({"ai:ready", "ai:blocked", "ai:needs-feedback", LABEL_WORK_READY})
+    | frozenset(PARK_LABELS)
+    | LEDGER_ACTIVE_LABELS
+)
+_BRANCH_PREFIX = "ai/fix/"
 
 SURVEY_TTL_SECONDS = 120
 SURVEY_STAMP_NAME = "factory-survey.stamp"
@@ -96,11 +116,14 @@ def skip_idle_factory_pass(
     stamp: Path | None = None,
     receipt: dict[str, Any] | None = None,
     now: float | None = None,
+    probe: Callable[..., bool | None] | None = None,
 ) -> dict[str, Any] | None:
-    """Skip hosting factory_pass while a live idle mill has a fresh empty survey.
+    """Skip hosting factory_pass while a live idle mill has an empty survey.
 
-    Missing / unreadable stamp or last-pass always hosts. Skip does not
-    refresh the stamp. Pytest must not skip the operator mill.
+    Fresh stamp: skip without GitHub and without refreshing the stamp.
+    Expired stamp: cheap-probe GitHub. Empty probe refreshes the stamp and
+    skips. Probe failure or remaining work hosts. Missing stamp always hosts.
+    Pytest must not skip the operator mill.
     """
     if not live:
         return None
@@ -108,8 +131,6 @@ def skip_idle_factory_pass(
         return None
     if stamp is None:
         stamp = mill_survey_stamp_path()
-    if not survey_recently_empty(stamp, now=now):
-        return None
     if receipt is None:
         from lokay.pass_receipt import read_pass_receipt
 
@@ -117,7 +138,7 @@ def skip_idle_factory_pass(
     if not last_pass_is_empty_idle(receipt):
         return None
     remaining = receipt.get("remaining") if isinstance(receipt, dict) else {}
-    return {
+    skipped = {
         "ok": True,
         "health": "idle",
         "idle": True,
@@ -127,3 +148,154 @@ def skip_idle_factory_pass(
         "skipped": True,
         "reason": "recent_empty_survey",
     }
+    if survey_recently_empty(stamp, now=now):
+        return skipped
+    try:
+        stamp.stat()
+    except OSError:
+        return None
+    checker = probe or mill_survey_still_empty
+    empty = checker()
+    if empty is not True:
+        return None
+    touch_survey_stamp(stamp)
+    skipped["reason"] = "recent_empty_survey_probe"
+    return skipped
+
+
+def _strip_csi(text: str) -> str:
+    return _CSI.sub("", text or "")
+
+
+def _gh_json_list(
+    args: list[str],
+    *,
+    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> list[Any] | None:
+    """One ``gh`` list. None means probe failed (nonzero / unreadable JSON)."""
+    env = os.environ.copy()
+    env["GH_NO_COLOR"] = "1"
+    env["NO_COLOR"] = "1"
+    runner = run or subprocess.run
+    try:
+        result = runner(
+            ["gh", *args],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        rows = json.loads(_strip_csi(result.stdout or "[]"))
+    except ValueError:
+        return None
+    if not isinstance(rows, list):
+        return None
+    if len(rows) >= SURVEY_LIST_CAP:
+        return None
+    return rows
+
+
+def _label_names(raw: Any) -> set[str]:
+    names: set[str] = set()
+    if not isinstance(raw, list):
+        return names
+    for item in raw:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "")
+        else:
+            name = str(item or "")
+        if name:
+            names.add(name)
+    return names
+
+
+def mill_survey_still_empty(
+    *,
+    repo: str | None = None,
+    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> bool | None:
+    """Cheap GitHub probe of mill PR / inbox / ready lists.
+
+    True: all three empty. False: work remains. None: probe failed.
+    """
+    name = str(repo or mill_repo() or "").strip()
+    if not name:
+        return None
+    prs = _gh_json_list(
+        [
+            "pr",
+            "list",
+            "--repo",
+            name,
+            "--state",
+            "open",
+            "--json",
+            "headRefName",
+            "--limit",
+            str(SURVEY_LIST_CAP),
+        ],
+        run=run,
+    )
+    if prs is None:
+        return None
+    if any(
+        str(row.get("headRefName") or "").startswith(_BRANCH_PREFIX)
+        for row in prs
+        if isinstance(row, dict)
+    ):
+        return False
+    ready = _gh_json_list(
+        [
+            "issue",
+            "list",
+            "--repo",
+            name,
+            "--state",
+            "open",
+            "--label",
+            LABEL_WORK_READY,
+            "--json",
+            "number,state",
+            "--limit",
+            str(SURVEY_LIST_CAP),
+        ],
+        run=run,
+    )
+    if ready is None:
+        return None
+    if any(
+        isinstance(row, dict)
+        and str(row.get("state") or "").upper() != "CLOSED"
+        and int(row.get("number") or 0) > 0
+        for row in ready
+    ):
+        return False
+    inbox = _gh_json_list(
+        [
+            "issue",
+            "list",
+            "--repo",
+            name,
+            "--state",
+            "open",
+            "--json",
+            "labels",
+            "--limit",
+            str(SURVEY_LIST_CAP),
+        ],
+        run=run,
+    )
+    if inbox is None:
+        return None
+    for row in inbox:
+        if not isinstance(row, dict):
+            continue
+        if not (_label_names(row.get("labels")) & _DECIDED_LABELS):
+            return False
+    return True

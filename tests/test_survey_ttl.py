@@ -220,6 +220,89 @@ def test_skip_idle_factory_pass_hosts_when_ready(tmp_path: Path) -> None:
     )
 
 
+def test_expired_stamp_empty_probe_skips_and_refreshes(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - survey_ttl.SURVEY_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    out = survey_ttl.skip_idle_factory_pass(
+        live=True,
+        stamp=stamp,
+        receipt=_idle_receipt(),
+        probe=lambda: True,
+    )
+    assert out is not None
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty_survey_probe"
+    assert stamp.stat().st_mtime >= old + survey_ttl.SURVEY_TTL_SECONDS
+
+
+def test_expired_stamp_probe_failure_hosts(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - survey_ttl.SURVEY_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    assert (
+        survey_ttl.skip_idle_factory_pass(
+            live=True,
+            stamp=stamp,
+            receipt=_idle_receipt(),
+            probe=lambda: None,
+        )
+        is None
+    )
+    assert stamp.stat().st_mtime == old
+
+
+def test_expired_stamp_remaining_work_hosts(tmp_path: Path) -> None:
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - survey_ttl.SURVEY_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    assert (
+        survey_ttl.skip_idle_factory_pass(
+            live=True,
+            stamp=stamp,
+            receipt=_idle_receipt(),
+            probe=lambda: False,
+        )
+        is None
+    )
+    assert stamp.stat().st_mtime == old
+
+
+def _gh_ok(stdout: str):
+    return type("R", (), {"returncode": 0, "stdout": stdout, "stderr": ""})()
+
+
+def test_mill_survey_probe_empty_is_true() -> None:
+    calls: list[str] = []
+
+    def fake_run(argv, **_k):
+        calls.append(" ".join(argv))
+        return _gh_ok("[]")
+
+    assert survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
+    assert len(calls) == 3
+
+
+def test_mill_survey_probe_ready_is_false() -> None:
+    def fake_run(argv, **_k):
+        joined = " ".join(argv)
+        if "--label" in argv:
+            return _gh_ok('[{"number": 12, "state": "OPEN"}]')
+        return _gh_ok("[]")
+
+    assert survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is False
+
+
+def test_mill_survey_probe_failure_is_none() -> None:
+    def fake_run(argv, **_k):
+        return type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
+
+    assert survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is None
+
+
 def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
     from lokay.compose import daemon_cycle as daemon_mod
 
