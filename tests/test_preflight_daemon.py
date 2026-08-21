@@ -41,7 +41,9 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "recent_empty_survey_probe" in script
     assert "recent_empty_leftover_probe" in script
     assert "Mill-probe GitHub lists run together. Probe failure still hosts." in script
+    assert "Leftover-probe GitHub lists run together. Probe failure still hosts." in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
+    assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
     assert "host_updated" in script
     assert "emit_launchd_glance" in script
@@ -656,6 +658,47 @@ def test_idle_expired_leftover_empty_probe_skips_lokay_daemon(tmp_path):
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_leftover_probe" in body
     assert leftover.stat().st_mtime > before
+
+
+def test_idle_expired_leftover_probe_lists_run_together(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    survey = lokay / "factory-survey.stamp"
+    leftover = lokay / "leftover-closeout.stamp"
+    survey.write_text("1", encoding="utf-8")
+    _expire(leftover, 400)
+    starts = tmp_path / "gh-starts"
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text(
+        "#!/bin/sh\n"
+        f"starts='{starts}'\n"
+        'case " $* " in\n'
+        '  *" issue list "*)\n'
+        "    python3 -c \"import time; print(time.time())\" >> \"$starts\"\n"
+        "    sleep 0.2\n"
+        "    printf '%s\\n' '[]'\n"
+        "    ;;\n"
+        "  *) printf '%s\\n' '[]' ;;\n"
+        "esac\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_leftover_probe" in body
+    stamps = [float(line) for line in starts.read_text(encoding="utf-8").split() if line.strip()]
+    assert len(stamps) == 2
+    assert max(stamps) - min(stamps) < 0.15
 
 
 def test_idle_expired_leftover_remaining_hosts(tmp_path):

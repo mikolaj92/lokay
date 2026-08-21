@@ -356,14 +356,20 @@ def closed_ready(rows):
 repo = os.environ.get("LOKAY_MILL_REPO", "").strip() or "mikolaj92/lokay"
 leftover_probed = False
 if leftover_age >= 300:
-    work_ready = gh_list(
-        ["issue", "list", "--repo", repo, "--state", "closed", "--label", "work:ready", "--json", "number,state", "--limit", "100"],
-        cap=100,
-    )
-    ai_ready = gh_list(
-        ["issue", "list", "--repo", repo, "--state", "closed", "--label", "ai:ready", "--json", "number,state", "--limit", "100"],
-        cap=100,
-    )
+    # Leftover-probe GitHub lists run together. Probe failure still hosts.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        fut_work = pool.submit(
+            gh_list,
+            ["issue", "list", "--repo", repo, "--state", "closed", "--label", "work:ready", "--json", "number,state", "--limit", "100"],
+            100,
+        )
+        fut_ai = pool.submit(
+            gh_list,
+            ["issue", "list", "--repo", repo, "--state", "closed", "--label", "ai:ready", "--json", "number,state", "--limit", "100"],
+            100,
+        )
+        work_ready = fut_work.result()
+        ai_ready = fut_ai.result()
     leftover_work = closed_ready(work_ready)
     leftover_ai = closed_ready(ai_ready)
     if leftover_work is None or leftover_ai is None or leftover_work or leftover_ai:
