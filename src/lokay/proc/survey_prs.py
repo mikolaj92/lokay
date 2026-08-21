@@ -12,6 +12,11 @@ from lokay.proc import list_prs as p_list_prs
 from lokay.proc._common import add_config_live
 from lokay.passkit.hot import survey_scope
 from lokay.mill_scope import mill_repo, scoped_repos
+from lokay.proc.survey_ttl import (
+    clear_survey_stamp,
+    survey_recently_empty,
+    survey_stamp_path,
+)
 
 
 MINI_MILL_REPO = mill_repo()
@@ -34,6 +39,15 @@ def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dic
     repos = list(begin.get("repos") or [])
     _, skipped_repos = scoped_repos(repos, mill=MINI_MILL_REPO)
     skipped = set(skipped_repos)
+    stamp = survey_stamp_path(begin)
+    skip = survey_recently_empty(stamp)
+    if skip:
+        actions.append(
+            {
+                "step": "skip_pr_survey_recent_empty",
+                "reason": "recent_empty",
+            }
+        )
     for repo_name in repos:
         if repo_name in skipped:
             actions.append(
@@ -47,6 +61,9 @@ def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dic
             continue
         if scoped and repo_name not in scope:
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "prs"})
+            prs_by_repo[repo_name] = []
+            continue
+        if skip:
             prs_by_repo[repo_name] = []
             continue
         prs = run_proc(p_list_prs.main, [*cfg_flag, *live_flag, "--repo", repo_name])
@@ -73,13 +90,19 @@ def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dic
             "survey_errors": survey_errors,
         }
     )
+    if not skip and (remaining_prs or survey_errors or pr_survey_failed):
+        clear_survey_stamp(stamp)
     save_begin_working(pass_dir, begin, working)
-    return ok(
-        pass_dir=pass_dir,
-        remaining_prs=remaining_prs,
-        actionable_prs=actionable_prs,
-        survey_errors=survey_errors,
-    )
+    out = {
+        "pass_dir": pass_dir,
+        "remaining_prs": remaining_prs,
+        "actionable_prs": actionable_prs,
+        "survey_errors": survey_errors,
+    }
+    if skip:
+        out["skipped"] = True
+        out["reason"] = "recent_empty"
+    return ok(**out)
 
 
 def main(argv: list[str] | None = None) -> int:

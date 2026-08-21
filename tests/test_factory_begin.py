@@ -40,6 +40,7 @@ executor:
     assert begin["repos"] == ["mikolaj92/lokay"]
     assert begin["survey_repos"] == ["mikolaj92/lokay"]
     assert begin["planned"][0]["repos"] == ["mikolaj92/lokay"]
+    assert begin["state_path"] == str(tmp_path / "state.jsonl")
 
 
 def test_mini_begin_harvests_only_lokay_stuck_rows(tmp_path: Path, monkeypatch) -> None:

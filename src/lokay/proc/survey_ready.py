@@ -19,6 +19,12 @@ from lokay.proc._common import add_config_live
 from lokay.passkit.hot import survey_scope
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 from lokay.mill_scope import mill_repo, scoped_repos
+from lokay.proc.survey_ttl import (
+    clear_survey_stamp,
+    survey_recently_empty,
+    survey_stamp_path,
+    touch_survey_stamp,
+)
 
 MINI_MILL_REPO = mill_repo()
 
@@ -43,6 +49,15 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
     repos = list(begin.get("repos") or [])
     _, skipped_repos = scoped_repos(repos, mill=MINI_MILL_REPO)
     skipped = set(skipped_repos)
+    stamp = survey_stamp_path(begin)
+    skip = survey_recently_empty(stamp)
+    if skip:
+        actions.append(
+            {
+                "step": "skip_ready_survey_recent_empty",
+                "reason": "recent_empty",
+            }
+        )
     for repo_name in repos:
         if repo_name in skipped:
             actions.append(
@@ -56,6 +71,9 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             continue
         if scoped and repo_name not in scope:
             actions.append({"step": "skip_cold_repo", "repo": repo_name, "survey": "ready"})
+            ready_by_repo[repo_name] = []
+            continue
+        if skip:
             ready_by_repo[repo_name] = []
             continue
         listed = run_proc(
@@ -192,12 +210,29 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             "stuck": stuck,
         }
     )
+    remaining_prs = int(working.get("remaining_prs") or 0)
+    remaining_inbox = int(working.get("remaining_inbox") or 0)
+    if not skip:
+        if (
+            remaining_ready
+            or remaining_prs
+            or remaining_inbox
+            or survey_errors
+            or ready_survey_failed
+        ):
+            clear_survey_stamp(stamp)
+        else:
+            touch_survey_stamp(stamp)
     save_begin_working(pass_dir, begin, working)
-    return ok(
-        pass_dir=pass_dir,
-        remaining_ready=remaining_ready,
-        survey_errors=survey_errors,
-    )
+    out = {
+        "pass_dir": pass_dir,
+        "remaining_ready": remaining_ready,
+        "survey_errors": survey_errors,
+    }
+    if skip:
+        out["skipped"] = True
+        out["reason"] = "recent_empty"
+    return ok(**out)
 
 
 def main(argv: list[str] | None = None) -> int:
