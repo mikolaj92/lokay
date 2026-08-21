@@ -73,13 +73,13 @@ host_ff
 | Atom | One job |
 | --- | --- |
 | `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / host catalog skip-worktree would overwrite. Product `config.yaml` follows origin/main. Launchd caretaker skips the mill pass when `mill.lock` is held. After ff moves HEAD, mill-daemon exits 0 so the next tick loads the new package; live i2pr is not killed |
-| `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token |
+| `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token. Healthy preflight closes leftover `<!-- lokay-preflight:… -->` tickets |
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error) |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error) |
 | `survey_ready` | list implementable `work:ready` (intake/triage/stage award it with `ai:ready`); skip those covered by open AI PRs. Missing `state` is still OPEN ready; only explicit CLOSED parks |
 | `ready_hygiene` | remove leftover `ai:ready` from issues without `work:ready`. READY awards both labels. |
 | `plan_pass` | triage targets + closeout set (per-repo PR-first) |
-| `dispatch_triage` | run planned `issue_triage` children. Preflight incident tickets (`<!-- lokay-preflight:… -->`) are `ai:blocked`, not `work:ready`. |
+| `dispatch_triage` | run planned `issue_triage` children. Preflight incident tickets (`<!-- lokay-preflight:… -->`) are `ai:blocked`, not `work:ready`. A later healthy preflight closes those leftover tickets |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
 | `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels) |
