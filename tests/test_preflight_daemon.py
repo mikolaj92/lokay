@@ -43,6 +43,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Mill-probe GitHub lists run together. Probe failure still hosts." in script
     assert "Leftover-probe GitHub lists run together. Probe failure still hosts." in script
     assert "Leftover-probe still hosts lokay-daemon so idle reap continues." in script
+    assert "Leftover-probe still hosts lokay-daemon even when mill-probe would also run." in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
@@ -753,6 +754,33 @@ def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_leftover_probe" in body
     assert leftover.stat().st_mtime > before
+
+
+def test_idle_expired_leftover_and_survey_probe_still_hosts_lokay_daemon(tmp_path):
+    """Leftover-probe still hosts lokay-daemon even when mill-probe would also run."""
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    survey = lokay / "factory-survey.stamp"
+    leftover = lokay / "leftover-closeout.stamp"
+    _expire(survey, 200)
+    _expire(leftover, 400)
+    leftover_before = leftover.stat().st_mtime
+    survey_before = survey.stat().st_mtime
+    _write_empty_gh(tmp_path)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_leftover_probe" in body
+    assert leftover.stat().st_mtime > leftover_before
+    assert survey.stat().st_mtime > survey_before
 
 
 def test_idle_expired_leftover_probe_lists_run_together(tmp_path):

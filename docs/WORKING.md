@@ -331,8 +331,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   mill-daemon skips python `idle_skip_daemon` on that path. After
   leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
   `work:ready` / `ai:ready` mill issues refreshes that stamp. Leftover-probe
-  still hosts `lokay-daemon` so idle reap continues. mill-daemon runs those
-  two leftover lists together. After survey-stamp expiry, a cheap empty GitHub
+  still hosts `lokay-daemon` so idle reap continues. Leftover-probe still
+  hosts `lokay-daemon` even when mill-probe would also run. mill-daemon runs
+  those two leftover lists together. After survey-stamp expiry, a cheap empty GitHub
   probe of mill PR / inbox / ready lists refreshes the survey stamp.
   mill-daemon runs those three lists together. Probe failure still hosts.
   Remaining leftovers, occupied last-pass, digest mismatch, or host-ff update still
