@@ -309,6 +309,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   lists. An empty probe refreshes the stamp and skips Fala; probe failure or
   remaining work hosts. Leftover closeout still runs after that skip via its
   own 300s TTL. Missing stamp, occupied last-pass, or pytest always hosts.
+  mill-daemon still runs caretaker `lokay-host-ff`. When last-pass is idle and
+  both the empty-survey stamp (120s) and leftover-closeout stamp (300s) are
+  fresh, it skips `lokay-daemon` (preflight + Fala) until a stamp expires.
+  Digest mismatch or host-ff update still starts the daemon.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.

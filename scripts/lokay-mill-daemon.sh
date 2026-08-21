@@ -110,6 +110,57 @@ raise SystemExit(1)
 PY
 }
 
+idle_skip_daemon() {
+  # 0 = last-pass idle and survey/leftover stamps are fresh. Missing stamp,
+  # occupied last-pass, or remaining work always hosts lokay-daemon.
+  _python - \
+    "${LOKAY_HOME}/last-pass.json" \
+    "${LOKAY_HOME}/factory-survey.stamp" \
+    "${LOKAY_HOME}/leftover-closeout.stamp" <<'PY'
+import json, sys, time
+from pathlib import Path
+
+receipt_path, survey_stamp, leftover_stamp = sys.argv[1:4]
+now = time.time()
+
+def fresh(path: str, ttl: int) -> bool:
+    try:
+        age = now - Path(path).stat().st_mtime
+    except OSError:
+        return False
+    return 0 <= age < ttl
+
+try:
+    receipt = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(1)
+if not isinstance(receipt, dict):
+    raise SystemExit(1)
+if receipt.get("health") != "idle" and not receipt.get("idle"):
+    raise SystemExit(1)
+remaining = receipt.get("remaining")
+if not isinstance(remaining, dict):
+    raise SystemExit(1)
+work = (
+    int(remaining.get("inbox") or 0)
+    + int(remaining.get("ready") or 0)
+    + int(remaining.get("open_ai_prs") or 0)
+    + int(remaining.get("issue_to_pr_started") or 0)
+    + int(remaining.get("survey_errors") or 0)
+)
+if work:
+    raise SystemExit(1)
+by_repo = remaining.get("by_repo") or receipt.get("by_repo") or []
+if isinstance(by_repo, list) and any(
+    isinstance(row, dict) and bool(row.get("occupied")) for row in by_repo
+):
+    raise SystemExit(1)
+if not fresh(survey_stamp, 120) or not fresh(leftover_stamp, 300):
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
+
 loaded_start_interval() {
   local label="$1"
   local uid
@@ -652,14 +703,22 @@ fi
 
 # Transcript stays in mill-*.log. Do not tee the Fala envelope into launchd stdout.
 # Empty array + set -u is fatal on macOS bash 3.2, so branch the argv.
-set +e
-if [[ ${#UV_REINSTALL_ARGS[@]} -gt 0 ]]; then
-  uv run "${UV_REINSTALL_ARGS[@]}" lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
+# Fresh empty-survey + leftover stamps and idle last-pass already proved the
+# mill is empty. Skip lokay-daemon (preflight + Fala) until a stamp expires.
+# Missing stamp, remaining work, digest drift, or host-ff update still hosts.
+if [[ ${#UV_REINSTALL_ARGS[@]} -eq 0 ]] && idle_skip_daemon; then
+  printf '%s\n' '{"ok":true,"health":"idle","idle":true,"skipped":true,"reason":"recent_empty_survey","engine":"fala","path_id":"daemon_cycle","leftover_closeout":{"ok":true,"skipped":true,"reason":"recent_empty"}}' >>"${LOG}"
+  MILL_RC=0
 else
-  uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
+  set +e
+  if [[ ${#UV_REINSTALL_ARGS[@]} -gt 0 ]]; then
+    uv run "${UV_REINSTALL_ARGS[@]}" lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
+  else
+    uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
+  fi
+  MILL_RC=$?
+  set -e
 fi
-MILL_RC=$?
-set -e
 cp "${LOG}" "${LATEST}" 2>/dev/null || true
 # Persist digest only after lokay-daemon emitted an envelope. host-ff writes
 # health=current first; a failed uv reinstall must retry next tick.
