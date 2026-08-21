@@ -36,6 +36,9 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
     assert "lock_busy" in script
     assert "mill_lock_busy" in script
+    assert "loaded_keepalive_crash_only" in script
+    assert '{"SuccessfulExit": False}' in script
+    assert '[[ "${HOME}" == /Users/* ]]' in script
 
 
 def test_daemon_handles_missing_home_and_bounds_bootstrap_outbox():
@@ -239,6 +242,61 @@ def test_launchd_runs_host_ff_but_not_daemon_when_mill_lock_busy(tmp_path):
     logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
     body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
     assert "lock_busy" in body
+
+
+def test_install_writes_crash_keepalive_on_existing_plist(tmp_path):
+    import plistlib
+
+    plist = tmp_path / "probe.plist"
+    plistlib.dump(
+        {"Label": "ai.mikolaj.lokay-mill-test-keepalive", "StartInterval": 600},
+        plist.open("wb"),
+    )
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": "/usr/bin:/bin",
+        "LOKAY_LAUNCHD_PLIST": str(plist),
+        "LOKAY_LAUNCHD_LABEL": "ai.mikolaj.lokay-mill-test-keepalive",
+    }
+    completed = subprocess.run(
+        ["/bin/bash", str(_script()), "--install"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    data = plistlib.load(plist.open("rb"))
+    assert data["StartInterval"] == 60
+    assert data["KeepAlive"] == {"SuccessfulExit": False}
+    stamp = tmp_path / ".lokay" / "launchd-keepalive.stamp"
+    assert stamp.exists()
+
+
+def test_install_does_not_invent_a_missing_plist(tmp_path):
+    plist = tmp_path / "missing.plist"
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": "/usr/bin:/bin",
+        "LOKAY_LAUNCHD_PLIST": str(plist),
+        "LOKAY_LAUNCHD_LABEL": "ai.mikolaj.lokay-mill-test-keepalive-missing",
+    }
+    completed = subprocess.run(
+        ["/bin/bash", str(_script()), "--install"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert not plist.exists()
+
+
+def test_pytest_home_does_not_spawn_delayed_install(tmp_path):
+    completed = _run_daemon(tmp_path)
+    assert completed.returncode == 0, completed.stderr
+    stamp = tmp_path / ".lokay" / "launchd-keepalive.stamp"
+    assert not stamp.exists()
 
 
 def test_second_tick_skips_uv_reinstall_when_digest_matches(tmp_path):
