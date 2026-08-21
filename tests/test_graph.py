@@ -138,6 +138,7 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
     assert "PYTHONPATH" in inherited
     assert "LOKAY_PROCESS_HEAD" in inherited
+    assert "LOKAY_HOST_FF_FETCHED" in inherited
 
 
 def test_subprocess_atoms_pin_project_cwd():
