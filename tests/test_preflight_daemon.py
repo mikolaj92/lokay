@@ -32,6 +32,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Fresh idle skip with a persisted digest skips checkout_digest" in script
     assert '"already_current"[[:space:]]*:[[:space:]]*true' in script
     assert "already_current envelope already proved HEAD did not move" in script
+    assert "Fresh idle skip already wrote health=idle" in script
+    assert '"health":"idle","progress":0' in script
     assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
     assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
     assert "recent_empty_survey" in script
@@ -394,6 +396,9 @@ def test_idle_stamps_skip_lokay_daemon_after_digest(tmp_path):
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_survey" in body
+    glance = json.loads(second.stdout.strip().splitlines()[-1])
+    assert glance["health"] == "idle"
+    assert glance["progress"] == 0
 
 
 def test_idle_stamps_skip_github_sha_probe(tmp_path):
