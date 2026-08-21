@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import time
 from types import SimpleNamespace
 
 import lokay.compose.issue_to_pr as issue_to_pr
@@ -106,6 +108,101 @@ def test_leftover_closed_ready_parks_without_searching_prs(monkeypatch):
     assert out["labels_removed"] is True
     assert out["closed_out"] == [{"repo": "mikolaj92/lokay", "issue": 429}]
     assert parked == [["--repo", "mikolaj92/lokay", "--issue", "429"]]
+
+
+def test_leftover_skips_github_when_recent_empty_stamp(monkeypatch, tmp_path):
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+
+    def boom(*_a, **_k):
+        raise AssertionError("recent empty leftover must not list GitHub")
+
+    monkeypatch.setattr(closeout, "closed_ready_numbers", boom)
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty"
+    assert out["labels_removed"] is False
+    assert out["closed_out"] == []
+
+
+def test_leftover_probes_when_empty_stamp_expired(monkeypatch, tmp_path):
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - closeout.LEFTOVER_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(closeout, "closed_ready_numbers", lambda *_a, **_k: [])
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out.get("skipped") is not True
+    assert out["labels_removed"] is False
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime >= old + closeout.LEFTOVER_TTL_SECONDS
+
+
+def test_leftover_empty_probe_writes_stamp(monkeypatch, tmp_path):
+    stamp = tmp_path / "leftover-closeout.stamp"
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(closeout, "closed_ready_numbers", lambda *_a, **_k: [])
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["labels_removed"] is False
+    assert stamp.is_file()
+
+
+def test_leftover_park_clears_empty_stamp(monkeypatch, tmp_path):
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - closeout.LEFTOVER_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(closeout, "closed_ready_numbers", lambda *_a, **_k: [429])
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    monkeypatch.setattr(
+        closeout, "run_proc", lambda *_a, **_k: {"ok": True, "removed": True}
+    )
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["labels_removed"] is True
+    assert out["closed_out"] == [{"repo": "mikolaj92/lokay", "issue": 429}]
+    assert not stamp.exists()
 
 
 def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeypatch):

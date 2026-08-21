@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
+from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, ok
@@ -15,6 +17,8 @@ from lokay.runner import gh_spec
 
 WORK_READY_LABEL = "work:ready"
 MINI_MILL_REPO = "mikolaj92/lokay"
+LEFTOVER_TTL_SECONDS = 300
+LEFTOVER_STAMP_NAME = "leftover-closeout.stamp"
 
 
 def _park_ready(
@@ -45,6 +49,43 @@ def run_closeout(
         labels_removed=bool(parked.get("ok") and parked.get("removed")),
         parked=parked,
     )
+
+
+def leftover_stamp_path(cfg: Any) -> Path | None:
+    """Stamp lives beside mill state. Missing path means always probe."""
+    path = getattr(cfg, "state_path", None)
+    if not path:
+        return None
+    return Path(path).expanduser().parent / LEFTOVER_STAMP_NAME
+
+
+def leftover_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
+    if stamp is None:
+        return False
+    try:
+        age = (now if now is not None else time.time()) - stamp.stat().st_mtime
+    except OSError:
+        return False
+    return 0 <= age < LEFTOVER_TTL_SECONDS
+
+
+def _touch_leftover_stamp(stamp: Path | None) -> None:
+    if stamp is None:
+        return
+    try:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(int(time.time())), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _clear_leftover_stamp(stamp: Path | None) -> None:
+    if stamp is None:
+        return
+    try:
+        stamp.unlink()
+    except OSError:
+        pass
 
 
 def closed_ready_numbers(
@@ -86,6 +127,16 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     """
     cfg = load_cfg(argparse.Namespace(config=config_path))
     allowed = mutations_allowed(live_flag=live, cfg=cfg)
+    stamp = leftover_stamp_path(cfg)
+    if leftover_recently_empty(stamp):
+        return ok(
+            leftover_closed=0,
+            labels_removed=False,
+            issue_to_pr_started=0,
+            closed_out=[],
+            skipped=True,
+            reason="recent_empty",
+        )
     issue_runner = runner(cfg)
     labels = [WORK_READY_LABEL]
     ready = str(getattr(cfg, "ready_label", "") or "")
@@ -106,6 +157,10 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
                 parked = _park_ready(repo=name, issue=number, allowed=allowed)
                 if parked.get("ok") and parked.get("removed"):
                     closed_out.append({"repo": name, "issue": number})
+    if closed_out:
+        _clear_leftover_stamp(stamp)
+    else:
+        _touch_leftover_stamp(stamp)
     return ok(
         leftover_closed=len(closed_out),
         labels_removed=bool(closed_out),

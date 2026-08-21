@@ -296,7 +296,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   journals stay.
   After each factory pass, leftover closeout parks leftover `work:ready` /
   `ai:ready` on GitHub-CLOSED mill issues. That is not a second hunt through
-  every mill PR; GitHub CLOSED is enough.
+  every mill PR; GitHub CLOSED is enough. After an empty leftover, skip
+  those GitHub lists for 300s so idle ticks do not pay them twice a minute.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy

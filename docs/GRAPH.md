@@ -93,7 +93,7 @@ host_ff
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
 | mill Fala journals | idle mill sqlite under `~/.lokay/fala/{daemon-cycle,factory}` rotates when oversized; recovery stays on `state.jsonl`. Live `fala/i2pr/` journals stay |
-| leftover closeout | after each factory pass, park leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. Do not paginate every mill PR to prove a closer |
+| leftover closeout | after each factory pass, park leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in
