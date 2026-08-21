@@ -12,10 +12,18 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Callable
 
-from lokay.mill_scope import mill_repo
+from lokay.mill_scope import mill_repo, scoped_repos
 from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
 from lokay.runner import Runner, gh_spec
-from lokay.stuck import clear_issue, is_blocked_in_ledger, issue_key, record_failure
+from lokay.stuck import (
+    clear_issue,
+    is_blocked_in_ledger,
+    issue_key,
+    load_stuck,
+    record_failure,
+    save_stuck,
+    stuck_path_for,
+)
 
 FAIL_CLOSED = frozenset(
     {
@@ -670,3 +678,25 @@ def harvest_fail_closed_children(
     _drop_out_of_scope_stuck_rows(stuck, repos)
     _clear_stale_cycle_start_receipts(root, repos=repos)
     return stuck
+
+
+def harvest_idle_mill_stuck(*, config_path: str | None, live: bool = True) -> None:
+    """Idle daemon_cycle skip still harvests mill stuck. OSError cannot stall."""
+    from argparse import Namespace
+
+    from lokay.proc._common import load_cfg
+
+    if not live:
+        return
+    try:
+        cfg = load_cfg(Namespace(config=config_path))
+        configured = [row.name for row in cfg.active_repos()]
+        repos, _ = scoped_repos(configured, mill=mill_repo())
+        stuck_path = stuck_path_for(cfg.state_path)
+        stuck = load_stuck(stuck_path)
+        harvest_fail_closed_children(
+            stuck, state_path=cfg.state_path, repos=repos
+        )
+        save_stuck(stuck_path, stuck)
+    except OSError:
+        return

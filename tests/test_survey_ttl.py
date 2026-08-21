@@ -338,6 +338,12 @@ def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
             "reason": "recent_empty_survey",
         },
     )
+    harvested: list[dict] = []
+
+    def fake_harvest(**kwargs):
+        harvested.append(kwargs)
+
+    monkeypatch.setattr(daemon_mod, "harvest_idle_mill_stuck", fake_harvest)
     monkeypatch.setattr(daemon_mod, "run_closeout_leftover", lambda **_k: leftover)
     out = daemon_mod.compose_daemon_cycle(
         config_path=str(tmp_path / "config.yaml"),
@@ -348,6 +354,9 @@ def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
     assert out["engine"] == "fala"
     assert out["path_id"] == "daemon_cycle"
     assert out["leftover_closeout"] == leftover
+    assert harvested == [
+        {"config_path": str(tmp_path / "config.yaml"), "live": True}
+    ]
     assert stamp.stat().st_mtime == before
 
 

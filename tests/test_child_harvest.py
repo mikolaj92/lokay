@@ -1172,3 +1172,68 @@ def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path
     )
     assert 4796 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#4796"].get("reason") == "plan_only"
+
+
+def test_harvest_idle_mill_stuck_drops_toplevel_temida(tmp_path: Path, monkeypatch):
+    """Idle daemon_cycle skip still harvests mill stuck, including top-level keys."""
+    from lokay.child_harvest import harvest_idle_mill_stuck
+
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        f"""
+mode: live
+repos:
+  - name: mikolaj92/Temida
+    clone_path: {tmp_path / "Temida"}
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "lokay"}
+state:
+  path: {tmp_path / "state.jsonl"}
+executor:
+  enabled: false
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "state.jsonl").write_text("", encoding="utf-8")
+    stuck_path = tmp_path / "stuck.json"
+    stuck_path.write_text(
+        json.dumps(
+            {
+                "issues": {
+                    "mikolaj92/lokay#178": {
+                        "failures": 1,
+                        "blocked": True,
+                        "reason": "rebase_conflict",
+                    }
+                },
+                "mikolaj92/Temida#4805": {
+                    "reason": "plan_only",
+                    "blocked": True,
+                    "ts": "2026-08-18T22:43:45Z",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+    )
+    harvest_idle_mill_stuck(config_path=str(config), live=True)
+    data = json.loads(stuck_path.read_text(encoding="utf-8"))
+    assert set(data["issues"]) == {"mikolaj92/lokay#178"}
+    assert "mikolaj92/Temida#4805" not in data
+
+
+def test_harvest_idle_mill_stuck_skips_when_not_live(tmp_path: Path):
+    from lokay.child_harvest import harvest_idle_mill_stuck
+
+    stuck_path = tmp_path / "stuck.json"
+    stuck_path.write_text(
+        json.dumps({"issues": {}, "mikolaj92/Temida#4805": {"blocked": True}})
+        + "\n",
+        encoding="utf-8",
+    )
+    harvest_idle_mill_stuck(config_path=str(tmp_path / "missing.yaml"), live=False)
+    data = json.loads(stuck_path.read_text(encoding="utf-8"))
+    assert "mikolaj92/Temida#4805" in data

@@ -14,6 +14,7 @@ from lokay.envelope import mill_glance
 from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
+from lokay.child_harvest import harvest_idle_mill_stuck
 from lokay.proc.closeout import run_closeout_leftover
 from lokay.proc.survey_ttl import skip_idle_factory_pass
 
@@ -67,6 +68,9 @@ def compose_daemon_cycle(
                 pass
             skipped = skip_idle_factory_pass(live=True)
             if skipped is not None:
+                harvest_idle_mill_stuck(
+                    config_path=config_path, live=True
+                )
                 leftover = run_closeout_leftover(
                     config_path=config_path, live=True
                 )
