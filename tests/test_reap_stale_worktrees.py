@@ -1101,6 +1101,69 @@ def test_reap_idle_closed_worktrees_classify_skips_no_issue_leftovers(
     assert cap == 4
 
 
+def test_reap_idle_closed_worktrees_classify_skips_harvest_leftovers(
+    tmp_path, monkeypatch
+):
+    """Harvest leftovers are not mill issues."""
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+    checked: list[int] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda repo, issue: checked.append(issue) or True,
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("idle reap must not leftover_status")
+        ),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "list_uncommitted_paths",
+        lambda *_a, **_k: [],
+    )
+    removed: list[str] = []
+
+    def fake_remove(_git, _clone, path, **_k):
+        removed.append(Path(path).name)
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(reap_stale_worktrees, "remove_worktree", fake_remove)
+    harvest = _corner(tmp_path, "harvest/414-mini-lokay-only")
+    old = time.time() - 3600
+    os.utime(harvest, (old, old))
+    issued = [
+        (_corner(tmp_path, f"ai/fix/{n}"), f"ai/fix/{n}")
+        for n in (267, 269, 271, 273, 275)
+    ]
+    leftovers = [(harvest, "harvest/414-mini-lokay-only"), *issued]
+    monkeypatch.setattr(
+        reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
+    )
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert "harvest__414-mini-lokay-only" not in removed
+    assert 414 not in checked
+    assert checked == [267, 269, 271, 273]
+    assert removed == [
+        "ai__fix__267",
+        "ai__fix__269",
+        "ai__fix__271",
+        "ai__fix__273",
+    ]
+    assert cap == 4
+
+
 def test_reap_idle_closed_worktrees_classify_skips_dirty_real_leftovers(
     tmp_path, monkeypatch
 ):

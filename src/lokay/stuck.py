@@ -131,17 +131,12 @@ def clear_issue(data: dict[str, Any], repo: str, number: int) -> None:
 
 
 def issue_number_from_branch(head_ref: str, *, branch_prefix: str = "ai/fix") -> int | None:
-    """Parse issue number from `ai/fix/12-slug-deadbeef` style branch names."""
+    """Parse issue number from mill leftover branches. Harvest leftovers are not mill issues."""
     prefix = branch_prefix.rstrip("/") + "/"
     ref = (head_ref or "").strip()
     if not ref.startswith(prefix):
-        # still try generic ai/fix/N-
-        if "/" not in ref:
-            return None
-        rest = ref.split("/", 2)[-1] if ref.count("/") >= 2 else ref.split("/", 1)[-1]
-    else:
-        rest = ref[len(prefix) :]
-    # rest = "12-slug-digest"
+        return None
+    rest = ref[len(prefix) :]
     head = rest.split("-", 1)[0]
     if head.isdigit():
         return int(head)
