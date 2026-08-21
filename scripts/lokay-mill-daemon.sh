@@ -46,9 +46,16 @@ bootstrap_incident() {
 
 write_host_plist_interval() {
   # Plist is host-only. Write 60s + crash KeepAlive; do not invent a job.
+  # Already 60s crash KeepAlive skips python plistlib.
   local plist="$1"
   local want="$2"
+  local interval keep
   [[ -f "${plist}" ]] || return 0
+  interval="$(plutil -extract StartInterval raw -o - "${plist}" 2>/dev/null || true)"
+  keep="$(plutil -extract KeepAlive.SuccessfulExit raw -o - "${plist}" 2>/dev/null || true)"
+  if [[ "${interval}" == "${want}" && "${keep}" == "false" ]]; then
+    return 0
+  fi
   _python - "${plist}" "${want}" <<'PY'
 import plistlib, sys
 

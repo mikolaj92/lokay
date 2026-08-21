@@ -194,7 +194,8 @@ LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
 the mill turning; event wake (`lokay-wake` on a self-hosted `lokay-mill`
 runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
 complete. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
-restarts immediately; idle 0 waits the 60s StartInterval. Delayed
+restarts immediately; idle 0 waits the 60s StartInterval. Already 60s
+crash KeepAlive skips python `plistlib`; missing plists stay missing. Delayed
 `--install` double-forks out of the launchd process group so idle 0
 cannot kill the reload. Same serial mill (K=1), same lock — not a
 parallel fleet. Details:

@@ -57,6 +57,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "mill_lock_busy" in script
     assert "loaded_keepalive_crash_only" in script
     assert '{"SuccessfulExit": False}' in script
+    assert "Already 60s crash KeepAlive skips python plistlib" in script
+    assert "plutil -extract StartInterval raw" in script
     assert '[[ "${HOME}" == /Users/* ]]' in script
     assert "os.setsid()" in script
     assert 'os.execv("/bin/bash", ["/bin/bash", script, "--install"])' in script
@@ -685,6 +687,36 @@ def test_install_writes_crash_keepalive_on_existing_plist(tmp_path):
     assert data["KeepAlive"] == {"SuccessfulExit": False}
     stamp = tmp_path / ".lokay" / "launchd-keepalive.stamp"
     assert stamp.exists()
+
+
+def test_already_crash_keepalive_skips_python_plistlib(tmp_path):
+    import plistlib
+
+    plist = tmp_path / "probe.plist"
+    plistlib.dump(
+        {
+            "Label": "ai.mikolaj.lokay-mill-test-keepalive-already",
+            "StartInterval": 60,
+            "KeepAlive": {"SuccessfulExit": False},
+        },
+        plist.open("wb"),
+    )
+    before = plist.read_bytes()
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": "/usr/bin:/bin",
+        "LOKAY_LAUNCHD_PLIST": str(plist),
+        "LOKAY_LAUNCHD_LABEL": "ai.mikolaj.lokay-mill-test-keepalive-already",
+    }
+    completed = subprocess.run(
+        ["/bin/bash", str(_script()), "--install"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert plist.read_bytes() == before
 
 
 def test_install_does_not_invent_a_missing_plist(tmp_path):
