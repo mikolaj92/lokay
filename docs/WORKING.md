@@ -330,8 +330,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   envelope skips python `host_ff_updated`. Fresh idle skip writes the
   launchd glance in bash and skips python `emit_launchd_glance` plus extra
   `bound_launchd_stdio`. Hosted ticks still scrape the mill log and bound
-  launchd stdio around glance. Probe skip, missing digest, host-ff
-  update, or a hosted daemon still checks the wheel.
+  launchd stdio around glance. Already under keep skips python
+  `prune_mill_logs`. Fat mill-log dirs still prune. Probe skip, missing
+  digest, host-ff update, or a hosted daemon still checks the wheel.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.

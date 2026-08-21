@@ -701,7 +701,28 @@ PY
 }
 
 prune_mill_logs() {
-  _python - "${LOG_DIR}" "${MILL_LOG_KEEP}" <<'PY'
+  # Already under keep skips python. Fat log dirs still prune.
+  local keep="${MILL_LOG_KEEP}"
+  local count=0
+  local path
+  case "${keep}" in
+    ''|*[!0-9]*) keep=48 ;;
+  esac
+  if [[ "${keep}" -lt 1 ]]; then
+    keep=1
+  fi
+  for path in "${LOG_DIR}"/mill-*.log; do
+    [[ -f "${path}" ]] || continue
+    [[ "${path##*/}" == "mill-latest.log" ]] && continue
+    count=$((count + 1))
+    if [[ "${count}" -gt "${keep}" ]]; then
+      break
+    fi
+  done
+  if [[ "${count}" -le "${keep}" ]]; then
+    return 0
+  fi
+  _python - "${LOG_DIR}" "${keep}" <<'PY'
 import sys
 from pathlib import Path
 

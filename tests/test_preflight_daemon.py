@@ -33,6 +33,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert '"already_current"[[:space:]]*:[[:space:]]*true' in script
     assert "already_current envelope already proved HEAD did not move" in script
     assert "Fresh idle skip already bounded launchd stdio" in script
+    assert "Already under keep skips python" in script
     assert '"health":"idle","progress":0' in script
     assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
     assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
@@ -896,6 +897,41 @@ def test_small_launchd_stdout_skips_python_reopen(tmp_path):
     assert completed.returncode == 0, completed.stderr
     assert small.read_bytes() == body
     assert b"truncated" not in small.read_bytes()
+
+
+def test_mill_logs_under_keep_skip_python_prune(tmp_path):
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    kept = []
+    for name in ["mill-20260821T120001Z.log", "mill-20260821T120002Z.log"]:
+        path = logs / name
+        path.write_text("idle\n", encoding="utf-8")
+        kept.append(path)
+    completed = _run_daemon(tmp_path, extra_env={"LOKAY_MILL_LOG_KEEP": "48"})
+    assert completed.returncode == 0, completed.stderr
+    for path in kept:
+        assert path.exists()
+
+
+def test_mill_logs_over_keep_still_prune(tmp_path):
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    stale = logs / "mill-20260821T110001Z.log"
+    stale.write_text("old\n", encoding="utf-8")
+    os.utime(stale, (1, 1))
+    for index in range(3):
+        path = logs / f"mill-20260821T12000{index}Z.log"
+        path.write_text("newer\n", encoding="utf-8")
+        os.utime(path, (100 + index, 100 + index))
+    completed = _run_daemon(tmp_path, extra_env={"LOKAY_MILL_LOG_KEEP": "2"})
+    assert completed.returncode == 0, completed.stderr
+    remaining = [
+        path
+        for path in logs.glob("mill-*.log")
+        if path.name != "mill-latest.log"
+    ]
+    assert len(remaining) == 2
+    assert not stale.exists()
 
 
 def test_glance_reads_nested_mill_health_from_truncated_envelope(tmp_path):
