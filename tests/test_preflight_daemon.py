@@ -27,6 +27,9 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert 'export PYTHONPATH="${ROOT}/src' in script
     assert "package_matches()" in script
     assert "idle_skip_daemon()" in script
+    assert "host_ff_already_current()" in script
+    assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
+    assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
     assert "recent_empty_survey" in script
     assert "recent_empty_survey_probe" in script
     assert "recent_empty_leftover_probe" in script
@@ -229,6 +232,124 @@ def test_host_ff_already_current_still_starts_daemon(tmp_path):
     calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert any("lokay-host-ff" in line for line in calls)
     assert any("lokay-daemon" in line for line in calls)
+
+
+def _github_checkout(root: Path) -> str:
+    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True, capture_output=True)
+    (root / "README").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README"], cwd=root, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "i"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "remote", "add", "origin", "git@github.com:mikolaj92/lokay.git"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/main", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _write_gh_sha(tmp_path: Path, sha: str, *, empty_lists: bool = False) -> None:
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    if empty_lists:
+        body = (
+            "#!/bin/sh\n"
+            'case " $* " in\n'
+            f"  *git/ref/heads/main*) printf '%s\\n' '{sha}' ;;\n"
+            "  *) printf '%s\\n' '[]' ;;\n"
+            "esac\n"
+            "exit 0\n"
+        )
+    else:
+        body = "#!/bin/sh\nprintf '%s\\n' '" + sha + "'\nexit 0\n"
+    gh.write_text(body, encoding="utf-8")
+    gh.chmod(0o755)
+
+
+def test_github_sha_match_skips_lokay_host_ff(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    root = tmp_path / "repo"
+    head = _github_checkout(root)
+    _write_gh_sha(tmp_path, head)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-host-ff" not in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
+    logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "already_current" in body
+
+
+def test_github_sha_probe_failure_still_runs_host_ff(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    _github_checkout(tmp_path / "repo")
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text("#!/bin/sh\necho fail >&2\nexit 1\n", encoding="utf-8")
+    gh.chmod(0o755)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+
+
+def test_github_sha_mismatch_still_runs_host_ff(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    _github_checkout(tmp_path / "repo")
+    _write_gh_sha(tmp_path, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+
+
+def test_idle_github_sha_match_skips_host_ff_and_daemon(tmp_path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "config.yaml").touch()
+    head = _github_checkout(root)
+    _write_gh_sha(tmp_path, head, empty_lists=True)
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-host-ff" not in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_survey" in body
+    assert "already_current" in body
 
 
 def _idle_receipt() -> str:
