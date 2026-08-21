@@ -42,18 +42,3 @@ def untrusted_issue_block(title: str, body: str | None) -> str:
             "=== END UNTRUSTED CONTENT ===",
         )
     )
-
-
-def looks_like_test_evidence(text: str) -> bool:
-    lowered = text.lower()
-    markers = (
-        "pytest",
-        "passed",
-        "test evidence",
-        "tests passed",
-        "make test",
-        "unittest",
-        "✓",
-        "ok (",
-    )
-    return any(m in lowered for m in markers)
