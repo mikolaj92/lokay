@@ -636,8 +636,24 @@ def incident_stamp_path(cfg: Any | None) -> Path | None:
     return Path(path).expanduser().parent / INCIDENT_STAMP_NAME
 
 
+def mill_incident_stamp_path() -> Path:
+    """Operator mill leftover-incident stamp beside last-pass / state.jsonl."""
+    return Path.home() / ".lokay" / INCIDENT_STAMP_NAME
+
+
+def _is_operator_mill_incident_stamp(stamp: Path) -> bool:
+    mill = mill_incident_stamp_path()
+    try:
+        return stamp.expanduser().resolve() == mill.resolve()
+    except OSError:
+        return stamp.expanduser() == mill
+
+
 def incident_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
+        return False
+    # Pytest must not skip leftover-incident GitHub lists using the mill stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_incident_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime

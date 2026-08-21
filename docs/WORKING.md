@@ -358,7 +358,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   that GitHub list for 300s without refreshing the stamp.
   Pytest must not skip leftover-ready GitHub lists using the mill stamp.
   After an empty leftover-incident probe (`<!-- lokay-preflight:… -->`), skip
-  that GitHub list for 300s without refreshing the stamp. Probe failure does
+  that GitHub list for 300s without refreshing the stamp.
+  Pytest must not skip leftover-incident GitHub lists using the mill stamp.
+  Probe failure does
   not write the stamp. Opening a new incident clears it.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
