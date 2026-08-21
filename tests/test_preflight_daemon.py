@@ -30,6 +30,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "host_ff_already_current()" in script
     assert "HOST_FF_MOVED" in script
     assert "Fresh idle skip with a persisted digest skips checkout_digest" in script
+    assert '"already_current"[[:space:]]*:[[:space:]]*true' in script
+    assert "already_current envelope already proved HEAD did not move" in script
     assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
     assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
     assert "recent_empty_survey" in script

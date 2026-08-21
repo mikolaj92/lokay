@@ -970,8 +970,11 @@ fi
 # Fresh idle skip with a persisted digest skips checkout_digest and
 # package_matches. Missing digest, host-ff update, or a hosted daemon
 # still checks the wheel.
+# already_current envelope already proved HEAD did not move. Skip python.
 HOST_FF_MOVED=0
-if host_ff_updated "${LOG}"; then
+if grep -Eq '"already_current"[[:space:]]*:[[:space:]]*true' "${LOG}" 2>/dev/null; then
+  :
+elif host_ff_updated "${LOG}"; then
   HOST_FF_MOVED=1
 fi
 SKIP_REASON=""
