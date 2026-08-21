@@ -42,6 +42,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "recent_empty_leftover_probe" in script
     assert "Mill-probe GitHub lists run together. Probe failure still hosts." in script
     assert "Leftover-probe GitHub lists run together. Probe failure still hosts." in script
+    assert "Leftover-probe still hosts lokay-daemon so idle reap continues." in script
     assert "ThreadPoolExecutor(max_workers=3)" in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
@@ -729,7 +730,8 @@ def test_idle_expired_survey_probe_failure_hosts(tmp_path):
     assert abs(survey.stat().st_mtime - before) < 1
 
 
-def test_idle_expired_leftover_empty_probe_skips_lokay_daemon(tmp_path):
+def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
+    """Leftover-probe still hosts lokay-daemon so idle reap continues."""
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
     lokay = tmp_path / ".lokay"
@@ -746,7 +748,7 @@ def test_idle_expired_leftover_empty_probe_skips_lokay_daemon(tmp_path):
     assert second.returncode == 0, second.stderr
     calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert any("lokay-host-ff" in line for line in calls)
-    assert all("lokay-daemon" not in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_leftover_probe" in body
@@ -785,7 +787,7 @@ def test_idle_expired_leftover_probe_lists_run_together(tmp_path):
     second = _run_daemon(tmp_path)
     assert second.returncode == 0, second.stderr
     calls = argv_log.read_text(encoding="utf-8").splitlines()
-    assert all("lokay-daemon" not in line for line in calls)
+    assert any("lokay-daemon" in line for line in calls)
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_leftover_probe" in body
