@@ -78,3 +78,6 @@ def test_working_docs_name_this_host_mill_scope():
         assert "mikolaj92/lokay" in text
     assert "all work across\nconfigured repos (`repos.mikolaj92.yaml`)" not in working
     assert "mini mill" in working.lower()
+    daemon = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")
+    assert "mill_scope=mikolaj92/lokay" in daemon
+    assert "all managed source repos" not in daemon

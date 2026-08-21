@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Continuous Lokay mill — one pass, invoked by launchd.
-# Scope: repos.mikolaj92.yaml (all managed source repos).
+# mill_scope=mikolaj92/lokay (this host). Catalog yaml is not the delivery set.
 # Host LaunchAgent StartInterval is 60s (not 600). Plist stays on the host.
 set -euo pipefail
 
