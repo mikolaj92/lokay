@@ -42,9 +42,9 @@ last-pass is idle, it skips `lokay-daemon` while empty-survey and
 leftover-closeout stamps are fresh; mill-daemon skips python
 `idle_skip_daemon` on that path. After
 leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
-`work:ready` / `ai:ready` mill issues refreshes that stamp and still skips
-when the survey stamp is fresh. mill-daemon runs those two leftover lists
-together. After survey-stamp expiry, a cheap empty
+`work:ready` / `ai:ready` mill issues refreshes that stamp. Leftover-probe
+still hosts `lokay-daemon` so idle reap continues. mill-daemon runs those
+two leftover lists together. After survey-stamp expiry, a cheap empty
 GitHub probe of mill PR / inbox / ready lists refreshes the survey stamp.
 mill-daemon runs those three lists together. Probe failure still hosts.
 Probe failure, remaining leftovers, occupied last-pass, digest mismatch,

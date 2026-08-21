@@ -1119,8 +1119,13 @@ SKIP_REASON=""
 if [[ "${HOST_FF_MOVED}" -eq 0 && -n "${PREVIOUS_DIGEST}" ]]; then
   SKIP_REASON="$(idle_skip_daemon)" || SKIP_REASON=""
 fi
+# Leftover-probe still hosts lokay-daemon so idle reap continues.
+if [[ "${SKIP_REASON}" == "recent_empty_leftover_probe" ]]; then
+  printf '{"ok":true,"health":"idle","idle":true,"reason":"recent_empty_leftover_probe"}\n' >>"${LOG}"
+  SKIP_REASON=""
+fi
 case "${SKIP_REASON}" in
-  recent_empty_survey|recent_empty_survey_probe|recent_empty_leftover_probe) ;;
+  recent_empty_survey|recent_empty_survey_probe) ;;
   *) SKIP_REASON="" ;;
 esac
 # Fresh idle skip (both stamps fresh) skips checkout_digest / package_matches.
