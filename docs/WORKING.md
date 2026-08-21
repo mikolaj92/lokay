@@ -319,15 +319,16 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   probes. Probe failure or SHA mismatch still runs host-ff. Local clones
   still run host-ff. Small mill / launchd logs skip
   python truncate. Small launchd stdio skips python inode reopen; fat logs
-  still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
-  later idle lines stay under the cap. When last-pass is idle,
-  it skips `lokay-daemon` (preflight + Fala) while empty-survey (120s) and
-  leftover-closeout (300s) stamps are fresh; mill-daemon skips python
-  `idle_skip_daemon` on that path. After leftover-stamp expiry, a
-  cheap empty GitHub probe of CLOSED `work:ready` / `ai:ready` mill issues
-  refreshes that stamp and still skips when the survey stamp is fresh.
-  mill-daemon runs those two leftover lists together.
-  After survey-stamp expiry, a cheap empty GitHub probe of mill PR / inbox
+  still bound in place, then reopen. Missing or XML plist skips python
+  `launchd_stdout_paths`; binary plist still python. Fat truncate leaves
+  1KiB glance headroom so later idle lines stay under the cap. When
+  last-pass is idle, it skips `lokay-daemon` (preflight + Fala) while
+  empty-survey (120s) and leftover-closeout (300s) stamps are fresh;
+  mill-daemon skips python `idle_skip_daemon` on that path. After
+  leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
+  `work:ready` / `ai:ready` mill issues refreshes that stamp and still
+  skips when the survey stamp is fresh. mill-daemon runs those two leftover
+  lists together. After survey-stamp expiry, a cheap empty GitHub probe of mill PR / inbox
   / ready lists refreshes the survey stamp. mill-daemon runs those three
   lists together. Probe failure still hosts. Remaining leftovers, occupied
   last-pass, digest mismatch, or host-ff update still

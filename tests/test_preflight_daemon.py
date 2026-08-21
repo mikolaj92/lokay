@@ -54,6 +54,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert 'size="${size// /}"' in script
     assert '[[ -n "${size}" && "${size}" -le "${LAUNCHD_STDOUT_MAX}" ]]' in script
     assert "skips python inode reopen" in script
+    assert "Missing or XML plist skips python plistlib. Binary plist still python." in script
+    assert '[[ "${magic}" == "bplist00" ]]' in script
     assert "Leave 1KiB glance headroom so later idle lines stay under the cap." in script
     assert "| tee " not in script
     assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
@@ -523,8 +525,10 @@ def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "already_current" in body
-    assert log.is_file()
-    assert str(root) not in log.read_text(encoding="utf-8")
+    # Missing or XML plist skips python launchd_stdout_paths. GitHub CLEAN
+    # skip may pay no python at all.
+    if log.is_file():
+        assert str(root) not in log.read_text(encoding="utf-8")
 
 
 def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):
@@ -1111,6 +1115,94 @@ def test_fat_launchd_stdout_leaves_glance_headroom(tmp_path):
     )
     assert second.returncode == 0, second.stderr
     assert fat.read_bytes() == body
+
+
+def test_xml_plist_skips_python_launchd_stdout_paths(tmp_path):
+    """Missing or XML plist skips python plistlib. Binary plist still python."""
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    custom = logs / "custom-stdout.log"
+    custom.write_bytes(b"idle glance" + bytes([10]))
+    plist = tmp_path / "job.plist"
+    plist.write_text(
+        chr(10).join(
+            [
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<plist version="1.0">',
+                "<dict>",
+                "<key>StandardOutPath</key>",
+                "<string>" + str(custom) + "</string>",
+                "<key>StandardErrorPath</key>",
+                "<string>" + str(logs / "custom-stderr.log") + "</string>",
+                "</dict>",
+                "</plist>",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    wrapper = tmp_path / "pywrap"
+    log = tmp_path / "pywrap.log"
+    wrapper.write_text(
+        chr(10).join(
+            [
+                "#!/bin/sh",
+                "printf '%s\\n' \"$*\" >> '" + str(log) + "'",
+                'exec /usr/bin/python3 "$@"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    completed = _run_daemon(
+        tmp_path,
+        extra_env={
+            "LOKAY_PYTHON3": str(wrapper),
+            "LOKAY_LAUNCHD_PLIST": str(plist),
+            "LOKAY_LAUNCHD_STDOUT_MAX": "2048",
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert custom.read_bytes() == b"idle glance" + bytes([10])
+    assert log.is_file()
+    assert not any(
+        line.split()[:2] == ["-", str(plist)] and len(line.split()) >= 4
+        for line in log.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def test_xml_plist_stdout_path_still_bounds(tmp_path):
+    logs = tmp_path / ".lokay" / "logs"
+    logs.mkdir(parents=True)
+    custom = logs / "custom-stdout.log"
+    custom.write_bytes(b"x" * 8000)
+    plist = tmp_path / "job.plist"
+    plist.write_text(
+        chr(10).join(
+            [
+                '<?xml version="1.0" encoding="UTF-8"?>',
+                '<plist version="1.0">',
+                "<dict>",
+                "<key>StandardOutPath</key>",
+                "<string>" + str(custom) + "</string>",
+                "</dict>",
+                "</plist>",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    completed = _run_daemon(
+        tmp_path,
+        extra_env={
+            "LOKAY_LAUNCHD_PLIST": str(plist),
+            "LOKAY_LAUNCHD_STDOUT_MAX": "2048",
+        },
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert custom.stat().st_size <= 2048 - 1024
+    assert b"truncated" in custom.read_bytes()
 
 
 def test_mill_logs_under_keep_skip_python_prune(tmp_path):
