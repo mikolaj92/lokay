@@ -121,6 +121,7 @@ def test_every_subprocess_atom_inherits_pythonpath():
         and (
             "PYTHONPATH" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
             or "LOKAY_PROCESS_HEAD" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
+            or "LOKAY_HOST_FF_FETCHED" not in ((effector.get("adapter") or {}).get("inherit_env") or [])
         )
     ]
     assert missing == []

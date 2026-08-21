@@ -207,6 +207,10 @@ def run_path(
         if str(src) not in prev.split(os.pathsep):
             os.environ["PYTHONPATH"] = str(src) + (os.pathsep + prev if prev else "")
 
+    # Fala inherit_env is a whitelist. Nested factory_pass host_ff requires the
+    # key even when mill-daemon did not set it (standalone lokay-daemon / tests).
+    os.environ.setdefault("LOKAY_HOST_FF_FETCHED", "")
+
     # Fala Mojo sources: FALA_HOME env, else sibling ../Fala only (no machine hardcodes).
     if not os.environ.get("FALA_HOME"):
         for candidate in (root.parent / "Fala", Path.cwd().parent / "Fala"):
