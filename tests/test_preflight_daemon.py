@@ -32,7 +32,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Fresh idle skip with a persisted digest skips checkout_digest" in script
     assert '"already_current"[[:space:]]*:[[:space:]]*true' in script
     assert "already_current envelope already proved HEAD did not move" in script
-    assert "Fresh idle skip already wrote health=idle" in script
+    assert "Fresh idle skip already bounded launchd stdio" in script
     assert '"health":"idle","progress":0' in script
     assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
     assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
