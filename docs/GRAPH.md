@@ -92,6 +92,7 @@ host_ff
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
 | `record_pass` | write `last-pass.json` + terminal tick envelope |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
+| mill Fala journals | idle mill sqlite under `~/.lokay/fala/{daemon-cycle,factory}` rotates when oversized; recovery stays on `state.jsonl`. Live `fala/i2pr/` journals stay |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in
