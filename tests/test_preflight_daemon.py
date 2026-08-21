@@ -65,6 +65,9 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert '{"SuccessfulExit": False}' in script
     assert "Already 60s crash KeepAlive skips python plistlib" in script
     assert "Cache python3 so later helpers skip command -v." in script
+    assert "Fresh idle stamps skip python host_ff_already_current." in script
+    assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
+    assert 'stat -c %Y' in script
     assert "plutil -extract StartInterval raw" in script
     assert '[[ "${HOME}" == /Users/* ]]' in script
     assert "os.setsid()" in script
@@ -436,6 +439,50 @@ def test_idle_stamps_skip_github_sha_probe(tmp_path):
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_survey" in body
     assert "already_current" in body
+
+
+def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
+    """Fresh idle stamps skip python host_ff_already_current. Busy lock still probes."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "config.yaml").touch()
+    _github_checkout(root)
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text("#!/bin/sh" + chr(10) + "echo fail >&2" + chr(10) + "exit 1" + chr(10), encoding="utf-8")
+    gh.chmod(0o755)
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    wrapper = tmp_path / "pywrap"
+    log = tmp_path / "pywrap.log"
+    wrapper.write_text(
+        chr(10).join(
+            [
+                "#!/bin/sh",
+                "printf '%s\\n' \"$*\" >> '" + str(log) + "'",
+                'exec /usr/bin/python3 "$@"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    second = _run_daemon(tmp_path, extra_env={"LOKAY_PYTHON3": str(wrapper)})
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-host-ff" not in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "already_current" in body
+    assert log.is_file()
+    assert str(root) not in log.read_text(encoding="utf-8")
 
 
 def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):

@@ -119,11 +119,64 @@ raise SystemExit(1)
 PY
 }
 
+_stamp_age_seconds() {
+  local path="$1" now mtime
+  [[ -f "${path}" ]] || return 1
+  now="$(date +%s)" || return 1
+  # GNU epoch first. Linux stat -f is filesystem, not mtime.
+  mtime="$(stat -c %Y "${path}" 2>/dev/null || stat -f %m "${path}" 2>/dev/null || true)"
+  [[ "${mtime}" =~ ^[0-9]+$ && "${now}" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$((now - mtime))"
+}
+
+host_ff_idle_stamps_current() {
+  # Fresh idle stamps skip python host_ff_already_current.
+  # Busy lock / stamp expiry / local clones still python+git.
+  local checkout="$1"
+  local receipt="${LOKAY_HOME}/last-pass.json"
+  local leftover_age survey_age head remote branch origin
+  leftover_age="$(_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp")" || return 1
+  survey_age="$(_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp")" || return 1
+  [[ "${leftover_age}" -ge 0 && "${leftover_age}" -lt 300 ]] || return 1
+  [[ "${survey_age}" -ge 0 && "${survey_age}" -lt 120 ]] || return 1
+  [[ -f "${receipt}" ]] || return 1
+  grep -Eq '"occupied"[[:space:]]*:[[:space:]]*true' "${receipt}" && return 1
+  grep -Eq '"health"[[:space:]]*:[[:space:]]*"idle"' "${receipt}" \
+    || grep -Eq '"idle"[[:space:]]*:[[:space:]]*true' "${receipt}" \
+    || return 1
+  grep -Eq '"inbox"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"ready"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"open_ai_prs"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"issue_to_pr_started"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"survey_errors"[[:space:]]*:[[:space:]]*[1-9]' "${receipt}" && return 1
+  grep -Eq '"inbox"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"ready"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"open_ai_prs"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"issue_to_pr_started"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  grep -Eq '"survey_errors"[[:space:]]*:[[:space:]]*0' "${receipt}" || return 1
+  [[ -n "${checkout}" && "${checkout}" != *'"'* && "${checkout}" != *$'\n'* ]] || return 1
+  head="$(git -C "${checkout}" rev-parse HEAD 2>/dev/null)" || return 1
+  remote="$(git -C "${checkout}" rev-parse origin/main 2>/dev/null)" || return 1
+  branch="$(git -C "${checkout}" rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+  origin="$(git -C "${checkout}" remote get-url origin 2>/dev/null)" || return 1
+  origin="${origin%.git}"
+  [[ -n "${head}" && "${head}" == "${remote}" && "${branch}" == "main" ]] || return 1
+  case "${origin}" in
+    https://github.com/mikolaj92/lokay|git@github.com:mikolaj92/lokay|ssh://git@github.com/mikolaj92/lokay) ;;
+    *) return 1 ;;
+  esac
+  printf '{"ok": true, "planned": false, "checkout": "%s", "health": "current", "updated": false, "already_current": true, "head": "%s", "origin_main": "%s"}\n' \
+    "${checkout}" "${head}" "${remote}"
+}
+
 host_ff_already_current() {
   # 0 = GitHub main already matches HEAD and origin/main. Probe failure hosts.
-  # Fresh idle stamps skip the GitHub SHA probe. Busy lock still probes.
+  # Fresh idle stamps skip python host_ff_already_current. Busy lock still probes.
   local checkout="${1:-${ROOT}}"
   local lock_busy="${2:-0}"
+  if [[ "${lock_busy}" != "1" ]] && host_ff_idle_stamps_current "${checkout}"; then
+    return 0
+  fi
   _python - "${checkout}" "${lock_busy}" \
     "${LOKAY_HOME}/last-pass.json" \
     "${LOKAY_HOME}/factory-survey.stamp" \
