@@ -45,7 +45,8 @@ probes. Probe failure or SHA mismatch still runs host-ff. Local clones
 still run host-ff. Small mill / launchd logs skip
 python truncate. Small launchd stdio skips python inode reopen; fat logs
 still bound in place, then reopen. Fresh idle skip defers the first
-launchd stdio bound; hosted/probe ticks still bound. Missing or XML plist skips python
+launchd stdio bound; hosted/probe ticks still bound. Fresh idle skip
+defers caretaker plist write; hosted/probe ticks still write. Missing or XML plist skips python
 `launchd_stdout_paths`; binary plist still python. Fat truncate leaves
 1KiB glance headroom so later idle lines stay under the cap. When
 last-pass is idle, it skips `lokay-daemon` while empty-survey and
