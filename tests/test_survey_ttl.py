@@ -220,6 +220,84 @@ def test_skip_idle_factory_pass_hosts_when_ready(tmp_path: Path) -> None:
     )
 
 
+def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
+    from lokay.compose import daemon_cycle as daemon_mod
+
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    before = stamp.stat().st_mtime
+    leftover = {
+        "ok": True,
+        "labels_removed": False,
+        "leftover_closed": 0,
+        "skipped": True,
+        "reason": "recent_empty",
+    }
+
+    def boom(**_kwargs):
+        raise AssertionError("idle mill must not host daemon_cycle Fala")
+
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    monkeypatch.setattr(daemon_mod, "rotate_mill_fala_journals", lambda: {"ok": True})
+    monkeypatch.setattr(daemon_mod, "run_path", boom)
+    monkeypatch.setattr(daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml")
+    monkeypatch.setattr(
+        daemon_mod,
+        "skip_idle_factory_pass",
+        lambda **_k: {
+            "ok": True,
+            "health": "idle",
+            "idle": True,
+            "live": True,
+            "progress": 0,
+            "remaining": {"ready": 0, "inbox": 0, "open_ai_prs": 0},
+            "skipped": True,
+            "reason": "recent_empty_survey",
+        },
+    )
+    monkeypatch.setattr(daemon_mod, "run_closeout_leftover", lambda **_k: leftover)
+    out = daemon_mod.compose_daemon_cycle(
+        config_path=str(tmp_path / "config.yaml"),
+        pass_ceiling_seconds=5,
+    )
+    assert out["ok"] is True
+    assert out["skipped"] is True
+    assert out["engine"] == "fala"
+    assert out["path_id"] == "daemon_cycle"
+    assert out["leftover_closeout"] == leftover
+    assert stamp.stat().st_mtime == before
+
+
+def test_live_idle_daemon_cycle_hosts_when_stamp_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from lokay.compose import daemon_cycle as daemon_mod
+
+    called: list[str] = []
+
+    def fake_run(**_kwargs):
+        called.append("run")
+        return {"ok": True, "health": "idle"}
+
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    monkeypatch.setattr(daemon_mod, "rotate_mill_fala_journals", lambda: {"ok": True})
+    monkeypatch.setattr(daemon_mod, "run_path", fake_run)
+    monkeypatch.setattr(daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml")
+    monkeypatch.setattr(daemon_mod, "skip_idle_factory_pass", lambda **_k: None)
+
+    def leftover_boom(**_kwargs):
+        raise AssertionError("hosting daemon_cycle must not short-circuit leftover via skip")
+
+    monkeypatch.setattr(daemon_mod, "run_closeout_leftover", leftover_boom)
+    out = daemon_mod.compose_daemon_cycle(
+        config_path=str(tmp_path / "config.yaml"),
+        pass_ceiling_seconds=5,
+    )
+    assert called == ["run"]
+    assert out["ok"] is True
+    assert out.get("skipped") is not True
+
+
 def test_live_idle_factory_pass_skips_fala(monkeypatch, tmp_path: Path) -> None:
     from lokay.compose import factory as factory_mod
 

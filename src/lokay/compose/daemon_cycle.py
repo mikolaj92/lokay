@@ -14,6 +14,8 @@ from lokay.envelope import mill_glance
 from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
+from lokay.proc.closeout import run_closeout_leftover
+from lokay.proc.survey_ttl import skip_idle_factory_pass
 
 
 def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -63,6 +65,32 @@ def compose_daemon_cycle(
                 rotate_mill_fala_journals()
             except OSError:
                 pass
+            skipped = skip_idle_factory_pass(live=True)
+            if skipped is not None:
+                leftover = run_closeout_leftover(
+                    config_path=config_path, live=True
+                )
+                payload = {
+                    **skipped,
+                    "engine": "fala",
+                    "path_id": "daemon_cycle",
+                    "live": True,
+                    "mode": "live",
+                    "passes": 0,
+                    "max_passes": max(1, int(max_passes)),
+                    "leftover_closeout": leftover,
+                }
+                if leftover.get("labels_removed"):
+                    remaining = payload.get("remaining")
+                    if isinstance(remaining, dict):
+                        payload["remaining"] = {
+                            **remaining,
+                            "issue_to_pr_started": 0,
+                        }
+                    payload["progress"] = int(payload.get("progress") or 0) + int(
+                        leftover.get("leftover_closed") or 1
+                    )
+                return finalize_daemon_payload(payload)
             return finalize_daemon_payload(
                 run_path(
                     path_id="daemon_cycle",
