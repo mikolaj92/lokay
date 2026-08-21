@@ -22,6 +22,15 @@ def _is_quarantine_name(name: str) -> bool:
     return name.startswith(".") and name.endswith(_QUARANTINE_SUFFIX)
 
 
+def _is_nested_clone(path: Path) -> bool:
+    """Nested clones are not mill leftover worktrees. Mill worktrees keep a .git file."""
+    git = path / ".git"
+    try:
+        return git.is_dir() and not git.is_symlink()
+    except OSError:
+        return True
+
+
 def _same_entry(left: os.stat_result, right: os.stat_result) -> bool:
     """Whether two lstat results identify the same filesystem object."""
     return left.st_dev == right.st_dev and left.st_ino == right.st_ino
@@ -157,13 +166,21 @@ def worktree_dir(config: Config, repo: RepoConfig, branch: str) -> Path:
 
 
 def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
-    """Existing leftover corners for *repo*: ``(path, branch)``."""
+    """Existing leftover corners for *repo*: ``(path, branch)``.
+
+    Nested clones are not mill leftover worktrees. Mill worktrees keep a .git file.
+    """
     root = config.worktrees_root / repo.name.replace("/", "__")
     if not root.is_dir():
         return []
     found: list[tuple[Path, str]] = []
     for child in sorted(root.iterdir()):
-        if not _is_quarantine_name(child.name) and not child.is_symlink() and child.is_dir():
+        if (
+            not _is_quarantine_name(child.name)
+            and not child.is_symlink()
+            and child.is_dir()
+            and not _is_nested_clone(child)
+        ):
             found.append((child, child.name.replace("__", "/")))
     return found
 

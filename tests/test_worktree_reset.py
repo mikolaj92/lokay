@@ -792,6 +792,27 @@ def test_iter_worktrees_ignores_symlink_corners(tmp_path):
     assert iter_worktrees(cfg, repo) == [(real, "ai/fix/1-real")]
 
 
+def test_iter_worktrees_skips_nested_clones(tmp_path):
+    """Nested clones are not mill leftover worktrees. Mill worktrees keep a .git file."""
+    from lokay.git_worktree import iter_worktrees
+
+    managed = tmp_path / "managed"
+    repo_root = managed / "owner__repo"
+    repo_root.mkdir(parents=True)
+    real = repo_root / "ai__fix__1-real"
+    real.mkdir()
+    (real / ".git").write_text(
+        "gitdir: /clone/.git/worktrees/ai__fix__1-real\n", encoding="utf-8"
+    )
+    nested = repo_root / "Fala"
+    nested.mkdir()
+    (nested / ".git").mkdir()
+    cfg = Config(worktrees_root=managed, repos=[])
+    repo = RepoConfig(name="owner/repo", clone_path=tmp_path / "clone")
+
+    assert iter_worktrees(cfg, repo) == [(real, "ai/fix/1-real")]
+
+
 def test_remove_registered_worktree_preserves_ignored_user_data(tmp_path):
     import subprocess
 
