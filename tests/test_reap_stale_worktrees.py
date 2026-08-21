@@ -1064,10 +1064,14 @@ def test_reap_idle_closed_worktrees_classify_skips_no_issue_leftovers(
             AssertionError("idle reap must not leftover_status")
         ),
     )
+    dirty = {"Fala": ["README.md"]}
+
+    def fake_uncommitted(_git, path):
+        branch = path.name.replace("__", "/")
+        return list(dirty.get(branch, []))
+
     monkeypatch.setattr(
-        reap_stale_worktrees,
-        "list_uncommitted_paths",
-        lambda *_a, **_k: [],
+        reap_stale_worktrees, "list_uncommitted_paths", fake_uncommitted
     )
     removed: list[str] = []
 
@@ -1126,10 +1130,14 @@ def test_reap_idle_closed_worktrees_classify_skips_harvest_leftovers(
             AssertionError("idle reap must not leftover_status")
         ),
     )
+    dirty = {"harvest/414-mini-lokay-only": ["src/lokay/child_harvest.py"]}
+
+    def fake_uncommitted(_git, path):
+        branch = path.name.replace("__", "/")
+        return list(dirty.get(branch, []))
+
     monkeypatch.setattr(
-        reap_stale_worktrees,
-        "list_uncommitted_paths",
-        lambda *_a, **_k: [],
+        reap_stale_worktrees, "list_uncommitted_paths", fake_uncommitted
     )
     removed: list[str] = []
 
@@ -1164,6 +1172,70 @@ def test_reap_idle_closed_worktrees_classify_skips_harvest_leftovers(
     assert cap == 4
 
 
+def test_reap_idle_closed_worktrees_reaps_empty_no_issue_leftovers(
+    tmp_path, monkeypatch
+):
+    """Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers cannot freeze mill porcelain."""
+    cap = reap_stale_worktrees.CLASSIFY_CAP
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+    checked: list[int] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "_issue_is_closed",
+        lambda repo, issue: checked.append(issue) or True,
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("idle reap must not leftover_status")
+        ),
+    )
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "list_uncommitted_paths",
+        lambda *_a, **_k: [],
+    )
+    removed: list[str] = []
+
+    def fake_remove(_git, _clone, path, **_k):
+        removed.append(Path(path).name)
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(reap_stale_worktrees, "remove_worktree", fake_remove)
+    harvest = _corner(tmp_path, "harvest/414-mini-lokay-only")
+    old = time.time() - 3600
+    os.utime(harvest, (old, old))
+    issued = [
+        (_corner(tmp_path, f"ai/fix/{n}"), f"ai/fix/{n}")
+        for n in (291, 294, 296, 298, 300)
+    ]
+    leftovers = [(harvest, "harvest/414-mini-lokay-only"), *issued]
+    monkeypatch.setattr(
+        reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
+    )
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert "harvest__414-mini-lokay-only" in removed
+    assert 414 not in checked
+    assert checked == [291, 294, 296, 298]
+    assert removed == [
+        "harvest__414-mini-lokay-only",
+        "ai__fix__291",
+        "ai__fix__294",
+        "ai__fix__296",
+        "ai__fix__298",
+    ]
+    assert cap == 4
+
+
 def test_reap_idle_closed_worktrees_classify_skips_dirty_real_leftovers(
     tmp_path, monkeypatch
 ):
@@ -1190,6 +1262,7 @@ def test_reap_idle_closed_worktrees_classify_skips_dirty_real_leftovers(
         ),
     )
     dirty = {
+        "Fala": ["README.md"],
         "ai/fix/123": ["src/lokay/proc/compute_health.py"],
         "ai/fix/188": ["src/lokay/localize.py"],
         "ai/fix/192": ["src/lokay/proc/detach_issue_to_pr.py"],

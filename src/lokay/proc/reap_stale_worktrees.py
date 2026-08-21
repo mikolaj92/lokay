@@ -163,6 +163,30 @@ def _oldest_issued_clean(
     return clean
 
 
+def _oldest_empty_no_issue(
+    leftovers: list[tuple[Path, str]], *, branch_prefix: str
+) -> list[tuple[Path, str]]:
+    """Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers cannot freeze mill porcelain."""
+    no_issue = [
+        item
+        for item in leftovers
+        if issue_number_from_branch(item[1], branch_prefix=branch_prefix) is None
+    ]
+    git = Runner()
+    empty: list[tuple[Path, str]] = []
+    for path, branch in _oldest(no_issue):
+        if len(empty) >= CLASSIFY_CAP:
+            break
+        try:
+            kind = classify_changed_paths(list_uncommitted_paths(git, path))
+        except (OSError, RuntimeError):
+            continue
+        if kind != "empty":
+            continue
+        empty.append((path, branch))
+    return empty
+
+
 def _live_keys(rows: list[dict[str, Any]]) -> set[tuple[str, int]]:
     keys: set[tuple[str, int]] = set()
     for row in rows:
@@ -537,7 +561,8 @@ def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) ->
     push --delete on this path. Idle CLASSIFY_CAP skips no-issue leftovers
     so Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real
     leftovers so KEEP cannot starve mill issues. Harvest leftovers are not
-    mill issues.
+    mill issues. Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest
+    leftovers cannot freeze mill porcelain.
     """
     if not live:
         return
@@ -570,10 +595,24 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
         # Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
         # Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
         # Harvest leftovers are not mill issues.
+        # Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers cannot freeze mill porcelain.
         candidates = set(
             _oldest_issued_clean(leftovers, branch_prefix=cfg.branch_prefix)[:CLASSIFY_CAP]
         )
+        empty_no_issue = set(
+            _oldest_empty_no_issue(leftovers, branch_prefix=cfg.branch_prefix)[:CLASSIFY_CAP]
+        )
         for path, branch in leftovers:
+            if (path, branch) in empty_no_issue:
+                probed = True
+                if git is None:
+                    git = make_runner(cfg)
+                removed = remove_worktree(
+                    git, repo.clone_path, path, managed_root=cfg.worktrees_root
+                )
+                if removed.get("ok"):
+                    reaped_here += 1
+                continue
             if (path, branch) not in candidates:
                 continue
             issue = issue_number_from_branch(
