@@ -111,6 +111,12 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
             return False, "non_ssh_origin"
     if checked == 0:
         return True, "ok"
+    from lokay.git_host_ff import caretaker_already_fetched
+
+    if caretaker_already_fetched():
+        # mill-daemon already fetched origin/main this tick. Origin URL is
+        # still checked above; do not ls-remote the same checkout twice.
+        return True, "ok"
     probe = next(repo for repo in repos if (repo.clone_path / ".git").exists())
     authenticated = False
     # Keep the original 20-second bound, but do not stop the mill for a single

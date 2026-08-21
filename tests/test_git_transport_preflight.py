@@ -50,6 +50,35 @@ def test_git_transport_rejects_https_origin(tmp_path, monkeypatch):
     assert preflight._github_git_transport(cfg(item)) == (False, "non_ssh_origin")
 
 
+def test_git_transport_skips_ls_remote_after_caretaker_fetch(tmp_path, monkeypatch):
+    item = repo(tmp_path)
+    calls = []
+
+    def run(argv, **kwargs):
+        calls.append(argv)
+        if "get-url" in argv:
+            return completed(stdout="git@github.com:mikolaj92/lokay.git\n")
+        raise AssertionError("ls-remote must not run after caretaker host-ff")
+
+    monkeypatch.setenv("LOKAY_HOST_FF_FETCHED", "1")
+    monkeypatch.setattr(preflight.subprocess, "run", run)
+    assert preflight._github_git_transport(cfg(item)) == (True, "ok")
+    assert calls == [
+        ["git", "-C", str(item.clone_path), "remote", "get-url", "origin"]
+    ]
+
+
+def test_git_transport_still_rejects_https_after_caretaker_fetch(tmp_path, monkeypatch):
+    item = repo(tmp_path)
+    monkeypatch.setenv("LOKAY_HOST_FF_FETCHED", "1")
+    monkeypatch.setattr(
+        preflight.subprocess,
+        "run",
+        lambda argv, **kw: completed(stdout="https://github.com/mikolaj92/lokay.git\n"),
+    )
+    assert preflight._github_git_transport(cfg(item)) == (False, "non_ssh_origin")
+
+
 def test_git_transport_proves_ssh_remote_non_interactively(tmp_path, monkeypatch):
     item = repo(tmp_path)
     calls = []
