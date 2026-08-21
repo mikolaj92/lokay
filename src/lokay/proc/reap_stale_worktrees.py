@@ -579,7 +579,8 @@ def reap_idle_closed_worktrees(*, config_path: str | None, live: bool = True) ->
     so Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real
     leftovers so KEEP cannot starve mill issues. Harvest leftovers are not
     mill issues. Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest
-    leftovers cannot freeze mill porcelain.
+    leftovers cannot freeze mill porcelain. Idle KEEP-only leftovers still
+    write the over-cap stamp.
     """
     if not live:
         return
@@ -599,7 +600,7 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
     live_keys = _live_keys(live_issue_to_pr_receipts())
     live_repos = {name for name, _ in live_keys}
     reaped_here = 0
-    probed = False
+    classified = False
     git = None
     for repo in cfg.active_repos():
         if repo.name != MINI_MILL_REPO:
@@ -609,6 +610,8 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
         leftovers = iter_worktrees(cfg, repo)
         if not leftovers:
             continue
+        # Idle KEEP-only leftovers still write the over-cap stamp.
+        classified = True
         # Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
         # Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
         # Harvest leftovers are not mill issues.
@@ -621,7 +624,6 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
         )
         for path, branch in leftovers:
             if (path, branch) in empty_no_issue:
-                probed = True
                 if git is None:
                     git = make_runner(cfg)
                 removed = remove_worktree(
@@ -637,7 +639,6 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
             )
             if issue is None or (repo.name, issue) in live_keys:
                 continue
-            probed = True
             if not _issue_is_closed(repo.name, issue):
                 continue
             if git is None:
@@ -647,11 +648,10 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
             )
             if removed.get("ok"):
                 reaped_here += 1
-    if not probed:
-        return
     if reaped_here:
         _clear_over_cap_stamp(stamp)
-    else:
+        return
+    if classified:
         _touch_over_cap_stamp(stamp)
 
 

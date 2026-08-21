@@ -1339,6 +1339,58 @@ def test_reap_idle_closed_worktrees_classify_skips_dirty_real_leftovers(
     assert cap == 4
 
 
+def test_reap_idle_keep_only_leftovers_write_over_cap_stamp(tmp_path, monkeypatch):
+    """Idle KEEP-only leftovers still write the over-cap stamp."""
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+
+    def boom(*_a, **_k):
+        raise AssertionError("KEEP-only idle must not view GitHub issues")
+
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", boom)
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda cfg: _Git())
+    dirty = {
+        "ai/fix/123": ["src/lokay/proc/compute_health.py"],
+        "ai/fix/188": ["src/lokay/localize.py"],
+        "ai/fix/192": ["src/lokay/proc/detach_issue_to_pr.py"],
+        "ai/fix/193": ["src/lokay/proc/survey_ready.py"],
+        "ai/fix/205": ["src/lokay/proc/select_implement.py"],
+    }
+
+    def fake_uncommitted(_git, path):
+        branch = path.name.replace("__", "/")
+        return list(dirty.get(branch, ["src/lokay/proc/compute_health.py"]))
+
+    monkeypatch.setattr(
+        reap_stale_worktrees, "list_uncommitted_paths", fake_uncommitted
+    )
+    removed: list[str] = []
+
+    def fake_remove(_git, _clone, path, **_k):
+        removed.append(Path(path).name)
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(reap_stale_worktrees, "remove_worktree", fake_remove)
+    leftovers = [
+        (_corner(tmp_path, f"ai/fix/{n}"), f"ai/fix/{n}")
+        for n in (123, 188, 192, 193, 205, 259)
+    ]
+    monkeypatch.setattr(
+        reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
+    )
+    stamp = tmp_path / "reap-over-cap.stamp"
+    assert not stamp.exists()
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert removed == []
+    assert stamp.is_file()
+
+
 def test_reap_idle_closed_worktrees_skips_when_not_live(tmp_path, monkeypatch):
     monkeypatch.setattr(
         reap_stale_worktrees,
