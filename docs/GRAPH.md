@@ -46,7 +46,8 @@ host-ff envelope skips python `host_ff_updated`. Fresh idle skip writes the
 launchd glance in bash and skips python `emit_launchd_glance` plus extra
 `bound_launchd_stdio`. Hosted ticks still scrape the mill log and bound
 launchd stdio around glance. Already under keep skips python `prune_mill_logs`.
-Fat mill-log dirs still prune. Probe skip, missing digest, host-ff update, or a
+Fat mill-log dirs still prune. mill-daemon caches `python3` so later `_python`
+helpers skip `command -v`. Probe skip, missing digest, host-ff update, or a
 hosted daemon still checks the wheel.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
