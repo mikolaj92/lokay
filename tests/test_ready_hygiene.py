@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from lokay.models import Issue
@@ -111,6 +112,65 @@ state:
     assert out["reason"] == "recent_empty"
     assert out["cleaned_count"] == 0
     assert stamp.stat().st_mtime == before
+
+
+def test_pytest_does_not_skip_leftover_ready_github_lists_using_the_mill_stamp(
+    tmp_path, monkeypatch
+):
+    mill = tmp_path / ".lokay"
+    mill.mkdir()
+    stamp = mill / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv(
+        "PYTEST_CURRENT_TEST",
+        "test_pytest_does_not_skip_leftover_ready_github_lists_using_the_mill_stamp",
+    )
+    from lokay.proc import ready_hygiene as hygiene
+
+    assert hygiene.hygiene_recently_empty(stamp) is False
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {mill / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    listed: list[str] = []
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        "lokay.proc.ready_hygiene.list_labeled_issues",
+        lambda *_a, **_k: listed.append("gh") or [],
+    )
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out.get("skipped") is not True
+    assert listed == ["gh"]
+    hermetic = tmp_path / "ready-hygiene.stamp"
+    hermetic.write_text("1", encoding="utf-8")
+    assert hygiene.hygiene_recently_empty(hermetic) is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Pytest must not skip leftover-ready GitHub lists using the mill stamp." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_hygiene_probes_when_empty_stamp_expired(tmp_path, monkeypatch):

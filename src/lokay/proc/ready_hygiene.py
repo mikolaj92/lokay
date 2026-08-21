@@ -7,6 +7,7 @@ Missing stamp always probes. Skip does not refresh the stamp.
 from __future__ import annotations
 
 import argparse
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -29,8 +30,24 @@ def hygiene_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / HYGIENE_STAMP_NAME
 
 
+def mill_hygiene_stamp_path() -> Path:
+    """Operator mill leftover-ready stamp beside last-pass / state.jsonl."""
+    return Path.home() / ".lokay" / HYGIENE_STAMP_NAME
+
+
+def _is_operator_mill_hygiene_stamp(stamp: Path) -> bool:
+    mill = mill_hygiene_stamp_path()
+    try:
+        return stamp.expanduser().resolve() == mill.resolve()
+    except OSError:
+        return stamp.expanduser() == mill
+
+
 def hygiene_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
+        return False
+    # Pytest must not skip leftover-ready GitHub lists using the mill stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_hygiene_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
