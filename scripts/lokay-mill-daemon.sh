@@ -111,24 +111,33 @@ PY
 }
 
 idle_skip_daemon() {
-  # 0 = last-pass idle and survey/leftover stamps are fresh. Missing stamp,
-  # occupied last-pass, or remaining work always hosts lokay-daemon.
+  # 0 + reason on stdout = skip lokay-daemon. Missing leftover stamp,
+  # occupied last-pass, remaining work, or a failed GitHub probe hosts.
   _python - \
     "${LOKAY_HOME}/last-pass.json" \
     "${LOKAY_HOME}/factory-survey.stamp" \
     "${LOKAY_HOME}/leftover-closeout.stamp" <<'PY'
-import json, sys, time
+import json, os, re, subprocess, sys, time
 from pathlib import Path
 
 receipt_path, survey_stamp, leftover_stamp = sys.argv[1:4]
 now = time.time()
+csi = re.compile("\x1b\\[[0-9;]*[mK]")
+decided = {
+    "ai:ready", "ai:blocked", "ai:needs-feedback", "work:ready",
+    "frozen", "ai:frozen", "ai:tracker",
+    "ai:in-progress", "ai:pr-open", "ai:ci-waiting", "ai:repairing",
+}
+
+def age_of(path):
+    try:
+        return now - Path(path).stat().st_mtime
+    except OSError:
+        return None
 
 def fresh(path: str, ttl: int) -> bool:
-    try:
-        age = now - Path(path).stat().st_mtime
-    except OSError:
-        return False
-    return 0 <= age < ttl
+    age = age_of(path)
+    return age is not None and 0 <= age < ttl
 
 try:
     receipt = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
@@ -155,8 +164,71 @@ if isinstance(by_repo, list) and any(
     isinstance(row, dict) and bool(row.get("occupied")) for row in by_repo
 ):
     raise SystemExit(1)
-if not fresh(survey_stamp, 120) or not fresh(leftover_stamp, 300):
+if not fresh(leftover_stamp, 300):
     raise SystemExit(1)
+survey_age = age_of(survey_stamp)
+if survey_age is None:
+    raise SystemExit(1)
+if 0 <= survey_age < 120:
+    print("recent_empty_survey")
+    raise SystemExit(0)
+
+def gh_list(args):
+    env = os.environ.copy()
+    env["GH_NO_COLOR"] = "1"
+    env["NO_COLOR"] = "1"
+    try:
+        result = subprocess.run(
+            ["gh", *args],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        rows = json.loads(csi.sub("", result.stdout or "[]"))
+    except ValueError:
+        return None
+    if not isinstance(rows, list) or len(rows) >= 1000:
+        return None
+    return rows
+
+repo = os.environ.get("LOKAY_MILL_REPO", "").strip() or "mikolaj92/lokay"
+prs = gh_list(["pr", "list", "--repo", repo, "--state", "open", "--json", "headRefName", "--limit", "1000"])
+if prs is None:
+    raise SystemExit(1)
+if any(str(row.get("headRefName") or "").startswith("ai/fix/") for row in prs if isinstance(row, dict)):
+    raise SystemExit(1)
+ready = gh_list(["issue", "list", "--repo", repo, "--state", "open", "--label", "work:ready", "--json", "number,state", "--limit", "1000"])
+if ready is None:
+    raise SystemExit(1)
+if any(isinstance(row, dict) and str(row.get("state") or "").upper() != "CLOSED" and int(row.get("number") or 0) > 0 for row in ready):
+    raise SystemExit(1)
+inbox = gh_list(["issue", "list", "--repo", repo, "--state", "open", "--json", "labels", "--limit", "1000"])
+if inbox is None:
+    raise SystemExit(1)
+for row in inbox:
+    if not isinstance(row, dict):
+        continue
+    names = set()
+    raw = row.get("labels")
+    if isinstance(raw, list):
+        for item in raw:
+            name = str(item.get("name") or "") if isinstance(item, dict) else str(item or "")
+            if name:
+                names.add(name)
+    if not (names & decided):
+        raise SystemExit(1)
+try:
+    Path(survey_stamp).write_text(str(int(now)), encoding="utf-8")
+except OSError:
+    pass
+print("recent_empty_survey_probe")
 raise SystemExit(0)
 PY
 }
@@ -706,8 +778,16 @@ fi
 # Fresh empty-survey + leftover stamps and idle last-pass already proved the
 # mill is empty. Skip lokay-daemon (preflight + Fala) until a stamp expires.
 # Missing stamp, remaining work, digest drift, or host-ff update still hosts.
-if [[ ${#UV_REINSTALL_ARGS[@]} -eq 0 ]] && idle_skip_daemon; then
-  printf '%s\n' '{"ok":true,"health":"idle","idle":true,"skipped":true,"reason":"recent_empty_survey","engine":"fala","path_id":"daemon_cycle","leftover_closeout":{"ok":true,"skipped":true,"reason":"recent_empty"}}' >>"${LOG}"
+SKIP_REASON=""
+if [[ ${#UV_REINSTALL_ARGS[@]} -eq 0 ]]; then
+  SKIP_REASON="$(idle_skip_daemon)" || SKIP_REASON=""
+fi
+case "${SKIP_REASON}" in
+  recent_empty_survey|recent_empty_survey_probe) ;;
+  *) SKIP_REASON="" ;;
+esac
+if [[ -n "${SKIP_REASON}" ]]; then
+  printf '{"ok":true,"health":"idle","idle":true,"skipped":true,"reason":"%s","engine":"fala","path_id":"daemon_cycle","leftover_closeout":{"ok":true,"skipped":true,"reason":"recent_empty"}}\n' "${SKIP_REASON}" >>"${LOG}"
   MILL_RC=0
 else
   set +e

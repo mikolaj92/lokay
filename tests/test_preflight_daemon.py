@@ -28,6 +28,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "package_matches()" in script
     assert "idle_skip_daemon()" in script
     assert "recent_empty_survey" in script
+    assert "recent_empty_survey_probe" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
     assert "host_updated" in script
     assert "emit_launchd_glance" in script
@@ -288,6 +289,86 @@ def test_idle_skip_hosts_when_occupied(tmp_path):
     (lokay / "last-pass.json").write_text(json.dumps(receipt), encoding="utf-8")
     (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
     (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-daemon" in line for line in calls)
+
+
+def _write_empty_gh(tmp_path: Path) -> None:
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text("#!/bin/sh\nprintf '%s\\n' '[]'\nexit 0\n", encoding="utf-8")
+    gh.chmod(0o755)
+
+
+def _expire(path: Path, age: int) -> None:
+    import time
+
+    path.write_text("1", encoding="utf-8")
+    stamp = time.time() - age
+    os.utime(path, (stamp, stamp))
+
+
+def test_idle_expired_survey_empty_probe_skips_lokay_daemon(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    survey = lokay / "factory-survey.stamp"
+    leftover = lokay / "leftover-closeout.stamp"
+    leftover.write_text("1", encoding="utf-8")
+    _expire(survey, 200)
+    before = survey.stat().st_mtime
+    _write_empty_gh(tmp_path)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_survey_probe" in body
+    assert survey.stat().st_mtime > before
+
+
+def test_idle_expired_survey_probe_failure_hosts(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    survey = lokay / "factory-survey.stamp"
+    leftover = lokay / "leftover-closeout.stamp"
+    leftover.write_text("1", encoding="utf-8")
+    _expire(survey, 200)
+    before = survey.stat().st_mtime
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text("#!/bin/sh\necho fail >&2\nexit 1\n", encoding="utf-8")
+    gh.chmod(0o755)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-daemon" in line for line in calls)
+    assert abs(survey.stat().st_mtime - before) < 1
+
+
+def test_idle_skip_hosts_when_leftover_stamp_expired(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    survey = lokay / "factory-survey.stamp"
+    leftover = lokay / "leftover-closeout.stamp"
+    survey.write_text("1", encoding="utf-8")
+    _expire(leftover, 400)
+    _write_empty_gh(tmp_path)
     argv_log = tmp_path / "uv-argv.log"
     argv_log.write_text("", encoding="utf-8")
     second = _run_daemon(tmp_path)
