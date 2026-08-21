@@ -28,6 +28,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "package_matches()" in script
     assert "idle_skip_daemon()" in script
     assert "host_ff_already_current()" in script
+    assert "HOST_FF_MOVED" in script
+    assert "Fresh idle skip with a persisted digest skips checkout_digest" in script
     assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
     assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
     assert "recent_empty_survey" in script
@@ -418,6 +420,37 @@ def test_idle_stamps_skip_github_sha_probe(tmp_path):
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_survey" in body
     assert "already_current" in body
+
+
+def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    digest = tmp_path / ".lokay" / "uv-install.digest"
+    assert digest.is_file()
+    src = tmp_path / "repo" / "src" / "lokay"
+    src.mkdir(parents=True)
+    (src / "gh_rate.py").write_text("SURVEY_LIST_CAP = 1000\n", encoding="utf-8")
+    stale = tmp_path / "repo" / ".venv" / "lib" / "python3.14" / "site-packages" / "lokay"
+    stale.mkdir(parents=True)
+    (stale / "gh_rate.py").write_text("old\n", encoding="utf-8")
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    second_calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert all("lokay-daemon" not in line for line in second_calls)
+    assert all("--reinstall-package" not in line for line in second_calls)
+    argv_log.write_text("", encoding="utf-8")
+    _expire(lokay / "factory-survey.stamp", 200)
+    _write_empty_gh(tmp_path)
+    third = _run_daemon(tmp_path)
+    assert third.returncode == 0, third.stderr
+    third_calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("--reinstall-package lokay" in line for line in third_calls)
 
 
 def test_busy_lock_still_probes_github_sha(tmp_path):
