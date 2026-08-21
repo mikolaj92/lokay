@@ -29,6 +29,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "idle_skip_daemon()" in script
     assert "recent_empty_survey" in script
     assert "recent_empty_survey_probe" in script
+    assert "recent_empty_leftover_probe" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
     assert "host_updated" in script
     assert "emit_launchd_glance" in script
@@ -359,7 +360,7 @@ def test_idle_expired_survey_probe_failure_hosts(tmp_path):
     assert abs(survey.stat().st_mtime - before) < 1
 
 
-def test_idle_skip_hosts_when_leftover_stamp_expired(tmp_path):
+def test_idle_expired_leftover_empty_probe_skips_lokay_daemon(tmp_path):
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
     lokay = tmp_path / ".lokay"
@@ -368,13 +369,45 @@ def test_idle_skip_hosts_when_leftover_stamp_expired(tmp_path):
     leftover = lokay / "leftover-closeout.stamp"
     survey.write_text("1", encoding="utf-8")
     _expire(leftover, 400)
+    before = leftover.stat().st_mtime
     _write_empty_gh(tmp_path)
     argv_log = tmp_path / "uv-argv.log"
     argv_log.write_text("", encoding="utf-8")
     second = _run_daemon(tmp_path)
     assert second.returncode == 0, second.stderr
     calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-host-ff" in line for line in calls)
+    assert all("lokay-daemon" not in line for line in calls)
+    logs = list((lokay / "logs").glob("mill-*.log"))
+    body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
+    assert "recent_empty_leftover_probe" in body
+    assert leftover.stat().st_mtime > before
+
+
+def test_idle_expired_leftover_remaining_hosts(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    survey = lokay / "factory-survey.stamp"
+    leftover = lokay / "leftover-closeout.stamp"
+    survey.write_text("1", encoding="utf-8")
+    _expire(leftover, 400)
+    before = leftover.stat().st_mtime
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text(
+        "#!/bin/sh\nprintf '%s\\n' '[{\"number\":1,\"state\":\"CLOSED\"}]'\nexit 0\n",
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert any("lokay-daemon" in line for line in calls)
+    assert abs(leftover.stat().st_mtime - before) < 1
 
 
 def test_launchd_runs_host_ff_but_not_daemon_when_mill_lock_busy(tmp_path):

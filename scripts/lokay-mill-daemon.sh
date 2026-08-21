@@ -164,16 +164,14 @@ if isinstance(by_repo, list) and any(
     isinstance(row, dict) and bool(row.get("occupied")) for row in by_repo
 ):
     raise SystemExit(1)
-if not fresh(leftover_stamp, 300):
+leftover_age = age_of(leftover_stamp)
+if leftover_age is None:
     raise SystemExit(1)
 survey_age = age_of(survey_stamp)
 if survey_age is None:
     raise SystemExit(1)
-if 0 <= survey_age < 120:
-    print("recent_empty_survey")
-    raise SystemExit(0)
 
-def gh_list(args):
+def gh_list(args, cap=1000):
     env = os.environ.copy()
     env["GH_NO_COLOR"] = "1"
     env["NO_COLOR"] = "1"
@@ -194,11 +192,45 @@ def gh_list(args):
         rows = json.loads(csi.sub("", result.stdout or "[]"))
     except ValueError:
         return None
-    if not isinstance(rows, list) or len(rows) >= 1000:
+    if not isinstance(rows, list) or len(rows) >= cap:
         return None
     return rows
 
+def closed_ready(rows):
+    if rows is None:
+        return None
+    return any(
+        isinstance(row, dict)
+        and str(row.get("state") or "").upper() == "CLOSED"
+        and int(row.get("number") or 0) > 0
+        for row in rows
+    )
+
 repo = os.environ.get("LOKAY_MILL_REPO", "").strip() or "mikolaj92/lokay"
+leftover_probed = False
+if leftover_age >= 300:
+    work_ready = gh_list(
+        ["issue", "list", "--repo", repo, "--state", "closed", "--label", "work:ready", "--json", "number,state", "--limit", "100"],
+        cap=100,
+    )
+    ai_ready = gh_list(
+        ["issue", "list", "--repo", repo, "--state", "closed", "--label", "ai:ready", "--json", "number,state", "--limit", "100"],
+        cap=100,
+    )
+    leftover_work = closed_ready(work_ready)
+    leftover_ai = closed_ready(ai_ready)
+    if leftover_work is None or leftover_ai is None or leftover_work or leftover_ai:
+        raise SystemExit(1)
+    try:
+        Path(leftover_stamp).write_text(str(int(now)), encoding="utf-8")
+    except OSError:
+        pass
+    leftover_probed = True
+
+if 0 <= survey_age < 120:
+    print("recent_empty_leftover_probe" if leftover_probed else "recent_empty_survey")
+    raise SystemExit(0)
+
 prs = gh_list(["pr", "list", "--repo", repo, "--state", "open", "--json", "headRefName", "--limit", "1000"])
 if prs is None:
     raise SystemExit(1)
@@ -783,7 +815,7 @@ if [[ ${#UV_REINSTALL_ARGS[@]} -eq 0 ]]; then
   SKIP_REASON="$(idle_skip_daemon)" || SKIP_REASON=""
 fi
 case "${SKIP_REASON}" in
-  recent_empty_survey|recent_empty_survey_probe) ;;
+  recent_empty_survey|recent_empty_survey_probe|recent_empty_leftover_probe) ;;
   *) SKIP_REASON="" ;;
 esac
 if [[ -n "${SKIP_REASON}" ]]; then
