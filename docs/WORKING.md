@@ -314,9 +314,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   own 300s TTL, and mill stuck is still harvested. Missing stamp,
   occupied last-pass, or pytest always hosts.
   mill-daemon skips caretaker `lokay-host-ff` when GitHub `main` already
-  matches HEAD and `origin/main`. Fresh idle stamps skip the GitHub SHA
-  probe. Busy lock still probes. Probe failure or SHA mismatch still runs
-  host-ff. Local clones still run host-ff. Small mill / launchd logs skip
+  matches HEAD and `origin/main`. Fresh idle stamps skip python
+  `host_ff_already_current` and the GitHub SHA probe. Busy lock still
+  probes. Probe failure or SHA mismatch still runs host-ff. Local clones
+  still run host-ff. Small mill / launchd logs skip
   python truncate. Small launchd stdio skips python inode reopen; fat logs
   still bound in place, then reopen. Fat truncate leaves 1KiB glance headroom so
   later idle lines stay under the cap. When last-pass is idle,
