@@ -74,6 +74,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Fresh idle proof is cached within one tick; stamp expiry is cross-tick." in script
     assert "Fresh idle stamp age reuses one date +%s." in script
     assert "Fresh idle skip already bounded launchd stdio and defers mill-log pruning" in script
+    assert "Fresh idle skip defers the first launchd stdio bound; hosted/probe ticks still bound." in script
     assert "Fresh idle stamps skip python idle_skip_daemon." in script
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
     assert 'stat -c %Y' in script
@@ -1274,6 +1275,23 @@ def test_fresh_idle_skip_defers_mill_log_prune(tmp_path):
     second = _run_daemon(tmp_path, extra_env={"LOKAY_MILL_LOG_KEEP": "1"})
     assert second.returncode == 0, second.stderr
     assert stale.exists()
+    logs_body = chr(10).join(path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log"))
+    assert "recent_empty_survey" in logs_body
+
+
+def test_fresh_idle_skip_defers_first_launchd_stdio_bound(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    (lokay / "factory-survey.stamp").write_text("1", encoding="utf-8")
+    (lokay / "leftover-closeout.stamp").write_text("1", encoding="utf-8")
+    logs = lokay / "logs"
+    fat = logs / "launchd-stdout.log"
+    fat.write_bytes(b"x" * 8000)
+    second = _run_daemon(tmp_path, extra_env={"LOKAY_LAUNCHD_STDOUT_MAX": "2048"})
+    assert second.returncode == 0, second.stderr
+    assert fat.stat().st_size == 8000
     logs_body = chr(10).join(path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log"))
     assert "recent_empty_survey" in logs_body
 

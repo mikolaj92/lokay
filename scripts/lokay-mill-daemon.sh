@@ -1066,7 +1066,10 @@ bound_launchd_stdio() {
 }
 
 # Bound StandardOutPath before this tick appends a glance line.
-bound_launchd_stdio
+# Fresh idle skip defers the first launchd stdio bound; hosted/probe ticks still bound.
+if ! last_pass_idle_stamps_fresh; then
+  bound_launchd_stdio
+fi
 
 # Tick starts on current origin/main or fail-closed (do not mill on stale host code).
 # Keep host-ff out of launchd stdout; the mill transcript owns that line.
