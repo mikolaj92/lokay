@@ -682,7 +682,28 @@ fi
 # Crash KeepAlive must load after this process exits. bootout here would
 # kill the live mill. HOME=/Users is the operator host; pytest HOME is not.
 # Stamp so a missed launchctl KeepAlive probe cannot RunAtLoad every tick.
+# launchd kills the job process group on idle 0, so a `&` child dies with
+# the tick. Double-fork + setsid detaches --install from that group.
 if ! mill_lock_busy   && [[ "${HOME}" == /Users/* ]]   && [[ "${LOKAY_LAUNCHD_PLIST}" == "${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist" ]]   && [[ -f "${LOKAY_LAUNCHD_PLIST}" ]]   && [[ ! -f "${LOKAY_KEEPALIVE_STAMP}" ]]   && ! loaded_keepalive_crash_only "${LOKAY_LAUNCHD_LABEL}"; then
-  ( sleep 2; exec /bin/bash "$0" --install ) >/dev/null 2>&1 &
+  _python - "$0" <<'PY' || true
+import os
+import sys
+import time
+
+script = sys.argv[1]
+if os.fork() > 0:
+    raise SystemExit(0)
+os.setsid()
+if os.fork() > 0:
+    os._exit(0)
+devnull = os.open(os.devnull, os.O_RDWR)
+os.dup2(devnull, 0)
+os.dup2(devnull, 1)
+os.dup2(devnull, 2)
+if devnull > 2:
+    os.close(devnull)
+time.sleep(2)
+os.execv("/bin/bash", ["/bin/bash", script, "--install"])
+PY
 fi
 exit "${MILL_RC}"

@@ -39,6 +39,9 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "loaded_keepalive_crash_only" in script
     assert '{"SuccessfulExit": False}' in script
     assert '[[ "${HOME}" == /Users/* ]]' in script
+    assert "os.setsid()" in script
+    assert 'os.execv("/bin/bash", ["/bin/bash", script, "--install"])' in script
+    assert "( sleep 2; exec /bin/bash" not in script
 
 
 def test_daemon_handles_missing_home_and_bounds_bootstrap_outbox():
