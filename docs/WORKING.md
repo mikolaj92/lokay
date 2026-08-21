@@ -304,6 +304,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
+  After an empty leftover-ready probe (`ai:ready` without `work:ready`), skip
+  that GitHub list for 300s without refreshing the stamp.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy
