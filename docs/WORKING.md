@@ -284,6 +284,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   that already moved HEAD continues into uv reinstall + `lokay-daemon` in the same tick.
   Launchd does not `host_ff` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
+  Mill Fala sqlite under `~/.lokay/fala/daemon-cycle` and `factory` rotates
+  when oversized (default 64 MiB) so idle ticks do not reopen a multi-GB
+  journal. Product recovery stays on `state.jsonl`. Live `fala/i2pr/`
+  journals stay.
   Dispatch atoms start the smaller workflow Falas through a separate journal
   boundary.
   `compose/tick.py` is a thin in-process bridge for `lokay-tick` / autonomy

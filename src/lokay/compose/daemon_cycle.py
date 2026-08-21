@@ -11,6 +11,7 @@ from typing import Any
 
 from lokay.config import load_config
 from lokay.envelope import mill_glance
+from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 
@@ -58,6 +59,10 @@ def compose_daemon_cycle(
     previous_timer = signal.setitimer(signal.ITIMER_REAL, ceiling)
     try:
         try:
+            try:
+                rotate_mill_fala_journals()
+            except OSError:
+                pass
             return finalize_daemon_payload(
                 run_path(
                     path_id="daemon_cycle",
