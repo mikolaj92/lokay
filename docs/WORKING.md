@@ -324,8 +324,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   cheap empty GitHub probe of CLOSED `work:ready` / `ai:ready` mill issues
   refreshes that stamp and still skips when the survey stamp is fresh.
   After survey-stamp expiry, a cheap empty GitHub probe of mill PR / inbox
-  / ready lists refreshes the survey stamp. Probe failure, remaining
-  leftovers, occupied last-pass, digest mismatch, or host-ff update still
+  / ready lists refreshes the survey stamp. mill-daemon runs those three
+  lists together. Probe failure still hosts. Remaining leftovers, occupied
+  last-pass, digest mismatch, or host-ff update still
   starts the daemon. Fresh idle skip with a persisted digest skips
   `checkout_digest` and `package_matches`. An `already_current` host-ff
   envelope skips python `host_ff_updated`. Fresh idle skip writes the
