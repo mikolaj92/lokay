@@ -312,7 +312,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   remaining work hosts. Leftover closeout still runs after that skip via its
   own 300s TTL. Missing stamp, occupied last-pass, or pytest always hosts.
   mill-daemon skips caretaker `lokay-host-ff` when GitHub `main` already
-  matches HEAD and `origin/main`. Probe failure or SHA mismatch still runs
+  matches HEAD and `origin/main`. Fresh idle stamps skip the GitHub SHA
+  probe. Busy lock still probes. Probe failure or SHA mismatch still runs
   host-ff. Local clones still run host-ff. When last-pass is idle,
   it skips `lokay-daemon` (preflight + Fala) while empty-survey (120s) and
   leftover-closeout (300s) stamps are fresh. After leftover-stamp expiry, a

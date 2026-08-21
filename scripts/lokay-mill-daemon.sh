@@ -112,12 +112,19 @@ PY
 
 host_ff_already_current() {
   # 0 = GitHub main already matches HEAD and origin/main. Probe failure hosts.
+  # Fresh idle stamps skip the GitHub SHA probe. Busy lock still probes.
   local checkout="${1:-${ROOT}}"
-  _python - "${checkout}" <<'PY'
-import json, os, re, subprocess, sys
+  local lock_busy="${2:-0}"
+  _python - "${checkout}" "${lock_busy}" \
+    "${LOKAY_HOME}/last-pass.json" \
+    "${LOKAY_HOME}/factory-survey.stamp" \
+    "${LOKAY_HOME}/leftover-closeout.stamp" <<'PY'
+import json, os, re, subprocess, sys, time
 from pathlib import Path
 
 checkout = Path(sys.argv[1])
+lock_busy = sys.argv[2]
+receipt_path, survey_stamp, leftover_stamp = sys.argv[3:6]
 csi = re.compile("\x1b\[[0-9;]*[mK]")
 
 def git(*args: str) -> str:
@@ -152,6 +159,65 @@ if (
     }
 ):
     raise SystemExit(1)
+
+def emit() -> None:
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "planned": False,
+                "checkout": str(checkout),
+                "health": "current",
+                "updated": False,
+                "already_current": True,
+                "head": head,
+                "origin_main": remote,
+            }
+        )
+    )
+
+if lock_busy != "1":
+    now = time.time()
+
+    def age_of(path: str):
+        try:
+            return now - Path(path).stat().st_mtime
+        except OSError:
+            return None
+
+    leftover_age = age_of(leftover_stamp)
+    survey_age = age_of(survey_stamp)
+    idle = False
+    try:
+        receipt = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
+        remaining = receipt.get("remaining") if isinstance(receipt, dict) else None
+        if isinstance(remaining, dict) and (
+            receipt.get("health") == "idle" or receipt.get("idle")
+        ):
+            work = (
+                int(remaining.get("inbox") or 0)
+                + int(remaining.get("ready") or 0)
+                + int(remaining.get("open_ai_prs") or 0)
+                + int(remaining.get("issue_to_pr_started") or 0)
+                + int(remaining.get("survey_errors") or 0)
+            )
+            by_repo = remaining.get("by_repo") or receipt.get("by_repo") or []
+            occupied = isinstance(by_repo, list) and any(
+                isinstance(row, dict) and bool(row.get("occupied")) for row in by_repo
+            )
+            idle = work == 0 and not occupied
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError):
+        idle = False
+    if (
+        idle
+        and leftover_age is not None
+        and 0 <= leftover_age < 300
+        and survey_age is not None
+        and 0 <= survey_age < 120
+    ):
+        emit()
+        raise SystemExit(0)
+
 env = os.environ.copy()
 env["GH_NO_COLOR"] = "1"
 env["NO_COLOR"] = "1"
@@ -177,20 +243,7 @@ if result.returncode != 0:
 sha = csi.sub("", result.stdout or "").strip()
 if not sha or sha != head:
     raise SystemExit(1)
-print(
-    json.dumps(
-        {
-            "ok": True,
-            "planned": False,
-            "checkout": str(checkout),
-            "health": "current",
-            "updated": False,
-            "already_current": True,
-            "head": head,
-            "origin_main": remote,
-        }
-    )
-)
+emit()
 PY
 }
 
@@ -848,8 +901,9 @@ if mill_lock_busy; then
 fi
 : >"${LOG}"
 # GitHub SHA already matches HEAD and origin/main. Skip caretaker host-ff.
+# Fresh idle stamps skip the GitHub SHA probe. Busy lock still probes.
 # Probe failure or SHA mismatch still hosts caretaker host-ff.
-if host_ff_already_current "${ROOT}" >>"${LOG}" 2>/dev/null; then
+if host_ff_already_current "${ROOT}" "${MILL_LOCK_WAS_BUSY}" >>"${LOG}" 2>/dev/null; then
   :
 elif ! uv run lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}" 2>&1; then
   bootstrap_incident "host_behind"

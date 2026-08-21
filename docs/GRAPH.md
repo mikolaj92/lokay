@@ -28,7 +28,8 @@ cheap GitHub probe of mill PR / inbox / ready lists refreshes the stamp and
 skips Fala when all three are still empty. Probe failure or remaining work
 hosts. Missing stamp, occupied last-pass, or pytest always hosts.
 mill-daemon skips caretaker `lokay-host-ff` when GitHub `main` already
-matches HEAD and `origin/main`. Probe failure or SHA mismatch still runs
+matches HEAD and `origin/main`. Fresh idle stamps skip the GitHub SHA
+probe. Busy lock still probes. Probe failure or SHA mismatch still runs
 host-ff. Local clones still run host-ff. When last-pass is idle, it
 skips `lokay-daemon` while empty-survey and leftover-closeout stamps are
 fresh. After leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
