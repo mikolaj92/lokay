@@ -938,6 +938,34 @@ def test_over_cap_skips_github_when_recent_idle_stamp(tmp_path, monkeypatch):
     assert stamp.stat().st_mtime == before
 
 
+def test_pytest_does_not_skip_over_cap_github_views_using_the_mill_stamp(
+    tmp_path, monkeypatch
+):
+    mill = tmp_path / ".lokay"
+    mill.mkdir()
+    stamp = mill / "reap-over-cap.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv(
+        "PYTEST_CURRENT_TEST",
+        "test_pytest_does_not_skip_over_cap_github_views_using_the_mill_stamp",
+    )
+    assert reap_stale_worktrees.over_cap_recently_idle(stamp) is False
+    hermetic = tmp_path / "reap-over-cap.stamp"
+    hermetic.write_text("1", encoding="utf-8")
+    assert reap_stale_worktrees.over_cap_recently_idle(hermetic) is True
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_worktrees.py"
+    )
+    assert "Pytest must not skip over-cap GitHub views using the mill stamp." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_over_cap_probes_when_idle_stamp_expired(tmp_path, monkeypatch):
     cap = reap_stale_worktrees.CLASSIFY_CAP
     stamp = tmp_path / "reap-over-cap.stamp"
