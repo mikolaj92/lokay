@@ -30,6 +30,7 @@ Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
 Harvest leftovers are not mill issues. Idle CLASSIFY_CAP reaps empty
 no-issue leftovers so harvest leftovers cannot freeze mill porcelain.
 Idle KEEP-only leftovers still write the over-cap stamp.
+Idle over-cap skip outlives leftover-probe.
 Nested clones are not mill leftover
 worktrees. Mill worktrees keep a .git file.
 `uv.lock`-only is not real uncommitted content. After the

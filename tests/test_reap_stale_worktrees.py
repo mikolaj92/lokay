@@ -1391,6 +1391,35 @@ def test_reap_idle_keep_only_leftovers_write_over_cap_stamp(tmp_path, monkeypatc
     assert stamp.is_file()
 
 
+def test_idle_over_cap_skip_outlives_leftover_probe(tmp_path, monkeypatch):
+    """Idle over-cap skip outlives leftover-probe. Hosted factory_pass stays 300s."""
+    stamp = tmp_path / "reap-over-cap.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    leftover_age = time.time() - 301
+    os.utime(stamp, (leftover_age, leftover_age))
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "has_unreadable_issue_to_pr_receipts",
+        lambda: False,
+    )
+
+    def boom(*_a, **_k):
+        raise AssertionError("idle over-cap skip outlives leftover-probe")
+
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", boom)
+    monkeypatch.setattr(reap_stale_worktrees, "list_uncommitted_paths", boom)
+    monkeypatch.setattr(reap_stale_worktrees, "iter_worktrees", boom)
+    reap_stale_worktrees.reap_idle_closed_worktrees(
+        config_path=str(_config(tmp_path)), live=True
+    )
+    assert stamp.stat().st_mtime == leftover_age
+    assert reap_stale_worktrees.over_cap_recently_idle(stamp) is False
+    assert reap_stale_worktrees.over_cap_recently_idle(
+        stamp, ttl=reap_stale_worktrees.IDLE_OVER_CAP_TTL_SECONDS
+    ) is True
+
+
 def test_reap_idle_closed_worktrees_skips_when_not_live(tmp_path, monkeypatch):
     monkeypatch.setattr(
         reap_stale_worktrees,
