@@ -429,6 +429,24 @@ def _isolated_mill_roots(state_path: Path, home: Path) -> tuple[Path, Path]:
     return state.parent / "cycle", state.parent
 
 
+def _drop_out_of_scope_stuck_rows(
+    stuck: dict[str, Any], repos: list[str] | None
+) -> None:
+    """Keep only the mill catalog. Omit repos in unit tests so fixtures stay."""
+    if repos is None:
+        return
+    allowed = {str(name).strip() for name in repos if str(name).strip()}
+    if not allowed:
+        return
+    for key in list((stuck.get("issues") or {})):
+        repo, sep, num_s = str(key).rpartition("#")
+        issue = _as_int(num_s)
+        if not sep or not repo or issue is None:
+            continue
+        if repo not in allowed:
+            clear_issue(stuck, repo, issue)
+
+
 def harvest_fail_closed_children(
     stuck: dict[str, Any],
     *,
@@ -436,6 +454,7 @@ def harvest_fail_closed_children(
     cycle_dir: Path | None = None,
     is_live: Callable[[int], bool] | None = None,
     home: Path | None = None,
+    repos: list[str] | None = None,
 ) -> dict[str, Any]:
     """Skip tickets whose detached child already died fail-closed / miss-N.
 
@@ -591,4 +610,5 @@ def harvest_fail_closed_children(
             error=str(row.get("last_error") or counted),
         )
     _clear_github_closed_mill_rows(stuck)
+    _drop_out_of_scope_stuck_rows(stuck, repos)
     return stuck

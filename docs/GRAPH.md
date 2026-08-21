@@ -286,7 +286,8 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   clears a stale `no_pr` stuck row. `clear_issue` marks `cleared` so
   `save_stuck` cannot restore a delivered corpse. GitHub CLOSED on the
   mill repo (`mill_scope`) also drops leftover stuck rows after compact
-  dropped the journal event.
+  dropped the journal event. Harvest then drops stuck rows outside the
+  mill catalog so a mini mill cannot keep Temida/test corpses.
 - **Published-tip retry** (`origin/<branch>` exists — including a closed
   CONFLICTING tip that matches HEAD) resets the corner from `origin/<base>`
   and deletes the stale remote tip. KEEP only unpublished ahead that already

@@ -179,6 +179,75 @@ def test_github_closed_mill_issue_clears_stuck_without_journal(tmp_path: Path, m
     assert excluded_numbers(stuck, "mikolaj92/lokay") == {178}
 
 
+def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
+    """Mini mill must not keep Temida/test corpses on this host's ledger."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    stuck = {
+        "issues": {
+            "mikolaj92/lokay#178": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "rebase_conflict",
+            },
+            "mikolaj92/Temida#4094": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "plan_only",
+            },
+            "a/one#2": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "test_local_recheck_failed",
+            },
+        }
+    }
+    monkeypatch.setattr(
+        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+    )
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        repos=["mikolaj92/lokay"],
+    )
+    assert set(stuck["issues"]) == {"mikolaj92/lokay#178"}
+    assert "mikolaj92/Temida#4094" in (stuck.get("cleared") or [])
+    assert "a/one#2" in (stuck.get("cleared") or [])
+
+
+def test_harvest_without_repos_keeps_hermetic_rows(tmp_path: Path):
+    """Harvest unit tests omit repos; do not wipe physics fixtures."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    stuck = {
+        "issues": {
+            "a/one#2": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "test_local_recheck_failed",
+            },
+            "a/two#2": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "plan_only",
+            },
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+    )
+    assert set(stuck["issues"]) == {"a/one#2", "a/two#2"}
+
+
 def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
     """ok=True and no PR is a stop/race, not FAIL_CLOSED no_pr."""
     cycle = tmp_path / "cycle"
