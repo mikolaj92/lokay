@@ -467,23 +467,31 @@ def closed_ready(rows):
 repo = os.environ.get("LOKAY_MILL_REPO", "").strip() or "mikolaj92/lokay"
 leftover_probed = False
 if leftover_age >= 300:
-    # Leftover-probe GitHub lists run together. Probe failure still hosts.
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        fut_work = pool.submit(
-            gh_list,
-            ["issue", "list", "--repo", repo, "--state", "closed", "--label", "work:ready", "--json", "number,state", "--limit", "100"],
-            100,
+    # Leftover-probe batches both CLOSED label reads into one GraphQL request.
+    # Probe failure, pagination, or malformed data still hosts.
+    owner, sep, name = repo.partition("/")
+    if not sep or not owner or not name:
+        raise SystemExit(1)
+    query = """query($owner:String!,$name:String!){repository(owner:$owner,name:$name){work:issues(first:100,states:CLOSED,labels:["work:ready"]){nodes{number state} pageInfo{hasNextPage}} ai:issues(first:100,states:CLOSED,labels:["ai:ready"]){nodes{number state} pageInfo{hasNextPage}}}}"""
+    try:
+        result = subprocess.run(
+            ["gh", "api", "graphql", "-f", f"query={query}", "-F", f"owner={owner}", "-F", f"name={name}"],
+            capture_output=True, text=True, timeout=60, check=False, env={**os.environ, "GH_NO_COLOR": "1", "NO_COLOR": "1"},
         )
-        fut_ai = pool.submit(
-            gh_list,
-            ["issue", "list", "--repo", repo, "--state", "closed", "--label", "ai:ready", "--json", "number,state", "--limit", "100"],
-            100,
-        )
-        work_ready = fut_work.result()
-        ai_ready = fut_ai.result()
-    leftover_work = closed_ready(work_ready)
-    leftover_ai = closed_ready(ai_ready)
-    if leftover_work is None or leftover_ai is None or leftover_work or leftover_ai:
+        payload = json.loads(csi.sub("", result.stdout or "{}")) if result.returncode == 0 else {}
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        raise SystemExit(1)
+    repository = ((payload.get("data") or {}).get("repository") or {}) if isinstance(payload, dict) else {}
+    work_ready = repository.get("work") or {}
+    ai_ready = repository.get("ai") or {}
+    if not isinstance(work_ready, dict) or not isinstance(ai_ready, dict):
+        raise SystemExit(1)
+    if (work_ready.get("pageInfo") or {}).get("hasNextPage") or (ai_ready.get("pageInfo") or {}).get("hasNextPage"):
+        raise SystemExit(1)
+    work_rows, ai_rows = work_ready.get("nodes"), ai_ready.get("nodes")
+    if not isinstance(work_rows, list) or not isinstance(ai_rows, list):
+        raise SystemExit(1)
+    if closed_ready(work_rows) or closed_ready(ai_rows):
         raise SystemExit(1)
     try:
         Path(leftover_stamp).write_text(str(int(now)), encoding="utf-8")

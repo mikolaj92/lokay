@@ -353,8 +353,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   leftover lists still probe.
   Leftover-probe skips GitHub SHA when survey stamp is still fresh.
   Mill-probe skips GitHub SHA when leftover stamp is still fresh.
-  Combined leftover+survey expiry still probes SHA. mill-daemon runs
-  those two leftover lists together. After survey-stamp expiry, one batched GraphQL read probes mill PR / inbox /
+  Combined leftover+survey expiry still probes SHA. One batched GraphQL read
+  probes both CLOSED ready labels. After survey-stamp expiry, one batched GraphQL read probes mill PR / inbox /
   ready state and refreshes the survey stamp. Pagination, malformed data, or
   probe failure still hosts.
   Remaining leftovers, occupied last-pass, digest mismatch, or host-ff update still
