@@ -738,7 +738,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
         else None
     )
     if incident_recently_empty(stamp, ttl=idle_ttl):
-        return {"ok": True, "closed": [], "skipped": True, "reason": "recent_empty"}
+        # Fresh leftover-incident skip is not applied.
+        return {
+            "ok": True,
+            "closed": [],
+            "skipped": True,
+            "reason": "recent_empty",
+            "applied": False,
+        }
     try:
         from lokay.triage import is_preflight_incident
     except ImportError:
