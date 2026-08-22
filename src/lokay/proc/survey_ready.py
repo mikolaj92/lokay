@@ -119,7 +119,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             if state != "CLOSED":
                 open_work_ready.append(issue)
                 continue
-            park_argv = ["--repo", repo_name, "--issue", str(number)]
+            park_argv = [*cfg_flag, *live_flag, "--repo", repo_name, "--issue", str(number)]
             if not live:
                 park_argv.append("--dry-run")
             parked = run_proc(p_park.main, park_argv)
@@ -163,7 +163,7 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
             )
         for issue in blocked_ready:
             number = int(issue["number"])
-            park_argv = ["--repo", repo_name, "--issue", str(number)]
+            park_argv = [*cfg_flag, *live_flag, "--repo", repo_name, "--issue", str(number)]
             if not live:
                 park_argv.append("--dry-run")
             parked = run_proc(p_park.main, park_argv)

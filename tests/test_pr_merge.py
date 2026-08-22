@@ -93,7 +93,7 @@ def test_lokay_repo_still_merges_and_parks_issue(
     assert park_calls == [
         (
             pr_merge.unbounded_park.main,
-            ["--repo", "mikolaj92/lokay", "--issue", "522"],
+            ["--live", "--repo", "mikolaj92/lokay", "--issue", "522"],
         )
     ]
     assert json.loads(capsys.readouterr().out) == {

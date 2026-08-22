@@ -294,7 +294,7 @@ def test_survey_ready_parks_blocked_ready_issue(tmp_path, monkeypatch):
     )
 
     assert result["ok"] is True
-    assert parked == [["--repo", "owner/repo", "--issue", "7"]]
+    assert parked == [["--live", "--repo", "owner/repo", "--issue", "7"]]
     survey = pass_io.read_json(pass_io.survey_path(pass_dir))
     assert [issue["number"] for issue in survey["ready_by_repo"]["owner/repo"]] == [8]
     assert survey["remaining_ready"] == 1
@@ -383,7 +383,7 @@ def test_survey_ready_live_rechecks_and_parks_closed_issue(tmp_path, monkeypatch
 
     assert result["ok"] is True
     assert listed == [["--live", "--repo", "owner/repo", "--label", "work:ready"]]
-    assert parked == [["--repo", "owner/repo", "--issue", "7"]]
+    assert parked == [["--live", "--repo", "owner/repo", "--issue", "7"]]
     survey = pass_io.read_json(pass_io.survey_path(pass_dir))
     assert [issue["number"] for issue in survey["ready_by_repo"]["owner/repo"]] == [8]
     assert survey["remaining_ready"] == 1

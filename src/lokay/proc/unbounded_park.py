@@ -1,6 +1,8 @@
 """Atomic: park an unbounded issue by removing work:ready and ai:ready.
 
 Mill will not sit a Pi on an issue that is no longer ready.
+--live plus a healthy mill enables mutation. Otherwise the atom plans only.
+Hosted unbounded parks require healthy. Planned parks do not.
 --dry-run prints the gh command and does not mutate.
 Fail-closed if repo or issue is missing.
 """
@@ -12,6 +14,7 @@ import subprocess
 from typing import Sequence
 
 from lokay.envelope import emit_exit, err, ok
+from lokay.proc._common import add_config_live, load_cfg, mutations_allowed
 from lokay.safety import validate_argv
 
 READY_LABEL = "ai:ready"
@@ -65,6 +68,7 @@ def run_gh(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-unbounded-park")
+    add_config_live(p)
     p.add_argument("--repo", help="GitHub repo owner/name")
     p.add_argument("--issue", type=int, help="issue number")
     p.add_argument(
@@ -93,10 +97,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     command = park_argv(repo, issue)
     display = " ".join(command)
-    if args.dry_run:
+    if args.dry_run or not args.live:
         return emit_exit(
             ok(
-                dry_run=True,
+                dry_run=bool(args.dry_run),
                 planned=True,
                 applied=False,
                 removed=False,
@@ -107,6 +111,10 @@ def main(argv: list[str] | None = None) -> int:
                 argv=command,
             )
         )
+    cfg = load_cfg(args)
+    apply = mutations_allowed(live_flag=True, cfg=cfg)
+    if not apply:  # pragma: no cover - mutations_allowed is fail-closed
+        return emit_exit(err("live mutation blocked", repo=repo, issue=issue))
     result = run_gh(command)
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()

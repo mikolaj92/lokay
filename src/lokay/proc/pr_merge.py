@@ -46,7 +46,14 @@ def main(argv: list[str] | None = None) -> int:
     if live and args.issue is not None:
         parked = run_proc(
             unbounded_park.main,
-            ["--repo", args.repo, "--issue", str(args.issue)],
+            [
+                *(["--config", args.config] if args.config else []),
+                "--live",
+                "--repo",
+                args.repo,
+                "--issue",
+                str(args.issue),
+            ],
         )
     return emit_exit(
         ok(

@@ -313,7 +313,14 @@ def run_reap_over_budget(
             save_stuck(stuck_path, stuck)
             result["park"] = run_proc(
                 p_park.main,
-                ["--repo", repo, "--issue", str(issue)],
+                [
+                    *(["--config", config_path] if config_path else []),
+                    *(["--live"] if live else []),
+                    "--repo",
+                    repo,
+                    "--issue",
+                    str(issue),
+                ],
             )
             # Park leaves the slot. Harvest must not CLOSE the issue.
         reaped.append(result)

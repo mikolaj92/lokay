@@ -44,7 +44,7 @@ def test_open_issue_with_merged_fixes_pr_removes_ready_labels(monkeypatch):
     assert out["delivered"] is True
     assert out["labels_removed"] is True
     assert out["pr"] == 41
-    assert parked == [["--repo", "owner/repo", "--issue", "7"]]
+    assert parked == [["--repo", "owner/repo", "--issue", "7", "--live"]]
 
 
 def test_existing_merged_delivery_is_closed_out_before_graph_can_start(monkeypatch):
@@ -108,7 +108,7 @@ def test_leftover_closed_ready_parks_without_searching_prs(monkeypatch):
     out = closeout.run_closeout_leftover(config_path=None, live=True)
     assert out["labels_removed"] is True
     assert out["closed_out"] == [{"repo": "mikolaj92/lokay", "issue": 429}]
-    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "429"]]
+    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "429", "--live"]]
 
 
 def test_leftover_skips_github_when_recent_empty_stamp(monkeypatch, tmp_path):
@@ -305,8 +305,15 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
     monkeypatch.setattr(closeout, "closed_ready_numbers", fake_closed_ready)
     calls: list[dict[str, object]] = []
 
-    def fake_park(*, repo, issue, allowed):
-        calls.append({"repo": repo, "issue": issue, "allowed": allowed})
+    def fake_park(*, repo, issue, allowed, config_path=None):
+        calls.append(
+            {
+                "repo": repo,
+                "issue": issue,
+                "allowed": allowed,
+                "config_path": config_path,
+            }
+        )
         return {"ok": True, "removed": True}
 
     monkeypatch.setattr(closeout, "_park_ready", fake_park)
@@ -318,7 +325,12 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
         ("mikolaj92/lokay", "ai:ready"),
     ]
     assert calls == [
-        {"repo": "mikolaj92/lokay", "issue": 7, "allowed": True}
+        {
+            "repo": "mikolaj92/lokay",
+            "issue": 7,
+            "allowed": True,
+            "config_path": None,
+        }
     ]
 
 

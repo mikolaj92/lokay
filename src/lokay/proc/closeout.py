@@ -22,12 +22,9 @@ LEFTOVER_TTL_SECONDS = 300
 LEFTOVER_STAMP_NAME = "leftover-closeout.stamp"
 
 
-def _park_ready(
-    *, repo: str, issue: int, allowed: bool
-) -> dict[str, Any]:
-    argv = ["--repo", repo, "--issue", str(issue)]
-    if not allowed:
-        argv.append("--dry-run")
+def _park_ready(*, repo: str, issue: int, allowed: bool, config_path: str | None = None) -> dict[str, Any]:
+    argv = [*(["--config", config_path] if config_path else []), "--repo", repo, "--issue", str(issue)]
+    argv.append("--live" if allowed else "--dry-run")
     return run_proc(p_park.main, argv)
 
 
@@ -41,7 +38,7 @@ def run_closeout(
     )
     if pull is None:
         return ok(repo=repo, issue=issue, delivered=False, labels_removed=False)
-    parked = _park_ready(repo=repo, issue=issue, allowed=allowed)
+    parked = _park_ready(repo=repo, issue=issue, allowed=allowed, config_path=config_path)
     return ok(
         repo=repo,
         issue=issue,
@@ -173,7 +170,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
                 if key in seen:
                     continue
                 seen.add(key)
-                parked = _park_ready(repo=name, issue=number, allowed=allowed)
+                parked = _park_ready(repo=name, issue=number, allowed=allowed, config_path=config_path)
                 if parked.get("ok") and parked.get("removed"):
                     closed_out.append({"repo": name, "issue": number})
     if closed_out:

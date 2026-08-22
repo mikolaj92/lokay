@@ -343,7 +343,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   mill-daemon skips python `idle_skip_daemon` on that path. After
   leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
   `work:ready` / `ai:ready` mill issues refreshes that stamp. Fresh leftover skip does not require
-  healthy. Hosted leftover parks still do. Leftover-probe
+  healthy. Hosted leftover parks still do. Hosted unbounded parks require
+  healthy. Planned parks do not.
+  Leftover-probe
   still hosts `lokay-daemon` so idle reap continues. Leftover-probe still
   hosts `lokay-daemon` even when mill-probe would also run.
   Leftover-probe host skips GitHub `/user` this tick. Hosted ticks without

@@ -189,7 +189,17 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
     assert env["merged"] is True
     assert env["issue"] == 164
     assert env["parked"]["removed"] is True
-    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "164"]]
+    assert parked == [
+        [
+            "--config",
+            str(cfg),
+            "--live",
+            "--repo",
+            "mikolaj92/lokay",
+            "--issue",
+            "164",
+        ]
+    ]
 
 
 def test_pr_merge_refuses_product_repo_without_calling_gh(

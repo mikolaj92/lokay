@@ -41,7 +41,7 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
         state = str((fetched.get("issue") or {}).get("state") or "").upper()
         if fetched.get("ok") and state != "OPEN":
             if live:
-                parked = run_proc(p_park.main, ["--repo", repo, "--issue", str(issue_n)])
+                parked = run_proc(p_park.main, [*cfg, "--live", "--repo", repo, "--issue", str(issue_n)])
                 actions.append({"step": "park_closed_issue", "repo": repo, "issue": issue_n, "pr": n, **parked})
                 clear_issue(stuck, repo, issue_n)
                 save_stuck(stuck_path, stuck)
@@ -80,7 +80,7 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
     progress = remaining_closed = 1
     apply_deltas(c, {"mergeable_green": -1})
     if issue_n is not None:
-        parked = run_proc(p_park.main, ["--repo", repo, "--issue", str(issue_n)])
+        parked = run_proc(p_park.main, [*cfg, "--live", "--repo", repo, "--issue", str(issue_n)])
         actions.append({"step": "park_closed_issue", "repo": repo, "issue": issue_n, "pr": n, **parked})
         clear_issue(stuck, repo, issue_n)
         save_stuck(stuck_path, stuck)
