@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -130,6 +131,19 @@ def test_list_ready_fail_closed_when_page_is_full(tmp_path):
     cfg, repo = _cfg(tmp_path)
     with pytest.raises(RuntimeError, match="newest-first cap"):
         list_ready_issues(runner, cfg, repo, live=True)
+
+
+def test_list_ready_rate_limit_is_not_an_empty_queue(tmp_path):
+    class RateLimitedRunner(_ListRunner):
+        def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:
+            raise RuntimeError("HTTP 429: API rate limit exceeded")
+
+    cfg, repo = _cfg(tmp_path)
+    with pytest.raises(RuntimeError, match="rate limit"):
+        list_ready_issues(RateLimitedRunner([]), cfg, repo, live=True)
+
+    source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "gh_issues.py"
+    assert "Ready-list rate limit is not an empty queue." in source.read_text(encoding="utf-8")
 
 
 def test_list_inbox_uses_full_page(tmp_path):
