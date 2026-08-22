@@ -20,35 +20,6 @@ def test_repair_prompt_delimits_untrusted_review() -> None:
     assert "<review-evidence>" in prompt
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_product_repo_skips_without_config_fala_or_state(
-    repo: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not run config, Fala, or state I/O")
-
-    monkeypatch.setattr(pr_repair, "load_config", fail_if_called)
-    monkeypatch.setattr(pr_repair, "run_path", fail_if_called)
-    monkeypatch.setattr(pr_repair, "append_event", fail_if_called)
-
-    assert pr_repair.compose_pr_repair(
-        config_path=None,
-        repo=repo,
-        pr_number=528,
-        branch="ai/fix/528-product",
-        live=True,
-        review={"blocking": ["do not process"]},
-    ) == {
-        "ok": True,
-        "kind": "pr_repair",
-        "engine": "fala",
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "pr": 528,
-        "branch": "ai/fix/528-product",
-    }
 
 
 def test_lokay_repo_runs_fala_and_propagates_review(

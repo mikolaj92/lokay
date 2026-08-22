@@ -18,10 +18,8 @@ from lokay.pr_review import (
 )
 from lokay.pr_review_io import load_pr_evidence, publish_decision, publish_fail_closed, review_worktree
 from lokay.proc._common import add_config_live, agent_execute_allowed, load_cfg, mutations_allowed, runner
-from lokay.mill_scope import SKIP_REASON, mill_repo
 
 
-MINI_MILL_REPO = mill_repo()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,18 +31,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--checks-text", default="", help="optional CI text; otherwise re-fetched lightly via pr view")
     args = p.parse_args(argv)
     live = bool(args.live)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                offline=not live,
-                skipped=True,
-                reason=SKIP_REASON,
-                repo=args.repo,
-                pr=args.pr,
-                merge_ok=False,
-                applied=False,
-            )
-        )
     cfg, r = load_cfg(args), runner()
     execute = agent_execute_allowed(cfg, live_flag=args.live)
     if live and cfg.mode != "live":

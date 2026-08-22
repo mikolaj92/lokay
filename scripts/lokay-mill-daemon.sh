@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Continuous Lokay mill — one pass, invoked by launchd.
-# mill_scope=mikolaj92/lokay (this host). Catalog yaml is not the delivery set.
+# The delivery set is every enabled repository in the configured catalog.
 # Host LaunchAgent StartInterval is 60s (not 600). Plist stays on the host.
 set -euo pipefail
 
@@ -430,7 +430,12 @@ def closed_ready(rows):
         for row in rows
     )
 
-repo = os.environ.get("LOKAY_MILL_REPO", "").strip() or "mikolaj92/lokay"
+repo = os.environ.get("LOKAY_MILL_REPO", "").strip()
+# The one-repo GraphQL shortcut is safe only for an explicit canary override.
+# A full-catalog stale probe hosts lokay-daemon, whose Fala survey rotates the
+# catalog without turning partial evidence into an empty-fleet verdict.
+if not repo:
+    raise SystemExit(1)
 leftover_probed = False
 if leftover_age >= 300:
     # Leftover-probe batches both CLOSED label reads into one GraphQL request.

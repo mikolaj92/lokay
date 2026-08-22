@@ -16,7 +16,6 @@ from lokay.gh_prs import list_open_ai_prs
 from lokay.proc._common import load_cfg, runner
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict[str, Any]:
@@ -24,7 +23,7 @@ def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict
     r = runner(cfg)
     items: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
-    repos = [repo for repo in cfg.active_repos() if repo.name == MINI_MILL_REPO]
+    repos = list(cfg.active_repos())
 
     for repo in repos:
         try:

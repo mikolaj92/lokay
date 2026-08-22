@@ -11,7 +11,6 @@ from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 from lokay.stuck import is_blocked_in_ledger, load_stuck, stuck_path_for
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,10 +20,6 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = read_live(args)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(offline=not live, repo=args.repo, issues=[], count=0, actions=[])
-        )
     repo = next((r for r in cfg.repos if r.name == args.repo), None)
     if repo is None:
         repo = RepoConfig(name=args.repo, clone_path=cfg.worktrees_root / "unused")

@@ -51,7 +51,6 @@ OVER_CAP_STAMP_NAME = "reap-over-cap.stamp"
 
 # The mini mill only delivers Lokay. Product repositories can remain in the
 # shared catalog, but this atom must not inspect or classify their worktrees.
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def over_cap_stamp_path(cfg: Any) -> Path | None:
@@ -292,8 +291,6 @@ def run_reap_stale_worktrees(
     apply = False
 
     for repo in cfg.active_repos():
-        if repo.name != MINI_MILL_REPO:
-            continue
         if scope is not None and repo.name not in scope:
             continue
         leftovers = iter_worktrees(cfg, repo)
@@ -617,8 +614,6 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
     classified = False
     git = None
     for repo in cfg.active_repos():
-        if repo.name != MINI_MILL_REPO:
-            continue
         if repo.name in live_repos:
             return
         leftovers = iter_worktrees(cfg, repo)

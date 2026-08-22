@@ -20,7 +20,6 @@ from lokay.models import Issue
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def _issue_from_args(args: argparse.Namespace) -> Issue:
@@ -74,18 +73,6 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(str(exc)))
 
     worktree = Path(args.worktree)
-    if issue.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=not args.live,
-                wrote=False,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=issue.repo,
-                issue=issue.number,
-                worktree=str(worktree),
-            )
-        )
 
     if args.llm:
         # Skippable slot: default path is deterministic. Requesting LLM without a

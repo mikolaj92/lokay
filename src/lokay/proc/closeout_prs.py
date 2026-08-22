@@ -14,9 +14,8 @@ from lokay.passkit.working import (
 )
 from lokay.closeout import COUNTERS
 from lokay.proc._common import add_config_live
-from lokay.proc.closeout_pr import MINI_MILL_REPO, run_closeout_pr
+from lokay.proc.closeout_pr import run_closeout_pr
 from lokay.stuck import save_stuck
-from lokay.mill_scope import SKIP_REASON, in_scope
 
 
 def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -35,18 +34,6 @@ def run_closeout_prs(*, pass_dir: str, config_path: str | None, live: bool) -> d
     skipped_repos: list[str] = []
 
     for repo_name in list(begin.get("repos") or []):
-        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
-            skipped_repos.append(repo_name)
-            actions.append(
-                {
-                    "step": "skip_repo_outside_mini_mill",
-                    "repo": repo_name,
-                    "ok": True,
-                    "skipped": True,
-                    "reason": SKIP_REASON,
-                }
-            )
-            continue
         still_open: list[dict[str, Any]] = []
         for pr in list(prs_by_repo.get(repo_name) or []):
             out = run_closeout_pr(

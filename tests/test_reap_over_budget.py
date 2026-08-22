@@ -5,44 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from lokay.models import Issue
 from lokay.proc import reap_over_budget
 from lokay.proc.detach_issue_to_pr import issue_to_pr_receipt_path
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_skips_product_receipts_without_inspecting_or_mutating(repo, monkeypatch):
-    receipt = {"repo": repo, "issue": 9, "pid": 4242}
-    monkeypatch.setattr(
-        reap_over_budget, "live_issue_to_pr_receipts", lambda: [receipt]
-    )
-
-    def unexpected(*_args, **_kwargs):
-        raise AssertionError("product receipt must not be inspected or mutated")
-
-    monkeypatch.setattr(reap_over_budget, "get_issue", unexpected)
-    monkeypatch.setattr(reap_over_budget, "check_pi_budget", unexpected)
-    monkeypatch.setattr(reap_over_budget, "terminate_issue_to_pr_pid", unexpected)
-    monkeypatch.setattr(reap_over_budget, "issue_to_pr_receipt_path", unexpected)
-    monkeypatch.setattr(reap_over_budget, "run_proc", unexpected)
-
-    out = reap_over_budget.run_reap_over_budget(budget_s=480, live=True)
-
-    assert out["ok"] is True
-    assert out["skipped"] is True
-    assert out["reason"] == "repo_not_delivered_by_mini_mill"
-    assert out["reaped_count"] == 0
-    assert out["reaped"] == []
-    assert out["kept"] == []
-    assert out["skipped_receipts"] == [
-        {
-            **receipt,
-            "skipped": True,
-            "reason": "repo_not_delivered_by_mini_mill",
-        }
-    ]
 
 
 def test_reaps_over_budget_live_receipt(tmp_path, monkeypatch):

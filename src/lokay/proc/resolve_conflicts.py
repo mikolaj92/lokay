@@ -17,10 +17,9 @@ from lokay.proc import pr_close as p_pr_close
 from lokay.proc import stage_label as p_stage
 from lokay.proc._common import add_config_live
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
-from lokay.mill_scope import SKIP_REASON, in_scope, mill_repo
+from lokay.mill_scope import SKIP_REASON
 
 
-MINI_MILL_REPO = mill_repo()
 
 
 def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -45,16 +44,6 @@ def run_resolve_conflicts(*, pass_dir: str, config_path: str | None, live: bool)
     skipped_repos: list[str] = []
 
     for repo_name in list(begin.get("repos") or []):
-        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
-            skipped_repos.append(repo_name)
-            actions.append(
-                {
-                    "step": "skip_resolve_conflicts_outside_mini_scope",
-                    "repo": repo_name,
-                    "reason": SKIP_REASON,
-                }
-            )
-            continue
         pr_list = list(prs_by_repo.get(repo_name) or [])
         still_open: list[dict[str, Any]] = []
         for pr in pr_list:

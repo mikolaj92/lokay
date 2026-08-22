@@ -12,23 +12,8 @@ from lokay.compose.tick import compose_tick
 from lokay.config import load_config, starter_config_text
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
-
-
 def _print(data: object) -> None:
     print(json.dumps(data, indent=2, ensure_ascii=False, default=str))
-
-
-def _limit_repo_metadata(payload: dict[str, object]) -> None:
-    """Keep umbrella CLI output scoped to this mill's delivery repository."""
-    for key in ("repos", "repos_disabled"):
-        repos = payload.get(key)
-        if isinstance(repos, list):
-            payload[key] = [name for name in repos if name == MINI_MILL_REPO]
-    if "repos_total" in payload:
-        payload["repos_total"] = sum(
-            len(payload.get(key) or []) for key in ("repos", "repos_disabled")
-        )
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -50,7 +35,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_validate(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     errors = cfg.validate()
-    mill_repos = [repo for repo in cfg.repos if repo.name == MINI_MILL_REPO]
+    mill_repos = list(cfg.repos)
     _print(
         {
             "config": str(cfg.config_path),
@@ -95,7 +80,6 @@ def cmd_status(args: argparse.Namespace) -> int:
         survey=survey,
         preflight_check=bool(getattr(args, "preflight", False) and not survey),
     )
-    _limit_repo_metadata(payload)
     _print(payload)
     return 0 if payload.get("ok") else 1
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import json
 
 from lokay.gh_prs import find_pr_fixing_issue
@@ -32,16 +33,8 @@ def _closing_row(issue: int) -> dict:
     }
 
 
-def test_find_pr_fixing_issue_temida_returns_none_without_gh() -> None:
-    runner = _Runner([_closing_row(436)])
-    assert find_pr_fixing_issue(runner, "mikolaj92/Temida", 436, live=True) is None
-    assert runner.calls == []
 
 
-def test_find_pr_fixing_issue_reviewkit_returns_none_without_gh() -> None:
-    runner = _Runner([_closing_row(436)])
-    assert find_pr_fixing_issue(runner, "mikolaj92/reviewkit", 436, live=True) is None
-    assert runner.calls == []
 
 
 def test_find_pr_fixing_issue_rejects_mixed_slurped_pages() -> None:

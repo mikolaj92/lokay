@@ -18,11 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     cfg = load_cfg(args)
-    repos = [
-        repo
-        for repo in (cfg.repos if args.all else cfg.active_repos())
-        if repo.name == "mikolaj92/lokay"
-    ]
+    repos = list(cfg.repos if args.all else cfg.active_repos())
     rows = []
     for repo in repos:
         rows.append(

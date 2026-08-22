@@ -16,11 +16,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from lokay.mill_scope import SKIP_REASON, delivers, mill_repo
+from lokay.mill_scope import SKIP_REASON
 
 
 _ACTIVATION_PROTOCOL = "pipe-v1"
-MINI_MILL_REPO = mill_repo()
 _REPO_SKIP_REASON = SKIP_REASON
 
 
@@ -560,15 +559,6 @@ def detach_issue_to_pr(
     """
     repo_name = str(repo)
     issue_number = int(issue)
-    if not delivers(repo_name, mill=MINI_MILL_REPO):
-        return {
-            "ok": True,
-            "detached": False,
-            "skipped": True,
-            "reason": _REPO_SKIP_REASON,
-            "repo": repo_name,
-            "issue": issue_number,
-        }
 
     spawn = popen or subprocess.Popen
     argv = [sys.executable, "-u", "-m", "lokay.compose.issue_to_pr"]

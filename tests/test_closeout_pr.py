@@ -95,25 +95,6 @@ def _run(
     return out, triage_calls, repair_calls, stages
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_product_repo_skips_without_any_effect(repo, monkeypatch, tmp_path):
-    def fail(*_args, **_kwargs):
-        raise AssertionError("product repositories must not reach GitHub or composers")
-
-    monkeypatch.setattr(closeout_pr, "run_proc", fail)
-    monkeypatch.setattr(closeout_pr, "compose_pr_triage", fail)
-    monkeypatch.setattr(closeout_pr, "compose_pr_repair", fail)
-    out = run_closeout_pr(
-        repo=repo, pr=_pr(), config_path=None, live=True, merge_enabled=True,
-        require_checks=False, repair_budget=1, executor_enabled=True,
-        branch_prefix="ai/fix/", stuck={"issues": {}},
-        stuck_path=tmp_path / "stuck.json",
-    )
-    assert out["route"] == "skip"
-    assert out["reason"] == "repo_not_delivered_by_mini_mill"
-    assert out["still_open"] is True
-    assert out["actions"] == []
-    assert out["repair_budget"] == 1
 
 
 def test_pending_waits_without_ci_waiting_label(monkeypatch, tmp_path):

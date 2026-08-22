@@ -143,7 +143,7 @@ host_ff
 | `reap_over_budget` | kill over-budget plan_only i2pr and park the slot. A live coder with a **real** diff is harvested (`commit_all` → `push` → `pr_create`) without SIGTERM |
 | `refresh_occupancy` | union just-merged + live i2pr; re-list PRs only on leftover-ready repos that are not occupied. A live receipt whose process command is unreadable remains occupied; an unreadable lifecycle receipt occupies every configured repo. Unknown is not idle. A `reaped` receipt is idle even if pi has not exited |
 | `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Over-cap stacks view at most 4 oldest issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the mill stamp. Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |
-| `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied). Live mini mill (`mill_scope`) delivers `mikolaj92/lokay` only |
+| `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied). Live mill delivers every enabled repository in the configured catalog |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design). If its live `ps` mutex survey fails, it refuses every launch: unknown is not idle. `plan_only` parks the slot; it does not CLOSE the issue. |
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |

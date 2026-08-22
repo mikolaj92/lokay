@@ -133,8 +133,6 @@ def find_pr_fixing_issue(
     merged_only: bool = False,
 ) -> dict[str, Any] | None:
     """Return a closing PR, optionally requiring it to be merged."""
-    if repo != "mikolaj92/lokay":
-        return None
     result = runner.run_checked(
         gh_spec(
             [

@@ -96,16 +96,6 @@ def main(argv: list[str] | None = None) -> int:
         help="if the full pytest suite is red, verify tests covering changed src",
     )
     args = p.parse_args(argv)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                tested=False,
-                repo=args.repo,
-                worktree=args.worktree,
-            )
-        )
     worktree = Path(args.worktree).resolve()
     if not worktree.is_dir():
         return emit_exit(err("worktree is not a directory", worktree=str(worktree)))

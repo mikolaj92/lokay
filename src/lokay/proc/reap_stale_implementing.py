@@ -24,7 +24,6 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 STALE_TTL_SECONDS = 300
 IDLE_STALE_TTL_SECONDS = 900
 STALE_STAMP_NAME = "reap-stale-implementing.stamp"
@@ -124,8 +123,6 @@ def run_reap_stale_implementing(
     probe_failed = False
     apply = False
     for repo in cfg.active_repos():
-        if repo.name != MINI_MILL_REPO:
-            continue
         if scope is not None and repo.name not in scope:
             continue
         probed = True

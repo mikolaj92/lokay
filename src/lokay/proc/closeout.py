@@ -18,7 +18,6 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 from lokay.runner import gh_spec
 
 WORK_READY_LABEL = "work:ready"
-MINI_MILL_REPO = "mikolaj92/lokay"
 LEFTOVER_TTL_SECONDS = 300
 LEFTOVER_STAMP_NAME = "leftover-closeout.stamp"
 
@@ -106,7 +105,7 @@ def _clear_leftover_stamp(stamp: Path | None) -> None:
 def closed_ready_numbers(
     issue_runner: Any, repo: str, label: str, *, live: bool
 ) -> list[int]:
-    if repo != MINI_MILL_REPO or not live or not label:
+    if not live or not label:
         return []
     cap = survey_list_cap()
     result = issue_runner.run_checked(
@@ -169,8 +168,6 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     probe_failed = False
     for repo in list(cfg.repos or []):
         name = str(repo.name)
-        if name != MINI_MILL_REPO:
-            continue
         for label in labels:
             try:
                 numbers = closed_ready_numbers(issue_runner, name, label, live=live)

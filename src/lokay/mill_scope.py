@@ -1,8 +1,8 @@
-"""This mill's delivery catalog.
+"""Configured delivery-catalog membership helpers.
 
-The live mini mill delivers mikolaj92/lokay only. Hermetic mill-physics
-tests may use a catalog that does not include that name; those catalogs
-are delivered as-is. Mixed catalogs that include the mill repo stay clamped.
+The production mill delivers every enabled repository in its configured catalog.
+``LOKAY_MILL_REPO`` remains an optional single-repository override for isolated
+canaries and hermetic tests; it is not the production default scope.
 """
 
 from __future__ import annotations
@@ -10,40 +10,49 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable
 
-DEFAULT_MILL_REPO = "mikolaj92/lokay"
-SKIP_REASON = "repo_not_delivered_by_mini_mill"
+DEFAULT_MILL_REPO = ""
+SKIP_REASON = "repo_not_in_delivery_catalog"
 
 
 def mill_repo() -> str:
-    raw = os.environ.get("LOKAY_MILL_REPO", "").strip()
-    return raw or DEFAULT_MILL_REPO
+    """Optional single-repository override. Empty means full configured catalog."""
+    return os.environ.get("LOKAY_MILL_REPO", "").strip()
 
 
-def delivers(repo: str, *, mill: str | None = None) -> bool:
+def delivers(
+    repo: str,
+    *,
+    catalog: Iterable[str] | None = None,
+    mill: str | None = None,
+) -> bool:
     name = str(repo or "").strip()
-    return bool(name) and name == (mill or mill_repo())
+    if not name:
+        return False
+    target = mill if mill is not None else mill_repo()
+    if target:
+        return name == target
+    names = {str(item).strip() for item in (catalog or ()) if str(item).strip()}
+    return name in names
 
 
 def scoped_repos(
     repos: Iterable[str], *, mill: str | None = None
 ) -> tuple[list[str], list[str]]:
-    """Return (deliver, skipped). Clamp only when mill is in the catalog."""
-    target = mill or mill_repo()
-    names = [str(r) for r in repos]
-    if target in names:
-        return [name for name in names if name == target], [
-            name for name in names if name != target
-        ]
-    return names, []
+    """Return (delivered, skipped), preserving configured catalog order."""
+    names = [str(repo).strip() for repo in repos if str(repo).strip()]
+    target = mill if mill is not None else mill_repo()
+    if not target:
+        return names, []
+    return [name for name in names if name == target], [
+        name for name in names if name != target
+    ]
 
 
-def in_scope(repo: str, catalog: Iterable[str] | None = None, *, mill: str | None = None) -> bool:
-    """Pass atoms: clamp mixed catalogs; empty catalog fails closed to mill."""
-    name = str(repo or "").strip()
-    if not name:
-        return False
-    names = [str(item) for item in catalog] if catalog is not None else []
-    if not names:
-        return delivers(name, mill=mill)
-    deliver, _ = scoped_repos(names, mill=mill)
-    return name in deliver
+def in_scope(
+    repo: str,
+    catalog: Iterable[str] | None = None,
+    *,
+    mill: str | None = None,
+) -> bool:
+    """Return true only for a catalog member (or explicit single-repo override)."""
+    return delivers(repo, catalog=catalog, mill=mill)

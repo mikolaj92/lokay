@@ -9,7 +9,6 @@ from lokay.gh_issues import get_issue
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,8 +19,6 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = read_live(args)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(ok(offline=not live, repo=args.repo, issue=None))
     try:
         issue = get_issue(runner(), cfg, args.repo, args.issue, live=live)
     except Exception as exc:  # noqa: BLE001

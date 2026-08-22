@@ -20,7 +20,6 @@ from lokay.gh_issues import (
 )
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 WORK_READY_LABEL = "work:ready"
 HYGIENE_TTL_SECONDS = 300
 IDLE_HYGIENE_TTL_SECONDS = 900
@@ -112,8 +111,6 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
     probed = False
     probe_failed = False
     for repo in cfg.active_repos():
-        if repo.name != MINI_MILL_REPO:
-            continue
         probed = True
         # Unhealthy leftover-ready still lists GitHub. Hosted leftover-ready parks still do.
         try:

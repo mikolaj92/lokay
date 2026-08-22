@@ -94,27 +94,6 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
     assert result["repairs"][0]["value"] == "[redacted]"
 
 
-def test_catalog_clone_check_ignores_product_repositories(tmp_path):
-    from types import SimpleNamespace
-
-    from lokay.preflight_checks import check_repository_catalog_clones
-
-    product_clone = tmp_path / "Temida"
-    lokay_clone = tmp_path / "lokay"
-    product_clone.mkdir()
-    cfg = SimpleNamespace(
-        active_repos=lambda: [
-            SimpleNamespace(name="mikolaj92/Temida", clone_path=product_clone),
-            SimpleNamespace(name="mikolaj92/takt", clone_path=tmp_path / "takt"),
-            SimpleNamespace(name="mikolaj92/lokay", clone_path=lokay_clone),
-        ]
-    )
-
-    finding = check_repository_catalog_clones(cfg=cfg)
-
-    assert finding["code"] == "missing_clones_allowed"
-    lokay_clone.mkdir()
-    assert check_repository_catalog_clones(cfg=cfg)["code"] == "ok"
 
 
 def test_missing_catalog_clone_does_not_block_global_preflight(tmp_path, monkeypatch):
@@ -1747,7 +1726,6 @@ def test_lease_issuance_rejects_preexisting_symlink(tmp_path, monkeypatch):
 
 
 def test_lease_atomic_publish_never_writes_swap_symlink_target(tmp_path, monkeypatch):
-    import pytest
     monkeypatch.setenv("HOME", str(tmp_path))
     lease_dir = tmp_path / ".lokay"; lease_dir.mkdir()
     victim = tmp_path / "victim"; victim.write_text("untouched")

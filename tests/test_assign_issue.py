@@ -8,30 +8,6 @@ import pytest
 from lokay.proc import assign_issue
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_assign_issue_skips_product_repo_without_gh(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(assign_issue, "load_cfg", fail_if_called)
-    monkeypatch.setattr(assign_issue, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(assign_issue, "runner", fail_if_called)
-    monkeypatch.setattr(assign_issue, "assign_issue", fail_if_called)
-
-    assert assign_issue.main(["--repo", repo, "--issue", "465", "--live"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "issue": 465,
-        "applied": False,
-    }
 
 
 def test_assign_issue_still_assigns_lokay(

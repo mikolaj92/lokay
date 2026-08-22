@@ -8,34 +8,6 @@ import pytest
 from lokay.proc import triage_issue
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_product_repo_skips_without_gh_or_config(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(triage_issue, "load_cfg", fail_if_called)
-    monkeypatch.setattr(triage_issue, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(triage_issue, "runner", fail_if_called)
-    monkeypatch.setattr(triage_issue, "get_issue", fail_if_called)
-    monkeypatch.setattr(triage_issue, "add_issue_labels", fail_if_called)
-    monkeypatch.setattr(triage_issue, "assign_issue", fail_if_called)
-    monkeypatch.setattr(triage_issue, "comment_issue", fail_if_called)
-    monkeypatch.setattr(triage_issue, "close_issue", fail_if_called)
-
-    assert triage_issue.main(["--repo", repo, "--issue", "506", "--live"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "issue": 506,
-        "applied": False,
-    }
 
 
 def test_lokay_repo_still_triages_and_applies(

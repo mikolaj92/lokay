@@ -25,7 +25,6 @@ from lokay.preflight import health_lease_status, run_preflight
 from lokay.proc._common import add_config, load_cfg
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def _offline() -> bool:
@@ -222,25 +221,7 @@ def compose_status(
             payload["error"] = "not working: mill is not live-ready"
         return payload
 
-    # factory_begin narrows mixed catalogs to MINI_MILL_REPO. Keep the status
-    # boundary fail-closed too: a product-only catalog must not reach any survey
-    # atom (and therefore must make zero GitHub calls).
-    if MINI_MILL_REPO in active_repo_names:
-        survey_result = compose_tick(config_path=config_path, live=False)
-    else:
-        survey_result = {
-            "ok": True,
-            "idle": True,
-            "health": "idle",
-            "remaining": {
-                "inbox": 0,
-                "ready": 0,
-                "open_ai_prs": 0,
-                "actionable_open_ai_prs": 0,
-                "survey_errors": 0,
-                "by_repo": [],
-            },
-        }
+    survey_result = compose_tick(config_path=config_path, live=False)
     remaining = survey_result.get("remaining") or {}
     idle = bool(survey_result.get("idle"))
     # Production signal: either truly idle, or mill is ready and can act.

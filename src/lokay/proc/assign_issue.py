@@ -9,7 +9,6 @@ from lokay.gh_issues import assign_issue
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,17 +17,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", required=True)
     p.add_argument("--issue", required=True, type=int)
     args = p.parse_args(argv)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=not args.live,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=args.repo,
-                issue=args.issue,
-                applied=False,
-            )
-        )
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:

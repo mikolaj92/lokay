@@ -10,33 +10,6 @@ from lokay.proc.pr_route import run_pr_route
 from lokay.runner import CommandResult, CommandSpec
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-def test_product_repo_skips_without_gh_or_config(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(pr_checks, "load_cfg", fail_if_called)
-    monkeypatch.setattr(pr_checks, "read_live", lambda _args: True)
-    monkeypatch.setattr(pr_checks, "runner", fail_if_called)
-    monkeypatch.setattr(pr_checks, "pr_checks_report", fail_if_called)
-
-    assert pr_checks.main(["--repo", repo, "--pr", "488"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "offline": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "pr": 488,
-        "status": "skipped",
-        "green": False,
-        "no_checks": False,
-        "merge_ok": False,
-    }
 
 
 def test_lokay_repo_still_checks(

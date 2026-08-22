@@ -150,24 +150,23 @@ def _github_closed_mill_issues(repo: str) -> set[int]:
     return out
 
 
-def _clear_github_closed_mill_rows(stuck: dict[str, Any]) -> None:
-    """Compacted journals lose issue_closed; GitHub CLOSED is still delivery."""
-    mill = mill_repo()
-    prefix = f"{mill}#"
-    mill_rows = [
-        key
-        for key in (stuck.get("issues") or {})
-        if str(key).startswith(prefix)
-    ]
-    if not mill_rows:
+def _clear_github_closed_catalog_rows(
+    stuck: dict[str, Any], repos: list[str] | None
+) -> None:
+    """Clear CLOSED rows using per-repository evidence from the active catalog."""
+    if not repos:
         return
-    closed = _github_closed_mill_issues(mill)
-    if not closed:
-        return
-    for key in mill_rows:
-        issue = _as_int(str(key).rpartition("#")[2])
-        if issue in closed:
-            clear_issue(stuck, mill, issue)
+    rows = stuck.get("issues") or {}
+    for repo in repos:
+        prefix = f"{repo}#"
+        repo_rows = [key for key in rows if str(key).startswith(prefix)]
+        if not repo_rows:
+            continue
+        closed = _github_closed_mill_issues(repo)
+        for key in repo_rows:
+            issue = _as_int(str(key).rpartition("#")[2])
+            if issue in closed:
+                clear_issue(stuck, repo, issue)
 
 
 _REASON_PRIORITY = (
@@ -453,8 +452,7 @@ def _clear_stale_cycle_start_receipts(
     allowed = {str(name).strip() for name in repos if str(name).strip()}
     if not allowed:
         return
-    mill = mill_repo()
-    mill_paths: dict[int, Path] = {}
+    repo_paths: dict[str, dict[int, Path]] = {}
     for path in cycle_dir.glob("*.json"):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -472,19 +470,15 @@ def _clear_stale_cycle_start_receipts(
             except OSError:
                 pass
             continue
-        if repo == mill:
-            mill_paths[issue] = path
-    if not mill_paths:
-        return
-    closed = _github_closed_mill_issues(mill)
-    if not closed:
-        return
-    for issue, path in mill_paths.items():
-        if issue in closed:
-            try:
-                path.unlink()
-            except OSError:
-                pass
+        repo_paths.setdefault(repo, {})[issue] = path
+    for repo, paths in repo_paths.items():
+        closed = _github_closed_mill_issues(repo)
+        for issue, path in paths.items():
+            if issue in closed:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
 
 
 def _drop_out_of_scope_stuck_rows(
@@ -677,7 +671,7 @@ def harvest_fail_closed_children(
             miss_runs=miss_runs,
             error=str(row.get("last_error") or counted),
         )
-    _clear_github_closed_mill_rows(stuck)
+    _clear_github_closed_catalog_rows(stuck, repos)
     _drop_out_of_scope_stuck_rows(stuck, repos)
     _clear_stale_cycle_start_receipts(root, repos=repos)
     return stuck

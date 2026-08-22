@@ -17,7 +17,6 @@ FAIL_CLOSED = (
     "Will not auto-merge until a valid review is produced."
 )
 _VIEW_FIELDS = "number,title,body,headRefName,headRefOid,url,isDraft,mergeable,comments"
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def load_pr_evidence(
@@ -58,8 +57,6 @@ def load_pr_evidence(
 
 def review_worktree(cfg: Config, repo: str) -> Path | None:
     """Return the review directory, or skip repos outside this mini mill."""
-    if repo != MINI_MILL_REPO:
-        return None
     try:
         worktree = next(r.clone_path for r in cfg.repos if r.name == repo)
         if not worktree.is_dir():

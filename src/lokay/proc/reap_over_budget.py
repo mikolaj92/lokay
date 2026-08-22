@@ -29,7 +29,6 @@ from lokay.proc.pi_budget import DEFAULT_BUDGET_S, check_pi_budget
 from lokay.stuck import load_stuck, record_failure, save_stuck
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 _REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
 
 
@@ -214,17 +213,6 @@ def run_reap_over_budget(
     skipped_receipts: list[dict[str, Any]] = []
     for row in live_issue_to_pr_receipts():
         repo = str(row.get("repo") or "")
-        if repo and repo != MINI_MILL_REPO:
-            skipped_receipts.append(
-                {
-                    "repo": repo,
-                    "issue": row.get("issue"),
-                    "pid": row.get("pid"),
-                    "skipped": True,
-                    "reason": _REPO_SKIP_REASON,
-                }
-            )
-            continue
         try:
             issue = int(row.get("issue"))
             pid = int(row.get("pid"))

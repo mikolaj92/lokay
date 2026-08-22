@@ -13,32 +13,6 @@ def _ctx(repo: str) -> dict[str, Any]:
     return {"cfg": ["--config", "config.yaml"], "live": ["--live"], "repo": repo}
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.parametrize("atom", ["list_prs", "pr_label"])
-def test_product_repo_skips_before_running_finalize_atoms(
-    repo: str, atom: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def fail(*_args: object, **_kwargs: object) -> dict[str, object]:
-        raise AssertionError("product repo reached a PR-finalization process")
-
-    monkeypatch.setattr(pr_finalize, "_run_atom_main", fail)
-
-    out = pr_finalize.handle_pr_finalize(
-        atom,
-        {},
-        {
-            "make_branch": {"branch": "ai/fix/534-scope"},
-            "list_prs": {"prs": [{"number": 12, "head_ref": "ai/fix/534-scope"}]},
-        },
-        _ctx(repo),
-    )
-
-    assert out == {
-        "ok": True,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-    }
 
 
 @pytest.mark.parametrize("atom", ["list_prs", "pr_label"])

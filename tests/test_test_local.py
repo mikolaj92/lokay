@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import json
 from pathlib import Path
 
@@ -49,31 +50,6 @@ def test_this_repo_declares_pytest():
     assert test_local.declared_test_argv(root) == LOKAY_PYTEST
 
 
-def test_product_repo_skips_without_inspecting_or_running_worktree(
-    tmp_path: Path, monkeypatch, capsys
-):
-    product = tmp_path / "missing-product-worktree"
-
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("product repositories must not inspect or run tests")
-
-    monkeypatch.setattr(test_local, "declared_test_argv", fail_if_called)
-    monkeypatch.setattr(test_local, "runner", fail_if_called)
-
-    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
-        code = test_local.main(
-            ["--repo", repo, "--worktree", str(product)]
-        )
-        assert code == 0
-        payload = _payload(capsys)
-        assert payload == {
-            "ok": True,
-            "skipped": True,
-            "reason": "repo_not_delivered_by_mini_mill",
-            "tested": False,
-            "repo": repo,
-            "worktree": str(product),
-        }
 
 
 def test_no_declaration_skips(tmp_path: Path, capsys):

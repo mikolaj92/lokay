@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 
 from lokay.models import Issue
 from lokay.proc import list_inbox
@@ -20,36 +19,6 @@ def _cfg(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(repos=repos, worktrees_root=tmp_path, mode="live")
 
 
-@pytest.mark.parametrize(
-    "repo",
-    ["mikolaj92/Temida", "mikolaj92/takt", "some-owner/outside-config"],
-)
-def test_list_inbox_skips_non_lokay_without_gh(
-    repo: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(list_inbox, "load_cfg", lambda _args: _cfg(tmp_path))
-    monkeypatch.setattr(list_inbox, "read_live", lambda _args: True)
-
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("non-lokay repositories must not call GitHub")
-
-    monkeypatch.setattr(list_inbox, "runner", fail_if_called)
-    monkeypatch.setattr(list_inbox, "list_inbox_issues", fail_if_called)
-
-    assert list_inbox.main(["--repo", repo, "--live"]) == 0
-
-    payload = json.loads(capsys.readouterr().out)
-    assert payload == {
-        "ok": True,
-        "offline": False,
-        "repo": repo,
-        "issues": [],
-        "count": 0,
-        "actions": [],
-    }
 
 
 def test_list_inbox_still_lists_lokay_and_skips_stuck_blocked_issue(
