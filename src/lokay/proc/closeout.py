@@ -144,6 +144,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     if leftover_recently_empty(stamp):
         # Fresh leftover-closeout skip is not applied.
         # Leftover-closeout skip reports planned=not live.
+        # Leftover-closeout skip reports probe_failed.
         return ok(
             leftover_closed=0,
             labels_removed=False,
@@ -153,6 +154,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
             reason="recent_empty",
             planned=not live,
             applied=False,
+            probe_failed=False,
         )
     allowed = mutations_allowed(live_flag=live, cfg=cfg)
     issue_runner = runner(cfg)

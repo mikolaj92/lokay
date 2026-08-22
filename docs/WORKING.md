@@ -308,6 +308,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   those GitHub lists for 300s so idle ticks do not pay them twice a minute.
   Fresh leftover skip does not require healthy. Fresh leftover-closeout
   skip is not applied. Leftover-closeout skip reports planned=not live.
+  Leftover-closeout skip reports probe_failed.
   Hosted leftover parks still do.
   Unhealthy leftover-closeout still lists GitHub.
   Unhealthy leftover-closeout parks are planned.

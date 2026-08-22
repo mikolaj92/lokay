@@ -245,6 +245,36 @@ def test_leftover_closeout_skip_reports_planned_not_live(monkeypatch, tmp_path):
     )
 
 
+def test_leftover_closeout_skip_reports_probe_failed(monkeypatch, tmp_path):
+    """Leftover-closeout skip reports probe_failed."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(
+        closeout,
+        "closed_ready_numbers",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("recent empty leftover must not list GitHub")
+        ),
+    )
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["skipped"] is True
+    assert out["probe_failed"] is False
+    assert out["applied"] is False
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Leftover-closeout skip reports probe_failed." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_unhealthy_leftover_closeout_still_lists_github(monkeypatch, tmp_path):
     """Unhealthy leftover-closeout still lists GitHub. Hosted leftover parks still do."""
     stamp = tmp_path / "leftover-closeout.stamp"
