@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import time
 from pathlib import Path
@@ -12,6 +11,7 @@ from typing import Any
 from lokay.envelope import emit_exit, ok
 from lokay.gh_issues import is_github_rate_limit_error
 from lokay.gh_prs import find_pr_fixing_issue
+from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park as p_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
@@ -108,19 +108,21 @@ def closed_ready_numbers(
 ) -> list[int]:
     if repo != MINI_MILL_REPO or not live or not label:
         return []
+    cap = survey_list_cap()
     result = issue_runner.run_checked(
         gh_spec(
             [
                 "issue", "list", "--repo", repo, "--state", "closed",
-                "--label", label, "--json", "number,state", "--limit", "100",
+                "--label", label, "--json", "number,state", "--limit", str(cap),
             ],
             timeout_seconds=60,
         ),
         live=live,
     )
-    rows = json.loads(result.stdout or "[]")
-    if not isinstance(rows, list):
-        return []
+    # Leftover-closeout refuses a silently truncated CLOSED issue list.
+    rows = parse_survey_list(
+        result.stdout, kind="closed-ready", repo=repo, cap=cap
+    )
     out: list[int] = []
     for row in rows:
         if not isinstance(row, dict):

@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import lokay.compose.issue_to_pr as issue_to_pr
 from lokay.compose import mill as mill_mod
 from lokay.proc import closeout
@@ -650,6 +652,28 @@ def test_closed_ready_numbers_skips_product_repo_without_gh():
     assert closeout.closed_ready_numbers(
         NoGhRunner(), "mikolaj92/Temida", "work:ready", live=True
     ) == []
+
+
+def test_closed_ready_numbers_refuses_truncated_list():
+    cap = closeout.survey_list_cap()
+
+    class FullPageRunner:
+        def run_checked(self, spec, *, live):
+            assert live is True
+            assert spec.argv[-1] == str(cap)
+            return SimpleNamespace(
+                stdout="[" + ",".join('{"number":1,"state":"CLOSED"}' for _ in range(cap)) + "]"
+            )
+
+    with pytest.raises(RuntimeError, match="hit the 1000 newest-first cap"):
+        closeout.closed_ready_numbers(
+            FullPageRunner(), "mikolaj92/lokay", "work:ready", live=True
+        )
+
+
+def test_closed_ready_numbers_pin_refuses_silent_truncation():
+    source = (Path(closeout.__file__)).read_text(encoding="utf-8")
+    assert "Leftover-closeout refuses a silently truncated CLOSED issue list." in source
 
 
 def test_mill_tick_leftover_closed_ready_does_not_start_i2pr(monkeypatch, tmp_path):
