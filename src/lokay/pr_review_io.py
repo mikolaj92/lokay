@@ -34,7 +34,13 @@ def load_pr_evidence(
         ["pr", "view", str(pr), "--repo", repo, "--json", _VIEW_FIELDS],
         live=live,
     )
-    diff = gh_text(runner, ["pr", "diff", str(pr), "--repo", repo], live=live)
+    # PR review refuses to substitute a GitHub error for the code diff.
+    diff = gh_text(
+        runner,
+        ["pr", "diff", str(pr), "--repo", repo],
+        live=live,
+        require_success=True,
+    )
     if not checks_text and live:
         checks_text = gh_text(
             runner, ["pr", "checks", str(pr), "--repo", repo], live=live

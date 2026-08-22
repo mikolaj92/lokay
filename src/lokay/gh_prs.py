@@ -26,12 +26,20 @@ def gh_json(
 
 
 def gh_text(
-    runner: Runner, args: list[str], *, live: bool, timeout_seconds: int = 120
+    runner: Runner,
+    args: list[str],
+    *,
+    live: bool,
+    timeout_seconds: int = 120,
+    require_success: bool = False,
 ) -> str:
     result = runner.run(gh_spec(args, timeout_seconds=timeout_seconds), live=live)
     if not live:
         return ""
-    return ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+    text = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+    if require_success and result.returncode != 0:
+        raise RuntimeError(text or f"gh text command failed with exit {result.returncode}")
+    return text
 
 
 def comment_bodies(view: dict[str, Any]) -> list[str]:
