@@ -71,8 +71,10 @@ def main(argv: list[str] | None = None) -> int:
     merged: list[int] = []
     covering: list[dict] = []
     if run:
-        merged = merged_prs(r, args.repo, referenced_pr_numbers(issue), live=fetch)
         try:
+            merged = merged_prs(
+                r, args.repo, referenced_pr_numbers(issue), live=fetch
+            )
             covering = covering_ai_prs(
                 r, args.repo, int(args.issue), branch_prefix=cfg.branch_prefix, live=fetch
             )

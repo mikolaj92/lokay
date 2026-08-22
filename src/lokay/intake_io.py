@@ -22,7 +22,7 @@ from lokay.stuck import issue_number_from_branch
 
 
 def merged_prs(runner: Runner, repo: str, numbers: list[int], *, live: bool) -> list[int]:
-    """Return which of the referenced PRs are merged (best-effort)."""
+    """Return merged referenced PRs; unavailable evidence fails closed."""
     if not live or not numbers:
         return []
     merged: list[int] = []
@@ -43,11 +43,18 @@ def merged_prs(runner: Runner, repo: str, numbers: list[int], *, live: bool) -> 
             live=True,
         )
         if result.returncode != 0:
-            continue
+            raise RuntimeError(f"intake linked PR #{num} probe failed for {repo}")
         try:
             row = json.loads(result.stdout or "{}")
-        except json.JSONDecodeError:
-            continue
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                f"intake linked PR #{num} probe returned malformed JSON for {repo}"
+            ) from exc
+        if not isinstance(row, dict):
+            raise RuntimeError(
+                f"intake linked PR #{num} probe returned non-object JSON for {repo}"
+            )
+        # Intake linked-PR uncertainty is not an unmerged verdict.
         state = str(row.get("state") or "").upper()
         if row.get("mergedAt") or state == "MERGED":
             merged.append(int(row.get("number") or num))

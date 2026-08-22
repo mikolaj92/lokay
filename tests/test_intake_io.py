@@ -78,16 +78,38 @@ def test_merged_prs_offline_or_empty():
     assert runner.calls == []
 
 
-def test_merged_prs_best_effort_selects_merged():
+def test_merged_prs_selects_merged_when_all_evidence_is_available():
     runner = _FakeRunner(
         views={
             "1": {"number": 1, "state": "OPEN"},
-            "3": "{",
             "4": {"number": 4, "mergedAt": "t"},
-        },
-        view_codes={"2": 1},
+        }
     )
-    assert merged_prs(runner, "a/b", [1, 2, 3, 4], live=True) == [4]
+    assert merged_prs(runner, "a/b", [1, 4], live=True) == [4]
+
+
+def test_merged_prs_refuses_failed_linked_pr_probe():
+    runner = _FakeRunner(
+        views={"1": {"number": 1, "state": "OPEN"}}, view_codes={"2": 1}
+    )
+    try:
+        merged_prs(runner, "a/b", [1, 2], live=True)
+    except RuntimeError as exc:
+        assert "linked PR #2 probe failed" in str(exc)
+    else:
+        raise AssertionError("unavailable linked PR evidence must fail closed")
+    source = Path(intake_io.__file__).read_text(encoding="utf-8")
+    assert "Intake linked-PR uncertainty is not an unmerged verdict." in source
+
+
+def test_merged_prs_refuses_malformed_linked_pr_json():
+    runner = _FakeRunner(views={"3": "{"})
+    try:
+        merged_prs(runner, "a/b", [3], live=True)
+    except RuntimeError as exc:
+        assert "returned malformed JSON" in str(exc)
+    else:
+        raise AssertionError("malformed linked PR evidence must fail closed")
 
 
 def test_covering_ai_prs_filters_and_dedupes():
