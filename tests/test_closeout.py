@@ -455,7 +455,39 @@ def test_leftover_empty_probe_writes_stamp(monkeypatch, tmp_path):
     monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
     out = closeout.run_closeout_leftover(config_path=None, live=True)
     assert out["labels_removed"] is False
+    assert out["applied"] is False
     assert stamp.is_file()
+
+
+def test_empty_leftover_closeout_host_is_not_applied(monkeypatch, tmp_path):
+    """Empty leftover-closeout host is not applied."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(closeout, "closed_ready_numbers", lambda *_a, **_k: [])
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    monkeypatch.setattr(
+        closeout,
+        "_park_ready",
+        lambda **_k: (_ for _ in ()).throw(
+            AssertionError("empty leftover-closeout host must not park")
+        ),
+    )
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["applied"] is False
+    assert out["leftover_closed"] == 0
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Empty leftover-closeout host is not applied." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_leftover_park_clears_empty_stamp(monkeypatch, tmp_path):
