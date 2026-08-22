@@ -1059,10 +1059,17 @@ def test_reap_idle_closed_worktrees_reaps_oldest_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(
         reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
     )
+    gated: list[bool] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "mutations_allowed",
+        lambda **_kwargs: gated.append(True) or True,
+    )
     stamp = tmp_path / "reap-over-cap.stamp"
     reap_stale_worktrees.reap_idle_closed_worktrees(
         config_path=str(_config(tmp_path)), live=True
     )
+    assert gated == [True]
     assert len(removed) == cap
     assert not stamp.exists()
 
@@ -1119,9 +1126,16 @@ def test_reap_idle_closed_worktrees_classify_skips_no_issue_leftovers(
     monkeypatch.setattr(
         reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
     )
+    gated: list[bool] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "mutations_allowed",
+        lambda **_kwargs: gated.append(True) or True,
+    )
     reap_stale_worktrees.reap_idle_closed_worktrees(
         config_path=str(_config(tmp_path)), live=True
     )
+    assert gated == [True]
     assert "Fala" not in removed
     assert checked == [123, 187, 188, 191]
     assert removed == [
@@ -1248,9 +1262,16 @@ def test_reap_idle_closed_worktrees_reaps_empty_no_issue_leftovers(
     monkeypatch.setattr(
         reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
     )
+    gated: list[bool] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "mutations_allowed",
+        lambda **_kwargs: gated.append(True) or True,
+    )
     reap_stale_worktrees.reap_idle_closed_worktrees(
         config_path=str(_config(tmp_path)), live=True
     )
+    assert gated == [True]
     assert "harvest__414-mini-lokay-only" in removed
     assert 414 not in checked
     assert checked == [291, 294, 296, 298]
@@ -1321,9 +1342,16 @@ def test_reap_idle_closed_worktrees_classify_skips_dirty_real_leftovers(
     monkeypatch.setattr(
         reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
     )
+    gated: list[bool] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "mutations_allowed",
+        lambda **_kwargs: gated.append(True) or True,
+    )
     reap_stale_worktrees.reap_idle_closed_worktrees(
         config_path=str(_config(tmp_path)), live=True
     )
+    assert gated == [True]
     assert "Fala" not in removed
     assert "ai__fix__123" not in removed
     assert "ai__fix__188" not in removed
@@ -1382,6 +1410,11 @@ def test_reap_idle_keep_only_leftovers_write_over_cap_stamp(tmp_path, monkeypatc
     monkeypatch.setattr(
         reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
     )
+
+    def health_boom(**_kwargs):
+        raise AssertionError("KEEP classification and stamping do not require healthy")
+
+    monkeypatch.setattr(reap_stale_worktrees, "mutations_allowed", health_boom)
     stamp = tmp_path / "reap-over-cap.stamp"
     assert not stamp.exists()
     reap_stale_worktrees.reap_idle_closed_worktrees(
