@@ -139,6 +139,8 @@ def build_pass_receipt(
         "idle": tick.get("idle"),
         "live": tick.get("live"),
         "progress": int(tick.get("progress") or 0),
+        # Pass receipt preserves survey probe uncertainty.
+        "probe_failed": bool(tick.get("probe_failed")),
         "merge_enabled": bool(merge_enabled),
         "require_checks": bool(require_checks),
         "require_llm_review": bool(require_llm_review),

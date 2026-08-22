@@ -21,6 +21,7 @@ def test_build_and_write_pass_receipt_roundtrip(tmp_path: Path):
         "idle": False,
         "live": True,
         "progress": 0,
+        "probe_failed": True,
         "remaining": {
             "inbox": 1,
             "ready": 2,
@@ -53,6 +54,7 @@ def test_build_and_write_pass_receipt_roundtrip(tmp_path: Path):
     )
     assert receipt["kind"] == "pass_receipt"
     assert receipt["health"] == "waiting"
+    assert receipt["probe_failed"] is True
     assert receipt["merge_enabled"] is True
     assert receipt["require_checks"] is True
     assert receipt["require_llm_review"] is True
@@ -67,7 +69,12 @@ def test_build_and_write_pass_receipt_roundtrip(tmp_path: Path):
     loaded = read_pass_receipt(state_path=state)
     assert loaded is not None
     assert loaded["health"] == "waiting"
+    assert loaded["probe_failed"] is True
     assert loaded["remaining"]["ready"] == 2
+    source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "pass_receipt.py"
+    assert "Pass receipt preserves survey probe uncertainty." in source.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_read_pass_receipt_missing_is_none(tmp_path: Path):
