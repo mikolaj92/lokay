@@ -118,13 +118,23 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
             remove_issue_labels(
                 runner(cfg), repo.name, issue.number, [cfg.ready_label], live=apply
             )
-            cleaned.append({"repo": repo.name, "issue": issue.number})
+            row = {"repo": repo.name, "issue": issue.number}
+            if not apply:
+                row["planned"] = True
+            cleaned.append(row)
     if apply and probed:
         if cleaned:
             _clear_hygiene_stamp(stamp)
         else:
             _touch_hygiene_stamp(stamp)
-    return ok(planned=not apply, applied=apply, cleaned=cleaned, cleaned_count=len(cleaned))
+    removed = [row for row in cleaned if not row.get("planned")]
+    # Unhealthy leftover-ready parks are planned.
+    return ok(
+        planned=not apply if cleaned else not live,
+        applied=apply,
+        cleaned=cleaned,
+        cleaned_count=len(removed),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
