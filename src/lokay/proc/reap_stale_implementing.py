@@ -100,6 +100,7 @@ def run_reap_stale_implementing(
     )
     if stale_recently_empty(stamp, ttl=idle_ttl):
         # Fresh leftover-cache skip is not applied.
+        # Leftover-cache skip reports probe_failed.
         return ok(
             planned=not live,
             applied=False,
@@ -109,6 +110,7 @@ def run_reap_stale_implementing(
             pass_dir=pass_dir or "",
             skipped=True,
             reason="recent_empty",
+            probe_failed=False,
         )
     cfg_flag = ["--config", config_path] if config_path else []
     live_flag = ["--live"] if live else []
