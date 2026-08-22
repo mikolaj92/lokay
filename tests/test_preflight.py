@@ -656,6 +656,34 @@ def test_leftover_incident_empty_name_is_not_applied(tmp_path, monkeypatch):
     )
 
 
+def test_leftover_incident_empty_name_reports_planned_not_live(
+    tmp_path, monkeypatch
+):
+    """Leftover-incident empty name reports planned=not live."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("leftover-incident empty name must not list GitHub")
+
+    monkeypatch.setattr(preflight.subprocess, "run", boom)
+    live = preflight._close_resolved_incidents("", loaded)
+    assert live["applied"] is False
+    assert live["closed"] == []
+    assert live["planned"] is False
+    dry = preflight._close_resolved_incidents(
+        "", SimpleNamespace(state_path=loaded.state_path, live=False)
+    )
+    assert dry["applied"] is False
+    assert dry["planned"] is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident empty name reports planned=not live." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_leftover_incident_skip_reports_planned_not_live(tmp_path, monkeypatch):
     """Leftover-incident skip reports planned=not live."""
     cfg = _config(tmp_path)

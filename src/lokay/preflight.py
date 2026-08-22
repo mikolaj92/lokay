@@ -729,7 +729,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     name = str(repo or "").strip()
     if not name:
         # Leftover-incident empty name is not applied.
-        return {"ok": True, "closed": [], "applied": False}
+        # Leftover-incident empty name reports planned=not live.
+        live = bool(getattr(cfg, "live", False))
+        return {
+            "ok": True,
+            "closed": [],
+            "applied": False,
+            "planned": not live,
+        }
     stamp = incident_stamp_path(cfg)
     # Idle leftover-incident skip outlives leftover-probe.
     # Hosted factory_pass stays at 300s. Leftover-probe host still lists when stamp is missing.
