@@ -676,10 +676,44 @@ def test_incident_probe_failure_does_not_write_stamp(tmp_path, monkeypatch):
         "closed": [],
         "applied": False,
         "probe_failed": True,
+        "planned": False,
     }
     assert stamp is not None and not stamp.exists()
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
     assert "Leftover-incident probe failure reports probe_failed." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_leftover_incident_probe_failure_reports_planned_not_live(
+    tmp_path, monkeypatch
+):
+    """Leftover-incident probe failure reports planned=not live."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    stamp = preflight.incident_stamp_path(loaded)
+
+    def fake_run(argv, *args, **kwargs):
+        return type(
+            "Completed", (), {"returncode": 1, "stdout": "", "stderr": "HTTP 429"}
+        )()
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    live = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert live["probe_failed"] is True
+    assert live["applied"] is False
+    assert live["planned"] is False
+    assert stamp is not None and not stamp.exists()
+    dry = preflight._close_resolved_incidents(
+        "mikolaj92/lokay", SimpleNamespace(state_path=loaded.state_path, live=False)
+    )
+    assert dry["probe_failed"] is True
+    assert dry["applied"] is False
+    assert dry["planned"] is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident probe failure reports planned=not live." in src.read_text(
         encoding="utf-8"
     )
 

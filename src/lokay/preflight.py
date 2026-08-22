@@ -756,7 +756,15 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     rows = _list_open_incidents(name)
     if rows is None:
         # Leftover-incident probe failure reports probe_failed.
-        return {"ok": True, "closed": [], "applied": False, "probe_failed": True}
+        # Leftover-incident probe failure reports planned=not live.
+        live = bool(getattr(cfg, "live", False))
+        return {
+            "ok": True,
+            "closed": [],
+            "applied": False,
+            "probe_failed": True,
+            "planned": not live,
+        }
     closed: list[int] = []
     for row in rows:
         number = row.get("number")
