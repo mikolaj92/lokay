@@ -207,6 +207,19 @@ def test_worktree_issue_overrides_stale_argument(
     assert issue_view[3] == "399"
 
 
+def test_created_pr_without_parseable_number_fails_closed(tmp_path, monkeypatch, capsys):
+    runner = _GhRunner("OPEN", pr_url="created successfully\n")
+    monkeypatch.setattr(pr_create, "runner", lambda: runner)
+    monkeypatch.setattr(pr_create, "mutations_allowed", lambda **kwargs: True)
+
+    assert pr_create.main(_args(_cfg(tmp_path))) == 1
+    env = _envelope(capsys)
+    assert env["ok"] is False
+    assert "succeeded but number is unknown" in env["error"]
+    source = Path(pr_create.__file__).parents[1] / "gh_prs.py"
+    assert "PR creation success requires a recoverable delivery identity." in source.read_text()
+
+
 def test_open_issue_creates_pr(tmp_path, monkeypatch, capsys):
     runner = _GhRunner(
         "OPEN",

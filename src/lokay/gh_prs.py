@@ -209,6 +209,11 @@ def create_pr(
         return {"planned": True, "head": head, "title": title, "number": None}
     url = (result.stdout or "").strip().splitlines()[-1] if result.stdout else ""
     number = _pr_number_from_url(url)
+    if number is None:
+        # PR creation success requires a recoverable delivery identity.
+        raise RuntimeError(
+            f"create PR on {repo} succeeded but number is unknown: {url!r}"
+        )
     return {"url": url, "head": head, "title": title, "number": number}
 
 
