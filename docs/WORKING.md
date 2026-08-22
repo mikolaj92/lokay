@@ -419,6 +419,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Leftover-incident OSError reports planned=not live.
   Leftover-incident host reports probe_failed.
   Leftover-incident skip reports probe_failed.
+  Leftover-incident ImportError reports probe_failed.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Pytest must not skip leftover-incident GitHub lists using the mill stamp.
