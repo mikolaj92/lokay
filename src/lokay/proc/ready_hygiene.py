@@ -92,9 +92,10 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
         else None
     )
     if hygiene_recently_empty(stamp, ttl=idle_ttl):
+        # Fresh leftover-ready skip is not applied.
         return ok(
             planned=not live,
-            applied=live,
+            applied=False,
             cleaned=[],
             cleaned_count=0,
             skipped=True,
