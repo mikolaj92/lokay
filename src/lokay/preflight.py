@@ -817,12 +817,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
         _touch_incident_stamp(stamp)
     # Empty leftover-incident host is not applied.
     # Empty leftover-incident host reports planned=not live.
+    # Leftover-incident host reports probe_failed.
     live = bool(getattr(cfg, "live", False))
     return {
         "ok": True,
         "closed": closed,
         "applied": bool(closed),
         "planned": False if closed else not live,
+        "probe_failed": False,
     }
 
 
