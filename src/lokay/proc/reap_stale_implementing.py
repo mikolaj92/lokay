@@ -176,8 +176,9 @@ def run_reap_stale_implementing(
         elif not reaped:
             _touch_stale_stamp(stamp)
         # Unhealthy leftover-cache parks do not clear the stamp.
+        # Unhealthy leftover-cache parks are planned.
     return ok(
-        planned=not live,
+        planned=not apply if reaped else not live,
         reaped=reaped,
         kept=[],
         reaped_count=len(reaped),
