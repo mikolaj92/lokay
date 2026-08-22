@@ -370,6 +370,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Pytest must not skip leftover-cache GitHub lists using the mill stamp.
   After an empty leftover-ready probe (`ai:ready` without `work:ready`), skip
   that GitHub list for 300s without refreshing the stamp.
+  Idle leftover-ready skip outlives leftover-probe. Hosted factory_pass
+  stays at 300s.
   Idle daemon_cycle skip still runs leftover-ready.
   Pytest must not skip leftover-ready GitHub lists using the mill stamp.
   After an empty leftover-incident probe (`<!-- lokay-preflight:… -->`), skip

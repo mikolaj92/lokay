@@ -19,6 +19,7 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 MINI_MILL_REPO = "mikolaj92/lokay"
 WORK_READY_LABEL = "work:ready"
 HYGIENE_TTL_SECONDS = 300
+IDLE_HYGIENE_TTL_SECONDS = 900
 HYGIENE_STAMP_NAME = "ready-hygiene.stamp"
 
 
@@ -43,7 +44,9 @@ def _is_operator_mill_hygiene_stamp(stamp: Path) -> bool:
         return stamp.expanduser() == mill
 
 
-def hygiene_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
+def hygiene_recently_empty(
+    stamp: Path | None, *, now: float | None = None, ttl: int | None = None
+) -> bool:
     if stamp is None:
         return False
     # Pytest must not skip leftover-ready GitHub lists using the mill stamp.
@@ -53,7 +56,8 @@ def hygiene_recently_empty(stamp: Path | None, *, now: float | None = None) -> b
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:
         return False
-    return 0 <= age < HYGIENE_TTL_SECONDS
+    limit = HYGIENE_TTL_SECONDS if ttl is None else ttl
+    return 0 <= age < limit
 
 
 def _touch_hygiene_stamp(stamp: Path | None) -> None:
@@ -80,7 +84,14 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
     cfg = load_cfg(args)
     apply = mutations_allowed(live_flag=live, cfg=cfg)
     stamp = hygiene_stamp_path(cfg)
-    if apply and hygiene_recently_empty(stamp):
+    # Idle leftover-ready skip outlives leftover-probe.
+    # Hosted factory_pass stays at 300s. Leftover-probe host still lists when stamp is missing.
+    idle_ttl = (
+        IDLE_HYGIENE_TTL_SECONDS
+        if os.environ.get("LOKAY_LEFTOVER_PROBE_GH_OK") == "1"
+        else None
+    )
+    if apply and hygiene_recently_empty(stamp, ttl=idle_ttl):
         return ok(
             planned=not apply,
             applied=apply,
