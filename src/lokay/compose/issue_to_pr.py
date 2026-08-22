@@ -12,6 +12,7 @@ from typing import Any
 from lokay.config import load_config
 from lokay.envelope import emit_exit, ok
 from lokay.graph_run import run_path
+from lokay.gh_rate import survey_list_cap
 from lokay.passkit.support import run_proc
 from lokay.proc import closeout as p_closeout
 from lokay.proc._common import add_config_live
@@ -86,12 +87,16 @@ def _delivery_stop_reason(repo: str, issue_number: int) -> str | None:
     if isinstance(issue, dict) and str(issue.get("state", "")).upper() == "CLOSED":
         return "issue_closed"
 
+    cap = survey_list_cap()
     prs = _command_json(
         [
-            "gh", "pr", "list", "--repo", repo, "--state", "all", "--limit", "100",
+            "gh", "pr", "list", "--repo", repo, "--state", "all", "--limit", str(cap),
             "--json", "body,state,mergedAt",
         ]
     )
+    # Delivery PR survey refuses a silently truncated all-state list.
+    if isinstance(prs, list) and len(prs) >= cap:
+        prs = None
     closes_issue = re.compile(
         rf"\b(?:fixes|closes|resolves)\s+#{issue_number}\b",
         re.IGNORECASE,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -127,6 +128,25 @@ def test_unavailable_delivery_survey_does_not_stop_implementation(monkeypatch):
     assert result["ok"] is True
     assert result.get("stopped") is not True
     assert result.get("reason") != "delivery_survey_unavailable"
+
+
+def test_truncated_delivery_pr_survey_does_not_claim_a_match(monkeypatch):
+    calls: list[list[str]] = []
+
+    def command_json(args):
+        calls.append(args)
+        if args[1:3] == ["issue", "view"]:
+            return {"state": "OPEN"}
+        return [{"body": "Fixes #331", "state": "OPEN", "mergedAt": None}] * 2
+
+    monkeypatch.setattr(issue_to_pr, "survey_list_cap", lambda: 2)
+    monkeypatch.setattr(issue_to_pr, "_command_json", command_json)
+    monkeypatch.setattr(issue_to_pr, "_head_has_on_goal_src", lambda *_args: False)
+
+    assert issue_to_pr._delivery_stop_reason("owner/repo", 331) is None
+    assert calls[1][calls[1].index("--limit") + 1] == "2"
+    source = Path(issue_to_pr.__file__).read_text(encoding="utf-8")
+    assert "Delivery PR survey refuses a silently truncated all-state list." in source
 
 
 def test_confirmed_closed_issue_remains_a_delivery_stop(monkeypatch):
