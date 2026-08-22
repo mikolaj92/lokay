@@ -787,7 +787,8 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
         _clear_incident_stamp(stamp)
     else:
         _touch_incident_stamp(stamp)
-    return {"ok": True, "closed": closed}
+    # Empty leftover-incident host is not applied.
+    return {"ok": True, "closed": closed, "applied": bool(closed)}
 
 
 def _reopen_issue(repo: str, number: int, summary: str) -> bool:
