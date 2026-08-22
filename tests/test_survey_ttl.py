@@ -44,7 +44,24 @@ def test_empty_ready_survey_writes_stamp(tmp_path: Path, monkeypatch) -> None:
         pass_dir=_pass(tmp_path), config_path=None, live=True
     )
     assert out["ok"] is True
+    assert out["probe_failed"] is False
     assert (tmp_path / "factory-survey.stamp").is_file()
+
+
+def test_ready_survey_reports_probe_failed(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        survey_ready,
+        "run_proc",
+        lambda *_a, **_k: {"ok": False, "error": "HTTP 429: rate limit"},
+    )
+    out = survey_ready.run_survey_ready(
+        pass_dir=_pass(tmp_path), config_path=None, live=True
+    )
+    assert out["ok"] is True
+    assert out["probe_failed"] is True
+    assert out["survey_errors"] == 1
+    source = Path(survey_ready.__file__).read_text(encoding="utf-8")
+    assert "Ready survey reports whether its GitHub probe failed." in source
 
 
 def test_surveys_skip_github_when_recent_empty_stamp(tmp_path: Path, monkeypatch) -> None:
