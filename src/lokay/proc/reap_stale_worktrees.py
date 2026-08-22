@@ -34,7 +34,7 @@ from lokay.git_worktree import (
 )
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.working import load_begin_working, save_begin_working
-from lokay.proc._common import add_config_live, load_cfg, runner as make_runner
+from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner as make_runner
 from lokay.proc.detach_issue_to_pr import (
     has_unreadable_issue_to_pr_receipts,
     live_issue_to_pr_receipts,
@@ -626,8 +626,12 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
         empty_no_issue = set(
             _oldest_empty_no_issue(leftovers, branch_prefix=cfg.branch_prefix)[:CLASSIFY_CAP]
         )
+        apply = False
         for path, branch in leftovers:
             if (path, branch) in empty_no_issue:
+                if not apply:
+                    # Idle worktree removal requires healthy. Classification and KEEP stamping do not.
+                    apply = mutations_allowed(live_flag=True, cfg=cfg)
                 if git is None:
                     git = make_runner(cfg)
                 removed = remove_worktree(
@@ -645,6 +649,9 @@ def _reap_idle_closed_worktrees(*, config_path: str | None) -> None:
                 continue
             if not _issue_is_closed(repo.name, issue):
                 continue
+            if not apply:
+                # Idle worktree removal requires healthy. Classification and KEEP stamping do not.
+                apply = mutations_allowed(live_flag=True, cfg=cfg)
             if git is None:
                 git = make_runner(cfg)
             removed = remove_worktree(
