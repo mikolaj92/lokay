@@ -203,6 +203,7 @@ state:
     assert out["skipped"] is True
     assert out["reason"] == "recent_empty"
     assert out["reaped_count"] == 0
+    assert out["probe_failed"] is False
     assert stamp.stat().st_mtime == before
     src = (
         Path(__file__).resolve().parents[1]
@@ -212,6 +213,9 @@ state:
         / "reap_stale_implementing.py"
     )
     assert "Fresh leftover-cache skip does not require healthy." in src.read_text(
+        encoding="utf-8"
+    )
+    assert "Leftover-cache skip reports probe_failed." in src.read_text(
         encoding="utf-8"
     )
 

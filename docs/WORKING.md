@@ -383,7 +383,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
   Fresh leftover-cache skip does not require healthy. Fresh leftover-cache
-  skip is not applied. Hosted leftover-cache parks do.
+  skip is not applied. Leftover-cache skip reports probe_failed.
+  Hosted leftover-cache parks do.
   Unhealthy leftover-cache parks do not clear the stamp. Unhealthy leftover-cache parks are planned.
   Leftover-cache reaped_count excludes planned parks.
   Hosted leftover-cache reports applied.
