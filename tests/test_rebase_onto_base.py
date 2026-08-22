@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -117,6 +116,7 @@ def test_safety_still_forbids_force_push():
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_cli_skips_product_repo_without_git_or_preflight(
     repo, tmp_path, monkeypatch, capsys
 ):

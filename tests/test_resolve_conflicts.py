@@ -52,6 +52,7 @@ def _write_pass(tmp_path: Path, repos: list[str]) -> Path:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_is_skipped_without_mutations(
     repo: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -81,6 +82,7 @@ def test_product_repo_is_skipped_without_mutations(
     )
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_mixed_catalog_skips_product_and_resolves_lokay(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

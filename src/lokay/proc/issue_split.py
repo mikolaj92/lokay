@@ -24,7 +24,6 @@ from lokay.issue_checkboxes import is_bug_issue
 from lokay.split import parent_tracker_comment, plan_split
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def _fetch_live() -> bool:
@@ -52,18 +51,6 @@ def main(argv: list[str] | None = None) -> int:
         help="upstream intake decision JSON or bare decision string",
     )
     args = p.parse_args(argv)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=False,
-                applied=False,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=args.repo,
-                issue=int(args.issue),
-                children=[],
-            )
-        )
     cfg = load_cfg(args)
     live_mut = mutations_allowed(live_flag=args.live, cfg=cfg)
     fetch = _fetch_live()

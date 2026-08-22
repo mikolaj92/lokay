@@ -16,9 +16,9 @@ from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc import label_issue as p_label
 from lokay.proc._common import add_config_live, load_cfg, runner, semantic_agent_allowed
-from lokay.queue_conflict import READY, SKIP, ConflictVerdict
+from lokay.queue_conflict import READY, SKIP
 from lokay.queue_conflict_agent import evaluate_queue_conflict_with_agent
-from lokay.mill_scope import SKIP_REASON, delivers, in_scope, mill_repo
+from lokay.mill_scope import in_scope, mill_repo
 
 
 MINI_MILL_REPO = mill_repo()
@@ -30,24 +30,17 @@ def evaluate_stdin(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return err("stdin must include issue{} object")
     issue = Issue.from_dict(raw)
-    if not delivers(issue.repo, mill=MINI_MILL_REPO):
-        verdict = ConflictVerdict(
-            outcome=SKIP,
-            reason=SKIP_REASON,
-            detail={"repo": issue.repo, "issue": issue.number},
-        )
-    else:
-        verdict = evaluate_queue_conflict_with_agent(
-            issue,
-            runner=None,
-            config=None,
-            execute=False,
-            open_prs=list(payload.get("open_prs") or []),
-            peer_issues=list(payload.get("peer_issues") or []),
-            branch_prefix=str(payload.get("branch_prefix") or "ai/fix/"),
-            ready_label=str(payload.get("ready_label") or "ai:ready"),
-            tracker_label=str(payload.get("tracker_label") or "ai:tracker"),
-        )
+    verdict = evaluate_queue_conflict_with_agent(
+        issue,
+        runner=None,
+        config=None,
+        execute=False,
+        open_prs=list(payload.get("open_prs") or []),
+        peer_issues=list(payload.get("peer_issues") or []),
+        branch_prefix=str(payload.get("branch_prefix") or "ai/fix/"),
+        ready_label=str(payload.get("ready_label") or "ai:ready"),
+        tracker_label=str(payload.get("tracker_label") or "ai:tracker"),
+    )
     return ok(
         outcome=verdict.outcome,
         reason=verdict.reason,
@@ -149,23 +142,6 @@ def run_queue_conflict(
 
     for repo_name in scan_repos:
         ready = list(ready_by_repo.get(repo_name) or [])
-        if not in_scope(repo_name, begin.get("repos") or [], mill=MINI_MILL_REPO):
-            # This mill delivers Lokay only. Do not let a stale/malformed pass
-            # invoke the semantic agent (and therefore gh) for product repos.
-            for issue in ready:
-                actions.append(
-                    {
-                        "step": "queue_conflict",
-                        "repo": repo_name,
-                        "issue": int(issue.get("number") or 0),
-                        "outcome": SKIP,
-                        "reason": "repo_not_delivered_by_mini_mill",
-                    }
-                )
-            skipped += len(ready)
-            remaining_ready = max(0, remaining_ready - len(ready))
-            ready_by_repo[repo_name] = []
-            continue
         if not ready:
             ready_by_repo[repo_name] = []
             continue

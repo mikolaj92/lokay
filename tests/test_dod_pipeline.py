@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 
@@ -202,6 +204,7 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
     ]
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_pr_merge_refuses_product_repo_without_calling_gh(
     tmp_path, monkeypatch, capsys
 ):

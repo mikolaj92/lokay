@@ -12,8 +12,6 @@ from lokay.proc import get_issue as p_get_issue, pr_checks as p_checks, unbounde
 from lokay.proc._common import add_config_live
 from lokay.proc.pr_route import run_pr_route
 from lokay.stuck import clear_issue, issue_number_from_branch, save_stuck
-from lokay.mill_scope import SKIP_REASON, in_scope, mill_repo
-MINI_MILL_REPO = mill_repo()
 def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, live: bool, merge_enabled: bool, require_checks: bool, repair_budget: int, executor_enabled: bool, branch_prefix: str, stuck: dict[str, Any], stuck_path: Path, catalog: list[str] | None = None) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
     c = {key: 0 for key in COUNTERS}
@@ -23,8 +21,6 @@ def run_closeout_pr(*, repo: str, pr: dict[str, Any], config_path: str | None, l
 
     def done(route: str, reason: str = "", still_open: bool = True) -> dict[str, Any]:
         return pr_envelope(repo=repo, pr=n, route=route, reason=reason, still_open=still_open, actions=actions, repair_budget=repair_budget, progress=progress, remaining_closed=remaining_closed, counters=c)
-    if not in_scope(repo, catalog, mill=MINI_MILL_REPO):
-        return done("skip", SKIP_REASON)
     def repair(*, review: dict[str, Any] | None = None, step: str = "pr_repair") -> None:
         nonlocal repair_budget
         if not head or repair_budget <= 0 or not executor_enabled:

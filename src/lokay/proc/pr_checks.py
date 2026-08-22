@@ -13,7 +13,6 @@ from lokay.gh_prs import pr_checks_report
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,20 +22,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pr", required=True, type=int)
     args = p.parse_args(argv)
     live = read_live(args)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                offline=not live,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=args.repo,
-                pr=args.pr,
-                status="skipped",
-                green=False,
-                no_checks=False,
-                merge_ok=False,
-            )
-        )
     cfg = load_cfg(args)
     try:
         report = pr_checks_report(runner(), args.repo, args.pr, live=live)

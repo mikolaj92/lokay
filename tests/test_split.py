@@ -132,6 +132,7 @@ state:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_issue_split_skips_product_repo_without_config_or_gh(
     repo, monkeypatch, capsys
 ):

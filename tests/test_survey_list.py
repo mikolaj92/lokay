@@ -239,6 +239,7 @@ def test_list_issues_with_work_ready_label_defaults_empty_state_to_open(tmp_path
     assert argv[argv.index("--state") + 1] == "all"
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_survey_ready_mini_mill_lists_only_lokay_issues(tmp_path, monkeypatch):
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()

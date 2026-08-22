@@ -21,6 +21,7 @@ def test_repair_prompt_delimits_untrusted_review() -> None:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_without_config_fala_or_state(
     repo: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

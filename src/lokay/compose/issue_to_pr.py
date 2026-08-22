@@ -10,16 +10,14 @@ import subprocess
 from typing import Any
 
 from lokay.config import load_config
-from lokay.envelope import emit_exit, ok
+from lokay.envelope import emit_exit
 from lokay.graph_run import run_path
 from lokay.gh_rate import survey_list_cap
 from lokay.passkit.support import run_proc
 from lokay.proc import closeout as p_closeout
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
-from lokay.mill_scope import SKIP_REASON, delivers, mill_repo
 
-MINI_MILL_REPO = mill_repo()
 
 
 def _await_detach_activation() -> bool:
@@ -145,16 +143,6 @@ def compose_issue_to_pr(
     incident_fingerprint: str = "",
     package_path: str | None = None,
 ) -> dict:
-    if not delivers(repo, mill=MINI_MILL_REPO):
-        return ok(
-            kind="issue_to_pr",
-            engine="fala",
-            planned=False,
-            skipped=True,
-            reason=SKIP_REASON,
-            repo=repo,
-            issue=issue_number,
-        )
     if not _await_detach_activation():
         return {"ok": False, "reason": "detachment_not_activated"}
     if live and load_config(config_path).mode != "live":

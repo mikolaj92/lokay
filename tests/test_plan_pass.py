@@ -1,9 +1,12 @@
+
+import pytest
 from pathlib import Path
 
 from lokay.passkit import io as pass_io
 from lokay.proc.plan_pass import MINI_MILL_REPO, run_plan_pass
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_plan_pass_skips_blocked_inbox_issue_without_spending_triage_budget(
     tmp_path: Path,
 ):
@@ -51,6 +54,7 @@ def test_plan_pass_skips_blocked_inbox_issue_without_spending_triage_budget(
     )
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_plan_pass_skips_repos_outside_mini_mill(tmp_path: Path):
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()

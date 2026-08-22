@@ -12,12 +12,9 @@ from lokay.gh_rate import is_transient_github_text
 
 Finding = dict[str, Any]
 Check = Callable[..., Finding]
-MINI_MILL_REPO = "mikolaj92/lokay"
-
-
 def preflight_repos(cfg: Any) -> list[Any]:
-    """Return only checkouts owned by this mill's host preflight."""
-    return [repo for repo in cfg.active_repos() if repo.name == MINI_MILL_REPO]
+    """Return every enabled checkout in the delivery catalog."""
+    return list(cfg.active_repos())
 
 
 def finding(name: str, passed: bool, code: str, *, repaired: bool = False) -> Finding:

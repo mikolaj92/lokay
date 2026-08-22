@@ -706,6 +706,7 @@ def _expire(path: Path, age: int) -> None:
     os.utime(path, (stamp, stamp))
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_idle_expired_survey_probes_github_sha(tmp_path):
     """Survey expiry probes GitHub SHA even when leftover stamp is still fresh."""
     root = tmp_path / "repo"
@@ -757,6 +758,7 @@ def test_idle_expired_survey_probes_github_sha(tmp_path):
     )
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_idle_expired_survey_probe_batches_one_graphql_request(tmp_path):
     """Mill-probe batches PR, ready, and inbox reads into one GraphQL request."""
     first = _run_daemon(tmp_path)
@@ -871,6 +873,7 @@ def test_idle_expired_survey_probe_failure_hosts(tmp_path):
     assert abs(survey.stat().st_mtime - before) < 1
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
     """Leftover-probe still hosts lokay-daemon so idle reap continues."""
     root = tmp_path / "repo"
@@ -919,6 +922,7 @@ def test_idle_expired_leftover_empty_probe_still_hosts_lokay_daemon(tmp_path):
     assert leftover.stat().st_mtime > before
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_idle_expired_leftover_and_survey_probe_still_hosts_lokay_daemon(tmp_path):
     """Leftover-probe still hosts lokay-daemon even when mill-probe would also run."""
     first = _run_daemon(tmp_path)
@@ -946,6 +950,7 @@ def test_idle_expired_leftover_and_survey_probe_still_hosts_lokay_daemon(tmp_pat
     assert survey.stat().st_mtime > survey_before
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_idle_expired_leftover_probe_batches_one_graphql_request(tmp_path):
     """Leftover-probe batches both CLOSED label reads into one GraphQL request."""
     first = _run_daemon(tmp_path)

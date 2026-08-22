@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -59,6 +61,7 @@ def test_all_cold_surveys_anchor_plus_bounded_cold():
     assert len(picked) < len(repos)
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_factory_begin_limits_mini_mill_survey_to_lokay(tmp_path, monkeypatch):
     repos = ["mikolaj92/lokay", "a/one", "a/two", "a/three"]
     cfg = SimpleNamespace(

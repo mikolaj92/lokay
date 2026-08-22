@@ -10,6 +10,7 @@ from lokay.proc import pr_merge
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_without_gh_git_or_config(
     repo: str,
     monkeypatch: pytest.MonkeyPatch,

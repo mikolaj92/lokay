@@ -18,7 +18,6 @@ from lokay.proc._common import add_config_live, load_cfg
 from lokay.wake import WakePlan, route_wake
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 _REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
 
 
@@ -48,8 +47,6 @@ def execute_wake(
     runners: dict[str, Callable[..., dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     """Invoke the path chosen by ``route_wake`` (injectable for tests)."""
-    if plan.repo and plan.repo != MINI_MILL_REPO:
-        return _repo_skip(plan.repo, planned=not live)
     if plan.skip or not plan.path:
         return ok(
             kind="wake",
@@ -158,14 +155,6 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     repo = str(args.repo or "").strip()
-    if repo and repo != MINI_MILL_REPO:
-        return emit_exit(
-            _repo_skip(
-                repo,
-                planned=bool(args.plan_only or not args.live),
-                plan_only=bool(args.plan_only),
-            )
-        )
 
     plan = route_wake(
         reason=str(args.reason),

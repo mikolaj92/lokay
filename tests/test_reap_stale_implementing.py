@@ -1,3 +1,5 @@
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 import os
@@ -58,6 +60,7 @@ state:
     assert out["reaped_count"] == 0
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_reap_stale_implementing_lists_only_lokay(tmp_path, monkeypatch):
     cfg = tmp_path / "config.yaml"
     repo_names = [

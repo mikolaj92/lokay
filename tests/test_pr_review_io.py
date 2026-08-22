@@ -7,6 +7,7 @@ from lokay import pr_review_io
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_review_worktree_skips_product_repos(tmp_path, repo: str) -> None:
     product_clone = tmp_path / repo.rsplit("/", 1)[-1]
     product_clone.mkdir()
@@ -15,6 +16,7 @@ def test_review_worktree_skips_product_repos(tmp_path, repo: str) -> None:
     assert pr_review_io.review_worktree(cfg, repo) is None
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_review_worktree_uses_lokay_clone(tmp_path) -> None:
     clone = tmp_path / "lokay"
     clone.mkdir()

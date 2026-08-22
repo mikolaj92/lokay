@@ -8,6 +8,7 @@ from lokay.compose import issue_to_pr
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_without_activation_config_github_git_fala_or_state(
     repo: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

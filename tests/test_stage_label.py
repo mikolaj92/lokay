@@ -10,6 +10,7 @@ from lokay.proc import stage_label
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_without_github_calls(repo, monkeypatch, capsys):
     def unexpected(*args, **kwargs):
         raise AssertionError("foreign repositories must be skipped before GitHub access")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +50,7 @@ def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | No
     return str(pass_dir)
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_mini_mill_selects_lokay_but_skips_product_repo(tmp_path):
     pass_dir = _pass(
         tmp_path,

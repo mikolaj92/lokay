@@ -22,6 +22,7 @@ def _cfg(tmp_path: Path) -> SimpleNamespace:
     "repo",
     ["mikolaj92/Temida", "mikolaj92/takt", "some-owner/outside-config"],
 )
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_list_issues_skips_non_lokay_without_gh(
     repo: str,
     tmp_path: Path,

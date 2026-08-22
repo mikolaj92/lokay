@@ -10,6 +10,7 @@ from lokay.proc import intake_check
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_without_github(monkeypatch, capsys, repo: str):
     def unexpected_github_call(*args, **kwargs):
         pytest.fail("foreign product intake must not call GitHub")

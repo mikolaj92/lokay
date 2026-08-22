@@ -1,5 +1,7 @@
 """DoD status: mill_ready and blockers."""
 
+import pytest
+
 from pathlib import Path
 
 from lokay.cli import build_parser
@@ -127,6 +129,7 @@ def test_local_status_uses_last_pass_health(tmp_path: Path, monkeypatch):
     assert result["human_residuals"]["count"] == 2
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_status_surveys_only_lokay_from_mixed_catalog(tmp_path: Path, monkeypatch):
     monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
     cfg_path = _write_cfg(
@@ -161,6 +164,7 @@ def test_status_surveys_only_lokay_from_mixed_catalog(tmp_path: Path, monkeypatc
     assert result["remaining"]["by_repo"][0]["survey_error"] is False
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_status_product_only_catalog_skips_survey(tmp_path: Path, monkeypatch):
     cfg_path = _write_cfg(
         tmp_path,

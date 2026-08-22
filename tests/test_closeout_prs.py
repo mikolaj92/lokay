@@ -1,5 +1,7 @@
 """Repository-boundary tests for lokay-closeout-prs."""
 
+import pytest
+
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +10,7 @@ from lokay.passkit import io as pass_io
 from lokay.proc import closeout_prs
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_skips_product_repos_before_closeout(tmp_path: Path, monkeypatch) -> None:
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()

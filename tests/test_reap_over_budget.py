@@ -13,6 +13,7 @@ from lokay.proc.detach_issue_to_pr import issue_to_pr_receipt_path
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_skips_product_receipts_without_inspecting_or_mutating(repo, monkeypatch):
     receipt = {"repo": repo, "issue": 9, "pid": 4242}
     monkeypatch.setattr(

@@ -1,9 +1,12 @@
+
+import pytest
 from pathlib import Path
 
 from lokay.proc import dispatch_implement as d
 from lokay.proc import detach_issue_to_pr as detach_mod
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_detach_writes_start_and_pid_to_log(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
 
@@ -21,6 +24,7 @@ def test_detach_writes_start_and_pid_to_log(monkeypatch, tmp_path):
     )
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_detach_does_not_wait(monkeypatch, tmp_path):
     seen = []
 

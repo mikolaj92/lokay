@@ -30,7 +30,6 @@ from lokay.proc._common import (
 )
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def _issue_from_args(args: argparse.Namespace) -> Issue | None:
@@ -114,18 +113,6 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(str(exc)))
 
     repo = issue.repo if issue is not None else str(args.repo or "")
-    if repo and repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=not args.live,
-                wrote=False,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=repo,
-                issue=(issue.number if issue else args.issue),
-                worktree=str(worktree),
-            )
-        )
 
     seed = _seed_text(args, issue, worktree if worktree.is_dir() else Path("."))
     issue_file_paths = extract_issue_file_paths(issue.body) if issue is not None else ()

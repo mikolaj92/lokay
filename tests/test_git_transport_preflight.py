@@ -1,3 +1,5 @@
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +20,7 @@ def completed(code=0, stdout=""):
     return SimpleNamespace(returncode=code, stdout=stdout, stderr="")
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_git_transport_never_touches_product_checkout(tmp_path, monkeypatch):
     item = repo(tmp_path)
     product_path = tmp_path / "Temida"

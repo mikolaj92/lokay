@@ -15,6 +15,7 @@ def _ctx(repo: str) -> dict[str, Any]:
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
 @pytest.mark.parametrize("atom", ["list_prs", "pr_label"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_before_running_finalize_atoms(
     repo: str, atom: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

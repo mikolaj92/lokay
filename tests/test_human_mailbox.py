@@ -1,9 +1,12 @@
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
 from lokay.compose import human_mailbox
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_human_mailbox_lists_only_lokay(tmp_path: Path, monkeypatch) -> None:
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(

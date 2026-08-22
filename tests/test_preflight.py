@@ -94,6 +94,7 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
     assert result["repairs"][0]["value"] == "[redacted]"
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_catalog_clone_check_ignores_product_repositories(tmp_path):
     from types import SimpleNamespace
 
@@ -1747,7 +1748,6 @@ def test_lease_issuance_rejects_preexisting_symlink(tmp_path, monkeypatch):
 
 
 def test_lease_atomic_publish_never_writes_swap_symlink_target(tmp_path, monkeypatch):
-    import pytest
     monkeypatch.setenv("HOME", str(tmp_path))
     lease_dir = tmp_path / ".lokay"; lease_dir.mkdir()
     victim = tmp_path / "victim"; victim.write_text("untouched")

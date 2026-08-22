@@ -19,7 +19,6 @@ from lokay.safety import validate_argv
 
 READY_LABEL = "ai:ready"
 WORK_READY_LABEL = "work:ready"
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def park_argv(repo: str, issue: int) -> list[str]:
@@ -81,20 +80,6 @@ def main(argv: list[str] | None = None) -> int:
     if isinstance(parsed, str):
         return emit_exit(err(parsed))
     repo, issue = parsed
-    if repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                dry_run=bool(args.dry_run),
-                planned=False,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                applied=False,
-                removed=False,
-                repo=repo,
-                issue=issue,
-                label=READY_LABEL,
-            )
-        )
     command = park_argv(repo, issue)
     display = " ".join(command)
     if args.dry_run or not args.live:

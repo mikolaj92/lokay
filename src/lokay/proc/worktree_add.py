@@ -9,7 +9,6 @@ from lokay.git_worktree import InvalidBranchRef, ensure_worktree
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,16 +27,6 @@ def main(argv: list[str] | None = None) -> int:
     repo = next((r for r in cfg.repos if r.name == args.repo), None)
     if repo is None:
         return emit_exit(err(f"repo not in config: {args.repo}"))
-    if repo.name != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=not args.live,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=args.repo,
-                branch=args.branch,
-            )
-        )
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
         path = ensure_worktree(

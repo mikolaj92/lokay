@@ -9,9 +9,7 @@ from lokay.gh_prs import merge_pr
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
-from lokay.mill_scope import SKIP_REASON, mill_repo
 
-MINI_MILL_REPO = mill_repo()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,19 +19,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--issue", type=int)
     args = p.parse_args(argv)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=False,
-                skipped=True,
-                reason=SKIP_REASON,
-                repo=args.repo,
-                pr=args.pr,
-                merged=False,
-                issue=args.issue,
-                parked=None,
-            )
-        )
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     if live and not cfg.merge_enabled:

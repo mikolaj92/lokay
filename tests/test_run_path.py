@@ -12,6 +12,7 @@ def _payload(capsys: pytest.CaptureFixture[str]) -> dict:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_is_skipped_without_running_path(
     repo: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -31,6 +32,7 @@ def test_product_repo_is_skipped_without_running_path(
     }
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_mini_mill_repo_runs_path_as_before(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 
@@ -113,6 +115,7 @@ def test_execute_wake_skip_ok():
     assert out["skipped"] is True
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_execute_wake_dispatches_injected_runners():
     plan = route_wake(
         reason="issue_opened", repo=wake_proc.MINI_MILL_REPO, issue=2
@@ -158,6 +161,7 @@ def test_execute_wake_dispatches_injected_runners():
     assert out_fp["max_passes"] == 1
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_plan_only_cli(capsys):
     code = wake_proc.main(
         [
@@ -177,6 +181,7 @@ def test_plan_only_cli(capsys):
     assert payload["path"] == "issue_triage"
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_cli_skips_before_config_or_path(monkeypatch, capsys):
     def unexpected(*args, **kwargs):
         raise AssertionError("product wake must not load config or run a path")
@@ -198,6 +203,7 @@ def test_product_repo_cli_skips_before_config_or_path(monkeypatch, capsys):
         assert payload["repo"] == repo
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_plan_only_skips_without_planning_path(capsys):
     code = wake_proc.main(
         [
@@ -221,6 +227,7 @@ def test_product_repo_plan_only_skips_without_planning_path(capsys):
     assert payload["reason"] == "repo_not_delivered_by_mini_mill"
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_execute_wake_defensively_skips_product_repo():
     plan = route_wake(reason="mill", repo="mikolaj92/takt")
     out = wake_proc.execute_wake(

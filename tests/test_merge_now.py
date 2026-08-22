@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -57,6 +59,7 @@ def test_without_live_plans_and_does_not_call_gh(monkeypatch, capsys):
     )
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
     def boom(*_a, **_k):
         raise AssertionError("gh must not run for a product repo")

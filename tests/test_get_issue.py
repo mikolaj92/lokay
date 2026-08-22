@@ -9,6 +9,7 @@ from lokay.proc import get_issue
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_get_issue_skips_product_repo_without_gh(
     repo: str,
     monkeypatch: pytest.MonkeyPatch,

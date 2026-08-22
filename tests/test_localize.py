@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 
@@ -283,6 +285,7 @@ state:
     assert "src/a.py" in out["paths"]
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_localize_cli_live_skips_product_repos_without_writing(tmp_path: Path, capsys):
     for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
         wt = tmp_path / repo.rsplit("/", 1)[-1]

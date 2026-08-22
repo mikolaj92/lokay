@@ -22,17 +22,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--worktree", required=True)
     p.add_argument("--message", required=True)
     args = p.parse_args(argv)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=not args.live,
-                committed=False,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=args.repo,
-                worktree=args.worktree,
-            )
-        )
     cfg = load_cfg(args) if args.live else None
     run = runner()
     try:

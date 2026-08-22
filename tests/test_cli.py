@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import json
 from argparse import Namespace
 from pathlib import Path
@@ -7,6 +9,7 @@ from pathlib import Path
 from lokay.cli import cmd_validate
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_validate_lists_only_lokay_from_product_catalog(tmp_path: Path, capsys) -> None:
     config = tmp_path / "config.yaml"
     config.write_text(

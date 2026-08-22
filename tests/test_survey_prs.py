@@ -1,9 +1,12 @@
+
+import pytest
 from pathlib import Path
 
 from lokay.passkit import io as pass_io
 from lokay.proc import survey_prs
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_mini_mill_lists_only_lokay_prs(tmp_path: Path, monkeypatch) -> None:
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()

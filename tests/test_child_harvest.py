@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 import sqlite3
 import time
@@ -164,6 +166,7 @@ def test_harvest_closed_issue_list_refuses_truncation(monkeypatch):
     assert "Harvest CLOSED list refuses truncation before clearing stuck rows." in source
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_github_closed_mill_issue_clears_stuck_without_journal(tmp_path: Path, monkeypatch):
     """Compacted state.jsonl still leaves CLOSED corpses; GitHub is the source of truth."""
     cycle = tmp_path / "cycle"
@@ -364,6 +367,7 @@ def test_harvest_drops_out_of_scope_cycle_start_files(tmp_path: Path, monkeypatc
     assert live.exists()
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_harvest_drops_github_closed_mill_cycle_start_files(
     tmp_path: Path, monkeypatch
 ):
@@ -1197,6 +1201,7 @@ def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path
     assert stuck["issues"]["a/b#4796"].get("reason") == "plan_only"
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_harvest_idle_mill_stuck_drops_toplevel_temida(tmp_path: Path, monkeypatch):
     """Idle daemon_cycle skip still harvests mill stuck, including top-level keys."""
     from lokay.child_harvest import harvest_idle_mill_stuck

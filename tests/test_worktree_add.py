@@ -42,6 +42,7 @@ state:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_before_preflight_or_creating_worktree(
     config_path, repo, monkeypatch, capsys
 ):

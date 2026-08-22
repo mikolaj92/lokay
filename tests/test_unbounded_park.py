@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -137,6 +139,7 @@ def test_live_requires_healthy_before_gh(monkeypatch, capsys):
     assert fake.calls == []
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
     for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
         fake = _gh()

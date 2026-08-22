@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +19,7 @@ def _repo(name: str, *, enabled: bool = True) -> SimpleNamespace:
     )
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_repos_list_only_returns_lokay(monkeypatch, capsys) -> None:
     lokay = _repo("mikolaj92/lokay")
     temida = _repo("mikolaj92/Temida")

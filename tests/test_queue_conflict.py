@@ -162,6 +162,7 @@ def test_older_with_path_overlap_stays_ready():
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_stdin_skips_product_repos_without_evaluating(repo, monkeypatch):
     monkeypatch.setattr(
         queue_conflict_proc,
@@ -179,6 +180,7 @@ def test_stdin_skips_product_repos_without_evaluating(repo, monkeypatch):
     assert out["selected"] is None
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_pass_mode_skips_products_and_evaluates_lokay(tmp_path, monkeypatch):
     product = _issue(repo="mikolaj92/Temida", number=20).to_dict()
     lokay = _issue(repo="mikolaj92/lokay", number=21).to_dict()

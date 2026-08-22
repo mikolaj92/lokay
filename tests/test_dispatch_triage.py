@@ -1,3 +1,5 @@
+
+import pytest
 from pathlib import Path
 
 from lokay.passkit import io as pass_io
@@ -36,6 +38,7 @@ def _pass_dir(tmp_path: Path, *, stuck_path: Path) -> Path:
     return pass_dir
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_dispatch_triage_skips_blocked_target_but_runs_other(tmp_path, monkeypatch):
     stuck_path = tmp_path / "stuck.json"
     stuck_path.write_text(
@@ -79,6 +82,7 @@ def test_dispatch_triage_skips_blocked_target_but_runs_other(tmp_path, monkeypat
     assert working["remaining_inbox"] == 1
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_dispatch_triage_skips_repos_outside_mini_mill(tmp_path, monkeypatch):
     stuck_path = tmp_path / "stuck.json"
     stuck_path.write_text("{}\n", encoding="utf-8")

@@ -28,6 +28,7 @@ def _init_repo(repo: Path) -> None:
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_commit_all_cli_skips_product_repo_without_git_or_preflight(
     repo: str, tmp_path: Path, monkeypatch, capsys
 ) -> None:

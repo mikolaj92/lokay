@@ -14,7 +14,6 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed
 
 MERGE_TIMEOUT_SECONDS = 180
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def merge_argv(repo: str, pr: int) -> list[str]:
@@ -35,16 +34,6 @@ def main(argv: list[str] | None = None) -> int:
     repo = str(args.repo)
     pr = int(args.pr)
     command = merge_argv(repo, pr)
-    if repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                command=command,
-                repo=repo,
-                pr=pr,
-            )
-        )
     if args.dry_run or not args.live:
         return emit_exit(
             ok(

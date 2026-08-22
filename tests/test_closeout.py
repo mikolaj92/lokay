@@ -590,6 +590,7 @@ def test_leftover_park_clears_empty_stamp(monkeypatch, tmp_path):
     assert not stamp.exists()
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeypatch):
     monkeypatch.setattr(
         closeout,
@@ -644,6 +645,7 @@ def test_leftover_closed_ready_with_merged_pr_strips_labels_without_i2pr(monkeyp
     ]
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_closed_ready_numbers_skips_product_repo_without_gh():
     class NoGhRunner:
         def run_checked(self, *_args, **_kwargs):

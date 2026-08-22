@@ -10,7 +10,6 @@ from lokay.git_rebase import RebaseConflict, RebaseError, rebase_onto_base
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -21,16 +20,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--worktree", required=True)
     parser.add_argument("--base", default="main")
     args = parser.parse_args(argv)
-    if args.repo != MINI_MILL_REPO:
-        return emit_exit(
-            ok(
-                planned=not args.live,
-                skipped=True,
-                reason="repo_not_delivered_by_mini_mill",
-                repo=args.repo,
-                worktree=args.worktree,
-            )
-        )
     cfg = load_cfg(args) if args.live else None
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:

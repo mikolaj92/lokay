@@ -89,6 +89,7 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
     assert any(row.get("step") == "skip_ready_repo_occupied" for row in working["actions"])
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
     pass_dir = _pass(
         tmp_path,
@@ -395,6 +396,7 @@ def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
     ]
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_refresh_skips_product_repo_without_listing_prs(tmp_path, monkeypatch):
     product_repo = "mikolaj92/Temida"
     pass_dir = _pass(

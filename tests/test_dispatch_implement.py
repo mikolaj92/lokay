@@ -1,9 +1,12 @@
+
+import pytest
 import json
 
 from lokay.passkit import io as pass_io
 from lokay.proc import dispatch_implement as dispatch
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_is_skipped_before_intake_or_detach(monkeypatch, tmp_path):
     begin = {
         "live": True,

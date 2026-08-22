@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 import json
 from pathlib import Path
 
@@ -49,6 +51,7 @@ def test_this_repo_declares_pytest():
     assert test_local.declared_test_argv(root) == LOKAY_PYTEST
 
 
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_product_repo_skips_without_inspecting_or_running_worktree(
     tmp_path: Path, monkeypatch, capsys
 ):

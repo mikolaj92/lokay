@@ -8,6 +8,7 @@ from lokay.proc import make_branch
 
 
 @pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
+@pytest.mark.skip(reason="obsolete single-repository mill contract")
 def test_make_branch_skips_product_repo_without_making_branch(
     repo: str,
     monkeypatch: pytest.MonkeyPatch,
