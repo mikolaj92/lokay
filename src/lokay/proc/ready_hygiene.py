@@ -108,8 +108,9 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
         if repo.name != MINI_MILL_REPO:
             continue
         probed = True
+        # Unhealthy leftover-ready still lists GitHub. Hosted leftover-ready parks still do.
         issues = list_labeled_issues(
-            runner(cfg), cfg, repo, label=cfg.ready_label, live=apply
+            runner(cfg), cfg, repo, label=cfg.ready_label, live=live
         )
         for issue in issues:
             if WORK_READY_LABEL in issue.labels:
