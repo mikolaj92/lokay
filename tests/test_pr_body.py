@@ -39,6 +39,12 @@ def test_pr_body_carries_ticket_acceptance_evidence_into_review() -> None:
     assert "PR body (includes the original ticket evidence):" in prompt
 
 
+def test_pr_body_explicitly_marks_ticket_truncation() -> None:
+    long_body = "x" * 9000
+    body = pr_body(_issue(long_body), agent_summary="ok")
+    assert "[... truncated at 8000 characters]" in body
+
+
 def test_pr_body_pins_ticket_review_semantics() -> None:
     import lokay.prompts as prompts
 
