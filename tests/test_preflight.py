@@ -383,7 +383,7 @@ def test_healthy_preflight_closes_open_incident_tickets(monkeypatch):
 
     monkeypatch.setattr(preflight.subprocess, "run", fake_run)
     out = preflight._close_resolved_incidents("mikolaj92/lokay")
-    assert out == {"ok": True, "closed": [178]}
+    assert out == {"ok": True, "closed": [178], "applied": True}
     assert any(c[:4] == ["gh", "issue", "close", "178"] for c in closed)
     assert all("99" not in c for c in closed)
 
@@ -411,7 +411,7 @@ def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
 
     monkeypatch.setattr(preflight.subprocess, "run", fake_run)
     first = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
-    assert first == {"ok": True, "closed": []}
+    assert first == {"ok": True, "closed": [], "applied": False}
     assert listed == [1]
     assert stamp is not None and stamp.is_file()
     mtime = stamp.stat().st_mtime
@@ -425,6 +425,36 @@ def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
     }
     assert listed == [1]
     assert stamp.stat().st_mtime == mtime
+
+
+def test_empty_leftover_incident_host_is_not_applied(tmp_path, monkeypatch):
+    """Empty leftover-incident host is not applied."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    listed: list[int] = []
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            listed.append(1)
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": "[[]]", "stderr": ""},
+            )()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert out["applied"] is False
+    assert out["closed"] == []
+    assert listed == [1]
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Empty leftover-incident host is not applied." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_idle_leftover_incident_skip_outlives_leftover_probe(tmp_path, monkeypatch):
@@ -604,7 +634,7 @@ def test_closing_an_incident_clears_the_empty_stamp(tmp_path, monkeypatch):
 
     monkeypatch.setattr(preflight.subprocess, "run", fake_run)
     out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
-    assert out == {"ok": True, "closed": [178]}
+    assert out == {"ok": True, "closed": [178], "applied": True}
     assert not stamp.exists()
 
 
