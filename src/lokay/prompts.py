@@ -228,6 +228,7 @@ Summarize what you fixed and how you verified it.
 def pr_body(issue: Issue, *, agent_summary: str, incident_fingerprint: str = "") -> str:
     linkage = f"Refs #{issue.number}" if incident_fingerprint else f"Closes #{issue.number}"
     marker = f"<!-- lokay-preflight:{incident_fingerprint} -->\n" if incident_fingerprint else ""
+    # PR review receives the ticket body, not only the builder's summary.
     return f"""{marker}## Summary
 
 Automated Lokay fix for {issue.repo}#{issue.number}.
@@ -237,6 +238,10 @@ Automated Lokay fix for {issue.repo}#{issue.number}.
 ## Issue
 
 {issue.title}
+
+## Ticket evidence
+
+{(issue.body or "(no ticket body)")[:8000]}
 
 ## Agent notes
 
