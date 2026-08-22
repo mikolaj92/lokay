@@ -407,6 +407,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   that GitHub list for 300s without refreshing the stamp.
   Fresh leftover-incident skip is not applied.
   Empty leftover-incident host is not applied.
+  Leftover-incident probe failure reports probe_failed.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Pytest must not skip leftover-incident GitHub lists using the mill stamp.

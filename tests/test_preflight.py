@@ -590,8 +590,17 @@ def test_incident_probe_failure_does_not_write_stamp(tmp_path, monkeypatch):
 
     monkeypatch.setattr(preflight.subprocess, "run", fake_run)
     out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
-    assert out == {"ok": True, "closed": []}
+    assert out == {
+        "ok": True,
+        "closed": [],
+        "applied": False,
+        "probe_failed": True,
+    }
     assert stamp is not None and not stamp.exists()
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident probe failure reports probe_failed." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_closing_an_incident_clears_the_empty_stamp(tmp_path, monkeypatch):
