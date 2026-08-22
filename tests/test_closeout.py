@@ -330,6 +330,51 @@ def test_unhealthy_leftover_closeout_parks_are_planned(monkeypatch, tmp_path):
     )
 
 
+def test_hosted_leftover_closeout_reports_applied(monkeypatch, tmp_path):
+    """Hosted leftover-closeout reports applied."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - closeout.LEFTOVER_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    monkeypatch.setattr(
+        closeout,
+        "closed_ready_numbers",
+        lambda *_a, **_k: [429],
+    )
+    monkeypatch.setattr(
+        closeout,
+        "_park_ready",
+        lambda **_k: {"ok": True, "planned": True, "removed": False},
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: False)
+    unhealthy = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert unhealthy["applied"] is False
+    assert unhealthy["planned"] is True
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        closeout,
+        "_park_ready",
+        lambda **_k: {"ok": True, "removed": True},
+    )
+    healthy = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert healthy["applied"] is True
+    assert healthy["labels_removed"] is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Hosted leftover-closeout reports applied." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp(
     monkeypatch, tmp_path
 ):
