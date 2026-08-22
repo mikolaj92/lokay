@@ -53,8 +53,26 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(ok(offline=not live, skipped=True, reason="executor_disabled",
                             repo=args.repo, pr=args.pr, merge_ok=False))
 
-    ev = load_pr_evidence(r, args.repo, int(args.pr), live=live,
-                          branch=args.branch, checks_text=args.checks_text)
+    try:
+        ev = load_pr_evidence(
+            r,
+            args.repo,
+            int(args.pr),
+            live=live,
+            branch=args.branch,
+            checks_text=args.checks_text,
+        )
+    except Exception as exc:  # noqa: BLE001
+        # PR review evidence failure returns a machine-readable uncertainty envelope.
+        return emit_exit(
+            err(
+                f"failed to load PR review evidence: {exc}",
+                repo=args.repo,
+                pr=args.pr,
+                merge_ok=False,
+                probe_failed=True,
+            )
+        )
     head, head_sha = ev["head"], ev["head_sha"]
     markers = parse_review_markers(ev["comments"])
     prior = find_review_for_head(markers, head_sha)
