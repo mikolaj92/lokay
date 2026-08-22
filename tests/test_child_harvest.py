@@ -6,7 +6,9 @@ import json
 import sqlite3
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
+import lokay.child_harvest as child_harvest
 from lokay.child_harvest import harvest_fail_closed_children
 from lokay.stuck import excluded_numbers, load_stuck, stuck_path_for
 
@@ -139,6 +141,27 @@ def test_issue_closed_clears_stale_no_pr_row(tmp_path: Path):
     )
     assert excluded_numbers(stuck, "a/b") == set()
     assert "a/b#5" not in stuck["issues"]
+
+
+def test_harvest_closed_issue_list_refuses_truncation(monkeypatch):
+    class FullPageRunner:
+        def run_checked(self, spec, *, live):
+            assert live is True
+            return SimpleNamespace(
+                stdout=json.dumps(
+                    [
+                        {"number": 528, "state": "CLOSED"},
+                        {"number": 529, "state": "CLOSED"},
+                    ]
+                )
+            )
+
+    monkeypatch.setattr(child_harvest, "survey_list_cap", lambda: 2)
+    monkeypatch.setattr(child_harvest, "Runner", FullPageRunner)
+
+    assert child_harvest._github_closed_mill_issues("mikolaj92/lokay") == set()
+    source = Path(child_harvest.__file__).read_text(encoding="utf-8")
+    assert "Harvest CLOSED list refuses truncation before clearing stuck rows." in source
 
 
 def test_github_closed_mill_issue_clears_stuck_without_journal(tmp_path: Path, monkeypatch):
