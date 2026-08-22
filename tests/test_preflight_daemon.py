@@ -46,8 +46,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Leftover-probe still hosts lokay-daemon so idle reap continues." in script
     assert "Leftover-probe still hosts lokay-daemon even when mill-probe would also run." in script
     assert "Leftover-probe skips GitHub SHA when survey stamp is still fresh." in script
-    assert "Mill-probe skips GitHub SHA when leftover stamp is still fresh." in script
-    assert "Combined leftover+survey expiry still probes SHA." in script
+    assert "Survey expiry probes GitHub SHA even when leftover stamp is still fresh." in script
     assert "Trailing delayed --install checks keepalive stamp before mill_lock_busy." in script
     assert "Fresh idle skip defers caretaker plist write; hosted/probe ticks still write." in script
     assert "Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe." in script
@@ -707,8 +706,8 @@ def _expire(path: Path, age: int) -> None:
     os.utime(path, (stamp, stamp))
 
 
-def test_idle_expired_survey_empty_probe_skips_lokay_daemon(tmp_path):
-    """Mill-probe skips GitHub SHA when leftover stamp is still fresh."""
+def test_idle_expired_survey_probes_github_sha(tmp_path):
+    """Survey expiry probes GitHub SHA even when leftover stamp is still fresh."""
     root = tmp_path / "repo"
     root.mkdir()
     (root / "config.yaml").touch()
@@ -745,13 +744,17 @@ def test_idle_expired_survey_empty_probe_skips_lokay_daemon(tmp_path):
     second = _run_daemon(tmp_path)
     assert second.returncode == 0, second.stderr
     calls = argv_log.read_text(encoding="utf-8").splitlines()
-    assert all("lokay-host-ff" not in line for line in calls)
+    assert any("lokay-host-ff" in line for line in calls)
     assert all("lokay-daemon" not in line for line in calls)
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_survey_probe" in body
     assert "already_current" in body
     assert survey.stat().st_mtime > before
+    script = Path(__file__).resolve().parents[1] / "scripts" / "lokay-mill-daemon.sh"
+    assert "Survey expiry probes GitHub SHA even when leftover stamp is still fresh." in script.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_idle_expired_survey_probe_batches_one_graphql_request(tmp_path):
