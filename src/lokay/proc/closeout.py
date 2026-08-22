@@ -146,6 +146,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     # Fresh leftover skip does not require healthy. Hosted leftover parks still do.
     # Unhealthy leftover-closeout still lists GitHub.
     if leftover_recently_empty(stamp):
+        # Fresh leftover-closeout skip is not applied.
         return ok(
             leftover_closed=0,
             labels_removed=False,
@@ -153,6 +154,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
             closed_out=[],
             skipped=True,
             reason="recent_empty",
+            applied=False,
         )
     allowed = mutations_allowed(live_flag=live, cfg=cfg)
     issue_runner = runner(cfg)
