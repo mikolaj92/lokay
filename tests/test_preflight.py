@@ -388,6 +388,7 @@ def test_healthy_preflight_closes_open_incident_tickets(monkeypatch):
         "closed": [178],
         "applied": True,
         "planned": False,
+        "probe_failed": False,
     }
     assert any(c[:4] == ["gh", "issue", "close", "178"] for c in closed)
     assert all("99" not in c for c in closed)
@@ -421,6 +422,7 @@ def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
         "closed": [],
         "applied": False,
         "planned": False,
+        "probe_failed": False,
     }
     assert listed == [1]
     assert stamp is not None and stamp.is_file()
@@ -502,6 +504,36 @@ def test_empty_leftover_incident_host_reports_planned_not_live(tmp_path, monkeyp
     assert dry["planned"] is True
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
     assert "Empty leftover-incident host reports planned=not live." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_leftover_incident_host_reports_probe_failed(tmp_path, monkeypatch):
+    """Leftover-incident host reports probe_failed."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    listed: list[int] = []
+
+    def fake_run(argv, *args, **kwargs):
+        cmd = list(argv)
+        if cmd[:2] == ["gh", "api"]:
+            listed.append(1)
+            return type(
+                "Completed",
+                (),
+                {"returncode": 0, "stdout": "[[]]", "stderr": ""},
+            )()
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(preflight.subprocess, "run", fake_run)
+    out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert out["probe_failed"] is False
+    assert out["applied"] is False
+    assert listed == [1]
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident host reports probe_failed." in src.read_text(
         encoding="utf-8"
     )
 
@@ -861,6 +893,7 @@ def test_closing_an_incident_clears_the_empty_stamp(tmp_path, monkeypatch):
         "closed": [178],
         "applied": True,
         "planned": False,
+        "probe_failed": False,
     }
     assert not stamp.exists()
 
