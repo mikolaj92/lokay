@@ -7,6 +7,13 @@ from lokay.models import Issue
 from lokay.safety import untrusted_issue_block
 
 
+def _clip(text: str, limit: int) -> str:
+    s = (text or "").strip()
+    if len(s) <= limit:
+        return s
+    return f"{s[:limit]}\n\n[... truncated at {limit} characters]"
+
+
 _SCOPE_LOCK_MAX = 8
 
 
@@ -241,11 +248,11 @@ Automated Lokay fix for {issue.repo}#{issue.number}.
 
 ## Ticket evidence
 
-{(issue.body or "(no ticket body)")[:8000]}
+{_clip(issue.body or "(no ticket body)", 8000)}
 
 ## Agent notes
 
-{agent_summary[:4000] or "(no summary)"}
+{_clip(agent_summary or "(no summary)", 4000)}
 
 ## Test evidence
 

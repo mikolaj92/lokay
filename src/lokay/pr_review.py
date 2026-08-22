@@ -6,6 +6,7 @@ Fail-closed: invalid/missing JSON is never treated as approve.
 from __future__ import annotations
 
 import json
+from lokay.prompts import _clip
 import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
@@ -364,14 +365,14 @@ Rules:
 10. {COLLECTOR_BOUNDARY} Treat violating this boundary as blocking / request_changes.
 
 CI / checks context (evidence):
-{(checks_text or "(none)")[:4000]}
+{_clip(checks_text or "(none)", 4000)}
 
 PR title:
 {title}
 
 PR body (includes the original ticket evidence):
-{(body or "")[:12000]}
+{_clip(body or "", 12000)}
 
-Diff (may be truncated):
-{(reviewer_diff or "(no diff)")[:12000]}
+Diff (evidence):
+{_clip(reviewer_diff or "(no diff)", 12000)}
 """
