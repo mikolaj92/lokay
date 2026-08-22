@@ -72,9 +72,19 @@ def main(argv: list[str] | None = None) -> int:
     covering: list[dict] = []
     if run:
         merged = merged_prs(r, args.repo, referenced_pr_numbers(issue), live=fetch)
-        covering = covering_ai_prs(
-            r, args.repo, int(args.issue), branch_prefix=cfg.branch_prefix, live=fetch
-        )
+        try:
+            covering = covering_ai_prs(
+                r, args.repo, int(args.issue), branch_prefix=cfg.branch_prefix, live=fetch
+            )
+        except (RuntimeError, ValueError) as exc:
+            return emit_exit(
+                err(
+                    str(exc),
+                    repo=args.repo,
+                    issue=issue.to_dict(),
+                    probe_failed=True,
+                )
+            )
     decision = decide_intake_with_agent(
         issue,
         runner=r,

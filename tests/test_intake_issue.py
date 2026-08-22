@@ -100,3 +100,49 @@ def test_lokay_repo_still_runs_intake(
     assert payload["repo"] == "mikolaj92/lokay"
     assert payload["applied"] is True
     assert payload["decision"]["decision"] == "ready"
+
+
+def test_covering_pr_probe_failure_stops_intake_before_decision(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = SimpleNamespace(
+        ready_label="ai:ready",
+        needs_feedback_label="ai:needs-feedback",
+        blocked_label="ai:blocked",
+        branch_prefix="ai/",
+        assignee="mikolaj92",
+    )
+    issue = SimpleNamespace(
+        labels=["ai:ready"],
+        state="OPEN",
+        to_dict=lambda: {"repo": "mikolaj92/lokay", "number": 508},
+    )
+    monkeypatch.setattr(intake_issue, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(intake_issue, "runner", lambda: object())
+    monkeypatch.setattr(intake_issue, "read_live", lambda _args: True)
+    monkeypatch.setattr(
+        intake_issue, "mutations_allowed", lambda *, live_flag, cfg: live_flag
+    )
+    monkeypatch.setattr(intake_issue, "get_issue", lambda *_args, **_kwargs: issue)
+    monkeypatch.setattr(intake_issue, "resolve_repo_clone", lambda *_args: None)
+    monkeypatch.setattr(intake_issue, "referenced_pr_numbers", lambda _issue: [])
+    monkeypatch.setattr(intake_issue, "merged_prs", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        intake_issue,
+        "covering_ai_prs",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("probe failed")),
+    )
+    monkeypatch.setattr(
+        intake_issue,
+        "decide_intake_with_agent",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("uncertain evidence must not reach intake decision")
+        ),
+    )
+
+    assert intake_issue.main(["--repo", "mikolaj92/lokay", "--issue", "508", "--live"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["probe_failed"] is True
+    assert payload["error"] == "probe failed"
