@@ -159,7 +159,12 @@ state:
     assert out["reason"] == "recent_empty"
     assert out["applied"] is False
     assert out["cleaned_count"] == 0
+    assert out["probe_failed"] is False
     assert stamp.stat().st_mtime == before
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Leftover-ready skip reports probe_failed." in src.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_fresh_leftover_ready_skip_does_not_require_healthy(tmp_path, monkeypatch):

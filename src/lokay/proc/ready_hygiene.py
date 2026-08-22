@@ -97,6 +97,7 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
     )
     if hygiene_recently_empty(stamp, ttl=idle_ttl):
         # Fresh leftover-ready skip is not applied.
+        # Leftover-ready skip reports probe_failed.
         return ok(
             planned=not live,
             applied=False,
@@ -104,6 +105,7 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
             cleaned_count=0,
             skipped=True,
             reason="recent_empty",
+            probe_failed=False,
         )
     apply = mutations_allowed(live_flag=live, cfg=cfg)
     cleaned: list[dict[str, Any]] = []
