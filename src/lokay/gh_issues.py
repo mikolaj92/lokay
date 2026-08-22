@@ -191,6 +191,8 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         label=config.ready_label,
         kind="ready-issue",
         state="all",
+        # Ready-list rate limit is not an empty queue.
+        raise_on_rate_limit=True,
     )
     issues: list[Issue] = []
     for row in rows:
