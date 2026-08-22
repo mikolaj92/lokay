@@ -228,6 +228,8 @@ def run_survey_ready(*, pass_dir: str, config_path: str | None, live: bool) -> d
         "pass_dir": pass_dir,
         "remaining_ready": remaining_ready,
         "survey_errors": survey_errors,
+        # Ready survey reports whether its GitHub probe failed.
+        "probe_failed": bool(ready_survey_failed),
     }
     if skip_github:
         out["skipped"] = True
