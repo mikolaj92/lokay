@@ -413,35 +413,11 @@ def create_issue(
         except ValueError:
             number = 0
     if number <= 0:
-        # Fallback: view by URL search is fragile; re-list latest open matching title.
-        listed = runner.run(
-            gh_spec(
-                [
-                    "issue",
-                    "list",
-                    "--repo",
-                    repo,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,title,url",
-                    "--limit",
-                    "5",
-                ],
-                timeout_seconds=60,
-            ),
-            live=True,
+        # Issue creation success requires its own recoverable identity.
+        # A same-title list fallback can bind the new child to an older issue.
+        raise RuntimeError(
+            f"create issue on {repo} succeeded but number unknown: {url!r}"
         )
-        if listed.returncode == 0:
-            for row in json.loads(listed.stdout or "[]"):
-                if str(row.get("title") or "") == title:
-                    return {
-                        "number": int(row["number"]),
-                        "url": str(row.get("url") or ""),
-                        "title": title,
-                        "repo": repo,
-                    }
-        raise RuntimeError(f"create issue on {repo} succeeded but number unknown: {url!r}")
     return {"number": number, "url": url, "title": title, "repo": repo}
 
 
