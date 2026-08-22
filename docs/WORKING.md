@@ -355,7 +355,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Mill-probe skips GitHub SHA when leftover stamp is still fresh.
   Combined leftover+survey expiry still probes SHA. One batched GraphQL read
   probes both CLOSED ready labels. After survey-stamp expiry, one batched GraphQL read probes mill PR / inbox /
-  ready state and refreshes the survey stamp. Pagination, malformed data, or
+  ready state and refreshes the survey stamp. GraphQL idle-skip does not import ThreadPoolExecutor.
+  Pagination, malformed data, or
   probe failure still hosts.
   Remaining leftovers, occupied last-pass, digest mismatch, or host-ff update still
   starts the daemon. Fresh idle skip with a persisted digest skips

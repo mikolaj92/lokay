@@ -54,6 +54,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "export LOKAY_LEFTOVER_PROBE_GH_OK=1" in script
     assert "ThreadPoolExecutor(max_workers=3)" not in script
     assert "ThreadPoolExecutor(max_workers=2)" not in script
+    assert "from concurrent.futures import ThreadPoolExecutor" not in script
+    assert "GraphQL idle-skip does not import ThreadPoolExecutor." in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
     assert "host_updated" in script
     assert "emit_launchd_glance" in script
