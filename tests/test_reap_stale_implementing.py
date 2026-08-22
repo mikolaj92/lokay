@@ -200,6 +200,82 @@ state:
     assert stamp.stat().st_mtime == before
 
 
+def test_idle_leftover_cache_skip_outlives_leftover_probe(tmp_path, monkeypatch):
+    """Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass stays at 300s."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "reap-stale-implementing.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    leftover_age = time.time() - 301
+    os.utime(stamp, (leftover_age, leftover_age))
+    listed: list[int] = []
+
+    def fake_list(*_a, **_k):
+        listed.append(1)
+        return []
+
+    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", fake_list)
+    monkeypatch.delenv("LOKAY_LEFTOVER_PROBE_GH_OK", raising=False)
+    hosted = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert hosted.get("skipped") is not True
+    assert listed
+    leftover_age = time.time() - 301
+    os.utime(stamp, (leftover_age, leftover_age))
+    listed.clear()
+    monkeypatch.setenv("LOKAY_LEFTOVER_PROBE_GH_OK", "1")
+    idle = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert idle["skipped"] is True
+    assert idle["reason"] == "recent_empty"
+    assert listed == []
+    assert stamp.stat().st_mtime == leftover_age
+    assert reap_stale_implementing.stale_recently_empty(stamp) is False
+    assert reap_stale_implementing.stale_recently_empty(
+        stamp, ttl=reap_stale_implementing.IDLE_STALE_TTL_SECONDS
+    ) is True
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Idle leftover-cache skip outlives leftover-probe." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_pytest_does_not_skip_leftover_cache_github_lists_using_the_mill_stamp(
     tmp_path, monkeypatch
 ):
