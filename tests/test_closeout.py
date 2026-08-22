@@ -288,6 +288,48 @@ def test_unhealthy_leftover_closeout_still_lists_github(monkeypatch, tmp_path):
     )
 
 
+def test_unhealthy_leftover_closeout_parks_are_planned(monkeypatch, tmp_path):
+    """Unhealthy leftover-closeout parks are planned."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - closeout.LEFTOVER_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: False)
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    monkeypatch.setattr(
+        closeout,
+        "closed_ready_numbers",
+        lambda *_a, **_k: [429],
+    )
+    monkeypatch.setattr(
+        closeout,
+        "_park_ready",
+        lambda **_k: {"ok": True, "planned": True, "removed": False},
+    )
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["leftover_closed"] == 0
+    assert out["labels_removed"] is False
+    assert out["planned"] is True
+    assert out["closed_out"] == [
+        {"repo": "mikolaj92/lokay", "issue": 429, "planned": True}
+    ]
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime == old
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Unhealthy leftover-closeout parks are planned." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp(
     monkeypatch, tmp_path
 ):

@@ -179,16 +179,21 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
                 parked = _park_ready(repo=name, issue=number, allowed=allowed, config_path=config_path)
                 if parked.get("ok") and parked.get("removed"):
                     closed_out.append({"repo": name, "issue": number})
+                elif parked.get("ok"):
+                    closed_out.append({"repo": name, "issue": number, "planned": True})
+    removed = [row for row in closed_out if not row.get("planned")]
     if allowed:
-        if closed_out:
+        if removed:
             _clear_leftover_stamp(stamp)
         else:
             _touch_leftover_stamp(stamp)
+    # Unhealthy leftover-closeout parks are planned.
     return ok(
-        leftover_closed=len(closed_out),
-        labels_removed=bool(closed_out),
+        leftover_closed=len(removed),
+        labels_removed=bool(removed),
         issue_to_pr_started=0,
         closed_out=closed_out,
+        planned=not allowed if closed_out else not live,
     )
 
 

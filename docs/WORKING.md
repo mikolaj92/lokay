@@ -310,6 +310,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   skip is not applied. Leftover-closeout skip reports planned=not live.
   Hosted leftover parks still do.
   Unhealthy leftover-closeout still lists GitHub.
+  Unhealthy leftover-closeout parks are planned.
   Pytest must not skip leftover GitHub lists using the mill stamp.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
   those GitHub lists for 120s without refreshing the stamp. A live mill with
