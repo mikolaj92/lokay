@@ -148,11 +148,17 @@ def find_pr_fixing_issue(
     if not live:
         return None
     pages = json.loads(result.stdout or "[]")
-    rows = (
-        pages
-        if pages and isinstance(pages[0], dict)
-        else [row for page in pages for row in page]
-    )
+    if not isinstance(pages, list):
+        raise ValueError("closing PR survey must be a JSON list")
+    if all(isinstance(row, dict) for row in pages):
+        rows = pages
+    elif all(isinstance(page, list) for page in pages):
+        rows = [row for page in pages for row in page]
+        if not all(isinstance(row, dict) for row in rows):
+            raise ValueError("closing PR survey pages must contain objects")
+    else:
+        # Closing PR pagination validates every slurped page before row access.
+        raise ValueError("closing PR survey cannot mix rows and pages")
     closes_issue = re.compile(
         rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#{issue}\b",
         re.IGNORECASE,
