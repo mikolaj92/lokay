@@ -258,3 +258,26 @@ def test_compute_health_ready_on_occupied_repo_is_waiting_not_stall(tmp_path):
     assert tick["ok"] is True
     by_repo = {row["repo"]: row for row in tick["remaining"]["by_repo"]}
     assert by_repo["a/one"]["occupied"] is True
+
+
+def test_compute_health_reports_probe_failed(tmp_path):
+    pass_dir = _pass(
+        tmp_path,
+        working={
+            "prs_by_repo": {},
+            "ready_by_repo": {},
+            "inbox_by_repo": {},
+            "pr_survey_failed": ["a/one"],
+            "inbox_survey_failed": [],
+            "ready_survey_failed": [],
+            "survey_errors": 1,
+        },
+    )
+    result = run_compute_health(pass_dir=pass_dir)
+    assert result["ok"] is True
+    assert result["probe_failed"] is True
+    assert result["health"] == "survey_error"
+    source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "compute_health.py"
+    assert "Health reports whether any survey probe remains failed." in source.read_text(
+        encoding="utf-8"
+    )

@@ -103,6 +103,10 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         progress=payload.get("progress"),
         idle=payload.get("idle"),
         tick_ok=bool(payload.get("ok")),
+        # Health reports whether any survey probe remains failed.
+        probe_failed=bool(
+            pr_survey_failed or inbox_survey_failed or ready_survey_failed
+        ),
     )
 
 
