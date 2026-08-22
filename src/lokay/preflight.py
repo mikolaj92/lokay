@@ -730,12 +730,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     if not name:
         # Leftover-incident empty name is not applied.
         # Leftover-incident empty name reports planned=not live.
+        # Leftover-incident empty name reports probe_failed.
         live = bool(getattr(cfg, "live", False))
         return {
             "ok": True,
             "closed": [],
             "applied": False,
             "planned": not live,
+            "probe_failed": False,
         }
     stamp = incident_stamp_path(cfg)
     # Idle leftover-incident skip outlives leftover-probe.
