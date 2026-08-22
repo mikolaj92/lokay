@@ -509,6 +509,9 @@ state:
         "run_proc",
         lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
     )
+    monkeypatch.setattr(
+        reap_stale_implementing, "mutations_allowed", lambda **_kwargs: True
+    )
     out = reap_stale_implementing.run_reap_stale_implementing(
         pass_dir=None,
         config_path=str(cfg),
