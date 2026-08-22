@@ -168,6 +168,70 @@ state:
     )
 
 
+def test_unhealthy_leftover_ready_still_lists_github(tmp_path, monkeypatch):
+    """Unhealthy leftover-ready still lists GitHub. Hosted leftover-ready parks still do."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - 400
+    os.utime(stamp, (old, old))
+    listed: list[bool] = []
+    removed_live: list[bool] = []
+
+    def reject(**_kwargs):
+        return False
+
+    def fake_list(*_a, **k):
+        listed.append(bool(k.get("live")))
+        return [SimpleNamespace(number=443, labels=["ai:ready"])]
+
+    def fake_remove(*_a, **k):
+        if k.get("live"):
+            raise AssertionError("unhealthy leftover-ready parks must not remove labels")
+        removed_live.append(bool(k.get("live")))
+
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", reject)
+    monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", fake_list)
+    monkeypatch.setattr("lokay.proc.ready_hygiene.remove_issue_labels", fake_remove)
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert listed == [True]
+    assert removed_live == [False]
+    assert out["cleaned_count"] == 1
+    assert out["applied"] is False
+    assert out["planned"] is True
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime == old
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Unhealthy leftover-ready still lists GitHub." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_idle_leftover_ready_skip_outlives_leftover_probe(tmp_path, monkeypatch):
     """Idle leftover-ready skip outlives leftover-probe. Hosted factory_pass stays at 300s."""
     from lokay.proc import ready_hygiene as hygiene
