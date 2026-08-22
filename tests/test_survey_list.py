@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from lokay.config import Config, RepoConfig
-from lokay.gh_issues import list_inbox_issues, list_issues_with_label, list_ready_issues
+from lokay.gh_issues import (
+    list_inbox_issues,
+    list_issues_with_label,
+    list_labeled_issues,
+    list_ready_issues,
+)
 from lokay.gh_prs import list_open_ai_prs
 from lokay.envelope import emit_exit, ok
 from lokay.gh_rate import SURVEY_LIST_CAP, parse_survey_list, survey_list_cap
@@ -144,6 +149,24 @@ def test_list_ready_rate_limit_is_not_an_empty_queue(tmp_path):
 
     source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "gh_issues.py"
     assert "Ready-list rate limit is not an empty queue." in source.read_text(encoding="utf-8")
+
+
+def test_issue_list_rate_limits_fail_closed_by_default(tmp_path):
+    class RateLimitedRunner(_ListRunner):
+        def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:
+            raise RuntimeError("HTTP 429: API rate limit exceeded")
+
+    cfg, repo = _cfg(tmp_path)
+    runner = RateLimitedRunner([])
+    with pytest.raises(RuntimeError, match="rate limit"):
+        list_inbox_issues(runner, cfg, repo, live=True)
+    with pytest.raises(RuntimeError, match="rate limit"):
+        list_labeled_issues(runner, cfg, repo, label="work:issues", live=True)
+
+    source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "gh_issues.py"
+    assert "Issue-list rate limits fail closed by default." in source.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_list_inbox_uses_full_page(tmp_path):

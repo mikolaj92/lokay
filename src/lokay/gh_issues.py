@@ -123,6 +123,7 @@ def _issue_from_row(repo_name: str, row: dict) -> Issue:
     )
 
 
+# Issue-list rate limits fail closed by default.
 def _list_open_issues(
     runner: Runner,
     config: Config,
@@ -132,7 +133,7 @@ def _list_open_issues(
     label: str | None = None,
     kind: str,
     state: str = "open",
-    raise_on_rate_limit: bool = False,
+    raise_on_rate_limit: bool = True,
 ) -> list[dict]:
     """One full newest-first page. Hitting the cap is truncated, not idle."""
     if live:
@@ -167,7 +168,7 @@ def list_labeled_issues(
     *,
     label: str,
     live: bool,
-    raise_on_rate_limit: bool = False,
+    raise_on_rate_limit: bool = True,
 ) -> list[Issue]:
     """Open issues carrying one ledger/factory label (no ready-only filter)."""
     rows = _list_open_issues(
@@ -215,7 +216,7 @@ def list_inbox_issues(
     repo: RepoConfig,
     *,
     live: bool,
-    raise_on_rate_limit: bool = False,
+    raise_on_rate_limit: bool = True,
 ) -> list[Issue]:
     """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
     rows = _list_open_issues(
