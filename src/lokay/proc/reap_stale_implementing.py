@@ -26,6 +26,7 @@ from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
 MINI_MILL_REPO = "mikolaj92/lokay"
 STALE_TTL_SECONDS = 300
+IDLE_STALE_TTL_SECONDS = 900
 STALE_STAMP_NAME = "reap-stale-implementing.stamp"
 
 
@@ -50,7 +51,9 @@ def _is_operator_mill_stale_stamp(stamp: Path) -> bool:
         return stamp.expanduser() == mill
 
 
-def stale_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
+def stale_recently_empty(
+    stamp: Path | None, *, now: float | None = None, ttl: int | None = None
+) -> bool:
     if stamp is None:
         return False
     # Pytest must not skip leftover-cache GitHub lists using the mill stamp.
@@ -60,7 +63,8 @@ def stale_recently_empty(stamp: Path | None, *, now: float | None = None) -> boo
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:
         return False
-    return 0 <= age < STALE_TTL_SECONDS
+    limit = STALE_TTL_SECONDS if ttl is None else ttl
+    return 0 <= age < limit
 
 
 def _touch_stale_stamp(stamp: Path | None) -> None:
@@ -87,7 +91,14 @@ def run_reap_stale_implementing(
 ) -> dict[str, Any]:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     stamp = stale_stamp_path(cfg)
-    if stale_recently_empty(stamp):
+    # Idle leftover-cache skip outlives leftover-probe.
+    # Hosted factory_pass stays at 300s. Leftover-probe host still lists when stamp is missing.
+    idle_ttl = (
+        IDLE_STALE_TTL_SECONDS
+        if os.environ.get("LOKAY_LEFTOVER_PROBE_GH_OK") == "1"
+        else None
+    )
+    if stale_recently_empty(stamp, ttl=idle_ttl):
         return ok(
             planned=not live,
             reaped=[],
