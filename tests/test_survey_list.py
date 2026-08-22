@@ -164,9 +164,10 @@ def test_issue_list_rate_limits_fail_closed_by_default(tmp_path):
         list_labeled_issues(runner, cfg, repo, label="work:issues", live=True)
 
     source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "gh_issues.py"
-    assert "Issue-list rate limits fail closed by default." in source.read_text(
-        encoding="utf-8"
-    )
+    body = source.read_text(encoding="utf-8")
+    assert "Issue-list rate limits fail closed by default." in body
+    assert "Issue-list rate-limit failures are always uncertainty, never an empty queue." in body
+    assert "raise_on_rate_limit" not in body
 
 
 def test_list_inbox_uses_full_page(tmp_path):

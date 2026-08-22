@@ -125,7 +125,7 @@ def test_inbox_rate_limit_does_not_stamp_empty(tmp_path, monkeypatch, capsys):
     seen: list[bool] = []
 
     def boom(*_a, **kwargs):
-        seen.append(bool(kwargs.get("raise_on_rate_limit")))
+        seen.append("raise_on_rate_limit" in kwargs)
         raise RuntimeError("HTTP 429: API rate limit exceeded")
 
     monkeypatch.setattr(list_inbox, "list_inbox_issues", boom)
@@ -135,7 +135,7 @@ def test_inbox_rate_limit_does_not_stamp_empty(tmp_path, monkeypatch, capsys):
     assert result == 1
     payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert payload["ok"] is False
-    assert seen == [True]
+    assert seen == [False]
     assert stamp.stat().st_mtime == old
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "list_inbox.py"
     assert "Inbox rate limit does not stamp empty." in src.read_text(encoding="utf-8")

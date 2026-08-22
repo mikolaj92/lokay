@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         # Inbox rate limit does not stamp empty.
         issues = list_inbox_issues(
-            runner(cfg), cfg, repo, live=live, raise_on_rate_limit=True
+            runner(cfg), cfg, repo, live=live
         )
         stuck = load_stuck(stuck_path_for(cfg.state_path))
         inbox = []

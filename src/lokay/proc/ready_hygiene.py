@@ -123,7 +123,6 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
                 repo,
                 label=cfg.ready_label,
                 live=live,
-                raise_on_rate_limit=True,
             )
         except RuntimeError as exc:
             if is_github_rate_limit_error(exc):

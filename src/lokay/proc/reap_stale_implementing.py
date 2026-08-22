@@ -138,7 +138,6 @@ def run_reap_stale_implementing(
                     repo,
                     label=label,
                     live=live,
-                    raise_on_rate_limit=True,
                 )
             except RuntimeError as exc:
                 if is_github_rate_limit_error(exc):
