@@ -1042,6 +1042,26 @@ def test_leftover_incident_oserror_reports_planned_not_live(tmp_path, monkeypatc
     )
 
 
+def test_leftover_incident_oserror_reports_probe_failed(tmp_path, monkeypatch):
+    """Leftover-incident OSError reports probe_failed."""
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    def boom(repo: str, cfg=None):
+        raise OSError("leftover-incident stamp unavailable")
+
+    monkeypatch.setattr(preflight, "_close_resolved_incidents", boom)
+    result = preflight.run_preflight(str(cfg), issue_lease=True)
+    assert result["resolved_incidents"]["probe_failed"] is True
+    assert result["resolved_incidents"]["applied"] is False
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident OSError reports probe_failed." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 @pytest.mark.parametrize(
     "findings",
     [

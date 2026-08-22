@@ -1177,12 +1177,14 @@ def run_preflight(
         except OSError:
             # Leftover-incident OSError is not applied.
             # Leftover-incident OSError reports planned=not live.
+            # Leftover-incident OSError reports probe_failed.
             live = bool(getattr(cfg, "live", False))
             result["resolved_incidents"] = {
                 "ok": False,
                 "closed": [],
                 "applied": False,
                 "planned": not live,
+                "probe_failed": True,
             }
     if not checked["ok"]:
         if operational_overlap:
