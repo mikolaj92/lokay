@@ -37,6 +37,33 @@ def _summary(rows: list[dict[str, Any]], *, hours: float, start: str, end: str) 
     }
 
 
+def _flatten_api_pages(stdout: str, *, kind: str) -> list[dict[str, Any]]:
+    """Accept gh --paginate JSON streams and explicit --slurp page arrays."""
+    decoder = json.JSONDecoder()
+    raw = str(stdout or "").strip()
+    values: list[Any] = []
+    offset = 0
+    try:
+        while offset < len(raw):
+            value, offset = decoder.raw_decode(raw, offset)
+            values.append(value)
+            while offset < len(raw) and raw[offset].isspace():
+                offset += 1
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"{kind} GitHub yield returned invalid JSON: {exc}") from exc
+    rows: list[dict[str, Any]] = []
+    for value in values:
+        pages = value if isinstance(value, list) else None
+        if pages is None:
+            raise RuntimeError(f"{kind} GitHub yield returned non-list JSON")
+        for page in pages:
+            if isinstance(page, list):
+                rows.extend(row for row in page if isinstance(row, dict))
+            elif isinstance(page, dict):
+                rows.append(page)
+    return rows
+
+
 def github_delivery(runner: Runner, repo: str, *, since: datetime, hours: float) -> dict[str, Any]:
     cutoff = since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     pulls = runner.run_checked(
@@ -47,8 +74,9 @@ def github_delivery(runner: Runner, repo: str, *, since: datetime, hours: float)
         gh_spec(["api", "--paginate", f"repos/{repo}/issues?state=closed&per_page=100"], timeout_seconds=120),
         live=True,
     )
-    pull_rows = json.loads(pulls.stdout or "[]")
-    issue_rows = json.loads(issues.stdout or "[]")
+    # Yield pagination is flattened before row access.
+    pull_rows = _flatten_api_pages(pulls.stdout, kind="pull")
+    issue_rows = _flatten_api_pages(issues.stdout, kind="issue")
     merged = [row for row in pull_rows if row.get("merged_at") and str(row["merged_at"]) >= cutoff]
     closed = [
         row for row in issue_rows
