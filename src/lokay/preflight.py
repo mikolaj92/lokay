@@ -739,12 +739,15 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     )
     if incident_recently_empty(stamp, ttl=idle_ttl):
         # Fresh leftover-incident skip is not applied.
+        # Leftover-incident skip reports planned=not live.
+        live = bool(getattr(cfg, "live", False))
         return {
             "ok": True,
             "closed": [],
             "skipped": True,
             "reason": "recent_empty",
             "applied": False,
+            "planned": not live,
         }
     try:
         from lokay.triage import is_preflight_incident

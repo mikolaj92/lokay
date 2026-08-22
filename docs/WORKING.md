@@ -406,6 +406,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After an empty leftover-incident probe (`<!-- lokay-preflight:… -->`), skip
   that GitHub list for 300s without refreshing the stamp.
   Fresh leftover-incident skip is not applied.
+  Leftover-incident skip reports planned=not live.
   Empty leftover-incident host is not applied.
   Leftover-incident probe failure reports probe_failed.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
