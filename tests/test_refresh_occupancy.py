@@ -129,6 +129,7 @@ def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
         pass_dir=pass_dir, config_path=None, live=True
     )
     assert out["ok"] is True
+    assert out["probe_failed"] is False
     assert out["merged_this_pass"] == ["mikolaj92/lokay"]
     assert out["live_issue_to_pr_repos"] == ["a/two"]
     assert out["occupied_repos"] == ["mikolaj92/lokay", "a/two"]
@@ -499,6 +500,9 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
     assert out["ok"] is True
     assert called == []
     assert out["survey_errors"] == 1
+    assert out["probe_failed"] is True
+    source = Path(refresh_occupancy.__file__).read_text(encoding="utf-8")
+    assert "Occupancy refresh reports whether a PR probe remains failed." in source
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
     assert working["survey_errors"] == 1
