@@ -1199,9 +1199,16 @@ def test_reap_idle_closed_worktrees_classify_skips_harvest_leftovers(
     monkeypatch.setattr(
         reap_stale_worktrees, "iter_worktrees", lambda cfg, repo: leftovers
     )
+    gated: list[bool] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "mutations_allowed",
+        lambda **_kwargs: gated.append(True) or True,
+    )
     reap_stale_worktrees.reap_idle_closed_worktrees(
         config_path=str(_config(tmp_path)), live=True
     )
+    assert gated == [True]
     assert "harvest__414-mini-lokay-only" not in removed
     assert 414 not in checked
     assert checked == [267, 269, 271, 273]
