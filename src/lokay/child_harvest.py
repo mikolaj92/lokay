@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Callable
 
+from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.mill_scope import mill_repo, scoped_repos
 from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
 from lokay.runner import Runner, gh_spec
@@ -112,6 +113,7 @@ def _github_closed_mill_issues(repo: str) -> set[int]:
     if not name:
         return set()
     try:
+        cap = survey_list_cap()
         result = Runner().run_checked(
             gh_spec(
                 [
@@ -124,16 +126,17 @@ def _github_closed_mill_issues(repo: str) -> set[int]:
                     "--json",
                     "number,state",
                     "--limit",
-                    "1000",
+                    str(cap),
                 ],
                 timeout_seconds=60,
             ),
             live=True,
         )
-        rows = json.loads(result.stdout or "[]")
+        # Harvest CLOSED list refuses truncation before clearing stuck rows.
+        rows = parse_survey_list(
+            result.stdout, kind="harvest-closed-issue", repo=name, cap=cap
+        )
     except (OSError, RuntimeError, ValueError):
-        return set()
-    if not isinstance(rows, list):
         return set()
     out: set[int] = set()
     for row in rows:
