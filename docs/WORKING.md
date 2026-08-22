@@ -408,6 +408,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Fresh leftover-incident skip is not applied.
   Leftover-incident skip reports planned=not live.
   Empty leftover-incident host is not applied.
+  Empty leftover-incident host reports planned=not live.
   Leftover-incident probe failure reports probe_failed.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.

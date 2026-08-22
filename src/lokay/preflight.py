@@ -792,7 +792,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     else:
         _touch_incident_stamp(stamp)
     # Empty leftover-incident host is not applied.
-    return {"ok": True, "closed": closed, "applied": bool(closed)}
+    # Empty leftover-incident host reports planned=not live.
+    live = bool(getattr(cfg, "live", False))
+    return {
+        "ok": True,
+        "closed": closed,
+        "applied": bool(closed),
+        "planned": False if closed else not live,
+    }
 
 
 def _reopen_issue(repo: str, number: int, summary: str) -> bool:
