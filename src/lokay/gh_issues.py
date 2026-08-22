@@ -132,6 +132,7 @@ def _list_open_issues(
     label: str | None = None,
     kind: str,
     state: str = "open",
+    raise_on_rate_limit: bool = False,
 ) -> list[dict]:
     """One full newest-first page. Hitting the cap is truncated, not idle."""
     if live:
@@ -151,7 +152,7 @@ def _list_open_issues(
     try:
         result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     except RuntimeError as exc:
-        if is_github_rate_limit_error(exc):
+        if is_github_rate_limit_error(exc) and not raise_on_rate_limit:
             return []
         raise
     if not live:
@@ -160,11 +161,23 @@ def _list_open_issues(
 
 
 def list_labeled_issues(
-    runner: Runner, config: Config, repo: RepoConfig, *, label: str, live: bool
+    runner: Runner,
+    config: Config,
+    repo: RepoConfig,
+    *,
+    label: str,
+    live: bool,
+    raise_on_rate_limit: bool = False,
 ) -> list[Issue]:
     """Open issues carrying one ledger/factory label (no ready-only filter)."""
     rows = _list_open_issues(
-        runner, config, repo, live=live, label=label, kind="labeled-issue"
+        runner,
+        config,
+        repo,
+        live=live,
+        label=label,
+        kind="labeled-issue",
+        raise_on_rate_limit=raise_on_rate_limit,
     )
     return [_issue_from_row(repo.name, row) for row in rows]
 
