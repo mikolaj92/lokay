@@ -71,7 +71,51 @@ state:
     monkeypatch.setattr("lokay.proc.ready_hygiene.remove_issue_labels", lambda *_a, **_k: None)
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert out["cleaned_count"] == 0
+    assert out["applied"] is False
     assert (tmp_path / "ready-hygiene.stamp").is_file()
+
+
+def test_empty_leftover_ready_host_is_not_applied(tmp_path, monkeypatch):
+    """Empty leftover-ready host is not applied."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr("lokay.proc.ready_hygiene.list_labeled_issues", lambda *_a, **_k: [])
+    monkeypatch.setattr(
+        "lokay.proc.ready_hygiene.remove_issue_labels",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("empty leftover-ready host must not remove labels")
+        ),
+    )
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out["applied"] is False
+    assert out["cleaned_count"] == 0
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Empty leftover-ready host is not applied." in src.read_text(encoding="utf-8")
 
 
 def test_hygiene_skips_github_when_recent_empty_stamp(tmp_path, monkeypatch):
