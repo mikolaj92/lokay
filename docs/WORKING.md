@@ -415,6 +415,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Leftover-incident ImportError reports planned=not live.
   Leftover-incident empty name is not applied.
   Leftover-incident empty name reports planned=not live.
+  Leftover-incident OSError is not applied.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Pytest must not skip leftover-incident GitHub lists using the mill stamp.

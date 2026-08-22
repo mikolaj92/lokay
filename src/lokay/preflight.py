@@ -1167,7 +1167,12 @@ def run_preflight(
                 _incident_repo(cfg), cfg
             )
         except OSError:
-            result["resolved_incidents"] = {"ok": False, "closed": []}
+            # Leftover-incident OSError is not applied.
+            result["resolved_incidents"] = {
+                "ok": False,
+                "closed": [],
+                "applied": False,
+            }
     if not checked["ok"]:
         if operational_overlap:
             # Overlap is already represented by the structured result. Do not
