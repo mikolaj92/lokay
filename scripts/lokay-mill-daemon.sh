@@ -375,9 +375,9 @@ idle_skip_daemon() {
     "${LOKAY_HOME}/factory-survey.stamp" \
     "${LOKAY_HOME}/leftover-closeout.stamp" <<'PY'
 import json, os, re, subprocess, sys, time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+# GraphQL idle-skip does not import ThreadPoolExecutor.
 receipt_path, survey_stamp, leftover_stamp = sys.argv[1:4]
 now = time.time()
 csi = re.compile("\x1b\\[[0-9;]*[mK]")
@@ -392,10 +392,6 @@ def age_of(path):
         return now - Path(path).stat().st_mtime
     except OSError:
         return None
-
-def fresh(path: str, ttl: int) -> bool:
-    age = age_of(path)
-    return age is not None and 0 <= age < ttl
 
 try:
     receipt = json.loads(Path(receipt_path).read_text(encoding="utf-8"))
@@ -428,31 +424,6 @@ if leftover_age is None:
 survey_age = age_of(survey_stamp)
 if survey_age is None:
     raise SystemExit(1)
-
-def gh_list(args, cap=1000):
-    env = os.environ.copy()
-    env["GH_NO_COLOR"] = "1"
-    env["NO_COLOR"] = "1"
-    try:
-        result = subprocess.run(
-            ["gh", *args],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-            env=env,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if result.returncode != 0:
-        return None
-    try:
-        rows = json.loads(csi.sub("", result.stdout or "[]"))
-    except ValueError:
-        return None
-    if not isinstance(rows, list) or len(rows) >= cap:
-        return None
-    return rows
 
 def closed_ready(rows):
     if rows is None:
