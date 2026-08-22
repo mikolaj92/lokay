@@ -316,7 +316,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Leftover-closeout rate limit does not stamp empty.
   Pytest must not skip leftover GitHub lists using the mill stamp.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
-  those GitHub lists for 120s without refreshing the stamp. A live mill with
+  those GitHub lists for 120s without refreshing the stamp.
+  Inbox rate limit does not stamp empty. A live mill with
   that fresh stamp and an idle last-pass also skips hosting `factory_pass`
   (20 organ spawns) and the parent `daemon_cycle` Fala (6 recovery organs).
   When the stamp expires, the same idle mill cheap-probes those three GitHub

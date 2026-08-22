@@ -207,9 +207,23 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
     return issues
 
 
-def list_inbox_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
+def list_inbox_issues(
+    runner: Runner,
+    config: Config,
+    repo: RepoConfig,
+    *,
+    live: bool,
+    raise_on_rate_limit: bool = False,
+) -> list[Issue]:
     """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
-    rows = _list_open_issues(runner, config, repo, live=live, kind="inbox-issue")
+    rows = _list_open_issues(
+        runner,
+        config,
+        repo,
+        live=live,
+        kind="inbox-issue",
+        raise_on_rate_limit=raise_on_rate_limit,
+    )
     stuck = load_stuck(stuck_path_for(config.state_path))
     out: list[Issue] = []
     for row in rows:
