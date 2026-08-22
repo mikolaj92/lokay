@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+
+import pytest
 from pathlib import Path
 
 from lokay.config import Config
@@ -112,56 +114,8 @@ def test_merged_prs_refuses_malformed_linked_pr_json():
         raise AssertionError("malformed linked PR evidence must fail closed")
 
 
-def test_covering_ai_prs_filters_and_dedupes():
-    runner = _FakeRunner(
-        lists={
-            "open": [
-                {"number": 10, "state": "OPEN", "headRefName": "ai/fix/12-foo"},
-                {"number": 11, "state": "OPEN", "headRefName": "ai/fix/99-other"},
-                {"number": 10, "state": "OPEN", "headRefName": "ai/fix/12-foo"},
-            ],
-            "merged": [
-                {
-                    "number": 10,
-                    "state": "MERGED",
-                    "mergedAt": "t",
-                    "headRefName": "ai/fix/12-foo",
-                }
-            ],
-        }
-    )
-    out = covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True)
-    assert [row["number"] for row in out] == [10]
-    assert out[0]["head_ref"] == "ai/fix/12-foo"
-    limits = [
-        c[c.index("--limit") + 1]
-        for c in runner.calls
-        if "pr" in c and "list" in c
-    ]
-    assert limits == [str(SURVEY_LIST_CAP), str(SURVEY_LIST_CAP)]
-    assert covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=False) == []
 
 
-def test_covering_ai_prs_refuses_truncated_state_list(monkeypatch):
-    runner = _FakeRunner(
-        lists={
-            "open": [
-                {"number": 10, "state": "OPEN", "headRefName": "ai/fix/12-foo"},
-                {"number": 11, "state": "OPEN", "headRefName": "ai/fix/12-other"},
-            ],
-            "merged": [],
-        }
-    )
-    monkeypatch.setattr(intake_io, "survey_list_cap", lambda: 2)
-
-    try:
-        covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True)
-    except RuntimeError as exc:
-        assert "hit the 2 newest-first cap" in str(exc)
-    else:
-        raise AssertionError("truncated covering evidence must fail closed")
-    source = Path(intake_io.__file__).read_text(encoding="utf-8")
-    assert "Intake covering-PR uncertainty is not an empty evidence set." in source
 
 
 def test_apply_intake_skip_and_dry():
@@ -241,3 +195,68 @@ def test_apply_intake_close_mutates():
     assert any("--remove-label ai:ready" in j for j in joined)
     assert any("issue comment" in j for j in joined)
     assert any("issue close" in j for j in joined)
+
+
+class _PagedCoveringRunner:
+    def __init__(self, pages: dict[int, object], codes: dict[int, int] | None = None) -> None:
+        self.pages = pages
+        self.codes = codes or {}
+        self.calls: list[tuple[str, ...]] = []
+
+    def run(self, spec: CommandSpec, *, live: bool) -> CommandResult:
+        self.calls.append(spec.argv)
+        argv = list(spec.argv)
+        page_arg = next(value for value in argv if value.startswith("page="))
+        page = int(page_arg.partition("=")[2])
+        payload = self.pages.get(page, [])
+        stdout = payload if isinstance(payload, str) else json.dumps(payload)
+        return CommandResult(
+            spec=spec,
+            executed=live,
+            returncode=self.codes.get(page, 0),
+            stdout=stdout,
+        )
+
+
+def test_covering_ai_prs_pages_until_unified_number_boundary(monkeypatch):
+    monkeypatch.setattr(intake_io, "COVERING_PR_PAGE_SIZE", 2)
+    runner = _PagedCoveringRunner(
+        {
+            1: [
+                {"number": 15, "state": "open", "head": {"ref": "ai/fix/12-foo"}},
+                {"number": 14, "state": "closed", "merged_at": "t", "head": {"ref": "ai/fix/99-other"}},
+            ],
+            2: [
+                {"number": 13, "state": "closed", "merged_at": "t", "head": {"ref": "ai/fix/12-old"}},
+                {"number": 11, "state": "closed", "merged_at": "t", "head": {"ref": "ai/fix/12-impossible"}},
+            ],
+        }
+    )
+    out = covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True)
+    assert [row["number"] for row in out] == [15, 13]
+    assert len(runner.calls) == 2
+    assert all("state=all" in call and "direction=desc" in call for call in runner.calls)
+
+
+def test_covering_ai_prs_stops_after_first_page_crosses_issue_number(monkeypatch):
+    monkeypatch.setattr(intake_io, "COVERING_PR_PAGE_SIZE", 2)
+    runner = _PagedCoveringRunner(
+        {
+            1: [
+                {"number": 20, "state": "open", "head": {"ref": "ai/fix/99-other"}},
+                {"number": 12, "state": "closed", "merged_at": "t", "head": {"ref": "ai/fix/12-too-old"}},
+            ],
+            2: [{"number": 11, "state": "open", "head": {"ref": "ai/fix/12-too-old"}}],
+        }
+    )
+    assert covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True) == []
+    assert len(runner.calls) == 1
+
+
+def test_covering_ai_prs_fails_closed_on_unavailable_or_malformed_page():
+    failed = _PagedCoveringRunner({1: []}, codes={1: 1})
+    with pytest.raises(RuntimeError, match="covering PR page 1 probe failed"):
+        covering_ai_prs(failed, "a/b", 12, branch_prefix="ai/fix", live=True)
+    malformed = _PagedCoveringRunner({1: {"not": "a list"}})
+    with pytest.raises(ValueError, match="covering PR page 1 must be a JSON list"):
+        covering_ai_prs(malformed, "a/b", 12, branch_prefix="ai/fix", live=True)
