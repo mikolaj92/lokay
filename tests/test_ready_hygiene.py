@@ -113,6 +113,7 @@ state:
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert out["skipped"] is True
     assert out["reason"] == "recent_empty"
+    assert out["applied"] is False
     assert out["cleaned_count"] == 0
     assert stamp.stat().st_mtime == before
 
@@ -160,6 +161,7 @@ state:
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert out["skipped"] is True
     assert out["reason"] == "recent_empty"
+    assert out["applied"] is False
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
     assert "Fresh leftover-ready skip does not require healthy." in src.read_text(
         encoding="utf-8"
@@ -220,6 +222,7 @@ state:
     idle = run_ready_hygiene(config_path=str(cfg), live=True)
     assert idle["skipped"] is True
     assert idle["reason"] == "recent_empty"
+    assert idle["applied"] is False
     assert listed == []
     assert stamp.stat().st_mtime == leftover_age
     assert hygiene.hygiene_recently_empty(stamp) is False
@@ -379,6 +382,53 @@ state:
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert out["cleaned_count"] == 1
     assert not stamp.exists()
+
+
+def test_fresh_leftover_ready_skip_is_not_applied(tmp_path, monkeypatch):
+    """Fresh leftover-ready skip is not applied."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+
+    def boom(**_kwargs):
+        raise AssertionError("fresh leftover-ready skip does not require healthy")
+
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", boom)
+    monkeypatch.setattr(
+        "lokay.proc.ready_hygiene.list_labeled_issues",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("must not list GitHub")),
+    )
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out["skipped"] is True
+    assert out["reason"] == "recent_empty"
+    assert out["applied"] is False
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Fresh leftover-ready skip is not applied." in src.read_text(encoding="utf-8")
 
 
 def test_hygiene_idle_leftover_ready_runs_when_live(tmp_path, monkeypatch):
