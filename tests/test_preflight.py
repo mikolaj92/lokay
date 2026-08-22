@@ -670,6 +670,27 @@ def test_leftover_incident_import_error_reports_planned_not_live(
     )
 
 
+def test_leftover_incident_import_error_reports_probe_failed(tmp_path, monkeypatch):
+    """Leftover-incident ImportError reports probe_failed."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    monkeypatch.setitem(__import__("sys").modules, "lokay.triage", None)
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("leftover-incident ImportError must not list GitHub")
+
+    monkeypatch.setattr(preflight.subprocess, "run", boom)
+    out = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert out["probe_failed"] is False
+    assert out["applied"] is False
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident ImportError reports probe_failed." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_leftover_incident_empty_name_is_not_applied(tmp_path, monkeypatch):
     """Leftover-incident empty name is not applied."""
     cfg = _config(tmp_path)

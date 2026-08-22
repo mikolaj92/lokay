@@ -764,12 +764,14 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     except ImportError:
         # Leftover-incident ImportError is not applied.
         # Leftover-incident ImportError reports planned=not live.
+        # Leftover-incident ImportError reports probe_failed.
         live = bool(getattr(cfg, "live", False))
         return {
             "ok": True,
             "closed": [],
             "applied": False,
             "planned": not live,
+            "probe_failed": False,
         }
     rows = _list_open_incidents(name)
     if rows is None:
