@@ -413,6 +413,78 @@ state:
     )
 
 
+def test_hosted_leftover_cache_reports_applied(tmp_path, monkeypatch):
+    """Hosted leftover-cache reports applied."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "list_labeled_issues",
+        lambda *_a, **k: [SimpleNamespace(number=443)]
+        if k.get("label") == "ai:in-progress"
+        else [],
+    )
+    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", lambda **_k: False)
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "run_proc",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("unhealthy leftover-cache parks must not stage")
+        ),
+    )
+    unhealthy = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert unhealthy["applied"] is False
+    assert unhealthy["planned"] is True
+    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", lambda **_k: True)
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "run_proc",
+        lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
+    )
+    healthy = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert healthy["applied"] is True
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Hosted leftover-cache reports applied." in src.read_text(encoding="utf-8")
+
+
 def test_idle_leftover_cache_skip_outlives_leftover_probe(tmp_path, monkeypatch):
     """Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass stays at 300s."""
     cfg = tmp_path / "config.yaml"
