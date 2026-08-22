@@ -99,8 +99,10 @@ def run_reap_stale_implementing(
         else None
     )
     if stale_recently_empty(stamp, ttl=idle_ttl):
+        # Fresh leftover-cache skip is not applied.
         return ok(
             planned=not live,
+            applied=False,
             reaped=[],
             kept=[],
             reaped_count=0,
