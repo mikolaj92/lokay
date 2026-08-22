@@ -70,6 +70,10 @@ def test_atom_strips_leftover_cache_even_when_job_or_pr_exists(monkeypatch):
         return {"ok": True, "stage": "ready", "applied": True}
 
     monkeypatch.setattr("lokay.proc.reap_stale_implementing.run_proc", fake_proc)
+    monkeypatch.setattr(
+        "lokay.proc.reap_stale_implementing.mutations_allowed",
+        lambda **_kwargs: True,
+    )
     out = run_reap_stale_implementing(pass_dir=None, config_path=None, live=True)
     assert out["ok"] is True
     assert out["reaped_count"] == 2

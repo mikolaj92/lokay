@@ -20,7 +20,7 @@ from lokay.passkit.hot import survey_scope
 from lokay.passkit.support import run_proc
 from lokay.passkit.working import load_begin_working
 from lokay.proc import stage_label as p_stage
-from lokay.proc._common import add_config_live, load_cfg, runner
+from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 from lokay.stage_ledger import LEDGER_ACTIVE_LABELS
 
 
@@ -137,13 +137,15 @@ def run_reap_stale_implementing(
                     break
                 raise
             repo_issues.extend((label, issue) for issue in issues)
+        # Fresh leftover-cache skip does not require healthy. Hosted leftover-cache parks do.
+        apply = mutations_allowed(live_flag=live, cfg=cfg) if repo_issues else False
         for label, issue in repo_issues:
             num = int(issue.number)
             key = (repo.name, num)
             if key in seen:
                 continue
             seen.add(key)
-            if live:
+            if apply:
                 staged = run_proc(
                     p_stage.main,
                     [

@@ -366,6 +366,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
+  Fresh leftover-cache skip does not require healthy. Hosted leftover-cache
+  parks do.
   Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Idle daemon_cycle skip still runs leftover-cache.
