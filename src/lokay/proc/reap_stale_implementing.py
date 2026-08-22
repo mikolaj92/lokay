@@ -118,6 +118,7 @@ def run_reap_stale_implementing(
         scope = survey_scope(begin)
     probed = False
     probe_failed = False
+    apply = False
     for repo in cfg.active_repos():
         if repo.name != MINI_MILL_REPO:
             continue
@@ -170,10 +171,11 @@ def run_reap_stale_implementing(
                 }
             )
     if probed and not probe_failed:
-        if reaped:
+        if reaped and apply:
             _clear_stale_stamp(stamp)
-        else:
+        elif not reaped:
             _touch_stale_stamp(stamp)
+        # Unhealthy leftover-cache parks do not clear the stamp.
     return ok(
         planned=not live,
         reaped=reaped,

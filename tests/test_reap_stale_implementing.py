@@ -282,6 +282,75 @@ state:
     assert "Hosted leftover-cache parks do." in src.read_text(encoding="utf-8")
 
 
+def test_unhealthy_leftover_cache_parks_do_not_clear_stamp(tmp_path, monkeypatch):
+    """Unhealthy leftover-cache parks do not clear the stamp."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    stamp = tmp_path / "reap-stale-implementing.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+
+    def reject(**_kwargs):
+        return False
+
+    def unexpected_stage(*_a, **_k):
+        raise AssertionError("unhealthy leftover-cache parks must not stage")
+
+    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", reject)
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "list_labeled_issues",
+        lambda *_a, **k: [SimpleNamespace(number=443)]
+        if k.get("label") == "ai:in-progress"
+        else [],
+    )
+    monkeypatch.setattr(reap_stale_implementing, "run_proc", unexpected_stage)
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert out["reaped_count"] == 1
+    assert out["reaped"][0]["planned"] is True
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime == old
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Unhealthy leftover-cache parks do not clear the stamp." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_idle_leftover_cache_skip_outlives_leftover_probe(tmp_path, monkeypatch):
     """Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass stays at 300s."""
     cfg = tmp_path / "config.yaml"
