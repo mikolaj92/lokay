@@ -303,6 +303,9 @@ def test_keep_unpublished_behind_main_with_real_uncommitted_work(tmp_path, monke
 
 
 def test_remove_published_closed_tip(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     branch = "ai/fix/142-prompt-i-i-asked"
     wt = _corner(tmp_path, branch)
     monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
@@ -338,6 +341,9 @@ def test_remove_published_closed_tip(tmp_path, monkeypatch):
 
 
 def test_remove_unpublished_behind_main(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     branch = "ai/fix/142-prompt"
     _corner(tmp_path, branch)
     monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
@@ -503,6 +509,9 @@ def test_ls_remote_failure_keeps_unreadability(tmp_path, monkeypatch):
 
 
 def test_classify_uses_ls_remote_not_per_branch_fetch(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     branch = "ai/fix/142-prompt"
     _corner(tmp_path, branch)
     monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
@@ -630,6 +639,9 @@ def test_malformed_no_pid_receipt_keeps_all_worktrees(tmp_path, monkeypatch):
 
 
 def test_reap_does_not_fetch_origin_main(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     branch = "ai/fix/142-prompt"
     _corner(tmp_path, branch)
     monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
@@ -668,6 +680,9 @@ def test_reap_does_not_fetch_origin_main(tmp_path, monkeypatch):
 
 
 def test_reap_only_inspects_mini_mill_repo(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     """Catalog products must cause no worktree, GitHub, or remote calls."""
     mini_repo = "mikolaj92/lokay"
     product_repos = ("mikolaj92/Temida", "mikolaj92/takt")
@@ -740,6 +755,9 @@ def test_reap_skips_repos_outside_survey_scope(tmp_path, monkeypatch):
 
 
 def test_closed_issue_reaps_without_waiting_for_over_cap(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     branch = "ai/fix/369-closed"
     wt = _corner(tmp_path, branch)
     monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
@@ -869,6 +887,9 @@ def test_closed_issue_with_live_i2pr_is_kept(tmp_path, monkeypatch):
 
 
 def test_over_cap_reaps_at_most_oldest_closed_issues(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     """A fat stack drains closed old corners without expensive classification."""
     cap = reap_stale_worktrees.CLASSIFY_CAP
     monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
@@ -1058,6 +1079,9 @@ def test_over_cap_probes_when_idle_stamp_expired(tmp_path, monkeypatch):
 
 
 def test_over_cap_reap_clears_idle_stamp(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        reap_stale_worktrees, "mutations_allowed", lambda **_kwargs: True
+    )
     cap = reap_stale_worktrees.CLASSIFY_CAP
     stamp = tmp_path / "reap-over-cap.stamp"
     stamp.write_text("1", encoding="utf-8")
