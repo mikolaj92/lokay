@@ -147,6 +147,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     # Unhealthy leftover-closeout still lists GitHub.
     if leftover_recently_empty(stamp):
         # Fresh leftover-closeout skip is not applied.
+        # Leftover-closeout skip reports planned=not live.
         return ok(
             leftover_closed=0,
             labels_removed=False,
@@ -154,6 +155,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
             closed_out=[],
             skipped=True,
             reason="recent_empty",
+            planned=not live,
             applied=False,
         )
     allowed = mutations_allowed(live_flag=live, cfg=cfg)
