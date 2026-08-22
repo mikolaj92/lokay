@@ -14,11 +14,12 @@ from lokay.gh_issues import (
     comment_issue,
     remove_issue_labels,
 )
-from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.intake import IntakeDecision
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import issue_number_from_branch
+
+COVERING_PR_PAGE_SIZE = 100
 
 
 def merged_prs(runner: Runner, repo: str, numbers: list[int], *, live: bool) -> list[int]:
@@ -69,59 +70,103 @@ def covering_ai_prs(
     branch_prefix: str,
     live: bool,
 ) -> list[dict[str, Any]]:
-    """Open or recently merged ai/fix PRs whose branch embeds this issue number."""
+    """Return complete covering-PR evidence without scanning ancient history.
+
+    GitHub issues and pull requests share one monotonically increasing number
+    sequence inside a repository. A PR created for an issue must therefore have
+    a larger number. Read the unified PR history newest-first and stop only when
+    a page crosses the issue number. Unlike ``gh pr list --limit``, a full page
+    is not treated as an unexplained truncation.
+    """
     if not live:
         return []
     prefix = branch_prefix.rstrip("/") + "/"
+    target = int(issue_number)
+    per_page = COVERING_PR_PAGE_SIZE
+    page = 1
     out: list[dict[str, Any]] = []
-    for state in ("open", "merged"):
-        cap = survey_list_cap()
+    while True:
         result = runner.run(
             gh_spec(
                 [
-                    "pr",
-                    "list",
-                    "--repo",
-                    repo,
-                    "--state",
-                    state,
-                    "--json",
-                    "number,state,mergedAt,headRefName",
-                    "--limit",
-                    str(cap),
+                    "api",
+                    "--method",
+                    "GET",
+                    f"repos/{repo}/pulls",
+                    "-f",
+                    "state=all",
+                    "-f",
+                    "sort=created",
+                    "-f",
+                    "direction=desc",
+                    "-f",
+                    f"per_page={per_page}",
+                    "-f",
+                    f"page={page}",
                 ],
                 timeout_seconds=60,
             ),
             live=True,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"intake {state} PR probe failed for {repo}")
-        # Intake covering-PR uncertainty is not an empty evidence set.
-        rows = parse_survey_list(
-            result.stdout, kind=f"intake-{state}-pr", repo=repo, cap=cap
-        )
+            raise RuntimeError(f"intake covering PR page {page} probe failed for {repo}")
+        try:
+            rows = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"intake covering PR page {page} returned malformed JSON for {repo}"
+            ) from exc
+        if not isinstance(rows, list):
+            raise ValueError(
+                f"intake covering PR page {page} must be a JSON list for {repo}"
+            )
+        if not all(isinstance(row, dict) for row in rows):
+            raise ValueError(
+                f"intake covering PR page {page} must contain objects for {repo}"
+            )
+        crossed_boundary = False
         for row in rows:
-            head = str(row.get("headRefName") or "")
+            try:
+                number = int(row["number"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"intake covering PR page {page} has invalid PR identity for {repo}"
+                ) from exc
+            if number <= target:
+                crossed_boundary = True
+                continue
+            head_obj = row.get("head")
+            if not isinstance(head_obj, dict):
+                raise ValueError(
+                    f"intake covering PR page {page} has invalid head evidence for {repo}"
+                )
+            head = str(head_obj.get("ref") or "")
             if not head.startswith(prefix):
                 continue
             covered = issue_number_from_branch(head, branch_prefix=branch_prefix)
-            if covered != int(issue_number):
+            if covered != target:
                 continue
+            state = str(row.get("state") or "").upper()
+            merged_at = row.get("merged_at")
             out.append(
                 {
-                    "number": int(row.get("number") or 0),
-                    "state": str(row.get("state") or state).upper(),
-                    "merged": bool(row.get("mergedAt")) or state == "merged",
+                    "number": number,
+                    "state": "MERGED" if merged_at else state,
+                    "merged": bool(merged_at),
                     "head_ref": head,
                 }
             )
+        if crossed_boundary or len(rows) < per_page:
+            break
+        page += 1
+
     seen: set[int] = set()
     uniq: list[dict[str, Any]] = []
     for row in out:
-        n = int(row["number"])
-        if n in seen or n <= 0:
+        number = int(row["number"])
+        if number in seen:
             continue
-        seen.add(n)
+        seen.add(number)
         uniq.append(row)
     return uniq
 
