@@ -337,6 +337,7 @@ state:
     )
     assert out["reaped_count"] == 1
     assert out["reaped"][0]["planned"] is True
+    assert out["planned"] is True
     assert stamp.is_file()
     assert stamp.stat().st_mtime == old
     src = (
@@ -347,6 +348,9 @@ state:
         / "reap_stale_implementing.py"
     )
     assert "Unhealthy leftover-cache parks do not clear the stamp." in src.read_text(
+        encoding="utf-8"
+    )
+    assert "Unhealthy leftover-cache parks are planned." in src.read_text(
         encoding="utf-8"
     )
 
