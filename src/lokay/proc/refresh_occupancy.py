@@ -245,6 +245,8 @@ def run_refresh_occupancy(
         remaining_prs=int(working.get("remaining_prs") or 0),
         actionable_prs=int(working.get("actionable_prs") or 0),
         survey_errors=int(working.get("survey_errors") or 0),
+        # Occupancy refresh reports whether a PR probe remains failed.
+        probe_failed=bool(pr_survey_failed),
         receipt_state_unknown=receipt_state_unknown,
     )
     if skipped_repos:
