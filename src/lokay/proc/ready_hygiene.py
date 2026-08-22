@@ -129,9 +129,10 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
             _touch_hygiene_stamp(stamp)
     removed = [row for row in cleaned if not row.get("planned")]
     # Unhealthy leftover-ready parks are planned.
+    # Empty leftover-ready host is not applied.
     return ok(
         planned=not apply if cleaned else not live,
-        applied=apply,
+        applied=apply if cleaned else False,
         cleaned=cleaned,
         cleaned_count=len(removed),
     )
