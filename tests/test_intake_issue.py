@@ -9,31 +9,6 @@ from lokay.intake import IntakeDecision
 from lokay.proc import intake_issue
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repo_skips_without_gh_or_config(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(intake_issue, "load_cfg", fail_if_called)
-    monkeypatch.setattr(intake_issue, "runner", fail_if_called)
-    monkeypatch.setattr(intake_issue, "get_issue", fail_if_called)
-    monkeypatch.setattr(intake_issue, "apply_intake", fail_if_called)
-
-    assert intake_issue.main(["--repo", repo, "--issue", "508", "--live"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "issue": 508,
-        "applied": False,
-    }
 
 
 def test_lokay_repo_still_runs_intake(

@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 
 from lokay.git_commit import commit_all
 from lokay.runner import Runner
@@ -27,42 +26,6 @@ def _init_repo(repo: Path) -> None:
     _git(repo, "config", "user.email", "test@example.com")
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_commit_all_cli_skips_product_repo_without_git_or_preflight(
-    repo: str, tmp_path: Path, monkeypatch, capsys
-) -> None:
-    from lokay.proc import commit_all as commit_module
-
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("product repositories must not commit or run preflight")
-
-    monkeypatch.setattr(commit_module, "load_cfg", fail_if_called)
-    monkeypatch.setattr(commit_module, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(commit_module, "runner", fail_if_called)
-    monkeypatch.setattr(commit_module, "commit_all", fail_if_called)
-
-    assert commit_module.main(
-        [
-            "--live",
-            "--repo",
-            repo,
-            "--worktree",
-            str(tmp_path),
-            "--message",
-            "must skip",
-        ]
-    ) == 0
-
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "committed": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "worktree": str(tmp_path),
-    }
 
 
 def test_commit_all_cli_still_commits_lokay(

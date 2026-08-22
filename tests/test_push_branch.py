@@ -7,44 +7,6 @@ import pytest
 from lokay.proc import push_branch
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repo_skips_without_git_or_preflight(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not run git or preflight")
-
-    monkeypatch.setattr(push_branch, "load_cfg", fail_if_called)
-    monkeypatch.setattr(push_branch, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(push_branch, "runner", fail_if_called)
-
-    assert (
-        push_branch.main(
-            [
-                "--live",
-                "--repo",
-                repo,
-                "--worktree",
-                str(tmp_path),
-                "--branch",
-                "ai/fix/494-x",
-            ]
-        )
-        == 0
-    )
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "branch": "ai/fix/494-x",
-        "worktree": str(tmp_path),
-    }
 
 
 def test_lokay_repo_still_pushes(

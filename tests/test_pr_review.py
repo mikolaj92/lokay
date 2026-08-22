@@ -22,32 +22,6 @@ from lokay.pr_review import (
 )
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repo_skips_without_gh_agent_or_config(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub, agent, or config")
-
-    monkeypatch.setattr(pr_review_proc, "load_cfg", fail_if_called)
-    monkeypatch.setattr(pr_review_proc, "runner", fail_if_called)
-    monkeypatch.setattr(pr_review_proc, "load_pr_evidence", fail_if_called)
-    monkeypatch.setattr(pr_review_proc, "run_agent", fail_if_called)
-
-    assert pr_review_proc.main(["--repo", repo, "--pr", "490", "--live"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "offline": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "pr": 490,
-        "merge_ok": False,
-        "applied": False,
-    }
 
 
 def test_lokay_repo_still_loads_evidence(

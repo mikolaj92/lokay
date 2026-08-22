@@ -89,64 +89,6 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
     assert any(row.get("step") == "skip_ready_repo_occupied" for row in working["actions"])
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_refresh_occupancy_unions_merged_and_live(tmp_path, monkeypatch):
-    pass_dir = _pass(
-        tmp_path,
-        begin={"repos": ["mikolaj92/lokay", "a/two"]},
-        working={
-            "merged_this_pass": ["mikolaj92/lokay"],
-            "ready_by_repo": {
-                "mikolaj92/lokay": [{"number": 2, "title": "next"}],
-                "a/two": [{"number": 3, "title": "other"}],
-            },
-            "remaining_ready": 2,
-        },
-    )
-
-    called: list[str] = []
-
-    def fake_run(fn, argv):
-        if fn is refresh_occupancy.p_get_issue.main:
-            return {"ok": True, "issue": {"state": "OPEN"}}
-        called.append(argv[argv.index("--repo") + 1])
-        return {"ok": True, "prs": []}
-
-    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
-    monkeypatch.setattr(
-        refresh_occupancy, "clear_dead_issue_to_pr_receipts", lambda _merged: []
-    )
-    monkeypatch.setattr(
-        refresh_occupancy,
-        "live_issue_to_pr_receipts",
-        lambda: [{"repo": "a/two", "issue": 3, "pid": 9}],
-    )
-    monkeypatch.setattr(
-        refresh_occupancy.os,
-        "kill",
-        lambda *_args: (_ for _ in ()).throw(AssertionError("OPEN worker terminated")),
-    )
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
-    )
-    assert out["ok"] is True
-    assert out["probe_failed"] is False
-    assert out["merged_this_pass"] == ["mikolaj92/lokay"]
-    assert out["live_issue_to_pr_repos"] == ["a/two"]
-    assert out["occupied_repos"] == ["mikolaj92/lokay", "a/two"]
-    working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["occupied_repos"] == ["mikolaj92/lokay", "a/two"]
-    assert working["prs_by_repo"] == {"mikolaj92/lokay": [], "a/two": []}
-    assert called == []
-    assert [a.get("reason") for a in working["actions"] if a.get("step") == "refresh_prs_skipped"] == [
-        "occupied",
-        "repo_not_delivered_by_mini_mill",
-    ]
-
-    selected = run_select_implement(pass_dir=pass_dir)
-    assert selected["selected"] == 0
-    implement = pass_io.read_json(pass_io.implement_path(pass_dir))
-    assert implement["clean_repos"] == []
 
 
 @pytest.mark.parametrize(
@@ -396,48 +338,6 @@ def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
     ]
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_refresh_skips_product_repo_without_listing_prs(tmp_path, monkeypatch):
-    product_repo = "mikolaj92/Temida"
-    pass_dir = _pass(
-        tmp_path,
-        begin={"repos": [product_repo, "mikolaj92/lokay"]},
-        working={
-            "prs_by_repo": {product_repo: [{"number": 8}]},
-            "ready_by_repo": {
-                product_repo: [{"number": 9, "title": "product"}],
-                "mikolaj92/lokay": [{"number": 548, "title": "lokay"}],
-            },
-            "remaining_ready": 2,
-        },
-    )
-    called: list[str] = []
-
-    def fake_run(fn, argv):
-        called.append(argv[argv.index("--repo") + 1])
-        return {"ok": True, "prs": []}
-
-    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
-
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
-    )
-
-    assert out["ok"] is True
-    assert out["skipped"] is True
-    assert out["reason"] == "repo_not_delivered_by_mini_mill"
-    assert out["skipped_repos"] == [product_repo]
-    assert called == ["mikolaj92/lokay"]
-    working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["prs_by_repo"][product_repo] == [{"number": 8}]
-    assert {
-        "step": "refresh_prs_skipped",
-        "repo": product_repo,
-        "ok": True,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-    } in working["actions"]
 
 
 def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):

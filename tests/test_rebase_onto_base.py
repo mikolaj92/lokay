@@ -115,30 +115,6 @@ def test_safety_still_forbids_force_push():
     validate_argv(["git", "rebase", "origin/main"])
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_cli_skips_product_repo_without_git_or_preflight(
-    repo, tmp_path, monkeypatch, capsys
-):
-    def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("product repositories must not rebase or run preflight")
-
-    monkeypatch.setattr(rebase_proc, "load_cfg", fail_if_called)
-    monkeypatch.setattr(rebase_proc, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(rebase_proc, "runner", fail_if_called)
-    monkeypatch.setattr(rebase_proc, "rebase_onto_base", fail_if_called)
-
-    assert rebase_proc.main(
-        ["--live", "--repo", repo, "--worktree", str(tmp_path)]
-    ) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "worktree": str(tmp_path),
-    }
 
 
 def test_cli_lokay_repo_still_rebases(tmp_path, monkeypatch, capsys):

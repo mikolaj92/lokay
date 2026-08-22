@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 import json
 from pathlib import Path
@@ -139,22 +138,6 @@ def test_live_requires_healthy_before_gh(monkeypatch, capsys):
     assert fake.calls == []
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
-    for repo in ("mikolaj92/Temida", "mikolaj92/takt"):
-        fake = _gh()
-        monkeypatch.setattr(unbounded_park, "run_gh", fake)
-        code = unbounded_park.main(["--repo", repo, "--issue", "7"])
-        assert code == 0
-        assert fake.calls == []
-        payload = _payload(capsys)
-        assert payload["ok"] is True
-        assert payload["skipped"] is True
-        assert payload["reason"] == "repo_not_delivered_by_mini_mill"
-        assert payload["applied"] is False
-        assert payload["removed"] is False
-        assert payload["repo"] == repo
-        assert payload["issue"] == 7
 
 
 def test_missing_repo_fails_closed(monkeypatch, capsys):

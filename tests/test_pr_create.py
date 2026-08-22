@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 
 from lokay.proc import pr_create
 from lokay.runner import CommandResult, CommandSpec
@@ -82,35 +81,6 @@ def _args(cfg: Path) -> list[str]:
     ]
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repo_skips_without_gh_or_config(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(pr_create, "load_cfg", fail_if_called)
-    monkeypatch.setattr(pr_create, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(pr_create, "runner", fail_if_called)
-    monkeypatch.setattr(pr_create, "find_pr_fixing_issue", fail_if_called)
-    monkeypatch.setattr(pr_create, "get_issue", fail_if_called)
-    monkeypatch.setattr(pr_create, "create_pr", fail_if_called)
-    args = _args(Path("unused.yaml"))
-    args[args.index("--repo") + 1] = repo
-
-    assert pr_create.main(args) == 0
-    assert _envelope(capsys) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "head": "ai/fix/239",
-        "pr": None,
-    }
 
 
 def test_closed_issue_skips_create_pr(tmp_path, monkeypatch, capsys):

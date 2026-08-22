@@ -18,37 +18,6 @@ def _cfg(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(repos=repos, worktrees_root=tmp_path, mode="live")
 
 
-@pytest.mark.parametrize(
-    "repo",
-    ["mikolaj92/Temida", "mikolaj92/takt", "some-owner/outside-config"],
-)
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_list_issues_skips_non_lokay_without_gh(
-    repo: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(list_issues, "load_cfg", lambda _args: _cfg(tmp_path))
-    monkeypatch.setattr(list_issues, "read_live", lambda _args: True)
-
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("non-lokay repositories must not call GitHub")
-
-    monkeypatch.setattr(list_issues, "runner", fail_if_called)
-    monkeypatch.setattr(list_issues, "list_ready_issues", fail_if_called)
-    monkeypatch.setattr(list_issues, "list_issues_with_label", fail_if_called)
-
-    assert list_issues.main(["--repo", repo, "--live"]) == 0
-
-    payload = json.loads(capsys.readouterr().out)
-    assert payload == {
-        "ok": True,
-        "offline": False,
-        "repo": repo,
-        "issues": [],
-        "count": 0,
-    }
 
 
 @pytest.mark.parametrize("label", [None, "work:ready"])

@@ -7,45 +7,6 @@ import pytest
 from lokay.proc import close_issue
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_close_issue_skips_product_repo_without_gh(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(close_issue, "load_cfg", fail_if_called)
-    monkeypatch.setattr(close_issue, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(close_issue, "runner", fail_if_called)
-    monkeypatch.setattr(close_issue, "comment_issue", fail_if_called)
-    monkeypatch.setattr(close_issue, "close_issue", fail_if_called)
-
-    assert (
-        close_issue.main(
-            [
-                "--repo",
-                repo,
-                "--issue",
-                "467",
-                "--comment",
-                "done",
-                "--live",
-            ]
-        )
-        == 0
-    )
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "issue": 467,
-        "closed": False,
-    }
 
 
 def test_close_issue_still_closes_lokay(

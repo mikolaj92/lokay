@@ -8,29 +8,6 @@ import pytest
 from lokay.proc import get_issue
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_get_issue_skips_product_repo_without_gh(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setattr(get_issue, "load_cfg", lambda _args: object())
-    monkeypatch.setattr(get_issue, "read_live", lambda _args: True)
-
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub")
-
-    monkeypatch.setattr(get_issue, "runner", fail_if_called)
-    monkeypatch.setattr(get_issue, "get_issue", fail_if_called)
-
-    assert get_issue.main(["--repo", repo, "--issue", "459", "--live"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "offline": False,
-        "repo": repo,
-        "issue": None,
-    }
 
 
 def test_get_issue_still_fetches_lokay(

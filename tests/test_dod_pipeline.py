@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 import json
 from pathlib import Path
@@ -204,32 +203,6 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
     ]
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_pr_merge_refuses_product_repo_without_calling_gh(
-    tmp_path, monkeypatch, capsys
-):
-    cfg = _cfg(tmp_path, mode="live")
-    monkeypatch.setattr(pr_merge, "mutations_allowed", lambda **k: True)
-    monkeypatch.setattr(
-        pr_merge,
-        "runner",
-        lambda: (_ for _ in ()).throw(
-            AssertionError("gh must not run for a product repo")
-        ),
-    )
-
-    code = pr_merge.main(
-        ["--config", str(cfg), "--live", "--repo", "mikolaj92/temida", "--pr", "88"]
-    )
-
-    assert code == 0
-    env = _envelope(capsys)
-    assert env["ok"] is True
-    assert env["skipped"] is True
-    assert env["reason"] == "repo_not_delivered_by_mini_mill"
-    assert env["repo"] == "mikolaj92/temida"
-    assert env["pr"] == 88
-    assert env["merged"] is False
 
 
 def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):

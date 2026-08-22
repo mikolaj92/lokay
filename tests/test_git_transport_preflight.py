@@ -1,5 +1,4 @@
 
-import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,27 +19,6 @@ def completed(code=0, stdout=""):
     return SimpleNamespace(returncode=code, stdout=stdout, stderr="")
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_git_transport_never_touches_product_checkout(tmp_path, monkeypatch):
-    item = repo(tmp_path)
-    product_path = tmp_path / "Temida"
-    (product_path / ".git").mkdir(parents=True)
-    product = SimpleNamespace(name="mikolaj92/Temida", clone_path=product_path)
-    calls = []
-
-    def run(argv, **kwargs):
-        calls.append(argv)
-        if "get-url" in argv:
-            return completed(stdout="git@github.com:mikolaj92/lokay.git\n")
-        return completed()
-
-    monkeypatch.setattr(preflight.subprocess, "run", run)
-
-    assert preflight._github_git_transport(cfg(product, item)) == (True, "ok")
-    assert preflight._repair_github_git_transport(cfg(product, item)) is False
-    assert calls
-    assert all(str(product_path) not in argv for argv in calls)
-    assert all(str(item.clone_path) in argv for argv in calls)
 
 
 def test_git_transport_rejects_https_origin(tmp_path, monkeypatch):

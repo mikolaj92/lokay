@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 import json
 import sqlite3
@@ -166,43 +165,6 @@ def test_harvest_closed_issue_list_refuses_truncation(monkeypatch):
     assert "Harvest CLOSED list refuses truncation before clearing stuck rows." in source
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_github_closed_mill_issue_clears_stuck_without_journal(tmp_path: Path, monkeypatch):
-    """Compacted state.jsonl still leaves CLOSED corpses; GitHub is the source of truth."""
-    cycle = tmp_path / "cycle"
-    cycle.mkdir()
-    state = tmp_path / "state.jsonl"
-    state.write_text("", encoding="utf-8")
-    stuck = {
-        "issues": {
-            "mikolaj92/lokay#528": {
-                "failures": 1,
-                "blocked": True,
-                "reason": "no_pr",
-                "last_error": "issue_to_pr produced no PR",
-            },
-            "mikolaj92/lokay#178": {
-                "failures": 1,
-                "blocked": True,
-                "reason": "rebase_conflict",
-            },
-        }
-    }
-
-    def fake_closed(_repo: str) -> set[int]:
-        return {528}
-
-    monkeypatch.setattr(
-        "lokay.child_harvest._github_closed_mill_issues", fake_closed
-    )
-    harvest_fail_closed_children(
-        stuck,
-        state_path=state,
-        cycle_dir=cycle,
-        is_live=lambda _pid: False,
-    )
-    assert "mikolaj92/lokay#528" not in stuck["issues"]
-    assert excluded_numbers(stuck, "mikolaj92/lokay") == {178}
 
 
 def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
@@ -367,50 +329,6 @@ def test_harvest_drops_out_of_scope_cycle_start_files(tmp_path: Path, monkeypatc
     assert live.exists()
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_harvest_drops_github_closed_mill_cycle_start_files(
-    tmp_path: Path, monkeypatch
-):
-    cycle = tmp_path / "cycle"
-    cycle.mkdir()
-    state = tmp_path / "state.jsonl"
-    state.write_text("", encoding="utf-8")
-    closed = cycle / "mikolaj92__lokay__528.json"
-    closed.write_text(
-        json.dumps(
-            {
-                "repo": "mikolaj92/lokay",
-                "issue": 528,
-                "started_ts": "2026-08-19T10:00:00Z",
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    open_start = cycle / "mikolaj92__lokay__178.json"
-    open_start.write_text(
-        json.dumps(
-            {
-                "repo": "mikolaj92/lokay",
-                "issue": 178,
-                "started_ts": "2026-08-19T10:00:00Z",
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: {528}
-    )
-    harvest_fail_closed_children(
-        {"issues": {}},
-        state_path=state,
-        cycle_dir=cycle,
-        is_live=lambda _pid: False,
-        repos=["mikolaj92/lokay"],
-    )
-    assert not closed.exists()
-    assert open_start.exists()
 
 
 def test_harvest_without_repos_keeps_cycle_start_files(tmp_path: Path):
@@ -1201,56 +1119,6 @@ def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path
     assert stuck["issues"]["a/b#4796"].get("reason") == "plan_only"
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_harvest_idle_mill_stuck_drops_toplevel_temida(tmp_path: Path, monkeypatch):
-    """Idle daemon_cycle skip still harvests mill stuck, including top-level keys."""
-    from lokay.child_harvest import harvest_idle_mill_stuck
-
-    config = tmp_path / "config.yaml"
-    config.write_text(
-        f"""
-mode: live
-repos:
-  - name: mikolaj92/Temida
-    clone_path: {tmp_path / "Temida"}
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "lokay"}
-state:
-  path: {tmp_path / "state.jsonl"}
-executor:
-  enabled: false
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "state.jsonl").write_text("", encoding="utf-8")
-    stuck_path = tmp_path / "stuck.json"
-    stuck_path.write_text(
-        json.dumps(
-            {
-                "issues": {
-                    "mikolaj92/lokay#178": {
-                        "failures": 1,
-                        "blocked": True,
-                        "reason": "rebase_conflict",
-                    }
-                },
-                "mikolaj92/Temida#4805": {
-                    "reason": "plan_only",
-                    "blocked": True,
-                    "ts": "2026-08-18T22:43:45Z",
-                },
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
-    )
-    harvest_idle_mill_stuck(config_path=str(config), live=True)
-    data = json.loads(stuck_path.read_text(encoding="utf-8"))
-    assert set(data["issues"]) == {"mikolaj92/lokay#178"}
-    assert "mikolaj92/Temida#4805" not in data
 
 
 def test_harvest_idle_mill_stuck_skips_when_not_live(tmp_path: Path):

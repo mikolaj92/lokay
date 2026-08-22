@@ -10,45 +10,6 @@ import pytest
 from lokay.proc import pr_label
 
 
-@pytest.mark.parametrize("repo", ["mikolaj92/Temida", "mikolaj92/takt"])
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repo_skips_without_gh_or_config(
-    repo: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def fail_if_called(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("product repositories must not call GitHub or load config")
-
-    monkeypatch.setattr(pr_label, "load_cfg", fail_if_called)
-    monkeypatch.setattr(pr_label, "mutations_allowed", fail_if_called)
-    monkeypatch.setattr(pr_label, "runner", fail_if_called)
-    monkeypatch.setattr(pr_label, "add_pr_labels", fail_if_called)
-
-    assert (
-        pr_label.main(
-            [
-                "--repo",
-                repo,
-                "--pr",
-                "480",
-                "--label",
-                "ai:generated",
-                "--live",
-            ]
-        )
-        == 0
-    )
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "planned": False,
-        "skipped": True,
-        "reason": "repo_not_delivered_by_mini_mill",
-        "repo": repo,
-        "pr": 480,
-        "labels": ["ai:generated"],
-        "applied": False,
-    }
 
 
 def test_lokay_repo_still_adds_labels(

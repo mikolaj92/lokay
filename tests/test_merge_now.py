@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 import json
 from pathlib import Path
@@ -59,22 +58,6 @@ def test_without_live_plans_and_does_not_call_gh(monkeypatch, capsys):
     )
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
-    def boom(*_a, **_k):
-        raise AssertionError("gh must not run for a product repo")
-
-    monkeypatch.setattr(merge_now.subprocess, "run", boom)
-    for repo in ("mikolaj92/temida", "mikolaj92/takt"):
-        code = merge_now.main(["--repo", repo, "--pr", "7"])
-        assert code == 0
-        payload = _payload(capsys)
-        assert payload["ok"] is True
-        assert payload["skipped"] is True
-        assert payload["reason"] == "repo_not_delivered_by_mini_mill"
-        assert payload["repo"] == repo
-        assert payload["pr"] == 7
-        assert payload["command"] == merge_now.merge_argv(repo, 7)
 
 
 def test_merge_runs_exact_gh_argv(monkeypatch, capsys):

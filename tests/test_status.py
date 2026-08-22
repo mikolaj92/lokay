@@ -1,6 +1,5 @@
 """DoD status: mill_ready and blockers."""
 
-import pytest
 
 from pathlib import Path
 
@@ -129,60 +128,8 @@ def test_local_status_uses_last_pass_health(tmp_path: Path, monkeypatch):
     assert result["human_residuals"]["count"] == 2
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_status_surveys_only_lokay_from_mixed_catalog(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
-    cfg_path = _write_cfg(
-        tmp_path,
-        mode="live",
-        executor=True,
-        merge=True,
-        repos=("mikolaj92/Temida", "mikolaj92/takt", "mikolaj92/lokay"),
-    )
-    surveyed: list[str] = []
-
-    def fake_proc(fn, argv):
-        repo = argv[argv.index("--repo") + 1]
-        surveyed.append(repo)
-        if fn.__module__ == "lokay.proc.list_prs":
-            return {"ok": True, "prs": []}
-        return {"ok": True, "issues": []}
-
-    monkeypatch.setattr("lokay.compose.tick._run", fake_proc)
-    monkeypatch.setattr(
-        "lokay.compose.status.compose_human_mailbox",
-        lambda **_kwargs: {"ok": True, "count": 0, "items": [], "errors": []},
-    )
-    result = compose_status(config_path=str(cfg_path))
-
-    assert result["ok"] is True
-    assert surveyed
-    assert set(surveyed) == {"mikolaj92/lokay"}
-    assert [row["repo"] for row in result["remaining"]["by_repo"]] == [
-        "mikolaj92/lokay"
-    ]
-    assert result["remaining"]["by_repo"][0]["survey_error"] is False
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_status_product_only_catalog_skips_survey(tmp_path: Path, monkeypatch):
-    cfg_path = _write_cfg(
-        tmp_path,
-        mode="live",
-        executor=True,
-        merge=True,
-        repos=("mikolaj92/Temida", "mikolaj92/takt"),
-    )
-
-    monkeypatch.setattr(
-        "lokay.compose.status.compose_tick",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("product survey")),
-    )
-    result = compose_status(config_path=str(cfg_path))
-
-    assert result["ok"] is True
-    assert result["idle"] is True
-    assert result["remaining"]["by_repo"] == []
 
 
 def test_status_survey_exposes_by_repo_and_human(tmp_path: Path, monkeypatch):

@@ -1,5 +1,4 @@
 
-import pytest
 from pathlib import Path
 from types import SimpleNamespace
 import os
@@ -60,65 +59,6 @@ state:
     assert out["reaped_count"] == 0
 
 
-@pytest.mark.skip(reason="obsolete single-repository mill contract")
-def test_reap_stale_implementing_lists_only_lokay(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.yaml"
-    repo_names = [
-        "mikolaj92/Temida",
-        "mikolaj92/takt",
-        "mikolaj92/app-factory",
-        "mikolaj92/lokay",
-    ]
-    repos_yaml = "\n".join(
-        f"  - name: {name}\n    clone_path: {tmp_path / name.split('/')[-1]}"
-        for name in repo_names
-    )
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-{repos_yaml}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    for name in repo_names:
-        (tmp_path / name.split("/")[-1]).mkdir()
-    listed_repos = []
-
-    def _list(_runner, _cfg, repo, *, label, live, **_kwargs):
-        listed_repos.append(repo.name)
-        if label == "ai:in-progress":
-            return [SimpleNamespace(number=443)]
-        return []
-
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", _list)
-
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=False,
-    )
-
-    assert out["ok"] is True
-    assert out["reaped_count"] == 0
-    assert out["reaped"][0]["repo"] == "mikolaj92/lokay"
-    assert out["reaped"][0]["planned"] is True
-    assert set(listed_repos) == {"mikolaj92/lokay"}
 
 
 def test_stale_empty_probe_writes_stamp(tmp_path, monkeypatch):
