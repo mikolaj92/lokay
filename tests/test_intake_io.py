@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-
-import pytest
 from pathlib import Path
 
+import pytest
+
+from lokay import intake_io
 from lokay.config import Config
-from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.intake import IntakeDecision
-import lokay.intake_io as intake_io
 from lokay.intake_io import apply_intake, covering_ai_prs, merged_prs
 from lokay.models import Issue
 from lokay.runner import CommandResult, CommandSpec
