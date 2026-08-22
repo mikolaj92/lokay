@@ -188,12 +188,14 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
         else:
             _touch_leftover_stamp(stamp)
     # Unhealthy leftover-closeout parks are planned.
+    # Hosted leftover-closeout reports applied.
     return ok(
         leftover_closed=len(removed),
         labels_removed=bool(removed),
         issue_to_pr_started=0,
         closed_out=closed_out,
         planned=not allowed if closed_out else not live,
+        applied=allowed,
     )
 
 
