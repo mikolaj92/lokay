@@ -133,7 +133,6 @@ def _list_open_issues(
     label: str | None = None,
     kind: str,
     state: str = "open",
-    raise_on_rate_limit: bool = True,
 ) -> list[dict]:
     """One full newest-first page. Hitting the cap is truncated, not idle."""
     if live:
@@ -150,12 +149,8 @@ def _list_open_issues(
             str(cap),
         ]
     )
-    try:
-        result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
-    except RuntimeError as exc:
-        if is_github_rate_limit_error(exc) and not raise_on_rate_limit:
-            return []
-        raise
+    # Issue-list rate-limit failures are always uncertainty, never an empty queue.
+    result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     if not live:
         return []
     return parse_survey_list(result.stdout, kind=kind, repo=repo.name, cap=cap)
@@ -168,7 +163,6 @@ def list_labeled_issues(
     *,
     label: str,
     live: bool,
-    raise_on_rate_limit: bool = True,
 ) -> list[Issue]:
     """Open issues carrying one ledger/factory label (no ready-only filter)."""
     rows = _list_open_issues(
@@ -178,7 +172,6 @@ def list_labeled_issues(
         live=live,
         label=label,
         kind="labeled-issue",
-        raise_on_rate_limit=raise_on_rate_limit,
     )
     return [_issue_from_row(repo.name, row) for row in rows]
 
@@ -193,7 +186,6 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         kind="ready-issue",
         state="all",
         # Ready-list rate limit is not an empty queue.
-        raise_on_rate_limit=True,
     )
     issues: list[Issue] = []
     for row in rows:
@@ -216,7 +208,6 @@ def list_inbox_issues(
     repo: RepoConfig,
     *,
     live: bool,
-    raise_on_rate_limit: bool = True,
 ) -> list[Issue]:
     """Open issues not yet decided (no ready/blocked/needs-feedback labels)."""
     rows = _list_open_issues(
@@ -225,7 +216,6 @@ def list_inbox_issues(
         repo,
         live=live,
         kind="inbox-issue",
-        raise_on_rate_limit=raise_on_rate_limit,
     )
     stuck = load_stuck(stuck_path_for(config.state_path))
     out: list[Issue] = []
