@@ -29,7 +29,10 @@ def main(argv: list[str] | None = None) -> int:
     if repo is None:
         repo = RepoConfig(name=args.repo, clone_path=cfg.worktrees_root / "unused")
     try:
-        issues = list_inbox_issues(runner(cfg), cfg, repo, live=live)
+        # Inbox rate limit does not stamp empty.
+        issues = list_inbox_issues(
+            runner(cfg), cfg, repo, live=live, raise_on_rate_limit=True
+        )
         stuck = load_stuck(stuck_path_for(cfg.state_path))
         inbox = []
         blocked_numbers: list[int] = []

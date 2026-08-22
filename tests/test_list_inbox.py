@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -110,3 +111,31 @@ def test_list_inbox_still_lists_lokay_and_skips_stuck_blocked_issue(
             "issues": [1],
         }
     ]
+
+
+def test_inbox_rate_limit_does_not_stamp_empty(tmp_path, monkeypatch, capsys):
+    """Inbox rate limit does not stamp empty."""
+    stamp = tmp_path / "factory-survey.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = 1.0
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(list_inbox, "load_cfg", lambda _args: _cfg(tmp_path))
+    monkeypatch.setattr(list_inbox, "read_live", lambda _args: True)
+    monkeypatch.setattr(list_inbox, "runner", lambda _cfg: object())
+    seen: list[bool] = []
+
+    def boom(*_a, **kwargs):
+        seen.append(bool(kwargs.get("raise_on_rate_limit")))
+        raise RuntimeError("HTTP 429: API rate limit exceeded")
+
+    monkeypatch.setattr(list_inbox, "list_inbox_issues", boom)
+
+    result = list_inbox.main(["--repo", "mikolaj92/lokay", "--live"])
+
+    assert result == 1
+    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert payload["ok"] is False
+    assert seen == [True]
+    assert stamp.stat().st_mtime == old
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "list_inbox.py"
+    assert "Inbox rate limit does not stamp empty." in src.read_text(encoding="utf-8")
