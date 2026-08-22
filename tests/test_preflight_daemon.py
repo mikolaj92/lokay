@@ -40,7 +40,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "recent_empty_survey" in script
     assert "recent_empty_survey_probe" in script
     assert "recent_empty_leftover_probe" in script
-    assert "Mill-probe GitHub lists run together. Probe failure still hosts." in script
+    assert "Mill-probe batches PR, ready, and inbox reads into one GraphQL request." in script
+    assert "Probe failure, pagination, or malformed data still hosts." in script
     assert "Leftover-probe GitHub lists run together. Probe failure still hosts." in script
     assert "Leftover-probe still hosts lokay-daemon so idle reap continues." in script
     assert "Leftover-probe still hosts lokay-daemon even when mill-probe would also run." in script
@@ -51,7 +52,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Fresh idle skip defers caretaker plist write; hosted/probe ticks still write." in script
     assert "Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe." in script
     assert "export LOKAY_LEFTOVER_PROBE_GH_OK=1" in script
-    assert "ThreadPoolExecutor(max_workers=3)" in script
+    assert "ThreadPoolExecutor(max_workers=3)" not in script
     assert "ThreadPoolExecutor(max_workers=2)" in script
     assert '"health"[[:space:]]*:[[:space:]]*"overlap"' in script
     assert "host_updated" in script
@@ -647,10 +648,37 @@ def test_idle_skip_hosts_when_occupied(tmp_path):
     assert any("lokay-daemon" in line for line in calls)
 
 
+def _empty_graphql() -> str:
+    return json.dumps(
+        {
+            "data": {
+                "repository": {
+                    "pullRequests": {
+                        "nodes": [],
+                        "pageInfo": {"hasNextPage": False},
+                    },
+                    "issues": {
+                        "nodes": [],
+                        "pageInfo": {"hasNextPage": False},
+                    },
+                }
+            }
+        }
+    )
+
+
 def _write_empty_gh(tmp_path: Path) -> None:
     gh = tmp_path / ".local" / "bin" / "gh"
     gh.parent.mkdir(parents=True, exist_ok=True)
-    gh.write_text("#!/bin/sh\nprintf '%s\\n' '[]'\nexit 0\n", encoding="utf-8")
+    graphql = _empty_graphql()
+    gh.write_text(
+        "#!/bin/sh\n"
+        'case " $* " in\n'
+        f"  *\" api graphql \"*) printf '%s\\n' '{graphql}' ;;\n"
+        "  *) printf '%s\\n' '[]' ;;\n"
+        "esac\nexit 0\n",
+        encoding="utf-8",
+    )
     gh.chmod(0o755)
 
 
@@ -685,6 +713,7 @@ def test_idle_expired_survey_empty_probe_skips_lokay_daemon(tmp_path):
                 "#!/bin/sh",
                 'case " $* " in',
                 "  *git/ref/heads/main*) echo fail >&2; exit 1 ;;",
+                f"  *\" api graphql \"*) printf '%s\n' '{_empty_graphql()}' ;;",
                 "  *) printf '%s\n' '[]' ;;",
                 "esac",
                 "exit 0",
@@ -708,7 +737,8 @@ def test_idle_expired_survey_empty_probe_skips_lokay_daemon(tmp_path):
     assert survey.stat().st_mtime > before
 
 
-def test_idle_expired_survey_probe_lists_run_together(tmp_path):
+def test_idle_expired_survey_probe_batches_one_graphql_request(tmp_path):
+    """Mill-probe batches PR, ready, and inbox reads into one GraphQL request."""
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
     lokay = tmp_path / ".lokay"
@@ -717,21 +747,17 @@ def test_idle_expired_survey_probe_lists_run_together(tmp_path):
     leftover = lokay / "leftover-closeout.stamp"
     leftover.write_text("1", encoding="utf-8")
     _expire(survey, 200)
-    starts = tmp_path / "gh-starts"
+    calls_log = tmp_path / "gh-calls"
     gh = tmp_path / ".local" / "bin" / "gh"
     gh.parent.mkdir(parents=True, exist_ok=True)
+    graphql = _empty_graphql()
     gh.write_text(
         "#!/bin/sh\n"
-        f"starts='{starts}'\n"
+        f"printf '%s\\n' \"$*\" >> '{calls_log}'\n"
         'case " $* " in\n'
-        '  *" pr list "*|*" issue list "*)\n'
-        "    python3 -c \"import time; print(time.time())\" >> \"$starts\"\n"
-        "    sleep 0.2\n"
-        "    printf '%s\\n' '[]'\n"
-        "    ;;\n"
+        f"  *\" api graphql \"*) printf '%s\\n' '{graphql}' ;;\n"
         "  *) printf '%s\\n' '[]' ;;\n"
-        "esac\n"
-        "exit 0\n",
+        "esac\nexit 0\n",
         encoding="utf-8",
     )
     gh.chmod(0o755)
@@ -741,12 +767,65 @@ def test_idle_expired_survey_probe_lists_run_together(tmp_path):
     assert second.returncode == 0, second.stderr
     calls = argv_log.read_text(encoding="utf-8").splitlines()
     assert all("lokay-daemon" not in line for line in calls)
+    gh_calls = calls_log.read_text(encoding="utf-8").splitlines()
+    assert len([line for line in gh_calls if "api graphql" in line]) == 1
+    assert all(" issue list " not in f" {line} " for line in gh_calls)
+    assert all(" pr list " not in f" {line} " for line in gh_calls)
     logs = list((lokay / "logs").glob("mill-*.log"))
     body = chr(10).join(path.read_text(encoding="utf-8") for path in logs)
     assert "recent_empty_survey_probe" in body
-    stamps = [float(line) for line in starts.read_text(encoding="utf-8").split() if line.strip()]
-    assert len(stamps) == 3
-    assert max(stamps) - min(stamps) < 0.15
+
+
+def test_idle_expired_survey_graphql_pagination_hosts(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    leftover = lokay / "leftover-closeout.stamp"
+    leftover.write_text("1", encoding="utf-8")
+    _expire(lokay / "factory-survey.stamp", 200)
+    payload = json.loads(_empty_graphql())
+    payload["data"]["repository"]["issues"]["pageInfo"]["hasNextPage"] = True
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text(
+        "#!/bin/sh\n" + f"printf '%s\\n' '{json.dumps(payload)}'\nexit 0\n",
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-daemon" in line for line in calls)
+
+
+def test_idle_expired_survey_graphql_ready_hosts(tmp_path):
+    first = _run_daemon(tmp_path)
+    assert first.returncode == 0, first.stderr
+    lokay = tmp_path / ".lokay"
+    (lokay / "last-pass.json").write_text(_idle_receipt(), encoding="utf-8")
+    leftover = lokay / "leftover-closeout.stamp"
+    leftover.write_text("1", encoding="utf-8")
+    _expire(lokay / "factory-survey.stamp", 200)
+    payload = json.loads(_empty_graphql())
+    payload["data"]["repository"]["issues"]["nodes"] = [
+        {"number": 7, "state": "OPEN", "labels": {"nodes": [{"name": "work:ready"}]}}
+    ]
+    gh = tmp_path / ".local" / "bin" / "gh"
+    gh.parent.mkdir(parents=True, exist_ok=True)
+    gh.write_text(
+        "#!/bin/sh\n" + f"printf '%s\\n' '{json.dumps(payload)}'\nexit 0\n",
+        encoding="utf-8",
+    )
+    gh.chmod(0o755)
+    argv_log = tmp_path / "uv-argv.log"
+    argv_log.write_text("", encoding="utf-8")
+    second = _run_daemon(tmp_path)
+    assert second.returncode == 0, second.stderr
+    calls = argv_log.read_text(encoding="utf-8").splitlines()
+    assert any("lokay-daemon" in line for line in calls)
 
 
 def test_idle_expired_survey_probe_failure_hosts(tmp_path):
