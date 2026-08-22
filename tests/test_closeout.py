@@ -171,6 +171,49 @@ def test_fresh_leftover_skip_does_not_require_healthy(monkeypatch, tmp_path):
     )
 
 
+def test_unhealthy_leftover_closeout_still_lists_github(monkeypatch, tmp_path):
+    """Unhealthy leftover-closeout still lists GitHub. Hosted leftover parks still do."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - closeout.LEFTOVER_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    listed: list[bool] = []
+    parked_live: list[bool] = []
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: False)
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+
+    def fake_closed(_runner, repo, label, *, live):
+        listed.append(bool(live))
+        return [429]
+
+    def fake_park(*, repo, issue, allowed, config_path=None):
+        parked_live.append(bool(allowed))
+        return {"ok": True, "planned": True, "removed": False}
+
+    monkeypatch.setattr(closeout, "closed_ready_numbers", fake_closed)
+    monkeypatch.setattr(closeout, "_park_ready", fake_park)
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert listed == [True, True]
+    assert parked_live == [False]
+    assert out["leftover_closed"] == 0
+    assert out["labels_removed"] is False
+    assert stamp.is_file()
+    assert stamp.stat().st_mtime == old
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Unhealthy leftover-closeout still lists GitHub." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp(
     monkeypatch, tmp_path
 ):
