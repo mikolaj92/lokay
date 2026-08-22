@@ -1,4 +1,9 @@
-"""Atomic: merge a GitHub PR with a merge-commit. No checks gate, no LLM review."""
+"""Atomic: merge a GitHub PR with a merge-commit. No checks gate, no LLM review.
+
+--live plus a healthy mill enables mutation. Otherwise the atom plans only.
+Hosted merge-now merges require healthy. Planned merges do not.
+--dry-run prints the gh command and does not merge.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import argparse
 import subprocess
 
 from lokay.envelope import emit_exit, err, ok
+from lokay.proc._common import add_config_live, load_cfg, mutations_allowed
 
 MERGE_TIMEOUT_SECONDS = 180
 MINI_MILL_REPO = "mikolaj92/lokay"
@@ -17,6 +23,7 @@ def merge_argv(repo: str, pr: int) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-merge-now")
+    add_config_live(p)
     p.add_argument("--repo", required=True, help="owner/name")
     p.add_argument("--pr", required=True, type=int)
     p.add_argument(
@@ -38,8 +45,21 @@ def main(argv: list[str] | None = None) -> int:
                 pr=pr,
             )
         )
-    if args.dry_run:
-        return emit_exit(ok(planned=True, dry_run=True, command=command, repo=repo, pr=pr))
+    if args.dry_run or not args.live:
+        return emit_exit(
+            ok(
+                planned=True,
+                dry_run=bool(args.dry_run),
+                merged=False,
+                command=command,
+                repo=repo,
+                pr=pr,
+            )
+        )
+    cfg = load_cfg(args)
+    apply = mutations_allowed(live_flag=True, cfg=cfg)
+    if not apply:  # pragma: no cover - mutations_allowed is fail-closed
+        return emit_exit(err("live mutation blocked", command=command, repo=repo, pr=pr))
     try:
         completed = subprocess.run(
             command,
