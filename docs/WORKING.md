@@ -306,6 +306,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   `ai:ready` on GitHub-CLOSED mill issues. That is not a second hunt through
   every mill PR; GitHub CLOSED is enough. After an empty leftover, skip
   those GitHub lists for 300s so idle ticks do not pay them twice a minute.
+  Fresh leftover skip does not require healthy. Hosted leftover parks still
+  do. Unhealthy leftover-closeout still lists GitHub.
   Pytest must not skip leftover GitHub lists using the mill stamp.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
   those GitHub lists for 120s without refreshing the stamp. A live mill with

@@ -139,10 +139,12 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     delivery hunt: paginating every mill PR per leftover ate idle ticks and
     still missed commit-closed issues. Fresh leftover skip does not require
     healthy. Hosted leftover parks still do.
+    Unhealthy leftover-closeout still lists GitHub.
     """
     cfg = load_cfg(argparse.Namespace(config=config_path))
     stamp = leftover_stamp_path(cfg)
     # Fresh leftover skip does not require healthy. Hosted leftover parks still do.
+    # Unhealthy leftover-closeout still lists GitHub.
     if leftover_recently_empty(stamp):
         return ok(
             leftover_closed=0,
@@ -165,7 +167,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
         if name != MINI_MILL_REPO:
             continue
         for label in labels:
-            for number in closed_ready_numbers(issue_runner, name, label, live=allowed):
+            for number in closed_ready_numbers(issue_runner, name, label, live=live):
                 key = (name, number)
                 if key in seen:
                     continue
@@ -173,10 +175,11 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
                 parked = _park_ready(repo=name, issue=number, allowed=allowed, config_path=config_path)
                 if parked.get("ok") and parked.get("removed"):
                     closed_out.append({"repo": name, "issue": number})
-    if closed_out:
-        _clear_leftover_stamp(stamp)
-    else:
-        _touch_leftover_stamp(stamp)
+    if allowed:
+        if closed_out:
+            _clear_leftover_stamp(stamp)
+        else:
+            _touch_leftover_stamp(stamp)
     return ok(
         leftover_closed=len(closed_out),
         labels_removed=bool(closed_out),
