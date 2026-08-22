@@ -24,8 +24,8 @@ preflight. Fala owns product/recovery order. Every node above is a separate
 actually publishes or merges work records no systemic stall fingerprint.
 A live mill with a fresh empty-survey stamp and idle last-pass skips hosting
 this parent path; leftover closeout still runs, mill stuck is still
-harvested, CLOSED leftover mill worktrees are still reaped, and leftover-ready
-still runs.
+harvested, CLOSED leftover mill worktrees are still reaped, leftover-ready
+still runs, and leftover-cache still runs.
 Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
 Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
 Harvest leftovers are not mill issues. Idle CLASSIFY_CAP reaps empty
@@ -136,7 +136,7 @@ host_ff
 | `dispatch_triage` | run planned `issue_triage` children. Preflight incident tickets (`<!-- lokay-preflight:… -->`) are `ai:blocked`, not `work:ready`. A later healthy preflight closes those leftover tickets |
 | `resolve_conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready issues |
 | `closeout_prs` | for-each remaining AI PRs via `lokay-closeout-pr` |
-| `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels). After an empty leftover-cache probe, skip those GitHub lists for 300s without refreshing the stamp. Pytest must not skip leftover-cache GitHub lists using the mill stamp. |
+| `reap_stale_implementing` | leftover in-flight cache → `ai:ready` (mill no longer awards those labels). After an empty leftover-cache probe, skip those GitHub lists for 300s without refreshing the stamp. Idle daemon_cycle skip still runs leftover-cache. Pytest must not skip leftover-cache GitHub lists using the mill stamp. |
 | `reap_over_budget` | kill over-budget plan_only i2pr and park the slot. A live coder with a **real** diff is harvested (`commit_all` → `push` → `pr_create`) without SIGTERM |
 | `refresh_occupancy` | union just-merged + live i2pr; re-list PRs only on leftover-ready repos that are not occupied. A live receipt whose process command is unreadable remains occupied; an unreadable lifecycle receipt occupies every configured repo. Unknown is not idle. A `reaped` receipt is idle even if pi has not exited |
 | `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Over-cap stacks view at most 4 oldest issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the mill stamp. Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |

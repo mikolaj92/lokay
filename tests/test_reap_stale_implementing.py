@@ -358,3 +358,60 @@ state:
     )
     assert out["reaped_count"] == 1
     assert not stamp.exists()
+
+
+def test_reap_idle_leftover_cache_runs_when_live(tmp_path, monkeypatch):
+    """Idle daemon_cycle skip still runs leftover-cache."""
+    called: list[dict] = []
+
+    def fake_run(**kwargs):
+        called.append(kwargs)
+        return {"ok": True, "reaped_count": 0}
+
+    monkeypatch.setattr(
+        reap_stale_implementing, "run_reap_stale_implementing", fake_run
+    )
+    reap_stale_implementing.reap_idle_leftover_cache(
+        config_path=str(tmp_path / "config.yaml"), live=True
+    )
+    assert called == [
+        {
+            "pass_dir": None,
+            "config_path": str(tmp_path / "config.yaml"),
+            "live": True,
+        }
+    ]
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Idle daemon_cycle skip still runs leftover-cache." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_reap_idle_leftover_cache_skips_when_not_live(tmp_path, monkeypatch):
+    def boom(**_k):
+        raise AssertionError("not-live skip does not run leftover-cache")
+
+    monkeypatch.setattr(
+        reap_stale_implementing, "run_reap_stale_implementing", boom
+    )
+    reap_stale_implementing.reap_idle_leftover_cache(
+        config_path=str(tmp_path / "missing.yaml"), live=False
+    )
+
+
+def test_reap_idle_leftover_cache_oserror_cannot_stall(tmp_path, monkeypatch):
+    def boom(**_k):
+        raise OSError("config unreadable")
+
+    monkeypatch.setattr(
+        reap_stale_implementing, "run_reap_stale_implementing", boom
+    )
+    reap_stale_implementing.reap_idle_leftover_cache(
+        config_path=str(tmp_path / "missing.yaml"), live=True
+    )

@@ -186,5 +186,17 @@ def main(argv: list[str] | None = None) -> int:
     return emit_exit(payload)
 
 
+def reap_idle_leftover_cache(*, config_path: str | None, live: bool = True) -> None:
+    """Idle daemon_cycle skip still runs leftover-cache. OSError cannot stall."""
+    if not live:
+        return
+    try:
+        run_reap_stale_implementing(
+            pass_dir=None, config_path=config_path, live=True
+        )
+    except OSError:
+        return
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

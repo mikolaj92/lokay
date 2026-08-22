@@ -315,7 +315,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   lists. An empty probe refreshes the stamp and skips Fala; probe failure or
   remaining work hosts. Leftover closeout still runs after that skip via its
   own 300s TTL, mill stuck is still harvested, CLOSED leftover mill
-  worktrees are still reaped, and leftover-ready still runs. Idle CLASSIFY_CAP skips no-issue leftovers so
+  worktrees are still reaped, leftover-ready still runs, and leftover-cache
+  still runs. Idle CLASSIFY_CAP skips no-issue leftovers so
   Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real leftovers
   so KEEP cannot starve mill issues. Harvest leftovers are not mill issues.
   Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers
@@ -365,6 +366,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
+  Idle daemon_cycle skip still runs leftover-cache.
   Pytest must not skip leftover-cache GitHub lists using the mill stamp.
   After an empty leftover-ready probe (`ai:ready` without `work:ready`), skip
   that GitHub list for 300s without refreshing the stamp.
