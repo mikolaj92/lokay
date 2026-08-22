@@ -179,13 +179,15 @@ def run_reap_stale_implementing(
             _touch_stale_stamp(stamp)
         # Unhealthy leftover-cache parks do not clear the stamp.
         # Unhealthy leftover-cache parks are planned.
+    removed = [row for row in reaped if not row.get("planned")]
+    # Leftover-cache reaped_count excludes planned parks.
     # Hosted leftover-cache reports applied.
     return ok(
         planned=not apply if reaped else not live,
         applied=apply,
         reaped=reaped,
         kept=[],
-        reaped_count=len(reaped),
+        reaped_count=len(removed),
         pass_dir=pass_dir or "",
     )
 
