@@ -132,7 +132,24 @@ def test_survey_probes_when_empty_stamp_expired(tmp_path: Path, monkeypatch) -> 
         pass_dir=_pass(tmp_path), config_path=None, live=True
     )
     assert out.get("skipped") is not True
+    assert out["probe_failed"] is False
     assert called == ["prs"]
+
+
+def test_pr_survey_reports_probe_failed(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        survey_prs,
+        "run_proc",
+        lambda *_a, **_k: {"ok": False, "error": "GitHub unavailable"},
+    )
+    out = survey_prs.run_survey_prs(
+        pass_dir=_pass(tmp_path), config_path=None, live=True
+    )
+    assert out["ok"] is True
+    assert out["probe_failed"] is True
+    assert out["survey_errors"] == 1
+    source = Path(survey_prs.__file__).read_text(encoding="utf-8")
+    assert "PR survey reports whether its GitHub probe failed." in source
 
 
 def test_ready_ttl_flag_does_not_skip_later_repos(tmp_path: Path, monkeypatch) -> None:

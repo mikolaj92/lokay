@@ -98,6 +98,8 @@ def run_survey_prs(*, pass_dir: str, config_path: str | None, live: bool) -> dic
         "remaining_prs": remaining_prs,
         "actionable_prs": actionable_prs,
         "survey_errors": survey_errors,
+        # PR survey reports whether its GitHub probe failed.
+        "probe_failed": bool(pr_survey_failed),
     }
     if skip:
         out["skipped"] = True
