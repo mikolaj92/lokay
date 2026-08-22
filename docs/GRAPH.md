@@ -65,9 +65,9 @@ leftover lists still probe.
 Leftover-probe skips GitHub SHA when survey stamp is still fresh.
 Mill-probe skips GitHub SHA when leftover stamp is still fresh.
 Combined leftover+survey expiry still probes SHA. mill-daemon runs
-those two leftover lists together. After survey-stamp expiry, a cheap empty
-GitHub probe of mill PR / inbox / ready lists refreshes the survey stamp.
-mill-daemon runs those three lists together. Probe failure still hosts.
+those two leftover lists together. After survey-stamp expiry, one batched GraphQL read probes mill PR / inbox /
+ready state and refreshes the survey stamp. Pagination, malformed data, or
+probe failure still hosts.
 Probe failure, remaining leftovers, occupied last-pass, digest mismatch,
 or host-ff update still starts the daemon. Fresh idle skip with a persisted
 digest skips `checkout_digest` and `package_matches`. An `already_current`

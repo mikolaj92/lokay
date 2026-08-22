@@ -496,31 +496,40 @@ if 0 <= survey_age < 120:
     raise SystemExit(0)
 
 # Leftover-probe still hosts lokay-daemon even when mill-probe would also run.
-# Mill-probe GitHub lists run together. Probe failure still hosts.
-with ThreadPoolExecutor(max_workers=3) as pool:
-    fut_prs = pool.submit(gh_list, ["pr", "list", "--repo", repo, "--state", "open", "--json", "headRefName", "--limit", "1000"])
-    fut_ready = pool.submit(gh_list, ["issue", "list", "--repo", repo, "--state", "open", "--label", "work:ready", "--json", "number,state", "--limit", "1000"])
-    fut_inbox = pool.submit(gh_list, ["issue", "list", "--repo", repo, "--state", "open", "--json", "labels", "--limit", "1000"])
-    prs = fut_prs.result()
-    ready = fut_ready.result()
-    inbox = fut_inbox.result()
-if prs is None or ready is None or inbox is None:
+# Mill-probe batches PR, ready, and inbox reads into one GraphQL request.
+# Probe failure, pagination, or malformed data still hosts.
+owner, sep, name = repo.partition("/")
+if not sep or not owner or not name:
     raise SystemExit(1)
-if any(str(row.get("headRefName") or "").startswith("ai/fix/") for row in prs if isinstance(row, dict)):
+query = """query($owner:String!,$name:String!){repository(owner:$owner,name:$name){pullRequests(first:100,states:OPEN){nodes{headRefName} pageInfo{hasNextPage}} issues(first:100,states:OPEN){nodes{number state labels(first:100){nodes{name}}} pageInfo{hasNextPage}}}}"""
+try:
+    result = subprocess.run(
+        ["gh", "api", "graphql", "-f", f"query={query}", "-F", f"owner={owner}", "-F", f"name={name}"],
+        capture_output=True, text=True, timeout=60, check=False, env={**os.environ, "GH_NO_COLOR": "1", "NO_COLOR": "1"},
+    )
+    payload = json.loads(csi.sub("", result.stdout or "{}")) if result.returncode == 0 else {}
+except (OSError, subprocess.TimeoutExpired, ValueError):
     raise SystemExit(1)
-if any(isinstance(row, dict) and str(row.get("state") or "").upper() != "CLOSED" and int(row.get("number") or 0) > 0 for row in ready):
+repository = ((payload.get("data") or {}).get("repository") or {}) if isinstance(payload, dict) else {}
+prs = repository.get("pullRequests") or {}
+inbox = repository.get("issues") or {}
+if not isinstance(prs, dict) or not isinstance(inbox, dict):
     raise SystemExit(1)
-for row in inbox:
-    if not isinstance(row, dict):
-        continue
-    names = set()
-    raw = row.get("labels")
-    if isinstance(raw, list):
-        for item in raw:
-            name = str(item.get("name") or "") if isinstance(item, dict) else str(item or "")
-            if name:
-                names.add(name)
-    if not (names & decided):
+if (prs.get("pageInfo") or {}).get("hasNextPage") or (inbox.get("pageInfo") or {}).get("hasNextPage"):
+    raise SystemExit(1)
+pr_rows, issue_rows = prs.get("nodes"), inbox.get("nodes")
+if not isinstance(pr_rows, list) or not isinstance(issue_rows, list):
+    raise SystemExit(1)
+if any(str(row.get("headRefName") or "").startswith("ai/fix/") for row in pr_rows if isinstance(row, dict)):
+    raise SystemExit(1)
+for row in issue_rows:
+    if not isinstance(row, dict) or int(row.get("number") or 0) < 1:
+        raise SystemExit(1)
+    raw = ((row.get("labels") or {}).get("nodes") or {})
+    if not isinstance(raw, list):
+        raise SystemExit(1)
+    names = {str(item.get("name") or "") for item in raw if isinstance(item, dict)}
+    if "work:ready" in names or not (names & decided):
         raise SystemExit(1)
 try:
     Path(survey_stamp).write_text(str(int(now)), encoding="utf-8")
