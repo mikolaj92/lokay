@@ -38,7 +38,15 @@ def main(argv: list[str] | None = None) -> int:
         add_pr_labels(runner(), args.repo, args.pr, labels, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
-    return emit_exit(ok(planned=not live, repo=args.repo, pr=args.pr, labels=labels))
+    return emit_exit(
+        ok(
+            planned=not live,
+            applied=bool(live and labels),
+            repo=args.repo,
+            pr=args.pr,
+            labels=labels,
+        )
+    )
 
 
 if __name__ == "__main__":

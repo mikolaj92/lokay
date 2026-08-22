@@ -220,7 +220,8 @@ def _pr_number_from_url(url: str) -> int | None:
 def add_pr_labels(runner: Runner, repo: str, number: int, labels: list[str], *, live: bool) -> None:
     ensure_labels(runner, repo, labels, live=live)
     for label in labels:
-        runner.run(
+        # PR-label mutation failure is not a successful applied atom.
+        runner.run_checked(
             gh_spec(["pr", "edit", str(number), "--repo", repo, "--add-label", label]),
             live=live,
         )
