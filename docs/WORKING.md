@@ -381,6 +381,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Fresh leftover-cache skip does not require healthy. Fresh leftover-cache
   skip is not applied. Hosted leftover-cache parks do.
   Unhealthy leftover-cache parks do not clear the stamp. Unhealthy leftover-cache parks are planned.
+  Hosted leftover-cache reports applied.
   Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Idle daemon_cycle skip still runs leftover-cache.
