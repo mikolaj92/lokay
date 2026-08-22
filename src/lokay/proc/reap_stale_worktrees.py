@@ -289,6 +289,7 @@ def run_reap_stale_worktrees(
     reaped: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
     classified = 0
+    apply = False
 
     for repo in cfg.active_repos():
         if repo.name != MINI_MILL_REPO:
@@ -392,6 +393,9 @@ def run_reap_stale_worktrees(
                 if protected is not None or not (live and closed):
                     kept_over_cap += 1
                     continue
+                if not apply:
+                    # Hosted worktree removal requires healthy.
+                    apply = mutations_allowed(live_flag=True, cfg=cfg)
                 removed = remove_worktree(
                     git, clone, path, managed_root=cfg.worktrees_root
                 )
@@ -452,6 +456,9 @@ def run_reap_stale_worktrees(
             if reason is None and live and issue is not None:
                 closed = _issue_is_closed(repo.name, issue)
                 if closed:
+                    if not apply:
+                        # Hosted worktree removal requires healthy.
+                        apply = mutations_allowed(live_flag=True, cfg=cfg)
                     removed = remove_worktree(
                         git,
                         clone,
@@ -531,6 +538,9 @@ def run_reap_stale_worktrees(
                 kept.append(row)
                 actions.append({"step": "keep_stale_worktree", **row})
                 continue
+            if not apply:
+                # Hosted worktree removal requires healthy.
+                apply = mutations_allowed(live_flag=True, cfg=cfg)
             removed = remove_worktree(
                 git,
                 clone,

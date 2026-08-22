@@ -775,6 +775,71 @@ def test_closed_issue_reaps_without_waiting_for_over_cap(tmp_path, monkeypatch):
     assert removed == [wt]
 
 
+
+
+def test_hosted_closed_issue_removal_requires_healthy(tmp_path, monkeypatch):
+    """Hosted worktree removal requires healthy. Classification does not."""
+    branch = "ai/fix/369-closed"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", lambda *_a: True)
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda _cfg: _Git())
+    removed: list[Path] = []
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "remove_worktree",
+        lambda _git, _clone, path, **_kwargs: removed.append(path) or {"ok": True},
+    )
+
+    def unhealthy(**_kwargs):
+        raise RuntimeError("unhealthy")
+
+    monkeypatch.setattr(reap_stale_worktrees, "mutations_allowed", unhealthy)
+    try:
+        reap_stale_worktrees.run_reap_stale_worktrees(
+            pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "unhealthy"
+    else:
+        raise AssertionError("hosted removal must fail closed")
+    assert removed == []
+    src = Path(reap_stale_worktrees.__file__)
+    assert "Hosted worktree removal requires healthy." in src.read_text(encoding="utf-8")
+
+
+def test_hosted_keep_does_not_require_healthy(tmp_path, monkeypatch):
+    branch = "ai/fix/369-open"
+    _corner(tmp_path, branch)
+    monkeypatch.setattr(reap_stale_worktrees, "live_issue_to_pr_receipts", lambda: [])
+    monkeypatch.setattr(reap_stale_worktrees, "_issue_is_closed", lambda *_a: False)
+    monkeypatch.setattr(reap_stale_worktrees, "remote_heads", lambda *_a: set())
+    monkeypatch.setattr(
+        reap_stale_worktrees,
+        "leftover_status",
+        lambda *_a, **_k: {
+            "readable": True,
+            "ahead": 1,
+            "behind_main": 0,
+            "published": False,
+            "dirty": "real",
+            "uncommitted": "real",
+            "keep_unpublished": False,
+        },
+    )
+    monkeypatch.setattr(reap_stale_worktrees, "make_runner", lambda _cfg: _Git())
+
+    def health_boom(**_kwargs):
+        raise AssertionError("hosted KEEP classification does not require healthy")
+
+    monkeypatch.setattr(reap_stale_worktrees, "mutations_allowed", health_boom)
+    out = reap_stale_worktrees.run_reap_stale_worktrees(
+        pass_dir=_pass(tmp_path), config_path=str(_config(tmp_path)), live=True
+    )
+    assert out["reaped_count"] == 0
+    assert out["kept"][0]["reason"] == "uncommitted_real"
+
+
 def test_closed_issue_with_live_i2pr_is_kept(tmp_path, monkeypatch):
     branch = "ai/fix/369-closed"
     _corner(tmp_path, branch)

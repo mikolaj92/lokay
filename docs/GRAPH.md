@@ -31,7 +31,7 @@ Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
 Harvest leftovers are not mill issues. Idle CLASSIFY_CAP reaps empty
 no-issue leftovers so harvest leftovers cannot freeze mill porcelain.
 Idle KEEP-only leftovers still write the over-cap stamp.
-Idle worktree removal requires healthy. Classification and KEEP stamping do not.
+Idle worktree removal requires healthy. Classification and KEEP stamping do not. Hosted worktree removal also requires healthy; hosted KEEP classification does not.
 Idle over-cap skip outlives leftover-probe.
 Nested clones are not mill leftover
 worktrees. Mill worktrees keep a .git file.
