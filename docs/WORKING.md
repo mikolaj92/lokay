@@ -384,6 +384,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Unhealthy leftover-cache parks do not clear the stamp. Unhealthy leftover-cache parks are planned.
   Leftover-cache reaped_count excludes planned parks.
   Hosted leftover-cache reports applied.
+  Leftover-cache rate limit does not stamp empty.
   Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Idle daemon_cycle skip still runs leftover-cache.

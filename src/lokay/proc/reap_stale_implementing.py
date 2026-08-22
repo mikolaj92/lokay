@@ -131,7 +131,12 @@ def run_reap_stale_implementing(
         for label in sorted(LEDGER_ACTIVE_LABELS):
             try:
                 issues = list_labeled_issues(
-                    runner(cfg), cfg, repo, label=label, live=live
+                    runner(cfg),
+                    cfg,
+                    repo,
+                    label=label,
+                    live=live,
+                    raise_on_rate_limit=True,
                 )
             except RuntimeError as exc:
                 if is_github_rate_limit_error(exc):
@@ -182,9 +187,11 @@ def run_reap_stale_implementing(
     removed = [row for row in reaped if not row.get("planned")]
     # Leftover-cache reaped_count excludes planned parks.
     # Hosted leftover-cache reports applied.
+    # Leftover-cache rate limit does not stamp empty.
     return ok(
         planned=not apply if reaped else not live,
         applied=apply,
+        probe_failed=probe_failed,
         reaped=reaped,
         kept=[],
         reaped_count=len(removed),
