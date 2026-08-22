@@ -883,6 +883,27 @@ def test_daemon_healthy_preflight_closes_resolved_incidents(tmp_path, monkeypatc
     assert result["resolved_incidents"]["closed"] == [178]
 
 
+def test_leftover_incident_oserror_is_not_applied(tmp_path, monkeypatch):
+    """Leftover-incident OSError is not applied."""
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    def boom(repo: str, cfg=None):
+        raise OSError("leftover-incident stamp unavailable")
+
+    monkeypatch.setattr(preflight, "_close_resolved_incidents", boom)
+    result = preflight.run_preflight(str(cfg), issue_lease=True)
+    assert result["ok"] is True
+    assert result["resolved_incidents"]["applied"] is False
+    assert result["resolved_incidents"]["closed"] == []
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident OSError is not applied." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 @pytest.mark.parametrize(
     "findings",
     [
