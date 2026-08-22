@@ -369,8 +369,8 @@ CI / checks context (evidence):
 PR title:
 {title}
 
-PR body:
-{(body or "")[:4000]}
+PR body (includes the original ticket evidence):
+{(body or "")[:12000]}
 
 Diff (may be truncated):
 {(reviewer_diff or "(no diff)")[:12000]}
