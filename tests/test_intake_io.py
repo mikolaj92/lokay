@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from lokay.config import Config
 from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.intake import IntakeDecision
+import lokay.intake_io as intake_io
 from lokay.intake_io import apply_intake, covering_ai_prs, merged_prs
 from lokay.models import Issue
 from lokay.runner import CommandResult, CommandSpec
@@ -116,6 +118,23 @@ def test_covering_ai_prs_filters_and_dedupes():
     ]
     assert limits == [str(SURVEY_LIST_CAP), str(SURVEY_LIST_CAP)]
     assert covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=False) == []
+
+
+def test_covering_ai_prs_refuses_truncated_state_list(monkeypatch):
+    runner = _FakeRunner(
+        lists={
+            "open": [
+                {"number": 10, "state": "OPEN", "headRefName": "ai/fix/12-foo"},
+                {"number": 11, "state": "OPEN", "headRefName": "ai/fix/12-other"},
+            ],
+            "merged": [],
+        }
+    )
+    monkeypatch.setattr(intake_io, "survey_list_cap", lambda: 2)
+
+    assert covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True) == []
+    source = Path(intake_io.__file__).read_text(encoding="utf-8")
+    assert "Intake covering-PR evidence refuses a truncated state list." in source
 
 
 def test_apply_intake_skip_and_dry():

@@ -14,7 +14,7 @@ from lokay.gh_issues import (
     comment_issue,
     remove_issue_labels,
 )
-from lokay.gh_rate import survey_list_cap
+from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.intake import IntakeDecision
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
@@ -68,6 +68,7 @@ def covering_ai_prs(
     prefix = branch_prefix.rstrip("/") + "/"
     out: list[dict[str, Any]] = []
     for state in ("open", "merged"):
+        cap = survey_list_cap()
         result = runner.run(
             gh_spec(
                 [
@@ -80,7 +81,7 @@ def covering_ai_prs(
                     "--json",
                     "number,state,mergedAt,headRefName",
                     "--limit",
-                    str(survey_list_cap()),
+                    str(cap),
                 ],
                 timeout_seconds=60,
             ),
@@ -89,8 +90,11 @@ def covering_ai_prs(
         if result.returncode != 0:
             continue
         try:
-            rows = json.loads(result.stdout or "[]")
-        except json.JSONDecodeError:
+            # Intake covering-PR evidence refuses a truncated state list.
+            rows = parse_survey_list(
+                result.stdout, kind=f"intake-{state}-pr", repo=repo, cap=cap
+            )
+        except (RuntimeError, ValueError):
             continue
         for row in rows:
             head = str(row.get("headRefName") or "")
