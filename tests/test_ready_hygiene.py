@@ -221,13 +221,70 @@ state:
     out = run_ready_hygiene(config_path=str(cfg), live=True)
     assert listed == [True]
     assert removed_live == [False]
-    assert out["cleaned_count"] == 1
+    assert out["cleaned_count"] == 0
+    assert out["cleaned"][0]["planned"] is True
     assert out["applied"] is False
     assert out["planned"] is True
     assert stamp.is_file()
     assert stamp.stat().st_mtime == old
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
     assert "Unhealthy leftover-ready still lists GitHub." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_unhealthy_leftover_ready_parks_are_planned(tmp_path, monkeypatch):
+    """Unhealthy leftover-ready parks are planned."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+
+    def reject(**_kwargs):
+        return False
+
+    monkeypatch.setattr("lokay.proc.ready_hygiene.mutations_allowed", reject)
+    monkeypatch.setattr(
+        "lokay.proc.ready_hygiene.list_labeled_issues",
+        lambda *_a, **_k: [SimpleNamespace(number=443, labels=["ai:ready"])],
+    )
+    monkeypatch.setattr(
+        "lokay.proc.ready_hygiene.remove_issue_labels",
+        lambda *_a, **k: (_ for _ in ()).throw(
+            AssertionError("unhealthy leftover-ready parks must not remove labels")
+        )
+        if k.get("live")
+        else None,
+    )
+    out = run_ready_hygiene(config_path=str(cfg), live=True)
+    assert out["cleaned_count"] == 0
+    assert out["cleaned"][0]["planned"] is True
+    assert out["planned"] is True
+    assert out["applied"] is False
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Unhealthy leftover-ready parks are planned." in src.read_text(
         encoding="utf-8"
     )
 
