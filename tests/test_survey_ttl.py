@@ -387,6 +387,12 @@ def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
         hygiened.append(kwargs)
 
     monkeypatch.setattr(daemon_mod, "hygiene_idle_leftover_ready", fake_hygiene)
+    cached: list[dict] = []
+
+    def fake_cache(**kwargs):
+        cached.append(kwargs)
+
+    monkeypatch.setattr(daemon_mod, "reap_idle_leftover_cache", fake_cache)
     monkeypatch.setattr(daemon_mod, "run_closeout_leftover", lambda **_k: leftover)
     out = daemon_mod.compose_daemon_cycle(
         config_path=str(tmp_path / "config.yaml"),
@@ -404,6 +410,9 @@ def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
         {"config_path": str(tmp_path / "config.yaml"), "live": True}
     ]
     assert hygiened == [
+        {"config_path": str(tmp_path / "config.yaml"), "live": True}
+    ]
+    assert cached == [
         {"config_path": str(tmp_path / "config.yaml"), "live": True}
     ]
     assert stamp.stat().st_mtime == before
@@ -433,6 +442,11 @@ def test_live_idle_daemon_cycle_hosts_when_stamp_missing(
     monkeypatch.setattr(
         daemon_mod,
         "hygiene_idle_leftover_ready",
+        leftover_boom,
+    )
+    monkeypatch.setattr(
+        daemon_mod,
+        "reap_idle_leftover_cache",
         leftover_boom,
     )
     out = daemon_mod.compose_daemon_cycle(
