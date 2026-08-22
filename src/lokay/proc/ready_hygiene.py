@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import list_labeled_issues, remove_issue_labels
+from lokay.gh_issues import (
+    is_github_rate_limit_error,
+    list_labeled_issues,
+    remove_issue_labels,
+)
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 MINI_MILL_REPO = "mikolaj92/lokay"
@@ -104,14 +108,26 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
     apply = mutations_allowed(live_flag=live, cfg=cfg)
     cleaned: list[dict[str, Any]] = []
     probed = False
+    probe_failed = False
     for repo in cfg.active_repos():
         if repo.name != MINI_MILL_REPO:
             continue
         probed = True
         # Unhealthy leftover-ready still lists GitHub. Hosted leftover-ready parks still do.
-        issues = list_labeled_issues(
-            runner(cfg), cfg, repo, label=cfg.ready_label, live=live
-        )
+        try:
+            issues = list_labeled_issues(
+                runner(cfg),
+                cfg,
+                repo,
+                label=cfg.ready_label,
+                live=live,
+                raise_on_rate_limit=True,
+            )
+        except RuntimeError as exc:
+            if is_github_rate_limit_error(exc):
+                probe_failed = True
+                continue
+            raise
         for issue in issues:
             if WORK_READY_LABEL in issue.labels:
                 continue
@@ -122,7 +138,7 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
             if not apply:
                 row["planned"] = True
             cleaned.append(row)
-    if apply and probed:
+    if apply and probed and not probe_failed:
         if cleaned:
             _clear_hygiene_stamp(stamp)
         else:
@@ -130,9 +146,11 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
     removed = [row for row in cleaned if not row.get("planned")]
     # Unhealthy leftover-ready parks are planned.
     # Empty leftover-ready host is not applied.
+    # Leftover-ready rate limit does not stamp empty.
     return ok(
         planned=not apply if cleaned else not live,
         applied=apply if cleaned else False,
+        probe_failed=probe_failed,
         cleaned=cleaned,
         cleaned_count=len(removed),
     )

@@ -396,6 +396,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Unhealthy leftover-ready still lists GitHub.
   Unhealthy leftover-ready parks are planned.
   Empty leftover-ready host is not applied.
+  Leftover-ready rate limit does not stamp empty.
   Idle leftover-ready skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Idle daemon_cycle skip still runs leftover-ready.

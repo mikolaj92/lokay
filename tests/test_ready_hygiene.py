@@ -503,6 +503,47 @@ state:
     assert stamp.stat().st_mtime >= old + hygiene.HYGIENE_TTL_SECONDS
 
 
+def test_leftover_ready_rate_limit_does_not_stamp_empty(tmp_path, monkeypatch):
+    """Leftover-ready rate limit does not stamp empty."""
+    cfg = SimpleNamespace(
+        state_path=tmp_path / "state.jsonl",
+        ready_label="ai:ready",
+        active_repos=lambda: [SimpleNamespace(name="mikolaj92/lokay")],
+    )
+    stamp = tmp_path / "ready-hygiene.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - ready_hygiene.HYGIENE_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(ready_hygiene, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(ready_hygiene, "runner", lambda _cfg: object())
+    monkeypatch.setattr(ready_hygiene, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        ready_hygiene,
+        "list_labeled_issues",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            RuntimeError("HTTP 429: API rate limit exceeded")
+        ),
+    )
+    monkeypatch.setattr(
+        ready_hygiene,
+        "remove_issue_labels",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("failed probe must not remove labels")
+        ),
+    )
+
+    out = ready_hygiene.run_ready_hygiene(config_path=None, live=True)
+
+    assert out["probe_failed"] is True
+    assert out["applied"] is False
+    assert out["cleaned_count"] == 0
+    assert stamp.stat().st_mtime == old
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "ready_hygiene.py"
+    assert "Leftover-ready rate limit does not stamp empty." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_hygiene_clean_clears_empty_stamp(tmp_path, monkeypatch):
     import os
     import time
