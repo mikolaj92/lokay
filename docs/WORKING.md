@@ -395,7 +395,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After an empty leftover-ready probe (`ai:ready` without `work:ready`), skip
   that GitHub list for 300s without refreshing the stamp.
   Fresh leftover-ready skip does not require healthy. Fresh leftover-ready
-  skip is not applied. Hosted leftover-ready parks still do.
+  skip is not applied. Leftover-ready skip reports probe_failed.
+  Hosted leftover-ready parks still do.
   Unhealthy leftover-ready still lists GitHub.
   Unhealthy leftover-ready parks are planned.
   Empty leftover-ready host is not applied.
