@@ -197,7 +197,7 @@ def test_merged_closed_issue_is_parked(monkeypatch, tmp_path):
     )
     assert out["ok"] is True
     assert out["still_open"] is False
-    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "7"]]
+    assert parked == [["--live", "--repo", "mikolaj92/lokay", "--issue", "7"]]
     assert any(a.get("step") == "park_closed_issue" for a in out["actions"])
 
 
@@ -213,7 +213,7 @@ def test_closed_issue_is_parked_and_skips_merge(monkeypatch, tmp_path):
     assert out["route"] == "skip"
     assert out["reason"] == "issue_closed"
     assert out["still_open"] is True
-    assert parked == [["--repo", "mikolaj92/lokay", "--issue", "7"]]
+    assert parked == [["--live", "--repo", "mikolaj92/lokay", "--issue", "7"]]
     assert triage == []
     assert not any(a.get("step") == "pr_checks" for a in out["actions"])
 

@@ -235,7 +235,7 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     if _is_plan_only_failure(result):
                         park = run_proc(
                             p_park.main,
-                            ["--repo", selected["repo"], "--issue", str(num)],
+                            [*cfg_flag, *live_flag, "--repo", selected["repo"], "--issue", str(num)],
                         )
                         actions.append(
                             {

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from lokay.proc import unbounded_park
@@ -60,8 +61,18 @@ def test_dry_run_prints_gh_command_and_does_not_call_gh(monkeypatch, capsys):
 def test_live_removes_ai_ready(monkeypatch, capsys):
     fake = _gh()
     monkeypatch.setattr(unbounded_park, "run_gh", fake)
-    code = unbounded_park.main(["--repo", "mikolaj92/lokay", "--issue", "7"])
+    gated: list[bool] = []
+    monkeypatch.setattr(unbounded_park, "load_cfg", lambda _args: SimpleNamespace())
+    monkeypatch.setattr(
+        unbounded_park,
+        "mutations_allowed",
+        lambda **_kwargs: gated.append(True) or True,
+    )
+    code = unbounded_park.main(
+        ["--live", "--repo", "mikolaj92/lokay", "--issue", "7"]
+    )
     assert code == 0
+    assert gated == [True]
     assert fake.calls == [
         [
             "gh",
@@ -83,6 +94,47 @@ def test_live_removes_ai_ready(monkeypatch, capsys):
     assert payload["removed"] is True
     assert payload["repo"] == "mikolaj92/lokay"
     assert payload["issue"] == 7
+
+
+def test_without_live_plans_and_does_not_call_gh(monkeypatch, capsys):
+    """Hosted unbounded parks require healthy. Planned parks do not."""
+    fake = _gh()
+    monkeypatch.setattr(unbounded_park, "run_gh", fake)
+
+    def health_boom(**_kwargs):
+        raise AssertionError("planned park must not require healthy")
+
+    monkeypatch.setattr(unbounded_park, "mutations_allowed", health_boom)
+    code = unbounded_park.main(["--repo", "mikolaj92/lokay", "--issue", "7"])
+    assert code == 0
+    assert fake.calls == []
+    payload = _payload(capsys)
+    assert payload["planned"] is True
+    assert payload["applied"] is False
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "unbounded_park.py"
+    assert "Hosted unbounded parks require healthy. Planned parks do not." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_live_requires_healthy_before_gh(monkeypatch, capsys):
+    fake = _gh()
+    monkeypatch.setattr(unbounded_park, "run_gh", fake)
+    monkeypatch.setattr(unbounded_park, "load_cfg", lambda _args: SimpleNamespace())
+
+    def reject(**_kwargs):
+        raise RuntimeError("unhealthy")
+
+    monkeypatch.setattr(unbounded_park, "mutations_allowed", reject)
+    try:
+        unbounded_park.main(
+            ["--live", "--repo", "mikolaj92/lokay", "--issue", "7"]
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "unhealthy"
+    else:
+        raise AssertionError("unhealthy park must fail closed")
+    assert fake.calls == []
 
 
 def test_product_repos_are_skipped_without_calling_gh(monkeypatch, capsys):
@@ -150,7 +202,13 @@ def test_non_positive_issue_fails_closed(monkeypatch, capsys):
 def test_gh_missing_issue_fails_closed(monkeypatch, capsys):
     fake = _gh(returncode=1, stderr="GraphQL: Could not resolve to an issue")
     monkeypatch.setattr(unbounded_park, "run_gh", fake)
-    code = unbounded_park.main(["--repo", "mikolaj92/lokay", "--issue", "99"])
+    monkeypatch.setattr(unbounded_park, "load_cfg", lambda _args: SimpleNamespace())
+    monkeypatch.setattr(
+        unbounded_park, "mutations_allowed", lambda **_kwargs: True
+    )
+    code = unbounded_park.main(
+        ["--live", "--repo", "mikolaj92/lokay", "--issue", "99"]
+    )
     assert code == 1
     payload = _payload(capsys)
     assert payload["ok"] is False
