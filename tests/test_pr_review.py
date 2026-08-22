@@ -84,6 +84,37 @@ def test_lokay_repo_still_loads_evidence(
     assert json.loads(capsys.readouterr().out)["planned"] is True
 
 
+def test_review_evidence_failure_returns_probe_failed_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = type("Cfg", (), {"mode": "live", "executor_enabled": True})()
+    monkeypatch.setattr(pr_review_proc, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(pr_review_proc, "runner", lambda: object())
+    monkeypatch.setattr(pr_review_proc, "agent_execute_allowed", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        pr_review_proc,
+        "load_pr_evidence",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("diff unavailable")),
+    )
+    monkeypatch.setattr(
+        pr_review_proc,
+        "run_agent",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("review must not run without evidence")
+        ),
+    )
+
+    assert pr_review_proc.main(
+        ["--repo", "mikolaj92/lokay", "--pr", "490", "--live"]
+    ) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["probe_failed"] is True
+    assert payload["merge_ok"] is False
+    assert "diff unavailable" in payload["error"]
+
+
 def test_parse_plain_json():
     d = parse_review_output(
         '{"verdict":"approve","risk":"low","scope_ok":true,"secrets":false,'
