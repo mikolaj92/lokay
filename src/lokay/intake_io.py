@@ -88,14 +88,11 @@ def covering_ai_prs(
             live=True,
         )
         if result.returncode != 0:
-            continue
-        try:
-            # Intake covering-PR evidence refuses a truncated state list.
-            rows = parse_survey_list(
-                result.stdout, kind=f"intake-{state}-pr", repo=repo, cap=cap
-            )
-        except (RuntimeError, ValueError):
-            continue
+            raise RuntimeError(f"intake {state} PR probe failed for {repo}")
+        # Intake covering-PR uncertainty is not an empty evidence set.
+        rows = parse_survey_list(
+            result.stdout, kind=f"intake-{state}-pr", repo=repo, cap=cap
+        )
         for row in rows:
             head = str(row.get("headRefName") or "")
             if not head.startswith(prefix):

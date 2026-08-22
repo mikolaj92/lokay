@@ -132,9 +132,14 @@ def test_covering_ai_prs_refuses_truncated_state_list(monkeypatch):
     )
     monkeypatch.setattr(intake_io, "survey_list_cap", lambda: 2)
 
-    assert covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True) == []
+    try:
+        covering_ai_prs(runner, "a/b", 12, branch_prefix="ai/fix", live=True)
+    except RuntimeError as exc:
+        assert "hit the 2 newest-first cap" in str(exc)
+    else:
+        raise AssertionError("truncated covering evidence must fail closed")
     source = Path(intake_io.__file__).read_text(encoding="utf-8")
-    assert "Intake covering-PR evidence refuses a truncated state list." in source
+    assert "Intake covering-PR uncertainty is not an empty evidence set." in source
 
 
 def test_apply_intake_skip_and_dry():
