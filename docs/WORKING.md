@@ -412,6 +412,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Leftover-incident probe failure reports probe_failed.
   Leftover-incident probe failure reports planned=not live.
   Leftover-incident ImportError is not applied.
+  Leftover-incident ImportError reports planned=not live.
   Leftover-incident empty name is not applied.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
