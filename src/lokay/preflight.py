@@ -752,7 +752,8 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
     try:
         from lokay.triage import is_preflight_incident
     except ImportError:
-        return {"ok": True, "closed": []}
+        # Leftover-incident ImportError is not applied.
+        return {"ok": True, "closed": [], "applied": False}
     rows = _list_open_incidents(name)
     if rows is None:
         # Leftover-incident probe failure reports probe_failed.
