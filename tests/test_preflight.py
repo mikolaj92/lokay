@@ -904,6 +904,43 @@ def test_leftover_incident_oserror_is_not_applied(tmp_path, monkeypatch):
     )
 
 
+def test_leftover_incident_oserror_reports_planned_not_live(tmp_path, monkeypatch):
+    """Leftover-incident OSError reports planned=not live."""
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    def boom(repo: str, cfg=None):
+        raise OSError("leftover-incident stamp unavailable")
+
+    monkeypatch.setattr(preflight, "_close_resolved_incidents", boom)
+    live = preflight.run_preflight(str(cfg), issue_lease=True)
+    assert live["resolved_incidents"]["applied"] is False
+    assert live["resolved_incidents"]["closed"] == []
+    assert live["resolved_incidents"]["planned"] is False
+    os.environ.pop("LOKAY_HEALTH_LEASE", None)
+    os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    object.__setattr__(loaded, "mode", "dry-run")
+    healthy = {
+        "ok": True,
+        "carrier_ok": True,
+        "integrity_ok": True,
+        "findings": [],
+    }
+    monkeypatch.setattr(preflight, "_check", lambda *_a, **_k: (healthy, loaded))
+    dry = preflight.run_preflight(str(cfg), issue_lease=True)
+    assert dry["resolved_incidents"]["applied"] is False
+    assert dry["resolved_incidents"]["planned"] is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident OSError reports planned=not live." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 @pytest.mark.parametrize(
     "findings",
     [
