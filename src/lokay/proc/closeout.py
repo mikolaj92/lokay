@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, ok
+from lokay.gh_issues import is_github_rate_limit_error
 from lokay.gh_prs import find_pr_fixing_issue
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park as p_park
@@ -135,16 +136,11 @@ def closed_ready_numbers(
 def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, Any]:
     """Strip leftover ready labels on CLOSED mill issues.
 
-    GitHub CLOSED is enough. A leftover label after close is not a second
-    delivery hunt: paginating every mill PR per leftover ate idle ticks and
-    still missed commit-closed issues. Fresh leftover skip does not require
-    healthy. Hosted leftover parks still do.
-    Unhealthy leftover-closeout still lists GitHub.
+    GitHub CLOSED is enough. Fresh leftover skip does not require healthy.
+    Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub.
     """
     cfg = load_cfg(argparse.Namespace(config=config_path))
     stamp = leftover_stamp_path(cfg)
-    # Fresh leftover skip does not require healthy. Hosted leftover parks still do.
-    # Unhealthy leftover-closeout still lists GitHub.
     if leftover_recently_empty(stamp):
         # Fresh leftover-closeout skip is not applied.
         # Leftover-closeout skip reports planned=not live.
@@ -166,12 +162,20 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
         labels.append(ready)
     closed_out: list[dict[str, Any]] = []
     seen: set[tuple[str, int]] = set()
+    probe_failed = False
     for repo in list(cfg.repos or []):
         name = str(repo.name)
         if name != MINI_MILL_REPO:
             continue
         for label in labels:
-            for number in closed_ready_numbers(issue_runner, name, label, live=live):
+            try:
+                numbers = closed_ready_numbers(issue_runner, name, label, live=live)
+            except RuntimeError as exc:
+                if is_github_rate_limit_error(exc):
+                    probe_failed = True
+                    break
+                raise
+            for number in numbers:
                 key = (name, number)
                 if key in seen:
                     continue
@@ -182,7 +186,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
                 elif parked.get("ok"):
                     closed_out.append({"repo": name, "issue": number, "planned": True})
     removed = [row for row in closed_out if not row.get("planned")]
-    if allowed:
+    if allowed and not probe_failed:
         if removed:
             _clear_leftover_stamp(stamp)
         else:
@@ -190,6 +194,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
     # Unhealthy leftover-closeout parks are planned.
     # Hosted leftover-closeout reports applied.
     # Empty leftover-closeout host is not applied.
+    # Leftover-closeout rate limit does not stamp empty.
     return ok(
         leftover_closed=len(removed),
         labels_removed=bool(removed),
@@ -197,6 +202,7 @@ def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, A
         closed_out=closed_out,
         planned=not allowed if closed_out else not live,
         applied=allowed if closed_out else False,
+        probe_failed=probe_failed,
     )
 
 

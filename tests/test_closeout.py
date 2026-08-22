@@ -490,6 +490,48 @@ def test_empty_leftover_closeout_host_is_not_applied(monkeypatch, tmp_path):
     )
 
 
+def test_leftover_closeout_rate_limit_does_not_stamp_empty(monkeypatch, tmp_path):
+    """Leftover-closeout rate limit does not stamp empty."""
+    stamp = tmp_path / "leftover-closeout.stamp"
+    stamp.write_text("1", encoding="utf-8")
+    old = time.time() - closeout.LEFTOVER_TTL_SECONDS - 1
+    os.utime(stamp, (old, old))
+    monkeypatch.setattr(
+        closeout,
+        "load_cfg",
+        lambda _args: SimpleNamespace(
+            repos=[SimpleNamespace(name="mikolaj92/lokay")],
+            ready_label="ai:ready",
+            state_path=tmp_path / "state.jsonl",
+        ),
+    )
+    monkeypatch.setattr(closeout, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(closeout, "runner", lambda _cfg: object())
+    monkeypatch.setattr(
+        closeout,
+        "closed_ready_numbers",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            RuntimeError("HTTP 429: API rate limit exceeded")
+        ),
+    )
+    monkeypatch.setattr(
+        closeout,
+        "_park_ready",
+        lambda **_k: (_ for _ in ()).throw(
+            AssertionError("failed probe must not park leftovers")
+        ),
+    )
+    out = closeout.run_closeout_leftover(config_path=None, live=True)
+    assert out["probe_failed"] is True
+    assert out["applied"] is False
+    assert out["leftover_closed"] == 0
+    assert stamp.stat().st_mtime == old
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
+    assert "Leftover-closeout rate limit does not stamp empty." in src.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_leftover_park_clears_empty_stamp(monkeypatch, tmp_path):
     stamp = tmp_path / "leftover-closeout.stamp"
     stamp.write_text("1", encoding="utf-8")
