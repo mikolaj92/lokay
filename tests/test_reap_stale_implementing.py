@@ -189,6 +189,11 @@ state:
         raise AssertionError("recent empty leftover cache must not list GitHub")
 
     monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", boom)
+
+    def health_boom(**_kwargs):
+        raise AssertionError("fresh leftover-cache skip does not require healthy")
+
+    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", health_boom)
     out = reap_stale_implementing.run_reap_stale_implementing(
         pass_dir=None,
         config_path=str(cfg),
@@ -198,6 +203,83 @@ state:
     assert out["reason"] == "recent_empty"
     assert out["reaped_count"] == 0
     assert stamp.stat().st_mtime == before
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Fresh leftover-cache skip does not require healthy." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_hosted_leftover_cache_parks_require_healthy(tmp_path, monkeypatch):
+    """Fresh leftover-cache skip does not require healthy. Hosted leftover-cache parks do."""
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""
+mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {tmp_path / "clone"}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path / "wt"}
+state:
+  path: {tmp_path / "state.jsonl"}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "clone").mkdir()
+    gated: list[bool] = []
+
+    def allow(**_kwargs):
+        gated.append(True)
+        return True
+
+    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", allow)
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "list_labeled_issues",
+        lambda *_a, **k: [SimpleNamespace(number=443)]
+        if k.get("label") == "ai:in-progress"
+        else [],
+    )
+    monkeypatch.setattr(
+        reap_stale_implementing,
+        "run_proc",
+        lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
+    )
+    out = reap_stale_implementing.run_reap_stale_implementing(
+        pass_dir=None,
+        config_path=str(cfg),
+        live=True,
+    )
+    assert gated == [True]
+    assert out["reaped_count"] == 1
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "reap_stale_implementing.py"
+    )
+    assert "Fresh leftover-cache skip does not require healthy." in src.read_text(
+        encoding="utf-8"
+    )
+    assert "Hosted leftover-cache parks do." in src.read_text(encoding="utf-8")
 
 
 def test_idle_leftover_cache_skip_outlives_leftover_probe(tmp_path, monkeypatch):
