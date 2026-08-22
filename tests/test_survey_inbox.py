@@ -30,6 +30,7 @@ def test_mini_mill_lists_only_lokay_inbox(tmp_path: Path, monkeypatch) -> None:
     )
 
     assert result["ok"] is True
+    assert result["probe_failed"] is False
     assert called == ["mikolaj92/lokay"]
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["inbox_by_repo"] == {
@@ -94,3 +95,31 @@ def test_survey_inbox_skips_blocked_issue(tmp_path: Path, monkeypatch) -> None:
         and action["issues"] == [1]
         for action in working["actions"]
     )
+
+
+def test_inbox_survey_reports_probe_failed(tmp_path: Path, monkeypatch) -> None:
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {"repos": ["mikolaj92/lokay"]},
+    )
+    pass_io.write_json(
+        pass_io.working_path(pass_dir),
+        {"actions": [], "survey_errors": 0},
+    )
+    monkeypatch.setattr(
+        survey_inbox,
+        "run_proc",
+        lambda *_a, **_k: {"ok": False, "error": "GitHub unavailable"},
+    )
+
+    result = survey_inbox.run_survey_inbox(
+        pass_dir=str(pass_dir), config_path=None, live=True
+    )
+
+    assert result["ok"] is True
+    assert result["probe_failed"] is True
+    assert result["survey_errors"] == 1
+    source = Path(survey_inbox.__file__).read_text(encoding="utf-8")
+    assert "Inbox survey reports whether its GitHub probe failed." in source

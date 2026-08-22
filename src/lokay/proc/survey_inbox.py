@@ -121,6 +121,8 @@ def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> d
         "pass_dir": pass_dir,
         "remaining_inbox": remaining_inbox,
         "survey_errors": survey_errors,
+        # Inbox survey reports whether its GitHub probe failed.
+        "probe_failed": bool(inbox_survey_failed),
     }
     if skip:
         out["skipped"] = True
