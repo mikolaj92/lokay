@@ -422,6 +422,7 @@ def test_empty_incident_probe_writes_stamp_and_skip_does_not_refresh(
         "skipped": True,
         "reason": "recent_empty",
         "applied": False,
+        "planned": False,
     }
     assert listed == [1]
     assert stamp.stat().st_mtime == mtime
@@ -498,6 +499,7 @@ def test_idle_leftover_incident_skip_outlives_leftover_probe(tmp_path, monkeypat
         "skipped": True,
         "reason": "recent_empty",
         "applied": False,
+        "planned": False,
     }
     assert listed == []
     assert stamp.stat().st_mtime == leftover_age
@@ -532,6 +534,37 @@ def test_fresh_leftover_incident_skip_is_not_applied(tmp_path, monkeypatch):
     assert out["applied"] is False
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
     assert "Fresh leftover-incident skip is not applied." in src.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_leftover_incident_skip_reports_planned_not_live(tmp_path, monkeypatch):
+    """Leftover-incident skip reports planned=not live."""
+    cfg = _config(tmp_path)
+    from lokay.config import load_config
+
+    loaded = load_config(str(cfg))
+    stamp = preflight.incident_stamp_path(loaded)
+    assert stamp is not None
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text("1", encoding="utf-8")
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("fresh leftover-incident skip must not list GitHub")
+
+    monkeypatch.setattr(preflight.subprocess, "run", boom)
+    live = preflight._close_resolved_incidents("mikolaj92/lokay", loaded)
+    assert live["skipped"] is True
+    assert live["reason"] == "recent_empty"
+    assert live["applied"] is False
+    assert live["planned"] is False
+    dry = preflight._close_resolved_incidents(
+        "mikolaj92/lokay", SimpleNamespace(state_path=loaded.state_path, live=False)
+    )
+    assert dry["skipped"] is True
+    assert dry["planned"] is True
+    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
+    assert "Leftover-incident skip reports planned=not live." in src.read_text(
         encoding="utf-8"
     )
 
