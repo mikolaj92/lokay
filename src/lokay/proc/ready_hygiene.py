@@ -82,8 +82,8 @@ def _clear_hygiene_stamp(stamp: Path | None) -> None:
 def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
     args = argparse.Namespace(config=config_path, live=live)
     cfg = load_cfg(args)
-    apply = mutations_allowed(live_flag=live, cfg=cfg)
     stamp = hygiene_stamp_path(cfg)
+    # Fresh leftover-ready skip does not require healthy. Hosted leftover-ready parks still do.
     # Idle leftover-ready skip outlives leftover-probe.
     # Hosted factory_pass stays at 300s. Leftover-probe host still lists when stamp is missing.
     idle_ttl = (
@@ -91,15 +91,16 @@ def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
         if os.environ.get("LOKAY_LEFTOVER_PROBE_GH_OK") == "1"
         else None
     )
-    if apply and hygiene_recently_empty(stamp, ttl=idle_ttl):
+    if hygiene_recently_empty(stamp, ttl=idle_ttl):
         return ok(
-            planned=not apply,
-            applied=apply,
+            planned=not live,
+            applied=live,
             cleaned=[],
             cleaned_count=0,
             skipped=True,
             reason="recent_empty",
         )
+    apply = mutations_allowed(live_flag=live, cfg=cfg)
     cleaned: list[dict[str, Any]] = []
     probed = False
     for repo in cfg.active_repos():
