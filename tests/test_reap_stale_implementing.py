@@ -1,853 +1,209 @@
+"""Semantics of minimal stale implementation-stage recovery processes."""
 
+import os, time
 from pathlib import Path
 from types import SimpleNamespace
-import os
-import time
-
 from lokay.passkit import io as pass_io
-from lokay.proc import reap_stale_implementing
+from lokay.proc import stale_implementing_stamp as stamp
 
 
-def test_reap_stale_implementing_skips_lokay_outside_survey_scope(tmp_path, monkeypatch):
-    pass_dir = tmp_path / "pass"
-    pass_dir.mkdir()
+def _config(tmp_path):
+    path = tmp_path / "config.yaml"
+    clone = tmp_path / "clone"
+    clone.mkdir(exist_ok=True)
+    path.write_text(f"""mode: live
+github:
+  assignee: t
+  ready_label: ai:ready
+  blocked_label: ai:blocked
+  branch_prefix: ai/fix
+  pr_labels: [ai:generated]
+repos:
+  - name: mikolaj92/lokay
+    clone_path: {clone}
+executor:
+  enabled: false
+  agent: grok
+merge:
+  enabled: false
+worktrees:
+  root: {tmp_path/'wt'}
+state:
+  path: {tmp_path/'state.jsonl'}
+""")
+    return str(path)
+
+
+def test_recent_empty_stamp_skips_probe(tmp_path):
+    from lokay.proc.prepare_stale_implementing_reap import prepare
+
+    cfg = _config(tmp_path)
+    (tmp_path / stamp.STALE_STAMP_NAME).write_text("1")
+    out = prepare(pass_dir=None, config_path=cfg, slot_count=30)
+    assert out["route"] == "recent_empty"
+
+
+def test_expired_stamp_requires_probe(tmp_path):
+    from lokay.proc.prepare_stale_implementing_reap import prepare
+
+    cfg = _config(tmp_path)
+    path = tmp_path / stamp.STALE_STAMP_NAME
+    path.write_text("1")
+    old = time.time() - stamp.STALE_TTL_SECONDS - 1
+    os.utime(path, (old, old))
+    assert prepare(pass_dir=None, config_path=cfg, slot_count=30)["route"] == "probe"
+
+
+def test_repo_outside_survey_scope_is_explicit(tmp_path):
+    from lokay.proc.prepare_stale_implementing_reap import prepare
+    from lokay.proc.select_stale_repo_slot import select
+
+    cfg = _config(tmp_path)
+    pd = tmp_path / "pass"
+    pd.mkdir()
     pass_io.write_json(
-        pass_io.begin_path(pass_dir),
-        {
-            "live": True,
-            "repos": ["mikolaj92/lokay"],
-            "survey_repos": ["other/hot"],
-        },
+        pass_io.begin_path(pd),
+        {"repos": ["mikolaj92/lokay"], "survey_repos": ["other/hot"]},
     )
-    pass_io.write_json(pass_io.working_path(pass_dir), {"actions": []})
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-
-    def _boom(*a, **k):
-        raise AssertionError("Lokay outside survey scope must not be listed")
-
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", _boom)
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=str(pass_dir),
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["reaped_count"] == 0
-
-
-
-
-def test_stale_empty_probe_writes_stamp(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", lambda *_a, **_k: [])
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["reaped_count"] == 0
-    assert (tmp_path / "reap-stale-implementing.stamp").is_file()
-
-
-def test_stale_skips_github_when_recent_empty_stamp(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    before = stamp.stat().st_mtime
-
-    def boom(*_a, **_k):
-        raise AssertionError("recent empty leftover cache must not list GitHub")
-
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", boom)
-
-    def health_boom(**_kwargs):
-        raise AssertionError("fresh leftover-cache skip does not require healthy")
-
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", health_boom)
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["skipped"] is True
-    assert out["reason"] == "recent_empty"
-    assert out["reaped_count"] == 0
-    assert out["probe_failed"] is False
-    assert stamp.stat().st_mtime == before
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Fresh leftover-cache skip does not require healthy." in src.read_text(
-        encoding="utf-8"
-    )
-    assert "Leftover-cache skip reports probe_failed." in src.read_text(
-        encoding="utf-8"
+    pass_io.write_json(pass_io.working_path(pd), {"actions": []})
+    assert (
+        select(prepare(pass_dir=str(pd), config_path=cfg, slot_count=30), slot=1)[
+            "route"
+        ]
+        == "outside_scope"
     )
 
 
-def test_fresh_leftover_cache_skip_is_not_applied(tmp_path, monkeypatch):
-    """Fresh leftover-cache skip is not applied."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
+def test_rate_limit_probe_is_failed_not_empty(tmp_path, monkeypatch):
+    from lokay.proc.list_stale_implementing_issues import fetch
 
-    def boom(*_a, **_k):
-        raise AssertionError("recent empty leftover cache must not list GitHub")
-
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", boom)
-
-    def health_boom(**_kwargs):
-        raise AssertionError("fresh leftover-cache skip does not require healthy")
-
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", health_boom)
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["skipped"] is True
-    assert out["reason"] == "recent_empty"
-    assert out["applied"] is False
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Fresh leftover-cache skip is not applied." in src.read_text(encoding="utf-8")
-
-
-def test_hosted_leftover_cache_parks_require_healthy(tmp_path, monkeypatch):
-    """Fresh leftover-cache skip does not require healthy. Hosted leftover-cache parks do."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    gated: list[bool] = []
-
-    def allow(**_kwargs):
-        gated.append(True)
-        return True
-
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", allow)
+    cfg = _config(tmp_path)
     monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
-        lambda *_a, **k: [SimpleNamespace(number=443)]
-        if k.get("label") == "ai:in-progress"
-        else [],
-    )
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "run_proc",
-        lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
-    )
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert gated == [True]
-    assert out["reaped_count"] == 1
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Fresh leftover-cache skip does not require healthy." in src.read_text(
-        encoding="utf-8"
-    )
-    assert "Hosted leftover-cache parks do." in src.read_text(encoding="utf-8")
-
-
-def test_unhealthy_leftover_cache_parks_do_not_clear_stamp(tmp_path, monkeypatch):
-    """Unhealthy leftover-cache parks do not clear the stamp."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
-    os.utime(stamp, (old, old))
-
-    def reject(**_kwargs):
-        return False
-
-    def unexpected_stage(*_a, **_k):
-        raise AssertionError("unhealthy leftover-cache parks must not stage")
-
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", reject)
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
-        lambda *_a, **k: [SimpleNamespace(number=443)]
-        if k.get("label") == "ai:in-progress"
-        else [],
-    )
-    monkeypatch.setattr(reap_stale_implementing, "run_proc", unexpected_stage)
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["reaped_count"] == 0
-    assert out["reaped"][0]["planned"] is True
-    assert out["planned"] is True
-    assert stamp.is_file()
-    assert stamp.stat().st_mtime == old
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Unhealthy leftover-cache parks do not clear the stamp." in src.read_text(
-        encoding="utf-8"
-    )
-    assert "Unhealthy leftover-cache parks are planned." in src.read_text(
-        encoding="utf-8"
-    )
-
-
-def test_leftover_cache_reaped_count_excludes_planned(tmp_path, monkeypatch):
-    """Leftover-cache reaped_count excludes planned parks."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", lambda **_k: False)
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
-        lambda *_a, **k: [SimpleNamespace(number=443)]
-        if k.get("label") == "ai:in-progress"
-        else [],
-    )
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "run_proc",
-        lambda *_a, **_k: (_ for _ in ()).throw(
-            AssertionError("unhealthy leftover-cache parks must not stage")
-        ),
-    )
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["reaped_count"] == 0
-    assert out["reaped"][0]["planned"] is True
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Leftover-cache reaped_count excludes planned parks." in src.read_text(
-        encoding="utf-8"
-    )
-
-
-def test_hosted_leftover_cache_reports_applied(tmp_path, monkeypatch):
-    """Hosted leftover-cache reports applied."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
-        lambda *_a, **k: [SimpleNamespace(number=443)]
-        if k.get("label") == "ai:in-progress"
-        else [],
-    )
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", lambda **_k: False)
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "run_proc",
-        lambda *_a, **_k: (_ for _ in ()).throw(
-            AssertionError("unhealthy leftover-cache parks must not stage")
-        ),
-    )
-    unhealthy = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert unhealthy["applied"] is False
-    assert unhealthy["planned"] is True
-    monkeypatch.setattr(reap_stale_implementing, "mutations_allowed", lambda **_k: True)
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "run_proc",
-        lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
-    )
-    healthy = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert healthy["applied"] is True
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Hosted leftover-cache reports applied." in src.read_text(encoding="utf-8")
-
-
-def test_idle_leftover_cache_skip_outlives_leftover_probe(tmp_path, monkeypatch):
-    """Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass stays at 300s."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    leftover_age = time.time() - 301
-    os.utime(stamp, (leftover_age, leftover_age))
-    listed: list[int] = []
-
-    def fake_list(*_a, **_k):
-        listed.append(1)
-        return []
-
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", fake_list)
-    monkeypatch.delenv("LOKAY_LEFTOVER_PROBE_GH_OK", raising=False)
-    hosted = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert hosted.get("skipped") is not True
-    assert listed
-    leftover_age = time.time() - 301
-    os.utime(stamp, (leftover_age, leftover_age))
-    listed.clear()
-    monkeypatch.setenv("LOKAY_LEFTOVER_PROBE_GH_OK", "1")
-    idle = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert idle["skipped"] is True
-    assert idle["reason"] == "recent_empty"
-    assert listed == []
-    assert stamp.stat().st_mtime == leftover_age
-    assert reap_stale_implementing.stale_recently_empty(stamp) is False
-    assert reap_stale_implementing.stale_recently_empty(
-        stamp, ttl=reap_stale_implementing.IDLE_STALE_TTL_SECONDS
-    ) is True
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Idle leftover-cache skip outlives leftover-probe." in src.read_text(
-        encoding="utf-8"
-    )
-
-
-def test_pytest_does_not_skip_leftover_cache_github_lists_using_the_mill_stamp(
-    tmp_path, monkeypatch
-):
-    mill = tmp_path / ".lokay"
-    mill.mkdir()
-    stamp = mill / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv(
-        "PYTEST_CURRENT_TEST",
-        "test_pytest_does_not_skip_leftover_cache_github_lists_using_the_mill_stamp",
-    )
-    assert reap_stale_implementing.stale_recently_empty(stamp) is False
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {mill / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    listed: list[str] = []
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
-        lambda *_a, **_k: listed.append("gh") or [],
-    )
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out.get("skipped") is not True
-    assert listed
-    hermetic = tmp_path / "reap-stale-implementing.stamp"
-    hermetic.write_text("1", encoding="utf-8")
-    assert reap_stale_implementing.stale_recently_empty(hermetic) is True
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
-    )
-    assert "Pytest must not skip leftover-cache GitHub lists using the mill stamp." in src.read_text(
-        encoding="utf-8"
-    )
-
-
-def test_stale_probes_when_empty_stamp_expired(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
-    os.utime(stamp, (old, old))
-    monkeypatch.setattr(reap_stale_implementing, "list_labeled_issues", lambda *_a, **_k: [])
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out.get("skipped") is not True
-    assert out["reaped_count"] == 0
-    assert stamp.is_file()
-    assert stamp.stat().st_mtime >= old + reap_stale_implementing.STALE_TTL_SECONDS
-
-
-def test_leftover_cache_rate_limit_does_not_stamp_empty(tmp_path, monkeypatch):
-    """Leftover-cache rate limit does not stamp empty."""
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "leftover-cache.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
-    os.utime(stamp, (old, old))
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
+        "lokay.proc.list_stale_implementing_issues.list_labeled_issues",
         lambda *_a, **_k: (_ for _ in ()).throw(
             RuntimeError("HTTP 429: API rate limit exceeded")
         ),
     )
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "mutations_allowed",
-        lambda **_kwargs: (_ for _ in ()).throw(
-            AssertionError("failed probe must not check mutation health")
-        ),
+    out = fetch(
+        {"repo": "mikolaj92/lokay"}, config_path=cfg, live=True, label="ai:in-progress"
     )
-
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-
-    assert out["probe_failed"] is True
-    assert out["reaped_count"] == 0
-    assert stamp.stat().st_mtime == old
-    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "reap_stale_implementing.py"
-    assert "Leftover-cache rate limit does not stamp empty." in src.read_text(
-        encoding="utf-8"
-    )
+    assert out["route"] == "failed"
 
 
-def test_stale_reap_clears_empty_stamp(tmp_path, monkeypatch):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
+def test_repo_probe_deduplicates_issue_across_labels():
+    from lokay.proc.reduce_stale_repo_probe import reduce_state
+
+    item = {"repo": "a/one", "issue": 2, "label": "ai:in-progress"}
+    out = reduce_state(
+        {"route": "repo", "repo": "a/one"},
+        [
+            {"route": "listed", "issues": [item]},
+            {"route": "listed", "issues": [{**item, "label": "ai:repairing"}]},
+        ],
     )
-    (tmp_path / "clone").mkdir()
-    stamp = tmp_path / "reap-stale-implementing.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    old = time.time() - reap_stale_implementing.STALE_TTL_SECONDS - 1
-    os.utime(stamp, (old, old))
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "list_labeled_issues",
-        lambda *_a, **k: [SimpleNamespace(number=443)] if k.get("label") == "ai:in-progress" else [],
-    )
-    monkeypatch.setattr(
-        reap_stale_implementing,
-        "run_proc",
-        lambda *_a, **_k: {"ok": True, "stage": "ready", "applied": True},
-    )
-    monkeypatch.setattr(
-        reap_stale_implementing, "mutations_allowed", lambda **_kwargs: True
-    )
-    out = reap_stale_implementing.run_reap_stale_implementing(
-        pass_dir=None,
-        config_path=str(cfg),
-        live=True,
-    )
-    assert out["reaped_count"] == 1
-    assert not stamp.exists()
+    assert out["issues"] == [item]
 
 
-def test_reap_idle_leftover_cache_runs_when_live(tmp_path, monkeypatch):
-    """Idle daemon_cycle skip still runs leftover-cache."""
-    called: list[dict] = []
+def test_probe_overflow_is_fail_closed():
+    from lokay.proc.reduce_stale_implementing_probe import reduce_state
 
-    def fake_run(**kwargs):
-        called.append(kwargs)
-        return {"ok": True, "reaped_count": 0}
-
-    monkeypatch.setattr(
-        reap_stale_implementing, "run_reap_stale_implementing", fake_run
-    )
-    reap_stale_implementing.reap_idle_leftover_cache(
-        config_path=str(tmp_path / "config.yaml"), live=True
-    )
-    assert called == [
+    rows = [
         {
-            "pass_dir": None,
-            "config_path": str(tmp_path / "config.yaml"),
-            "live": True,
+            "route": "probed",
+            "issues": [{"repo": "a/one", "issue": i} for i in range(31)],
         }
     ]
-    src = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "lokay"
-        / "proc"
-        / "reap_stale_implementing.py"
+    out = reduce_state(prepared={}, rows=rows, candidate_slots=30)
+    assert out["ok"] is False and "exceed authored slots" in out["error"]
+
+
+def test_plan_only_candidate_is_not_counted_reaped():
+    from lokay.proc.reduce_stale_reap_effects import reduce_state
+
+    out = reduce_state(
+        probe={"probed": True},
+        gate={"apply": False},
+        rows=[
+            {"route": "plan", "repo": "a/one", "issue": 2, "label": "ai:in-progress"}
+        ],
     )
-    assert "Idle daemon_cycle skip still runs leftover-cache." in src.read_text(
-        encoding="utf-8"
+    assert out["reaped_count"] == 0 and out["reaped"][0]["planned"] is True
+
+
+def test_applied_candidate_is_counted():
+    from lokay.proc.reduce_stale_reap_effects import reduce_state
+
+    out = reduce_state(
+        probe={"probed": True},
+        gate={"apply": True},
+        rows=[
+            {
+                "route": "applied",
+                "repo": "a/one",
+                "issue": 2,
+                "staged": {"ok": True, "applied": True},
+            }
+        ],
     )
+    assert out["reaped_count"] == 1
 
 
-def test_reap_idle_leftover_cache_skips_when_not_live(tmp_path, monkeypatch):
-    def boom(**_k):
-        raise AssertionError("not-live skip does not run leftover-cache")
+def test_empty_success_touches_stamp(tmp_path):
+    from lokay.proc.update_stale_empty_stamp import update
 
+    path = tmp_path / stamp.STALE_STAMP_NAME
+    update(
+        {
+            "stamp": str(path),
+            "probed": True,
+            "probe_failed": False,
+            "reaped": [],
+            "apply": False,
+        }
+    )
+    assert path.is_file()
+
+
+def test_failed_probe_does_not_touch_stamp(tmp_path):
+    from lokay.proc.update_stale_empty_stamp import update
+
+    path = tmp_path / stamp.STALE_STAMP_NAME
+    update(
+        {
+            "stamp": str(path),
+            "probed": True,
+            "probe_failed": True,
+            "reaped": [],
+            "apply": False,
+        }
+    )
+    assert not path.exists()
+
+
+def test_applied_reap_clears_old_empty_stamp(tmp_path):
+    from lokay.proc.update_stale_empty_stamp import update
+
+    path = tmp_path / stamp.STALE_STAMP_NAME
+    path.write_text("1")
+    update(
+        {
+            "stamp": str(path),
+            "probed": True,
+            "probe_failed": False,
+            "reaped": [{"issue": 2}],
+            "apply": True,
+        }
+    )
+    assert not path.exists()
+
+
+def test_idle_facade_runs_only_live(monkeypatch):
+    from lokay.proc import reap_stale_implementing as facade
+
+    calls = []
     monkeypatch.setattr(
-        reap_stale_implementing, "run_reap_stale_implementing", boom
+        facade, "run_reap_stale_implementing", lambda **kw: calls.append(kw)
     )
-    reap_stale_implementing.reap_idle_leftover_cache(
-        config_path=str(tmp_path / "missing.yaml"), live=False
-    )
-
-
-def test_reap_idle_leftover_cache_oserror_cannot_stall(tmp_path, monkeypatch):
-    def boom(**_k):
-        raise OSError("config unreadable")
-
-    monkeypatch.setattr(
-        reap_stale_implementing, "run_reap_stale_implementing", boom
-    )
-    reap_stale_implementing.reap_idle_leftover_cache(
-        config_path=str(tmp_path / "missing.yaml"), live=True
-    )
+    facade.reap_idle_leftover_cache(config_path="x", live=False)
+    facade.reap_idle_leftover_cache(config_path="x", live=True)
+    assert calls == [{"pass_dir": None, "config_path": "x", "live": True}]
