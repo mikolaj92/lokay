@@ -13,6 +13,28 @@ from lokay import gh_prs, graph_run
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _run_inbox(module, pass_dir):
+    from lokay.passkit import io as pass_io
+
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    by = {}
+    issues = {}
+    for repo in begin.get("repos") or []:
+        out = module._run(module.p_list_inbox.main, ["--repo", repo])
+        rows = list(out.get("issues") or []) if out.get("ok") else []
+        by[repo] = len(rows)
+        issues[repo] = rows
+    working.update(
+        inbox_by_repo=by,
+        inbox_issues_by_repo=issues,
+        remaining_inbox=sum(by.values()),
+        inbox_survey_failed=[],
+    )
+    pass_io.write_json(pass_io.working_path(pass_dir), working)
+    return {"ok": True}
+
+
 def test_no_grok_agent_compat_module():
     """Deleted: lokay.grok_agent backward-compat re-export."""
     with pytest.raises(ModuleNotFoundError):
@@ -139,6 +161,11 @@ state:
     )
     monkeypatch.setattr(
         tick_mod, "run_refresh_occupancy", lambda **kwargs: {"ok": True}
+    )
+    monkeypatch.setattr(
+        tick_mod,
+        "run_survey_inbox",
+        lambda **kwargs: _run_inbox(tick_mod, kwargs["pass_dir"]),
     )
     out = tick_mod.compose_tick(config_path=str(cfg), live=True)
     assert out["progress"] == 0

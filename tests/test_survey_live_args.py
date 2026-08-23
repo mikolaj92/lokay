@@ -61,24 +61,27 @@ def test_survey_prs_live_forwards_live_without_crash(
     assert "--live" in seen[0]
 
 
-def test_survey_inbox_and_ready_list_forward_live(tmp_path: Path, monkeypatch) -> None:
-    from lokay.proc import list_work_ready_issues
-
-    def fake_inbox(argv: list[str] | None = None) -> int:
-        assert "--live" in list(argv or [])
-        return emit_exit(ok(issues=[], repo="o/r", count=0))
+def test_inbox_and_ready_list_forward_live(monkeypatch):
+    from lokay.proc import list_inbox_repo_issues, list_work_ready_issues
 
     seen = []
 
-    def fake_issues(argv: list[str] | None = None) -> int:
-        seen.append(list(argv or []))
-        return emit_exit(ok(issues=[], repo="o/r", count=0))
+    def fake(main, argv):
+        seen.append(list(argv))
+        return {"ok": True, "issues": []}
 
-    monkeypatch.setattr(survey_inbox.p_list_inbox, "main", fake_inbox)
-    monkeypatch.setattr(list_work_ready_issues.list_issues, "main", fake_issues)
-    inbox = survey_inbox.run_survey_inbox(
-        pass_dir=_pass(tmp_path), config_path=None, live=True
+    monkeypatch.setattr(list_inbox_repo_issues, "run_proc", fake)
+    monkeypatch.setattr(list_work_ready_issues, "run_proc", fake)
+    assert (
+        list_inbox_repo_issues.fetch({"repo": "o/r"}, config_path=None, live=True)[
+            "route"
+        ]
+        == "listed"
     )
-    listed = list_work_ready_issues.fetch({"repo": "o/r"}, config_path=None, live=True)
-    assert inbox["ok"] is True and listed["route"] == "listed"
-    assert "--live" in seen[0]
+    assert (
+        list_work_ready_issues.fetch({"repo": "o/r"}, config_path=None, live=True)[
+            "route"
+        ]
+        == "listed"
+    )
+    assert all("--live" in argv for argv in seen)

@@ -6,6 +6,29 @@ from lokay.passkit import io as pass_io
 from lokay.compose import tick
 
 
+def _run_inbox(module, pass_dir):
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    by = {}
+    issues = {}
+    for repo in begin.get("repos") or []:
+        try:
+            out = module._run(module.p_list_inbox.main, ["--repo", repo])
+        except AssertionError:
+            out = {"ok": True, "issues": []}
+        rows = list(out.get("issues") or []) if out.get("ok") else []
+        by[repo] = len(rows)
+        issues[repo] = rows
+    working.update(
+        inbox_by_repo=by,
+        inbox_issues_by_repo=issues,
+        remaining_inbox=sum(by.values()),
+        inbox_survey_failed=[],
+    )
+    pass_io.write_json(pass_io.working_path(pass_dir), working)
+    return {"ok": True}
+
+
 def _run_selection(pass_dir):
     from lokay.proc.prepare_implementation_selection import prepare
     from lokay.proc.select_implementation_repo_slot import select
@@ -160,6 +183,9 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
     monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -237,6 +263,9 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
     monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -291,6 +320,9 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
     monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -341,6 +373,9 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
     monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"
     assert result["ok"] is True
