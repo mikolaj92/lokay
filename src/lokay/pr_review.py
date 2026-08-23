@@ -13,11 +13,11 @@ from typing import Any, Literal
 
 Verdict = Literal["approve", "request_changes", "needs_evidence", "needs_human"]
 Risk = Literal["low", "medium", "high"]
-EvidenceKind = Literal["pr_metadata", "changed_files", "diff_tail", "commit_history"]
+EvidenceKind = Literal["pr_metadata", "changed_files", "diff_tail", "commit_summary"]
 
 VALID_VERDICTS = frozenset({"approve", "request_changes", "needs_evidence", "needs_human"})
 VALID_RISKS = frozenset({"low", "medium", "high"})
-VALID_EVIDENCE_KINDS = frozenset({"pr_metadata", "changed_files", "diff_tail", "commit_history"})
+VALID_EVIDENCE_KINDS = frozenset({"pr_metadata", "changed_files", "diff_tail", "commit_summary"})
 COLLECTOR_BOUNDARY = (
     "Collector boundary: a collector change may install/start durable background "
     "work after merge, but this PR must not use Pi or the mill to populate data "
@@ -358,7 +358,7 @@ def review_prompt(
   "secrets": boolean,
   "tests_adequate": boolean,
   "blocking": ["..."],
-  "evidence_kind": "pr_metadata" | "changed_files" | "diff_tail" | "commit_history" | null,
+  "evidence_kind": "pr_metadata" | "changed_files" | "diff_tail" | "commit_summary" | null,
   "nits": ["..."],
   "summary": "one short paragraph"
 }"""

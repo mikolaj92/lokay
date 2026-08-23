@@ -1,15 +1,15 @@
 """Collect refreshed files evidence for one PR."""
 from __future__ import annotations
 from lokay.envelope import ok
-from lokay.gh_prs import gh_json
+from lokay.gh_prs import gh_text
 from lokay.proc._common import runner
 
 def collect(*, repo: str, pr: int, live: bool) -> dict:
     try:
-        value=gh_json(runner(),["pr","view",str(pr),"--repo",repo,"--json","files"],live=live)
+        value=gh_text(runner(),["pr","diff",str(pr),"--repo",repo,"--name-only"],live=live,require_success=True)
     except Exception as exc:
         return ok(collected=False,reason=f"failed to collect files evidence: {exc}",probe_failed=True)
-    return ok(collected=True,repo=repo,pr=pr,evidence_kind="changed_files",additional_evidence=value)
+    return ok(collected=True,repo=repo,pr=pr,evidence_kind="changed_files",additional_evidence={"files":[line for line in value.splitlines() if line.strip()]})
 
 
 def main(argv=None):

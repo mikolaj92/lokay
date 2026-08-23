@@ -67,7 +67,7 @@ Unixowy. Proces może odczytać fakt albo wykonać jeden efekt uboczny. Nie moż
 ukrywać kolejnego grafu. Agent występuje tylko na granicy niedeterministycznej
 i zwraca jeden wynik z zamkniętego schematu. Recenzja PR może poprosić o dokładnie
 jeden dodatkowy fakt: `pr_metadata`, `changed_files`, `diff_tail` albo
-`commit_history`. Każdy rodzaj ma osobny kolektor Unixowy. Fala uruchamia tylko
+`commit_summary`. Każdy rodzaj ma osobny kolektor Unixowy. Fala uruchamia tylko
 wybrany kolektor, ponawia agenta raz i kieruje drugą prośbę o dowody do terminala
 ręcznego.
 
@@ -172,11 +172,11 @@ stateDiagram-v2
     SelectEvidenceCollector --> CollectPrMetadata: pr_metadata
     SelectEvidenceCollector --> CollectChangedFiles: changed_files
     SelectEvidenceCollector --> CollectDiffTail: diff_tail
-    SelectEvidenceCollector --> CollectCommitHistory: commit_history
+    SelectEvidenceCollector --> CollectCommitSummary: commit_summary
     CollectPrMetadata --> VerifyEvidenceSha
     CollectChangedFiles --> VerifyEvidenceSha
     CollectDiffTail --> VerifyEvidenceSha
-    CollectCommitHistory --> VerifyEvidenceSha
+    CollectCommitSummary --> VerifyEvidenceSha
     VerifyEvidenceSha --> EvidenceReviewAgent: SHA bez zmian
     VerifyEvidenceSha --> HumanTerminal: SHA zmienione / brak dowodu
     EvidenceReviewAgent --> ValidateEvidenceReview

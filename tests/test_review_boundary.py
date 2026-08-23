@@ -75,7 +75,7 @@ def test_needs_evidence_routes_one_closed_collector_round():
 
 def test_second_evidence_request_is_terminal_needs_human():
     selected={"route":"evidence","decision":{"verdict":"needs_evidence","evidence_kind":"changed_files"}}
-    validation=validate_review_output('{"verdict":"needs_evidence","evidence_kind":"commit_history"}')
+    validation=validate_review_output('{"verdict":"needs_evidence","evidence_kind":"commit_summary"}')
     out=select_evidence_review(selected,validation)
     assert out["route"] == "needs_human"
     assert out["decision"] == {"verdict":"needs_human"}

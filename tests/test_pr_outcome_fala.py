@@ -152,7 +152,7 @@ def test_needs_evidence_runs_only_selected_collector_then_one_agent(tmp_path):
         "if a=='validate_pr_review': v.update(route='valid',decision={'verdict':'needs_evidence','evidence_kind':'diff_tail'})\n"
         "if a=='select_pr_review': v.update(route='evidence',evidence_kind='diff_tail',decision={'verdict':'needs_evidence','evidence_kind':'diff_tail'})\n"
         "if a=='collect_review_diff_tail': Path("+repr(str(selected_sentinel))+").write_text('ran')\n"
-        "if a in {'collect_review_pr_metadata','collect_review_changed_files','collect_review_commit_history'}: Path("+repr(str(wrong_sentinel))+").write_text(a)\n"
+        "if a in {'collect_review_pr_metadata','collect_review_changed_files','collect_review_commit_summary'}: Path("+repr(str(wrong_sentinel))+").write_text(a)\n"
         "if a=='verify_review_evidence_sha': v['route']='agent'\n"
         "if a=='evidence_review_agent': Path("+repr(str(evidence_agent_sentinel))+").write_text('ran')\n"
         "if a=='validate_evidence_review': v.update(route='valid',decision={'verdict':'approve'})\n"
@@ -173,6 +173,6 @@ def test_needs_evidence_runs_only_selected_collector_then_one_agent(tmp_path):
     assert statuses['collect_review_diff_tail']=='succeeded'
     assert statuses['collect_review_pr_metadata']=='skipped'
     assert statuses['collect_review_changed_files']=='skipped'
-    assert statuses['collect_review_commit_history']=='skipped'
+    assert statuses['collect_review_commit_summary']=='skipped'
     assert selected_sentinel.exists() and evidence_agent_sentinel.exists() and merge_sentinel.exists()
     assert not wrong_sentinel.exists()

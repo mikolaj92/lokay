@@ -238,7 +238,7 @@ def test_pr_triage_path_in_package():
         "collect_review_pr_metadata",
         "collect_review_changed_files",
         "collect_review_diff_tail",
-        "collect_review_commit_history",
+        "collect_review_commit_summary",
         "verify_review_evidence_sha",
         "evidence_review_agent",
         "validate_evidence_review",
