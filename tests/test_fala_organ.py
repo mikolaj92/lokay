@@ -44,61 +44,6 @@ state:
     return str(path)
 
 
-def test_review_not_required_bypasses_disabled_executor_and_allows_merge(tmp_path, monkeypatch):
-    cfg = _config(tmp_path, required=False, executor=False)
-    review = fala_organ._handle(
-        "pr_review",
-        {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
-        {"pr_checks": {"ok": True, "status": "none"}},
-    )
-    assert review == {
-        "ok": True,
-        "skipped": True,
-        "reason": "llm_review_not_required",
-        "decision": {"verdict": "approve"},
-        "merge_ok": True,
-        "repo": "a/b",
-        "pr": 7,
-    }
-
-    called = []
-    def fake_run(main, argv):
-        called.append((main, argv))
-        return {"ok": True, "merged": True}
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    merged = fala_organ._handle(
-        "pr_merge",
-        {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
-        {
-            "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
-            "pr_review": review,
-            "test_local": _ok_test_local(),
-        },
-    )
-    assert merged["merged"] is True
-    assert called, "pr_merge atom must execute"
-
-
-def test_required_review_with_disabled_executor_stays_blocked(tmp_path, monkeypatch):
-    cfg = _config(tmp_path, required=True, executor=False)
-
-    def fake_run(main, argv):
-        return {"ok": True, "skipped": True, "reason": "executor_disabled", "merge_ok": False}
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    review = fala_organ._handle(
-        "pr_review",
-        {"config_path": cfg, "repo": "a/b", "pr": 8, "live": True},
-        {"pr_checks": {"ok": True, "status": "none"}},
-    )
-    merged = fala_organ._handle(
-        "pr_merge",
-        {"config_path": cfg, "repo": "a/b", "pr": 8, "live": True},
-        {"pr_checks": {"ok": True, "status": "none", "merge_ok": True}, "pr_review": review},
-    )
-    assert merged["skipped"] is True
-    assert merged["reason"] == "executor_disabled"
-
-
 def test_pr_merge_pending_checks_wait_not_merge(tmp_path, monkeypatch):
     cfg = _config(tmp_path, required=True, executor=True)
 
@@ -111,7 +56,7 @@ def test_pr_merge_pending_checks_wait_not_merge(tmp_path, monkeypatch):
         {"config_path": cfg, "repo": "a/b", "pr": 9, "live": True},
         {
             "pr_checks": {"ok": True, "status": "pending", "merge_ok": False},
-            "pr_review": {
+            "publish_pr_review": {
                 "ok": True,
                 "merge_ok": True,
                 "decision": {"verdict": "approve", "secrets": False},
@@ -135,7 +80,7 @@ def test_pr_merge_secrets_fail_closed(tmp_path, monkeypatch):
         {"config_path": cfg, "repo": "a/b", "pr": 10, "live": True},
         {
             "pr_checks": {"ok": True, "status": "passed", "merge_ok": True},
-            "pr_review": {
+            "publish_pr_review": {
                 "ok": True,
                 "merge_ok": False,
                 "decision": {"verdict": "approve", "secrets": True},
@@ -375,7 +320,7 @@ def test_pr_merge_without_test_local_fails(tmp_path, monkeypatch):
         {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
         {
             "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
-            "pr_review": {
+            "publish_pr_review": {
                 "ok": True,
                 "skipped": True,
                 "reason": "llm_review_not_required",
@@ -401,7 +346,7 @@ def test_pr_merge_skipped_suite_still_merges(tmp_path, monkeypatch):
         {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
         {
             "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
-            "pr_review": {
+            "publish_pr_review": {
                 "ok": True,
                 "skipped": True,
                 "reason": "llm_review_not_required",
@@ -418,7 +363,7 @@ def test_pr_merge_passes_issue_only_when_known(tmp_path, monkeypatch):
     cfg = _config(tmp_path, required=False, executor=False)
     up = {
         "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
-        "pr_review": {"ok": True, "merge_ok": True},
+        "publish_pr_review": {"ok": True, "merge_ok": True},
         "test_local": _ok_test_local(),
     }
 
@@ -453,7 +398,7 @@ def test_pr_merge_red_suite_does_not_merge(tmp_path, monkeypatch):
         {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
         {
             "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
-            "pr_review": {
+            "publish_pr_review": {
                 "ok": True,
                 "skipped": True,
                 "reason": "llm_review_not_required",

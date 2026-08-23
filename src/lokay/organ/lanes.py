@@ -34,7 +34,7 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         cycle_end, cycle_start, dispatch_implement, dispatch_triage, factory_begin,
         factory_tick, get_issue, host_ff, list_prs, make_branch, plan_issue,
         localize, pi_budget, plan_pass, pr_checks, pr_create, pr_label, pr_merge,
-        pr_review, push_branch, record_pass, recovery_begin, recovery_incident,
+        push_branch, record_pass, recovery_begin, recovery_incident,
         recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
         resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
         survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
@@ -114,40 +114,6 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             [*cfg, "--repo", repo, "--pr", str(pr_number)],
         )
 
-    if atom == "pr_review":
-        assert repo and pr_number is not None
-        # The graph always contains the review effector, but review policy is
-        # optional.  Bypass the executor entirely when deterministic merge is
-        # configured; downstream merge treats merge_ok=true as approval.
-        from lokay.config import load_config
-
-        review_cfg = load_config(str(inputs.get("config_path") or inputs.get("config") or "") or None)
-        if not review_cfg.require_llm_review:
-            return {
-                "ok": True,
-                "skipped": True,
-                "reason": "llm_review_not_required",
-                "decision": {"verdict": "approve"},
-                "merge_ok": True,
-                "repo": repo,
-                "pr": pr_number,
-            }
-        checks = up.get("pr_checks") or {}
-        argv = [
-            *cfg,
-            *live,
-            "--repo",
-            repo,
-            "--pr",
-            str(pr_number),
-        ]
-        if branch:
-            argv.extend(["--branch", branch])
-        checks_text = str(checks.get("text") or inputs.get("checks_text") or "")
-        if checks_text:
-            argv.extend(["--checks-text", checks_text])
-        return _run_atom_main(pr_review.main, argv)
-
     if atom == "pr_merge":
         assert repo and pr_number is not None
         from lokay.config import load_config
@@ -157,7 +123,7 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             str(inputs.get("config_path") or inputs.get("config") or "") or None
         )
         checks = up.get("pr_checks") or {}
-        review = up.get("pr_review") or {}
+        review = up.get("publish_pr_review") or up.get("pr_review") or {}
         # Trusted auto-merge gate (fail closed). Pending → waiting; red → repair;
         # secrets / needs_human / escalated needs-review never merge.
         gate = decide_auto_merge(

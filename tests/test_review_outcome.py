@@ -38,7 +38,7 @@ def test_pr_outcome_handler_routes_reused_request_changes(monkeypatch):
     from lokay.organ.pr_outcome import handle_pr_outcome
     out = handle_pr_outcome(
         "review_repair_gate", {},
-        {"pr_review": {"skipped": True, "reason": "already_reviewed_head", "decision": {"verdict": "request_changes"}}},
+        {"publish_pr_review": {"execution": {"source": "cache"}, "decision": {"verdict": "request_changes"}}},
         {"repo": "a/b", "pr_number": 7, "branch": "ai/fix/7-x", "live": []},
     )
     assert out["route"] == "repair"

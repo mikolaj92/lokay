@@ -10,11 +10,11 @@ def handle_pr_outcome(
 ) -> dict[str, Any] | None:
     if atom == "review_repair_gate":
         from lokay.proc.review_repair_gate import route_review_repair
-        return route_review_repair(up.get("pr_review") or {})
+        return route_review_repair(up.get("publish_pr_review") or {})
 
     if atom in {"review_manual", "review_repair_manual"}:
         from lokay.proc.review_terminal import terminal_review
-        review = up.get("pr_review") or {}
+        review = up.get("publish_pr_review") or {}
         decision = review.get("decision") if isinstance(review, dict) else {}
         verdict = str((decision or {}).get("verdict") or "needs_human")
         reason = "review_repair_escalated" if atom == "review_repair_manual" else "review_needs_human"
@@ -22,7 +22,7 @@ def handle_pr_outcome(
 
     if atom == "pr_repair_subflow":
         from lokay.proc.pr_repair_subflow import run_pr_repair_subflow
-        review = up.get("pr_review") or {}
+        review = up.get("publish_pr_review") or {}
         return run_pr_repair_subflow(
             config_path=str(inputs.get("config_path") or "") or None,
             repo=str(ctx["repo"]), pr=int(ctx["pr_number"]),

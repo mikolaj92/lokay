@@ -228,7 +228,14 @@ def test_pr_triage_path_in_package():
     node_ids = [n["id"] for n in path["nodes"]]
     assert node_ids == [
         "pr_checks",
-        "pr_review",
+        "collect_pr_review_evidence",
+        "resolve_sha_review",
+        "pr_review_agent",
+        "validate_pr_review",
+        "pr_review_retry_agent",
+        "validate_pr_review_retry",
+        "select_pr_review",
+        "publish_pr_review",
         "review_repair_gate",
         "pr_repair_subflow",
         "review_repair_manual",
@@ -240,20 +247,22 @@ def test_pr_triage_path_in_package():
         "close_issue",
     ]
     assert "run_agent" not in node_ids
-    review = next(n for n in path["nodes"] if n["id"] == "pr_review")
-    assert "pr_checks" in review["conduction"]
+    collect = next(n for n in path["nodes"] if n["id"] == "collect_pr_review_evidence")
+    assert "pr_checks" in collect["conduction"]
+    retry = next(n for n in path["nodes"] if n["id"] == "pr_review_retry_agent")
+    assert retry["when"] == {"upstream": "validate_pr_review", "path": "route", "equals": "retry"}
     worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
-    assert "pr_review" in worktree["conduction"]
+    assert "publish_pr_review" in worktree["conduction"]
     merge = next(n for n in path["nodes"] if n["id"] == "pr_merge")
     assert "pr_checks" in merge["conduction"]
-    assert "pr_review" in merge["conduction"]
+    assert "publish_pr_review" in merge["conduction"]
     assert "test_local" in merge["conduction"]
     clear = next(n for n in path["nodes"] if n["id"] == "stage_clear")
     assert "pr_merge" in clear["conduction"]
     close = next(n for n in path["nodes"] if n["id"] == "close_issue")
     assert "pr_merge" in close["conduction"]
     assert "stage_clear" in close["conduction"]
-    assert "pr_review" in close["conduction"]
+    assert "publish_pr_review" in close["conduction"]
 
 
 def test_package_files_exist():

@@ -11,8 +11,10 @@ from lokay.envelope import emit_exit, err, ok
 
 def route_review_repair(review: Mapping[str, Any]) -> dict[str, Any]:
     decision = review.get("decision")
-    if not isinstance(decision, Mapping) or decision.get("verdict") != "request_changes":
-        return err("request_changes review required")
+    if not isinstance(decision, Mapping):
+        return err("review decision required")
+    if decision.get("verdict") != "request_changes":
+        return ok(route="not_applicable", reason="review_does_not_request_changes")
     if review.get("escalated") or decision.get("secrets") is True:
         return ok(route="needs_human", reason="review_repair_escalated")
     return ok(route="repair", reason="review_requested_changes")

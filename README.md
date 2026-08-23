@@ -155,10 +155,14 @@ stateDiagram-v2
     InspectPullRequest --> ConflictRecovery: konflikt
     InspectPullRequest --> HumanTerminal: terminal ręczny
     InspectPullRequest --> CollectReviewEvidence: gotowy do recenzji
-    CollectReviewEvidence --> ReviewAgent: brak werdyktu dla SHA
-    CollectReviewEvidence --> ReviewVerdict: werdykt zapisany dla SHA
+    CollectReviewEvidence --> ResolveShaReview
+    ResolveShaReview --> ReviewVerdict: werdykt zapisany dla SHA
+    ResolveShaReview --> ReviewAgent: brak werdyktu dla SHA
     ReviewAgent --> ValidateReviewResult
-    ValidateReviewResult --> ReviewAgent: invalid JSON + informacja zwrotna
+    ValidateReviewResult --> ReviewRetryAgent: invalid JSON + informacja zwrotna
+    ReviewRetryAgent --> ValidateRetryResult
+    ValidateRetryResult --> ReviewVerdict: wynik poprawny
+    ValidateRetryResult --> HumanTerminal: nadal invalid JSON
     ValidateReviewResult --> CollectReviewEvidence: NEEDS_EVIDENCE
     ValidateReviewResult --> ReviewVerdict: wynik poprawny
     ReviewVerdict --> LocalMergeGate: APPROVE
@@ -237,7 +241,7 @@ kontraktu. Aktualny audyt:
 | `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane; pełny powrót między przebiegami wymaga dalszego audytu |
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → zbierz dowody → ponów agenta` | **do implementacji** |
-| `invalid JSON → feedback walidatora → ponów agenta` | **do implementacji** |
+| `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
 | `issue_triage` bez ukrytego drzewa Python | **do refaktoru** |
 | `issue_to_pr` bez ukrytego drzewa Python | **do refaktoru** |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | **do refaktoru** |
