@@ -222,6 +222,48 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Ograniczenie czasu implementacji — `reap_over_budget`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareOverBudgetReap
+    PrepareOverBudgetReap --> SelectBudgetReceiptSlot
+    SelectBudgetReceiptSlot --> InspectBudgetIssueState: slot zawiera receipt
+    SelectBudgetReceiptSlot --> RecordBudgetSlotOutcome: slot pusty
+    InspectBudgetIssueState --> CheckReceiptBudget
+    CheckReceiptBudget --> InspectBudgetCoder: issue otwarte i budżet przekroczony
+    CheckReceiptBudget --> SelectBudgetReceiptRoute: issue zamknięte / pod budżetem
+    InspectBudgetCoder --> InspectCoderDiff: żywy coder
+    InspectBudgetCoder --> SelectBudgetReceiptRoute: brak codera
+    InspectCoderDiff --> SelectBudgetReceiptRoute
+    SelectBudgetReceiptRoute --> CommitOverBudgetDiff: realny diff i harvest możliwy
+    CommitOverBudgetDiff --> SelectBudgetCommitOutcome
+    SelectBudgetCommitOutcome --> PushOverBudgetBranch: commit udany
+    SelectBudgetCommitOutcome --> SelectBudgetHarvestOutcome: commit nieudany
+    PushOverBudgetBranch --> SelectBudgetPushOutcome
+    SelectBudgetPushOutcome --> CreateOverBudgetPr: push udany
+    SelectBudgetPushOutcome --> SelectBudgetHarvestOutcome: push nieudany
+    CreateOverBudgetPr --> SelectBudgetHarvestOutcome
+    SelectBudgetHarvestOutcome --> TerminateOverBudgetWorker: plan-only / issue zamknięte
+    SelectBudgetHarvestOutcome --> RecordBudgetSlotOutcome: harvested / coder-live / pod budżetem
+    TerminateOverBudgetWorker --> StampReapedReceipt
+    StampReapedReceipt --> RecordPlanOnlyFailure: otwarte issue
+    StampReapedReceipt --> RecordBudgetSlotOutcome: zamknięte issue
+    RecordPlanOnlyFailure --> ParkPlanOnlyIssue
+    ParkPlanOnlyIssue --> RecordBudgetSlotOutcome
+    RecordBudgetSlotOutcome --> SelectBudgetReceiptSlot: następny jawny slot
+    RecordBudgetSlotOutcome --> ReduceOverBudgetReap: ostatni slot
+    ReduceOverBudgetReap --> OverBudgetResult
+    OverBudgetResult --> [*]
+```
+
+Pod-Fala ma 30 jawnych slotów receiptów. Stan issue, budżet procesu, obecność
+codera i klasyfikacja diffu są osobnymi faktami. Harvest realnego diffu jest
+jawnym łańcuchem `commit → push → PR`, a nie funkcją-composerem. Niepewny diff
+zachowuje żywego codera fail-closed. Tylko plan-only lub zamknięte issue prowadzi
+do jawnej terminacji. Zapis receiptu, stuck ledger i parkowanie są oddzielnymi
+efektami.
+
 ### Odzyskanie porzuconych etapów implementacji — `reap_stale_implementing`
 
 ```mermaid
@@ -642,6 +684,7 @@ kontraktu. Aktualny audyt:
 | `PassPlan` | `plan_pass` | składa repozytoryjne fragmenty planu przez jawne sloty |
 | `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
 | `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
+| `OverBudgetReap` | `reap_over_budget` | ogranicza receipt workera przez jawny harvest albo plan-only reap |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
