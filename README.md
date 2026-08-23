@@ -222,6 +222,36 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Walidacja self-repair — `self_repair_validate`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ReadSelfRepairCandidateState
+    ReadSelfRepairCandidateState --> ClassifySelfRepairCandidateDiff
+    ClassifySelfRepairCandidateDiff --> VerifySelfRepairCandidateIdentity
+    VerifySelfRepairCandidateIdentity --> RunSelfRepairTests
+    RunSelfRepairTests --> ListSelfRepairUntrackedPaths
+    ListSelfRepairUntrackedPaths --> SelectUntrackedPathSlot
+    SelectUntrackedPathSlot --> CheckUntrackedPathDiff: slot zawiera ścieżkę
+    SelectUntrackedPathSlot --> RecordUntrackedPathCheck: slot pusty
+    CheckUntrackedPathDiff --> RecordUntrackedPathCheck
+    RecordUntrackedPathCheck --> SelectUntrackedPathSlot: następny jawny slot
+    RecordUntrackedPathCheck --> ReduceUntrackedChecks: ostatni slot
+    ReduceUntrackedChecks --> CheckSelfRepairWorkingDiff
+    CheckSelfRepairWorkingDiff --> CheckSelfRepairCachedDiff
+    CheckSelfRepairCachedDiff --> CheckSelfRepairCommittedDiff: jest base SHA
+    CheckSelfRepairCachedDiff --> RecheckSelfRepairIdentity: brak base SHA
+    CheckSelfRepairCommittedDiff --> RecheckSelfRepairIdentity
+    RecheckSelfRepairIdentity --> SelfRepairValidationResult
+    SelfRepairValidationResult --> [*]
+```
+
+Pod-Fala oddziela początkowy stan i klasę diffu, exact commit identity, pełny
+lokalny test suite, listing untracked paths, maksymalnie 30 jawnych kontroli
+`diff --no-index --check`, trzy tracked diff checks oraz końcowy identity
+recheck. Każdy nieudany fakt kończy ścieżkę fail-closed. Izolowany `HOME` dla
+testów pozostaje własnością pojedynczego procesu testowego.
+
 ### Przygotowanie self-repair — `self_repair_prepare`
 
 ```mermaid
@@ -716,6 +746,7 @@ kontraktu. Aktualny audyt:
 | `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
 | `OverBudgetReap` | `reap_over_budget` | ogranicza receipt workera przez jawny harvest albo plan-only reap |
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
+| `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
