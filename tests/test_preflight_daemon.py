@@ -88,7 +88,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
     assert 'stat -c %Y' in script
     assert "plutil -extract StartInterval raw" in script
-    assert '[[ "${HOME}" == /Users/* ]]' in script
+    assert '[[ "${plist}" == "${HOME}/Library/LaunchAgents/${label}.plist" ]]' in script
     assert "os.setsid()" in script
     assert 'os.execv("/bin/bash", ["/bin/bash", script, "--install"])' in script
     assert "( sleep 2; exec /bin/bash" not in script
@@ -866,7 +866,8 @@ def test_launchd_runs_host_ff_but_not_daemon_when_mill_lock_busy(tmp_path):
 def test_install_writes_crash_keepalive_on_existing_plist(tmp_path):
     import plistlib
 
-    plist = tmp_path / "probe.plist"
+    plist = tmp_path / "Library" / "LaunchAgents" / "ai.mikolaj.lokay-test.plist"
+    plist.parent.mkdir(parents=True, exist_ok=True)
     plistlib.dump(
         {"Label": "ai.mikolaj.lokay-mill-test-keepalive", "StartInterval": 600},
         plist.open("wb"),
@@ -1507,3 +1508,103 @@ def test_daemon_progress_despite_fala_ok_false_exits_zero(monkeypatch, tmp_path,
     )
     assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 0
     assert '"health": "progress"' in capsys.readouterr().out
+
+
+def _fake_launchctl(tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0) -> tuple[Path, Path]:
+    local_bin = tmp_path / ".local" / "bin"
+    local_bin.mkdir(parents=True, exist_ok=True)
+    state = tmp_path / "fake-launchctl-loaded"
+    failures = tmp_path / "fake-launchctl-bootstrap-failures"
+    calls = tmp_path / "fake-launchctl-calls"
+    failures.write_text(str(bootstrap_failures), encoding="utf-8")
+    if loaded:
+        state.write_text("loaded", encoding="utf-8")
+    launchctl = local_bin / "launchctl"
+    launchctl.write_text(
+        "#!/bin/bash\n"
+        f"state='{state}'\nfailures='{failures}'\ncalls='{calls}'\n"
+        "printf '%s\\n' \"$*\" >> \"$calls\"\n"
+        "case \"$1\" in\n"
+        "  print)\n"
+        "    if [[ -f \"$state\" ]]; then\n"
+        "      printf 'path = /tmp/probe.plist\\nrun interval = 60 seconds\\nkeep alive = { SuccessfulExit => false }\\n'\n"
+        "      exit 0\n"
+        "    fi\n"
+        "    exit 113\n"
+        "    ;;\n"
+        "  bootout) rm -f \"$state\"; exit 0 ;;\n"
+        "  bootstrap)\n"
+        "    n=$(cat \"$failures\")\n"
+        "    if (( n > 0 )); then printf '%s' $((n-1)) > \"$failures\"; exit 5; fi\n"
+        "    : > \"$state\"; exit 0\n"
+        "    ;;\n"
+        "esac\nexit 0\n",
+        encoding="utf-8",
+    )
+    launchctl.chmod(0o755)
+    return local_bin, calls
+
+
+def _run_install_with_fake_launchctl(tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0):
+    import plistlib
+
+    plist = tmp_path / "Library" / "LaunchAgents" / "ai.mikolaj.lokay-test.plist"
+    plist.parent.mkdir(parents=True, exist_ok=True)
+    plistlib.dump(
+        {"Label": "ai.mikolaj.lokay-test", "StartInterval": 600},
+        plist.open("wb"),
+    )
+    local_bin, calls = _fake_launchctl(
+        tmp_path, loaded=loaded, bootstrap_failures=bootstrap_failures
+    )
+    env = {
+        "HOME": str(tmp_path),
+        "PATH": f"{local_bin}:/usr/bin:/bin",
+        "LOKAY_LAUNCHD_PLIST": str(plist),
+        "LOKAY_LAUNCHD_LABEL": "ai.mikolaj.lokay-test",
+    }
+    completed = subprocess.run(
+        ["/bin/bash", str(_script()), "--install"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed, calls.read_text(encoding="utf-8").splitlines()
+
+
+def test_install_bootstraps_missing_launchagent_without_bootout(tmp_path):
+    completed, calls = _run_install_with_fake_launchctl(tmp_path, loaded=False)
+    assert completed.returncode == 0, completed.stderr
+    assert not any(call.startswith("bootout ") for call in calls)
+    assert sum(call.startswith("bootstrap ") for call in calls) == 1
+    assert (tmp_path / ".lokay" / "launchd-keepalive.stamp").exists()
+
+
+def test_install_retries_bootstrap_and_verifies_loaded_job(tmp_path):
+    completed, calls = _run_install_with_fake_launchctl(
+        tmp_path, loaded=True, bootstrap_failures=2
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert sum(call.startswith("bootout ") for call in calls) == 1
+    assert sum(call.startswith("bootstrap ") for call in calls) == 3
+    assert (tmp_path / ".lokay" / "launchd-keepalive.stamp").exists()
+
+
+def test_install_fails_closed_when_launchagent_cannot_be_restored(tmp_path):
+    completed, calls = _run_install_with_fake_launchctl(
+        tmp_path, loaded=True, bootstrap_failures=3
+    )
+    assert completed.returncode == 75
+    assert sum(call.startswith("bootout ") for call in calls) == 1
+    assert sum(call.startswith("bootstrap ") for call in calls) == 3
+    assert not (tmp_path / ".lokay" / "launchd-keepalive.stamp").exists()
+    incident = tmp_path / ".lokay" / "preflight-bootstrap-incidents.log"
+    assert "launchagent_reload_failed" in incident.read_text(encoding="utf-8")
+
+
+def test_restart_required_never_reloads_inside_live_job():
+    script = _script().read_text(encoding="utf-8")
+    tail = script[script.index("FORCE_LAUNCHAGENT_RELOAD=0") :]
+    assert "reload_launchagent" not in tail
+    assert tail.index("os.setsid()") < tail.index('os.execv("/bin/bash"')

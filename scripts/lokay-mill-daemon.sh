@@ -545,10 +545,10 @@ loaded_keepalive_crash_only() {
   command -v launchctl >/dev/null 2>&1 || return 1
   text="$(launchctl print "user/${uid}/${label}" 2>/dev/null || true)"
   [[ -n "${text}" ]] || return 1
-  printf '%s' "${text}" | _python - <<'PY'
+  _python - "${text}" <<'PY'
 import sys
 
-text = sys.stdin.read().lower()
+text = sys.argv[1].lower()
 if "keep alive" not in text and "keepalive" not in text:
     raise SystemExit(1)
 compact = "".join(text.split())
@@ -563,14 +563,33 @@ raise SystemExit(1)
 PY
 }
 
+launchagent_loaded() {
+  local label="$1"
+  local uid
+  uid="$(id -u)"
+  launchctl print "user/${uid}/${label}" >/dev/null 2>&1
+}
+
 reload_launchagent() {
+  # Never hide a missing job. A missing job bootstraps directly. A loaded,
+  # stale job is removed only when necessary, then bootstrap is retried and
+  # verified. Failure remains non-zero so --install cannot stamp false health.
   local plist="$1"
   local label="$2"
-  local uid domain
+  local uid domain attempt
   uid="$(id -u)"
   domain="user/${uid}"
-  launchctl bootout "${domain}/${label}" >/dev/null 2>&1 || true
-  launchctl bootstrap "${domain}" "${plist}" >/dev/null 2>&1 || true
+  [[ -f "${plist}" ]] || return 66
+  if launchagent_loaded "${label}"; then
+    launchctl bootout "${domain}/${label}" >/dev/null 2>&1 || return 1
+  fi
+  for attempt in 1 2 3; do
+    if launchctl bootstrap "${domain}" "${plist}" >/dev/null 2>&1       && launchagent_loaded "${label}"; then
+      return 0
+    fi
+  done
+  bootstrap_incident "launchagent_reload_failed"
+  return 1
 }
 
 caretaker_write_interval() {
@@ -581,15 +600,14 @@ caretaker_write_interval() {
 }
 
 caretaker_reload_if_idle() {
-  # Load the host plist only after idle. Never launchctl while mill.lock
-  # is held (lokay is still in a cycle). pytest HOME is not the host.
+  # Load the HOME-local plist only after idle. Never launchctl while mill.lock
+  # is held (lokay is still in a cycle). Exact plist identity isolates tests.
   local plist="${LOKAY_LAUNCHD_PLIST}"
   local label="${LOKAY_LAUNCHD_LABEL}"
   local want="${LOKAY_LAUNCHD_START_INTERVAL}"
   local loaded=""
   local loaded_path=""
   [[ -f "${plist}" ]] || return 0
-  [[ "${HOME}" == /Users/* ]] || return 0
   [[ "${plist}" == "${HOME}/Library/LaunchAgents/${label}.plist" ]] || return 0
   command -v launchctl >/dev/null 2>&1 || return 0
   loaded="$(loaded_start_interval "${label}")"
@@ -606,7 +624,7 @@ caretaker_reload_if_idle() {
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "${LOKAY_HOME}" || exit 70
   caretaker_write_interval
-  caretaker_reload_if_idle
+  caretaker_reload_if_idle || exit 75
   if ! mill_lock_busy; then
     : > "${LOKAY_KEEPALIVE_STAMP}" || true
   fi
@@ -1218,20 +1236,20 @@ else
   bound_launchd_stdio
 fi
 
-# Self-repair writes this flag when activate+preflight released the gate.
+# A running LaunchAgent must never bootout itself: launchd kills its process
+# group before the following bootstrap can execute. Self-repair requests and
+# KeepAlive upgrades are therefore reloaded only by detached --install after
+# this tick exits.
+FORCE_LAUNCHAGENT_RELOAD=0
 if [[ -f "${LOKAY_HOME}/restart-required" ]]; then
   rm -f "${LOKAY_HOME}/restart-required" || true
-  if ! mill_lock_busy; then
-    reload_launchagent "${LOKAY_LAUNCHD_PLIST}" "${LOKAY_LAUNCHD_LABEL}" || true
-  fi
+  FORCE_LAUNCHAGENT_RELOAD=1
 fi
-# Crash KeepAlive must load after this process exits. bootout here would
-# kill the live mill. HOME=/Users is the operator host; pytest HOME is not.
 # Stamp so a missed launchctl KeepAlive probe cannot RunAtLoad every tick.
 # Trailing delayed --install checks keepalive stamp before mill_lock_busy.
 # launchd kills the job process group on idle 0, so a `&` child dies with
 # the tick. Double-fork + setsid detaches --install from that group.
-if [[ ! -f "${LOKAY_KEEPALIVE_STAMP}" ]]   && [[ "${HOME}" == /Users/* ]]   && [[ "${LOKAY_LAUNCHD_PLIST}" == "${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist" ]]   && [[ -f "${LOKAY_LAUNCHD_PLIST}" ]]   && ! mill_lock_busy   && ! loaded_keepalive_crash_only "${LOKAY_LAUNCHD_LABEL}"; then
+if { [[ "${FORCE_LAUNCHAGENT_RELOAD}" -eq 1 ]] || [[ ! -f "${LOKAY_KEEPALIVE_STAMP}" ]]; }   && [[ "${HOME}" == /Users/* ]]   && [[ "${LOKAY_LAUNCHD_PLIST}" == "${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist" ]]   && [[ -f "${LOKAY_LAUNCHD_PLIST}" ]]   && ! mill_lock_busy   && { [[ "${FORCE_LAUNCHAGENT_RELOAD}" -eq 1 ]] || ! loaded_keepalive_crash_only "${LOKAY_LAUNCHD_LABEL}"; }; then
   _python - "$0" <<'PY' || true
 import os
 import sys
