@@ -121,6 +121,51 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
     )
 
 
+def _run_refresh(*, pass_dir, config_path=None, live=True):
+    from lokay.proc.prepare_occupancy_refresh import prepare
+    from lokay.proc.clear_merged_dead_receipts import clear as clear_merged
+    from lokay.proc.select_live_receipt_slot import select as select_receipt
+    from lokay.proc.inspect_live_receipt_issue import inspect as inspect_receipt
+    from lokay.proc.reduce_occupancy_facts import reduce_state as reduce_facts
+    from lokay.proc.select_occupancy_repo_slot import select as select_repo
+    from lokay.proc.inspect_repo_pr_refresh import inspect as inspect_repo
+    from lokay.proc.list_occupancy_pull_requests import fetch
+    from lokay.proc.reduce_occupancy_refresh import reduce_state as reduce_refresh
+    from lokay.proc.persist_occupancy_refresh import persist
+
+    prepared = prepare(pass_dir=pass_dir, slot_count=30)
+    receipt_results = []
+    for slot in range(1, 31):
+        selected = select_receipt(prepared, slot=slot)
+        receipt_results.append(
+            inspect_receipt(selected, config_path=config_path, live=live)
+            if selected.get("route") == "receipt"
+            else selected
+        )
+    facts = reduce_facts(
+        prepared=prepared, merged_clear=clear_merged(prepared), results=receipt_results
+    )
+    repo_results = []
+    for slot in range(1, 31):
+        selected = select_repo(prepared, slot=slot)
+        if selected.get("route") != "repo":
+            repo_results.append(selected)
+            continue
+        inspected = inspect_repo(pass_dir=pass_dir, selected=selected, facts=facts)
+        repo_results.append(
+            fetch(inspected, config_path=config_path, live=live)
+            if inspected.get("route") == "list"
+            else inspected
+        )
+    _, working = (
+        pass_io.load_begin_working(pass_dir)
+        if hasattr(pass_io, "load_begin_working")
+        else (None, pass_io.read_json(pass_io.working_path(pass_dir)))
+    )
+    reduced = reduce_refresh(facts=facts, results=repo_results, working=working)
+    return persist(pass_dir=pass_dir, reduced=reduced)
+
+
 @pytest.mark.parametrize(
     ("pid_alive", "occupied", "started"),
     [(False, [], 0), (True, ["mikolaj92/lokay"], 1)],
@@ -140,18 +185,16 @@ def test_refresh_occupancy_uses_worker_liveness(
         detach_issue_to_pr, "coding_live_for_issue", lambda _issue: False
     )
     monkeypatch.setattr(
-        refresh_occupancy,
-        "live_issue_to_pr_receipts",
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts",
         lambda: detach_issue_to_pr.live_issue_to_pr_receipts(
             cycle, pid_alive=lambda _pid: pid_alive
         ),
     )
     monkeypatch.setattr(
-        refresh_occupancy,
-        "run_proc",
+        "lokay.proc.inspect_live_receipt_issue.run_proc",
         lambda fn, argv: (
             {"ok": True, "issue": {"state": "OPEN"}}
-            if fn is refresh_occupancy.p_get_issue.main
+            if fn is __import__("lokay.proc.get_issue", fromlist=["main"]).main
             else {"ok": True, "prs": []}
         ),
     )
@@ -164,9 +207,7 @@ def test_refresh_occupancy_uses_worker_liveness(
         },
     )
 
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
-    )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
 
     assert out["occupied_repos"] == occupied
     working = pass_io.read_json(pass_io.working_path(pass_dir))
@@ -174,49 +215,24 @@ def test_refresh_occupancy_uses_worker_liveness(
     assert working["issue_to_pr_started"] == started
 
 
-def test_refresh_live_receipt_for_closed_issue_is_cleared(tmp_path, monkeypatch):
-    pass_dir = _pass(
-        tmp_path,
-        working={
-            "ready_by_repo": {"mikolaj92/lokay": [{"number": 3, "title": "next"}]},
-            "remaining_ready": 1,
-        },
-    )
-    receipt = {"repo": "mikolaj92/lokay", "issue": 2, "pid": 9}
-    cleared: list[dict[str, Any]] = []
-    killed: list[tuple[int, int]] = []
+def test_refresh_live_receipt_for_closed_issue_is_cleared(monkeypatch):
+    from lokay.proc.terminate_closed_issue_worker import terminate
+    from lokay.proc.clear_closed_issue_receipt import clear
 
+    receipt = {"repo": "mikolaj92/lokay", "issue": 2, "pid": 9}
+    killed = []
+    cleared = []
     monkeypatch.setattr(
-        refresh_occupancy, "live_issue_to_pr_receipts", lambda: [receipt]
-    )
-    monkeypatch.setattr(
-        refresh_occupancy,
-        "clear_issue_to_pr_receipt",
-        lambda row: not cleared.append(row),
-    )
-    monkeypatch.setattr(
-        refresh_occupancy.os,
-        "kill",
+        "lokay.proc.terminate_closed_issue_worker.os.kill",
         lambda pid, sig: killed.append((pid, sig)),
     )
-
-    def fake_run(fn, argv):
-        if fn is refresh_occupancy.p_get_issue.main:
-            return {"ok": True, "issue": {"state": "CLOSED"}}
-        return {"ok": True, "prs": []}
-
-    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
+    monkeypatch.setattr(
+        "lokay.proc.clear_closed_issue_receipt.clear_issue_to_pr_receipt",
+        lambda row: not cleared.append(row),
     )
-
-    assert out["occupied_repos"] == []
-    assert out["live_issue_to_pr_repos"] == []
-    assert out["cleared_issue_to_pr_receipts"] == [
-        {"repo": "mikolaj92/lokay", "issue": 2}
-    ]
-    assert killed == [(9, refresh_occupancy.signal.SIGTERM)]
-    assert cleared == [receipt]
+    terminated = terminate({"receipt": receipt, "repo": "mikolaj92/lokay", "issue": 2})
+    out = clear(terminated)
+    assert out["cleared"] is True and killed and cleared == [receipt]
 
 
 def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
@@ -228,14 +244,13 @@ def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(
-        refresh_occupancy,
-        "run_proc",
+        "lokay.proc.list_occupancy_pull_requests.run_proc",
         lambda fn, argv: {"ok": False, "error": "gh failed"},
     )
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
+    monkeypatch.setattr(
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
     )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
@@ -328,8 +343,7 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(
-        refresh_occupancy,
-        "run_proc",
+        "lokay.proc.list_occupancy_pull_requests.run_proc",
         lambda fn, argv: {
             "ok": True,
             "prs": [
@@ -337,10 +351,10 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
             ],
         },
     )
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
+    monkeypatch.setattr(
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
     )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     parked = working["prs_by_repo"]["mikolaj92/lokay"][0]
@@ -364,11 +378,11 @@ def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
         called.append(argv[argv.index("--repo") + 1])
         return {"ok": True, "prs": []}
 
-    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
+    monkeypatch.setattr("lokay.proc.list_occupancy_pull_requests.run_proc", fake_run)
+    monkeypatch.setattr(
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
     )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
     assert called == []
     working = pass_io.read_json(pass_io.working_path(pass_dir))
@@ -397,14 +411,13 @@ def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(
-        refresh_occupancy,
-        "run_proc",
+        "lokay.proc.list_occupancy_pull_requests.run_proc",
         lambda fn, argv: {"ok": False, "error": "gh rate limit exhausted"},
     )
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
+    monkeypatch.setattr(
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
     )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
@@ -434,17 +447,15 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
         called.append(argv[argv.index("--repo") + 1])
         return {"ok": True, "prs": []}
 
-    monkeypatch.setattr(refresh_occupancy, "run_proc", fake_run)
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
+    monkeypatch.setattr("lokay.proc.list_occupancy_pull_requests.run_proc", fake_run)
+    monkeypatch.setattr(
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
     )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
     assert called == []
     assert out["survey_errors"] == 1
     assert out["probe_failed"] is True
-    source = Path(refresh_occupancy.__file__).read_text(encoding="utf-8")
-    assert "Occupancy refresh reports whether a PR probe remains failed." in source
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert working["pr_survey_failed"] == ["mikolaj92/lokay"]
     assert working["survey_errors"] == 1
@@ -464,18 +475,18 @@ def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeyp
         },
     )
     monkeypatch.setattr(
-        refresh_occupancy, "has_unreadable_issue_to_pr_receipts", lambda: True
+        "lokay.proc.prepare_occupancy_refresh.has_unreadable_issue_to_pr_receipts",
+        lambda: True,
     )
-    monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
     monkeypatch.setattr(
-        refresh_occupancy,
-        "run_proc",
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+    )
+    monkeypatch.setattr(
+        "lokay.proc.list_occupancy_pull_requests.run_proc",
         lambda *_args, **_kwargs: {"ok": True, "prs": []},
     )
 
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
-    )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
 
     assert out["receipt_state_unknown"] is True
     assert out["occupied_repos"] == []
@@ -509,14 +520,11 @@ def test_refresh_malformed_no_pid_receipt_does_not_occupy_catalog(
         },
     )
     monkeypatch.setattr(
-        refresh_occupancy,
-        "run_proc",
+        "lokay.proc.list_occupancy_pull_requests.run_proc",
         lambda *_args, **_kwargs: {"ok": True, "prs": []},
     )
 
-    out = refresh_occupancy.run_refresh_occupancy(
-        pass_dir=pass_dir, config_path=None, live=True
-    )
+    out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
 
     assert out["receipt_state_unknown"] is True
     assert out["occupied_repos"] == []

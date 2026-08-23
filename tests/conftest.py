@@ -29,7 +29,7 @@ def _isolate_mill_health_lease() -> None:
 def _isolate_live_issue_to_pr_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
     """Occupancy must not scan the host mill's ~/.lokay/cycle during compose canaries."""
     monkeypatch.setattr(
-        "lokay.proc.refresh_occupancy.live_issue_to_pr_receipts",
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts",
         lambda *a, **k: [],
     )
     monkeypatch.setattr(

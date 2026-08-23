@@ -442,6 +442,7 @@ state:
         )
         and {"ok": True},
     )
+    monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=str(cfg_path), live=True)
 
     assert len(triage_calls) == 1

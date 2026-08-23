@@ -115,7 +115,6 @@ def _bind_test_patches() -> None:
     import lokay.proc.factory_begin as factory_begin
     import lokay.proc.plan_pass as plan_pass
     import lokay.proc.queue_conflict as queue_conflict
-    import lokay.proc.refresh_occupancy as refresh_occupancy
     import lokay.proc.resolve_conflicts as resolve_conflicts
     import lokay.proc.survey_inbox as survey_inbox
     import lokay.proc.survey_prs as survey_prs
@@ -135,7 +134,6 @@ def _bind_test_patches() -> None:
     closeout_pr.compose_pr_repair = compose_pr_repair
     closeout_pr.compose_pr_triage = compose_pr_triage
     closeout_pr.is_manual_pr = _is_manual_pr
-    refresh_occupancy.run_proc = _run_bound
     queue_conflict.run_proc = _run_bound
     dispatch_implement.run_proc = _run_bound
     # Honor tick.compose_issue_to_pr only when tests replace it. The live

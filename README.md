@@ -222,6 +222,40 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Odświeżenie zajętości repozytoriów — `refresh_occupancy`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareOccupancyRefresh
+    PrepareOccupancyRefresh --> ClearMergedDeadReceipts
+    ClearMergedDeadReceipts --> SelectLiveReceiptSlot
+    SelectLiveReceiptSlot --> InspectLiveReceiptIssue: slot zawiera żywy receipt
+    SelectLiveReceiptSlot --> RecordLiveReceiptOutcome: slot pusty
+    InspectLiveReceiptIssue --> TerminateClosedIssueWorker: issue fizycznie zamknięte
+    InspectLiveReceiptIssue --> RecordLiveReceiptOutcome: issue otwarte / odczyt niepewny
+    TerminateClosedIssueWorker --> ClearClosedIssueReceipt
+    ClearClosedIssueReceipt --> RecordLiveReceiptOutcome
+    RecordLiveReceiptOutcome --> SelectLiveReceiptSlot: następny jawny slot
+    RecordLiveReceiptOutcome --> ReduceOccupancyFacts: ostatni slot
+    ReduceOccupancyFacts --> SelectOccupancyRepoSlot
+    SelectOccupancyRepoSlot --> InspectRepoPrRefresh: slot zawiera repo
+    SelectOccupancyRepoSlot --> RecordRepoPrRefresh: slot pusty
+    InspectRepoPrRefresh --> ListOccupancyPullRequests: ready i repo wolne
+    InspectRepoPrRefresh --> RecordRepoPrRefresh: occupied / no_ready
+    ListOccupancyPullRequests --> RecordRepoPrRefresh
+    RecordRepoPrRefresh --> SelectOccupancyRepoSlot: następny jawny slot
+    RecordRepoPrRefresh --> ReduceOccupancyRefresh: ostatni slot
+    ReduceOccupancyRefresh --> PersistOccupancyRefresh
+    PersistOccupancyRefresh --> OccupancyRefreshResult
+    OccupancyRefreshResult --> [*]
+```
+
+Pod-Fala ma jawne sloty dla receiptów oraz pełnego katalogu. Odczyt issue,
+terminacja procesu, usunięcie receiptu i listing PR są oddzielnymi efektami.
+Niepewny odczyt issue zachowuje zajętość fail-closed. Nieczytelny receipt nie
+zajmuje całego katalogu, ale pozostaje jawnym faktem diagnostycznym. Czyste
+reduktory składają occupancy i snapshot PR; osobny efekt zapisuje stan pass.
+
 ### Wybór repozytorium do implementacji — `select_implement`
 
 ```mermaid
@@ -570,6 +604,7 @@ kontraktu. Aktualny audyt:
 | `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
 | `ImplementationSelection` | `select_implement` | prowadzi katalog przez jawne bramki kwalifikacji repo |
 | `PassPlan` | `plan_pass` | składa repozytoryjne fragmenty planu przez jawne sloty |
+| `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
