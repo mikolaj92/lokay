@@ -177,6 +177,42 @@ Pod-Fala wybiera najwyżej jeden ticket w jednym pass. `K` jest seryjnym budżet
 kolejnych passów, nie pętlą ani równoległym schedulerem ukrytym w procesie.
 Każdy węzeł wykonuje jeden odczyt faktu, jedną mutację albo jedną redukcję stanu.
 
+### Higiena kolejki implementacji — `queue_conflict`
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectQueueConflictCandidate
+    SelectQueueConflictCandidate --> QueueConflictResult: brak kandydata
+    SelectQueueConflictCandidate --> CheckCoveringPullRequest: wybrano jedno issue
+    CheckCoveringPullRequest --> SelectQueueConflictOutcome: PR fizycznie pokrywa issue
+    CheckCoveringPullRequest --> RunQueueConflictAgent: brak pokrywającego PR
+    RunQueueConflictAgent --> ValidateQueueConflictResult
+    ValidateQueueConflictResult --> RetryQueueConflictAgent: JSON niepoprawny
+    ValidateQueueConflictResult --> SelectQueueConflictOutcome: ready / skip / close
+    RetryQueueConflictAgent --> ValidateQueueConflictRetry
+    ValidateQueueConflictRetry --> SelectQueueConflictOutcome: wynik poprawny
+    ValidateQueueConflictRetry --> SelectQueueConflictOutcome: drugi JSON niepoprawny
+    SelectQueueConflictOutcome --> KeepQueueCandidate: ready
+    SelectQueueConflictOutcome --> DropQueueCandidate: skip
+    SelectQueueConflictOutcome --> RemoveReadyLabel: close
+    SelectQueueConflictOutcome --> QueueConflictHumanTerminal: needs_human
+    RemoveReadyLabel --> AddTrackerLabel: agent wybrał tracker
+    RemoveReadyLabel --> RecordQueueConflict: bez tracker label
+    AddTrackerLabel --> RecordQueueConflict
+    KeepQueueCandidate --> RecordQueueConflict
+    DropQueueCandidate --> RecordQueueConflict
+    RecordQueueConflict --> QueueConflictResult
+    QueueConflictHumanTerminal --> QueueConflictResult
+    QueueConflictResult --> [*]
+```
+
+Pod-Fala wybiera najwyżej jedno issue w jednym pass. Pokrycie przez otwarty PR
+pozostaje twardym faktem. Pozostałą semantykę rozstrzyga agent, który zwraca
+zamknięty wynik `ready | skip | close | needs_human`. Dokładny błąd walidatora
+może uruchomić jeden retry. Python nie zastępuje poprawnego wyniku agenta
+heurystyką ani statusem wykonania. Usunięcie `ai:ready`, opcjonalne dodanie
+`ai:tracker`, aktualizacja kolejki i terminal są osobnymi efektami Fali.
+
 ### Higiena worktree — `reap_stale_worktrees`
 
 ```mermaid
