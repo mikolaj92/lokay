@@ -428,6 +428,20 @@ state:
     monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(tick, "run_resolve_conflicts", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(tick, "run_select_implement", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick,
+        "run_plan_pass",
+        lambda **kwargs: pass_io.write_json(
+            pass_io.plan_path(kwargs["pass_dir"]),
+            {
+                "triage_targets": [],
+                "closeout_targets": [],
+                "implement_candidates": [],
+                "triage_budget_remaining": 0,
+            },
+        )
+        and {"ok": True},
+    )
     result = tick.compose_tick(config_path=str(cfg_path), live=True)
 
     assert len(triage_calls) == 1

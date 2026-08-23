@@ -30,6 +30,30 @@ def _run_selection(pass_dir):
     return persist(pass_dir=pass_dir, reduced=reduced)
 
 
+def _run_plan(pass_dir):
+    from lokay.proc.prepare_pass_plan import prepare
+    from lokay.proc.select_plan_repo_slot import select
+    from lokay.proc.build_repo_plan_fragment import build
+    from lokay.proc.reduce_pass_plan import reduce_state
+    from lokay.proc.persist_pass_plan import persist
+
+    prepared = prepare(pass_dir=pass_dir, slot_count=30)
+    fragments = []
+    for slot in range(1, 31):
+        selected = select(prepared, slot=slot)
+        fragments.append(
+            build(pass_dir=pass_dir, prepared=prepared, selected=selected)
+            if selected.get("route") == "repo"
+            else selected
+        )
+    reduced = reduce_state(
+        prepared=prepared,
+        fragments=fragments,
+        working=pass_io.read_json(pass_io.working_path(pass_dir)),
+    )
+    return persist(pass_dir=pass_dir, reduced=reduced)
+
+
 def _intake_ok():
     return {
         "ok": True,
@@ -132,6 +156,9 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
         "run_select_implement",
         lambda **kwargs: _run_selection(kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(
+        tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -205,6 +232,9 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
         "run_select_implement",
         lambda **kwargs: _run_selection(kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(
+        tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -255,6 +285,9 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
         "run_select_implement",
         lambda **kwargs: _run_selection(kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(
+        tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -300,6 +333,9 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
         tick,
         "run_select_implement",
         lambda **kwargs: _run_selection(kwargs["pass_dir"]),
+    )
+    monkeypatch.setattr(
+        tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"

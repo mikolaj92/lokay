@@ -35,6 +35,7 @@ from lokay.organ.implementation_selection_boundary import (
 )
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
+from lokay.organ.pass_plan_boundary import handle_pass_plan
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
@@ -159,6 +160,7 @@ def _handle(
         handle_publication,
         handle_queue_conflict,
         handle_pr_finalize,
+        handle_pass_plan,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
