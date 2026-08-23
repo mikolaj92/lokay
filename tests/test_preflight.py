@@ -73,7 +73,9 @@ def _auth_ok(monkeypatch):
 
 def _host_ok(monkeypatch):
     ok = _auth_ok(monkeypatch)
-    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(
+        preflight.shutil, "which", lambda command, **kwargs: "/usr/bin/gh"
+    )
     monkeypatch.setattr(preflight.subprocess, "run", lambda *args, **kwargs: ok)
 
 
@@ -92,8 +94,6 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
     }
     assert (tmp_path / "runtime" / "logs").is_dir()
     assert result["repairs"][0]["value"] == "[redacted]"
-
-
 
 
 def test_missing_catalog_clone_does_not_block_global_preflight(tmp_path, monkeypatch):
@@ -126,12 +126,16 @@ def test_preflight_fails_closed_when_github_unavailable(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: None)
-    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: None)
+    monkeypatch.setattr(
+        preflight_checks.shutil, "which", lambda command, **kwargs: None
+    )
 
     result = preflight.run_preflight(str(cfg))
 
     assert result["ok"] is False
-    finding = next(item for item in result["findings"] if item["name"] == "github_authentication")
+    finding = next(
+        item for item in result["findings"] if item["name"] == "github_authentication"
+    )
     assert finding["ok"] is False
     assert all(len(item["detail"]) <= 240 for item in result["findings"])
 
@@ -163,7 +167,9 @@ def test_inherited_lease_skips_duplicate_tick_preflight(monkeypatch):
     monkeypatch.setattr(
         tick,
         "run_preflight",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("duplicate preflight")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("duplicate preflight")
+        ),
     )
     monkeypatch.setattr(
         tick,
@@ -181,7 +187,9 @@ def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
     monkeypatch.setattr(
         preflight,
         "_check",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested host checks")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("nested host checks")
+        ),
     )
 
     result = preflight.run_preflight("config.yaml")
@@ -190,7 +198,9 @@ def test_nested_run_preflight_reuses_valid_inherited_lease(monkeypatch):
     assert result["lease"] is True
 
 
-def test_validation_lease_is_bound_to_contended_custom_state_lock(tmp_path, monkeypatch):
+def test_validation_lease_is_bound_to_contended_custom_state_lock(
+    tmp_path, monkeypatch
+):
     import os
     import subprocess
     import sys
@@ -198,7 +208,11 @@ def test_validation_lease_is_bound_to_contended_custom_state_lock(tmp_path, monk
     real_run = subprocess.run
     cfg = _config(tmp_path)
     state_dir = tmp_path / "runtime" / "state"
-    for path in (state_dir, tmp_path / "runtime" / "worktrees", tmp_path / "runtime" / "logs"):
+    for path in (
+        state_dir,
+        tmp_path / "runtime" / "worktrees",
+        tmp_path / "runtime" / "logs",
+    ):
         path.mkdir(parents=True)
     custom_lock = state_dir / "mill.lock"
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -247,7 +261,11 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
 
     cfg = _config(tmp_path)
     state_dir = tmp_path / "runtime" / "state"
-    for path in (state_dir, tmp_path / "runtime" / "worktrees", tmp_path / "runtime" / "logs"):
+    for path in (
+        state_dir,
+        tmp_path / "runtime" / "worktrees",
+        tmp_path / "runtime" / "logs",
+    ):
         path.mkdir(parents=True)
     daemon_lock = tmp_path / ".lokay" / "mill.lock"
     configured_lock = state_dir / "mill.lock"
@@ -292,22 +310,14 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
     "failed",
     [
         [preflight._finding("singleton_overlap", False, "contended")],
+        [preflight._finding("writable_runtime_paths", False, "unsafe_or_unwritable")],
         [
-            preflight._finding(
-                "writable_runtime_paths", False, "unsafe_or_unwritable"
-            )
-        ],
-        [
-            preflight._finding(
-                "repository_catalog_clones", False, "missing_clone"
-            ),
+            preflight._finding("repository_catalog_clones", False, "missing_clone"),
             preflight._finding("singleton_overlap", False, "contended"),
         ],
     ],
 )
-def test_github_incident_refuses_operational_inventory_failures(
-    monkeypatch, failed
-):
+def test_github_incident_refuses_operational_inventory_failures(monkeypatch, failed):
     monkeypatch.setattr(
         preflight.subprocess,
         "run",
@@ -565,9 +575,12 @@ def test_idle_leftover_incident_skip_outlives_leftover_probe(tmp_path, monkeypat
     assert listed == []
     assert stamp.stat().st_mtime == leftover_age
     assert preflight.incident_recently_empty(stamp) is False
-    assert preflight.incident_recently_empty(
-        stamp, ttl=preflight.IDLE_INCIDENT_TTL_SECONDS
-    ) is True
+    assert (
+        preflight.incident_recently_empty(
+            stamp, ttl=preflight.IDLE_INCIDENT_TTL_SECONDS
+        )
+        is True
+    )
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
     assert "Idle leftover-incident skip outlives leftover-probe." in src.read_text(
         encoding="utf-8"
@@ -620,9 +633,7 @@ def test_leftover_incident_import_error_is_not_applied(tmp_path, monkeypatch):
     )
 
 
-def test_leftover_incident_import_error_reports_planned_not_live(
-    tmp_path, monkeypatch
-):
+def test_leftover_incident_import_error_reports_planned_not_live(tmp_path, monkeypatch):
     """Leftover-incident ImportError reports planned=not live."""
     cfg = _config(tmp_path)
     from lokay.config import load_config
@@ -690,9 +701,7 @@ def test_leftover_incident_empty_name_is_not_applied(tmp_path, monkeypatch):
     )
 
 
-def test_leftover_incident_empty_name_reports_planned_not_live(
-    tmp_path, monkeypatch
-):
+def test_leftover_incident_empty_name_reports_planned_not_live(tmp_path, monkeypatch):
     """Leftover-incident empty name reports planned=not live."""
     cfg = _config(tmp_path)
     from lokay.config import load_config
@@ -829,8 +838,9 @@ def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stam
     hermetic.write_text("1", encoding="utf-8")
     assert preflight.incident_recently_empty(hermetic) is True
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
-    assert "Pytest must not skip leftover-incident GitHub lists using the mill stamp." in src.read_text(
-        encoding="utf-8"
+    assert (
+        "Pytest must not skip leftover-incident GitHub lists using the mill stamp."
+        in src.read_text(encoding="utf-8")
     )
 
 
@@ -906,6 +916,7 @@ def test_closing_an_incident_clears_the_empty_stamp(tmp_path, monkeypatch):
     stamp.write_text("stale", encoding="utf-8")
     stamp.touch()
     import os
+
     os.utime(stamp, (0, 0))
 
     def fake_run(argv, *args, **kwargs):
@@ -1046,16 +1057,12 @@ def test_leftover_incident_oserror_reports_probe_failed(tmp_path, monkeypatch):
     [
         [preflight._finding("singleton_overlap", False, "contended")],
         [
-            preflight._finding(
-                "repository_catalog_clones", False, "missing_clone"
-            ),
+            preflight._finding("repository_catalog_clones", False, "missing_clone"),
             preflight._finding("singleton_overlap", False, "contended"),
         ],
     ],
 )
-def test_singleton_contention_is_not_recorded_as_an_incident(
-    monkeypatch, findings
-):
+def test_singleton_contention_is_not_recorded_as_an_incident(monkeypatch, findings):
     monkeypatch.setattr(
         preflight,
         "_check",
@@ -1072,7 +1079,9 @@ def test_singleton_contention_is_not_recorded_as_an_incident(
     monkeypatch.setattr(
         preflight,
         "_persist_incident",
-        lambda *args: (_ for _ in ()).throw(AssertionError("operational overlap incident")),
+        lambda *args: (_ for _ in ()).throw(
+            AssertionError("operational overlap incident")
+        ),
     )
     monkeypatch.setattr(
         preflight,
@@ -1102,9 +1111,7 @@ def test_self_repair_validation_does_not_open_recursive_incident(monkeypatch):
                 "carrier_ok": False,
                 "integrity_ok": True,
                 "findings": [
-                    preflight._finding(
-                        "singleton_overlap", False, "contended"
-                    )
+                    preflight._finding("singleton_overlap", False, "contended")
                 ],
             },
             None,
@@ -1184,7 +1191,9 @@ def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
     monkeypatch.setattr(
         preflight,
         "_check",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested host checks")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("nested host checks")
+        ),
     )
 
     result = preflight.run_preflight("config.yaml")
@@ -1196,12 +1205,16 @@ def test_nested_run_preflight_rejects_invalid_inherited_lease(monkeypatch):
 def test_rejected_inherited_tick_lease_is_not_reissued(monkeypatch):
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(
-        tick, "health_lease_status", lambda: (False, "lease_unavailable_FileNotFoundError")
+        tick,
+        "health_lease_status",
+        lambda: (False, "lease_unavailable_FileNotFoundError"),
     )
     monkeypatch.setattr(
         tick,
         "run_preflight",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested preflight")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("nested preflight")
+        ),
     )
 
     result = tick.compose_tick(config_path="config.yaml", live=True)
@@ -1219,24 +1232,44 @@ def test_no_repair_keeps_missing_locale_unhealthy(tmp_path, monkeypatch):
 
     assert result["ok"] is False
     assert result["repairs"] == []
-    assert next(item for item in result["findings"] if item["name"] == "required_environment")["ok"] is False
+    assert (
+        next(
+            item
+            for item in result["findings"]
+            if item["name"] == "required_environment"
+        )["ok"]
+        is False
+    )
 
 
 def test_real_os_lock_rejects_competitor(tmp_path):
     import subprocess, sys
+
     lock = tmp_path / "run.lock"
     assert preflight.acquire_run_lock(lock) is True
-    code = "from pathlib import Path; from lokay.preflight import acquire_run_lock; raise SystemExit(0 if acquire_run_lock(Path(%r)) else 9)" % str(lock)
-    child = subprocess.run([sys.executable, "-c", code], env={**__import__('os').environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")})
+    code = (
+        "from pathlib import Path; from lokay.preflight import acquire_run_lock; raise SystemExit(0 if acquire_run_lock(Path(%r)) else 9)"
+        % str(lock)
+    )
+    child = subprocess.run(
+        [sys.executable, "-c", code],
+        env={
+            **__import__("os").environ,
+            "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
+        },
+    )
     assert child.returncode == 9
 
 
 def test_unsafe_symlink_runtime_path_is_not_repaired(tmp_path, monkeypatch):
-    target = tmp_path / "target"; target.mkdir()
-    link = tmp_path / "linked"; link.symlink_to(target, target_is_directory=True)
+    target = tmp_path / "target"
+    target.mkdir()
+    link = tmp_path / "linked"
+    link.symlink_to(target, target_is_directory=True)
     cfg = _config(tmp_path)
     monkeypatch.setenv("LOKAY_LOG_DIR", str(link / "logs"))
-    monkeypatch.setenv("LANG", "C.UTF-8"); _host_ok(monkeypatch)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    _host_ok(monkeypatch)
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is False
     assert not (target / "worktrees").exists()
@@ -1260,21 +1293,28 @@ def test_unavailable_runtime_path_does_not_open_github_issue(tmp_path, monkeypat
 
     def allow_auth_only(args, **kwargs):
         if list(args)[:3] == ["gh", "api", "user"]:
-            return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            return type(
+                "Completed", (), {"returncode": 0, "stdout": "", "stderr": ""}
+            )()
         raise AssertionError("GitHub mutation attempted for runtime-path failure")
 
     from lokay import preflight_checks
 
     monkeypatch.setattr(preflight.subprocess, "run", allow_auth_only)
     monkeypatch.setattr(preflight_checks.subprocess, "run", allow_auth_only)
-    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}")
+    monkeypatch.setattr(
+        preflight_checks.shutil,
+        "which",
+        lambda command, **kwargs: f"/usr/bin/{command}",
+    )
 
     result = preflight.run_preflight(str(cfg), remediate=False)
 
     assert result["ok"] is False
-    assert {
-        item["name"] for item in result["findings"] if not item["ok"]
-    } == {"writable_runtime_paths", "disk_headroom"}
+    assert {item["name"] for item in result["findings"] if not item["ok"]} == {
+        "writable_runtime_paths",
+        "disk_headroom",
+    }
     assert result["incident_url"] is None
 
 
@@ -1282,11 +1322,22 @@ def test_executor_unavailable_closes_gate(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
     _auth_ok(monkeypatch)
-    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else None)
-    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+    monkeypatch.setattr(
+        preflight.shutil,
+        "which",
+        lambda command, **kwargs: "/gh" if command == "gh" else None,
+    )
+    monkeypatch.setattr(
+        preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})()
+    )
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is False
-    assert next(x for x in result["findings"] if x["name"] == "executor_availability")["ok"] is False
+    assert (
+        next(x for x in result["findings"] if x["name"] == "executor_availability")[
+            "ok"
+        ]
+        is False
+    )
     assert Path(result["local_incident"]).is_file()
 
 
@@ -1303,20 +1354,32 @@ def test_preflight_repairs_daemon_path_for_pi_in_local_bin(tmp_path, monkeypatch
     monkeypatch.setenv("LANG", "C.UTF-8")
     _auth_ok(monkeypatch)
     real_which = preflight.shutil.which
-    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
-    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+    monkeypatch.setattr(
+        preflight.shutil,
+        "which",
+        lambda command, **kwargs: (
+            "/gh" if command == "gh" else real_which(command, **kwargs)
+        ),
+    )
+    monkeypatch.setattr(
+        preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})()
+    )
 
     result = preflight.run_preflight(str(cfg))
 
     assert result["ok"] is True, result
     assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{user_bin}"
     assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
-    finding = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    finding = next(
+        x for x in result["findings"] if x["name"] == "executor_availability"
+    )
     assert finding["ok"] is True
     assert finding["repaired"] is True
 
 
-def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monkeypatch):
+def test_preflight_repairs_service_path_for_mise_shimmed_executor(
+    tmp_path, monkeypatch
+):
     """Issue #14: the mill daemon runs under a minimal launchd PATH while the
     executor (pi) lives in mise shims; preflight must expose it and release
     the gate with both incident findings healthy."""
@@ -1329,20 +1392,32 @@ def test_preflight_repairs_service_path_for_mise_shimmed_executor(tmp_path, monk
     monkeypatch.setenv("LANG", "C.UTF-8")
     _auth_ok(monkeypatch)
     real_which = preflight.shutil.which
-    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs))
-    monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})())
+    monkeypatch.setattr(
+        preflight.shutil,
+        "which",
+        lambda command, **kwargs: (
+            "/gh" if command == "gh" else real_which(command, **kwargs)
+        ),
+    )
+    monkeypatch.setattr(
+        preflight.subprocess, "run", lambda *a, **kw: type("C", (), {"returncode": 0})()
+    )
 
     result = preflight.run_preflight(str(cfg))
 
     assert result["ok"] is True, result
     assert result["gate_released"] is True
     assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
-    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    executor = next(
+        x for x in result["findings"] if x["name"] == "executor_availability"
+    )
     assert executor["ok"] is True
     assert executor["repaired"] is True
     # The other half of the incident pair (fala_smoke) stays healthy against
     # the real installed Fala and canonical manifest.
-    assert next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
+    assert (
+        next(x for x in result["findings"] if x["name"] == "fala_smoke")["ok"] is True
+    )
 
 
 def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypatch):
@@ -1360,7 +1435,9 @@ def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypat
     monkeypatch.setattr(
         preflight.shutil,
         "which",
-        lambda command, **kwargs: "/gh" if command == "gh" else real_which(command, **kwargs),
+        lambda command, **kwargs: (
+            "/gh" if command == "gh" else real_which(command, **kwargs)
+        ),
     )
     monkeypatch.setattr(
         preflight.subprocess,
@@ -1373,7 +1450,9 @@ def test_preflight_repairs_service_path_for_pi_agent_install(tmp_path, monkeypat
     assert result["ok"] is True, result
     assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{agent_bin}"
     assert any(repair["kind"] == "extend_runtime_path" for repair in result["repairs"])
-    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    executor = next(
+        x for x in result["findings"] if x["name"] == "executor_availability"
+    )
     assert executor["ok"] is True
     assert executor["repaired"] is True
 
@@ -1402,9 +1481,9 @@ def test_preflight_repairs_executor_from_login_home_when_home_is_service_fallbac
     monkeypatch.setattr(
         preflight.shutil,
         "which",
-        lambda command, **kwargs: "/gh"
-        if command == "gh"
-        else real_which(command, **kwargs),
+        lambda command, **kwargs: (
+            "/gh" if command == "gh" else real_which(command, **kwargs)
+        ),
     )
     monkeypatch.setattr(
         preflight.subprocess,
@@ -1416,12 +1495,16 @@ def test_preflight_repairs_executor_from_login_home_when_home_is_service_fallbac
 
     assert result["ok"] is True, [item for item in result["findings"] if not item["ok"]]
     assert str(login_home / ".local" / "bin") in __import__("os").environ["PATH"]
-    executor = next(x for x in result["findings"] if x["name"] == "executor_availability")
+    executor = next(
+        x for x in result["findings"] if x["name"] == "executor_availability"
+    )
     assert executor["ok"] is True
     assert executor["repaired"] is True
 
 
-def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, monkeypatch):
+def test_executor_path_repair_only_adds_directory_containing_command(
+    tmp_path, monkeypatch
+):
     home = tmp_path / "home"
     user_bin = home / ".local" / "bin"
     shims = home / ".local" / "share" / "mise" / "shims"
@@ -1435,7 +1518,9 @@ def test_executor_path_repair_only_adds_directory_containing_command(tmp_path, m
     assert __import__("os").environ["PATH"] == f"/usr/bin:/bin:{shims}"
 
 
-def test_executor_path_repair_preserves_existing_command_precedence(tmp_path, monkeypatch):
+def test_executor_path_repair_preserves_existing_command_precedence(
+    tmp_path, monkeypatch
+):
     home = tmp_path / "home"
     existing_bin = tmp_path / "existing"
     user_bin = home / ".local" / "bin"
@@ -1477,7 +1562,11 @@ def test_failed_executor_path_repair_does_not_mutate_path(tmp_path, monkeypatch)
 def test_fala_smoke_reports_bounded_exception_class(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     _host_ok(monkeypatch)
-    monkeypatch.setattr(preflight, "trusted_fala_manifest", lambda: (_ for _ in ()).throw(RuntimeError("secret detail")))
+    monkeypatch.setattr(
+        preflight,
+        "trusted_fala_manifest",
+        lambda: (_ for _ in ()).throw(RuntimeError("secret detail")),
+    )
 
     result = preflight.run_preflight(str(cfg), remediate=False)
 
@@ -1486,7 +1575,9 @@ def test_fala_smoke_reports_bounded_exception_class(tmp_path, monkeypatch):
     assert "secret detail" not in finding["detail"]
 
 
-def test_fala_smoke_requires_the_complete_lokay_workflow_manifest(tmp_path, monkeypatch):
+def test_fala_smoke_requires_the_complete_lokay_workflow_manifest(
+    tmp_path, monkeypatch
+):
     package = tmp_path / "incomplete.toml"
     package.write_text('[[correlation_paths]]\nid = "issue_to_pr"\n', encoding="utf-8")
     monkeypatch.setattr(preflight, "trusted_fala_manifest", lambda: package)
@@ -1500,15 +1591,22 @@ def test_fala_smoke_requires_the_complete_lokay_workflow_manifest(tmp_path, monk
 def test_direct_live_mutation_uses_health_gate(tmp_path, monkeypatch):
     from lokay.proc import _common
     from lokay.config import Config
+
     cfg = Config(mode="live", config_path=tmp_path / "config.yaml")
-    monkeypatch.setattr(preflight, "require_healthy", lambda path: (_ for _ in ()).throw(RuntimeError("blocked")))
+    monkeypatch.setattr(
+        preflight,
+        "require_healthy",
+        lambda path: (_ for _ in ()).throw(RuntimeError("blocked")),
+    )
     import pytest
+
     with pytest.raises(RuntimeError, match="blocked"):
         _common.mutations_allowed(live_flag=True, cfg=cfg)
 
 
 def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkeypatch):
     import subprocess, sys, os
+
     monkeypatch.setenv("HOME", str(tmp_path))
     lock = tmp_path / ".lokay" / "mill.lock"
     assert preflight.acquire_run_lock(lock)
@@ -1517,7 +1615,8 @@ def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkey
     child = subprocess.run(
         [sys.executable, "-c", code],
         env={**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")},
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert child.returncode == 0, child.stderr
     assert child.stdout.strip() == "mutated"
@@ -1552,13 +1651,17 @@ def test_health_lease_is_not_just_an_environment_flag(tmp_path, monkeypatch):
     assert preflight.has_health_lease() is False
 
 
-def test_rejected_inherited_lease_does_not_run_or_replace_preflight(tmp_path, monkeypatch):
+def test_rejected_inherited_lease_does_not_run_or_replace_preflight(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
     monkeypatch.setattr(
         preflight,
         "run_preflight",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("nested preflight")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("nested preflight")
+        ),
     )
 
     assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
@@ -1588,19 +1691,27 @@ def test_expired_inherited_lease_still_fail_closed(tmp_path, monkeypatch):
 
 def test_commit_and_push_dry_run_do_not_require_config(tmp_path, monkeypatch, capsys):
     from lokay.proc import commit_all, push_branch
+
     monkeypatch.delenv("LOKAY_CONFIG", raising=False)
     assert commit_all.main(["--worktree", str(tmp_path), "--message", "x"]) == 0
-    assert push_branch.main(["--repo", "mikolaj92/lokay", "--worktree", str(tmp_path), "--branch", "x"]) == 0
+    assert (
+        push_branch.main(
+            ["--repo", "mikolaj92/lokay", "--worktree", str(tmp_path), "--branch", "x"]
+        )
+        == 0
+    )
 
 
 def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):
     import json, time
+
     monkeypatch.setenv("HOME", str(tmp_path))
     preflight.issue_health_lease()
     path = tmp_path / ".lokay" / "health-lease"
     record = json.loads(path.read_text())
     record["expires_at"] = int(time.time()) - 1
-    path.write_text(json.dumps(record)); path.chmod(0o600)
+    path.write_text(json.dumps(record))
+    path.chmod(0o600)
     assert preflight.has_health_lease() is False
     preflight.revoke_health_lease()
     assert not path.exists()
@@ -1629,7 +1740,9 @@ def test_dead_owner_inherited_token_is_restored(tmp_path, monkeypatch):
     lease.write_text(
         json.dumps(
             {
-                "token_sha256": __import__("hashlib").sha256(("f" * 64).encode()).hexdigest(),
+                "token_sha256": __import__("hashlib")
+                .sha256(("f" * 64).encode())
+                .hexdigest(),
                 "owner_pid": 999_999_999,
                 "lock_path": str(tmp_path / ".lokay" / "mill.lock"),
                 "issued_at": 1,
@@ -1682,7 +1795,9 @@ def test_rejected_inherited_lease_cannot_be_replaced(tmp_path, monkeypatch):
     path.chmod(0o600)
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "a" * 64)
 
-    with pytest.raises(RuntimeError, match="refusing to replace inherited health lease"):
+    with pytest.raises(
+        RuntimeError, match="refusing to replace inherited health lease"
+    ):
         preflight.issue_health_lease()
 
 
@@ -1705,19 +1820,25 @@ def test_child_cannot_revoke_parent_health_lease(tmp_path, monkeypatch):
 
 def test_dead_owner_health_lease_fails(tmp_path, monkeypatch):
     import json
+
     monkeypatch.setenv("HOME", str(tmp_path))
     preflight.issue_health_lease()
     path = tmp_path / ".lokay" / "health-lease"
-    record = json.loads(path.read_text()); record["owner_pid"] = 99999999
-    path.write_text(json.dumps(record)); path.chmod(0o600)
+    record = json.loads(path.read_text())
+    record["owner_pid"] = 99999999
+    path.write_text(json.dumps(record))
+    path.chmod(0o600)
     assert preflight.has_health_lease() is False
 
 
 def test_lease_issuance_rejects_preexisting_symlink(tmp_path, monkeypatch):
     import pytest
+
     monkeypatch.setenv("HOME", str(tmp_path))
-    lease_dir = tmp_path / ".lokay"; lease_dir.mkdir()
-    victim = tmp_path / "victim"; victim.write_text("untouched")
+    lease_dir = tmp_path / ".lokay"
+    lease_dir.mkdir()
+    victim = tmp_path / "victim"
+    victim.write_text("untouched")
     (lease_dir / "health-lease").symlink_to(victim)
     with pytest.raises(RuntimeError, match="unsafe existing health lease"):
         preflight.issue_health_lease()
@@ -1727,12 +1848,16 @@ def test_lease_issuance_rejects_preexisting_symlink(tmp_path, monkeypatch):
 
 def test_lease_atomic_publish_never_writes_swap_symlink_target(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    lease_dir = tmp_path / ".lokay"; lease_dir.mkdir()
-    victim = tmp_path / "victim"; victim.write_text("untouched")
+    lease_dir = tmp_path / ".lokay"
+    lease_dir.mkdir()
+    victim = tmp_path / "victim"
+    victim.write_text("untouched")
     real_replace = preflight.os.replace
+
     def swap_then_replace(src, dst):
         Path(dst).symlink_to(victim)
         real_replace(src, dst)
+
     monkeypatch.setattr(preflight.os, "replace", swap_then_replace)
     preflight.issue_health_lease()
     assert victim.read_text() == "untouched"
@@ -1743,7 +1868,9 @@ def test_trusted_manifest_uses_packaged_copy_without_checkout(tmp_path, monkeypa
     installed = tmp_path / "site-packages" / "lokay"
     packaged = installed / "data" / "lokay.fala-package.toml"
     packaged.parent.mkdir(parents=True)
-    packaged.write_text('[[correlation_paths]]\nid = "factory_pass"\n', encoding="utf-8")
+    packaged.write_text(
+        '[[correlation_paths]]\nid = "factory_pass"\n', encoding="utf-8"
+    )
     monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("LOKAY_FALA_PACKAGE", raising=False)
@@ -1758,7 +1885,9 @@ def test_installed_manifest_ignores_unrelated_checkout_cwd(tmp_path, monkeypatch
     packaged.parent.mkdir(parents=True)
     cwd_manifest.parent.mkdir(parents=True)
     packaged.write_text('[[correlation_paths]]\nid = "installed"\n', encoding="utf-8")
-    cwd_manifest.write_text('[[correlation_paths]]\nid = "upgrading"\n', encoding="utf-8")
+    cwd_manifest.write_text(
+        '[[correlation_paths]]\nid = "upgrading"\n', encoding="utf-8"
+    )
     monkeypatch.setattr(preflight, "__file__", str(installed / "preflight.py"))
     monkeypatch.chdir(cwd_manifest.parents[1])
     monkeypatch.delenv("LOKAY_FALA_PACKAGE", raising=False)
@@ -1803,7 +1932,9 @@ def test_only_lock_owning_daemon_preflight_issues_lease(tmp_path, monkeypatch):
     _host_ok(monkeypatch)
     assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
+    monkeypatch.setattr(
+        preflight, "issue_health_lease", lambda **kwargs: issued.append(True)
+    )
 
     assert preflight.run_preflight(str(cfg), issue_lease=True)["ok"] is True
     assert issued == [True]
@@ -1817,7 +1948,9 @@ def test_direct_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     _host_ok(monkeypatch)
     assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
+    monkeypatch.setattr(
+        preflight, "issue_health_lease", lambda **kwargs: issued.append(True)
+    )
 
     assert preflight.run_preflight(str(cfg))["ok"] is True
     assert issued == []
@@ -1834,14 +1967,21 @@ def test_unhealthy_preflight_does_not_issue_lease(tmp_path, monkeypatch):
         lambda command, **kwargs: None if command == "omp" else f"/usr/bin/{command}",
     )
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
+    monkeypatch.setattr(
+        preflight, "issue_health_lease", lambda **kwargs: issued.append(True)
+    )
 
     result = preflight.run_preflight(str(cfg))
 
     assert result["ok"] is False
-    assert next(
-        item for item in result["findings"] if item["name"] == "executor_availability"
-    )["ok"] is False
+    assert (
+        next(
+            item
+            for item in result["findings"]
+            if item["name"] == "executor_availability"
+        )["ok"]
+        is False
+    )
     assert issued == []
 
 
@@ -1854,11 +1994,19 @@ def test_smoke_valid_alternate_manifest_is_untrusted_carrier(tmp_path, monkeypat
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     _host_ok(monkeypatch)
     issued = []
-    monkeypatch.setattr(preflight, "issue_health_lease", lambda **kwargs: issued.append(True))
+    monkeypatch.setattr(
+        preflight, "issue_health_lease", lambda **kwargs: issued.append(True)
+    )
     result = preflight.run_preflight(str(cfg))
     assert result["carrier_ok"] is False
     assert issued == []
-    assert next(x for x in result["findings"] if x["name"] == "fala_manifest_provenance")["ok"] is False
+    assert (
+        next(x for x in result["findings"] if x["name"] == "fala_manifest_provenance")[
+            "ok"
+        ]
+        is False
+    )
+
 
 def test_github_auth_skips_user_when_leftover_probe_already_proved(monkeypatch):
     """Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe."""
@@ -1869,7 +2017,9 @@ def test_github_auth_skips_user_when_leftover_probe_already_proved(monkeypatch):
     def fake_run(argv, **kwargs):
         raise AssertionError(f"must not probe GitHub /user: {argv}")
 
-    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(
+        preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh"
+    )
     monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
     out = preflight_checks.check_github_authentication()
     assert out["ok"] is True
@@ -1899,10 +2049,14 @@ def test_github_auth_treats_user_503_as_ok_when_token_present(monkeypatch):
                 },
             )()
         if cmd[:3] == ("gh", "auth", "status"):
-            return type("C", (), {"returncode": 0, "stdout": "Logged in", "stderr": ""})()
+            return type(
+                "C", (), {"returncode": 0, "stdout": "Logged in", "stderr": ""}
+            )()
         raise AssertionError(argv)
 
-    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(
+        preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh"
+    )
     monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
     out = preflight_checks.check_github_authentication()
     assert out["ok"] is True
@@ -1923,7 +2077,9 @@ def test_github_auth_stays_unavailable_on_401(monkeypatch):
             )()
         raise AssertionError(f"must not fall back on 401: {argv}")
 
-    monkeypatch.setattr(preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh")
+    monkeypatch.setattr(
+        preflight_checks.shutil, "which", lambda command, **kwargs: "/usr/bin/gh"
+    )
     monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
     out = preflight_checks.check_github_authentication()
     assert out["ok"] is False
@@ -1937,7 +2093,9 @@ def test_preflight_releases_gate_when_user_api_is_503(tmp_path, monkeypatch):
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     ok = type("C", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-    monkeypatch.setattr(preflight.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}")
+    monkeypatch.setattr(
+        preflight.shutil, "which", lambda command, **kwargs: f"/usr/bin/{command}"
+    )
     monkeypatch.setattr(preflight.subprocess, "run", lambda *a, **k: ok)
 
     def fake_run(argv, **kwargs):
@@ -1964,7 +2122,9 @@ def test_preflight_releases_gate_when_user_api_is_503(tmp_path, monkeypatch):
     monkeypatch.setattr(preflight_checks.subprocess, "run", fake_run)
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is True, result
-    finding = next(x for x in result["findings"] if x["name"] == "github_authentication")
+    finding = next(
+        x for x in result["findings"] if x["name"] == "github_authentication"
+    )
     assert finding["ok"] is True
 
 
@@ -2007,4 +2167,3 @@ def test_unhealthy_preflight_still_reruns_host_checks(tmp_path, monkeypatch):
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is True, result
     assert calls["n"] == 2
-

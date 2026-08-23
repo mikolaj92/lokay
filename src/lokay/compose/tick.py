@@ -19,7 +19,6 @@ from lokay.proc.compute_health import run_compute_health
 from lokay.proc import (
     verify_issue_ready as p_intake,
 )  # compatibility test hook; physical ready fact only
-from lokay.proc.dispatch_triage import run_dispatch_triage
 from lokay.proc.factory_begin import run_factory_begin
 from lokay.proc.plan_pass import run_plan_pass
 from lokay.proc.record_pass import run_record_pass
@@ -164,7 +163,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     run_survey_inbox(pass_dir=pass_dir, config_path=config_path, live=live)
     run_survey_ready(pass_dir=pass_dir, config_path=config_path, live=live)
     run_plan_pass(pass_dir=pass_dir)
-    run_dispatch_triage(pass_dir=pass_dir, config_path=config_path, live=live)
     run_resolve_conflicts(pass_dir=pass_dir, config_path=config_path, live=live)
     run_closeout_prs(pass_dir=pass_dir, config_path=config_path, live=live)
     run_refresh_occupancy(pass_dir=pass_dir, config_path=config_path, live=live)

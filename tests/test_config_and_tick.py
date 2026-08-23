@@ -69,8 +69,7 @@ executor:
 
     legacy = tmp_path / "legacy.yaml"
     legacy.write_text(
-        bare.read_text()
-        + """
+        bare.read_text() + """
 limits:
   max_issues_per_tick: 2
 """,
@@ -82,8 +81,7 @@ limits:
 
     explicit = tmp_path / "explicit.yaml"
     explicit.write_text(
-        bare.read_text()
-        + """
+        bare.read_text() + """
 limits:
   max_issue_to_pr_per_pass: 5
   max_issues_per_tick: 1
@@ -250,7 +248,16 @@ def test_agent_argv_from_template_not_vendor_branch():
 
 def test_make_branch_atomic(capsys):
     code = make_branch_main(
-        ["--prefix", "ai/fix", "--repo", "mikolaj92/lokay", "--issue", "3", "--title", "Hello World"]
+        [
+            "--prefix",
+            "ai/fix",
+            "--repo",
+            "mikolaj92/lokay",
+            "--issue",
+            "3",
+            "--title",
+            "Hello World",
+        ]
     )
     assert code == 0
     import json
@@ -258,7 +265,9 @@ def test_make_branch_atomic(capsys):
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert out["ok"] is True
     assert out["branch"].startswith("ai/fix/3-")
-    assert branch_for_issue("ai/fix", "mikolaj92/lokay", 3, "Hello World") == out["branch"]
+    assert (
+        branch_for_issue("ai/fix", "mikolaj92/lokay", 3, "Hello World") == out["branch"]
+    )
 
 
 def test_tick_offline_survey(tmp_path: Path, monkeypatch):
@@ -416,12 +425,21 @@ state:
 def test_agent_executor_environment_strips_health_lease(tmp_path):
     from lokay.agent import run_agent
     from lokay.runner import CommandResult
+
     class CapturingRunner:
         spec = None
+
         def run(self, spec, *, live):
             self.spec = spec
             return CommandResult(spec=spec, executed=True, returncode=0)
-    cfg = Config(mode="live", executor_enabled=True, agent="omp", agent_command="true", agent_args=["{{prompt}}"])
+
+    cfg = Config(
+        mode="live",
+        executor_enabled=True,
+        agent="omp",
+        agent_command="true",
+        agent_args=["{{prompt}}"],
+    )
     runner = CapturingRunner()
     run_agent(runner, cfg, worktree=tmp_path, prompt="x", execute=True)
     assert runner.spec.env["LOKAY_HEALTH_LEASE"] == ""

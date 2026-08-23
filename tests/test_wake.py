@@ -113,16 +113,6 @@ def test_execute_wake_skip_ok():
     assert out["skipped"] is True
 
 
-
-
-
-
-
-
-
-
-
-
 def test_github_actions_workflows_are_absent():
     workflows = ROOT / ".github" / "workflows"
     assert not workflows.exists() or not any(workflows.iterdir())

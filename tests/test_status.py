@@ -1,6 +1,5 @@
 """DoD status: mill_ready and blockers."""
 
-
 from pathlib import Path
 
 from lokay.cli import build_parser
@@ -126,10 +125,6 @@ def test_local_status_uses_last_pass_health(tmp_path: Path, monkeypatch):
     assert result["last_pass"]["health"] == "repairing"
     assert result["by_repo"][0]["repo"] == "a/b"
     assert result["human_residuals"]["count"] == 2
-
-
-
-
 
 
 def test_status_survey_exposes_by_repo_and_human(tmp_path: Path, monkeypatch):
@@ -261,8 +256,8 @@ def test_status_human_mailbox_not_mill_brake(tmp_path: Path, monkeypatch):
 def test_mill_daemon_does_not_override_configured_executor_metadata():
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")
-    assert 'export LOKAY_AGENT=' not in script
-    assert 'LOKAY_AGENT:-grok' not in script
+    assert "export LOKAY_AGENT=" not in script
+    assert "LOKAY_AGENT:-grok" not in script
 
 
 def test_mill_daemon_does_not_default_require_checks():
@@ -270,4 +265,4 @@ def test_mill_daemon_does_not_default_require_checks():
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts" / "lokay-mill-daemon.sh").read_text(encoding="utf-8")
     assert "LOKAY_REQUIRE_CHECKS:-1" not in script
-    assert 'export LOKAY_REQUIRE_CHECKS=' not in script
+    assert "export LOKAY_REQUIRE_CHECKS=" not in script

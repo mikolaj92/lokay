@@ -95,6 +95,27 @@ stateDiagram-v2
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
+### Uruchomienie triage — `dispatch_triage`
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectTriageTarget
+    SelectTriageTarget --> TriageDispatchResult: brak celu / dry-run
+    SelectTriageTarget --> CheckTriageStuckLedger: wybrano jedno issue
+    CheckTriageStuckLedger --> RecordTriageSkip: issue zablokowane
+    CheckTriageStuckLedger --> RunIssueTriageSubflow: issue niezablokowane
+    RunIssueTriageSubflow --> RecordTriageSuccess: pod-Fala zakończona
+    RunIssueTriageSubflow --> RecordTriageFailure: pod-Fala zawiodła technicznie
+    RecordTriageSuccess --> TriageDispatchResult
+    RecordTriageFailure --> TriageDispatchResult
+    RecordTriageSkip --> TriageDispatchResult
+    TriageDispatchResult --> [*]
+```
+
+Pod-Fala uruchamia najwyżej jeden cel triage w jednym pass. Semantyczne drzewo
+`issue_triage` pozostaje osobną autorską pod-Falą; dispatcher tylko wybiera cel,
+sprawdza fizyczny ledger, uruchamia ją i zapisuje jej zamknięty wynik.
+
 ### Uruchomienie implementacji — `dispatch_implement`
 
 ```mermaid
@@ -406,6 +427,7 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
