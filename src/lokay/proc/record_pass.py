@@ -8,6 +8,7 @@ from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
+from lokay.pass_history import append_pass_receipt
 from lokay.pass_receipt import build_pass_receipt, write_pass_receipt
 from lokay.proc._common import add_config_live
 
@@ -26,6 +27,7 @@ def run_record_pass(*, pass_dir: str) -> dict[str, Any]:
         )
         state_path = Path(str(begin.get("state_path")))
         written = write_pass_receipt(receipt, state_path=state_path)
+        append_pass_receipt(receipt, state_path=state_path)
         payload["pass_receipt_path"] = str(written)
         pass_io.write_json(pass_io.tick_path(pass_dir), payload)
     except OSError as exc:

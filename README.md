@@ -117,3 +117,18 @@ brake. All other nodes are deterministic GitHub, Git, or pure operations.
 - [`docs/NO_STUBS.md`](docs/NO_STUBS.md) — real-agent requirement
 - [`docs/HTMX.md`](docs/HTMX.md), [`docs/ALPINE.md`](docs/ALPINE.md), [`docs/PLATFORM_UI.md`](docs/PLATFORM_UI.md) — UI boundaries
 - [`repos.mikolaj92.yaml`](repos.mikolaj92.yaml) — managed repository inventory
+
+
+## Local status dashboard
+
+Run the read-only FastAPI dashboard on localhost:
+
+```bash
+uv run lokay-status-server --config config.yaml
+# http://127.0.0.1:8766
+```
+
+The server does not survey GitHub or mutate the mill. It renders the current local
+pass receipt, 24-hour and 7-day event throughput, supported repositories, per-repo
+work, blockers, and a bounded history of completed pass receipts. Core UI assets
+come from the pinned app-factory platform at same-origin `/static/platform`.
