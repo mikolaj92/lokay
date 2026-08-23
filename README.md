@@ -222,6 +222,42 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Odzyskanie porzuconych etapów implementacji — `reap_stale_implementing`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareStaleImplementingReap
+    PrepareStaleImplementingReap --> RecentEmptyResult: świeży stempel pustego wyniku
+    PrepareStaleImplementingReap --> SelectStaleRepoSlot: wymagany probe
+    SelectStaleRepoSlot --> SelectStaleLabelSlot: repo w zakresie survey
+    SelectStaleRepoSlot --> RecordStaleRepoOutcome: pusty slot / repo poza zakresem
+    SelectStaleLabelSlot --> ListStaleImplementingIssues: jawna etykieta ledgera
+    ListStaleImplementingIssues --> SelectStaleLabelSlot: następna etykieta
+    ListStaleImplementingIssues --> ReduceStaleRepoProbe: ostatnia etykieta
+    ReduceStaleRepoProbe --> RecordStaleRepoOutcome
+    RecordStaleRepoOutcome --> SelectStaleRepoSlot: następny jawny slot
+    RecordStaleRepoOutcome --> ReduceStaleImplementingProbe: ostatni slot
+    ReduceStaleImplementingProbe --> CheckStaleMutationGate: znaleziono kandydatów
+    ReduceStaleImplementingProbe --> UpdateStaleEmptyStamp: brak kandydatów / probe failed
+    CheckStaleMutationGate --> SelectStaleCandidateSlot
+    SelectStaleCandidateSlot --> RestoreStaleIssueReady: mutacje dozwolone
+    SelectStaleCandidateSlot --> RecordStaleCandidateOutcome: plan-only / pusty slot
+    RestoreStaleIssueReady --> RecordStaleCandidateOutcome
+    RecordStaleCandidateOutcome --> SelectStaleCandidateSlot: następny jawny slot
+    RecordStaleCandidateOutcome --> ReduceStaleReapEffects: ostatni slot
+    ReduceStaleReapEffects --> UpdateStaleEmptyStamp
+    UpdateStaleEmptyStamp --> PersistStaleImplementingReap
+    PersistStaleImplementingReap --> StaleImplementingResult
+    RecentEmptyResult --> [*]
+    StaleImplementingResult --> [*]
+```
+
+Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Każde repo ma trzy
+jawne odczyty etykiet aktywnego ledgera. Rate limit kończy probe repo
+fail-closed bez udawania pustego wyniku. Mutation gate jest osobnym faktem, a
+każde przywrócenie `ai:ready` osobnym efektem. Stempel TTL aktualizuje osobny
+proces dopiero po redukcji kompletnego probe i efektów.
+
 ### Odświeżenie zajętości repozytoriów — `refresh_occupancy`
 
 ```mermaid
@@ -605,6 +641,7 @@ kontraktu. Aktualny audyt:
 | `ImplementationSelection` | `select_implement` | prowadzi katalog przez jawne bramki kwalifikacji repo |
 | `PassPlan` | `plan_pass` | składa repozytoryjne fragmenty planu przez jawne sloty |
 | `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
+| `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
