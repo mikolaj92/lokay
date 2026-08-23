@@ -3320,3 +3320,1539 @@ conduction = ["record_conflict_resolution"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_conflict_resolution" }
 retry_policy = "none"
+
+[[correlation_paths]]
+id = "select_implement"
+title = "Bounded implementation repository selection"
+description = "Expose every catalog repository eligibility gate before implementation dispatch."
+
+[[correlation_paths.effectors]]
+id = "prepare_implementation_selection"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "prepare_implementation_selection" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_1"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_1" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_1"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_1"]
+when = { upstream = "select_implementation_repo_1", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_1" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_1"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_1", "inspect_implementation_eligibility_1"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_1" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_1"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_1"]
+when = { upstream = "select_implementation_eligibility_gate_1", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_1" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_1"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_1", "select_implementation_eligibility_gate_1"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_1" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_1"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_1", "record_eligible_implementation_repo_1", "record_ineligible_implementation_repo_1"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_1" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_2"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_1"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_2" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_2"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_2"]
+when = { upstream = "select_implementation_repo_2", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_2" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_2"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_2", "inspect_implementation_eligibility_2"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_2" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_2"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_2"]
+when = { upstream = "select_implementation_eligibility_gate_2", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_2" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_2"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_2", "select_implementation_eligibility_gate_2"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_2" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_2"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_2", "record_eligible_implementation_repo_2", "record_ineligible_implementation_repo_2"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_2" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_3"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_2"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_3" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_3"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_3"]
+when = { upstream = "select_implementation_repo_3", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_3" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_3"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_3", "inspect_implementation_eligibility_3"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_3" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_3"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_3"]
+when = { upstream = "select_implementation_eligibility_gate_3", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_3" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_3"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_3", "select_implementation_eligibility_gate_3"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_3" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_3"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_3", "record_eligible_implementation_repo_3", "record_ineligible_implementation_repo_3"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_3" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_4"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_3"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_4" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_4"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_4"]
+when = { upstream = "select_implementation_repo_4", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_4" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_4"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_4", "inspect_implementation_eligibility_4"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_4" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_4"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_4"]
+when = { upstream = "select_implementation_eligibility_gate_4", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_4" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_4"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_4", "select_implementation_eligibility_gate_4"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_4" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_4"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_4", "record_eligible_implementation_repo_4", "record_ineligible_implementation_repo_4"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_4" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_5"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_4"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_5" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_5"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_5"]
+when = { upstream = "select_implementation_repo_5", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_5" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_5"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_5", "inspect_implementation_eligibility_5"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_5" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_5"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_5"]
+when = { upstream = "select_implementation_eligibility_gate_5", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_5" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_5"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_5", "select_implementation_eligibility_gate_5"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_5" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_5"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_5", "record_eligible_implementation_repo_5", "record_ineligible_implementation_repo_5"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_5" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_6"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_5"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_6" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_6"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_6"]
+when = { upstream = "select_implementation_repo_6", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_6" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_6"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_6", "inspect_implementation_eligibility_6"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_6" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_6"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_6"]
+when = { upstream = "select_implementation_eligibility_gate_6", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_6" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_6"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_6", "select_implementation_eligibility_gate_6"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_6" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_6"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_6", "record_eligible_implementation_repo_6", "record_ineligible_implementation_repo_6"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_6" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_7"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_6"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_7" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_7"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_7"]
+when = { upstream = "select_implementation_repo_7", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_7" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_7"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_7", "inspect_implementation_eligibility_7"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_7" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_7"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_7"]
+when = { upstream = "select_implementation_eligibility_gate_7", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_7" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_7"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_7", "select_implementation_eligibility_gate_7"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_7" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_7"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_7", "record_eligible_implementation_repo_7", "record_ineligible_implementation_repo_7"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_7" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_8"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_7"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_8" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_8"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_8"]
+when = { upstream = "select_implementation_repo_8", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_8" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_8"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_8", "inspect_implementation_eligibility_8"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_8" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_8"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_8"]
+when = { upstream = "select_implementation_eligibility_gate_8", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_8" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_8"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_8", "select_implementation_eligibility_gate_8"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_8" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_8"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_8", "record_eligible_implementation_repo_8", "record_ineligible_implementation_repo_8"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_8" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_9"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_8"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_9" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_9"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_9"]
+when = { upstream = "select_implementation_repo_9", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_9" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_9"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_9", "inspect_implementation_eligibility_9"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_9" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_9"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_9"]
+when = { upstream = "select_implementation_eligibility_gate_9", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_9" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_9"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_9", "select_implementation_eligibility_gate_9"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_9" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_9"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_9", "record_eligible_implementation_repo_9", "record_ineligible_implementation_repo_9"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_9" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_10"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_9"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_10" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_10"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_10"]
+when = { upstream = "select_implementation_repo_10", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_10" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_10"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_10", "inspect_implementation_eligibility_10"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_10" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_10"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_10"]
+when = { upstream = "select_implementation_eligibility_gate_10", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_10" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_10"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_10", "select_implementation_eligibility_gate_10"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_10" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_10"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_10", "record_eligible_implementation_repo_10", "record_ineligible_implementation_repo_10"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_10" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_11"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_10"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_11" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_11"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_11"]
+when = { upstream = "select_implementation_repo_11", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_11" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_11"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_11", "inspect_implementation_eligibility_11"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_11" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_11"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_11"]
+when = { upstream = "select_implementation_eligibility_gate_11", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_11" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_11"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_11", "select_implementation_eligibility_gate_11"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_11" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_11"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_11", "record_eligible_implementation_repo_11", "record_ineligible_implementation_repo_11"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_11" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_12"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_11"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_12" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_12"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_12"]
+when = { upstream = "select_implementation_repo_12", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_12" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_12"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_12", "inspect_implementation_eligibility_12"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_12" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_12"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_12"]
+when = { upstream = "select_implementation_eligibility_gate_12", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_12" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_12"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_12", "select_implementation_eligibility_gate_12"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_12" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_12"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_12", "record_eligible_implementation_repo_12", "record_ineligible_implementation_repo_12"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_12" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_13"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_12"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_13" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_13"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_13"]
+when = { upstream = "select_implementation_repo_13", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_13" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_13"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_13", "inspect_implementation_eligibility_13"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_13" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_13"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_13"]
+when = { upstream = "select_implementation_eligibility_gate_13", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_13" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_13"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_13", "select_implementation_eligibility_gate_13"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_13" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_13"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_13", "record_eligible_implementation_repo_13", "record_ineligible_implementation_repo_13"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_13" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_14"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_13"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_14" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_14"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_14"]
+when = { upstream = "select_implementation_repo_14", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_14" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_14"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_14", "inspect_implementation_eligibility_14"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_14" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_14"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_14"]
+when = { upstream = "select_implementation_eligibility_gate_14", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_14" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_14"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_14", "select_implementation_eligibility_gate_14"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_14" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_14"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_14", "record_eligible_implementation_repo_14", "record_ineligible_implementation_repo_14"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_14" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_15"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_14"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_15" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_15"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_15"]
+when = { upstream = "select_implementation_repo_15", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_15" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_15"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_15", "inspect_implementation_eligibility_15"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_15" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_15"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_15"]
+when = { upstream = "select_implementation_eligibility_gate_15", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_15" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_15"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_15", "select_implementation_eligibility_gate_15"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_15" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_15"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_15", "record_eligible_implementation_repo_15", "record_ineligible_implementation_repo_15"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_15" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_16"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_15"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_16" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_16"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_16"]
+when = { upstream = "select_implementation_repo_16", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_16" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_16"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_16", "inspect_implementation_eligibility_16"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_16" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_16"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_16"]
+when = { upstream = "select_implementation_eligibility_gate_16", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_16" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_16"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_16", "select_implementation_eligibility_gate_16"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_16" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_16"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_16", "record_eligible_implementation_repo_16", "record_ineligible_implementation_repo_16"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_16" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_17"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_16"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_17" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_17"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_17"]
+when = { upstream = "select_implementation_repo_17", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_17" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_17"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_17", "inspect_implementation_eligibility_17"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_17" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_17"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_17"]
+when = { upstream = "select_implementation_eligibility_gate_17", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_17" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_17"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_17", "select_implementation_eligibility_gate_17"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_17" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_17"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_17", "record_eligible_implementation_repo_17", "record_ineligible_implementation_repo_17"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_17" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_18"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_17"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_18" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_18"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_18"]
+when = { upstream = "select_implementation_repo_18", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_18" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_18"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_18", "inspect_implementation_eligibility_18"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_18" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_18"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_18"]
+when = { upstream = "select_implementation_eligibility_gate_18", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_18" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_18"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_18", "select_implementation_eligibility_gate_18"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_18" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_18"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_18", "record_eligible_implementation_repo_18", "record_ineligible_implementation_repo_18"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_18" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_19"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_18"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_19" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_19"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_19"]
+when = { upstream = "select_implementation_repo_19", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_19" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_19"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_19", "inspect_implementation_eligibility_19"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_19" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_19"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_19"]
+when = { upstream = "select_implementation_eligibility_gate_19", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_19" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_19"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_19", "select_implementation_eligibility_gate_19"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_19" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_19"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_19", "record_eligible_implementation_repo_19", "record_ineligible_implementation_repo_19"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_19" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_20"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_19"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_20" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_20"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_20"]
+when = { upstream = "select_implementation_repo_20", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_20" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_20"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_20", "inspect_implementation_eligibility_20"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_20" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_20"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_20"]
+when = { upstream = "select_implementation_eligibility_gate_20", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_20" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_20"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_20", "select_implementation_eligibility_gate_20"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_20" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_20"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_20", "record_eligible_implementation_repo_20", "record_ineligible_implementation_repo_20"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_20" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_21"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_20"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_21" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_21"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_21"]
+when = { upstream = "select_implementation_repo_21", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_21" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_21"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_21", "inspect_implementation_eligibility_21"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_21" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_21"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_21"]
+when = { upstream = "select_implementation_eligibility_gate_21", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_21" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_21"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_21", "select_implementation_eligibility_gate_21"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_21" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_21"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_21", "record_eligible_implementation_repo_21", "record_ineligible_implementation_repo_21"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_21" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_22"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_21"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_22" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_22"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_22"]
+when = { upstream = "select_implementation_repo_22", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_22" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_22"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_22", "inspect_implementation_eligibility_22"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_22" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_22"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_22"]
+when = { upstream = "select_implementation_eligibility_gate_22", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_22" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_22"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_22", "select_implementation_eligibility_gate_22"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_22" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_22"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_22", "record_eligible_implementation_repo_22", "record_ineligible_implementation_repo_22"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_22" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_23"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_22"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_23" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_23"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_23"]
+when = { upstream = "select_implementation_repo_23", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_23" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_23"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_23", "inspect_implementation_eligibility_23"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_23" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_23"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_23"]
+when = { upstream = "select_implementation_eligibility_gate_23", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_23" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_23"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_23", "select_implementation_eligibility_gate_23"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_23" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_23"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_23", "record_eligible_implementation_repo_23", "record_ineligible_implementation_repo_23"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_23" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_24"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_23"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_24" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_24"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_24"]
+when = { upstream = "select_implementation_repo_24", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_24" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_24"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_24", "inspect_implementation_eligibility_24"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_24" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_24"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_24"]
+when = { upstream = "select_implementation_eligibility_gate_24", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_24" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_24"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_24", "select_implementation_eligibility_gate_24"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_24" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_24"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_24", "record_eligible_implementation_repo_24", "record_ineligible_implementation_repo_24"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_24" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_25"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_24"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_25" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_25"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_25"]
+when = { upstream = "select_implementation_repo_25", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_25" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_25"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_25", "inspect_implementation_eligibility_25"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_25" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_25"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_25"]
+when = { upstream = "select_implementation_eligibility_gate_25", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_25" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_25"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_25", "select_implementation_eligibility_gate_25"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_25" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_25"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_25", "record_eligible_implementation_repo_25", "record_ineligible_implementation_repo_25"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_25" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_26"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_25"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_26" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_26"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_26"]
+when = { upstream = "select_implementation_repo_26", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_26" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_26"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_26", "inspect_implementation_eligibility_26"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_26" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_26"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_26"]
+when = { upstream = "select_implementation_eligibility_gate_26", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_26" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_26"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_26", "select_implementation_eligibility_gate_26"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_26" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_26"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_26", "record_eligible_implementation_repo_26", "record_ineligible_implementation_repo_26"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_26" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_27"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_26"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_27" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_27"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_27"]
+when = { upstream = "select_implementation_repo_27", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_27" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_27"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_27", "inspect_implementation_eligibility_27"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_27" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_27"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_27"]
+when = { upstream = "select_implementation_eligibility_gate_27", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_27" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_27"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_27", "select_implementation_eligibility_gate_27"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_27" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_27"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_27", "record_eligible_implementation_repo_27", "record_ineligible_implementation_repo_27"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_27" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_28"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_27"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_28" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_28"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_28"]
+when = { upstream = "select_implementation_repo_28", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_28" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_28"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_28", "inspect_implementation_eligibility_28"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_28" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_28"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_28"]
+when = { upstream = "select_implementation_eligibility_gate_28", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_28" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_28"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_28", "select_implementation_eligibility_gate_28"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_28" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_28"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_28", "record_eligible_implementation_repo_28", "record_ineligible_implementation_repo_28"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_28" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_29"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_28"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_29" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_29"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_29"]
+when = { upstream = "select_implementation_repo_29", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_29" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_29"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_29", "inspect_implementation_eligibility_29"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_29" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_29"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_29"]
+when = { upstream = "select_implementation_eligibility_gate_29", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_29" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_29"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_29", "select_implementation_eligibility_gate_29"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_29" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_29"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_29", "record_eligible_implementation_repo_29", "record_ineligible_implementation_repo_29"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_29" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_repo_30"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_29"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_repo_30" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "inspect_implementation_eligibility_30"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_30"]
+when = { upstream = "select_implementation_repo_30", path = "route", equals = "repo" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "inspect_implementation_eligibility_30" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_eligibility_gate_30"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_30", "inspect_implementation_eligibility_30"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_eligibility_gate_30" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_eligible_implementation_repo_30"
+capability = "lokay_atom"
+conduction = ["select_implementation_eligibility_gate_30"]
+when = { upstream = "select_implementation_eligibility_gate_30", path = "route", equals = "eligible" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_eligible_implementation_repo_30" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_ineligible_implementation_repo_30"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_30", "select_implementation_eligibility_gate_30"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_ineligible_implementation_repo_30" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implementation_slot_outcome_30"
+capability = "lokay_atom"
+conduction = ["select_implementation_repo_30", "record_eligible_implementation_repo_30", "record_ineligible_implementation_repo_30"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implementation_slot_outcome_30" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "reduce_implementation_selection"
+capability = "lokay_atom"
+conduction = ["prepare_implementation_selection", "select_implementation_slot_outcome_30"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "reduce_implementation_selection" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "persist_implementation_selection"
+capability = "lokay_atom"
+conduction = ["reduce_implementation_selection"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "persist_implementation_selection" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "summarize_implementation_selection"
+capability = "lokay_atom"
+conduction = ["persist_implementation_selection"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_implementation_selection" }
+retry_policy = "none"

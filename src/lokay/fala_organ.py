@@ -30,6 +30,9 @@ from lokay.organ.implement import handle_implement
 from lokay.organ.issue_triage_boundary import handle_issue_triage
 from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.implementation_dispatch_boundary import handle_implementation_dispatch
+from lokay.organ.implementation_selection_boundary import (
+    handle_implementation_selection,
+)
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
@@ -147,6 +150,7 @@ def _handle(
         handle_repair_boundary,
         handle_issue_split,
         handle_implementation_dispatch,
+        handle_implementation_selection,
         handle_issue_triage,
         handle_pr_outcome,
         handle_lanes,

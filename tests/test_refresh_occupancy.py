@@ -11,10 +11,36 @@ import pytest
 from lokay.passkit import io as pass_io
 from lokay.proc import detach_issue_to_pr, refresh_occupancy
 from lokay.proc.closeout_prs import run_closeout_prs
-from lokay.proc.select_implement import run_select_implement
+from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
+from lokay.proc.select_implementation_repo_slot import select as _select_slot
+from lokay.proc.inspect_implementation_eligibility import inspect as _inspect_selection
+from lokay.proc.reduce_implementation_selection import reduce_state as _reduce_selection
+from lokay.proc.persist_implementation_selection import persist as _persist_selection
 
 
-def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | None = None) -> str:
+def run_select_implement(*, pass_dir: str):
+    from lokay.passkit import io as pass_io
+
+    prepared = _prepare_selection(pass_dir=pass_dir, slot_count=30)
+    results = []
+    for slot in range(1, 31):
+        selected = _select_slot(prepared, slot=slot)
+        results.append(
+            _inspect_selection(pass_dir=pass_dir, prepared=prepared, selected=selected)
+            if selected.get("route") == "repo"
+            else selected
+        )
+    reduced = _reduce_selection(
+        prepared=prepared,
+        results=results,
+        working=pass_io.read_json(pass_io.working_path(pass_dir)),
+    )
+    return _persist_selection(pass_dir=pass_dir, reduced=reduced)
+
+
+def _pass(
+    tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | None = None
+) -> str:
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()
     base_begin = {
@@ -70,14 +96,18 @@ def test_select_skips_repo_merged_this_pass(tmp_path):
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
     assert implement["clean_repos"] == []
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert any(row.get("step") == "skip_ready_repo_occupied" for row in working["actions"])
+    assert any(
+        row.get("step") == "skip_ready_repo_occupied" for row in working["actions"]
+    )
 
 
 def test_select_skips_live_issue_to_pr_repo(tmp_path):
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"mikolaj92/lokay": [{"number": 59, "title": "in flight"}]},
+            "ready_by_repo": {
+                "mikolaj92/lokay": [{"number": 59, "title": "in flight"}]
+            },
             "remaining_ready": 1,
             "live_issue_to_pr_repos": ["mikolaj92/lokay"],
             "occupied_repos": ["mikolaj92/lokay"],
@@ -86,9 +116,9 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
     result = run_select_implement(pass_dir=pass_dir)
     assert result["selected"] == 0
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert any(row.get("step") == "skip_ready_repo_occupied" for row in working["actions"])
-
-
+    assert any(
+        row.get("step") == "skip_ready_repo_occupied" for row in working["actions"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -106,7 +136,9 @@ def test_refresh_occupancy_uses_worker_liveness(
         json.dumps({"repo": "mikolaj92/lokay", "issue": 2, "pid": 987654}),
         encoding="utf-8",
     )
-    monkeypatch.setattr(detach_issue_to_pr, "coding_live_for_issue", lambda _issue: False)
+    monkeypatch.setattr(
+        detach_issue_to_pr, "coding_live_for_issue", lambda _issue: False
+    )
     monkeypatch.setattr(
         refresh_occupancy,
         "live_issue_to_pr_receipts",
@@ -211,7 +243,8 @@ def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
     assert selected["selected"] == 0
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert any(
-        row.get("step") == "skip_issue_to_pr_survey_failed" for row in working["actions"]
+        row.get("step") == "skip_issue_to_pr_survey_failed"
+        for row in working["actions"]
     )
 
 
@@ -220,7 +253,13 @@ def test_closeout_records_merged_this_pass(tmp_path, monkeypatch):
         tmp_path,
         working={
             "prs_by_repo": {
-                "mikolaj92/lokay": [{"number": 287, "head_ref": "ai/fix/141-x", "labels": ["ai:generated"]}]
+                "mikolaj92/lokay": [
+                    {
+                        "number": 287,
+                        "head_ref": "ai/fix/141-x",
+                        "labels": ["ai:generated"],
+                    }
+                ]
             },
             "remaining_prs": 1,
             "actionable_prs": 1,
@@ -293,7 +332,9 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
         "run_proc",
         lambda fn, argv: {
             "ok": True,
-            "prs": [{"number": 69, "head_ref": "ai/fix/68-x", "labels": ["ai:generated"]}],
+            "prs": [
+                {"number": 69, "head_ref": "ai/fix/68-x", "labels": ["ai:generated"]}
+            ],
         },
     )
     monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
@@ -338,8 +379,6 @@ def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
     ]
 
 
-
-
 def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
     """A 429 must not wipe a known open PR into a fake clear lane."""
     parked = {
@@ -372,6 +411,7 @@ def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
     assert working["prs_by_repo"]["mikolaj92/lokay"] == [parked]
     selected = run_select_implement(pass_dir=pass_dir)
     assert selected["selected"] == 0
+
 
 def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch):
     """An occupied 429 from survey_prs must stay on the board."""
@@ -410,8 +450,6 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
     assert working["survey_errors"] == 1
 
 
-
-
 def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeypatch):
     """Stale/unreadable receipts are idle — they do not occupy every repo."""
     pass_dir = _pass(
@@ -425,7 +463,9 @@ def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeyp
             "remaining_ready": 2,
         },
     )
-    monkeypatch.setattr(refresh_occupancy, "has_unreadable_issue_to_pr_receipts", lambda: True)
+    monkeypatch.setattr(
+        refresh_occupancy, "has_unreadable_issue_to_pr_receipts", lambda: True
+    )
     monkeypatch.setattr(refresh_occupancy, "live_issue_to_pr_receipts", lambda: [])
     monkeypatch.setattr(
         refresh_occupancy,
@@ -444,7 +484,9 @@ def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeyp
     assert working["occupied_repos"] == []
 
 
-def test_refresh_malformed_no_pid_receipt_does_not_occupy_catalog(tmp_path, monkeypatch):
+def test_refresh_malformed_no_pid_receipt_does_not_occupy_catalog(
+    tmp_path, monkeypatch
+):
     """Partial no-PID objects stay unknown but do not occupy the catalog."""
     import json
 
