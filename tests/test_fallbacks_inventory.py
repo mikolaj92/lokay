@@ -88,6 +88,22 @@ state:
 
     monkeypatch.setattr(tick_mod, "run_preflight", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(tick_mod, "_run", fake_atom)
+
+    def fake_ready(**kwargs):
+        from lokay.passkit import io as pass_io
+
+        pass_io.write_json(
+            pass_io.survey_path(kwargs["pass_dir"]),
+            pass_io.read_json(pass_io.working_path(kwargs["pass_dir"])),
+        )
+        return {
+            "ok": True,
+            "pass_dir": kwargs["pass_dir"],
+            "remaining_ready": 0,
+            "survey_errors": 0,
+        }
+
+    monkeypatch.setattr(tick_mod, "run_survey_ready", fake_ready)
     monkeypatch.setattr(
         tick_mod,
         "run_path",

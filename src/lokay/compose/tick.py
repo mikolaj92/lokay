@@ -28,7 +28,7 @@ from lokay.proc.refresh_occupancy import run_refresh_occupancy
 from lokay.proc.select_implement import run_select_implement
 from lokay.proc.survey_inbox import run_survey_inbox
 from lokay.proc.survey_prs import run_survey_prs
-from lokay.proc.survey_ready import run_survey_ready
+from lokay.proc.survey_ready_subflow import run as run_survey_ready
 from lokay.passkit import io as pass_io
 
 # Re-exports for tests that still patch tick.* symbols while the spine migrates.

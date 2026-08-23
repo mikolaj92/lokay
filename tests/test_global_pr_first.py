@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lokay.passkit import io as pass_io
 from lokay.compose import tick
 
 
@@ -56,6 +57,22 @@ def _pr(number=1, labels=None):
 
 
 def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        tick,
+        "run_survey_ready",
+        lambda **kwargs: (
+            pass_io.write_json(
+                pass_io.survey_path(kwargs["pass_dir"]),
+                pass_io.read_json(pass_io.working_path(kwargs["pass_dir"])),
+            )
+            and {
+                "ok": True,
+                "pass_dir": kwargs["pass_dir"],
+                "remaining_ready": 0,
+                "survey_errors": 0,
+            }
+        ),
+    )
     config = _config(tmp_path, repos=("a/one",), max_triage_per_tick=5)
     triage = []
 
@@ -96,6 +113,22 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
 
 
 def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        tick,
+        "run_survey_ready",
+        lambda **kwargs: (
+            pass_io.write_json(
+                pass_io.survey_path(kwargs["pass_dir"]),
+                pass_io.read_json(pass_io.working_path(kwargs["pass_dir"])),
+            )
+            and {
+                "ok": True,
+                "pass_dir": kwargs["pass_dir"],
+                "remaining_ready": 0,
+                "survey_errors": 0,
+            }
+        ),
+    )
     """Just-merged repo stays occupied this pass — do not publish #288 from stale main."""
     config = _config(tmp_path, repos=("a/one",), max_issue_to_pr_per_pass=1)
     listed = {"prs": 0}
@@ -142,6 +175,22 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
 
 
 def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        tick,
+        "run_survey_ready",
+        lambda **kwargs: (
+            pass_io.write_json(
+                pass_io.survey_path(kwargs["pass_dir"]),
+                pass_io.read_json(pass_io.working_path(kwargs["pass_dir"])),
+            )
+            and {
+                "ok": True,
+                "pass_dir": kwargs["pass_dir"],
+                "remaining_ready": 0,
+                "survey_errors": 0,
+            }
+        ),
+    )
     config = _config(tmp_path)
 
     def fake_run(fn, argv):
@@ -167,6 +216,22 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
 
 
 def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        tick,
+        "run_survey_ready",
+        lambda **kwargs: (
+            pass_io.write_json(
+                pass_io.survey_path(kwargs["pass_dir"]),
+                pass_io.read_json(pass_io.working_path(kwargs["pass_dir"])),
+            )
+            and {
+                "ok": True,
+                "pass_dir": kwargs["pass_dir"],
+                "remaining_ready": 0,
+                "survey_errors": 0,
+            }
+        ),
+    )
     """No ready work + parked mailbox PR → waiting, never stall/recovery bait."""
     config = _config(tmp_path, repos=("a/one",))
 

@@ -95,6 +95,35 @@ stateDiagram-v2
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
+### Przegląd gotowych issue — `survey_ready`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareReadySurvey
+    PrepareReadySurvey --> FinalizeReadySurvey: stamp recent_empty jest aktywny
+    PrepareReadySurvey --> SelectReadyRepoSlot: survey dozwolone
+    SelectReadyRepoSlot --> ListWorkReadyIssues: slot zawiera repo hot / rotowane cold
+    SelectReadyRepoSlot --> RecordReadyRepoResult: slot cold albo pusty
+    ListWorkReadyIssues --> ClassifyReadyRepoIssues: listing GitHub zakończony
+    ClassifyReadyRepoIssues --> ParkOneBlockedReadyIssue: istnieje zablokowane issue
+    ClassifyReadyRepoIssues --> RecordReadyRepoResult: brak issue do parkowania
+    ParkOneBlockedReadyIssue --> RecordReadyRepoResult
+    RecordReadyRepoResult --> SelectReadyRepoSlot: następny statyczny slot
+    RecordReadyRepoResult --> FinalizeReadySurvey: ostatni slot
+    FinalizeReadySurvey --> UpdateSurveyStamp
+    UpdateSurveyStamp --> ReadySurveyResult
+    ReadySurveyResult --> [*]
+```
+
+Pod-Fala rozwija skonfigurowany katalog do jawnych, statycznie ograniczonych
+slotów repozytoriów. Manifest Fali zawiera każdy slot i jego krawędzie; żaden
+proces Pythonowy nie iteruje po repozytoriach ani nie uruchamia kolejnego etapu.
+Listing `work:ready` jest fizycznym odczytem GitHub i zwraca tylko otwarte issue.
+Osobny czysty reduktor wyklucza issue pokryte przez PR albo ledger. Osobny efekt
+parkuje najwyżej jedno zablokowane issue na repozytorium i pass, więc mutacja
+pozostaje atomowa, a higiena postępuje bez ukrytej pętli. Finalizator wyłącznie
+materializuje zgromadzony stan survey i nie podejmuje decyzji trasujących.
+
 ### Uruchomienie triage — `dispatch_triage`
 
 ```mermaid
@@ -427,6 +456,7 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `ReadySurvey` | `survey_ready` | seryjny odczyt i klasyfikacja gotowych issue |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
