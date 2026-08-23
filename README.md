@@ -95,6 +95,38 @@ stateDiagram-v2
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
+### Uruchomienie implementacji — `dispatch_implement`
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectImplementationCandidate
+    SelectImplementationCandidate --> DispatchResult: brak kandydata / brak budżetu / dry-run
+    SelectImplementationCandidate --> InspectRepositoryMutex: wybrano jedno repo i issue
+    InspectRepositoryMutex --> KeepCandidateQueued: mutex zajęty lub nieznany
+    InspectRepositoryMutex --> VerifyIssueReady: mutex wolny
+    VerifyIssueReady --> DropStaleCandidate: issue nie jest już fizycznie open + ai:ready
+    VerifyIssueReady --> LaunchIssueToPullRequest: issue nadal gotowe
+    LaunchIssueToPullRequest --> RecordDispatchSuccess: worker uruchomiony
+    LaunchIssueToPullRequest --> RecordDispatchFailure: uruchomienie nieudane
+    RecordDispatchSuccess --> PersistStuckLedger
+    RecordDispatchFailure --> PersistStuckLedger
+    PersistStuckLedger --> LabelIssueBlocked: osiągnięto ograniczony próg awarii
+    PersistStuckLedger --> DispatchResult: można spróbować w późniejszym pass
+    LabelIssueBlocked --> PersistBlockedState
+    PersistBlockedState --> ParkPlanOnly: wynik plan_only
+    PersistBlockedState --> DispatchResult: inna ograniczona awaria
+    ParkPlanOnly --> DispatchResult
+    PersistStuckLedger --> WriteDispatchReceipt: worker uruchomiony
+    WriteDispatchReceipt --> DispatchResult
+    KeepCandidateQueued --> DispatchResult
+    DropStaleCandidate --> DispatchResult
+    DispatchResult --> [*]
+```
+
+Pod-Fala wybiera najwyżej jeden ticket w jednym pass. `K` jest seryjnym budżetem
+kolejnych passów, nie pętlą ani równoległym schedulerem ukrytym w procesie.
+Każdy węzeł wykonuje jeden odczyt faktu, jedną mutację albo jedną redukcję stanu.
+
 ### Higiena worktree — `reap_stale_worktrees`
 
 ```mermaid
@@ -374,6 +406,7 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |

@@ -19,7 +19,6 @@ from lokay.proc.compute_health import run_compute_health
 from lokay.proc import (
     verify_issue_ready as p_intake,
 )  # compatibility test hook; physical ready fact only
-from lokay.proc.dispatch_implement import run_dispatch_implement
 from lokay.proc.dispatch_triage import run_dispatch_triage
 from lokay.proc.factory_begin import run_factory_begin
 from lokay.proc.plan_pass import run_plan_pass
@@ -171,7 +170,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     run_refresh_occupancy(pass_dir=pass_dir, config_path=config_path, live=live)
     run_select_implement(pass_dir=pass_dir)
     run_queue_conflict(pass_dir=pass_dir, config_path=config_path, live=live)
-    run_dispatch_implement(pass_dir=pass_dir, config_path=config_path, live=live)
     run_compute_health(pass_dir=pass_dir)
     recorded = run_record_pass(pass_dir=pass_dir)
     tick = recorded.get("tick")

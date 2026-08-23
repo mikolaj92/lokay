@@ -56,187 +56,9 @@ def _issue(**kwargs) -> Issue:
 # ---------------------------------------------------------------------------
 
 
-def test_contract_busy_repo_a_does_not_block_clean_repo_b(tmp_path, monkeypatch):
-    """Actionable AI PR in A: triage/implement still schedule in clean B."""
-    config = write_mill_config(
-        tmp_path,
-        repos=("a/busy", "a/clean"),
-        max_issue_to_pr_per_pass=2,
-        max_triage_per_tick=5,
-    )
-    triage_calls: list[dict] = []
-    implemented: list[dict] = []
-
-    def fake_run(fn, argv):
-        repo = argv[argv.index("--repo") + 1]
-        if fn is tick.p_list_prs.main:
-            return {
-                "ok": True,
-                "prs": [open_ai_pr(9)] if repo == "a/busy" else [],
-            }
-        if fn is tick.p_list_inbox.main:
-            # Inbox only in clean repo — must still triage there.
-            return {
-                "ok": True,
-                "issues": (
-                    [{"number": 3, "repo": repo, "title": "inbox"}]
-                    if repo == "a/clean"
-                    else []
-                ),
-            }
-        if fn is tick.p_list_issues.main:
-            return {
-                "ok": True,
-                "issues": (
-                    [
-                        {
-                            "number": 2,
-                            "repo": repo,
-                            "title": "ready-work",
-                            "labels": ["work:ready", "ai:ready"],
-                        }
-                    ]
-                    if repo == "a/clean"
-                    else []
-                ),
-            }
-        if fn is tick.p_checks.main:
-            return {"ok": True, "status": "pending"}
-        if fn is tick.p_intake.main:
-            return intake_ready_envelope()
-        raise AssertionError(fn)
-
-    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(tick, "_run", fake_run)
-    monkeypatch.setattr(
-        tick,
-        "run_path",
-        lambda **kw: triage_calls.append(kw) or {"ok": True},
-    )
-    monkeypatch.setattr(
-        tick,
-        "compose_issue_to_pr",
-        lambda **kw: implemented.append(kw)
-        or {"ok": True, "pr": 2, "branch": "ai/fix/2-ready-work"},
-    )
-
-    result = tick.compose_tick(config_path=config, live=True)
-
-    assert any(c.get("repo") == "a/clean" for c in triage_calls)
-    assert not any(c.get("repo") == "a/busy" for c in triage_calls)
-    assert len(implemented) == 1
-    assert implemented[0]["repo"] == "a/clean"
-    steps = step_names(result["actions"])
-    assert "skip_ready_open_ai_pr" in steps
-    assert result["remaining"]["intake_skip_reason"] is None
-
-
 # ---------------------------------------------------------------------------
 # 2) K cap on issue_to_pr across repos
 # ---------------------------------------------------------------------------
-
-
-def test_contract_default_k_is_serial_one(tmp_path, monkeypatch):
-    """Serial by design: default K=1 starts one issue_to_pr per pass."""
-    repos = ("a/one", "a/two", "a/three")
-    config = write_mill_config(tmp_path, repos=repos)  # fixture default K=1
-    implemented: list[dict] = []
-
-    def fake_run(fn, argv):
-        repo = argv[argv.index("--repo") + 1]
-        if fn is tick.p_list_prs.main:
-            return {"ok": True, "prs": []}
-        if fn is tick.p_list_inbox.main:
-            return {"ok": True, "issues": []}
-        if fn is tick.p_list_issues.main:
-            return {
-                "ok": True,
-                "issues": [
-                    {
-                        "number": 2,
-                        "repo": repo,
-                        "title": f"work-{repo}",
-                        "labels": ["work:ready", "ai:ready"],
-                    }
-                ],
-            }
-        if fn is tick.p_intake.main:
-            return intake_ready_envelope()
-        raise AssertionError(fn)
-
-    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(tick, "_run", fake_run)
-    monkeypatch.setattr(
-        tick,
-        "compose_issue_to_pr",
-        lambda **kw: implemented.append(kw)
-        or {
-            "ok": True,
-            "pr": 10 + len(implemented),
-            "branch": f"ai/fix/2-{kw['repo'].replace('/', '-')}",
-        },
-    )
-
-    result = tick.compose_tick(config_path=config, live=True)
-
-    assert len(implemented) == 1
-    assert result["remaining"]["issue_to_pr_started"] == 1
-    assert result["remaining"]["max_issue_to_pr_per_pass"] == 1
-
-
-def test_contract_k_caps_issue_to_pr_across_repos(tmp_path, monkeypatch):
-    """Configured K>1 still honored as a rare pass breadth budget (not concurrency)."""
-    repos = ("a/one", "a/two", "a/three", "a/four")
-    config = write_mill_config(
-        tmp_path, repos=repos, max_issue_to_pr_per_pass=3
-    )
-    implemented: list[dict] = []
-
-    def fake_run(fn, argv):
-        repo = argv[argv.index("--repo") + 1]
-        if fn is tick.p_list_prs.main:
-            return {"ok": True, "prs": []}
-        if fn is tick.p_list_inbox.main:
-            return {"ok": True, "issues": []}
-        if fn is tick.p_list_issues.main:
-            return {
-                "ok": True,
-                "issues": [
-                    {
-                        "number": 2,
-                        "repo": repo,
-                        "title": f"work-{repo}",
-                        "labels": ["work:ready", "ai:ready"],
-                    }
-                ],
-            }
-        if fn is tick.p_intake.main:
-            return intake_ready_envelope()
-        raise AssertionError(fn)
-
-    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(tick, "_run", fake_run)
-    monkeypatch.setattr(
-        tick,
-        "compose_issue_to_pr",
-        lambda **kw: implemented.append(kw)
-        or {
-            "ok": True,
-            "pr": 10 + len(implemented),
-            "branch": f"ai/fix/2-{kw['repo'].replace('/', '-')}",
-        },
-    )
-
-    result = tick.compose_tick(config_path=config, live=True)
-
-    assert len(implemented) == 3
-    assert result["remaining"]["issue_to_pr_started"] == 3
-    assert result["remaining"]["max_issue_to_pr_per_pass"] == 3
-    by_repo = {row["repo"]: row for row in result["remaining"]["by_repo"]}
-    # The list rows intentionally omit state. Missing state is still OPEN ready.
-    assert result["remaining"]["ready"] == 1
-    # One clean repo must remain ready after K is exhausted.
-    assert sum(1 for r in by_repo.values() if r.get("ready")) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +110,9 @@ def test_contract_trusted_author_ordinary_issue_prefers_ready(tmp_path: Path):
     """Operator-owned intentional work → READY+implement; no NEEDS_HUMAN gate."""
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="app"\n', encoding="utf-8"
+    )
     d = decide_intake(
         _issue(assignees=["mikolaj92"]),
         clone_path=tmp_path,
@@ -303,7 +127,9 @@ def test_contract_intake_close_not_implementable(tmp_path: Path):
     """Wrong-shape playbook closes — does not park NEEDS_HUMAN."""
     (tmp_path / "README.md").write_text("A pure library kit.\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="kit"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="kit"\n', encoding="utf-8"
+    )
     d = decide_intake(
         _issue(
             title="Adopt product_shell / Basecoat host stack",
@@ -347,95 +173,6 @@ def test_contract_needs_human_is_rare_residual_only(tmp_path: Path):
     assert d.decision == "needs_human"
     assert d.implementable is False
     assert d.reason.startswith("inconclusive_")
-
-
-@pytest.mark.parametrize(
-    "decision,reason",
-    [
-        ("close", "wrong_product_shape"),
-        ("split", "inventory_blob"),
-    ],
-)
-def test_contract_intake_reject_gates_issue_to_pr(
-    tmp_path, monkeypatch, decision, reason
-):
-    """Mill public surface: CLOSE/SPLIT under --require-ready never issue_to_pr."""
-    config = write_mill_config(tmp_path, repos=("a/lib",), max_issue_to_pr_per_pass=1)
-    implemented: list[dict] = []
-
-    def fake_run(fn, argv):
-        if fn is tick.p_list_prs.main:
-            return {"ok": True, "prs": []}
-        if fn is tick.p_list_inbox.main:
-            return {"ok": True, "issues": []}
-        if fn is tick.p_list_issues.main:
-            return {
-                "ok": True,
-                "issues": [
-                    {
-                        "number": 9,
-                        "repo": "a/lib",
-                        "title": "Work",
-                        "labels": ["work:ready", "ai:ready"],
-                    }
-                ],
-            }
-        if fn is tick.p_intake.main:
-                        return intake_reject_envelope(decision, reason=reason)
-        raise AssertionError(fn)
-
-    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(tick, "_run", fake_run)
-    monkeypatch.setattr(
-        tick,
-        "compose_issue_to_pr",
-        lambda **kw: implemented.append(kw)
-        or (_ for _ in ()).throw(AssertionError("issue_to_pr must not run")),
-    )
-
-    result = tick.compose_tick(config_path=config, live=True)
-    assert implemented == []
-    assert "verify_issue_ready" in step_names(result["actions"])
-
-
-def test_contract_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
-    config = write_mill_config(tmp_path, repos=("a/lib",), max_issue_to_pr_per_pass=1)
-    implemented: list[dict] = []
-
-    def fake_run(fn, argv):
-        if fn is tick.p_list_prs.main:
-            return {"ok": True, "prs": []}
-        if fn is tick.p_list_inbox.main:
-            return {"ok": True, "issues": []}
-        if fn is tick.p_list_issues.main:
-            return {
-                "ok": True,
-                "issues": [
-                    {
-                        "number": 4,
-                        "repo": "a/lib",
-                        "title": "Fix parser",
-                        "labels": ["work:ready", "ai:ready"],
-                    }
-                ],
-            }
-        if fn is tick.p_intake.main:
-                        return intake_ready_envelope()
-        raise AssertionError(fn)
-
-    monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
-    monkeypatch.setattr(tick, "_run", fake_run)
-    monkeypatch.setattr(
-        tick,
-        "compose_issue_to_pr",
-        lambda **kw: implemented.append(kw)
-        or {"ok": True, "pr": 7, "branch": "ai/fix/4-fix-parser"},
-    )
-
-    result = tick.compose_tick(config_path=config, live=True)
-    assert len(implemented) == 1
-    assert implemented[0]["issue_number"] == 4
-    assert "verify_issue_ready" in step_names(result["actions"])
 
 
 # ---------------------------------------------------------------------------
@@ -566,9 +303,7 @@ def test_live_autonomous_example_profile_knobs():
     assert data["github"]["assignee"] == "mikolaj92"
 
     # Default example stays dry-run / merge-off (do not swap defaults).
-    default = yaml.safe_load(
-        (ROOT / "config.example.yaml").read_text(encoding="utf-8")
-    )
+    default = yaml.safe_load((ROOT / "config.example.yaml").read_text(encoding="utf-8"))
     assert default["mode"] == "dry-run"
     assert default["executor"]["enabled"] is False
     assert default["merge"]["enabled"] is False
