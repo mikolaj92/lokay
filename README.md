@@ -257,15 +257,37 @@ stateDiagram-v2
     PrepareRepairWorktree --> CollectRepairEvidence
     CollectRepairEvidence --> RepairAgent
     RepairAgent --> ValidateRepairResult
-    ValidateRepairResult --> RepairAgent: invalid JSON + informacja zwrotna
-    ValidateRepairResult --> CollectRepairEvidence: NEEDS_EVIDENCE
-    ValidateRepairResult --> CommitRepair: REPAIRED
-    ValidateRepairResult --> HumanTerminal: NEEDS_HUMAN
+    ValidateRepairResult --> SelectRepairResult: wynik poprawny
+    ValidateRepairResult --> RepairRetryAgent: invalid JSON + informacja zwrotna
+    RepairRetryAgent --> ValidateRepairRetry
+    ValidateRepairRetry --> SelectRepairResult: wynik poprawny
+    ValidateRepairRetry --> HumanTerminal: nadal invalid JSON
+    SelectRepairResult --> CollectPrMetadata: NEEDS_EVIDENCE(pr_metadata)
+    SelectRepairResult --> CollectChangedFiles: NEEDS_EVIDENCE(changed_files)
+    SelectRepairResult --> CollectTestContract: NEEDS_EVIDENCE(test_contract)
+    SelectRepairResult --> CollectReviewFindings: NEEDS_EVIDENCE(review_findings)
+    CollectPrMetadata --> EvidenceRepairAgent
+    CollectChangedFiles --> EvidenceRepairAgent
+    CollectTestContract --> EvidenceRepairAgent
+    CollectReviewFindings --> EvidenceRepairAgent
+    EvidenceRepairAgent --> ValidateEvidenceRepair
+    ValidateEvidenceRepair --> FinalizeRepairResult: wynik poprawny
+    ValidateEvidenceRepair --> HumanTerminal: invalid JSON
+    FinalizeRepairResult --> HumanTerminal: ponowne NEEDS_EVIDENCE / NEEDS_HUMAN
+    SelectRepairResult --> VerifyRepairDiff: REPAIRED
+    FinalizeRepairResult --> VerifyRepairDiff: REPAIRED
+    VerifyRepairDiff --> CommitRepair
     CommitRepair --> LocalRepairTest
-    LocalRepairTest --> VerifyRepairDiff: PASS
-    LocalRepairTest --> RepairAgent: FAIL i budżet pozostał
-    LocalRepairTest --> RepairTerminal: FAIL i brak budżetu
-    VerifyRepairDiff --> PushNewSha
+    LocalRepairTest --> VerifyPublishDiff: PASS
+    LocalRepairTest --> TestRepairAgent: FAIL
+    TestRepairAgent --> ValidateTestRepair
+    ValidateTestRepair --> VerifyTestRepairDiff: REPAIRED
+    ValidateTestRepair --> RepairTerminal: invalid JSON / NEEDS_HUMAN
+    VerifyTestRepairDiff --> CommitTestRepair
+    CommitTestRepair --> LocalRepairTestAgain
+    LocalRepairTestAgain --> VerifyPublishDiff: PASS
+    LocalRepairTestAgain --> RepairTerminal: FAIL
+    VerifyPublishDiff --> PushNewSha
     PushNewSha --> [*]
     HumanTerminal --> [*]
     RepairTerminal --> [*]
