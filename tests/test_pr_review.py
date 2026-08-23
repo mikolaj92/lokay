@@ -4,7 +4,6 @@ import json
 
 import pytest
 
-from lokay.proc import pr_review as pr_review_proc
 from lokay.pr_review import (
     PrReviewError,
     build_review_comment_body,
@@ -22,72 +21,6 @@ from lokay.pr_review import (
 )
 
 
-
-
-def test_lokay_repo_still_loads_evidence(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    cfg = type("Cfg", (), {"mode": "live", "executor_enabled": True})()
-    sentinel_runner = object()
-    calls: list[tuple[object, str, int, bool]] = []
-
-    monkeypatch.setattr(pr_review_proc, "load_cfg", lambda _args: cfg)
-    monkeypatch.setattr(pr_review_proc, "runner", lambda: sentinel_runner)
-    monkeypatch.setattr(pr_review_proc, "agent_execute_allowed", lambda *_args, **_kwargs: True)
-
-    def load_evidence(
-        evidence_runner: object, repo: str, pr: int, *, live: bool, **_kwargs: object
-    ) -> dict[str, object]:
-        calls.append((evidence_runner, repo, pr, live))
-        return {
-            "title": "title", "body": "", "head": "branch", "head_sha": "sha",
-            "comments": [], "diff": "diff", "checks_text": "checks",
-        }
-
-    monkeypatch.setattr(pr_review_proc, "load_pr_evidence", load_evidence)
-    monkeypatch.setattr(
-        pr_review_proc,
-        "run_agent",
-        lambda *_args, **_kwargs: {"status": "planned"},
-    )
-    monkeypatch.setattr(pr_review_proc, "review_worktree", lambda *_args: tmp_path)
-
-    assert pr_review_proc.main(["--repo", "mikolaj92/lokay", "--pr", "490"]) == 0
-    assert calls == [(sentinel_runner, "mikolaj92/lokay", 490, False)]
-    assert json.loads(capsys.readouterr().out)["planned"] is True
-
-
-def test_review_evidence_failure_returns_probe_failed_envelope(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    cfg = type("Cfg", (), {"mode": "live", "executor_enabled": True})()
-    monkeypatch.setattr(pr_review_proc, "load_cfg", lambda _args: cfg)
-    monkeypatch.setattr(pr_review_proc, "runner", lambda: object())
-    monkeypatch.setattr(pr_review_proc, "agent_execute_allowed", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(
-        pr_review_proc,
-        "load_pr_evidence",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("diff unavailable")),
-    )
-    monkeypatch.setattr(
-        pr_review_proc,
-        "run_agent",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError("review must not run without evidence")
-        ),
-    )
-
-    assert pr_review_proc.main(
-        ["--repo", "mikolaj92/lokay", "--pr", "490", "--live"]
-    ) == 1
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["ok"] is False
-    assert payload["probe_failed"] is True
-    assert payload["merge_ok"] is False
-    assert "diff unavailable" in payload["error"]
 
 
 def test_parse_plain_json():

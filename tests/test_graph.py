@@ -333,7 +333,7 @@ def _host(path_id, results, *, live=True, ok=True):
 
 def test_fala_approve_contract():
     out = _host("pr_triage", {
-        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"decision": {"verdict": "approve"}}}},
+        "publish_pr_review": {"id": "publish_pr_review", "status": "completed", "output": {"values": {"decision": {"verdict": "approve"}}}},
         "pr_merge": {"id": "pr_merge", "status": "completed", "output": {"values": {"merged": True}}},
         "close_issue": {"id": "close_issue", "status": "completed", "output": {"values": {"issue": 33}}},
     })
@@ -343,7 +343,7 @@ def test_fala_approve_contract():
 def test_fala_request_changes_contract():
     review = {"verdict": "request_changes", "secrets": False, "blocking": ["test"]}
     out = _host("pr_triage", {
-        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"decision": review}}},
+        "publish_pr_review": {"id": "publish_pr_review", "status": "completed", "output": {"values": {"decision": review}}},
         "review_repair_gate": {"id": "review_repair_gate", "status": "completed", "output": {"values": {"route": "repair"}}},
         "pr_repair_subflow": {"id": "pr_repair_subflow", "status": "completed", "output": {"values": {"ok": True, "kind": "pr_repair"}}},
     })
@@ -352,7 +352,7 @@ def test_fala_request_changes_contract():
 
 def test_fala_already_reviewed_request_changes_still_enters_repair():
     out = _host("pr_triage", {
-        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {
+        "publish_pr_review": {"id": "publish_pr_review", "status": "completed", "output": {"values": {
             "skipped": True, "reason": "already_reviewed_head",
             "decision": {"verdict": "request_changes"},
         }}},
@@ -366,7 +366,7 @@ def test_fala_already_reviewed_request_changes_still_enters_repair():
 
 def test_fala_needs_human_contract():
     out = _host("pr_triage", {
-        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"decision": {"verdict": "needs_human"}}}},
+        "publish_pr_review": {"id": "publish_pr_review", "status": "completed", "output": {"values": {"decision": {"verdict": "needs_human"}}}},
         "review_manual": {"id": "review_manual", "status": "completed", "output": {"values": {"terminal": True, "reason": "review_needs_human"}}},
     })
     assert out["skipped"] and not out["repairable"] and out["needs_review"]
@@ -465,7 +465,7 @@ def test_completed_effector_without_output_fails_closed():
 
 def test_fala_review_not_required_contract_allows_merge():
     out = _host("pr_triage", {
-        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"skipped": True, "reason": "llm_review_not_required", "decision": {"verdict": "approve"}, "merge_ok": True}}},
+        "publish_pr_review": {"id": "publish_pr_review", "status": "completed", "output": {"values": {"skipped": True, "reason": "llm_review_not_required", "decision": {"verdict": "approve"}, "merge_ok": True}}},
         "pr_merge": {"id": "pr_merge", "status": "completed", "output": {"values": {"merged": True}}},
     })
     assert out["ok"] is True
@@ -538,9 +538,12 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "commit_all", "test_local", "assert_real_diff", "push",
         },
         "pr_triage": {
-            "pr_checks", "pr_review", "review_repair_gate",
-            "pr_repair_subflow", "review_repair_manual", "review_manual",
-            "worktree_add", "test_local", "pr_merge", "stage_clear", "close_issue",
+            "pr_checks", "collect_pr_review_evidence", "resolve_sha_review",
+            "pr_review_agent", "validate_pr_review", "pr_review_retry_agent",
+            "validate_pr_review_retry", "select_pr_review", "publish_pr_review",
+            "review_repair_gate", "pr_repair_subflow", "review_repair_manual",
+            "review_manual", "worktree_add", "test_local", "pr_merge",
+            "stage_clear", "close_issue",
         },
     }
     for path_id, effectors in expected.items():
@@ -636,9 +639,9 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
         "upstream": "review_repair_gate", "path": "route", "equals": "repair"
     }
     assert by_id["review_manual"]["when"] == {
-        "upstream": "pr_review", "path": "decision.verdict", "equals": "needs_human"
+        "upstream": "publish_pr_review", "path": "decision.verdict", "equals": "needs_human"
     }
     for node_id in ("worktree_add", "test_local", "pr_merge", "stage_clear", "close_issue"):
         assert by_id[node_id]["when"] == {
-            "upstream": "pr_review", "path": "decision.verdict", "equals": "approve"
+            "upstream": "publish_pr_review", "path": "decision.verdict", "equals": "approve"
         }

@@ -34,7 +34,7 @@ def handle_self_repair(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
         cycle_end, cycle_start, dispatch_implement, dispatch_triage, factory_begin,
         factory_tick, get_issue, host_ff, list_prs, make_branch, plan_issue,
         localize, pi_budget, plan_pass, pr_checks, pr_create, pr_label, pr_merge,
-        pr_review, push_branch, record_pass, recovery_begin, recovery_incident,
+        push_branch, record_pass, recovery_begin, recovery_incident,
         recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
         resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
         survey_inbox, survey_prs, survey_ready, survey_repos, test_local,

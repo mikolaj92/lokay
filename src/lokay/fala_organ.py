@@ -28,6 +28,7 @@ from lokay.organ.implement import handle_implement
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
+from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.recovery import handle_recovery
 from lokay.organ.self_repair import handle_self_repair
 
@@ -88,6 +89,7 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         handle_recovery,
         handle_factory,
         handle_self_repair,
+        handle_review_boundary,
         handle_pr_outcome,
         handle_lanes,
         handle_implement,

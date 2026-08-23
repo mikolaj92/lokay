@@ -443,7 +443,7 @@ def test_pr_triage_merge_conducts_through_test_local():
     by_id = _path_nodes("pr_triage")
     assert "run_agent" not in by_id
     assert "worktree_add" in by_id
-    assert "pr_review" in by_id["worktree_add"]["conduction"]
+    assert "publish_pr_review" in by_id["worktree_add"]["conduction"]
     assert "worktree_add" in by_id["test_local"]["conduction"]
     assert "test_local" in by_id["pr_merge"]["conduction"]
     assert "pr_merge" not in by_id["test_local"]["conduction"]
@@ -502,7 +502,7 @@ def _ready_after_failure(path_id: str, failed_id: str) -> set[str]:
 def test_pr_triage_red_test_local_does_not_reach_merge():
     reached = _ready_after_failure("pr_triage", "test_local")
     assert "pr_checks" in reached
-    assert "pr_review" in reached
+    assert "publish_pr_review" in reached
     assert "worktree_add" in reached
     assert "test_local" not in reached
     assert "pr_merge" not in reached

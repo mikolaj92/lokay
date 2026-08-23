@@ -185,9 +185,12 @@ def run_path(
             "commit_all", "test_local", "assert_real_diff", "push",
         ),
         "pr_triage": (
-            "pr_checks", "pr_review", "review_repair_gate",
-            "pr_repair_subflow", "review_repair_manual", "review_manual",
-            "worktree_add", "test_local", "pr_merge", "stage_clear", "close_issue",
+            "pr_checks", "collect_pr_review_evidence", "resolve_sha_review",
+            "pr_review_agent", "validate_pr_review", "pr_review_retry_agent",
+            "validate_pr_review_retry", "select_pr_review", "publish_pr_review",
+            "review_repair_gate", "pr_repair_subflow", "review_repair_manual",
+            "review_manual", "worktree_add", "test_local", "pr_merge",
+            "stage_clear", "close_issue",
         ),
         "self_repair": (
             "self_repair_prepare", "self_repair_run_agent", "self_repair_validate",
@@ -396,7 +399,7 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     out["ok"] = True
     path_id = str(result.get("path_id") or "")
     if path_id == "pr_triage":
-        review = terminal.get("pr_review", {})
+        review = terminal.get("publish_pr_review", {})
         decision = review.get("decision") if isinstance(review.get("decision"), dict) else {}
         repair = terminal.get("pr_repair_subflow", {})
         repair_manual = terminal.get("review_repair_manual", {})
