@@ -25,6 +25,8 @@ from lokay.organ.common import (  # noqa: F401
 )
 from lokay.organ.factory import handle_factory
 from lokay.organ.implement import handle_implement
+from lokay.organ.issue_triage_boundary import handle_issue_triage
+from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
@@ -32,13 +34,33 @@ from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.recovery import handle_recovery
 from lokay.organ.self_repair import handle_self_repair
 
-
 _MUTATING_ATOMS = frozenset(
-    {"run_agent", "repair_agent", "commit_all", "push", "pr_create", "pr_merge"}
+    {
+        "run_agent",
+        "repair_agent",
+        "commit_all",
+        "push",
+        "pr_create",
+        "pr_merge",
+        "apply_issue_ready",
+        "apply_issue_close",
+        "apply_issue_manual",
+        "issue_split_subflow",
+        "create_issue_split_child_1",
+        "create_issue_split_child_2",
+        "create_issue_split_child_3",
+        "create_issue_split_child_4",
+        "create_issue_split_child_5",
+        "mark_issue_tracker",
+        "comment_issue_tracker",
+        "close_issue_tracker",
+    }
 )
 
 
-def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _handle(
+    atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     from lokay.organ.common import _cfg_flags, _live_flags
 
     ctx = {
@@ -90,6 +112,8 @@ def _handle(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]) ->
         handle_factory,
         handle_self_repair,
         handle_review_boundary,
+        handle_issue_split,
+        handle_issue_triage,
         handle_pr_outcome,
         handle_lanes,
         handle_implement,
@@ -124,9 +148,7 @@ def main() -> int:
         if not atom:
             raise RuntimeError("config.atom is required")
         if atom == "commit_all" and not os.environ.get("LOKAY_HEALTH_LEASE_PATH"):
-            raise RuntimeError(
-                "health lease path missing at Fala mutation boundary"
-            )
+            raise RuntimeError("health lease path missing at Fala mutation boundary")
         inputs = dict(sdk.declared_inputs(manifest))
         for key, value in sdk.input_values(manifest).items():
             if key not in sdk.INJECTED_INPUT_KEYS and key not in inputs:
@@ -141,9 +163,17 @@ def main() -> int:
         if result.get("status") == "failed":
             ok_flag = False
         if not ok_flag and not result.get("skipped"):
-            values = {"ok": False, "atom": atom, **{k: v for k, v in result.items() if k != "_exit"}}
+            values = {
+                "ok": False,
+                "atom": atom,
+                **{k: v for k, v in result.items() if k != "_exit"},
+            }
             raise RuntimeError(json.dumps(values, ensure_ascii=False)[:2000])
-        values = {"ok": True, "atom": atom, **{k: v for k, v in result.items() if k != "_exit"}}
+        values = {
+            "ok": True,
+            "atom": atom,
+            **{k: v for k, v in result.items() if k != "_exit"},
+        }
         return sdk.output(values=values)
 
     return sdk.run_manifest_effector(handler)

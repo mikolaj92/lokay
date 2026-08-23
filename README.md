@@ -100,20 +100,53 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> GetIssue
-    GetIssue --> TriageAgent
+    GetIssue --> ResolveIssueCandidate
+    ResolveIssueCandidate --> CollectLinkedPullRequests
+    CollectLinkedPullRequests --> CollectCoveringPullRequests
+    CollectCoveringPullRequests --> ResolveHardFacts
+    ResolveHardFacts --> IntakeDecision: wynik fizyczny CLOSE / BLOCKED / SKIP
+    ResolveHardFacts --> TriageAgent: potrzebna ocena semantyczna
     TriageAgent --> ValidateTriageResult
-    ValidateTriageResult --> TriageAgent: invalid JSON + informacja zwrotna
-    ValidateTriageResult --> CollectIssueEvidence: NEEDS_EVIDENCE
-    CollectIssueEvidence --> TriageAgent
+    ValidateTriageResult --> TriageRetryAgent: invalid JSON + informacja zwrotna
+    TriageRetryAgent --> ValidateTriageRetry
+    ValidateTriageRetry --> IntakeDecision: wynik poprawny
+    ValidateTriageRetry --> HumanTerminal: nadal invalid JSON
     ValidateTriageResult --> IntakeDecision: wynik poprawny
+    IntakeDecision --> SelectIssueEvidence: NEEDS_EVIDENCE
+    SelectIssueEvidence --> CollectRepoShape: repo_shape
+    SelectIssueEvidence --> CollectNamedPaths: named_paths
+    SelectIssueEvidence --> CollectLinkedPullRequests: linked_prs
+    SelectIssueEvidence --> CollectCoveringPullRequests: covering_prs
+    CollectRepoShape --> EvidenceTriageAgent
+    CollectNamedPaths --> EvidenceTriageAgent
+    CollectLinkedPullRequests --> EvidenceTriageAgent
+    CollectCoveringPullRequests --> EvidenceTriageAgent
+    EvidenceTriageAgent --> ValidateEvidenceTriage
+    ValidateEvidenceTriage --> IntakeDecision: wynik poprawny
+    ValidateEvidenceTriage --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
     IntakeDecision --> CloseIssue: CLOSE
     IntakeDecision --> MarkReady: READY
-    IntakeDecision --> SplitIssue: SPLIT
+    IntakeDecision --> PlanSplit: SPLIT
     IntakeDecision --> HumanTerminal: NEEDS_HUMAN
-    SplitIssue --> MarkTracker
+    IntakeDecision --> MarkBlocked: BLOCKED
+    IntakeDecision --> NoEffect: SKIP
+    PlanSplit --> HumanTerminal: plan niemożliwy
+    PlanSplit --> CreateChild1: plan poprawny
+    CreateChild1 --> CreateChild2
+    CreateChild2 --> CreateChild3: child 3 istnieje
+    CreateChild2 --> MarkTracker: tylko 2 dzieci
+    CreateChild3 --> CreateChild4: child 4 istnieje
+    CreateChild3 --> MarkTracker: tylko 3 dzieci
+    CreateChild4 --> CreateChild5: child 5 istnieje
+    CreateChild4 --> MarkTracker: tylko 4 dzieci
+    CreateChild5 --> MarkTracker
+    MarkTracker --> CommentTracker
+    CommentTracker --> CloseTracker
     CloseIssue --> [*]
     MarkReady --> [*]
-    MarkTracker --> [*]
+    MarkBlocked --> [*]
+    CloseTracker --> [*]
+    NoEffect --> [*]
     HumanTerminal --> [*]
 ```
 
@@ -258,7 +291,7 @@ kontraktu. Aktualny audyt:
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
-| `issue_triage` bez ukrytego drzewa Python | **do refaktoru** |
+| `issue_triage` bez ukrytego drzewa Python | zaimplementowane w Fali wraz z pod-Falą `issue_split` |
 | `issue_to_pr` bez ukrytego drzewa Python | **do refaktoru** |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | **do refaktoru** |
 
@@ -269,6 +302,7 @@ kontraktu. Aktualny audyt:
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
+| `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | otwarty i oznaczony PR dla issue |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |

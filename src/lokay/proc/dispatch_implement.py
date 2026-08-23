@@ -10,7 +10,9 @@ from lokay.pass_receipt import build_pass_receipt, write_pass_receipt
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc, run_select
-from lokay.proc import intake_issue as p_intake
+from lokay.proc import verify_issue_ready as p_ready
+
+p_intake = p_ready  # compatibility hook; no semantic intake dispatcher
 from lokay.proc import label_issue as p_label
 from lokay.proc import select_issue as p_select
 from lokay.proc import unbounded_park as p_park
@@ -38,7 +40,9 @@ def _is_plan_only_failure(result: dict[str, Any]) -> bool:
     )
 
 
-def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
+def run_dispatch_implement(
+    *, pass_dir: str, config_path: str | None, live: bool
+) -> dict[str, Any]:
     begin = pass_io.read_json(pass_io.begin_path(pass_dir))
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
@@ -78,7 +82,9 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
 
     try:
         ps_text = _live_ps_text()
-    except Exception as exc:  # noqa: BLE001 -- unknown mutex state must not launch a sibling
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 -- unknown mutex state must not launch a sibling
         return err(
             "cannot inspect repo mutex; refusing issue_to_pr dispatch",
             pass_dir=pass_dir,
@@ -90,7 +96,13 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
             break
         mutex = inspect_mutex(repo=str(repo_name), ps_text=ps_text)
         if mutex.get("busy"):
-            actions.append({"step": "skip_repo_mutex", "repo": repo_name, "pids": mutex.get("pids")})
+            actions.append(
+                {
+                    "step": "skip_repo_mutex",
+                    "repo": repo_name,
+                    "pids": mutex.get("pids"),
+                }
+            )
             continue
         implementable = list(ready_by_repo.get(repo_name) or [])
         if not implementable:
@@ -110,20 +122,12 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                 break
             num = int(selected["number"])
             gate = run_proc(
-                p_intake.main,
-                [
-                    *cfg_flag,
-                    *live_flag,
-                    "--repo",
-                    selected["repo"],
-                    "--issue",
-                    str(num),
-                    "--require-ready",
-                ],
+                p_ready.main,
+                [*cfg_flag, "--repo", selected["repo"], "--issue", str(num)],
             )
             actions.append(
                 {
-                    "step": "intake_issue",
+                    "step": "verify_issue_ready",
                     "repo": selected["repo"],
                     "issue": num,
                     **gate,
@@ -170,7 +174,11 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                             "head_ref": br,
                             "mergeable": "UNKNOWN",
                             "title": str(
-                                (selected.get("title") if isinstance(selected, dict) else "")
+                                (
+                                    selected.get("title")
+                                    if isinstance(selected, dict)
+                                    else ""
+                                )
                                 or ""
                             ),
                         }
@@ -181,7 +189,9 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     repo=selected["repo"],
                     number=num,
                     error=str(
-                        result.get("error") or result.get("fala") or "issue_to_pr failed"
+                        result.get("error")
+                        or result.get("fala")
+                        or "issue_to_pr failed"
                     ),
                     max_failures=max_fail,
                 )
@@ -223,7 +233,14 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                     if _is_plan_only_failure(result):
                         park = run_proc(
                             p_park.main,
-                            [*cfg_flag, *live_flag, "--repo", selected["repo"], "--issue", str(num)],
+                            [
+                                *cfg_flag,
+                                *live_flag,
+                                "--repo",
+                                selected["repo"],
+                                "--issue",
+                                str(num),
+                            ],
                         )
                         actions.append(
                             {
@@ -234,7 +251,9 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
                             }
                         )
                         # Park leaves the slot. Harvest must not CLOSE the issue.
-            implementable = [i for i in implementable if int(i.get("number", -1)) != num]
+            implementable = [
+                i for i in implementable if int(i.get("number", -1)) != num
+            ]
         ready_by_repo[repo_name] = list(implementable)
 
     save_stuck(stuck_path, stuck)
@@ -255,7 +274,9 @@ def run_dispatch_implement(*, pass_dir: str, config_path: str | None, live: bool
     )
     pass_io.write_json(pass_io.working_path(pass_dir), working)
     try:
-        state_path = Path(str(begin.get("state_path") or Path.home() / ".lokay" / "state.jsonl"))
+        state_path = Path(
+            str(begin.get("state_path") or Path.home() / ".lokay" / "state.jsonl")
+        )
         receipt = build_pass_receipt(
             tick={
                 "ok": True,

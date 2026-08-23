@@ -56,115 +56,22 @@ def test_plan_split_fails_closed_without_parts_for_title_only():
     assert plan is None
 
 
-def test_issue_split_atom_creates_children(monkeypatch, tmp_path, capsys):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path}
-executor:
-  enabled: true
-  command: true
-  args: ["{{prompt}}"]
-merge:
-  enabled: true
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-
-    issue = _issue(
-        body="\n".join(f"- [ ] slice {i} concrete work item" for i in range(4)),
-        labels=["ai:ready"],
-    )
-    created: list[dict] = []
-
-    monkeypatch.setenv("LOKAY_OFFLINE", "0")
-    monkeypatch.setattr(atom, "get_issue", lambda *a, **k: issue)
-    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
-
-    def fake_create(runner, *, repo, title, body, labels=None, live):
-        n = 100 + len(created)
-        row = {"number": n, "url": f"https://example.com/{n}", "title": title, "repo": repo}
-        created.append(row)
-        return row
-
-    monkeypatch.setattr(atom, "create_issue", fake_create)
-    monkeypatch.setattr(atom, "add_issue_labels", lambda *a, **k: None)
-    monkeypatch.setattr(atom, "remove_issue_labels", lambda *a, **k: None)
-    monkeypatch.setattr(atom, "comment_issue", lambda *a, **k: None)
-    monkeypatch.setattr(atom, "close_issue", lambda *a, **k: None)
-    monkeypatch.setattr(atom, "runner", lambda: object())
-
-    code = atom.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "9",
-            "--intake-decision",
-            "split",
-            "--reason",
-            "too_many_checkboxes",
-        ]
-    )
+def test_issue_split_cli_invokes_authored_subflow(monkeypatch, tmp_path, capsys):
+    cfg=tmp_path/"config.yaml"; cfg.write_text("mode: dry-run\nrepos: []\nexecutor: {enabled: false}\nmerge: {enabled: false}\nworktrees: {root: /tmp/wt}\nstate: {path: /tmp/state.jsonl}\n")
+    calls=[]
+    monkeypatch.setattr(atom,"run_path",lambda **kwargs:calls.append(kwargs) or {"ok":True,"applied":False,"children":[]})
+    code=atom.main(["--config",str(cfg),"--repo","mikolaj92/lokay","--issue","9","--reason","too_many_checkboxes"])
     assert code == 0
-    import json
-
-    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert out["ok"] is True
-    assert out["applied"] is True
-    assert out["decision"] == "split"
-    assert out["parent_tracker"] is True
-    assert len(out["children"]) == 4
-    assert len(created) == 4
-    assert all(child["repo"] == "mikolaj92/lokay" for child in created)
+    assert calls[0]["path_id"] == "issue_split"
+    assert calls[0]["extra_inputs"] == {"split_reason":"too_many_checkboxes"}
 
 
-
-
-def test_issue_split_skips_when_not_split_decision(tmp_path, capsys):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: dry-run
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path}
-executor:
-  enabled: false
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wt"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    code = atom.main(
-        [
-            "--config",
-            str(cfg),
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "9",
-            "--intake-decision",
-            "ready",
-        ]
-    )
-    assert code == 0
-    import json
-
-    out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert out["skipped"] is True
-    assert out["children"] == []
+def test_create_split_child_is_one_indexed_effect(monkeypatch):
+    from lokay.proc.create_issue_split_child import create
+    created=[]
+    monkeypatch.setattr("lokay.proc.create_issue_split_child.create_issue",lambda *_args,**kwargs:created.append(kwargs) or {"number":10})
+    plan={"children":[{"title":"one","body":"body","source":"checkbox"},{"title":"two","body":"body","source":"checkbox"}]}
+    out=create(runner=object(),repo="a/b",plan=plan,slot=2,live=True)
+    assert out["child"]["number"] == 10
+    assert created[0]["title"] == "two"
+    assert create(runner=object(),repo="a/b",plan=plan,slot=3,live=True)["route"] == "absent"

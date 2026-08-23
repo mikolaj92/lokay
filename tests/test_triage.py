@@ -183,13 +183,36 @@ def test_issue_triage_path_in_package():
     assert "issue_triage" in ids
     path = next(p for p in desc["paths"] if p["id"] == "issue_triage")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["get_issue", "triage_issue", "intake_issue", "issue_split"]
+    assert node_ids == [
+        "get_issue",
+        "resolve_issue_candidate",
+        "collect_issue_linked_prs",
+        "collect_issue_covering_prs",
+        "resolve_issue_hard_facts",
+        "issue_triage_agent",
+        "validate_issue_triage",
+        "issue_triage_retry_agent",
+        "validate_issue_triage_retry",
+        "select_issue_triage",
+        "collect_issue_repo_shape",
+        "collect_issue_named_paths",
+        "verify_issue_evidence",
+        "issue_evidence_agent",
+        "validate_issue_evidence",
+        "select_issue_evidence",
+        "finalize_issue_triage",
+        "apply_issue_blocked",
+        "apply_issue_close",
+        "apply_issue_ready",
+        "issue_split_subflow",
+        "apply_issue_manual",
+    ]
     triage = path["nodes"][1]
     assert "get_issue" in triage["conduction"]
-    intake = path["nodes"][2]
-    assert "triage_issue" in intake["conduction"]
-    split = path["nodes"][3]
-    assert "intake_issue" in split["conduction"]
+    linked = path["nodes"][2]
+    assert "resolve_issue_candidate" in linked["conduction"]
+    split = next(node for node in path["nodes"] if node["id"] == "issue_split_subflow")
+    assert "finalize_issue_triage" in split["conduction"]
 
 
 def test_pr_repair_path_in_package():

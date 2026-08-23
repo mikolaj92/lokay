@@ -1,7 +1,13 @@
+import pytest
 
 
 from lokay.proc import dispatch_implement as d
 from lokay.proc import detach_issue_to_pr as detach_mod
+
+@pytest.fixture(autouse=True)
+def _clear_composer_hook(monkeypatch):
+    monkeypatch.setattr(d,"compose_issue_to_pr",None)
+
 
 
 

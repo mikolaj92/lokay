@@ -475,8 +475,8 @@ def test_fala_review_not_required_contract_allows_merge():
 
 def test_fala_issue_triage_applied_contract():
     out = _host("issue_triage", {
-        "triage_issue": {"id": "triage_issue", "status": "completed", "output": {"values": {"applied": True, "decision": {"decision": "ready"}}}},
-        "intake_issue": {"id": "intake_issue", "status": "completed", "output": {"values": {"applied": False, "implementable": True, "decision": {"decision": "ready"}, "skipped": False}}},
+        "finalize_issue_triage":{"id":"finalize_issue_triage","status":"completed","output":{"values":{"decision":{"verdict":"ready"}}}},
+        "apply_issue_ready":{"id":"apply_issue_ready","status":"completed","output":{"values":{"applied":True}}},
     })
     assert out["ok"] and out["applied"] and not out["skipped"]
     assert out["implementable"] is True
@@ -484,72 +484,23 @@ def test_fala_issue_triage_applied_contract():
 
 def test_fala_issue_triage_skip_contract_is_not_applied():
     out = _host("issue_triage", {
-        "triage_issue": {"id": "triage_issue", "status": "completed", "output": {"values": {"applied": False, "decision": {"decision": "skip"}}}},
-        "intake_issue": {"id": "intake_issue", "status": "completed", "output": {"values": {"applied": False, "implementable": False, "decision": {"decision": "skip"}, "skipped": True}}},
+        "finalize_issue_triage":{"id":"finalize_issue_triage","status":"completed","output":{"values":{"decision":{"verdict":"skip"}}}},
     })
     assert out["ok"] and not out["applied"] and out["skipped"]
 
 
-def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
+def test_run_path_scopes_inputs_to_authored_fala_path(tmp_path, monkeypatch):
     import lokay.graph_run as graph_run
-
-    package = Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml"
-    captured = []
-
+    import tomllib
+    package=Path(__file__).resolve().parents[1]/"fala"/"lokay.fala-package.toml"
+    authored={path["id"]:{node["id"] for node in path["effectors"]} for path in tomllib.loads(package.read_text())["correlation_paths"]}
+    captured=[]
     def fake_host_run_package(**kwargs):
-        captured.append(kwargs)
-        return {"ok": True, "run_status": "completed", "effector_results": {}}
-
-    monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
-    expected = {
-        "factory_pass": {
-            "host_ff",
-            "factory_begin",
-            "survey_prs",
-            "survey_inbox",
-            "survey_ready",
-            "ready_hygiene",
-            "plan_pass",
-            "dispatch_triage",
-            "resolve_conflicts",
-            "closeout_prs",
-            "reap_stale_implementing",
-            "reap_over_budget",
-            "refresh_occupancy",
-            "reap_stale_worktrees",
-            "select_implement",
-            "queue_conflict",
-            "dispatch_implement",
-            "compute_health",
-            "compact_state",
-            "record_pass",
-        },
-        "issue_to_pr": {
-            "get_issue", "assign_issue", "stage_implementing", "make_branch",
-            "worktree_add", "plan_issue", "localize", "cycle_start", "run_agent",
-            "relocalize_off_goal", "commit_all", "rebase_onto_base", "test_local", "repair_agent",
-            "test_local_recheck", "assert_real_diff", "push", "pr_create",
-            "cycle_end", "stage_pr_open",
-            "list_prs", "pr_label",
-        },
-        "issue_triage": {"get_issue", "triage_issue", "intake_issue", "issue_split"},
-        "pr_repair": {
-            "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "test_local", "assert_real_diff", "push",
-        },
-        "pr_triage": {
-            "pr_checks", "collect_pr_review_evidence", "resolve_sha_review",
-            "pr_review_agent", "validate_pr_review", "pr_review_retry_agent",
-            "validate_pr_review_retry", "select_pr_review", "publish_pr_review",
-            "review_repair_gate", "pr_repair_subflow", "review_repair_manual",
-            "review_manual", "worktree_add", "test_local", "pr_merge",
-            "stage_clear", "close_issue",
-        },
-    }
-    for path_id, effectors in expected.items():
-        graph_run.run_path(path_id=path_id, repo="a/b", issue=1, pr=2, branch="ai/fix/1-x", live=False, package_path=str(package), db_path=str(tmp_path / path_id))
+        captured.append(kwargs); return {"ok":True,"run_status":"completed","effector_results":{}}
+    monkeypatch.setattr("fala.host_run_package",fake_host_run_package)
+    for path_id,effectors in authored.items():
+        graph_run.run_path(path_id=path_id,repo="a/b",issue=1,pr=2,branch="ai/fix/1-x",live=False,package_path=str(package),db_path=str(tmp_path/path_id))
         assert set(captured[-1]["effector_inputs"]) == effectors
-
 
 def test_factory_path_lifts_host_updated_from_failed_begin():
     out = _host(

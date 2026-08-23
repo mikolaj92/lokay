@@ -287,118 +287,52 @@ def test_issue_triage_path_includes_intake_and_split():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "issue_triage")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == ["get_issue", "triage_issue", "intake_issue", "issue_split"]
-    intake = path["nodes"][2]
-    assert "triage_issue" in intake["conduction"]
-    assert "get_issue" in intake["conduction"]
-    split = path["nodes"][3]
-    assert "intake_issue" in split["conduction"]
+    assert node_ids == [
+        "get_issue",
+        "resolve_issue_candidate",
+        "collect_issue_linked_prs",
+        "collect_issue_covering_prs",
+        "resolve_issue_hard_facts",
+        "issue_triage_agent",
+        "validate_issue_triage",
+        "issue_triage_retry_agent",
+        "validate_issue_triage_retry",
+        "select_issue_triage",
+        "collect_issue_repo_shape",
+        "collect_issue_named_paths",
+        "verify_issue_evidence",
+        "issue_evidence_agent",
+        "validate_issue_evidence",
+        "select_issue_evidence",
+        "finalize_issue_triage",
+        "apply_issue_blocked",
+        "apply_issue_close",
+        "apply_issue_ready",
+        "issue_split_subflow",
+        "apply_issue_manual",
+    ]
+    linked = path["nodes"][2]
+    assert "resolve_issue_candidate" in linked["conduction"]
+    assert "get_issue" in linked["conduction"]
+    split = next(node for node in path["nodes"] if node["id"] == "issue_split_subflow")
+    assert "finalize_issue_triage" in split["conduction"]
 
 
-def test_normalize_issue_triage_prefers_intake_demotion():
-    out = normalize_path_result(
-        {
-            "ok": True,
-            "path_id": "issue_triage",
-            "live": True,
-            "fala": {
-                "ok": True,
-                "run_status": "completed",
-                "effector_results": {
-                    "triage_issue": {
-                        "id": "triage_issue",
-                        "status": "completed",
-                        "output": {
-                            "values": {
-                                "applied": True,
-                                "decision": {"decision": "ready", "reason": "spec_ok"},
-                            }
-                        },
-                    },
-                    "intake_issue": {
-                        "id": "intake_issue",
-                        "status": "completed",
-                        "output": {
-                            "values": {
-                                "applied": True,
-                                "implementable": False,
-                                "decision": {
-                                    "decision": "close",
-                                    "reason": "wrong_product_shape",
-                                },
-                                "reason": "wrong_product_shape",
-                            }
-                        },
-                    },
-                    "issue_split": {
-                        "id": "issue_split",
-                        "status": "completed",
-                        "output": {"values": {"skipped": True, "reason": "not_split_decision:close"}},
-                    },
-                },
-            },
-        }
-    )
-    assert out["ok"] is True
-    assert out["applied"] is True
-    assert out["skipped"] is False
-    assert out["decision"]["decision"] == "close"
+def test_normalize_issue_triage_unwraps_authoritative_final_verdict():
+    out=normalize_path_result({"ok":True,"path_id":"issue_triage","live":True,"fala":{"ok":True,"run_status":"completed","effector_results":{
+        "finalize_issue_triage":{"id":"finalize_issue_triage","status":"completed","output":{"values":{"decision":{"verdict":"close","reason":"wrong_product_shape"}}}},
+        "apply_issue_close":{"id":"apply_issue_close","status":"completed","output":{"values":{"applied":True}}},
+    }}})
+    assert out["ok"] is True and out["applied"] is True and out["skipped"] is False
+    assert out["decision"] == {"verdict":"close","reason":"wrong_product_shape"}
     assert out["implementable"] is False
 
-
 def test_normalize_issue_triage_split_applied():
-    out = normalize_path_result(
-        {
-            "ok": True,
-            "path_id": "issue_triage",
-            "live": True,
-            "fala": {
-                "ok": True,
-                "run_status": "completed",
-                "effector_results": {
-                    "triage_issue": {
-                        "id": "triage_issue",
-                        "status": "completed",
-                        "output": {
-                            "values": {
-                                "applied": False,
-                                "decision": {"decision": "split", "reason": "too_large_split"},
-                            }
-                        },
-                    },
-                    "intake_issue": {
-                        "id": "intake_issue",
-                        "status": "completed",
-                        "output": {
-                            "values": {
-                                "applied": True,
-                                "implementable": False,
-                                "decision": {"decision": "split", "reason": "too_many_checkboxes"},
-                                "reason": "too_many_checkboxes",
-                            }
-                        },
-                    },
-                    "issue_split": {
-                        "id": "issue_split",
-                        "status": "completed",
-                        "output": {
-                            "values": {
-                                "applied": True,
-                                "skipped": False,
-                                "reason": "too_many_checkboxes",
-                                "decision": "split",
-                                "children": [{"number": 10}, {"number": 11}],
-                            }
-                        },
-                    },
-                },
-            },
-        }
-    )
-    assert out["decision"]["decision"] == "split"
-    assert out["applied"] is True
-    assert out["skipped"] is False
-
+    out=normalize_path_result({"ok":True,"path_id":"issue_triage","live":True,"fala":{"ok":True,"run_status":"completed","effector_results":{
+        "finalize_issue_triage":{"id":"finalize_issue_triage","status":"completed","output":{"values":{"decision":{"verdict":"split","reason":"too_many_checkboxes"}}}},
+        "issue_split_subflow":{"id":"issue_split_subflow","status":"completed","output":{"values":{"applied":True,"children":[{"number":10},{"number":11}]}}},
+    }}})
+    assert out["decision"]["verdict"] == "split" and out["applied"] is True and out["skipped"] is False
 
 def _gate(**kwargs):
     kw = dict(
