@@ -95,6 +95,36 @@ stateDiagram-v2
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
+### Przegląd gotowych issue — `survey_ready`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectSurveyReadyScope
+    InspectSurveyReadyScope --> ReadySurveyResult: stamp recent_empty jest aktywny
+    InspectSurveyReadyScope --> SelectReadySurveyRepo: survey dozwolone
+    SelectReadySurveyRepo --> ListWorkReadyIssues: wybrano repozytorium z zakresu
+    SelectReadySurveyRepo --> FinalizeReadySurvey: brak kolejnych repozytoriów
+    ListWorkReadyIssues --> VerifyReadyIssueState: zgłoszono fizyczną listę work:ready
+    ListWorkReadyIssues --> RecordReadySurveyError: zapytanie GitHub zawiodło
+    VerifyReadyIssueState --> ParkClosedReadyIssue: issue jest fizycznie CLOSED
+    VerifyReadyIssueState --> CheckCoveredOrBlocked: issue jest fizycznie otwarte
+    CheckCoveredOrBlocked --> ParkBlockedReadyIssue: issue zablokowane w ledgerze
+    CheckCoveredOrBlocked --> ExcludeCoveredReadyIssue: issue ma otwarty PR dostarczający
+    CheckCoveredOrBlocked --> AddImplementableCandidate: issue wolne i gotowe
+    ParkClosedReadyIssue --> SelectReadySurveyRepo
+    ParkBlockedReadyIssue --> SelectReadySurveyRepo
+    ExcludeCoveredReadyIssue --> SelectReadySurveyRepo
+    AddImplementableCandidate --> SelectReadySurveyRepo
+    RecordReadySurveyError --> SelectReadySurveyRepo
+    FinalizeReadySurvey --> UpdateSurveyStamp
+    UpdateSurveyStamp --> ReadySurveyResult
+    ReadySurveyResult --> [*]
+```
+
+Pod-Fala wykonuje przegląd gotowych issue dla hot repos i rotowanych cold repos.
+Każdy odczyt listy, weryfikacja stanu, parkowanie zablokowanych lub zamkniętych
+oraz aktualizacja stampu pozostają jawnymi węzłami Fali.
+
 ### Uruchomienie triage — `dispatch_triage`
 
 ```mermaid
@@ -427,6 +457,7 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `ReadySurvey` | `survey_ready` | seryjny odczyt i klasyfikacja gotowych issue |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
