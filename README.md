@@ -162,19 +162,37 @@ stateDiagram-v2
     PlanIssue --> Localize
     Localize --> CodingAgent
     CodingAgent --> ValidateCodingResult
-    ValidateCodingResult --> CodingAgent: invalid JSON + informacja zwrotna
-    ValidateCodingResult --> CollectCodingEvidence: NEEDS_EVIDENCE
-    CollectCodingEvidence --> CodingAgent
-    ValidateCodingResult --> Commit: IMPLEMENTED
-    ValidateCodingResult --> HumanTerminal: NEEDS_HUMAN
-    Commit --> RebaseOntoMain
+    ValidateCodingResult --> SelectCodingResult: wynik poprawny
+    ValidateCodingResult --> CodingRetryAgent: invalid JSON + informacja zwrotna
+    CodingRetryAgent --> ValidateCodingRetry
+    ValidateCodingRetry --> SelectCodingResult: wynik poprawny
+    ValidateCodingRetry --> HumanTerminal: nadal invalid JSON
+    SelectCodingResult --> CollectIssueSnapshot: NEEDS_EVIDENCE(issue_snapshot)
+    SelectCodingResult --> CollectRepoStructure: NEEDS_EVIDENCE(repo_structure)
+    SelectCodingResult --> CollectTestContract: NEEDS_EVIDENCE(test_contract)
+    SelectCodingResult --> CollectLocalizedDiff: NEEDS_EVIDENCE(localized_diff)
+    CollectIssueSnapshot --> EvidenceCodingAgent
+    CollectRepoStructure --> EvidenceCodingAgent
+    CollectTestContract --> EvidenceCodingAgent
+    CollectLocalizedDiff --> EvidenceCodingAgent
+    EvidenceCodingAgent --> ValidateEvidenceCoding
+    ValidateEvidenceCoding --> FinalizeCodingResult: wynik poprawny
+    ValidateEvidenceCoding --> HumanTerminal: invalid JSON
+    FinalizeCodingResult --> HumanTerminal: ponowne NEEDS_EVIDENCE / NEEDS_HUMAN
+    SelectCodingResult --> VerifyImplementationDiff: IMPLEMENTED
+    FinalizeCodingResult --> VerifyImplementationDiff: IMPLEMENTED
+    VerifyImplementationDiff --> CommitImplementation
+    CommitImplementation --> RebaseOntoMain
     RebaseOntoMain --> LocalTest
-    LocalTest --> VerifyRealDiff: PASS
+    LocalTest --> VerifyPublishDiff: PASS
     LocalTest --> RepairAgent: FAIL
-    RepairAgent --> LocalTestAgain
-    LocalTestAgain --> VerifyRealDiff: PASS
+    RepairAgent --> ValidateRepairResult
+    ValidateRepairResult --> CommitRepair: REPAIRED
+    ValidateRepairResult --> RepairTerminal: invalid JSON / NEEDS_HUMAN
+    CommitRepair --> LocalTestAgain
+    LocalTestAgain --> VerifyPublishDiff: PASS
     LocalTestAgain --> RepairTerminal: FAIL
-    VerifyRealDiff --> PushBranch
+    VerifyPublishDiff --> PushBranch
     PushBranch --> CreatePullRequest
     CreatePullRequest --> LabelPullRequest
     LabelPullRequest --> PullRequestOpen
