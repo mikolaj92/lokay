@@ -225,13 +225,16 @@ def handle_factory(
         )
 
     if atom == "reap_over_budget":
-        from lokay.proc import reap_over_budget
+        from lokay.proc.reap_over_budget_subflow import run
+        from lokay.proc.pi_budget import DEFAULT_BUDGET_S
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
-        argv = [*cfg, *live]
-        if pass_dir:
-            argv.extend(["--pass-dir", pass_dir])
-        return _run_atom_main(reap_over_budget.main, argv)
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "") or None
+        return run(
+            budget_s=DEFAULT_BUDGET_S,
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
 
     if atom == "refresh_occupancy":
         from lokay.proc.refresh_occupancy_subflow import run
