@@ -600,15 +600,14 @@ caretaker_write_interval() {
 }
 
 caretaker_reload_if_idle() {
-  # Load the host plist only after idle. Never launchctl while mill.lock
-  # is held (lokay is still in a cycle). pytest HOME is not the host.
+  # Load the HOME-local plist only after idle. Never launchctl while mill.lock
+  # is held (lokay is still in a cycle). Exact plist identity isolates tests.
   local plist="${LOKAY_LAUNCHD_PLIST}"
   local label="${LOKAY_LAUNCHD_LABEL}"
   local want="${LOKAY_LAUNCHD_START_INTERVAL}"
   local loaded=""
   local loaded_path=""
   [[ -f "${plist}" ]] || return 0
-  [[ "${HOME}" == /Users/* ]] || return 0
   [[ "${plist}" == "${HOME}/Library/LaunchAgents/${label}.plist" ]] || return 0
   command -v launchctl >/dev/null 2>&1 || return 0
   loaded="$(loaded_start_interval "${label}")"

@@ -88,7 +88,7 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
     assert 'stat -c %Y' in script
     assert "plutil -extract StartInterval raw" in script
-    assert '[[ "${HOME}" == /Users/* ]]' in script
+    assert '[[ "${plist}" == "${HOME}/Library/LaunchAgents/${label}.plist" ]]' in script
     assert "os.setsid()" in script
     assert 'os.execv("/bin/bash", ["/bin/bash", script, "--install"])' in script
     assert "( sleep 2; exec /bin/bash" not in script
