@@ -114,11 +114,14 @@ def handle_self_repair(
         )
 
     if atom == "self_repair_prepare":
+        from lokay.proc.self_repair_prepare_subflow import run
+
         fingerprint = str(inputs.get("fingerprint") or "")
         assert fingerprint
-        return _run_atom_main(
-            self_repair_prepare.main,
-            [*cfg, *live, "--fingerprint", fingerprint],
+        return run(
+            fingerprint=fingerprint,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
         )
 
     if atom == "self_repair_run_agent":

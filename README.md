@@ -222,6 +222,36 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Przygotowanie self-repair — `self_repair_prepare`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ResolveSelfRepairCheckout
+    ResolveSelfRepairCheckout --> CheckSelfRepairMutationGate
+    CheckSelfRepairMutationGate --> SelfRepairPrepareResult: plan-only
+    CheckSelfRepairMutationGate --> VerifySelfRepairOrigin: live
+    VerifySelfRepairOrigin --> FetchSelfRepairMain
+    FetchSelfRepairMain --> FindPublishedSelfRepair
+    FindPublishedSelfRepair --> SelfRepairPrepareResult: fingerprint już na main
+    FindPublishedSelfRepair --> ReadSelfRepairBase: brak publikacji
+    ReadSelfRepairBase --> InspectSelfRepairWorktree
+    InspectSelfRepairWorktree --> SelectSelfRepairWorktreeRoute
+    SelectSelfRepairWorktreeRoute --> RemoveSelfRepairWorktree: potwierdzony pusty lub stale exact candidate
+    SelectSelfRepairWorktreeRoute --> SelfRepairPrepareResult: bezpieczny dirty/exact resume
+    SelectSelfRepairWorktreeRoute --> CreateSelfRepairWorktree: worktree nie istnieje
+    RemoveSelfRepairWorktree --> SelectSelfRepairRemoveOutcome
+    SelectSelfRepairRemoveOutcome --> CreateSelfRepairWorktree: usunięty
+    SelectSelfRepairRemoveOutcome --> SelfRepairPrepareResult: removal failed
+    CreateSelfRepairWorktree --> SelfRepairPrepareResult
+    SelfRepairPrepareResult --> [*]
+```
+
+Pod-Fala oddziela konfigurację checkoutu, mutation gate, weryfikację origin,
+fetch, fingerprint na `main`, base SHA, inspekcję istniejącego worktree,
+decyzję routingu oraz efekty remove/create. Nieczytelna własność, plan-only,
+nieznany commit i dirty work poza aktualnym `origin/main` kończą się
+fail-closed bez usuwania dowodów.
+
 ### Ograniczenie czasu implementacji — `reap_over_budget`
 
 ```mermaid
@@ -685,6 +715,7 @@ kontraktu. Aktualny audyt:
 | `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
 | `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
 | `OverBudgetReap` | `reap_over_budget` | ogranicza receipt workera przez jawny harvest albo plan-only reap |
+| `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
