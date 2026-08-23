@@ -215,11 +215,14 @@ def handle_factory(
         return _run_atom_main(closeout_prs.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "reap_stale_implementing":
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
-        argv = [*cfg, *live]
-        if pass_dir:
-            argv.extend(["--pass-dir", pass_dir])
-        return _run_atom_main(reap_stale_implementing.main, argv)
+        from lokay.proc.reap_stale_implementing_subflow import run
+
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "") or None
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
 
     if atom == "reap_over_budget":
         from lokay.proc import reap_over_budget

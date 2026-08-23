@@ -37,6 +37,7 @@ from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pass_plan_boundary import handle_pass_plan
 from lokay.organ.occupancy_refresh_boundary import handle_occupancy_refresh
+from lokay.organ.stale_implementing_boundary import handle_stale_implementing
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
@@ -163,6 +164,7 @@ def _handle(
         handle_pr_finalize,
         handle_pass_plan,
         handle_occupancy_refresh,
+        handle_stale_implementing,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:

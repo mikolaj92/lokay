@@ -29,8 +29,16 @@ def test_keep_when_live_job_or_pr():
 def test_covering_pr_from_branch_and_title():
     prs = [{"head_ref": "ai/fix/164-src-readme", "title": "fix: other"}]
     assert issue_has_covering_pr(164, prs) is True
-    assert issue_has_covering_pr(91, [{"head_ref": "ai/fix/1-x", "title": "fix: repo#91 foo"}]) is True
-    assert issue_has_covering_pr(91, [{"head_ref": "ai/fix/1-x", "title": "unrelated"}]) is False
+    assert (
+        issue_has_covering_pr(
+            91, [{"head_ref": "ai/fix/1-x", "title": "fix: repo#91 foo"}]
+        )
+        is True
+    )
+    assert (
+        issue_has_covering_pr(91, [{"head_ref": "ai/fix/1-x", "title": "unrelated"}])
+        is False
+    )
 
 
 def _issue(number: int, title: str, labels: list[str]) -> Issue:
@@ -45,38 +53,36 @@ def _issue(number: int, title: str, labels: list[str]) -> Issue:
     )
 
 
-def test_atom_strips_leftover_cache_even_when_job_or_pr_exists(monkeypatch):
-    leftover = _issue(164, "readme", [LABEL_IMPLEMENTING])
-    also = _issue(21, "pr cache", [LABEL_PR_OPEN])
-    by_label = {
-        LABEL_IMPLEMENTING: [leftover],
-        LABEL_PR_OPEN: [also],
-    }
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing.list_labeled_issues",
-        lambda *a, **k: list(by_label.get(k.get("label"), [])),
-    )
-    monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing.load_cfg",
-        lambda args: SimpleNamespace(
-            branch_prefix="ai/fix",
-            active_repos=lambda: [SimpleNamespace(name="mikolaj92/lokay")],
-        ),
-    )
-    staged: list[list[str]] = []
+def test_label_probes_reduce_and_each_candidate_restores_ready(monkeypatch):
+    from lokay.proc.reduce_stale_repo_probe import reduce_state as reduce_repo
+    from lokay.proc.reduce_stale_implementing_probe import reduce_state as reduce_all
+    from lokay.proc.select_stale_candidate_slot import select
+    from lokay.proc.restore_stale_issue_ready import restore
 
-    def fake_proc(main, argv):
-        staged.append(argv)
-        return {"ok": True, "stage": "ready", "applied": True}
-
-    monkeypatch.setattr("lokay.proc.reap_stale_implementing.run_proc", fake_proc)
+    rows = [
+        {
+            "route": "listed",
+            "issues": [
+                {"repo": "mikolaj92/lokay", "issue": 164, "label": LABEL_IMPLEMENTING}
+            ],
+        },
+        {
+            "route": "listed",
+            "issues": [
+                {"repo": "mikolaj92/lokay", "issue": 21, "label": LABEL_PR_OPEN}
+            ],
+        },
+    ]
+    repo = reduce_repo({"route": "repo", "repo": "mikolaj92/lokay"}, rows)
+    probe = reduce_all(prepared={}, rows=[repo], candidate_slots=30)
+    staged = []
     monkeypatch.setattr(
-        "lokay.proc.reap_stale_implementing.mutations_allowed",
-        lambda **_kwargs: True,
+        "lokay.proc.restore_stale_issue_ready.run_proc",
+        lambda main, argv: staged.append(argv)
+        or {"ok": True, "stage": "ready", "applied": True},
     )
-    out = run_reap_stale_implementing(pass_dir=None, config_path=None, live=True)
-    assert out["ok"] is True
-    assert out["reaped_count"] == 2
-    assert {row["issue"] for row in out["reaped"]} == {164, 21}
-    assert out["kept"] == []
-    assert any("164" in a and "ready" in a for a in staged)
+    for slot in (1, 2):
+        restore(select(probe, {"apply": True}, slot=slot), config_path=None, live=True)
+    assert {x["issue"] for x in probe["candidates"]} == {164, 21} and any(
+        "164" in a and "ready" in a for a in staged
+    )
