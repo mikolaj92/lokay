@@ -545,10 +545,10 @@ loaded_keepalive_crash_only() {
   command -v launchctl >/dev/null 2>&1 || return 1
   text="$(launchctl print "user/${uid}/${label}" 2>/dev/null || true)"
   [[ -n "${text}" ]] || return 1
-  printf '%s' "${text}" | _python - <<'PY'
+  _python - "${text}" <<'PY'
 import sys
 
-text = sys.stdin.read().lower()
+text = sys.argv[1].lower()
 if "keep alive" not in text and "keepalive" not in text:
     raise SystemExit(1)
 compact = "".join(text.split())
@@ -563,14 +563,33 @@ raise SystemExit(1)
 PY
 }
 
+launchagent_loaded() {
+  local label="$1"
+  local uid
+  uid="$(id -u)"
+  launchctl print "user/${uid}/${label}" >/dev/null 2>&1
+}
+
 reload_launchagent() {
+  # Never hide a missing job. A missing job bootstraps directly. A loaded,
+  # stale job is removed only when necessary, then bootstrap is retried and
+  # verified. Failure remains non-zero so --install cannot stamp false health.
   local plist="$1"
   local label="$2"
-  local uid domain
+  local uid domain attempt
   uid="$(id -u)"
   domain="user/${uid}"
-  launchctl bootout "${domain}/${label}" >/dev/null 2>&1 || true
-  launchctl bootstrap "${domain}" "${plist}" >/dev/null 2>&1 || true
+  [[ -f "${plist}" ]] || return 66
+  if launchagent_loaded "${label}"; then
+    launchctl bootout "${domain}/${label}" >/dev/null 2>&1 || return 1
+  fi
+  for attempt in 1 2 3; do
+    if launchctl bootstrap "${domain}" "${plist}" >/dev/null 2>&1       && launchagent_loaded "${label}"; then
+      return 0
+    fi
+  done
+  bootstrap_incident "launchagent_reload_failed"
+  return 1
 }
 
 caretaker_write_interval() {
@@ -606,7 +625,7 @@ caretaker_reload_if_idle() {
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p "${LOKAY_HOME}" || exit 70
   caretaker_write_interval
-  caretaker_reload_if_idle
+  caretaker_reload_if_idle || exit 75
   if ! mill_lock_busy; then
     : > "${LOKAY_KEEPALIVE_STAMP}" || true
   fi
