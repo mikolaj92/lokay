@@ -15,6 +15,7 @@ from fala import sdk
 from lokay.git_commit import branch_ahead_of_upstream  # noqa: F401 — tests patch this
 from lokay.organ.agent import handle_agent
 from lokay.organ.coding_boundary import handle_coding_boundary
+from lokay.organ.conflict_resolution_boundary import handle_conflict_resolution
 from lokay.organ.common import (  # noqa: F401
     _conduction_values,
     _issue_no_longer_open,
@@ -142,6 +143,7 @@ def _handle(
         handle_triage_dispatch,
         handle_review_boundary,
         handle_coding_boundary,
+        handle_conflict_resolution,
         handle_repair_boundary,
         handle_issue_split,
         handle_implementation_dispatch,

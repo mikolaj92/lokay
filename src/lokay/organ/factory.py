@@ -197,10 +197,14 @@ def handle_factory(
         )
 
     if atom == "resolve_conflicts":
+        from lokay.proc.resolve_conflicts_subflow import run
+
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            resolve_conflicts.main, [*cfg, *live, "--pass-dir", pass_dir]
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
         )
 
     if atom == "closeout_prs":
