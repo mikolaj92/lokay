@@ -27,6 +27,7 @@ _ATOMS = frozenset(
         "select_repair_test_recheck",
         "finalize_repair_tests",
         "pr_repair_terminal",
+        "summarize_pr_repair",
     }
 )
 
@@ -115,6 +116,16 @@ def handle_repair_boundary(
         return finalize_result(
             up.get("select_initial_repair") or {},
             up.get("select_evidence_repair") or {},
+        )
+    if atom == "summarize_pr_repair":
+        from lokay.proc.summarize_pr_repair import summarize
+
+        return summarize(
+            final=up.get("finalize_repair_tests") or {},
+            push=up.get("push") or {},
+            repo=repo,
+            pr=pr,
+            branch=str(inputs.get("branch") or ""),
         )
     if atom in {"pr_repair_manual", "pr_repair_terminal"}:
         from lokay.proc.repair_terminal import terminal

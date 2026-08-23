@@ -199,7 +199,8 @@ stateDiagram-v2
     PushBranch --> CreatePullRequest
     CreatePullRequest --> LabelPullRequest
     LabelPullRequest --> PullRequestOpen
-    PullRequestOpen --> [*]
+    PullRequestOpen --> DeliveryResult
+    DeliveryResult --> [*]
     NoEffect --> [*]
     HumanTerminal --> [*]
     RepairTerminal --> [*]
@@ -288,7 +289,8 @@ stateDiagram-v2
     LocalRepairTestAgain --> VerifyPublishDiff: PASS
     LocalRepairTestAgain --> RepairTerminal: FAIL
     VerifyPublishDiff --> PushNewSha
-    PushNewSha --> [*]
+    PushNewSha --> RepairResult
+    RepairResult --> [*]
     HumanTerminal --> [*]
     RepairTerminal --> [*]
 ```

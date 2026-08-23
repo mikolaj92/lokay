@@ -374,6 +374,14 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         return out
 
     out["ok"] = True
+    authored_results = [
+        item.get("result")
+        for item in terminal.values()
+        if isinstance(item.get("result"), dict)
+    ]
+    if authored_results:
+        out.update(authored_results[-1])
+        return out
     path_id = str(result.get("path_id") or "")
     if path_id == "pr_triage":
         review = terminal.get("publish_pr_review", {})
