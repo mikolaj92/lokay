@@ -400,10 +400,20 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         merge = terminal.get("pr_merge", {})
         close = terminal.get("close_issue", {})
         if review.get("skipped") and not review.get("merge_ok"):
+            # Idempotent review reuses the verdict for the same head. The merge
+            # policy still owns whether that verdict must enter repair. Do not
+            # turn an already-reviewed request_changes into an inert PR.
+            repairable = bool(merge.get("repairable"))
             out.update(
                 skipped=True,
-                reason=review.get("reason") or "pr_review_skipped",
-                repairable=False,
+                reason=(
+                    str(merge.get("reason") or "llm_review_requested_changes")
+                    if repairable
+                    else str(review.get("reason") or "pr_review_skipped")
+                ),
+                repairable=repairable,
+                waiting=bool(merge.get("waiting")),
+                needs_review=bool(merge.get("needs_review")),
                 review=decision,
             )
         elif review.get("merge_ok") and review.get("reason") == "llm_review_not_required":

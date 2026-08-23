@@ -138,11 +138,30 @@ def main(argv: list[str] | None = None) -> int:
                     live=True,
                 )
                 if contains_base.returncode != 0:
-                    raise RuntimeError(
-                        "cannot resume self-repair worktree outside current origin/main"
-                    )
-                resumed = True
-                candidate_commit = head if ahead > 0 else ""
+                    if uncommitted == "empty" and ahead > 0:
+                        # The exact, clean, fingerprint-labelled candidate is
+                        # stale after origin/main advanced on another line. It
+                        # cannot be pushed or resumed safely. Remove it and let
+                        # this run rebuild from the current base.
+                        removed = remove_worktree(
+                            run,
+                            repo.clone_path,
+                            worktree,
+                            managed_root=cfg.worktrees_root,
+                        )
+                        if not removed.get("ok"):
+                            raise RuntimeError(
+                                "stale self-repair worktree remove failed: "
+                                f"{removed.get('error') or 'still exists'}"
+                            )
+                    else:
+                        # Dirty recovery work is preserved for inspection.
+                        raise RuntimeError(
+                            "cannot resume self-repair worktree outside current origin/main"
+                        )
+                else:
+                    resumed = True
+                    candidate_commit = head if ahead > 0 else ""
             else:
                 removed = remove_worktree(
                     run,
