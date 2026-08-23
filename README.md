@@ -200,6 +200,33 @@ PR, wyprowadzenie numeru issue, wyczyszczenie ledgera, przywrócenie `ready` ora
 materializacja stanu są oddzielnymi procesami. Fala prowadzi każdą gałąź;
 żaden proces nie iteruje po repozytoriach ani PR-ach i nie łączy kilku efektów.
 
+### Wybór repozytorium do implementacji — `select_implement`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareImplementationSelection
+    PrepareImplementationSelection --> PersistImplementationSelection: brak live budget
+    PrepareImplementationSelection --> SelectImplementationRepoSlot: budżet aktywny
+    SelectImplementationRepoSlot --> InspectImplementationEligibility: slot zawiera repo
+    SelectImplementationRepoSlot --> RecordIneligibleRepo: slot pusty
+    InspectImplementationEligibility --> RecordEligibleRepo: repo spełnia wszystkie bramki
+    InspectImplementationEligibility --> RecordIneligibleRepo: outside scope / survey failed / PR-first / occupied / stuck / brak ready / agent disabled
+    RecordEligibleRepo --> SelectImplementationSlotOutcome
+    RecordIneligibleRepo --> SelectImplementationSlotOutcome
+    SelectImplementationSlotOutcome --> SelectImplementationRepoSlot: następny jawny slot
+    SelectImplementationSlotOutcome --> ReduceImplementationSelection: ostatni slot
+    ReduceImplementationSelection --> PersistImplementationSelection
+    PersistImplementationSelection --> ImplementationSelectionResult
+    ImplementationSelectionResult --> [*]
+```
+
+Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Każdy slot sprawdza jeden
+repozytoryjny zestaw twardych faktów: zakres, kompletność survey PR, PR-first,
+occupancy, stuck ledger, obecność gotowego issue i dostępność executora. Fala
+prowadzi rozłączne krawędzie `eligible` i `ineligible`. Czysty reduktor wybiera
+pierwsze kwalifikujące się repo w kolejności konfiguracji; nie uruchamia procesu
+ani mutacji. Osobny efekt materializuje plan implementacji.
+
 ### Higiena kolejki implementacji — `queue_conflict`
 
 ```mermaid
@@ -519,6 +546,7 @@ kontraktu. Aktualny audyt:
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
+| `ImplementationSelection` | `select_implement` | prowadzi katalog przez jawne bramki kwalifikacji repo |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
