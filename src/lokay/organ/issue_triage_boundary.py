@@ -29,6 +29,7 @@ OWNED = frozenset(
         "apply_issue_close",
         "apply_issue_manual",
         "issue_split_subflow",
+        "summarize_issue_triage",
     }
 )
 
@@ -211,6 +212,17 @@ def handle_issue_triage(
         or (up.get("finalize_issue_triage") or {}).get("decision")
         or {}
     )
+    if atom == "summarize_issue_triage":
+        from lokay.proc.summarize_issue_triage import summarize
+
+        return summarize(
+            final=up.get("finalize_issue_triage") or {},
+            ready=up.get("apply_issue_ready") or {},
+            blocked=up.get("apply_issue_blocked") or {},
+            close=up.get("apply_issue_close") or {},
+            split=up.get("issue_split_subflow") or {},
+            manual=up.get("apply_issue_manual") or {},
+        )
     if atom == "issue_split_subflow":
         from lokay.proc.issue_split_subflow import invoke
 

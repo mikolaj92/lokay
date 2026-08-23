@@ -16,6 +16,7 @@ OWNED = frozenset(
         "mark_issue_tracker",
         "comment_issue_tracker",
         "close_issue_tracker",
+        "summarize_issue_split",
     }
 )
 
@@ -62,6 +63,15 @@ def handle_issue_split(
             live=mutate,
         )
     plan_data = dict((up.get("plan_issue_split") or {}).get("plan") or {})
+    if atom == "summarize_issue_split":
+        from lokay.proc.summarize_issue_split import summarize
+
+        return summarize(
+            plan=up.get("plan_issue_split") or {},
+            comment=up.get("comment_issue_tracker") or {},
+            close=up.get("close_issue_tracker") or {},
+            manual=up.get("apply_issue_manual") or {},
+        )
     if atom == "mark_issue_tracker":
         from lokay.proc.mark_issue_tracker import apply
 

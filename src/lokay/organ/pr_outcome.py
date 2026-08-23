@@ -6,27 +6,52 @@ from typing import Any
 
 
 def handle_pr_outcome(
-    atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]
+    atom: str,
+    inputs: dict[str, Any],
+    up: dict[str, dict[str, Any]],
+    ctx: dict[str, Any],
 ) -> dict[str, Any] | None:
+    if atom == "summarize_pr_triage":
+        from lokay.proc.summarize_pr_triage import summarize
+
+        return summarize(
+            review=up.get("publish_pr_review") or {},
+            repair=up.get("pr_repair_subflow") or {},
+            repair_manual=up.get("review_repair_manual") or {},
+            manual=up.get("review_manual") or {},
+            merge=up.get("pr_merge") or {},
+            close=up.get("close_issue") or {},
+        )
+
     if atom == "review_repair_gate":
         from lokay.proc.review_repair_gate import route_review_repair
+
         return route_review_repair(up.get("publish_pr_review") or {})
 
     if atom in {"review_manual", "review_repair_manual"}:
         from lokay.proc.review_terminal import terminal_review
+
         review = up.get("publish_pr_review") or {}
         decision = review.get("decision") if isinstance(review, dict) else {}
         verdict = str((decision or {}).get("verdict") or "needs_human")
-        reason = "review_repair_escalated" if atom == "review_repair_manual" else "review_needs_human"
+        reason = (
+            "review_repair_escalated"
+            if atom == "review_repair_manual"
+            else "review_needs_human"
+        )
         return terminal_review(verdict=verdict, reason=reason)
 
     if atom == "pr_repair_subflow":
         from lokay.proc.pr_repair_subflow import run_pr_repair_subflow
+
         review = up.get("publish_pr_review") or {}
         return run_pr_repair_subflow(
             config_path=str(inputs.get("config_path") or "") or None,
-            repo=str(ctx["repo"]), pr=int(ctx["pr_number"]),
-            branch=str(ctx["branch"]), review=dict(review), live=bool(ctx["live"]),
+            repo=str(ctx["repo"]),
+            pr=int(ctx["pr_number"]),
+            branch=str(ctx["branch"]),
+            review=dict(review),
+            live=bool(ctx["live"]),
         )
 
     return None

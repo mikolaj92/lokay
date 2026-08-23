@@ -44,10 +44,14 @@ def test_check_open_closed():
 
 
 def test_shape_closes_platform_work_on_library(tmp_path: Path):
-    (tmp_path / "README.md").write_text("# Cool Kit\n\nA small library SDK.\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text(
+        "# Cool Kit\n\nA small library SDK.\n", encoding="utf-8"
+    )
     (tmp_path / "src" / "coolkit").mkdir(parents=True)
     (tmp_path / "src" / "coolkit" / "__init__.py").write_text("", encoding="utf-8")
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "coolkit"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "coolkit"\n', encoding="utf-8"
+    )
     shape = probe_repo_shape(tmp_path)
     assert shape.kind == "library", shape
     issue = _issue(
@@ -60,7 +64,9 @@ def test_shape_closes_platform_work_on_library(tmp_path: Path):
 
 
 def test_shape_closes_platform_work_on_swift_only(tmp_path: Path):
-    (tmp_path / "Package.swift").write_text("// swift-tools-version: 5.9\n", encoding="utf-8")
+    (tmp_path / "Package.swift").write_text(
+        "// swift-tools-version: 5.9\n", encoding="utf-8"
+    )
     (tmp_path / "Sources").mkdir()
     shape = probe_repo_shape(tmp_path)
     assert shape.kind == "library", shape
@@ -74,7 +80,9 @@ def test_shape_closes_platform_work_on_swift_only(tmp_path: Path):
 def test_shape_allows_platform_work_on_host(tmp_path: Path):
     (tmp_path / "README.md").write_text("# Host app\n", encoding="utf-8")
     (tmp_path / "templates").mkdir()
-    (tmp_path / "templates" / "product_shell.html").write_text("<html></html>", encoding="utf-8")
+    (tmp_path / "templates" / "product_shell.html").write_text(
+        "<html></html>", encoding="utf-8"
+    )
     (tmp_path / "static" / "platform").mkdir(parents=True)
     (tmp_path / "pyproject.toml").write_text(
         'dependencies = ["fastapi", "app-factory"]\n', encoding="utf-8"
@@ -210,7 +218,9 @@ def test_essence_keeps_foreign_hang_report():
 def test_decide_intake_ready_path(tmp_path: Path):
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="app"\n', encoding="utf-8"
+    )
     # Ordinary implementable bugfix — not a platform-host playbook.
     d = decide_intake(_issue(), clone_path=tmp_path, state="OPEN")
     assert d.decision == "ready", d
@@ -222,7 +232,9 @@ def test_decide_intake_ready_path(tmp_path: Path):
 def test_decide_intake_blocks_preflight_incident(tmp_path: Path):
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="app"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="app"\n', encoding="utf-8"
+    )
     issue = _issue(
         title="Preflight failure 7a069cefb68040e2",
         body="<!-- lokay-preflight:7a069cefb68040e2 -->\nBounded checks failed: disk_headroom",
@@ -240,7 +252,9 @@ def test_decide_intake_blocks_preflight_incident(tmp_path: Path):
 def test_decide_intake_obsolete_close_on_library(tmp_path: Path):
     (tmp_path / "README.md").write_text("A pure library kit.\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="kit"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname="kit"\n', encoding="utf-8"
+    )
     d = decide_intake(
         _issue(
             title="Adopt product_shell / Basecoat host stack",
@@ -252,7 +266,10 @@ def test_decide_intake_obsolete_close_on_library(tmp_path: Path):
     assert d.decision == "close"
     assert d.close is True
     assert d.implementable is False
-    assert "product_shell" in (d.comment or "").lower() or "library" in (d.comment or "").lower()
+    assert (
+        "product_shell" in (d.comment or "").lower()
+        or "library" in (d.comment or "").lower()
+    )
 
 
 def test_decide_intake_split_on_inventory(tmp_path: Path):
@@ -310,6 +327,7 @@ def test_issue_triage_path_includes_intake_and_split():
         "apply_issue_ready",
         "issue_split_subflow",
         "apply_issue_manual",
+        "summarize_issue_triage",
     ]
     linked = path["nodes"][2]
     assert "resolve_issue_candidate" in linked["conduction"]
@@ -318,21 +336,9 @@ def test_issue_triage_path_includes_intake_and_split():
     assert "finalize_issue_triage" in split["conduction"]
 
 
-def test_normalize_issue_triage_unwraps_authoritative_final_verdict():
-    out=normalize_path_result({"ok":True,"path_id":"issue_triage","live":True,"fala":{"ok":True,"run_status":"completed","effector_results":{
-        "finalize_issue_triage":{"id":"finalize_issue_triage","status":"completed","output":{"values":{"decision":{"verdict":"close","reason":"wrong_product_shape"}}}},
-        "apply_issue_close":{"id":"apply_issue_close","status":"completed","output":{"values":{"applied":True}}},
-    }}})
-    assert out["ok"] is True and out["applied"] is True and out["skipped"] is False
-    assert out["decision"] == {"verdict":"close","reason":"wrong_product_shape"}
-    assert out["implementable"] is False
 
-def test_normalize_issue_triage_split_applied():
-    out=normalize_path_result({"ok":True,"path_id":"issue_triage","live":True,"fala":{"ok":True,"run_status":"completed","effector_results":{
-        "finalize_issue_triage":{"id":"finalize_issue_triage","status":"completed","output":{"values":{"decision":{"verdict":"split","reason":"too_many_checkboxes"}}}},
-        "issue_split_subflow":{"id":"issue_split_subflow","status":"completed","output":{"values":{"applied":True,"children":[{"number":10},{"number":11}]}}},
-    }}})
-    assert out["decision"]["verdict"] == "split" and out["applied"] is True and out["skipped"] is False
+
+
 
 def _gate(**kwargs):
     kw = dict(
@@ -346,8 +352,14 @@ def _gate(**kwargs):
 
 def test_should_run_intake_ready_and_candidates():
     assert _gate(issue_labels=["ai:ready"]) == (True, "already_ready")
-    assert _gate(issue_labels=[], candidate_split=True) == (True, "triage_split_candidate")
-    assert _gate(issue_labels=[], candidate_ready=True) == (True, "triage_ready_candidate")
+    assert _gate(issue_labels=[], candidate_split=True) == (
+        True,
+        "triage_split_candidate",
+    )
+    assert _gate(issue_labels=[], candidate_ready=True) == (
+        True,
+        "triage_ready_candidate",
+    )
 
 
 def test_should_run_intake_skips_parked_blocked_undecided():

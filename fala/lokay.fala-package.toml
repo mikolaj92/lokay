@@ -824,6 +824,14 @@ when = { upstream = "finalize_issue_triage", path = "decision.verdict", equals =
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "apply_issue_manual" }
 retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "summarize_issue_triage"
+capability = "lokay_atom"
+conduction = ["finalize_issue_triage", "apply_issue_ready", "apply_issue_blocked", "apply_issue_close", "issue_split_subflow", "apply_issue_manual"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_issue_triage" }
+retry_policy = "none"
+
 [[correlation_paths]]
 id = "issue_split"
 title = "Bounded issue split"
@@ -916,6 +924,14 @@ config = { atom = "apply_issue_manual" }
 retry_policy = "none"
 
 # --- PR repair: red checks -> agent fix on existing branch -> push ---
+
+[[correlation_paths.effectors]]
+id = "summarize_issue_split"
+capability = "lokay_atom"
+conduction = ["plan_issue_split", "comment_issue_tracker", "close_issue_tracker", "apply_issue_manual"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_issue_split" }
+retry_policy = "none"
 
 [[correlation_paths]]
 id = "pr_repair"
@@ -1391,6 +1407,14 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "close_issue" }
 retry_policy = "none"
 # --- Emergency self-repair: direct validated fast-forward commit to main ---
+
+[[correlation_paths.effectors]]
+id = "summarize_pr_triage"
+capability = "lokay_atom"
+conduction = ["publish_pr_review", "pr_repair_subflow", "review_repair_manual", "review_manual", "pr_merge", "close_issue"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_pr_triage" }
+retry_policy = "none"
 
 [[correlation_paths]]
 id = "self_repair"
