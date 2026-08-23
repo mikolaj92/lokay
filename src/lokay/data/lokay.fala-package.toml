@@ -1507,3 +1507,114 @@ conduction = ["self_repair_preflight", "self_repair_push_main", "self_repair_act
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_self_repair" }
 retry_policy = "none"
+
+[[correlation_paths]]
+id = "stale_worktree_reap"
+title = "Stale worktree hygiene"
+description = "Bounded serial candidate classification with explicit keep/remove effects."
+
+[[correlation_paths.effectors]]
+id = "collect_stale_worktree_candidates"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "collect_stale_worktree_candidates" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "classify_stale_worktree_1"
+capability = "lokay_atom"
+conduction = ["collect_stale_worktree_candidates"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "classify_stale_worktree_1" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "keep_stale_worktree_1"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_1"]
+when = { upstream = "classify_stale_worktree_1", path = "route", equals = "keep" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "keep_stale_worktree_1" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "remove_stale_worktree_1"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_1"]
+when = { upstream = "classify_stale_worktree_1", path = "route", equals = "remove" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "remove_stale_worktree_1" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "classify_stale_worktree_2"
+capability = "lokay_atom"
+conduction = ["collect_stale_worktree_candidates", "keep_stale_worktree_1", "remove_stale_worktree_1"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "classify_stale_worktree_2" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "keep_stale_worktree_2"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_2"]
+when = { upstream = "classify_stale_worktree_2", path = "route", equals = "keep" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "keep_stale_worktree_2" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "remove_stale_worktree_2"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_2"]
+when = { upstream = "classify_stale_worktree_2", path = "route", equals = "remove" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "remove_stale_worktree_2" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "classify_stale_worktree_3"
+capability = "lokay_atom"
+conduction = ["collect_stale_worktree_candidates", "keep_stale_worktree_2", "remove_stale_worktree_2"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "classify_stale_worktree_3" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "keep_stale_worktree_3"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_3"]
+when = { upstream = "classify_stale_worktree_3", path = "route", equals = "keep" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "keep_stale_worktree_3" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "remove_stale_worktree_3"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_3"]
+when = { upstream = "classify_stale_worktree_3", path = "route", equals = "remove" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "remove_stale_worktree_3" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "classify_stale_worktree_4"
+capability = "lokay_atom"
+conduction = ["collect_stale_worktree_candidates", "keep_stale_worktree_3", "remove_stale_worktree_3"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "classify_stale_worktree_4" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "keep_stale_worktree_4"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_4"]
+when = { upstream = "classify_stale_worktree_4", path = "route", equals = "keep" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "keep_stale_worktree_4" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "remove_stale_worktree_4"
+capability = "lokay_atom"
+conduction = ["classify_stale_worktree_4"]
+when = { upstream = "classify_stale_worktree_4", path = "route", equals = "remove" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "remove_stale_worktree_4" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "summarize_stale_worktree_reap"
+capability = "lokay_atom"
+conduction = ["collect_stale_worktree_candidates", "classify_stale_worktree_1", "keep_stale_worktree_1", "remove_stale_worktree_1", "classify_stale_worktree_2", "keep_stale_worktree_2", "remove_stale_worktree_2", "classify_stale_worktree_3", "keep_stale_worktree_3", "remove_stale_worktree_3", "classify_stale_worktree_4", "keep_stale_worktree_4", "remove_stale_worktree_4"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_stale_worktree_reap" }
+retry_policy = "none"

@@ -16,7 +16,9 @@ from lokay.envelope import emit_exit
 from lokay.proc._common import add_config_live, load_cfg  # noqa: F401
 from lokay.proc.closeout_prs import run_closeout_prs
 from lokay.proc.compute_health import run_compute_health
-from lokay.proc import verify_issue_ready as p_intake  # compatibility test hook; physical ready fact only
+from lokay.proc import (
+    verify_issue_ready as p_intake,
+)  # compatibility test hook; physical ready fact only
 from lokay.proc.dispatch_implement import run_dispatch_implement
 from lokay.proc.dispatch_triage import run_dispatch_triage
 from lokay.proc.factory_begin import run_factory_begin
@@ -24,7 +26,6 @@ from lokay.proc.plan_pass import run_plan_pass
 from lokay.proc.record_pass import run_record_pass
 from lokay.proc.resolve_conflicts import run_resolve_conflicts
 from lokay.proc.queue_conflict import run_queue_conflict
-from lokay.proc.reap_stale_worktrees import run_reap_stale_worktrees
 from lokay.proc.refresh_occupancy import run_refresh_occupancy
 from lokay.proc.select_implement import run_select_implement
 from lokay.proc.survey_inbox import run_survey_inbox
@@ -36,7 +37,9 @@ from lokay.passkit import io as pass_io
 from lokay.passkit.health import health_payload as _health_payload  # noqa: F401
 from lokay.passkit.support import is_manual_pr as _is_manual_pr  # noqa: F401
 from lokay.passkit.support import run_proc as _run  # noqa: F401
-from lokay.compose.issue_to_pr import compose_issue_to_pr as _default_compose_issue_to_pr  # noqa: F401
+from lokay.compose.issue_to_pr import (
+    compose_issue_to_pr as _default_compose_issue_to_pr,
+)  # noqa: F401
 from lokay.compose.pr_repair import compose_pr_repair  # noqa: F401
 from lokay.compose.pr_triage import compose_pr_triage  # noqa: F401
 from lokay.graph_run import run_path  # noqa: F401
@@ -166,7 +169,6 @@ def compose_tick(*, config_path: str | None, live: bool) -> dict[str, Any]:
     run_resolve_conflicts(pass_dir=pass_dir, config_path=config_path, live=live)
     run_closeout_prs(pass_dir=pass_dir, config_path=config_path, live=live)
     run_refresh_occupancy(pass_dir=pass_dir, config_path=config_path, live=live)
-    run_reap_stale_worktrees(pass_dir=pass_dir, config_path=config_path, live=live)
     run_select_implement(pass_dir=pass_dir)
     run_queue_conflict(pass_dir=pass_dir, config_path=config_path, live=live)
     run_dispatch_implement(pass_dir=pass_dir, config_path=config_path, live=live)

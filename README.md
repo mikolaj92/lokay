@@ -95,6 +95,34 @@ stateDiagram-v2
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
+### Higiena worktree — `reap_stale_worktrees`
+
+```mermaid
+stateDiagram-v2
+    [*] --> CollectWorktreeCandidates
+    CollectWorktreeCandidates --> ResolveReceiptSafety
+    ResolveReceiptSafety --> KeepAll: receipt nieczytelny
+    ResolveReceiptSafety --> SelectCandidate1: receipt czytelny
+    SelectCandidate1 --> ClassifyCandidate1
+    ClassifyCandidate1 --> KeepCandidate1: live / PR / dirty / unpublished / unreadable
+    ClassifyCandidate1 --> RemoveCandidate1: zamknięte issue / bezpiecznie stale
+    RemoveCandidate1 --> SelectCandidate2
+    KeepCandidate1 --> SelectCandidate2
+    SelectCandidate2 --> ClassifyCandidate2: kandydat istnieje
+    SelectCandidate2 --> ReapResult: brak dalszych kandydatów
+    ClassifyCandidate2 --> KeepCandidate2: chroniony
+    ClassifyCandidate2 --> RemoveCandidate2: bezpiecznie stale
+    KeepCandidate2 --> ReapResult
+    RemoveCandidate2 --> ReapResult
+    KeepAll --> ReapResult
+    ReapResult --> [*]
+```
+
+Pierwszy pion implementacji zachowa obecny `CLASSIFY_CAP`, ale przeniesie wybór,
+klasyfikację, efekt `keep/remove` i wynik do osobnej pod-Fali. Kolejne sloty są
+tym samym wzorcem co `Candidate2`; diagram skraca powtarzalne sloty, nie ukrywa
+innej reguły routingu.
+
 ### Triage issue — `issue_triage`
 
 ```mermaid
@@ -346,6 +374,7 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |

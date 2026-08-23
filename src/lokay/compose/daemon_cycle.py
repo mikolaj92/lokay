@@ -14,12 +14,6 @@ from lokay.envelope import mill_glance
 from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
-from lokay.child_harvest import harvest_idle_mill_stuck
-from lokay.proc.closeout import run_closeout_leftover
-from lokay.proc.ready_hygiene import hygiene_idle_leftover_ready
-from lokay.proc.reap_stale_implementing import reap_idle_leftover_cache
-from lokay.proc.reap_stale_worktrees import reap_idle_closed_worktrees
-from lokay.proc.survey_ttl import skip_idle_factory_pass
 
 
 def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -69,46 +63,6 @@ def compose_daemon_cycle(
                 rotate_mill_fala_journals()
             except OSError:
                 pass
-            skipped = skip_idle_factory_pass(live=True)
-            if skipped is not None:
-                harvest_idle_mill_stuck(
-                    config_path=config_path, live=True
-                )
-                reap_idle_closed_worktrees(
-                    config_path=config_path, live=True
-                )
-                # Idle daemon_cycle skip still runs leftover-ready.
-                hygiene_idle_leftover_ready(
-                    config_path=config_path, live=True
-                )
-                # Idle daemon_cycle skip still runs leftover-cache.
-                reap_idle_leftover_cache(
-                    config_path=config_path, live=True
-                )
-                leftover = run_closeout_leftover(
-                    config_path=config_path, live=True
-                )
-                payload = {
-                    **skipped,
-                    "engine": "fala",
-                    "path_id": "daemon_cycle",
-                    "live": True,
-                    "mode": "live",
-                    "passes": 0,
-                    "max_passes": max(1, int(max_passes)),
-                    "leftover_closeout": leftover,
-                }
-                if leftover.get("labels_removed"):
-                    remaining = payload.get("remaining")
-                    if isinstance(remaining, dict):
-                        payload["remaining"] = {
-                            **remaining,
-                            "issue_to_pr_started": 0,
-                        }
-                    payload["progress"] = int(payload.get("progress") or 0) + int(
-                        leftover.get("leftover_closed") or 1
-                    )
-                return finalize_daemon_payload(payload)
             return finalize_daemon_payload(
                 run_path(
                     path_id="daemon_cycle",
@@ -144,7 +98,9 @@ def compose_daemon_cycle(
             receipt = Path.home() / ".lokay" / "last-pass.json"
         try:
             previous = json.loads(receipt.read_text(encoding="utf-8"))
-            if isinstance(previous, dict) and isinstance(previous.get("remaining"), dict):
+            if isinstance(previous, dict) and isinstance(
+                previous.get("remaining"), dict
+            ):
                 payload["remaining"] = previous["remaining"]
         except (OSError, UnicodeError, json.JSONDecodeError):
             pass

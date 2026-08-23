@@ -28,22 +28,70 @@ from lokay.prompts import (
 )
 
 
-def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
+def handle_factory(
+    atom: str,
+    inputs: dict[str, Any],
+    up: dict[str, dict[str, Any]],
+    ctx: dict[str, Any],
+) -> dict[str, Any] | None:
     from lokay.proc import (
-        assign_issue, close_issue, commit_all, closeout_prs, compute_health,
-        cycle_end, cycle_start, dispatch_implement, dispatch_triage, factory_begin,
-        factory_tick, get_issue, host_ff, list_prs, make_branch, plan_issue,
-        localize, pi_budget, plan_pass, pr_checks, pr_create, pr_label, pr_merge,
-        push_branch, record_pass, recovery_begin, recovery_incident,
-        recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
-        resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
-        reap_stale_implementing, reap_stale_worktrees, refresh_occupancy,
-        ready_hygiene, compact_state, survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
-        worktree_add, assert_real_diff,
-        self_repair_activate, self_repair_close, self_repair_prepare,
-        self_repair_preflight, self_repair_push_main, self_repair_validate,
+        assign_issue,
+        close_issue,
+        commit_all,
+        closeout_prs,
+        compute_health,
+        cycle_end,
+        cycle_start,
+        dispatch_implement,
+        dispatch_triage,
+        factory_begin,
+        factory_tick,
+        get_issue,
+        host_ff,
+        list_prs,
+        make_branch,
+        plan_issue,
+        localize,
+        pi_budget,
+        plan_pass,
+        pr_checks,
+        pr_create,
+        pr_label,
+        pr_merge,
+        push_branch,
+        record_pass,
+        recovery_begin,
+        recovery_incident,
+        recovery_mill,
+        recovery_observe,
+        recovery_record,
+        recovery_run_self_repair,
+        resolve_conflicts,
+        run_agent,
+        select_implement,
+        queue_conflict,
+        stage_label,
+        reap_stale_implementing,
+        reap_stale_worktrees,
+        refresh_occupancy,
+        ready_hygiene,
+        compact_state,
+        survey_inbox,
+        survey_prs,
+        survey_ready,
+        survey_repos,
+        test_local,
+        worktree_add,
+        assert_real_diff,
+        self_repair_activate,
+        self_repair_close,
+        self_repair_prepare,
+        self_repair_preflight,
+        self_repair_push_main,
+        self_repair_validate,
     )
     from lokay.stuck import issue_number_from_branch
+
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
@@ -53,6 +101,7 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
     branch = ctx["branch"]
 
     import lokay.fala_organ as _fo
+
     _run_atom_main = _fo._run_atom_main
     branch_ahead_of_upstream = getattr(_fo, "branch_ahead_of_upstream", None)
     if branch_ahead_of_upstream is None:
@@ -100,30 +149,22 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         # Legacy bridge atom (not in parent factory_pass graph).
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            survey_repos.main, [*cfg, *live, "--pass-dir", pass_dir]
-        )
+        return _run_atom_main(survey_repos.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "survey_prs":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            survey_prs.main, [*cfg, *live, "--pass-dir", pass_dir]
-        )
+        return _run_atom_main(survey_prs.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "survey_inbox":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            survey_inbox.main, [*cfg, *live, "--pass-dir", pass_dir]
-        )
+        return _run_atom_main(survey_inbox.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "survey_ready":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            survey_ready.main, [*cfg, *live, "--pass-dir", pass_dir]
-        )
+        return _run_atom_main(survey_ready.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "ready_hygiene":
         return _run_atom_main(ready_hygiene.main, [*cfg, *live])
@@ -155,9 +196,7 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
     if atom == "closeout_prs":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            closeout_prs.main, [*cfg, *live, "--pass-dir", pass_dir]
-        )
+        return _run_atom_main(closeout_prs.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "reap_stale_implementing":
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
@@ -168,6 +207,7 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
 
     if atom == "reap_over_budget":
         from lokay.proc import reap_over_budget
+
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         argv = [*cfg, *live]
         if pass_dir:
@@ -182,10 +222,14 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         )
 
     if atom == "reap_stale_worktrees":
+        from lokay.proc.reap_stale_worktrees_subflow import run
+
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            reap_stale_worktrees.main, [*cfg, *live, "--pass-dir", pass_dir]
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
         )
 
     if atom == "select_implement":
@@ -225,6 +269,5 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
 
     if atom == "compact_state":
         return _run_atom_main(compact_state.main, [*cfg])
-
 
     return None
