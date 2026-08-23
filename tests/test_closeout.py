@@ -39,9 +39,7 @@ def test_open_issue_with_merged_fixes_pr_removes_ready_labels(monkeypatch):
 
     monkeypatch.setattr(closeout, "run_proc", run_proc)
 
-    out = closeout.run_closeout(
-        repo="owner/repo", issue=7, config_path=None, live=True
-    )
+    out = closeout.run_closeout(repo="owner/repo", issue=7, config_path=None, live=True)
 
     assert out["delivered"] is True
     assert out["labels_removed"] is True
@@ -49,38 +47,17 @@ def test_open_issue_with_merged_fixes_pr_removes_ready_labels(monkeypatch):
     assert parked == [["--repo", "owner/repo", "--issue", "7", "--live"]]
 
 
-def test_existing_merged_delivery_is_closed_out_before_graph_can_start(monkeypatch):
-    monkeypatch.delenv("LOKAY_ISSUE_TO_PR_ACTIVATION_FD", raising=False)
-    monkeypatch.setattr(
-        issue_to_pr,
-        "load_config",
-        lambda _path: SimpleNamespace(mode="live", state_path="state.jsonl"),
-    )
-    monkeypatch.setattr(issue_to_pr, "append_event", lambda *_a, **_k: None)
-    monkeypatch.setattr(
-        issue_to_pr, "_delivery_stop_reason", lambda _repo, _issue: "delivery_pr_exists"
-    )
-    calls: list[list[str]] = []
+def test_existing_delivery_closeout_is_an_explicit_fala_edge():
+    from lokay.graph_run import describe_package
 
-    def run_proc(_main, argv):
-        calls.append(argv)
-        return {"ok": True, "delivered": True, "labels_removed": True}
-
-    monkeypatch.setattr(issue_to_pr, "run_proc", run_proc)
-    monkeypatch.setattr(
-        issue_to_pr,
-        "run_path",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("second i2pr must not start")),
-    )
-
-    out = issue_to_pr.compose_issue_to_pr(
-        config_path=None, repo="mikolaj92/lokay", issue_number=7, live=True
-    )
-
-    assert out["stopped"] is True
-    assert out["closeout"]["labels_removed"] is True
-    assert calls == [["--live", "--repo", "mikolaj92/lokay", "--issue", "7"]]
-
+    path = next(p for p in describe_package()["paths"] if p["id"] == "issue_to_pr")
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["close_existing_delivery"]["when"] == {
+        "upstream": "resolve_existing_delivery",
+        "path": "route",
+        "equals": "closeout",
+    }
+    assert by_id["issue_to_pr_subflow"]["when"]["equals"] == "deliver"
 
 
 def test_leftover_closed_ready_parks_without_searching_prs(monkeypatch):
@@ -442,8 +419,9 @@ def test_pytest_does_not_skip_leftover_github_lists_using_the_mill_stamp(
     hermetic.write_text("1", encoding="utf-8")
     assert closeout.leftover_recently_empty(hermetic) is True
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "closeout.py"
-    assert "Pytest must not skip leftover GitHub lists using the mill stamp." in src.read_text(
-        encoding="utf-8"
+    assert (
+        "Pytest must not skip leftover GitHub lists using the mill stamp."
+        in src.read_text(encoding="utf-8")
     )
 
 
@@ -590,10 +568,6 @@ def test_leftover_park_clears_empty_stamp(monkeypatch, tmp_path):
     assert not stamp.exists()
 
 
-
-
-
-
 def test_closed_ready_numbers_refuses_truncated_list():
     cap = closeout.survey_list_cap()
 
@@ -602,7 +576,9 @@ def test_closed_ready_numbers_refuses_truncated_list():
             assert live is True
             assert spec.argv[-1] == str(cap)
             return SimpleNamespace(
-                stdout="[" + ",".join('{"number":1,"state":"CLOSED"}' for _ in range(cap)) + "]"
+                stdout="["
+                + ",".join('{"number":1,"state":"CLOSED"}' for _ in range(cap))
+                + "]"
             )
 
     with pytest.raises(RuntimeError, match="hit the 1000 newest-first cap"):

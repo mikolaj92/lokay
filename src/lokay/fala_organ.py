@@ -14,6 +14,7 @@ from fala import sdk
 
 from lokay.git_commit import branch_ahead_of_upstream  # noqa: F401 — tests patch this
 from lokay.organ.agent import handle_agent
+from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.organ.common import (  # noqa: F401
     _conduction_values,
     _issue_no_longer_open,
@@ -30,6 +31,7 @@ from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
+from lokay.organ.publication import handle_publication
 from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.recovery import handle_recovery
 from lokay.organ.self_repair import handle_self_repair
@@ -38,7 +40,13 @@ _MUTATING_ATOMS = frozenset(
     {
         "run_agent",
         "repair_agent",
+        "coding_retry_agent",
+        "evidence_coding_agent",
+        "issue_to_pr_subflow",
+        "close_existing_delivery",
         "commit_all",
+        "commit_implementation",
+        "commit_repair",
         "push",
         "pr_create",
         "pr_merge",
@@ -112,12 +120,14 @@ def _handle(
         handle_factory,
         handle_self_repair,
         handle_review_boundary,
+        handle_coding_boundary,
         handle_issue_split,
         handle_issue_triage,
         handle_pr_outcome,
         handle_lanes,
         handle_implement,
         handle_agent,
+        handle_publication,
         handle_pr_finalize,
     ):
         result = handler(atom, inputs, up, ctx)

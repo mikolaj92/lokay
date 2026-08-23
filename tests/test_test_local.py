@@ -408,26 +408,13 @@ def _path_nodes(path_id: str) -> dict[str, dict]:
     return {n["id"]: n for n in path["nodes"]}
 
 
-def test_issue_to_pr_push_and_pr_create_conduct_through_test_local():
-    by_id = _path_nodes("issue_to_pr")
-    assert "test_local" in by_id
-    assert "commit_all" in by_id["test_local"]["conduction"]
-    assert "worktree_add" in by_id["test_local"]["conduction"]
-    assert "test_local" in by_id["push"]["conduction"]
-    assert "assert_real_diff" in by_id["push"]["conduction"]
-    assert "test_local" in by_id["pr_create"]["conduction"]
-    assert "assert_real_diff" in by_id["pr_create"]["conduction"]
-    assert "push" in by_id["pr_create"]["conduction"]
-    # Bounded AlphaCodium loop: one repair nest, then one recheck, then push.
-    assert "repair_agent" in by_id
-    assert "test_local_recheck" in by_id
-    assert "test_local" in by_id["repair_agent"]["conduction"]
-    assert "repair_agent" in by_id["test_local_recheck"]["conduction"]
-    assert "test_local_recheck" in by_id["push"]["conduction"]
-    assert "test_local_recheck" in by_id["pr_create"]["conduction"]
-    # Recheck must not depend on push/pr_create (order: tests then publish).
-    assert "push" not in by_id["test_local_recheck"]["conduction"]
-    assert "pr_create" not in by_id["test_local_recheck"]["conduction"]
+def test_issue_to_pr_push_and_pr_create_follow_explicit_test_selection():
+    by_id = _path_nodes("issue_to_pr_delivery")
+    assert "commit_implementation" in by_id["test_local"]["conduction"]
+    assert by_id["repair_agent"]["when"]["equals"] == "fail"
+    assert by_id["push"]["when"]["equals"] == "publish"
+    assert {"finalize_local_tests", "assert_real_diff"} <= set(by_id["push"]["conduction"])
+
 
 
 def test_pr_repair_push_conducts_through_test_local():
@@ -449,35 +436,13 @@ def test_pr_triage_merge_conducts_through_test_local():
     assert "pr_merge" not in by_id["test_local"]["conduction"]
 
 
-def test_issue_to_pr_red_test_local_never_reaches_pr_create():
-    """Conduction: a failed first probe still reaches the one-shot nest.
+def test_issue_to_pr_red_test_routes_to_one_repair_not_publish():
+    by_id = _path_nodes("issue_to_pr_delivery")
+    assert by_id["repair_agent"]["when"]["equals"] == "fail"
+    assert by_id["test_local_recheck"]["when"]["equals"] == "repaired"
+    assert by_id["coding_repair_terminal"]["when"]["equals"] == "repair_terminal"
+    assert by_id["push"]["when"]["equals"] == "publish"
 
-    The nest itself (repair_agent, test_local_recheck) is allowed; publish
-    nodes (push, pr_create, stage_pr_open, …) stay unreachable until the
-    bounded recheck succeeds.
-    """
-    by_id = _path_nodes("issue_to_pr")
-    # After a red first probe, Fala will not ready nodes that list test_local
-    # as a hard conduction. The nest atoms list it, so they *do* wait for the
-    # first probe to complete — but they skip-or-run based on its values, not
-    # on its success. That skip-or-run is organ-owned (see test_fala_organ).
-    # Publish nodes also list test_local AND test_local_recheck, so a red
-    # recheck never readies them.
-    after_red_recheck = _ready_after_failure("issue_to_pr", "test_local_recheck")
-    assert "repair_agent" in after_red_recheck or "test_local" in by_id["repair_agent"]["conduction"]
-    assert "push" not in after_red_recheck
-    assert "pr_create" not in after_red_recheck
-    assert "assert_real_diff" not in after_red_recheck
-    assert "stage_pr_open" not in after_red_recheck
-    assert "list_prs" not in after_red_recheck
-    assert "pr_label" not in after_red_recheck
-    after_red_first = _ready_after_failure("issue_to_pr", "test_local")
-    assert "push" not in after_red_first
-    assert "pr_create" not in after_red_first
-    assert "stage_pr_open" not in after_red_first
-    # The nest atoms themselves wait on test_local (they must not start early).
-    assert "repair_agent" not in after_red_first
-    assert "test_local_recheck" not in after_red_first
 
 
 def _ready_after_failure(path_id: str, failed_id: str) -> set[str]:

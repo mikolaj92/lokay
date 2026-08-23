@@ -155,26 +155,47 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> RecheckOpenIssue
-    RecheckOpenIssue --> PrepareBranch: issue otwarte
+    RecheckOpenIssue --> RecheckDelivery: issue otwarte
     RecheckOpenIssue --> NoEffect: issue zamknięte
+    RecheckDelivery --> CloseExistingDelivery: istniejący PR dostarcza issue
+    RecheckDelivery --> NoEffect: wznowiona gałąź ma kod celu
+    RecheckDelivery --> PrepareBranch: brak dostawy
     PrepareBranch --> PrepareWorktree
     PrepareWorktree --> PlanIssue
     PlanIssue --> Localize
     Localize --> CodingAgent
     CodingAgent --> ValidateCodingResult
-    ValidateCodingResult --> CodingAgent: invalid JSON + informacja zwrotna
-    ValidateCodingResult --> CollectCodingEvidence: NEEDS_EVIDENCE
-    CollectCodingEvidence --> CodingAgent
-    ValidateCodingResult --> Commit: IMPLEMENTED
-    ValidateCodingResult --> HumanTerminal: NEEDS_HUMAN
-    Commit --> RebaseOntoMain
+    ValidateCodingResult --> SelectCodingResult: wynik poprawny
+    ValidateCodingResult --> CodingRetryAgent: invalid JSON + informacja zwrotna
+    CodingRetryAgent --> ValidateCodingRetry
+    ValidateCodingRetry --> SelectCodingResult: wynik poprawny
+    ValidateCodingRetry --> HumanTerminal: nadal invalid JSON
+    SelectCodingResult --> CollectIssueSnapshot: NEEDS_EVIDENCE(issue_snapshot)
+    SelectCodingResult --> CollectRepoStructure: NEEDS_EVIDENCE(repo_structure)
+    SelectCodingResult --> CollectTestContract: NEEDS_EVIDENCE(test_contract)
+    SelectCodingResult --> CollectLocalizedDiff: NEEDS_EVIDENCE(localized_diff)
+    CollectIssueSnapshot --> EvidenceCodingAgent
+    CollectRepoStructure --> EvidenceCodingAgent
+    CollectTestContract --> EvidenceCodingAgent
+    CollectLocalizedDiff --> EvidenceCodingAgent
+    EvidenceCodingAgent --> ValidateEvidenceCoding
+    ValidateEvidenceCoding --> FinalizeCodingResult: wynik poprawny
+    ValidateEvidenceCoding --> HumanTerminal: invalid JSON
+    FinalizeCodingResult --> HumanTerminal: ponowne NEEDS_EVIDENCE / NEEDS_HUMAN
+    SelectCodingResult --> VerifyImplementationDiff: IMPLEMENTED
+    FinalizeCodingResult --> VerifyImplementationDiff: IMPLEMENTED
+    VerifyImplementationDiff --> CommitImplementation
+    CommitImplementation --> RebaseOntoMain
     RebaseOntoMain --> LocalTest
-    LocalTest --> VerifyRealDiff: PASS
+    LocalTest --> VerifyPublishDiff: PASS
     LocalTest --> RepairAgent: FAIL
-    RepairAgent --> LocalTestAgain
-    LocalTestAgain --> VerifyRealDiff: PASS
+    RepairAgent --> ValidateRepairResult
+    ValidateRepairResult --> CommitRepair: REPAIRED
+    ValidateRepairResult --> RepairTerminal: invalid JSON / NEEDS_HUMAN
+    CommitRepair --> LocalTestAgain
+    LocalTestAgain --> VerifyPublishDiff: PASS
     LocalTestAgain --> RepairTerminal: FAIL
-    VerifyRealDiff --> PushBranch
+    VerifyPublishDiff --> PushBranch
     PushBranch --> CreatePullRequest
     CreatePullRequest --> LabelPullRequest
     LabelPullRequest --> PullRequestOpen
@@ -292,7 +313,7 @@ kontraktu. Aktualny audyt:
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
 | `issue_triage` bez ukrytego drzewa Python | zaimplementowane w Fali wraz z pod-Falą `issue_split` |
-| `issue_to_pr` bez ukrytego drzewa Python | **do refaktoru** |
+| `issue_to_pr` bez ukrytego drzewa Python | zaimplementowane jako gate Fali + pod-Fala `issue_to_pr_delivery` |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | **do refaktoru** |
 
 ### Ścieżki Fali odpowiadające diagramowi
@@ -303,7 +324,8 @@ kontraktu. Aktualny audyt:
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
-| `ImplementIssue` | `issue_to_pr` | otwarty i oznaczony PR dla issue |
+| `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
+| `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
 | `SelfRepair` | `self_repair` | zweryfikowany fast-forward Lokaya |
