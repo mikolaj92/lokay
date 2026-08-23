@@ -200,6 +200,28 @@ PR, wyprowadzenie numeru issue, wyczyszczenie ledgera, przywrócenie `ready` ora
 materializacja stanu są oddzielnymi procesami. Fala prowadzi każdą gałąź;
 żaden proces nie iteruje po repozytoriach ani PR-ach i nie łączy kilku efektów.
 
+### Plan przebiegu — `plan_pass`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PreparePassPlan
+    PreparePassPlan --> SelectPlanRepoSlot
+    SelectPlanRepoSlot --> BuildRepoPlanFragment: slot zawiera repo
+    SelectPlanRepoSlot --> RecordRepoPlanFragment: slot pusty
+    BuildRepoPlanFragment --> RecordRepoPlanFragment
+    RecordRepoPlanFragment --> SelectPlanRepoSlot: następny jawny slot
+    RecordRepoPlanFragment --> ReducePassPlan: ostatni slot
+    ReducePassPlan --> PersistPassPlan
+    PersistPassPlan --> PassPlanResult
+    PassPlanResult --> [*]
+```
+
+Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Jeden czysty proces buduje
+fragment planu jednego repozytorium na podstawie survey, stuck ledgera, budżetu
+i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
+kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
+akcje wyjaśniające odrzucone cele.
+
 ### Wybór repozytorium do implementacji — `select_implement`
 
 ```mermaid
@@ -547,6 +569,7 @@ kontraktu. Aktualny audyt:
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
 | `ImplementationSelection` | `select_implement` | prowadzi katalog przez jawne bramki kwalifikacji repo |
+| `PassPlan` | `plan_pass` | składa repozytoryjne fragmenty planu przez jawne sloty |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
