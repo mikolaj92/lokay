@@ -59,10 +59,10 @@ limits:
   # Still one open ai/fix/* PR per repo.
   max_issue_to_pr_per_pass: 1
 
-# Trusted auto-merge: green checks + structured LLM approve/merge_ok.
-# Pending checks → waiting (not stall). Red → repair. Secrets / needs_human /
-# escalated ai:needs-review → fail closed (never auto-merge).
+# Trusted auto-merge: local repository tests + structured LLM approval.
+# GitHub Actions and remote CI are not used. Secrets / needs_human /
+# escalated ai:needs-review still fail closed.
 merge:
   enabled: true
-  require_checks: true
+  require_checks: false
   require_llm_review: true

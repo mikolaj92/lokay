@@ -20,11 +20,11 @@ The JSON envelope includes:
 | --- | --- |
 | `mill_ready` | Config can mill live (mode/executor/merge gates) |
 | `merge_enabled` | Whether trusted auto-merge is armed |
-| `require_checks` | No-CI PRs wait when true; green CI still merges |
+| `require_checks` | Legacy remote-check switch; production keeps it false |
 | `require_llm_review` | Structured approve/`merge_ok` required before merge |
 | `max_issue_to_pr_per_pass` / `k` | Serial pass budget for `issue_to_pr` (default 1; not concurrency) |
 | `health` | `idle` / `progress` / `waiting` / `repairing` / `stall` / `survey_error` |
-| `remaining` | Aggregate inbox, ready, actionable AI PRs, CI waits, `merge_disabled`, … (survey lists the full page; a 50-row newest-first window is a lie) |
+| `remaining` | Aggregate inbox, ready, actionable AI PRs, waits, `merge_disabled`, … (survey lists the full page; a 50-row newest-first window is a lie) |
 | `by_repo` | Per-repo inbox / ready / actionable open AI PRs |
 | `human_residuals` | Compact needs-feedback / needs-review count (not a mill brake) |
 | `last_pass` | Prior compact pass receipt (also refreshed by this survey) |
@@ -99,7 +99,7 @@ tip is reaped; `issue_to_pr` RESETs from main.
 | --- | --- |
 | `idle` | No remaining actionable work — mill may sleep until new issues |
 | `progress` | Last pass moved the queue — mill is turning; **not** proof of Done |
-| `waiting` | Pending CI / no-CI (`require_checks`) / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox / ready catalog frozen by per-repo PR-first or occupancy — honest wait |
+| `waiting` | legacy remote-check wait / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox / ready catalog frozen by per-repo PR-first or occupancy — honest wait |
 | `repairing` | Repair / request_changes cycle in flight — honest wait |
 | `stall` | Actionable work with no progress — investigate agent/config (not merge-disarmed green) |
 | `survey_error` | `gh` list atoms failed — fix network/auth before trusting idle |
@@ -130,7 +130,7 @@ frozen set (secondary rate-limit then fingerprints `survey_error`).
 Those ready rows must not fill `actionable_now` or the 4-of-5 stall quorum.
 A clean repo with leftover ready is still a stall if the mill made no progress.
 
-**GitHub 503 is not missing auth or failed CI:** `github_authentication` must
+**GitHub 503 is not missing auth or failed verification:** `github_authentication` must
 not treat a transient `gh api user` 5xx as `unavailable` when `gh auth status`
 still proves a local token. Separately, `pr_checks` maps GitHub/rate-limit
 429/5xx uncertainty to non-green `pending`, so closeout waits rather than
@@ -146,9 +146,9 @@ product-mill stalls. See [`WORKING.md`](WORKING.md) (Self-repair / recovery) and
 Human residuals never freeze other repos. High `human_residuals.count` is an
 exception mailbox signal, not a mill brake.
 
-## CI (repo checks)
+## Lokalne testy repozytorium
 
-GitHub Actions workflow `.github/workflows/checks.yml` runs `uv sync` +
-`uv run pytest -q` on PRs and pushes to `main`. Fala is cloned as a sibling
-(`../Fala`) so the path dependency in `pyproject.toml` resolves hermetically —
-no Hermes path hygiene, no requirement for a git submodule on the runner.
+Lokay nie używa GitHub Actions ani zdalnego CI. Każde zarządzane repozytorium
+deklaruje własne lokalne polecenie testowe w `[tool.lokay] test`. Fala uruchamia
+je w worktree przed `push` i ponownie przed `merge`. Brak deklaracji jest jawnym
+`skipped`, a nie domyślnym `pytest`.

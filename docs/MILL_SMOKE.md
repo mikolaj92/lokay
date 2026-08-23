@@ -43,7 +43,7 @@
    jq '{health, progress, remaining, by_repo}' ~/.lokay/last-pass.json
    ```
 
-7. Optionally configure event wake on a self-hosted Actions runner labeled `lokay-mill`; do not start a second coding fleet.
+7. Verify the local LaunchAgent heartbeat; do not configure GitHub Actions or start a second coding fleet.
 
 For a separately classified unbounded collector seed, this smoke run remains a
 PR mill only: it must not populate collection data or wait for the collector.
