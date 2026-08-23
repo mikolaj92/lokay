@@ -38,7 +38,6 @@ def handle_factory(
         assign_issue,
         close_issue,
         commit_all,
-        closeout_prs,
         compute_health,
         cycle_end,
         cycle_start,
@@ -215,9 +214,15 @@ def handle_factory(
         )
 
     if atom == "closeout_prs":
+        from lokay.proc.closeout_prs_subflow import run
+
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(closeout_prs.main, [*cfg, *live, "--pass-dir", pass_dir])
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
 
     if atom == "reap_stale_implementing":
         from lokay.proc.reap_stale_implementing_subflow import run

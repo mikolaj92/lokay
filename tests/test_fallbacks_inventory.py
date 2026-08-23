@@ -167,6 +167,7 @@ state:
         "run_survey_inbox",
         lambda **kwargs: _run_inbox(tick_mod, kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(tick_mod, "run_closeout_prs", lambda **kwargs: {"ok": True})
     out = tick_mod.compose_tick(config_path=str(cfg), live=True)
     assert out["progress"] == 0
     assert out["remaining"]["inbox"] == 1

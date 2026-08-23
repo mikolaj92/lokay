@@ -263,62 +263,24 @@ def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
     )
 
 
-def test_closeout_records_merged_this_pass(tmp_path, monkeypatch):
-    pass_dir = _pass(
-        tmp_path,
-        working={
-            "prs_by_repo": {
-                "mikolaj92/lokay": [
-                    {
-                        "number": 287,
-                        "head_ref": "ai/fix/141-x",
-                        "labels": ["ai:generated"],
-                    }
-                ]
-            },
-            "remaining_prs": 1,
-            "actionable_prs": 1,
-            "pending_checks": 0,
-            "no_checks_blocked": 0,
-            "merge_conflicts": 0,
-            "needs_repair": 0,
-            "mergeable_green": 0,
-            "merge_disabled": 0,
-            "review_limbo": 0,
-            "stuck": {"issues": {}},
-        },
-        begin={
-            "repos": ["mikolaj92/lokay"],
-            "repair_budget": 1,
-            "stuck_path": str(tmp_path / "stuck.json"),
-            "require_checks": False,
-            "branch_prefix": "ai/fix/",
-        },
-    )
+def test_closeout_records_merged_this_pass(tmp_path):
+    from lokay.proc.reduce_pr_closeout import reduce_state
 
-    def fake_atom(**kwargs: Any) -> dict[str, Any]:
-        return {
-            "ok": True,
-            "still_open": False,
-            "actions": [{"step": "pr_triage", "pr": 287}],
-            "repair_budget": kwargs["repair_budget"],
-            "progress": 1,
-            "remaining_closed": 1,
-            "pending_checks": 0,
-            "no_checks_blocked": 0,
-            "merge_conflicts": 0,
-            "needs_repair": 0,
-            "mergeable_green": 0,
-            "merge_disabled": 0,
-            "review_limbo": 0,
-        }
-
-    monkeypatch.setattr("lokay.proc.closeout_prs.run_closeout_pr", fake_atom)
-    out = run_closeout_prs(pass_dir=pass_dir, config_path=None, live=True)
-    assert out["ok"] is True
-    working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["merged_this_pass"] == ["mikolaj92/lokay"]
-    assert working["prs_by_repo"]["mikolaj92/lokay"] == []
+    working = {
+        "actions": [],
+        "progress": 0,
+        "prs_by_repo": {"mikolaj92/lokay": [{"number": 287, "labels": []}]},
+    }
+    row = {
+        "ok": True,
+        "repo": "mikolaj92/lokay",
+        "still_open": False,
+        "progress": 1,
+        "repair_budget": 1,
+    }
+    out = reduce_state(prepared={"repair_budget": 1}, rows=[row], working=working)
+    assert out["state"]["merged_this_pass"] == ["mikolaj92/lokay"]
+    assert out["state"]["prs_by_repo"]["mikolaj92/lokay"] == []
 
 
 def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):

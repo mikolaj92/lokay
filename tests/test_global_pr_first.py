@@ -6,6 +6,86 @@ from lokay.passkit import io as pass_io
 from lokay.compose import tick
 
 
+def _run_closeout(module, pass_dir):
+    from lokay.passkit.support import is_manual_pr
+
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    prs = dict(working.get("prs_by_repo") or {})
+    actions = list(working.get("actions") or [])
+    merged = []
+    needs = pending = green = limbo = progress = 0
+    for repo, rows in prs.items():
+        kept = []
+        for pr in rows:
+            if is_manual_pr(pr):
+                kept.append(pr)
+                continue
+            checks = module._run(
+                module.p_checks.main, ["--repo", repo, "--pr", str(pr["number"])]
+            )
+            status = str(checks.get("status") or "")
+            if status == "pending":
+                pending += 1
+                kept.append(pr)
+                continue
+            if status == "failed":
+                needs += 1
+                module.compose_pr_repair(
+                    config_path=None,
+                    repo=repo,
+                    pr_number=pr["number"],
+                    branch=pr.get("head_ref", ""),
+                    live=True,
+                )
+                kept.append(pr)
+                continue
+            tri = module.compose_pr_triage(
+                config_path=None,
+                repo=repo,
+                pr_number=pr["number"],
+                branch=pr.get("head_ref", ""),
+                live=True,
+            )
+            actions.append({"step": "pr_triage", "pr": pr["number"], **tri})
+            if tri.get("skipped"):
+                if tri.get("repairable"):
+                    needs += 1
+                    rep = module.compose_pr_repair(
+                        config_path=None,
+                        repo=repo,
+                        pr_number=pr["number"],
+                        branch=pr.get("head_ref", ""),
+                        live=True,
+                        review=tri.get("review") or {},
+                    )
+                    actions.append(
+                        {"step": "pr_review_repair", "pr": pr["number"], **rep}
+                    )
+                else:
+                    limbo += 1
+                kept.append(pr)
+            else:
+                progress += 1
+                merged.append(repo)
+        prs[repo] = kept
+    working.update(
+        actions=actions,
+        prs_by_repo=prs,
+        remaining_prs=sum(len(v) for v in prs.values()),
+        actionable_prs=sum(not is_manual_pr(p) for v in prs.values() for p in v),
+        manual_prs=sum(is_manual_pr(p) for v in prs.values() for p in v),
+        needs_repair=needs,
+        pending_checks=pending,
+        mergeable_green=green,
+        review_limbo=limbo,
+        merged_this_pass=merged,
+        progress=int(working.get("progress") or 0) + progress,
+    )
+    pass_io.write_json(pass_io.working_path(pass_dir), working)
+    return {"ok": True}
+
+
 def _run_inbox(module, pass_dir):
     begin = pass_io.read_json(pass_io.begin_path(pass_dir))
     working = pass_io.read_json(pass_io.working_path(pass_dir))
@@ -186,6 +266,11 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
     monkeypatch.setattr(
         tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
     )
+    monkeypatch.setattr(
+        tick,
+        "run_closeout_prs",
+        lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -266,6 +351,11 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
     monkeypatch.setattr(
         tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
     )
+    monkeypatch.setattr(
+        tick,
+        "run_closeout_prs",
+        lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -323,6 +413,11 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(
         tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
     )
+    monkeypatch.setattr(
+        tick,
+        "run_closeout_prs",
+        lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -375,6 +470,11 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
     monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(
         tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
+    )
+    monkeypatch.setattr(
+        tick,
+        "run_closeout_prs",
+        lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
     )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"
