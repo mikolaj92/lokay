@@ -177,6 +177,29 @@ Pod-Fala wybiera najwyżej jeden ticket w jednym pass. `K` jest seryjnym budżet
 kolejnych passów, nie pętlą ani równoległym schedulerem ukrytym w procesie.
 Każdy węzeł wykonuje jeden odczyt faktu, jedną mutację albo jedną redukcję stanu.
 
+### Odzyskanie konfliktującego PR — `resolve_conflicts`
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectConflictingPullRequest
+    SelectConflictingPullRequest --> ConflictResolutionResult: brak konfliktu
+    SelectConflictingPullRequest --> CloseConflictingPullRequest: CONFLICTING / DIRTY
+    CloseConflictingPullRequest --> RecordConflictCloseFailure: zamknięcie zawiodło
+    CloseConflictingPullRequest --> ResolveConflictIssue: PR zamknięty / dry-run
+    ResolveConflictIssue --> RecordConflictResolution: brak issue w branch
+    ResolveConflictIssue --> ClearConflictStuckLedger: znaleziono issue
+    ClearConflictStuckLedger --> ReadyIssueAfterConflict
+    ReadyIssueAfterConflict --> RecordConflictResolution
+    RecordConflictCloseFailure --> ConflictResolutionResult
+    RecordConflictResolution --> ConflictResolutionResult
+    ConflictResolutionResult --> [*]
+```
+
+Pod-Fala wybiera najwyżej jeden konfliktujący PR w jednym pass. Wybór, zamknięcie
+PR, wyprowadzenie numeru issue, wyczyszczenie ledgera, przywrócenie `ready` oraz
+materializacja stanu są oddzielnymi procesami. Fala prowadzi każdą gałąź;
+żaden proces nie iteruje po repozytoriach ani PR-ach i nie łączy kilku efektów.
+
 ### Higiena kolejki implementacji — `queue_conflict`
 
 ```mermaid
@@ -495,6 +518,7 @@ kontraktu. Aktualny audyt:
 | `ReadySurvey` | `survey_ready` | seryjny odczyt i klasyfikacja gotowych issue |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
+| `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
