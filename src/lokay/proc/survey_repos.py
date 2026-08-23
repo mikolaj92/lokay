@@ -12,10 +12,12 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live
 from lokay.proc.survey_inbox import run_survey_inbox
 from lokay.proc.survey_prs import run_survey_prs
-from lokay.proc.survey_ready import run_survey_ready
+from lokay.proc.survey_ready_subflow import run as run_survey_ready
 
 
-def run_survey_repos(*, pass_dir: str, config_path: str | None, live: bool) -> dict[str, Any]:
+def run_survey_repos(
+    *, pass_dir: str, config_path: str | None, live: bool
+) -> dict[str, Any]:
     prs = run_survey_prs(pass_dir=pass_dir, config_path=config_path, live=live)
     if not prs.get("ok"):
         return prs

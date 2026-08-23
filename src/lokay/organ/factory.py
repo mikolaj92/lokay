@@ -162,9 +162,15 @@ def handle_factory(
         return _run_atom_main(survey_inbox.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "survey_ready":
+        from lokay.proc.survey_ready_subflow import run
+
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(survey_ready.main, [*cfg, *live, "--pass-dir", pass_dir])
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
 
     if atom == "ready_hygiene":
         return _run_atom_main(ready_hygiene.main, [*cfg, *live])

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from lokay.passkit import io as pass_io
 from lokay.agent import build_agent_argv
 from lokay.compose.tick import compose_tick
 from lokay.config import Config, RepoConfig, load_config
@@ -340,6 +341,23 @@ state:
 
 def test_tick_routes_request_changes_to_repair_and_keeps_pr_open(tmp_path, monkeypatch):
     from lokay.compose import tick
+
+    monkeypatch.setattr(
+        tick,
+        "run_survey_ready",
+        lambda **kwargs: (
+            pass_io.write_json(
+                pass_io.survey_path(kwargs["pass_dir"]),
+                pass_io.read_json(pass_io.working_path(kwargs["pass_dir"])),
+            )
+            and {
+                "ok": True,
+                "pass_dir": kwargs["pass_dir"],
+                "remaining_ready": 0,
+                "survey_errors": 0,
+            }
+        ),
+    )
 
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
