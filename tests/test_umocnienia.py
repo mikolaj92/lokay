@@ -18,9 +18,13 @@ from lokay.preflight import (
     require_healthy,
 )
 from lokay.proc.compute_health import run_compute_health
-from lokay.proc.detach_issue_to_pr import detach_issue_to_pr, issue_to_pr_receipt_path, live_issue_to_pr_receipts
+from lokay.proc.detach_issue_to_pr import (
+    detach_issue_to_pr,
+    issue_to_pr_receipt_path,
+    live_issue_to_pr_receipts,
+)
 from lokay.proc.self_repair_activate import main as activate_main
-from lokay.proc.self_repair_prepare import published_self_repair_commit
+from lokay.proc.find_published_self_repair import find as find_published_self_repair
 from lokay.recovery_history import observe_run, record_observation
 
 
@@ -59,15 +63,16 @@ def test_plateau_does_not_confirm_stall(tmp_path):
         obs = observe_run(
             state_path=state,
             state_offset=0,
-            mill={"ok": False, "health": "plateau", "error": "mill plateau", "progress": 8},
+            mill={
+                "ok": False,
+                "health": "plateau",
+                "error": "mill plateau",
+                "progress": 8,
+            },
         )
         signal = record_observation(path, obs)
         assert obs["fingerprint"] is None
     assert signal is None
-
-
-
-
 
 
 def test_published_self_repair_commit_reads_git_log(tmp_path):
@@ -77,10 +82,10 @@ def test_published_self_repair_commit_reads_git_log(tmp_path):
             assert any("self-repair: abc" in str(a) for a in spec.argv)
             return SimpleNamespace(returncode=0, stdout="cafebabe0123\n")
 
-    sha = published_self_repair_commit(
-        clone=tmp_path, fingerprint="abc", run=FakeRun()
+    out = find_published_self_repair(
+        {"clone": str(tmp_path), "fingerprint": "abc"}, run=FakeRun()
     )
-    assert sha == "cafebabe0123"
+    assert out["commit"] == "cafebabe0123" and out["route"] == "published"
 
 
 def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
@@ -104,7 +109,9 @@ def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
     receipt = Path(out["receipt"])
     assert receipt.is_file()
     data = json.loads(receipt.read_text())
-    assert data["issue"] == 164 and data["log"].endswith("issue-to-pr-mikolaj92__lokay-164.log")
+    assert data["issue"] == 164 and data["log"].endswith(
+        "issue-to-pr-mikolaj92__lokay-164.log"
+    )
     assert seen["session"] is True
     assert "lokay.compose.issue_to_pr" in seen["argv"]
 
@@ -128,7 +135,9 @@ def test_detach_forwards_lease_path_for_fala_inherit(tmp_path, monkeypatch):
     )
     env = seen["env"]
     assert env.get("LOKAY_HEALTH_LEASE") == "d" * 64
-    assert env.get("LOKAY_HEALTH_LEASE_PATH") == str(tmp_path / ".lokay" / "health-lease")
+    assert env.get("LOKAY_HEALTH_LEASE_PATH") == str(
+        tmp_path / ".lokay" / "health-lease"
+    )
 
 
 def test_evaluate_mill_stop_host_updated_is_soft_stop():
@@ -223,15 +232,21 @@ def _issue_to_pr_cmd(pid: int) -> str:
 
 def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd
+    )
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "mikolaj92__Fala-164.json").write_text(
-        json.dumps({"pid": os.getpid(), "repo": "mikolaj92/Fala", "issue": 164, "log": "a"}),
+        json.dumps(
+            {"pid": os.getpid(), "repo": "mikolaj92/Fala", "issue": 164, "log": "a"}
+        ),
         encoding="utf-8",
     )
     (cycle / "mikolaj92__Temida-1.json").write_text(
-        json.dumps({"pid": 999_999_999, "repo": "mikolaj92/Temida", "issue": 1, "log": "b"}),
+        json.dumps(
+            {"pid": 999_999_999, "repo": "mikolaj92/Temida", "issue": 1, "log": "b"}
+        ),
         encoding="utf-8",
     )
     (cycle / "noise.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
@@ -243,7 +258,9 @@ def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
 def test_reaped_plan_only_receipt_is_not_occupancy(tmp_path, monkeypatch):
     """#192: over-budget plan_only must drop the slot without waiting for pi exit."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd
+    )
     monkeypatch.setattr(
         "lokay.proc.detach_issue_to_pr.coding_live_for_issue", lambda _issue: True
     )
@@ -267,7 +284,9 @@ def test_reaped_plan_only_receipt_is_not_occupancy(tmp_path, monkeypatch):
 
 def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd
+    )
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "mikolaj92__Fala-164.json").write_text(
@@ -283,7 +302,9 @@ def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     (cycle / "mikolaj92__Temida-1.json").write_text(
-        json.dumps({"pid": 999_999_999, "repo": "mikolaj92/Temida", "issue": 1, "log": "dead"}),
+        json.dumps(
+            {"pid": 999_999_999, "repo": "mikolaj92/Temida", "issue": 1, "log": "dead"}
+        ),
         encoding="utf-8",
     )
     pass_dir = tmp_path / "pass"
@@ -363,13 +384,20 @@ def test_compute_health_by_repo_contains_only_survey_scope(tmp_path, monkeypatch
     assert [row["repo"] for row in tick["remaining"]["by_repo"]] == survey_scope
 
 
-def test_activate_descendant_of_recovery_keeps_published_push(tmp_path, monkeypatch, capsys):
+def test_activate_descendant_of_recovery_keeps_published_push(
+    tmp_path, monkeypatch, capsys
+):
     clone = tmp_path / "lokay"
     bare = tmp_path / "origin.git"
     clone.mkdir()
-    subprocess.run(["git", "init", "--bare", str(bare)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "init", "--bare", str(bare)], check=True, capture_output=True
+    )
+
     def git(*args: str) -> None:
-        subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True)
+        subprocess.run(
+            ["git", "-C", str(clone), *args], check=True, capture_output=True
+        )
 
     git("init")
     git("config", "user.email", "t@t.example")
@@ -396,7 +424,9 @@ def test_activate_descendant_of_recovery_keeps_published_push(tmp_path, monkeypa
         act,
         "load_cfg",
         lambda a: SimpleNamespace(
-            active_repos=lambda: [SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)]
+            active_repos=lambda: [
+                SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)
+            ]
         ),
     )
     monkeypatch.setattr(act, "mutations_allowed", lambda **k: True)
@@ -421,7 +451,11 @@ def test_activate_dirty_keeps_published_commit(tmp_path, monkeypatch):
     monkeypatch.setattr(
         act,
         "load_cfg",
-        lambda a: SimpleNamespace(active_repos=lambda: [SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)]),
+        lambda a: SimpleNamespace(
+            active_repos=lambda: [
+                SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)
+            ]
+        ),
     )
     monkeypatch.setattr(act, "mutations_allowed", lambda **k: True)
 
@@ -446,7 +480,9 @@ def test_live_receipt_with_unreadable_command_stays_occupied(tmp_path, monkeypat
         json.dumps({"pid": os.getpid(), "repo": "mikolaj92/lokay", "issue": 9}),
         encoding="utf-8",
     )
-    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", lambda _pid: "")
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_process._pid_command", lambda _pid: ""
+    )
 
     assert live_issue_to_pr_receipts() == [
         {"pid": os.getpid(), "repo": "mikolaj92/lokay", "issue": 9}
@@ -462,6 +498,7 @@ def test_unreadable_pid_liveness_probe_stays_occupied(monkeypatch):
         lambda _pid, _sig: (_ for _ in ()).throw(OSError("probe unavailable")),
     )
     assert pid_is_alive(123) is True
+
 
 def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
     """The pre-spawn receipt closes the next-pass reaper window."""
@@ -514,7 +551,9 @@ def test_detach_refuses_to_spawn_without_durable_reservation(tmp_path, monkeypat
         repo="mikolaj92/lokay",
         issue=9,
         config_path=None,
-        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("must not spawn")
+        ),
     )
 
     assert out["ok"] is False
@@ -563,16 +602,20 @@ def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch
         pid = 4242
 
     monkeypatch.setattr(detach_mod, "write_issue_to_pr_receipt", fail_final)
-    monkeypatch.setattr(detach_mod, "_terminate_detached_process_group", lambda _proc: False)
+    monkeypatch.setattr(
+        detach_mod, "_terminate_detached_process_group", lambda _proc: False
+    )
     out = detach_mod.detach_issue_to_pr(
-        repo="mikolaj92/lokay", issue=9, config_path=None, popen=lambda *_a, **_k: FakePopen()
+        repo="mikolaj92/lokay",
+        issue=9,
+        config_path=None,
+        popen=lambda *_a, **_k: FakePopen(),
     )
 
     assert out["ok"] is False
     assert out["reason"] == "receipt_unavailable"
     assert out["cleanup_confirmed"] is False
     assert live_issue_to_pr_receipts()[0]["starting"] is True
-
 
 
 def test_unreadable_receipt_state_is_detected(tmp_path, monkeypatch):
@@ -587,7 +630,9 @@ def test_unreadable_receipt_state_is_detected(tmp_path, monkeypatch):
     assert detach_mod.has_unreadable_issue_to_pr_receipts() is True
 
 
-def test_detach_does_not_replace_an_existing_starting_reservation(tmp_path, monkeypatch):
+def test_detach_does_not_replace_an_existing_starting_reservation(
+    tmp_path, monkeypatch
+):
     """A second dispatch cannot steal the first launch's durable K=1 reservation."""
     import lokay.proc.detach_issue_to_pr as detach_mod
 
@@ -609,13 +654,14 @@ def test_detach_does_not_replace_an_existing_starting_reservation(tmp_path, monk
         repo="mikolaj92/lokay",
         issue=9,
         config_path=None,
-        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("must not spawn")
+        ),
     )
 
     assert out["ok"] is False
     assert out["reason"] == "receipt_unavailable"
     assert json.loads(path.read_text())["launch_id"] == "other-launch"
-
 
 
 def test_detach_replaces_a_dead_completed_receipt(tmp_path, monkeypatch):
@@ -637,7 +683,6 @@ def test_detach_replaces_a_dead_completed_receipt(tmp_path, monkeypatch):
 
     assert out["ok"] is True
     assert json.loads(path.read_text())["pid"] == 4242
-
 
 
 def test_final_receipt_requires_its_own_reservation(tmp_path, monkeypatch):
@@ -674,8 +719,9 @@ def test_final_receipt_requires_its_own_reservation(tmp_path, monkeypatch):
     assert json.loads(path.read_text())["launch_id"] == "other-launch"
 
 
-
-def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, monkeypatch):
+def test_detach_discards_its_reservation_only_after_confirmed_cleanup(
+    tmp_path, monkeypatch
+):
     """A failed final publication leaves no child or stale reservation after reaping."""
     import lokay.proc.issue_delivery_launch as detach_mod
 
@@ -701,7 +747,10 @@ def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, 
         lambda proc: seen.append(proc.pid) is None,
     )
     out = detach_mod.detach_issue_to_pr(
-        repo="mikolaj92/lokay", issue=9, config_path=None, popen=lambda *_a, **_k: FakePopen()
+        repo="mikolaj92/lokay",
+        issue=9,
+        config_path=None,
+        popen=lambda *_a, **_k: FakePopen(),
     )
 
     assert out["ok"] is False
@@ -710,7 +759,9 @@ def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, 
     assert not issue_to_pr_receipt_path("mikolaj92/lokay", 9).exists()
 
 
-def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(tmp_path, monkeypatch):
+def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(
+    tmp_path, monkeypatch
+):
     """A SIGKILL before final publication cannot wedge the issue forever.
 
     The child is pipe-gated, so a dead launcher has no path to start work;
@@ -772,7 +823,9 @@ def test_legacy_starting_receipt_remains_live_not_reclaimable(tmp_path, monkeypa
         repo="mikolaj92/lokay",
         issue=9,
         config_path=None,
-        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not spawn")),
+        popen=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("must not spawn")
+        ),
     )
     assert out["reason"] == "receipt_unavailable"
     assert "still starting" in out["error"]
@@ -786,10 +839,15 @@ def test_pid_command_uses_wide_ps_to_avoid_macos_truncation(monkeypatch):
 
     def fake_run(argv, **_kwargs):
         seen["argv"] = argv
-        return SimpleNamespace(stdout="/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9\n")
+        return SimpleNamespace(
+            stdout="/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9\n"
+        )
 
     monkeypatch.setattr("lokay.proc.issue_delivery_process.subprocess.run", fake_run)
-    assert detach_mod._pid_command(123) == "/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9"
+    assert (
+        detach_mod._pid_command(123)
+        == "/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9"
+    )
     assert seen["argv"] == ["ps", "-ww", "-p", "123", "-o", "command="]
 
 
@@ -801,14 +859,18 @@ def test_cycle_start_metric_receipt_is_not_lifecycle_uncertainty(tmp_path, monke
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "owner__repo__9.json").write_text(
-        json.dumps({"repo": "owner/repo", "issue": 9, "started_ts": "2026-01-01T00:00:00Z"}),
+        json.dumps(
+            {"repo": "owner/repo", "issue": 9, "started_ts": "2026-01-01T00:00:00Z"}
+        ),
         encoding="utf-8",
     )
     assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
     assert live_issue_to_pr_receipts() == []
 
 
-def test_malformed_starting_receipt_is_global_lifecycle_uncertainty(tmp_path, monkeypatch):
+def test_malformed_starting_receipt_is_global_lifecycle_uncertainty(
+    tmp_path, monkeypatch
+):
     """A partial reservation must not expose another repo's destructive lane."""
     import lokay.proc.detach_issue_to_pr as detach_mod
 
