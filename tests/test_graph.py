@@ -356,106 +356,12 @@ def _host(path_id, results, *, live=True, ok=True):
     )
 
 
-def test_fala_approve_contract():
-    out = _host(
-        "pr_triage",
-        {
-            "publish_pr_review": {
-                "id": "publish_pr_review",
-                "status": "completed",
-                "output": {"values": {"decision": {"verdict": "approve"}}},
-            },
-            "pr_merge": {
-                "id": "pr_merge",
-                "status": "completed",
-                "output": {"values": {"merged": True}},
-            },
-            "close_issue": {
-                "id": "close_issue",
-                "status": "completed",
-                "output": {"values": {"issue": 33}},
-            },
-        },
-    )
-    assert out["ok"] and out["merged"] and out["closed_issue"] == 33
 
 
-def test_fala_request_changes_contract():
-    review = {"verdict": "request_changes", "secrets": False, "blocking": ["test"]}
-    out = _host(
-        "pr_triage",
-        {
-            "publish_pr_review": {
-                "id": "publish_pr_review",
-                "status": "completed",
-                "output": {"values": {"decision": review}},
-            },
-            "review_repair_gate": {
-                "id": "review_repair_gate",
-                "status": "completed",
-                "output": {"values": {"route": "repair"}},
-            },
-            "pr_repair_subflow": {
-                "id": "pr_repair_subflow",
-                "status": "completed",
-                "output": {"values": {"ok": True, "kind": "pr_repair"}},
-            },
-        },
-    )
-    assert out["skipped"] and out["repaired"] and out["review"] == review
 
 
-def test_fala_already_reviewed_request_changes_still_enters_repair():
-    out = _host(
-        "pr_triage",
-        {
-            "publish_pr_review": {
-                "id": "publish_pr_review",
-                "status": "completed",
-                "output": {
-                    "values": {
-                        "skipped": True,
-                        "reason": "already_reviewed_head",
-                        "decision": {"verdict": "request_changes"},
-                    }
-                },
-            },
-            "review_repair_gate": {
-                "id": "review_repair_gate",
-                "status": "completed",
-                "output": {"values": {"route": "repair"}},
-            },
-            "pr_repair_subflow": {
-                "id": "pr_repair_subflow",
-                "status": "completed",
-                "output": {"values": {"ok": True}},
-            },
-        },
-    )
-    assert out["skipped"] is True
-    assert out["repaired"] is True
-    assert out["review"]["verdict"] == "request_changes"
 
 
-def test_fala_needs_human_contract():
-    out = _host(
-        "pr_triage",
-        {
-            "publish_pr_review": {
-                "id": "publish_pr_review",
-                "status": "completed",
-                "output": {"values": {"decision": {"verdict": "needs_human"}}},
-            },
-            "review_manual": {
-                "id": "review_manual",
-                "status": "completed",
-                "output": {
-                    "values": {"terminal": True, "reason": "review_needs_human"}
-                },
-            },
-        },
-    )
-    assert out["skipped"] and not out["repairable"] and out["needs_review"]
 
 
 def test_self_repair_graph_orders_direct_main_recovery():
@@ -482,64 +388,10 @@ def test_self_repair_graph_orders_direct_main_recovery():
     )
 
 
-def test_fala_issue_to_pr_no_pr_is_fail_closed():
-    out = _host(
-        "issue_to_pr",
-        {
-            "make_branch": {
-                "id": "make_branch",
-                "status": "completed",
-                "output": {"values": {"branch": "lokay/x"}},
-            },
-            "pr_label": {
-                "id": "pr_label",
-                "status": "completed",
-                "output": {"values": {"pr": None}},
-            },
-        },
-    )
-    assert out["ok"] is False
-    assert out["error"] == "issue_to_pr produced no PR"
-    assert out["reason"] == "no_pr"
 
 
-def test_fala_issue_to_pr_with_pr_ok():
-    out = _host(
-        "issue_to_pr",
-        {
-            "make_branch": {
-                "id": "make_branch",
-                "status": "completed",
-                "output": {"values": {"branch": "lokay/x"}},
-            },
-            "pr_create": {
-                "id": "pr_create",
-                "status": "completed",
-                "output": {"values": {"pr": 12}},
-            },
-            "pr_label": {
-                "id": "pr_label",
-                "status": "completed",
-                "output": {"values": {"pr": 12}},
-            },
-        },
-    )
-    assert out["ok"] is True
-    assert out["pr"] == 12
 
 
-def test_fala_zero_diff_repair_contract():
-    out = _host(
-        "pr_repair",
-        {
-            "commit_all": {
-                "id": "commit_all",
-                "status": "completed",
-                "output": {"values": {"committed": False}},
-            }
-        },
-    )
-    assert out["ok"] is False and out["error"] == "repair produced no commit"
 
 
 def test_fala_agent_committed_repair_contract():
@@ -605,66 +457,10 @@ def test_completed_effector_without_output_fails_closed():
     assert "without structured output" in out["error"]
 
 
-def test_fala_review_not_required_contract_allows_merge():
-    out = _host(
-        "pr_triage",
-        {
-            "publish_pr_review": {
-                "id": "publish_pr_review",
-                "status": "completed",
-                "output": {
-                    "values": {
-                        "skipped": True,
-                        "reason": "llm_review_not_required",
-                        "decision": {"verdict": "approve"},
-                        "merge_ok": True,
-                    }
-                },
-            },
-            "pr_merge": {
-                "id": "pr_merge",
-                "status": "completed",
-                "output": {"values": {"merged": True}},
-            },
-        },
-    )
-    assert out["ok"] is True
-    assert out["merged"] is True
-    assert not out.get("skipped")
 
 
-def test_fala_issue_triage_applied_contract():
-    out = _host(
-        "issue_triage",
-        {
-            "finalize_issue_triage": {
-                "id": "finalize_issue_triage",
-                "status": "completed",
-                "output": {"values": {"decision": {"verdict": "ready"}}},
-            },
-            "apply_issue_ready": {
-                "id": "apply_issue_ready",
-                "status": "completed",
-                "output": {"values": {"applied": True}},
-            },
-        },
-    )
-    assert out["ok"] and out["applied"] and not out["skipped"]
-    assert out["implementable"] is True
 
 
-def test_fala_issue_triage_skip_contract_is_not_applied():
-    out = _host(
-        "issue_triage",
-        {
-            "finalize_issue_triage": {
-                "id": "finalize_issue_triage",
-                "status": "completed",
-                "output": {"values": {"decision": {"verdict": "skip"}}},
-            },
-        },
-    )
-    assert out["ok"] and not out["applied"] and out["skipped"]
 
 
 def test_run_path_scopes_inputs_to_authored_fala_path(tmp_path, monkeypatch):

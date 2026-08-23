@@ -211,6 +211,7 @@ def test_issue_triage_path_in_package():
         "apply_issue_ready",
         "issue_split_subflow",
         "apply_issue_manual",
+        "summarize_issue_triage",
     ]
     triage = path["nodes"][1]
     assert "get_issue" in triage["conduction"]
@@ -270,6 +271,7 @@ def test_pr_triage_path_in_package():
         "pr_merge",
         "stage_clear",
         "close_issue",
+        "summarize_pr_triage",
     ]
     assert "run_agent" not in node_ids
     collect = next(n for n in path["nodes"] if n["id"] == "collect_pr_review_evidence")
