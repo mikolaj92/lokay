@@ -247,11 +247,11 @@ def handle_factory(
         )
 
     if atom == "select_implement":
+        from lokay.proc.select_implement_subflow import run
+
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return _run_atom_main(
-            select_implement.main, [*cfg, *live, "--pass-dir", pass_dir]
-        )
+        return run(pass_dir=pass_dir)
 
     if atom == "queue_conflict":
         from lokay.proc.queue_conflict_subflow import run

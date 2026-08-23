@@ -6,6 +6,30 @@ from lokay.passkit import io as pass_io
 from lokay.compose import tick
 
 
+def _run_selection(pass_dir):
+    from lokay.proc.prepare_implementation_selection import prepare
+    from lokay.proc.select_implementation_repo_slot import select
+    from lokay.proc.inspect_implementation_eligibility import inspect
+    from lokay.proc.reduce_implementation_selection import reduce_state
+    from lokay.proc.persist_implementation_selection import persist
+
+    prepared = prepare(pass_dir=pass_dir, slot_count=30)
+    results = []
+    for slot in range(1, 31):
+        selected = select(prepared, slot=slot)
+        results.append(
+            inspect(pass_dir=pass_dir, prepared=prepared, selected=selected)
+            if selected.get("route") == "repo"
+            else selected
+        )
+    reduced = reduce_state(
+        prepared=prepared,
+        results=results,
+        working=pass_io.read_json(pass_io.working_path(pass_dir)),
+    )
+    return persist(pass_dir=pass_dir, reduced=reduced)
+
+
 def _intake_ok():
     return {
         "ok": True,
@@ -103,6 +127,11 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
     )
     monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(tick, "run_resolve_conflicts", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick,
+        "run_select_implement",
+        lambda **kwargs: _run_selection(kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -171,6 +200,11 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(tick, "run_resolve_conflicts", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick,
+        "run_select_implement",
+        lambda **kwargs: _run_selection(kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -216,6 +250,11 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(tick, "run_resolve_conflicts", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick,
+        "run_select_implement",
+        lambda **kwargs: _run_selection(kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -257,6 +296,11 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     monkeypatch.setattr(tick, "run_resolve_conflicts", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick,
+        "run_select_implement",
+        lambda **kwargs: _run_selection(kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"
     assert result["ok"] is True

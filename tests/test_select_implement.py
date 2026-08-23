@@ -8,10 +8,36 @@ from typing import Any
 
 from lokay.passkit import io as pass_io
 from lokay.proc.compute_health import run_compute_health
-from lokay.proc.select_implement import run_select_implement
+from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
+from lokay.proc.select_implementation_repo_slot import select as _select_slot
+from lokay.proc.inspect_implementation_eligibility import inspect as _inspect_selection
+from lokay.proc.reduce_implementation_selection import reduce_state as _reduce_selection
+from lokay.proc.persist_implementation_selection import persist as _persist_selection
 
 
-def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | None = None) -> str:
+def run_select_implement(*, pass_dir: str):
+    from lokay.passkit import io as pass_io
+
+    prepared = _prepare_selection(pass_dir=pass_dir, slot_count=30)
+    results = []
+    for slot in range(1, 31):
+        selected = _select_slot(prepared, slot=slot)
+        results.append(
+            _inspect_selection(pass_dir=pass_dir, prepared=prepared, selected=selected)
+            if selected.get("route") == "repo"
+            else selected
+        )
+    reduced = _reduce_selection(
+        prepared=prepared,
+        results=results,
+        working=pass_io.read_json(pass_io.working_path(pass_dir)),
+    )
+    return _persist_selection(pass_dir=pass_dir, reduced=reduced)
+
+
+def _pass(
+    tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | None = None
+) -> str:
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()
     base_begin = {
@@ -47,8 +73,6 @@ def _pass(tmp_path: Path, *, working: dict[str, Any], begin: dict[str, Any] | No
     base_working.update(working)
     pass_io.write_json(pass_io.working_path(pass_dir), base_working)
     return str(pass_dir)
-
-
 
 
 def test_blocked_ready_issue_is_not_selected_for_issue_to_pr(tmp_path):
@@ -102,9 +126,7 @@ def test_manual_needs_review_does_not_block_same_repo_ready(tmp_path):
                     }
                 ]
             },
-            "ready_by_repo": {
-                "a/one": [{"number": 70, "title": "next ready"}]
-            },
+            "ready_by_repo": {"a/one": [{"number": 70, "title": "next ready"}]},
             "remaining_ready": 1,
             "remaining_prs": 1,
             "actionable_prs": 0,
@@ -118,7 +140,8 @@ def test_manual_needs_review_does_not_block_same_repo_ready(tmp_path):
     assert implement["clean_repos"] == ["a/one"]
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert not any(
-        row.get("step") == "skip_ready_open_ai_pr" for row in working.get("actions") or []
+        row.get("step") == "skip_ready_open_ai_pr"
+        for row in working.get("actions") or []
     )
 
 
@@ -127,7 +150,9 @@ def test_actionable_ai_pr_still_blocks_same_repo_ready(tmp_path):
         tmp_path,
         working={
             "prs_by_repo": {
-                "a/one": [{"number": 1, "head_ref": "ai/fix/1-x", "labels": ["ai:generated"]}]
+                "a/one": [
+                    {"number": 1, "head_ref": "ai/fix/1-x", "labels": ["ai:generated"]}
+                ]
             },
             "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
             "remaining_ready": 1,
@@ -141,7 +166,8 @@ def test_actionable_ai_pr_still_blocks_same_repo_ready(tmp_path):
     assert implement["clean_repos"] == []
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     assert any(
-        row.get("step") == "skip_ready_open_ai_pr" for row in working.get("actions") or []
+        row.get("step") == "skip_ready_open_ai_pr"
+        for row in working.get("actions") or []
     )
 
 
@@ -253,7 +279,14 @@ def test_compute_health_reports_probe_failed(tmp_path):
     assert result["ok"] is True
     assert result["probe_failed"] is True
     assert result["health"] == "survey_error"
-    source = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "compute_health.py"
-    assert "Health reports whether any survey probe remains failed." in source.read_text(
-        encoding="utf-8"
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "compute_health.py"
+    )
+    assert (
+        "Health reports whether any survey probe remains failed."
+        in source.read_text(encoding="utf-8")
     )
