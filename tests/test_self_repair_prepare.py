@@ -460,3 +460,69 @@ def test_prepare_rejects_clean_committed_plan_only_candidate(
     assert code == 1
     assert "committed plan evidence" in payload["error"]
     assert corner.is_dir()
+
+
+def test_prepare_rebuilds_clean_exact_candidate_when_origin_main_advanced(
+    tmp_path, monkeypatch, capsys
+):
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    fingerprint = "deadbeef"
+    corner = tmp_path / "wt" / "_self_repair" / fingerprint
+    corner.mkdir(parents=True)
+    cfg = SimpleNamespace(
+        active_repos=lambda: [SimpleNamespace(name=prepare.REPO, clone_path=clone)],
+        worktrees_root=tmp_path / "wt",
+    )
+    added = []
+
+    class Run:
+        def run_checked(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1:4] == ["remote", "get-url", "origin"]:
+                return _result("https://github.com/mikolaj92/lokay.git\n")
+            if argv[1:3] == ["fetch", "origin"]:
+                return _result()
+            if argv[1:3] == ["rev-parse", "origin/main"]:
+                return _result("b" * 40 + "\n")
+            if argv[1:3] == ["rev-parse", "HEAD"]:
+                return _result("c" * 40 + "\n")
+            if argv[1:3] == ["rev-list", "--count"]:
+                return _result("1\n")
+            if argv[1:3] == ["diff", "--name-only"]:
+                return _result("src/lokay/fix.py\0")
+            if argv[1] == "log" and "--format=%s" in argv:
+                return _result("self-repair: deadbeef\n")
+            if argv[1:3] == ["worktree", "add"]:
+                added.append(argv)
+                return _result()
+            raise AssertionError(argv)
+
+        def run(self, spec, *, live):
+            argv = list(spec.argv)
+            if argv[1] == "log":
+                return _result()
+            if argv[1] in {"diff", "ls-files"}:
+                return _result()
+            if argv[1:3] == ["merge-base", "--is-ancestor"]:
+                return _result(returncode=1)
+            raise AssertionError(argv)
+
+    monkeypatch.setattr(prepare, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(prepare, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(prepare, "runner", Run)
+    monkeypatch.setattr(prepare, "worktree_owned_by_clone", lambda *_args: True)
+
+    def remove(*_args, **_kwargs):
+        corner.rmdir()
+        return {"ok": True, "removed": True}
+
+    monkeypatch.setattr(prepare, "remove_worktree", remove)
+
+    code = prepare.main(["--live", "--fingerprint", fingerprint])
+    payload = json.loads(capsys.readouterr().out.strip())
+
+    assert code == 0
+    assert payload["base_sha"] == "b" * 40
+    assert "resumed" not in payload
+    assert added and added[0][-1] == "b" * 40

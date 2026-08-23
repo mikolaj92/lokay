@@ -346,6 +346,40 @@ def test_fala_request_changes_contract():
     assert out["skipped"] and out["repairable"] and out["review"] == review
 
 
+def test_fala_already_reviewed_request_changes_still_enters_repair():
+    out = _host(
+        "pr_triage",
+        {
+            "pr_review": {
+                "id": "pr_review",
+                "status": "completed",
+                "output": {
+                    "values": {
+                        "skipped": True,
+                        "reason": "already_reviewed_head",
+                        "merge_ok": False,
+                        "decision": {"verdict": "request_changes"},
+                    }
+                },
+            },
+            "pr_merge": {
+                "id": "pr_merge",
+                "status": "completed",
+                "output": {
+                    "values": {
+                        "skipped": True,
+                        "reason": "llm_review_requested_changes",
+                        "repairable": True,
+                    }
+                },
+            },
+        },
+    )
+    assert out["skipped"] is True
+    assert out["repairable"] is True
+    assert out["reason"] == "llm_review_requested_changes"
+
+
 def test_fala_needs_human_contract():
     out = _host("pr_triage", {
         "pr_review": {
