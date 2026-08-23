@@ -33,6 +33,7 @@ from lokay.organ.lanes import handle_lanes
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
+from lokay.organ.queue_conflict_boundary import handle_queue_conflict
 from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.recovery import handle_recovery
 from lokay.organ.repair_boundary import handle_repair_boundary
@@ -58,6 +59,8 @@ _MUTATING_ATOMS = frozenset(
         "remove_stale_worktree_4",
         "launch_issue_to_pr",
         "label_blocked_dispatch",
+        "remove_queue_ready_label",
+        "add_queue_tracker_label",
         "park_plan_only_dispatch",
         "commit_all",
         "commit_implementation",
@@ -148,6 +151,7 @@ def _handle(
         handle_implement,
         handle_agent,
         handle_publication,
+        handle_queue_conflict,
         handle_pr_finalize,
     ):
         result = handler(atom, inputs, up, ctx)

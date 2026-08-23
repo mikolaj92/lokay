@@ -425,6 +425,7 @@ state:
     monkeypatch.setattr(tick, "_run", fake_run)
     monkeypatch.setattr(tick, "compose_pr_triage", fake_triage)
     monkeypatch.setattr(tick, "compose_pr_repair", fake_repair)
+    monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=str(cfg_path), live=True)
 
     assert len(triage_calls) == 1

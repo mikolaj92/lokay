@@ -101,6 +101,7 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
         "compose_issue_to_pr",
         lambda **_: (_ for _ in ()).throw(AssertionError("intake ran")),
     )
+    monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -167,6 +168,7 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
         lambda **kw: intake.append(kw)
         or {"ok": True, "pr": 2, "branch": "ai/fix/2-next"},
     )
+    monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -210,6 +212,7 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
 
     monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
     monkeypatch.setattr(tick, "_run", fake_run)
+    monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -249,6 +252,7 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
         "compose_issue_to_pr",
         lambda **_: (_ for _ in ()).throw(AssertionError("intake ran")),
     )
+    monkeypatch.setattr(tick, "run_queue_conflict", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"
     assert result["ok"] is True
