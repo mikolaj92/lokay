@@ -330,7 +330,7 @@ kontraktu. Aktualny audyt:
 | Fragment | Stan obecny |
 | --- | --- |
 | `approve → lokalne testy → merge` | zaimplementowane w Fali |
-| `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane; pełny powrót między przebiegami wymaga dalszego audytu |
+| `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane z zamkniętym wynikiem agenta, jedną rundą dowodu i jedną naprawą testów |
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
