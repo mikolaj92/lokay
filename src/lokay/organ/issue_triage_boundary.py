@@ -25,6 +25,7 @@ OWNED = frozenset(
         "select_issue_evidence",
         "finalize_issue_triage",
         "apply_issue_ready",
+        "apply_issue_blocked",
         "apply_issue_close",
         "apply_issue_manual",
         "issue_split_subflow",
@@ -222,6 +223,17 @@ def handle_issue_triage(
         )
     if atom == "apply_issue_ready":
         from lokay.proc.apply_issue_ready import apply
+
+        return apply(
+            runner=runner(),
+            cfg=cfg,
+            repo=repo,
+            issue=number,
+            issue_data=issue,
+            live=mutate,
+        )
+    if atom == "apply_issue_blocked":
+        from lokay.proc.apply_issue_blocked import apply
 
         return apply(
             runner=runner(),

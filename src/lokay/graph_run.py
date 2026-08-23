@@ -437,6 +437,7 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         effects = (
             terminal.get("apply_issue_close", {}),
             terminal.get("apply_issue_ready", {}),
+            terminal.get("apply_issue_blocked", {}),
             terminal.get("issue_split_subflow", {}),
             terminal.get("apply_issue_manual", {}),
         )

@@ -305,6 +305,7 @@ def test_issue_triage_path_includes_intake_and_split():
         "validate_issue_evidence",
         "select_issue_evidence",
         "finalize_issue_triage",
+        "apply_issue_blocked",
         "apply_issue_close",
         "apply_issue_ready",
         "issue_split_subflow",

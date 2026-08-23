@@ -543,6 +543,14 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "finalize_issue_triage" }
 retry_policy = "none"
 [[correlation_paths.effectors]]
+id = "apply_issue_blocked"
+capability = "lokay_atom"
+conduction = ["get_issue", "finalize_issue_triage"]
+when = { upstream = "finalize_issue_triage", path = "decision.verdict", equals = "blocked" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "apply_issue_blocked" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
 id = "apply_issue_close"
 capability = "lokay_atom"
 conduction = ["get_issue", "finalize_issue_triage"]

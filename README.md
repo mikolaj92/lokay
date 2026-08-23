@@ -128,7 +128,8 @@ stateDiagram-v2
     IntakeDecision --> MarkReady: READY
     IntakeDecision --> PlanSplit: SPLIT
     IntakeDecision --> HumanTerminal: NEEDS_HUMAN
-    IntakeDecision --> NoEffect: SKIP / BLOCKED
+    IntakeDecision --> MarkBlocked: BLOCKED
+    IntakeDecision --> NoEffect: SKIP
     PlanSplit --> HumanTerminal: plan niemożliwy
     PlanSplit --> CreateChild1: plan poprawny
     CreateChild1 --> CreateChild2
@@ -143,6 +144,7 @@ stateDiagram-v2
     CommentTracker --> CloseTracker
     CloseIssue --> [*]
     MarkReady --> [*]
+    MarkBlocked --> [*]
     CloseTracker --> [*]
     NoEffect --> [*]
     HumanTerminal --> [*]

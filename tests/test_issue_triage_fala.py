@@ -28,9 +28,9 @@ if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'ready'}
 if a=='apply_issue_ready':Path(%r).write_text('ran')
-if a in {'apply_issue_close','apply_issue_manual'}:Path(%r).write_text(a)"""%(str(ready),str(wrong)))
+if a in {'apply_issue_close','apply_issue_blocked','apply_issue_manual'}:Path(%r).write_text(a)"""%(str(ready),str(wrong)))
     result=run_graph(tmp_path,body,"ready"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
-    assert statuses['apply_issue_ready']=='succeeded' and statuses['apply_issue_close']=='skipped' and statuses['issue_split_subflow']=='skipped'
+    assert statuses['apply_issue_ready']=='succeeded' and statuses['apply_issue_close']=='skipped' and statuses['apply_issue_blocked']=='skipped' and statuses['issue_split_subflow']=='skipped'
     assert ready.exists() and not wrong.exists()
 
 def test_invalid_json_runs_exactly_one_retry_then_close(tmp_path):
@@ -88,3 +88,20 @@ if a=='close_issue_tracker':Path(%r).write_text('ran')"""%(str(child1),str(child
     assert statuses['create_issue_split_child_1']=='succeeded' and statuses['create_issue_split_child_2']=='succeeded'
     assert statuses['create_issue_split_child_3']=='skipped' and statuses['close_issue_tracker']=='succeeded'
     assert child1.exists() and child2.exists() and closed.exists() and not wrong.exists()
+
+
+def test_hard_blocked_routes_only_blocked_effect(tmp_path):
+    blocked=tmp_path/"blocked"; wrong=tmp_path/"wrong"
+    body=base_effector("""if a=='resolve_issue_candidate':v['route']='evaluate'
+if a in {'collect_issue_linked_prs','collect_issue_covering_prs'}:v['collected']=True
+if a=='resolve_issue_hard_facts':v.update(route='terminal',decision={'verdict':'blocked','reason':'preflight_incident'})
+if a=='validate_issue_triage':v['route']='not_applicable'
+if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decision={'verdict':'blocked','reason':'preflight_incident'})
+if a=='verify_issue_evidence':v['route']='not_applicable'
+if a=='select_issue_evidence':v['route']='not_applicable'
+if a=='finalize_issue_triage':v['decision']={'verdict':'blocked','reason':'preflight_incident'}
+if a=='apply_issue_blocked':Path(%r).write_text('ran')
+if a in {'apply_issue_ready','apply_issue_close','apply_issue_manual','issue_split_subflow'}:Path(%r).write_text(a)"""%(str(blocked),str(wrong)))
+    result=run_graph(tmp_path,body,"blocked"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
+    assert statuses['apply_issue_blocked']=='succeeded' and statuses['apply_issue_ready']=='skipped'
+    assert blocked.exists() and not wrong.exists()
