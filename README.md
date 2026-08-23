@@ -99,31 +99,30 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> InspectSurveyReadyScope
-    InspectSurveyReadyScope --> ReadySurveyResult: stamp recent_empty jest aktywny
-    InspectSurveyReadyScope --> SelectReadySurveyRepo: survey dozwolone
-    SelectReadySurveyRepo --> ListWorkReadyIssues: wybrano repozytorium z zakresu
-    SelectReadySurveyRepo --> FinalizeReadySurvey: brak kolejnych repozytoriów
-    ListWorkReadyIssues --> VerifyReadyIssueState: zgłoszono fizyczną listę work:ready
-    ListWorkReadyIssues --> RecordReadySurveyError: zapytanie GitHub zawiodło
-    VerifyReadyIssueState --> ParkClosedReadyIssue: issue jest fizycznie CLOSED
-    VerifyReadyIssueState --> CheckCoveredOrBlocked: issue jest fizycznie otwarte
-    CheckCoveredOrBlocked --> ParkBlockedReadyIssue: issue zablokowane w ledgerze
-    CheckCoveredOrBlocked --> ExcludeCoveredReadyIssue: issue ma otwarty PR dostarczający
-    CheckCoveredOrBlocked --> AddImplementableCandidate: issue wolne i gotowe
-    ParkClosedReadyIssue --> SelectReadySurveyRepo
-    ParkBlockedReadyIssue --> SelectReadySurveyRepo
-    ExcludeCoveredReadyIssue --> SelectReadySurveyRepo
-    AddImplementableCandidate --> SelectReadySurveyRepo
-    RecordReadySurveyError --> SelectReadySurveyRepo
+    [*] --> PrepareReadySurvey
+    PrepareReadySurvey --> FinalizeReadySurvey: stamp recent_empty jest aktywny
+    PrepareReadySurvey --> SelectReadyRepoSlot: survey dozwolone
+    SelectReadyRepoSlot --> ListWorkReadyIssues: slot zawiera repo hot / rotowane cold
+    SelectReadyRepoSlot --> RecordReadyRepoResult: slot cold albo pusty
+    ListWorkReadyIssues --> ClassifyReadyRepoIssues: listing GitHub zakończony
+    ClassifyReadyRepoIssues --> ParkOneBlockedReadyIssue: istnieje zablokowane issue
+    ClassifyReadyRepoIssues --> RecordReadyRepoResult: brak issue do parkowania
+    ParkOneBlockedReadyIssue --> RecordReadyRepoResult
+    RecordReadyRepoResult --> SelectReadyRepoSlot: następny statyczny slot
+    RecordReadyRepoResult --> FinalizeReadySurvey: ostatni slot
     FinalizeReadySurvey --> UpdateSurveyStamp
     UpdateSurveyStamp --> ReadySurveyResult
     ReadySurveyResult --> [*]
 ```
 
-Pod-Fala wykonuje przegląd gotowych issue dla hot repos i rotowanych cold repos.
-Każdy odczyt listy, weryfikacja stanu, parkowanie zablokowanych lub zamkniętych
-oraz aktualizacja stampu pozostają jawnymi węzłami Fali.
+Pod-Fala rozwija skonfigurowany katalog do jawnych, statycznie ograniczonych
+slotów repozytoriów. Manifest Fali zawiera każdy slot i jego krawędzie; żaden
+proces Pythonowy nie iteruje po repozytoriach ani nie uruchamia kolejnego etapu.
+Listing `work:ready` jest fizycznym odczytem GitHub i zwraca tylko otwarte issue.
+Osobny czysty reduktor wyklucza issue pokryte przez PR albo ledger. Osobny efekt
+parkuje najwyżej jedno zablokowane issue na repozytorium i pass, więc mutacja
+pozostaje atomowa, a higiena postępuje bez ukrytej pętli. Finalizator wyłącznie
+materializuje zgromadzony stan survey i nie podejmuje decyzji trasujących.
 
 ### Uruchomienie triage — `dispatch_triage`
 
