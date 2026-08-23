@@ -222,6 +222,29 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Przegląd inboxu — `survey_inbox`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareInboxSurvey
+    PrepareInboxSurvey --> SelectInboxRepoSlot
+    SelectInboxRepoSlot --> ListInboxIssues: aktywne repo
+    SelectInboxRepoSlot --> RecordInboxRepoResult: cold / poza mini-scope / pusty slot / recent-empty
+    ListInboxIssues --> ClassifyInboxIssues
+    ClassifyInboxIssues --> RecordInboxRepoResult
+    RecordInboxRepoResult --> SelectInboxRepoSlot: następny jawny slot
+    RecordInboxRepoResult --> ReduceInboxSurvey: ostatni slot
+    ReduceInboxSurvey --> PersistInboxSurvey
+    PersistInboxSurvey --> UpdateInboxSurveyStamp
+    UpdateInboxSurveyStamp --> InboxSurveyResult
+    InboxSurveyResult --> [*]
+```
+
+Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Każdy listing GitHub jest
+osobnym procesem, a filtrowanie stuck ledger jest czystą klasyfikacją jednego
+repo. Redukcja katalogu, zapis pass state i efekt stempla TTL są oddzielone.
+Błąd listingu pozostaje jawnym `probe_failed` i nie udaje pustego inboxu.
+
 ### Walidacja self-repair — `self_repair_validate`
 
 ```mermaid
@@ -747,6 +770,7 @@ kontraktu. Aktualny audyt:
 | `OverBudgetReap` | `reap_over_budget` | ogranicza receipt workera przez jawny harvest albo plan-only reap |
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
+| `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
