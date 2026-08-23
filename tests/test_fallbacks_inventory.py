@@ -119,6 +119,24 @@ state:
         tick_mod, "run_resolve_conflicts", lambda **kwargs: {"ok": True}
     )
     monkeypatch.setattr(tick_mod, "run_select_implement", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick_mod,
+        "run_plan_pass",
+        lambda **kwargs: __import__(
+            "lokay.passkit.io", fromlist=["write_json"]
+        ).write_json(
+            __import__("lokay.passkit.io", fromlist=["plan_path"]).plan_path(
+                kwargs["pass_dir"]
+            ),
+            {
+                "triage_targets": [],
+                "closeout_targets": [],
+                "implement_candidates": [],
+                "triage_budget_remaining": 0,
+            },
+        )
+        and {"ok": True},
+    )
     out = tick_mod.compose_tick(config_path=str(cfg), live=True)
     assert out["progress"] == 0
     assert out["remaining"]["inbox"] == 1

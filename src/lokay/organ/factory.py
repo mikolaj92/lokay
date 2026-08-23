@@ -176,6 +176,8 @@ def handle_factory(
         return _run_atom_main(ready_hygiene.main, [*cfg, *live])
 
     if atom == "plan_pass":
+        from lokay.proc.plan_pass_subflow import run
+
         pass_dir = str(
             up.get("factory_begin", {}).get("pass_dir")
             or up.get("survey_ready", {}).get("pass_dir")
@@ -183,7 +185,7 @@ def handle_factory(
             or ""
         )
         assert pass_dir
-        return _run_atom_main(plan_pass.main, [*cfg, *live, "--pass-dir", pass_dir])
+        return run(pass_dir=pass_dir)
 
     if atom == "dispatch_triage":
         from lokay.proc.dispatch_triage_subflow import run
