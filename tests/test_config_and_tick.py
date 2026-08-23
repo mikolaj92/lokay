@@ -10,6 +10,29 @@ from lokay.git_branch import branch_for_issue
 from lokay.proc.make_branch import main as make_branch_main
 
 
+def _run_inbox(module, pass_dir):
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    by = {}
+    issues = {}
+    for repo in begin.get("repos") or []:
+        try:
+            out = module._run(module.p_list_inbox.main, ["--repo", repo])
+        except AssertionError:
+            out = {"ok": True, "issues": []}
+        rows = list(out.get("issues") or []) if out.get("ok") else []
+        by[repo] = len(rows)
+        issues[repo] = rows
+    working.update(
+        inbox_by_repo=by,
+        inbox_issues_by_repo=issues,
+        remaining_inbox=sum(by.values()),
+        inbox_survey_failed=[],
+    )
+    pass_io.write_json(pass_io.working_path(pass_dir), working)
+    return {"ok": True}
+
+
 def test_load_example(tmp_path: Path, monkeypatch):
     # File values only — do not inherit LaunchAgent mill env.
     for key in (
@@ -443,6 +466,9 @@ state:
         and {"ok": True},
     )
     monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick, "run_survey_inbox", lambda **kwargs: _run_inbox(tick, kwargs["pass_dir"])
+    )
     result = tick.compose_tick(config_path=str(cfg_path), live=True)
 
     assert len(triage_calls) == 1
