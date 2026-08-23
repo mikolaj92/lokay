@@ -222,6 +222,34 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Higiena gotowych issue — `ready_hygiene`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareReadyHygiene
+    PrepareReadyHygiene --> SelectHygieneRepoSlot
+    SelectHygieneRepoSlot --> ListReadyLabelIssues: probe
+    SelectHygieneRepoSlot --> RecordHygieneRepo: recent-empty / pusty slot
+    ListReadyLabelIssues --> ClassifyOrphanReady
+    ClassifyOrphanReady --> RecordHygieneRepo
+    RecordHygieneRepo --> SelectHygieneRepoSlot: następne repo
+    RecordHygieneRepo --> ReduceHygieneCandidates: ostatnie repo
+    ReduceHygieneCandidates --> SelectHygieneCandidateSlot
+    SelectHygieneCandidateSlot --> RemoveOrphanReadyLabel: kandydat
+    SelectHygieneCandidateSlot --> RecordHygieneCandidate: pusty slot
+    RemoveOrphanReadyLabel --> RecordHygieneCandidate
+    RecordHygieneCandidate --> SelectHygieneCandidateSlot: następny kandydat
+    RecordHygieneCandidate --> ReduceReadyHygiene: ostatni kandydat
+    ReduceReadyHygiene --> UpdateReadyHygieneStamp
+    UpdateReadyHygieneStamp --> ReadyHygieneResult
+    ReadyHygieneResult --> [*]
+```
+
+Pod-Fala ma 30 jawnych slotów repozytoriów i 30 jawnych slotów osieroconych
+issue. Listing, czysta klasyfikacja `ai:ready` bez `work:ready`, mutation effect,
+redukcja oraz TTL są osobnymi procesami. Overflow katalogu lub kandydatów jest
+fail-closed. Rate limit nie udaje pustej sondy i nie zapisuje empty stamp.
+
 ### Przegląd pull requestów — `survey_prs`
 
 ```mermaid
@@ -837,6 +865,7 @@ kontraktu. Aktualny audyt:
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
+| `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
 | `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
