@@ -222,6 +222,48 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareCloseout
+    PrepareCloseout --> SelectCloseoutSlot
+    SelectCloseoutSlot --> CloseoutPR: jeden otwarty AI PR repo
+    SelectCloseoutSlot --> RecordCloseoutSlot: pusty slot / brak PR / naruszenie one-PR
+    CloseoutPR --> InspectPRIssue
+    InspectPRIssue --> GetPRIssue: branch wiąże issue
+    InspectPRIssue --> StabilizePRIssue: brak issue
+    GetPRIssue --> StabilizePRIssue
+    StabilizePRIssue --> ParkClosedPRIssue: issue zamknięte
+    StabilizePRIssue --> ClassifyPRGate: issue otwarte / nieznane
+    ParkClosedPRIssue --> FinalizeCloseoutPR
+    ClassifyPRGate --> FinalizeCloseoutPR: manual / konflikt
+    ClassifyPRGate --> ReadPRChecks: kwalifikowany PR
+    ReadPRChecks --> RoutePRChecks
+    RoutePRChecks --> RepairPR: repair
+    RoutePRChecks --> FinalizeCloseoutPR: wait / skip
+    RoutePRChecks --> TriagePR: merge candidate
+    TriagePR --> ClassifyTriageOutcome
+    ClassifyTriageOutcome --> RepairPR: request_changes
+    ClassifyTriageOutcome --> ParkDeliveredIssue: merged
+    ClassifyTriageOutcome --> FinalizeCloseoutPR: waiting / needs_human
+    RepairPR --> FinalizeCloseoutPR
+    ParkDeliveredIssue --> FinalizeCloseoutPR
+    FinalizeCloseoutPR --> RecordCloseoutSlot
+    RecordCloseoutSlot --> SelectCloseoutSlot: następny jawny slot
+    RecordCloseoutSlot --> ReduceCloseout: ostatni slot
+    ReduceCloseout --> PersistCloseout
+    PersistCloseout --> CloseoutResult
+    CloseoutResult --> [*]
+```
+
+Rodzic rozwija katalog do 30 jawnych slotów i prowadzi wspólny budżet napraw
+seryjnie między repozytoriami. Każdy kwalifikowany PR uruchamia tę samą
+pod-Falę `closeout_pr`. Odczyt issue, checks, routing, naprawa, SHA-bound
+triage/merge, parkowanie oraz redukcja pass state są osobnymi procesami.
+Naruszenie inwariantu jednego otwartego AI PR na repo jest terminalnym,
+fail-closed wynikiem slotu, a nie ukrytą pętlą.
+
 ### Przegląd inboxu — `survey_inbox`
 
 ```mermaid
@@ -771,6 +813,8 @@ kontraktu. Aktualny audyt:
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
+| `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
+| `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
