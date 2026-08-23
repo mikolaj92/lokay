@@ -36,6 +36,7 @@ from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.recovery import handle_recovery
 from lokay.organ.repair_boundary import handle_repair_boundary
 from lokay.organ.self_repair import handle_self_repair
+from lokay.organ.stale_worktree_boundary import handle_stale_worktree
 
 _MUTATING_ATOMS = frozenset(
     {
@@ -48,6 +49,10 @@ _MUTATING_ATOMS = frozenset(
         "pr_test_repair_agent",
         "issue_to_pr_subflow",
         "close_existing_delivery",
+        "remove_stale_worktree_1",
+        "remove_stale_worktree_2",
+        "remove_stale_worktree_3",
+        "remove_stale_worktree_4",
         "commit_all",
         "commit_implementation",
         "commit_repair",
@@ -123,6 +128,7 @@ def _handle(
         handle_recovery,
         handle_factory,
         handle_self_repair,
+        handle_stale_worktree,
         handle_review_boundary,
         handle_coding_boundary,
         handle_repair_boundary,

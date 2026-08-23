@@ -64,7 +64,9 @@ def test_ready_survey_reports_probe_failed(tmp_path: Path, monkeypatch) -> None:
     assert "Ready survey reports whether its GitHub probe failed." in source
 
 
-def test_surveys_skip_github_when_recent_empty_stamp(tmp_path: Path, monkeypatch) -> None:
+def test_surveys_skip_github_when_recent_empty_stamp(
+    tmp_path: Path, monkeypatch
+) -> None:
     stamp = tmp_path / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")
     before = stamp.stat().st_mtime
@@ -77,8 +79,12 @@ def test_surveys_skip_github_when_recent_empty_stamp(tmp_path: Path, monkeypatch
     monkeypatch.setattr(survey_ready, "run_proc", boom)
     pass_dir = _pass(tmp_path)
     prs = survey_prs.run_survey_prs(pass_dir=pass_dir, config_path=None, live=True)
-    inbox = survey_inbox.run_survey_inbox(pass_dir=pass_dir, config_path=None, live=True)
-    ready = survey_ready.run_survey_ready(pass_dir=pass_dir, config_path=None, live=True)
+    inbox = survey_inbox.run_survey_inbox(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
+    ready = survey_ready.run_survey_ready(
+        pass_dir=pass_dir, config_path=None, live=True
+    )
     assert prs["skipped"] is True
     assert inbox["skipped"] is True
     assert ready["skipped"] is True
@@ -93,7 +99,10 @@ def test_pytest_does_not_skip_github_surveys_using_the_mill_stamp(
     stamp = mill / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_pytest_does_not_skip_github_surveys_using_the_mill_stamp")
+    monkeypatch.setenv(
+        "PYTEST_CURRENT_TEST",
+        "test_pytest_does_not_skip_github_surveys_using_the_mill_stamp",
+    )
     assert survey_ttl.survey_recently_empty(stamp) is False
     assert (
         survey_ttl.skip_idle_factory_pass(
@@ -110,7 +119,9 @@ def test_pytest_does_not_skip_github_surveys_using_the_mill_stamp(
     hermetic = tmp_path / "factory-survey.stamp"
     hermetic.write_text("1", encoding="utf-8")
     assert survey_ttl.survey_recently_empty(hermetic) is True
-    src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "survey_ttl.py"
+    src = (
+        Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "survey_ttl.py"
+    )
     assert "Pytest must not skip GitHub surveys using the mill stamp." in src.read_text(
         encoding="utf-8"
     )
@@ -183,10 +194,19 @@ def test_ready_ttl_flag_does_not_skip_later_repos(tmp_path: Path, monkeypatch) -
     def fake_run(fn, argv):
         repo = argv[argv.index("--repo") + 1]
         if "--issue" in argv:
-            return {"ok": True, "issue": {"number": int(argv[argv.index("--issue") + 1]), "state": "OPEN"}}
+            return {
+                "ok": True,
+                "issue": {
+                    "number": int(argv[argv.index("--issue") + 1]),
+                    "state": "OPEN",
+                },
+            }
         listed.append(repo)
         if repo == "a/two":
-            return {"ok": True, "issues": [{"number": 2, "repo": repo, "labels": ["work:ready"]}]}
+            return {
+                "ok": True,
+                "issues": [{"number": 2, "repo": repo, "labels": ["work:ready"]}],
+            }
         return {"ok": True, "issues": []}
 
     monkeypatch.setattr(survey_ready, "run_proc", fake_run)
@@ -263,13 +283,9 @@ def test_skip_idle_factory_pass_hosts_when_stamp_missing(tmp_path: Path) -> None
 def test_skip_idle_factory_pass_hosts_when_occupied(tmp_path: Path) -> None:
     stamp = tmp_path / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")
-    receipt = _idle_receipt(
-        by_repo=[{"repo": "mikolaj92/lokay", "occupied": True}]
-    )
+    receipt = _idle_receipt(by_repo=[{"repo": "mikolaj92/lokay", "occupied": True}])
     assert (
-        survey_ttl.skip_idle_factory_pass(
-            live=True, stamp=stamp, receipt=receipt
-        )
+        survey_ttl.skip_idle_factory_pass(live=True, stamp=stamp, receipt=receipt)
         is None
     )
 
@@ -347,7 +363,9 @@ def test_mill_survey_probe_empty_is_true() -> None:
         calls.append(" ".join(argv))
         return _gh_ok("[]")
 
-    assert survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
+    assert (
+        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
+    )
     assert len(calls) == 3
 
 
@@ -358,138 +376,19 @@ def test_mill_survey_probe_ready_is_false() -> None:
             return _gh_ok('[{"number": 12, "state": "OPEN"}]')
         return _gh_ok("[]")
 
-    assert survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is False
+    assert (
+        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run)
+        is False
+    )
 
 
 def test_mill_survey_probe_failure_is_none() -> None:
     def fake_run(argv, **_k):
         return type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
 
-    assert survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is None
-
-
-def test_live_idle_daemon_cycle_skips_fala(monkeypatch, tmp_path: Path) -> None:
-    from lokay.compose import daemon_cycle as daemon_mod
-
-    stamp = tmp_path / "factory-survey.stamp"
-    stamp.write_text("1", encoding="utf-8")
-    before = stamp.stat().st_mtime
-    leftover = {
-        "ok": True,
-        "labels_removed": False,
-        "leftover_closed": 0,
-        "skipped": True,
-        "reason": "recent_empty",
-    }
-
-    def boom(**_kwargs):
-        raise AssertionError("idle mill must not host daemon_cycle Fala")
-
-    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
-    monkeypatch.setattr(daemon_mod, "rotate_mill_fala_journals", lambda: {"ok": True})
-    monkeypatch.setattr(daemon_mod, "run_path", boom)
-    monkeypatch.setattr(daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml")
-    monkeypatch.setattr(
-        daemon_mod,
-        "skip_idle_factory_pass",
-        lambda **_k: {
-            "ok": True,
-            "health": "idle",
-            "idle": True,
-            "live": True,
-            "progress": 0,
-            "remaining": {"ready": 0, "inbox": 0, "open_ai_prs": 0},
-            "skipped": True,
-            "reason": "recent_empty_survey",
-        },
+    assert (
+        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is None
     )
-    harvested: list[dict] = []
-
-    def fake_harvest(**kwargs):
-        harvested.append(kwargs)
-
-    monkeypatch.setattr(daemon_mod, "harvest_idle_mill_stuck", fake_harvest)
-    reaped: list[dict] = []
-
-    def fake_reap(**kwargs):
-        reaped.append(kwargs)
-
-    monkeypatch.setattr(daemon_mod, "reap_idle_closed_worktrees", fake_reap)
-    hygiened: list[dict] = []
-
-    def fake_hygiene(**kwargs):
-        hygiened.append(kwargs)
-
-    monkeypatch.setattr(daemon_mod, "hygiene_idle_leftover_ready", fake_hygiene)
-    cached: list[dict] = []
-
-    def fake_cache(**kwargs):
-        cached.append(kwargs)
-
-    monkeypatch.setattr(daemon_mod, "reap_idle_leftover_cache", fake_cache)
-    monkeypatch.setattr(daemon_mod, "run_closeout_leftover", lambda **_k: leftover)
-    out = daemon_mod.compose_daemon_cycle(
-        config_path=str(tmp_path / "config.yaml"),
-        pass_ceiling_seconds=5,
-    )
-    assert out["ok"] is True
-    assert out["skipped"] is True
-    assert out["engine"] == "fala"
-    assert out["path_id"] == "daemon_cycle"
-    assert out["leftover_closeout"] == leftover
-    assert harvested == [
-        {"config_path": str(tmp_path / "config.yaml"), "live": True}
-    ]
-    assert reaped == [
-        {"config_path": str(tmp_path / "config.yaml"), "live": True}
-    ]
-    assert hygiened == [
-        {"config_path": str(tmp_path / "config.yaml"), "live": True}
-    ]
-    assert cached == [
-        {"config_path": str(tmp_path / "config.yaml"), "live": True}
-    ]
-    assert stamp.stat().st_mtime == before
-
-
-def test_live_idle_daemon_cycle_hosts_when_stamp_missing(
-    monkeypatch, tmp_path: Path
-) -> None:
-    from lokay.compose import daemon_cycle as daemon_mod
-
-    called: list[str] = []
-
-    def fake_run(**_kwargs):
-        called.append("run")
-        return {"ok": True, "health": "idle"}
-
-    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
-    monkeypatch.setattr(daemon_mod, "rotate_mill_fala_journals", lambda: {"ok": True})
-    monkeypatch.setattr(daemon_mod, "run_path", fake_run)
-    monkeypatch.setattr(daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml")
-    monkeypatch.setattr(daemon_mod, "skip_idle_factory_pass", lambda **_k: None)
-
-    def leftover_boom(**_kwargs):
-        raise AssertionError("hosting daemon_cycle must not short-circuit leftover via skip")
-
-    monkeypatch.setattr(daemon_mod, "run_closeout_leftover", leftover_boom)
-    monkeypatch.setattr(
-        daemon_mod,
-        "hygiene_idle_leftover_ready",
-        leftover_boom,
-    )
-    monkeypatch.setattr(
-        daemon_mod,
-        "reap_idle_leftover_cache",
-        leftover_boom,
-    )
-    out = daemon_mod.compose_daemon_cycle(
-        config_path=str(tmp_path / "config.yaml"),
-        pass_ceiling_seconds=5,
-    )
-    assert called == ["run"]
-    assert out["ok"] is True
-    assert out.get("skipped") is not True
 
 
 def test_live_idle_factory_pass_skips_fala(monkeypatch, tmp_path: Path) -> None:
@@ -524,3 +423,20 @@ def test_live_idle_factory_pass_skips_fala(monkeypatch, tmp_path: Path) -> None:
     assert out["skipped"] is True
     assert out["engine"] == "fala"
     assert out["kind"] == "factory_pass"
+
+
+def test_live_daemon_cycle_always_hosts_authored_fala(monkeypatch, tmp_path):
+    from lokay.compose import daemon_cycle as daemon_mod
+
+    called = []
+    monkeypatch.setattr(daemon_mod, "rotate_mill_fala_journals", lambda: {"ok": True})
+    monkeypatch.setattr(
+        daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml"
+    )
+    monkeypatch.setattr(
+        daemon_mod,
+        "run_path",
+        lambda **kwargs: called.append(kwargs) or {"ok": True, "health": "idle"},
+    )
+    out = daemon_mod.compose_daemon_cycle(config_path="config.yaml", max_passes=1)
+    assert out["health"] == "idle" and called[0]["path_id"] == "daemon_cycle"
