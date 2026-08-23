@@ -18,6 +18,14 @@ def test_yield_report_counts_repo_and_semantic_trace(tmp_path: Path):
             "pr": 7,
         },
         {
+            "ts": "2026-08-19T10:00:30Z",
+            "kind": "pr_triage",
+            "repo": "a/b",
+            "ok": True,
+            "pr": 7,
+            "merged": True,
+        },
+        {
             "ts": "2026-08-19T10:01:00Z",
             "kind": "localize",
             "repo": "a/b",
@@ -38,5 +46,6 @@ def test_yield_report_counts_repo_and_semantic_trace(tmp_path: Path):
     )
     assert report["by_repo"]["a/b"]["starts"] == 1
     assert report["by_repo"]["a/b"]["prs"] == 1
+    assert report["by_repo"]["a/b"]["merges"] == 1
     assert report["semantic"]["localize"]["outcomes"]["agent:completed"] == 1
     assert report["semantic"]["localize"]["average_duration_ms"] == 120

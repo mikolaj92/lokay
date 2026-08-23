@@ -14,11 +14,25 @@
   </header>
 
   <div class="app-card-grid">
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Issues delivered / hour</p><p class="text-2xl font-semibold">{{ data.kpis.issues_per_hour }}</p><p class="text-sm text-muted-foreground">Merged AI PRs in the last rolling hour</p></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Open issues remaining</p><p class="text-2xl font-semibold">{{ data.kpis.open_issues }}</p><p class="text-sm text-muted-foreground">Inbox {{ data.backlog.inbox }} · Ready {{ data.backlog.ready }}</p></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">PRs created / hour</p><p class="text-2xl font-semibold">{{ data.kpis.prs_per_hour }}</p><p class="text-sm text-muted-foreground">{{ data.kpis.starts_per_hour }} implementation starts</p></div></article>
     <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Mill health</p><p class="text-2xl font-semibold">{{ status.health }}</p><span class="badge" data-variant="{{ 'default' if status.mill_ready else 'destructive' }}">{{ 'ready' if status.mill_ready else 'blocked' }}</span></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Latest progress</p><p class="text-2xl font-semibold">{{ (status.last_pass or {}).progress or 0 }}</p><p class="text-sm text-muted-foreground">Pass {{ (status.last_pass or {}).ts or 'not recorded' }}</p></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Supported repos</p><p class="text-2xl font-semibold">{{ data.catalog | selectattr('enabled') | list | length }}</p><p class="text-sm text-muted-foreground">{{ data.catalog | rejectattr('enabled') | list | length }} disabled</p></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Open work</p><p class="text-2xl font-semibold">{{ (remaining.inbox or 0) + (remaining.ready or 0) + (remaining.open_ai_prs or 0) }}</p><p class="text-sm text-muted-foreground">Inbox {{ remaining.inbox or 0 }} · Ready {{ remaining.ready or 0 }} · PRs {{ remaining.open_ai_prs or 0 }}</p></div></article>
   </div>
+
+  <article class="card app-stack app-stack--tight" aria-labelledby="backlog-title">
+    <h2 id="backlog-title">Current delivery backlog</h2>
+    <div class="app-cluster">
+      <span class="badge">{{ data.backlog.inbox }} inbox</span>
+      <span class="badge">{{ data.backlog.ready }} ready</span>
+      <span class="badge">{{ data.backlog.ready_with_open_pr }} ready with PR</span>
+      <span class="badge">{{ data.backlog.open_ai_prs }} open AI PRs</span>
+      <span class="badge">{{ data.backlog.review_limbo }} review limbo</span>
+      <span class="badge">{{ data.backlog.needs_repair }} needs repair</span>
+      <span class="badge" data-variant="{{ 'destructive' if data.backlog.survey_errors else 'outline' }}">{{ data.backlog.survey_errors }} survey errors</span>
+    </div>
+    <p class="text-sm text-muted-foreground">Open issues is the disjoint inbox + ready backlog. Ready-with-PR is diagnostic and is not counted twice.</p>
+  </article>
 
   {% if status.blockers or status.policy_notes %}
   <article class="card app-stack app-stack--tight"><h2>Operator notes</h2>
@@ -28,9 +42,9 @@
   {% endif %}
 
   <section class="app-stack" aria-labelledby="throughput-title"><h2 id="throughput-title">Local event throughput</h2>
-    <div class="table-container"><table class="table"><thead><tr><th>Window</th><th>Events</th><th>Starts</th><th>PRs</th><th>Merges recorded locally</th><th>Failures</th></tr></thead><tbody>
+    <div class="table-container"><table class="table"><thead><tr><th>Window</th><th>Events</th><th>Issue starts</th><th>PRs created</th><th>Issues delivered</th><th>Failures</th></tr></thead><tbody>
     {% for window, metrics in data.throughput.items() %}<tr><th>{{ window }}</th><td>{{ metrics.events }}</td><td>{{ metrics.starts }}</td><td>{{ metrics.prs }}</td><td>{{ metrics.merges }}</td><td>{{ metrics.failures }}</td></tr>{% endfor %}
-    </tbody></table></div><p class="text-sm text-muted-foreground">Local state events are operational evidence. GitHub remains authoritative for completed merges.</p>
+    </tbody></table></div><p class="text-sm text-muted-foreground">Local state events are operational evidence. One successful local PR-merge receipt counts as one delivered issue. GitHub remains authoritative for completed merges.</p>
   </section>
 
   <section class="app-stack" aria-labelledby="repos-title"><h2 id="repos-title">Supported repositories</h2>

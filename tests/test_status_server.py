@@ -35,6 +35,9 @@ def test_dashboard_uses_product_shell_platform_assets_and_server_html(tmp_path: 
     assert response.status_code == 200
     assert "owner/repo" in response.text
     assert "Supported repositories" in response.text
+    assert "Issues delivered / hour" in response.text
+    assert "Open issues remaining" in response.text
+    assert "Current delivery backlog" in response.text
     assert "/static/platform/" in response.text
     assert 'id="main-content"' in response.text
     assert "cdn.jsdelivr" not in response.text
