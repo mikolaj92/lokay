@@ -56,17 +56,56 @@ def select_review_decision(
             "ok": True, "route": route,
             "decision": dict(resolved.get("decision") or {}),
             "merge_ok": bool(resolved.get("merge_ok")),
+            "evidence_kind": "none",
             "request_changes_count": int(resolved.get("request_changes_count") or 0),
         }
     candidate = retry if first.get("route") == "retry" else first
     if candidate.get("route") != "valid":
         return {
             "ok": True, "route": "needs_human",
+            "decision": {"verdict": "needs_human"},
+            "evidence_kind": "none",
             "reason": "invalid_review_json_exhausted",
             "validation_error": str(candidate.get("validation_error") or "invalid review"),
         }
+    decision = dict(candidate.get("decision") or {})
     return {
-        "ok": True, "route": "publish",
-        "decision": dict(candidate.get("decision") or {}),
+        "ok": True,
+        "route": "evidence" if decision.get("verdict") == "needs_evidence" else "publish",
+        "evidence_kind": str(decision.get("evidence_kind") or "none"),
+        "decision": decision,
         "request_changes_count": int(resolved.get("request_changes_count") or 0),
     }
+
+
+def select_evidence_review(
+    selected: Mapping[str, Any], validation: Mapping[str, Any]
+) -> dict[str, Any]:
+    if selected.get("route") != "evidence":
+        return {"ok": True, "route": "not_applicable"}
+    if validation.get("route") != "valid":
+        return {
+            "ok": True, "route": "needs_human",
+            "reason": "evidence_review_invalid",
+            "decision": {"verdict": "needs_human"},
+            "request_changes_count": int(selected.get("request_changes_count") or 0),
+        }
+    decision = dict(validation.get("decision") or {})
+    if decision.get("verdict") == "needs_evidence":
+        return {
+            "ok": True, "route": "needs_human",
+            "reason": "evidence_still_insufficient",
+            "decision": {"verdict": "needs_human"},
+        }
+    return {
+        "ok": True, "route": "publish", "decision": decision,
+        "request_changes_count": int(selected.get("request_changes_count") or 0),
+    }
+
+
+def finalize_review_selection(
+    selected: Mapping[str, Any], evidence_selected: Mapping[str, Any]
+) -> dict[str, Any]:
+    if selected.get("route") == "evidence":
+        return dict(evidence_selected)
+    return dict(selected)

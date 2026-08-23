@@ -14,7 +14,8 @@ def test_readme_contains_mermaid_state_machine_before_implementation_contract():
     assert "Lokay nie używa GitHub Actions" in readme
     assert "invalid JSON + informacja zwrotna" in readme
     assert "NEEDS_EVIDENCE" in readme
-    assert "**do implementacji**" in readme
+    assert "pr_metadata" in readme
+    assert "ponawia agenta raz" in readme
 
 
 def test_readme_state_machine_maps_every_fala_path():

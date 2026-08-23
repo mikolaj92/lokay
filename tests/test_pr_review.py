@@ -208,3 +208,14 @@ def test_labels_and_merge_decision_helpers():
     merge_ok, escalated = decide_review_merge(d, 1, max_request_changes=2)
     assert merge_ok is False
     assert escalated is True
+
+
+def test_review_schema_is_closed_and_evidence_request_is_scalar():
+    with pytest.raises(PrReviewError,match="unknown review fields"):
+        parse_review_output('{"verdict":"approve","route":"merge"}')
+    with pytest.raises(PrReviewError,match="requires one evidence_kind"):
+        parse_review_output('{"verdict":"needs_evidence"}')
+    with pytest.raises(PrReviewError,match="only valid with needs_evidence"):
+        parse_review_output('{"verdict":"approve","evidence_kind":"diff_tail"}')
+    out=parse_review_output('{"verdict":"needs_evidence","evidence_kind":"diff_tail"}')
+    assert out.evidence_kind == "diff_tail"

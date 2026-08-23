@@ -65,7 +65,11 @@ Lokay jest maszyną stanów sterowaną przez Falę. Stan domenowy pochodzi z
 GitHuba (`issue`, PR, SHA, merge), a Fala wybiera następny minimalny proces
 Unixowy. Proces może odczytać fakt albo wykonać jeden efekt uboczny. Nie może
 ukrywać kolejnego grafu. Agent występuje tylko na granicy niedeterministycznej
-i zwraca jeden wynik z zamkniętego schematu.
+i zwraca jeden wynik z zamkniętego schematu. Recenzja PR może poprosić o dokładnie
+jeden dodatkowy fakt: `pr_metadata`, `changed_files`, `diff_tail` albo
+`commit_history`. Każdy rodzaj ma osobny kolektor Unixowy. Fala uruchamia tylko
+wybrany kolektor, ponawia agenta raz i kieruje drugą prośbę o dowody do terminala
+ręcznego.
 
 Ten diagram jest kontraktem projektowym. **Każda zmiana przepływu zaczyna się
 od zmiany i przeglądu diagramu. Dopiero zaakceptowany diagram wolno zakodować
@@ -163,11 +167,23 @@ stateDiagram-v2
     ReviewRetryAgent --> ValidateRetryResult
     ValidateRetryResult --> ReviewVerdict: wynik poprawny
     ValidateRetryResult --> HumanTerminal: nadal invalid JSON
-    ValidateReviewResult --> CollectReviewEvidence: NEEDS_EVIDENCE
     ValidateReviewResult --> ReviewVerdict: wynik poprawny
+    ReviewVerdict --> SelectEvidenceCollector: NEEDS_EVIDENCE
+    SelectEvidenceCollector --> CollectPrMetadata: pr_metadata
+    SelectEvidenceCollector --> CollectChangedFiles: changed_files
+    SelectEvidenceCollector --> CollectDiffTail: diff_tail
+    SelectEvidenceCollector --> CollectCommitHistory: commit_history
+    CollectPrMetadata --> VerifyEvidenceSha
+    CollectChangedFiles --> VerifyEvidenceSha
+    CollectDiffTail --> VerifyEvidenceSha
+    CollectCommitHistory --> VerifyEvidenceSha
+    VerifyEvidenceSha --> EvidenceReviewAgent: SHA bez zmian
+    VerifyEvidenceSha --> HumanTerminal: SHA zmienione / brak dowodu
+    EvidenceReviewAgent --> ValidateEvidenceReview
+    ValidateEvidenceReview --> ReviewVerdict: wynik poprawny
+    ValidateEvidenceReview --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
     ReviewVerdict --> LocalMergeGate: APPROVE
     ReviewVerdict --> RepairPullRequest: REQUEST_CHANGES
-    ReviewVerdict --> CollectReviewEvidence: NEEDS_EVIDENCE
     ReviewVerdict --> HumanTerminal: NEEDS_HUMAN
     RepairPullRequest --> CollectReviewEvidence: nowy SHA
     LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
@@ -240,7 +256,7 @@ kontraktu. Aktualny audyt:
 | `approve → lokalne testy → merge` | zaimplementowane w Fali |
 | `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane; pełny powrót między przebiegami wymaga dalszego audytu |
 | `needs_human → terminal` | zaimplementowane w Fali |
-| `needs_evidence → zbierz dowody → ponów agenta` | **do implementacji** |
+| `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
 | `issue_triage` bez ukrytego drzewa Python | **do refaktoru** |
 | `issue_to_pr` bez ukrytego drzewa Python | **do refaktoru** |
