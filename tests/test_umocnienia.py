@@ -18,7 +18,7 @@ from lokay.preflight import (
     require_healthy,
 )
 from lokay.proc.compute_health import run_compute_health
-from lokay.proc.detach_issue_to_pr import detach_issue_to_pr, live_issue_to_pr_receipts
+from lokay.proc.detach_issue_to_pr import detach_issue_to_pr, issue_to_pr_receipt_path, live_issue_to_pr_receipts
 from lokay.proc.self_repair_activate import main as activate_main
 from lokay.proc.self_repair_prepare import published_self_repair_commit
 from lokay.recovery_history import observe_run, record_observation
@@ -295,7 +295,7 @@ def _issue_to_pr_cmd(pid: int) -> str:
 
 def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd)
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "mikolaj92__Fala-164.json").write_text(
@@ -315,7 +315,7 @@ def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
 def test_reaped_plan_only_receipt_is_not_occupancy(tmp_path, monkeypatch):
     """#192: over-budget plan_only must drop the slot without waiting for pi exit."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd)
     monkeypatch.setattr(
         "lokay.proc.detach_issue_to_pr.coding_live_for_issue", lambda _issue: True
     )
@@ -339,7 +339,7 @@ def test_reaped_plan_only_receipt_is_not_occupancy(tmp_path, monkeypatch):
 
 def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", _issue_to_pr_cmd)
+    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd)
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "mikolaj92__Fala-164.json").write_text(
@@ -518,7 +518,7 @@ def test_live_receipt_with_unreadable_command_stays_occupied(tmp_path, monkeypat
         json.dumps({"pid": os.getpid(), "repo": "mikolaj92/lokay", "issue": 9}),
         encoding="utf-8",
     )
-    monkeypatch.setattr("lokay.proc.detach_issue_to_pr._pid_command", lambda _pid: "")
+    monkeypatch.setattr("lokay.proc.issue_delivery_process._pid_command", lambda _pid: "")
 
     assert live_issue_to_pr_receipts() == [
         {"pid": os.getpid(), "repo": "mikolaj92/lokay", "issue": 9}
@@ -530,7 +530,7 @@ def test_unreadable_pid_liveness_probe_stays_occupied(monkeypatch):
     from lokay.proc.detach_issue_to_pr import pid_is_alive
 
     monkeypatch.setattr(
-        "lokay.proc.detach_issue_to_pr.os.kill",
+        "lokay.proc.issue_delivery_process.os.kill",
         lambda _pid, _sig: (_ for _ in ()).throw(OSError("probe unavailable")),
     )
     assert pid_is_alive(123) is True
@@ -544,7 +544,7 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
 
     class FakePopen:
         def __init__(self, argv, **kwargs):
-            receipt = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+            receipt = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
             seen["during_spawn"] = json.loads(receipt.read_text(encoding="utf-8"))
             seen["pass_fds"] = kwargs.get("pass_fds")
             self.pid = 4242
@@ -574,7 +574,7 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
 
 def test_detach_refuses_to_spawn_without_durable_reservation(tmp_path, monkeypatch):
     """Receipt storage failure is not allowed to create an untracked child."""
-    import lokay.proc.detach_issue_to_pr as detach_mod
+    import lokay.proc.issue_delivery_launch as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
@@ -599,7 +599,7 @@ def test_starting_receipt_keeps_repo_occupied_without_pid(tmp_path, monkeypatch)
     import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    path = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(
             {
@@ -613,12 +613,12 @@ def test_starting_receipt_keeps_repo_occupied_without_pid(tmp_path, monkeypatch)
         encoding="utf-8",
     )
 
-    assert detach_mod.live_issue_to_pr_receipts() == [json.loads(path.read_text())]
+    assert live_issue_to_pr_receipts() == [json.loads(path.read_text())]
 
 
 def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch):
     """If post-spawn publication fails, the child is killed and its KEEP remains."""
-    import lokay.proc.detach_issue_to_pr as detach_mod
+    import lokay.proc.issue_delivery_launch as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
     original = detach_mod.write_issue_to_pr_receipt
@@ -643,7 +643,7 @@ def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch
     assert out["ok"] is False
     assert out["reason"] == "receipt_unavailable"
     assert out["cleanup_confirmed"] is False
-    assert detach_mod.live_issue_to_pr_receipts()[0]["starting"] is True
+    assert live_issue_to_pr_receipts()[0]["starting"] is True
 
 
 
@@ -664,7 +664,7 @@ def test_detach_does_not_replace_an_existing_starting_reservation(tmp_path, monk
     import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    path = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(
             {
@@ -695,7 +695,7 @@ def test_detach_replaces_a_dead_completed_receipt(tmp_path, monkeypatch):
     import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    path = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps({"pid": 999_999_999, "repo": "mikolaj92/lokay", "issue": 9}),
         encoding="utf-8",
@@ -717,7 +717,7 @@ def test_final_receipt_requires_its_own_reservation(tmp_path, monkeypatch):
     import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    path = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(
             {
@@ -749,7 +749,7 @@ def test_final_receipt_requires_its_own_reservation(tmp_path, monkeypatch):
 
 def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, monkeypatch):
     """A failed final publication leaves no child or stale reservation after reaping."""
-    import lokay.proc.detach_issue_to_pr as detach_mod
+    import lokay.proc.issue_delivery_launch as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
     original = detach_mod.write_issue_to_pr_receipt
@@ -779,7 +779,7 @@ def test_detach_discards_its_reservation_only_after_confirmed_cleanup(tmp_path, 
     assert out["ok"] is False
     assert out["cleanup_confirmed"] is True
     assert seen == [4242]
-    assert not detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9).exists()
+    assert not issue_to_pr_receipt_path("mikolaj92/lokay", 9).exists()
 
 
 def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(tmp_path, monkeypatch):
@@ -792,7 +792,7 @@ def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(tmp
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(detach_mod, "pid_is_alive", lambda _pid: False)
-    path = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(
             {
@@ -809,7 +809,7 @@ def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(tmp
         encoding="utf-8",
     )
 
-    assert detach_mod.live_issue_to_pr_receipts() == []
+    assert live_issue_to_pr_receipts() == []
     assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
     out = detach_mod.detach_issue_to_pr(
         repo="mikolaj92/lokay",
@@ -826,7 +826,7 @@ def test_legacy_starting_receipt_remains_live_not_reclaimable(tmp_path, monkeypa
     import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    path = detach_mod.issue_to_pr_receipt_path("mikolaj92/lokay", 9)
+    path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(
             {
@@ -839,7 +839,7 @@ def test_legacy_starting_receipt_remains_live_not_reclaimable(tmp_path, monkeypa
         encoding="utf-8",
     )
 
-    assert detach_mod.live_issue_to_pr_receipts() == [json.loads(path.read_text())]
+    assert live_issue_to_pr_receipts() == [json.loads(path.read_text())]
     out = detach_mod.detach_issue_to_pr(
         repo="mikolaj92/lokay",
         issue=9,
@@ -860,7 +860,7 @@ def test_pid_command_uses_wide_ps_to_avoid_macos_truncation(monkeypatch):
         seen["argv"] = argv
         return SimpleNamespace(stdout="/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9\n")
 
-    monkeypatch.setattr(detach_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr("lokay.proc.issue_delivery_process.subprocess.run", fake_run)
     assert detach_mod._pid_command(123) == "/long/python -u -m lokay.compose.issue_to_pr --repo owner/repo --issue 9"
     assert seen["argv"] == ["ps", "-ww", "-p", "123", "-o", "command="]
 
@@ -877,7 +877,7 @@ def test_cycle_start_metric_receipt_is_not_lifecycle_uncertainty(tmp_path, monke
         encoding="utf-8",
     )
     assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
-    assert detach_mod.live_issue_to_pr_receipts() == []
+    assert live_issue_to_pr_receipts() == []
 
 
 def test_malformed_starting_receipt_is_global_lifecycle_uncertainty(tmp_path, monkeypatch):
