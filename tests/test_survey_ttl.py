@@ -79,40 +79,38 @@ def test_pytest_does_not_skip_github_surveys_using_the_mill_stamp(
     )
 
 
-def test_survey_probes_when_empty_stamp_expired(tmp_path: Path, monkeypatch) -> None:
+def test_pr_survey_expired_stamp_selects_probe(tmp_path: Path) -> None:
+    from lokay.proc.prepare_pr_survey import prepare
+    from lokay.proc.select_pr_survey_slot import select
+
     stamp = tmp_path / "factory-survey.stamp"
-    stamp.write_text("1", encoding="utf-8")
+    stamp.write_text("1")
     old = time.time() - survey_ttl.SURVEY_TTL_SECONDS - 1
     os.utime(stamp, (old, old))
-    called: list[str] = []
+    prepared = prepare(pass_dir=_pass(tmp_path), slot_count=30)
+    assert select(prepared, slot=1)["route"] == "survey"
 
-    def listed(*_a, **_k):
-        called.append("prs")
-        return {"ok": True, "prs": []}
 
-    monkeypatch.setattr(survey_prs, "run_proc", listed)
-    out = survey_prs.run_survey_prs(
-        pass_dir=_pass(tmp_path), config_path=None, live=True
+def test_pr_survey_failed_listing_is_probe_failure():
+    from lokay.proc.record_pr_survey_repo import record
+    from lokay.proc.reduce_pr_survey import reduce_state
+
+    row = record(
+        {"mini_repo": "mikolaj92/lokay"},
+        {"repo": "mikolaj92/lokay"},
+        {
+            "ok": True,
+            "repo": "mikolaj92/lokay",
+            "route": "failed",
+            "listed": {"ok": False},
+        },
     )
-    assert out.get("skipped") is not True
-    assert out["probe_failed"] is False
-    assert called == ["prs"]
-
-
-def test_pr_survey_reports_probe_failed(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(
-        survey_prs,
-        "run_proc",
-        lambda *_a, **_k: {"ok": False, "error": "GitHub unavailable"},
+    state = reduce_state(
+        prepared={}, rows=[row], working={"actions": [], "survey_errors": 0}
+    )["state"]
+    assert (
+        state["pr_survey_failed"] == ["mikolaj92/lokay"] and state["survey_errors"] == 1
     )
-    out = survey_prs.run_survey_prs(
-        pass_dir=_pass(tmp_path), config_path=None, live=True
-    )
-    assert out["ok"] is True
-    assert out["probe_failed"] is True
-    assert out["survey_errors"] == 1
-    source = Path(survey_prs.__file__).read_text(encoding="utf-8")
-    assert "PR survey reports whether its GitHub probe failed." in source
 
 
 def test_ready_stamp_update_touches_empty_and_clears_nonempty(tmp_path: Path) -> None:

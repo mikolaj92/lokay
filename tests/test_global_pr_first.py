@@ -6,6 +6,30 @@ from lokay.passkit import io as pass_io
 from lokay.compose import tick
 
 
+def _run_pr_survey(module, pass_dir):
+    from lokay.passkit.support import is_manual_pr
+
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    by = {}
+    actions = list(working.get("actions") or [])
+    for repo in begin.get("repos") or []:
+        out = module._run(module.p_list_prs.main, ["--repo", repo])
+        rows = list(out.get("prs") or []) if out.get("ok") else []
+        by[repo] = rows
+        actions.append({"step": "list_prs", "repo": repo, **out})
+    working.update(
+        actions=actions,
+        prs_by_repo=by,
+        remaining_prs=sum(len(v) for v in by.values()),
+        actionable_prs=sum(not is_manual_pr(x) for v in by.values() for x in v),
+        manual_prs=sum(is_manual_pr(x) for v in by.values() for x in v),
+        pr_survey_failed=[],
+    )
+    pass_io.write_json(pass_io.working_path(pass_dir), working)
+    return {"ok": True}
+
+
 def _run_closeout(module, pass_dir):
     from lokay.passkit.support import is_manual_pr
 
@@ -271,6 +295,11 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
         "run_closeout_prs",
         lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(
+        tick,
+        "run_survey_prs",
+        lambda **kwargs: _run_pr_survey(tick, kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -356,6 +385,11 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
         "run_closeout_prs",
         lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(
+        tick,
+        "run_survey_prs",
+        lambda **kwargs: _run_pr_survey(tick, kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -418,6 +452,11 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
         "run_closeout_prs",
         lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
     )
+    monkeypatch.setattr(
+        tick,
+        "run_survey_prs",
+        lambda **kwargs: _run_pr_survey(tick, kwargs["pass_dir"]),
+    )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -475,6 +514,11 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
         tick,
         "run_closeout_prs",
         lambda **kwargs: _run_closeout(tick, kwargs["pass_dir"]),
+    )
+    monkeypatch.setattr(
+        tick,
+        "run_survey_prs",
+        lambda **kwargs: _run_pr_survey(tick, kwargs["pass_dir"]),
     )
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"

@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import json
 
-from lokay.passkit.hot import load_last_pass_by_repo, pick_survey_repos, repo_is_hot, survey_scope
+from lokay.passkit.hot import (
+    load_last_pass_by_repo,
+    pick_survey_repos,
+    repo_is_hot,
+    survey_scope,
+)
 from lokay.proc.survey_prs import run_survey_prs
 
 
@@ -50,13 +55,13 @@ def test_no_last_pass_surveys_anchor_plus_bounded_cold():
 
 def test_all_cold_surveys_anchor_plus_bounded_cold():
     repos = ["mikolaj92/lokay", *(f"mikolaj92/product-{i}" for i in range(28))]
-    prev = {name: {"repo": name, "ready": 0, "inbox": 0, "open_ai_prs": 0} for name in repos}
+    prev = {
+        name: {"repo": name, "ready": 0, "inbox": 0, "open_ai_prs": 0} for name in repos
+    }
     picked = pick_survey_repos(repos, prev, salt="all-cold", extra_cold=2)
     assert "mikolaj92/lokay" in picked
     assert len(picked) <= 3
     assert len(picked) < len(repos)
-
-
 
 
 def test_load_last_pass_by_repo(tmp_path):
@@ -80,37 +85,23 @@ def test_load_last_pass_by_repo(tmp_path):
     assert repo_is_hot(by_repo["a/cold"]) is False
 
 
-def test_survey_prs_skips_cold_scope(tmp_path, monkeypatch):
+def test_pr_survey_slot_skips_cold_scope(tmp_path):
     from lokay.passkit import io as pass_io
+    from lokay.proc.prepare_pr_survey import prepare
+    from lokay.proc.select_pr_survey_slot import select
 
-    pass_dir = tmp_path / "pass"
-    pass_dir.mkdir()
+    pd = tmp_path / "pass"
+    pd.mkdir()
     pass_io.write_json(
-        pass_io.begin_path(pass_dir),
-        {
-            "live": True,
-            "repos": ["a/hot", "a/cold"],
-            "survey_repos": ["a/hot"],
-        },
+        pass_io.begin_path(pd),
+        {"repos": ["a/hot", "a/cold"], "survey_repos": ["a/hot"]},
     )
-    pass_io.write_json(
-        pass_io.working_path(pass_dir),
-        {"actions": [], "survey_errors": 0},
+    pass_io.write_json(pass_io.working_path(pd), {})
+    prepared = prepare(pass_dir=str(pd), slot_count=30)
+    assert (
+        select(prepared, slot=1)["route"] == "survey"
+        and select(prepared, slot=2)["route"] == "cold"
     )
-    called: list[str] = []
-
-    def fake_run(fn, argv):
-        called.append(argv[argv.index("--repo") + 1])
-        return {"ok": True, "prs": [{"number": 1}]}
-
-    monkeypatch.setattr("lokay.proc.survey_prs.run_proc", fake_run)
-    out = run_survey_prs(pass_dir=str(pass_dir), config_path=None, live=True)
-    assert out["ok"] is True
-    assert called == ["a/hot"]
-    working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["prs_by_repo"]["a/hot"] == [{"number": 1}]
-    assert working["prs_by_repo"]["a/cold"] == []
-    assert any(a.get("step") == "skip_cold_repo" and a.get("repo") == "a/cold" for a in working["actions"])
 
 
 def test_survey_scope_none_means_all():

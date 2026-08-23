@@ -222,6 +222,29 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Przegląd pull requestów — `survey_prs`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PreparePRSurvey
+    PreparePRSurvey --> SelectPRRepoSlot
+    SelectPRRepoSlot --> ListRepoPRs: aktywne repo
+    SelectPRRepoSlot --> RecordPRRepoResult: cold / poza mini-scope / pusty slot / recent-empty
+    ListRepoPRs --> ClassifyRepoPRs
+    ClassifyRepoPRs --> RecordPRRepoResult
+    RecordPRRepoResult --> SelectPRRepoSlot: następny jawny slot
+    RecordPRRepoResult --> ReducePRSurvey: ostatni slot
+    ReducePRSurvey --> PersistPRSurvey
+    PersistPRSurvey --> UpdatePRSurveyStamp
+    UpdatePRSurveyStamp --> PRSurveyResult
+    PRSurveyResult --> [*]
+```
+
+Pod-Fala rozwija katalog do 30 jawnych slotów. Listing GitHub i klasyfikacja
+manual/actionable są osobnymi procesami jednego repo. Repo-local reaction,
+katalogowa redukcja, persist i efekt TTL są rozdzielone. Failed listing
+pozostaje `probe_failed`; przekroczenie authored katalogu kończy się fail-closed.
+
 ### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
 
 ```mermaid
@@ -813,6 +836,7 @@ kontraktu. Aktualny audyt:
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
+| `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
