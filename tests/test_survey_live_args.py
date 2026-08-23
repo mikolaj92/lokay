@@ -43,21 +43,19 @@ def _pass(tmp_path: Path) -> str:
     return str(pass_dir)
 
 
-def test_survey_prs_live_forwards_live_without_crash(
-    tmp_path: Path, monkeypatch
-) -> None:
-    seen: list[list[str]] = []
+def test_pr_survey_list_forwards_live(monkeypatch):
+    from lokay.proc import list_pr_survey_repo
 
-    def fake_main(argv: list[str] | None = None) -> int:
-        seen.append(list(argv or []))
-        return emit_exit(ok(prs=[], repo="o/r", count=0))
-
-    monkeypatch.setattr(survey_prs.p_list_prs, "main", fake_main)
-    out = survey_prs.run_survey_prs(
-        pass_dir=_pass(tmp_path), config_path=None, live=True
+    seen = []
+    monkeypatch.setattr(
+        list_pr_survey_repo,
+        "run_proc",
+        lambda main, argv: seen.append(argv) or {"ok": True, "prs": []},
     )
-    assert out["ok"] is True
-    assert seen
+    assert (
+        list_pr_survey_repo.fetch({"repo": "o/r"}, config_path=None, live=True)["route"]
+        == "listed"
+    )
     assert "--live" in seen[0]
 
 

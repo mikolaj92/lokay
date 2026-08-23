@@ -35,6 +35,27 @@ def _run_inbox(module, pass_dir):
     return {"ok": True}
 
 
+def _run_pr_survey(module, pass_dir):
+    from lokay.passkit import io as pass_io
+    from lokay.passkit.support import is_manual_pr
+
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    working = pass_io.read_json(pass_io.working_path(pass_dir))
+    by = {}
+    for repo in begin.get("repos") or []:
+        out = module._run(module.p_list_prs.main, ["--repo", repo])
+        by[repo] = list(out.get("prs") or []) if out.get("ok") else []
+    working.update(
+        prs_by_repo=by,
+        remaining_prs=sum(len(v) for v in by.values()),
+        actionable_prs=sum(not is_manual_pr(x) for v in by.values() for x in v),
+        manual_prs=sum(is_manual_pr(x) for v in by.values() for x in v),
+        pr_survey_failed=[],
+    )
+    pass_io.write_json(pass_io.working_path(pass_dir), working)
+    return {"ok": True}
+
+
 def test_no_grok_agent_compat_module():
     """Deleted: lokay.grok_agent backward-compat re-export."""
     with pytest.raises(ModuleNotFoundError):
@@ -168,6 +189,11 @@ state:
         lambda **kwargs: _run_inbox(tick_mod, kwargs["pass_dir"]),
     )
     monkeypatch.setattr(tick_mod, "run_closeout_prs", lambda **kwargs: {"ok": True})
+    monkeypatch.setattr(
+        tick_mod,
+        "run_survey_prs",
+        lambda **kwargs: _run_pr_survey(tick_mod, kwargs["pass_dir"]),
+    )
     out = tick_mod.compose_tick(config_path=str(cfg), live=True)
     assert out["progress"] == 0
     assert out["remaining"]["inbox"] == 1
