@@ -38,6 +38,7 @@ from lokay.organ.recovery import handle_recovery
 from lokay.organ.repair_boundary import handle_repair_boundary
 from lokay.organ.self_repair import handle_self_repair
 from lokay.organ.stale_worktree_boundary import handle_stale_worktree
+from lokay.organ.triage_dispatch_boundary import handle_triage_dispatch
 
 _MUTATING_ATOMS = frozenset(
     {
@@ -133,6 +134,7 @@ def _handle(
         handle_factory,
         handle_self_repair,
         handle_stale_worktree,
+        handle_triage_dispatch,
         handle_review_boundary,
         handle_coding_boundary,
         handle_repair_boundary,
