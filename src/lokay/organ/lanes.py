@@ -28,22 +28,66 @@ from lokay.prompts import (
 )
 
 
-def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
+def handle_lanes(
+    atom: str,
+    inputs: dict[str, Any],
+    up: dict[str, dict[str, Any]],
+    ctx: dict[str, Any],
+) -> dict[str, Any] | None:
     from lokay.proc import (
-        assign_issue, close_issue, commit_all, closeout_prs, compute_health,
-        cycle_end, cycle_start, dispatch_implement, dispatch_triage, factory_begin,
-        factory_tick, get_issue, host_ff, list_prs, make_branch, plan_issue,
-        localize, pi_budget, plan_pass, pr_checks, pr_create, pr_label, pr_merge,
-        push_branch, record_pass, recovery_begin, recovery_incident,
-        recovery_mill, recovery_observe, recovery_record, recovery_run_self_repair,
-        resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
-        survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
-        triage_issue, intake_issue, issue_split, worktree_add, assert_real_diff,
-        self_repair_activate, self_repair_close, self_repair_prepare,
-        self_repair_preflight, self_repair_push_main, self_repair_validate,
+        assign_issue,
+        close_issue,
+        commit_all,
+        closeout_prs,
+        compute_health,
+        cycle_end,
+        cycle_start,
+        dispatch_implement,
+        dispatch_triage,
+        factory_begin,
+        factory_tick,
+        get_issue,
+        host_ff,
+        list_prs,
+        make_branch,
+        plan_issue,
+        localize,
+        pi_budget,
+        plan_pass,
+        pr_checks,
+        pr_create,
+        pr_label,
+        pr_merge,
+        push_branch,
+        record_pass,
+        recovery_begin,
+        recovery_incident,
+        recovery_mill,
+        recovery_observe,
+        recovery_record,
+        recovery_run_self_repair,
+        resolve_conflicts,
+        run_agent,
+        select_implement,
+        queue_conflict,
+        stage_label,
+        survey_inbox,
+        survey_prs,
+        survey_ready,
+        survey_repos,
+        test_local,
+        worktree_add,
+        assert_real_diff,
+        self_repair_activate,
+        self_repair_close,
+        self_repair_prepare,
+        self_repair_preflight,
+        self_repair_push_main,
+        self_repair_validate,
     )
     from lokay.git_commit import branch_ahead_of_upstream
     from lokay.stuck import issue_number_from_branch
+
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
@@ -53,6 +97,7 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
     branch = ctx["branch"]
 
     import lokay.fala_organ as _fo
+
     _run_atom_main = _fo._run_atom_main
     branch_ahead_of_upstream = getattr(_fo, "branch_ahead_of_upstream", None)
     if branch_ahead_of_upstream is None:
@@ -64,48 +109,6 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
             get_issue.main,
             [*cfg, "--repo", repo, "--issue", str(issue_number)],
         )
-
-    if atom == "triage_issue":
-        assert repo and issue_number is not None
-        return _run_atom_main(
-            triage_issue.main,
-            [*cfg, *live, "--repo", repo, "--issue", str(issue_number)],
-        )
-
-    if atom == "intake_issue":
-        assert repo and issue_number is not None
-        argv = [*cfg, *live, "--repo", repo, "--issue", str(issue_number)]
-        triage = up.get("triage_issue") or {}
-        triage_decision = triage.get("decision")
-        if isinstance(triage_decision, dict) and triage_decision.get("decision") == "ready":
-            argv.append("--candidate-ready")
-        if isinstance(triage_decision, dict) and triage_decision.get("decision") == "split":
-            argv.append("--candidate-split")
-        if inputs.get("require_ready"):
-            argv.append("--require-ready")
-        return _run_atom_main(intake_issue.main, argv)
-
-    if atom == "issue_split":
-        assert repo and issue_number is not None
-        argv = [*cfg, *live, "--repo", repo, "--issue", str(issue_number)]
-        intake = up.get("intake_issue") or {}
-        intake_decision = intake.get("decision")
-        if isinstance(intake_decision, dict):
-            argv.extend(["--intake-decision", json.dumps(intake_decision, separators=(",", ":"))])
-            if intake_decision.get("reason"):
-                argv.extend(["--reason", str(intake_decision.get("reason"))])
-        elif intake_decision:
-            argv.extend(["--intake-decision", str(intake_decision)])
-        # Also honor triage split when intake skipped after already-decided tracker demotion.
-        triage = up.get("triage_issue") or {}
-        triage_decision = triage.get("decision")
-        if (
-            isinstance(triage_decision, dict)
-            and triage_decision.get("decision") == "split"
-            and not (isinstance(intake_decision, dict) and intake_decision.get("decision"))
-        ):
-            argv.extend(["--intake-decision", "split", "--reason", str(triage_decision.get("reason") or "too_large_split")])
-        return _run_atom_main(issue_split.main, argv)
 
     if atom == "pr_checks":
         assert repo and pr_number is not None
@@ -159,7 +162,11 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
     if atom == "close_issue":
         assert repo
         if inputs.get("keep_issue_open"):
-            return {"ok": True, "skipped": True, "reason": "self_repair_validation_pending"}
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "self_repair_validation_pending",
+            }
         merged = up.get("pr_merge") or {}
         # Only close after merge ran (live merged=true) or dry-run planned merge.
         if merged.get("skipped"):
@@ -190,8 +197,7 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                 "pr": pr_number,
             }
         comment = str(
-            inputs.get("comment")
-            or f"Closed by Lokay after merging PR #{pr_number}."
+            inputs.get("comment") or f"Closed by Lokay after merging PR #{pr_number}."
         )
         return _run_atom_main(
             close_issue.main,
@@ -253,6 +259,5 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
         if comment:
             argv.extend(["--comment", comment])
         return _run_atom_main(stage_label.main, argv)
-
 
     return None

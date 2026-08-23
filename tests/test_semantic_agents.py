@@ -8,8 +8,6 @@ import pytest
 
 from lokay.agent import build_agent_argv, session_id_for_worktree
 from lokay.config import Config
-from lokay.intake import decide_intake
-from lokay.intake_agent import decide_intake_with_agent, parse_intake_output
 from lokay.localize_agent import build_localization_with_agent, parse_localize_output
 from lokay.models import Issue
 from lokay.queue_conflict import CLOSE, READY
@@ -78,85 +76,6 @@ def test_semantic_sessions_do_not_share_coding_session(tmp_path: Path):
         _cfg(), worktree=tmp_path, prompt="judge", session_kind="intake"
     )
     assert argv[-1] == intake
-
-
-def test_parse_intake_fenced_json():
-    parsed = parse_intake_output(
-        '```json\n{"decision":"ready","reason":"single_bug","evidence":["one fix"],'
-        '"summary":"ok"}\n```'
-    )
-    assert parsed["decision"] == "ready"
-    assert parsed["reason"] == "single_bug"
-
-
-def test_parse_intake_rejects_unknown_verdict():
-    with pytest.raises(Exception):
-        parse_intake_output('{"decision":"ship_it"}')
-
-
-def test_hard_covering_pr_beats_agent_ready(tmp_path: Path):
-    runner = _FakeRunner('{"decision":"ready","reason":"looks_fine","summary":"x"}')
-    d = decide_intake_with_agent(
-        _issue(),
-        runner=runner,
-        config=_cfg(),
-        execute=True,
-        clone_path=tmp_path,
-        covering_prs=[{"number": 44, "state": "OPEN", "merged": False}],
-    )
-    assert d.decision == "close"
-    assert d.reason == "duplicate_ai_pr_for_issue"
-    assert runner.specs == []
-
-
-def test_agent_ready_overrides_shape_regex_when_json_valid(tmp_path: Path):
-    (tmp_path / "README.md").write_text("A pure library kit.\n", encoding="utf-8")
-    (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="kit"\n', encoding="utf-8")
-    issue = _issue(
-        title="Adopt product_shell / Basecoat host stack",
-        body="Wire product_shell and /static/platform for auth chrome.",
-    )
-    assert decide_intake(issue, clone_path=tmp_path).decision == "close"
-    runner = _FakeRunner(
-        '{"decision":"ready","reason":"operator_wants_host_chrome","evidence":["intentional"],'
-        '"summary":"keep"}'
-    )
-    d = decide_intake_with_agent(
-        issue,
-        runner=runner,
-        config=_cfg(),
-        execute=True,
-        clone_path=tmp_path,
-    )
-    assert d.decision == "ready"
-    assert d.implementable is True
-    assert d.semantic["source"] == "agent"
-    assert d.semantic["status"] == "completed"
-    assert d.semantic["session_kind"] == "intake"
-    assert runner.specs
-
-
-def test_bad_intake_json_falls_back_to_deterministic(tmp_path: Path):
-    (tmp_path / "README.md").write_text("A pure library kit.\n", encoding="utf-8")
-    (tmp_path / "src").mkdir()
-    (tmp_path / "pyproject.toml").write_text('[project]\nname="kit"\n', encoding="utf-8")
-    issue = _issue(
-        title="Adopt product_shell / Basecoat host stack",
-        body="Wire product_shell and /static/platform for auth chrome.",
-    )
-    runner = _FakeRunner("not json at all")
-    d = decide_intake_with_agent(
-        issue,
-        runner=runner,
-        config=_cfg(),
-        execute=True,
-        clone_path=tmp_path,
-    )
-    assert d.decision == "close"
-    assert d.reason == "wrong_product_shape"
-    assert d.semantic["source"] == "fallback"
-    assert d.semantic["status"] == "invalid_json"
 
 
 def test_queue_covering_pr_still_closes_without_agent():

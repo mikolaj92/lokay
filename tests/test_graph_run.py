@@ -16,9 +16,9 @@ def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys)
             "ok": True,
             "run_status": "completed",
             "effector_results": {
-                "triage_issue": {
+                "finalize_issue_triage": {
                     "status": "completed",
-                    "output": {"values": {"skipped": True}},
+                    "output": {"values": {"decision": {"verdict": "skip"}}},
                 }
             },
             **dumped,

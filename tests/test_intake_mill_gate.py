@@ -59,8 +59,7 @@ def test_ready_without_intake_pass_cannot_implement(tmp_path, monkeypatch):
                 ],
             }
         if fn is tick.p_intake.main:
-            assert "--require-ready" in argv
-            return {
+                        return {
                 "ok": True,
                 "implementable": False,
                 "applied": True,
@@ -79,7 +78,7 @@ def test_ready_without_intake_pass_cannot_implement(tmp_path, monkeypatch):
     )
     result = tick.compose_tick(config_path=config, live=True)
     assert implemented == []
-    assert any(a.get("step") == "intake_issue" for a in result["actions"])
+    assert any(a.get("step") == "verify_issue_ready" for a in result["actions"])
     assert result["progress"] >= 1
 
 
@@ -156,4 +155,4 @@ def test_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
     result = tick.compose_tick(config_path=config, live=True)
     assert len(implemented) == 1
     assert implemented[0]["issue_number"] == 4
-    assert any(a.get("step") == "intake_issue" for a in result["actions"])
+    assert any(a.get("step") == "verify_issue_ready" for a in result["actions"])

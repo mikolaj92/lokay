@@ -16,6 +16,7 @@ from lokay.envelope import emit_exit
 from lokay.proc._common import add_config_live, load_cfg  # noqa: F401
 from lokay.proc.closeout_prs import run_closeout_prs
 from lokay.proc.compute_health import run_compute_health
+from lokay.proc import verify_issue_ready as p_intake  # compatibility test hook; physical ready fact only
 from lokay.proc.dispatch_implement import run_dispatch_implement
 from lokay.proc.dispatch_triage import run_dispatch_triage
 from lokay.proc.factory_begin import run_factory_begin
@@ -41,7 +42,6 @@ from lokay.compose.pr_triage import compose_pr_triage  # noqa: F401
 from lokay.graph_run import run_path  # noqa: F401
 from lokay.preflight import health_lease_status, run_preflight  # noqa: F401
 from lokay.proc import get_issue as p_get_issue  # noqa: F401
-from lokay.proc import intake_issue as p_intake  # noqa: F401
 from lokay.proc import label_issue as p_label  # noqa: F401
 from lokay.proc import list_inbox as p_list_inbox  # noqa: F401
 from lokay.proc import list_issues as p_list_issues  # noqa: F401

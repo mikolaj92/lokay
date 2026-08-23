@@ -381,8 +381,7 @@ def test_contract_intake_reject_gates_issue_to_pr(
                 ],
             }
         if fn is tick.p_intake.main:
-            assert "--require-ready" in argv
-            return intake_reject_envelope(decision, reason=reason)
+                        return intake_reject_envelope(decision, reason=reason)
         raise AssertionError(fn)
 
     monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
@@ -396,7 +395,7 @@ def test_contract_intake_reject_gates_issue_to_pr(
 
     result = tick.compose_tick(config_path=config, live=True)
     assert implemented == []
-    assert "intake_issue" in step_names(result["actions"])
+    assert "verify_issue_ready" in step_names(result["actions"])
 
 
 def test_contract_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
@@ -421,8 +420,7 @@ def test_contract_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
                 ],
             }
         if fn is tick.p_intake.main:
-            assert "--require-ready" in argv
-            return intake_ready_envelope()
+                        return intake_ready_envelope()
         raise AssertionError(fn)
 
     monkeypatch.setattr(tick, "run_preflight", lambda *a, **kw: {"ok": True})
@@ -437,7 +435,7 @@ def test_contract_intake_ready_allows_issue_to_pr(tmp_path, monkeypatch):
     result = tick.compose_tick(config_path=config, live=True)
     assert len(implemented) == 1
     assert implemented[0]["issue_number"] == 4
-    assert "intake_issue" in step_names(result["actions"])
+    assert "verify_issue_ready" in step_names(result["actions"])
 
 
 # ---------------------------------------------------------------------------

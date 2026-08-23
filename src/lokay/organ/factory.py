@@ -39,7 +39,7 @@ def handle_factory(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, An
         resolve_conflicts, run_agent, select_implement, queue_conflict, stage_label,
         reap_stale_implementing, reap_stale_worktrees, refresh_occupancy,
         ready_hygiene, compact_state, survey_inbox, survey_prs, survey_ready, survey_repos, test_local,
-        triage_issue, intake_issue, issue_split, worktree_add, assert_real_diff,
+        worktree_add, assert_real_diff,
         self_repair_activate, self_repair_close, self_repair_prepare,
         self_repair_preflight, self_repair_push_main, self_repair_validate,
     )

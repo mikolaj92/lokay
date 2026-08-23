@@ -289,7 +289,7 @@ kontraktu. Aktualny audyt:
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
-| `issue_triage` bez ukrytego drzewa Python | **do refaktoru** |
+| `issue_triage` bez ukrytego drzewa Python | zaimplementowane w Fali wraz z pod-Falą `issue_split` |
 | `issue_to_pr` bez ukrytego drzewa Python | **do refaktoru** |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | **do refaktoru** |
 
@@ -300,6 +300,7 @@ kontraktu. Aktualny audyt:
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
+| `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | otwarty i oznaczony PR dla issue |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |

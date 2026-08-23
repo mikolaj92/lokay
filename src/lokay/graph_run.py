@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Any
 
+
 def _project_root() -> Path:
     """Resolve checkout root (editable src layout or CWD)."""
     here = Path(__file__).resolve()
@@ -101,9 +102,16 @@ def run_path(
 
     if db_path:
         work = Path(db_path)
-    elif path_id == "issue_to_pr" and issue is not None and "/" in str(repo):
+    elif (
+        path_id in {"issue_to_pr", "issue_split"}
+        and issue is not None
+        and "/" in str(repo)
+    ):
         owner, name = str(repo).split("/", 1)
-        work = Path.home() / ".lokay" / "fala" / "i2pr" / f"{owner}__{name}__{int(issue)}"
+        family = "i2pr" if path_id == "issue_to_pr" else "issue-split"
+        work = (
+            Path.home() / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
+        )
     else:
         work = Path.home() / ".lokay" / "fala"
     work.mkdir(parents=True, exist_ok=True)
@@ -142,65 +150,24 @@ def run_path(
     if extra_inputs:
         base_input.update(extra_inputs)
 
-    # Fala rejects input keys outside the instantiated plan. Keep this mapping
-    # aligned with the authored package and pass only the selected path's IDs.
-    path_effectors = {
-        "daemon_cycle": (
-            "recovery_begin", "recovery_mill", "recovery_observe",
-            "recovery_record", "recovery_incident", "recovery_run_self_repair",
+    # Instantiate inputs from the authored Fala path. Python does not duplicate the
+    # graph: it only supplies the same external envelope to each authored node.
+    import tomllib
+
+    package = tomllib.loads(pkg_src.read_text(encoding="utf-8"))
+    path = next(
+        (
+            item
+            for item in package.get("correlation_paths", [])
+            if item.get("id") == path_id
         ),
-        "factory_pass": (
-            "host_ff",
-            "factory_begin",
-            "survey_prs",
-            "survey_inbox",
-            "survey_ready",
-            "ready_hygiene",
-            "plan_pass",
-            "dispatch_triage",
-            "resolve_conflicts",
-            "closeout_prs",
-            "reap_stale_implementing",
-            "reap_over_budget",
-            "refresh_occupancy",
-            "reap_stale_worktrees",
-            "select_implement",
-            "queue_conflict",
-            "dispatch_implement",
-            "compute_health",
-            "compact_state",
-            "record_pass",
-        ),
-        "issue_to_pr": (
-            "get_issue", "assign_issue", "stage_implementing", "make_branch",
-            "worktree_add", "plan_issue", "localize", "cycle_start", "run_agent",
-            "relocalize_off_goal", "commit_all", "rebase_onto_base", "test_local", "repair_agent",
-            "test_local_recheck", "assert_real_diff", "push", "pr_create",
-            "cycle_end", "stage_pr_open",
-            "list_prs", "pr_label",
-        ),
-        "issue_triage": ("get_issue", "triage_issue", "intake_issue", "issue_split"),
-        "pr_repair": (
-            "pr_checks", "stage_repairing", "worktree_add", "localize", "run_agent",
-            "commit_all", "test_local", "assert_real_diff", "push",
-        ),
-        "pr_triage": (
-            "pr_checks", "collect_pr_review_evidence", "resolve_sha_review",
-            "pr_review_agent", "validate_pr_review", "pr_review_retry_agent",
-            "validate_pr_review_retry", "select_pr_review", "publish_pr_review",
-            "review_repair_gate", "pr_repair_subflow", "review_repair_manual",
-            "review_manual", "worktree_add", "test_local", "pr_merge",
-            "stage_clear", "close_issue",
-        ),
-        "self_repair": (
-            "self_repair_prepare", "self_repair_run_agent", "self_repair_validate",
-            "self_repair_commit", "self_repair_push_main", "self_repair_activate",
-            "self_repair_preflight", "self_repair_close",
-        ),
-    }
-    if path_id not in path_effectors:
+        None,
+    )
+    if path is None:
         raise ValueError(f"unknown Fala correlation path: {path_id}")
-    effector_inputs = {step: dict(base_input) for step in path_effectors[path_id]}
+    effector_inputs = {
+        str(step["id"]): dict(base_input) for step in path.get("effectors", [])
+    }
 
     rid = run_id or f"lokay-{uuid.uuid4().hex[:12]}"
     # Ensure organ imports resolve from checkout when not fully installed
@@ -270,6 +237,7 @@ def _process_payload(process: dict[str, Any]) -> dict[str, Any]:
         raw = process.get("output_json")
     if isinstance(raw, str):
         import json
+
         try:
             raw = json.loads(raw)
         except (TypeError, ValueError):
@@ -325,6 +293,7 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                         raw_output = value.get("output_json")
                     if isinstance(raw_output, str):
                         import json
+
                         try:
                             raw_output = json.loads(raw_output)
                         except (TypeError, ValueError):
@@ -342,13 +311,17 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         processes = fala.get("processes")
         if isinstance(processes, list):
             legacy = [
-                value for value in processes
+                value
+                for value in processes
                 if isinstance(value, dict)
                 and ("output" in value or "output_json" in value)
             ]
             entries = [
                 (
-                    str(value.get("effector_id") or str(value.get("id") or "").rsplit(":", 1)[-1]),
+                    str(
+                        value.get("effector_id")
+                        or str(value.get("id") or "").rsplit(":", 1)[-1]
+                    ),
                     value,
                 )
                 for value in legacy
@@ -400,7 +373,9 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     path_id = str(result.get("path_id") or "")
     if path_id == "pr_triage":
         review = terminal.get("publish_pr_review", {})
-        decision = review.get("decision") if isinstance(review.get("decision"), dict) else {}
+        decision = (
+            review.get("decision") if isinstance(review.get("decision"), dict) else {}
+        )
         repair = terminal.get("pr_repair_subflow", {})
         repair_manual = terminal.get("review_repair_manual", {})
         manual = terminal.get("review_manual", {})
@@ -438,7 +413,12 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                     reason=reason,
                     repairable=bool(merge.get("repairable")),
                     waiting=bool(merge.get("waiting"))
-                    or reason in {"checks_pending", "checks_none_require_checks", "merge_disabled"},
+                    or reason
+                    in {
+                        "checks_pending",
+                        "checks_none_require_checks",
+                        "merge_disabled",
+                    },
                     needs_review=bool(merge.get("needs_review")),
                 )
             else:
@@ -448,85 +428,59 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                 )
         else:
             # A successful path must terminate through one authored verdict branch.
-            out.update(ok=False, error=f"unrouted PR review verdict: {verdict or 'missing'}")
-    elif path_id == "issue_triage":
-        triage = terminal.get("triage_issue", {})
-        intake = terminal.get("intake_issue", {})
-        split = terminal.get("issue_split", {})
-        triage_decision = triage.get("decision")
-        intake_decision = intake.get("decision")
-        # Intake is the final gate for ready; prefer its decision when present.
-        # Successful split overrides to decision=split with children.
-        if (
-            isinstance(split, dict)
-            and not split.get("skipped")
-            and (split.get("applied") or split.get("children"))
-        ):
-            decision = {
-                "decision": "split",
-                "reason": split.get("reason") or "split",
-                "children": split.get("children") or [],
-            }
-        elif isinstance(intake_decision, dict) and intake_decision.get("decision") not in {
-            None,
-            "",
-            "skip",
-        }:
-            decision = intake_decision
-        elif isinstance(intake_decision, dict) and intake.get("skipped"):
-            decision = triage_decision if isinstance(triage_decision, dict) else {}
-        else:
-            decision = (
-                intake_decision
-                if isinstance(intake_decision, dict)
-                else triage_decision if isinstance(triage_decision, dict) else {}
+            out.update(
+                ok=False, error=f"unrouted PR review verdict: {verdict or 'missing'}"
             )
-        applied = (
-            triage.get("applied") is True
-            or intake.get("applied") is True
-            or split.get("applied") is True
+    elif path_id == "issue_triage":
+        final = terminal.get("finalize_issue_triage", {})
+        decision = dict(final.get("decision") or {})
+        effects = (
+            terminal.get("apply_issue_close", {}),
+            terminal.get("apply_issue_ready", {}),
+            terminal.get("issue_split_subflow", {}),
+            terminal.get("apply_issue_manual", {}),
         )
-        triage_skip = bool(triage.get("skipped")) or (
-            isinstance(triage_decision, dict) and triage_decision.get("decision") == "skip"
-        )
-        intake_skip = bool(intake.get("skipped")) or (
-            isinstance(intake_decision, dict) and intake_decision.get("decision") == "skip"
-        )
-        split_skip = bool(split.get("skipped")) if split else True
-        # Path is a no-op only when triage+intake skipped and split did nothing.
-        skipped = triage_skip and (not intake or intake_skip) and split_skip
-        # Demotion after a ready triage still counts as a real decision.
-        if (
-            isinstance(intake_decision, dict)
-            and intake_decision.get("decision") in {"close", "needs_human", "split"}
-        ):
-            skipped = False
-        if split.get("applied"):
-            skipped = False
+        applied = any(effect.get("applied") is True for effect in effects)
+        verdict = str(decision.get("verdict") or "")
         out.update(
             applied=applied,
-            decision=decision if isinstance(decision, dict) else {},
-            skipped=skipped,
-            implementable=bool(intake.get("implementable")),
-            intake=intake_decision if isinstance(intake_decision, dict) else {},
-            split=split if isinstance(split, dict) else {},
+            decision=decision,
+            skipped=verdict in {"skip", "blocked"},
+            implementable=verdict == "ready",
+            split=terminal.get("issue_split_subflow", {}),
         )
-        reason = split.get("reason") or intake.get("reason") or triage.get("reason")
-        if reason:
-            out["reason"] = reason
+        if decision.get("reason"):
+            out["reason"] = decision["reason"]
+    elif path_id == "issue_split":
+        plan = terminal.get("plan_issue_split", {})
+        close = terminal.get("close_issue_tracker", {})
+        manual = terminal.get("apply_issue_manual", {})
+        children = list(
+            (terminal.get("comment_issue_tracker", {}) or {}).get("children") or []
+        )
+        out.update(
+            applied=close.get("applied") is True or manual.get("applied") is True,
+            children=children,
+            plan=plan.get("plan"),
+            decision={
+                "verdict": (
+                    "split" if plan.get("route") == "children" else "needs_human"
+                ),
+                "reason": plan.get("reason"),
+            },
+        )
     elif path_id == "pr_repair":
         commit = terminal.get("commit_all", {})
         push = terminal.get("push", {})
-        out.update(repo=result.get("repo"), pr=result.get("pr"), branch=result.get("branch"))
+        out.update(
+            repo=result.get("repo"), pr=result.get("pr"), branch=result.get("branch")
+        )
         # commit_all=false is valid when the repair agent committed directly;
         # the push effector proves whether unpublished progress existed.
         if (
             result.get("live")
             and commit.get("committed") is not True
-            and not (
-                push.get("ok") is True
-                and push.get("planned") is False
-            )
+            and not (push.get("ok") is True and push.get("planned") is False)
         ):
             out.update(ok=False, error="repair produced no commit")
     elif path_id == "issue_to_pr":
@@ -540,7 +494,11 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
             pr=pr,
         )
         # Live i2pr may not vanish: PR number or explicit fail-closed.
-        if result.get("live") and not result.get("planned") and out.get("ok") is not False:
+        if (
+            result.get("live")
+            and not result.get("planned")
+            and out.get("ok") is not False
+        ):
             if pr in (None, "", 0):
                 out.update(ok=False, error="issue_to_pr produced no PR", reason="no_pr")
     elif path_id == "self_repair":
@@ -549,10 +507,7 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         activate = terminal.get("self_repair_activate", {})
         closed = terminal.get("self_repair_close", {})
         commit = str(
-            fresh.get("commit")
-            or pushed.get("commit")
-            or activate.get("commit")
-            or ""
+            fresh.get("commit") or pushed.get("commit") or activate.get("commit") or ""
         )
         validated = fresh.get("validated") is True
         restart_required = fresh.get("restart_required") is True
@@ -594,10 +549,20 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         factory = terminal.get("factory_tick", {})
         tick = recorded.get("tick") if isinstance(recorded.get("tick"), dict) else None
         if tick is None:
-            tick = factory.get("tick") if isinstance(factory.get("tick"), dict) else factory
+            tick = (
+                factory.get("tick")
+                if isinstance(factory.get("tick"), dict)
+                else factory
+            )
         if not isinstance(tick, dict):
             tick = {}
-        out.update({key: value for key, value in tick.items() if key not in {"step", "status", "atom", "_exit"}})
+        out.update(
+            {
+                key: value
+                for key, value in tick.items()
+                if key not in {"step", "status", "atom", "_exit"}
+            }
+        )
         out["ok"] = bool(tick.get("ok", True))
         if not out["ok"]:
             out["error"] = tick.get("error") or "factory pass failed"
