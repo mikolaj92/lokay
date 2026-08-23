@@ -114,6 +114,7 @@ state:
             "decision": {"decision": "skip"},
         },
     )
+    monkeypatch.setattr(tick_mod, "run_queue_conflict", lambda **kwargs: {"ok": True})
     out = tick_mod.compose_tick(config_path=str(cfg), live=True)
     assert out["progress"] == 0
     assert out["remaining"]["inbox"] == 1
