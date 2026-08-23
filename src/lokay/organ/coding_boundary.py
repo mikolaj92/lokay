@@ -27,6 +27,8 @@ _ATOMS = frozenset(
         "resolve_implementation_issue",
         "validate_repair_result",
         "select_repair_result",
+        "summarize_issue_delivery",
+        "summarize_issue_to_pr",
         "issue_to_pr_subflow",
         "issue_to_pr_no_effect",
         "collect_existing_delivery_pr",
@@ -123,6 +125,22 @@ def handle_coding_boundary(
         from lokay.proc.issue_to_pr_no_effect import terminal
 
         return terminal(up.get("resolve_existing_delivery") or {})
+    if atom == "summarize_issue_to_pr":
+        from lokay.proc.summarize_issue_to_pr import summarize
+
+        return summarize(
+            delivery=up.get("issue_to_pr_subflow") or {},
+            closeout=up.get("close_existing_delivery") or {},
+            no_effect=up.get("issue_to_pr_no_effect") or {},
+        )
+    if atom == "summarize_issue_delivery":
+        from lokay.proc.summarize_issue_delivery import summarize
+
+        return summarize(
+            branch=up.get("make_branch") or {},
+            pr_create=up.get("pr_create") or {},
+            pr_label=up.get("pr_label") or {},
+        )
     if atom == "resolve_implementation_issue":
         from lokay.proc.resolve_implementation_issue import resolve
 

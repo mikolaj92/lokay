@@ -186,6 +186,7 @@ def test_describe_issue_to_pr_graph():
         "issue_to_pr_subflow",
         "close_existing_delivery",
         "issue_to_pr_no_effect",
+        "summarize_issue_to_pr",
     ]
     ids = [n["id"] for n in _issue_delivery_path()["nodes"]]
     for required in (

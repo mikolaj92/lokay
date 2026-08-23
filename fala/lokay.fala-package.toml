@@ -294,6 +294,13 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "issue_to_pr_no_effect" }
 retry_policy = "none"
 
+[[correlation_paths.effectors]]
+id = "summarize_issue_to_pr"
+capability = "lokay_atom"
+conduction = ["resolve_existing_delivery", "issue_to_pr_subflow", "close_existing_delivery", "issue_to_pr_no_effect"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_issue_to_pr" }
+retry_policy = "none"
 [[correlation_paths]]
 id = "issue_to_pr_delivery"
 title = "Issue to PR delivery"
@@ -638,6 +645,13 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "pr_label", label = "ai-generated" }
 retry_policy = "none"
 
+[[correlation_paths.effectors]]
+id = "summarize_issue_delivery"
+capability = "lokay_atom"
+conduction = ["make_branch", "finalize_coding_result", "finalize_local_tests", "pr_create", "pr_label"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_issue_delivery" }
+retry_policy = "none"
 [[correlation_paths]]
 id = "issue_triage"
 title = "Issue triage"
@@ -1159,6 +1173,13 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "push" }
 retry_policy = "none"
 
+[[correlation_paths.effectors]]
+id = "summarize_pr_repair"
+capability = "lokay_atom"
+conduction = ["finalize_repair_result", "finalize_repair_tests", "push", "pr_repair_manual", "pr_repair_terminal"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_pr_repair" }
+retry_policy = "none"
 [[correlation_paths]]
 id = "pr_triage"
 title = "PR review outcome"
