@@ -14,6 +14,10 @@ from fastapi.templating import Jinja2Templates
 from lokay.status_dashboard import dashboard_snapshot
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
+# The Python snapshot schema and its template form one release. During a live
+# checkout fast-forward, reloading only the template can mix two releases and
+# turn a healthy read-only page into HTTP 500. launchd restart loads both.
+TEMPLATES.env.auto_reload = False
 PLATFORM = PlatformConfig(
     app_name="Lokay",
     brand_href="/",
