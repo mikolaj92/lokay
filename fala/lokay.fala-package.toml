@@ -65,6 +65,14 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "recovery_run_self_repair" }
 retry_policy = "none"
 
+[[correlation_paths.effectors]]
+id = "summarize_daemon_cycle"
+capability = "lokay_atom"
+conduction = ["recovery_mill", "recovery_run_self_repair"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_daemon_cycle" }
+retry_policy = "none"
+
 [[correlation_paths]]
 id = "factory_pass"
 title = "Lokay factory pass"
@@ -1491,3 +1499,11 @@ path = ".fala/lokay-state.sqlite"
 [runtime.reaction_store]
 kind = "filesystem"
 root = ".fala/reactions"
+
+[[correlation_paths.effectors]]
+id = "summarize_self_repair"
+capability = "lokay_atom"
+conduction = ["self_repair_preflight", "self_repair_push_main", "self_repair_activate", "self_repair_close"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_self_repair" }
+retry_policy = "none"
