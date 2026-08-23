@@ -28,6 +28,12 @@ state:
     return config
 
 
+def test_template_does_not_reload_independently_of_snapshot_schema():
+    from lokay.proc.status_server import TEMPLATES
+
+    assert TEMPLATES.env.auto_reload is False
+
+
 def test_dashboard_uses_product_shell_platform_assets_and_server_html(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("LOKAY_OFFLINE", "1")
     client = TestClient(create_app(config_path=str(_config(tmp_path))))
