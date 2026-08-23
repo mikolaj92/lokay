@@ -529,7 +529,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "pr_triage"
 title = "PR review outcome"
-description = "Collect evidence, resolve SHA cache, retry one invalid agent result, publish the domain verdict, then route it in Fala."
+description = "Resolve SHA cache, retry invalid JSON once, collect one bounded evidence supplement when requested, publish one domain verdict, then route it in Fala."
 
 [[correlation_paths.effectors]]
 id = "pr_checks"
@@ -590,9 +590,78 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "select_pr_review" }
 retry_policy = "none"
 [[correlation_paths.effectors]]
+id = "collect_review_pr_metadata"
+capability = "lokay_atom"
+conduction = ["select_pr_review"]
+when = { upstream = "select_pr_review", path = "evidence_kind", equals = "pr_metadata" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "collect_review_pr_metadata" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "collect_review_changed_files"
+capability = "lokay_atom"
+conduction = ["select_pr_review"]
+when = { upstream = "select_pr_review", path = "evidence_kind", equals = "changed_files" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "collect_review_changed_files" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "collect_review_diff_tail"
+capability = "lokay_atom"
+conduction = ["select_pr_review"]
+when = { upstream = "select_pr_review", path = "evidence_kind", equals = "diff_tail" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "collect_review_diff_tail" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "collect_review_commit_summary"
+capability = "lokay_atom"
+conduction = ["select_pr_review"]
+when = { upstream = "select_pr_review", path = "evidence_kind", equals = "commit_summary" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "collect_review_commit_summary" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "verify_review_evidence_sha"
+capability = "lokay_atom"
+conduction = ["collect_pr_review_evidence", "select_pr_review", "collect_review_pr_metadata", "collect_review_changed_files", "collect_review_diff_tail", "collect_review_commit_summary"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "verify_review_evidence_sha" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "evidence_review_agent"
+capability = "lokay_atom"
+conduction = ["collect_pr_review_evidence", "select_pr_review", "verify_review_evidence_sha"]
+when = { upstream = "verify_review_evidence_sha", path = "route", equals = "agent" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "evidence_review_agent" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "validate_evidence_review"
+capability = "lokay_atom"
+conduction = ["select_pr_review", "verify_review_evidence_sha", "evidence_review_agent"]
+when = { upstream = "verify_review_evidence_sha", path = "route", equals = "agent" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "validate_evidence_review" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "select_evidence_review"
+capability = "lokay_atom"
+conduction = ["select_pr_review", "validate_evidence_review"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_evidence_review" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "finalize_pr_review"
+capability = "lokay_atom"
+conduction = ["select_pr_review", "select_evidence_review"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "finalize_pr_review" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
 id = "publish_pr_review"
 capability = "lokay_atom"
-conduction = ["collect_pr_review_evidence", "select_pr_review"]
+conduction = ["collect_pr_review_evidence", "finalize_pr_review"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "publish_pr_review" }
 retry_policy = "none"

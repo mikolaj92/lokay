@@ -1,8 +1,8 @@
 """Closed PR-review boundary contracts."""
 
 from lokay.review_boundary import (
-    resolve_sha_review, select_review_decision, validate_review_output,
-    validation_feedback_prompt,
+    finalize_review_selection, resolve_sha_review, select_evidence_review,
+    select_review_decision, validate_review_output, validation_feedback_prompt,
 )
 
 
@@ -59,3 +59,29 @@ def test_cached_first_validation_is_not_applicable_at_organ_boundary():
 def test_policy_approval_skips_agent_results():
     out=select_review_decision({"route":"policy","decision":{"verdict":"approve"},"merge_ok":True},{"reason":"condition_not_met"},{"reason":"condition_not_met"})
     assert out["route"] == "policy" and out["decision"]["verdict"] == "approve"
+
+
+def test_needs_evidence_routes_one_closed_collector_round():
+    first=validate_review_output('{"verdict":"needs_evidence","evidence_kind":"diff_tail"}')
+    selected=select_review_decision({"route":"agent","request_changes_count":2},first,{})
+    assert selected["route"] == "evidence"
+    assert selected["decision"]["evidence_kind"] == "diff_tail"
+    validation=validate_review_output('{"verdict":"approve"}')
+    evidence_selected=select_evidence_review(selected,validation)
+    final=finalize_review_selection(selected,evidence_selected)
+    assert final["route"] == "publish" and final["decision"]["verdict"] == "approve"
+    assert final["request_changes_count"] == 2
+
+
+def test_second_evidence_request_is_terminal_needs_human():
+    selected={"route":"evidence","decision":{"verdict":"needs_evidence","evidence_kind":"changed_files"}}
+    validation=validate_review_output('{"verdict":"needs_evidence","evidence_kind":"commit_summary"}')
+    out=select_evidence_review(selected,validation)
+    assert out["route"] == "needs_human"
+    assert out["decision"] == {"verdict":"needs_human"}
+
+
+def test_invalid_evidence_kind_is_rejected_before_routing():
+    out=validate_review_output('{"verdict":"needs_evidence","evidence_kind":"arbitrary_shell"}')
+    assert out["route"] == "retry"
+    assert "evidence_kind" in out["validation_error"]
