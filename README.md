@@ -126,13 +126,24 @@ stateDiagram-v2
     ValidateEvidenceTriage --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
     IntakeDecision --> CloseIssue: CLOSE
     IntakeDecision --> MarkReady: READY
-    IntakeDecision --> SplitIssue: SPLIT
+    IntakeDecision --> PlanSplit: SPLIT
     IntakeDecision --> HumanTerminal: NEEDS_HUMAN
     IntakeDecision --> NoEffect: SKIP / BLOCKED
-    SplitIssue --> MarkTracker
+    PlanSplit --> HumanTerminal: plan niemożliwy
+    PlanSplit --> CreateChild1: plan poprawny
+    CreateChild1 --> CreateChild2
+    CreateChild2 --> CreateChild3: child 3 istnieje
+    CreateChild2 --> MarkTracker: tylko 2 dzieci
+    CreateChild3 --> CreateChild4: child 4 istnieje
+    CreateChild3 --> MarkTracker: tylko 3 dzieci
+    CreateChild4 --> CreateChild5: child 5 istnieje
+    CreateChild4 --> MarkTracker: tylko 4 dzieci
+    CreateChild5 --> MarkTracker
+    MarkTracker --> CommentTracker
+    CommentTracker --> CloseTracker
     CloseIssue --> [*]
     MarkReady --> [*]
-    MarkTracker --> [*]
+    CloseTracker --> [*]
     NoEffect --> [*]
     HumanTerminal --> [*]
 ```
