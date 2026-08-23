@@ -161,6 +161,8 @@ def handle_self_repair(
             Path(prompt_path).unlink(missing_ok=True)
 
     if atom == "self_repair_validate":
+        from lokay.proc.self_repair_validate_subflow import run
+
         prepared = up.get("self_repair_prepare", {})
         if prepared.get("already_on_main"):
             return {
@@ -174,18 +176,11 @@ def handle_self_repair(
         base_sha = str(prepared.get("base_sha") or "")
         fingerprint = str(inputs.get("fingerprint") or "")
         assert worktree and base_sha and fingerprint and committed.get("commit")
-        return _run_atom_main(
-            self_repair_validate.main,
-            [
-                "--worktree",
-                worktree,
-                "--base-sha",
-                base_sha,
-                "--expected-subject",
-                f"self-repair: {fingerprint}",
-                "--expected-commit",
-                str(committed["commit"]),
-            ],
+        return run(
+            worktree=worktree,
+            base_sha=base_sha,
+            expected_subject=f"self-repair: {fingerprint}",
+            expected_commit=str(committed["commit"]),
         )
 
     if atom == "self_repair_commit":
