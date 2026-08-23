@@ -342,53 +342,34 @@ def test_fala_approve_contract():
 
 def test_fala_request_changes_contract():
     review = {"verdict": "request_changes", "secrets": False, "blocking": ["test"]}
-    out = _host("pr_triage", {"pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"decision": review}}}})
-    assert out["skipped"] and out["repairable"] and out["review"] == review
+    out = _host("pr_triage", {
+        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"decision": review}}},
+        "review_repair_gate": {"id": "review_repair_gate", "status": "completed", "output": {"values": {"route": "repair"}}},
+        "pr_repair_subflow": {"id": "pr_repair_subflow", "status": "completed", "output": {"values": {"ok": True, "kind": "pr_repair"}}},
+    })
+    assert out["skipped"] and out["repaired"] and out["review"] == review
 
 
 def test_fala_already_reviewed_request_changes_still_enters_repair():
-    out = _host(
-        "pr_triage",
-        {
-            "pr_review": {
-                "id": "pr_review",
-                "status": "completed",
-                "output": {
-                    "values": {
-                        "skipped": True,
-                        "reason": "already_reviewed_head",
-                        "merge_ok": False,
-                        "decision": {"verdict": "request_changes"},
-                    }
-                },
-            },
-            "pr_merge": {
-                "id": "pr_merge",
-                "status": "completed",
-                "output": {
-                    "values": {
-                        "skipped": True,
-                        "reason": "llm_review_requested_changes",
-                        "repairable": True,
-                    }
-                },
-            },
-        },
-    )
+    out = _host("pr_triage", {
+        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {
+            "skipped": True, "reason": "already_reviewed_head",
+            "decision": {"verdict": "request_changes"},
+        }}},
+        "review_repair_gate": {"id": "review_repair_gate", "status": "completed", "output": {"values": {"route": "repair"}}},
+        "pr_repair_subflow": {"id": "pr_repair_subflow", "status": "completed", "output": {"values": {"ok": True}}},
+    })
     assert out["skipped"] is True
-    assert out["repairable"] is True
-    assert out["reason"] == "llm_review_requested_changes"
+    assert out["repaired"] is True
+    assert out["review"]["verdict"] == "request_changes"
 
 
 def test_fala_needs_human_contract():
     out = _host("pr_triage", {
-        "pr_review": {
-            "id": "pr_review",
-            "status": "completed",
-            "output": {"values": {"decision": {"verdict": "needs_human"}}},
-        }
+        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"decision": {"verdict": "needs_human"}}}},
+        "review_manual": {"id": "review_manual", "status": "completed", "output": {"values": {"terminal": True, "reason": "review_needs_human"}}},
     })
-    assert out["skipped"] and not out["repairable"]
+    assert out["skipped"] and not out["repairable"] and out["needs_review"]
 
 
 def test_self_repair_graph_orders_direct_main_recovery():
@@ -484,7 +465,7 @@ def test_completed_effector_without_output_fails_closed():
 
 def test_fala_review_not_required_contract_allows_merge():
     out = _host("pr_triage", {
-        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"skipped": True, "reason": "llm_review_not_required", "merge_ok": True}}},
+        "pr_review": {"id": "pr_review", "status": "completed", "output": {"values": {"skipped": True, "reason": "llm_review_not_required", "decision": {"verdict": "approve"}, "merge_ok": True}}},
         "pr_merge": {"id": "pr_merge", "status": "completed", "output": {"values": {"merged": True}}},
     })
     assert out["ok"] is True
@@ -557,8 +538,9 @@ def test_run_path_scopes_inputs_to_selected_fala_path(tmp_path, monkeypatch):
             "commit_all", "test_local", "assert_real_diff", "push",
         },
         "pr_triage": {
-            "pr_checks", "pr_review", "worktree_add", "test_local",
-            "pr_merge", "stage_clear", "close_issue",
+            "pr_checks", "pr_review", "review_repair_gate",
+            "pr_repair_subflow", "review_repair_manual", "review_manual",
+            "worktree_add", "test_local", "pr_merge", "stage_clear", "close_issue",
         },
     }
     for path_id, effectors in expected.items():
@@ -644,3 +626,19 @@ def test_run_path_rejects_unknown_path_before_fala(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="unknown Fala correlation path"):
         graph_run.run_path(path_id="missing", repo="a/b", live=False, package_path=str(package), db_path=str(tmp_path / "missing"))
     assert called is False
+
+
+def test_pr_review_outcome_is_routed_by_fala_conditions():
+    package = describe_package()
+    path = next(item for item in package["paths"] if item["id"] == "pr_triage")
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["pr_repair_subflow"]["when"] == {
+        "upstream": "review_repair_gate", "path": "route", "equals": "repair"
+    }
+    assert by_id["review_manual"]["when"] == {
+        "upstream": "pr_review", "path": "decision.verdict", "equals": "needs_human"
+    }
+    for node_id in ("worktree_add", "test_local", "pr_merge", "stage_clear", "close_issue"):
+        assert by_id[node_id]["when"] == {
+            "upstream": "pr_review", "path": "decision.verdict", "equals": "approve"
+        }

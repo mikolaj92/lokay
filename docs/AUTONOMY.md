@@ -44,7 +44,7 @@ residual** after rules fail closed (missing evidence), never the default exit
 for oversized work (auto-`SPLIT`) or obsolete playbooks (`CLOSE`).
 
 Residual mailbox (`lokay status --human`) is exception reporting, not a
-workflow step and not a mill brake.
+Fala step and not a Lokay brake.
 
 ## Issue ledger = chat with the mill
 
@@ -107,42 +107,16 @@ Atom: `lokay-stage-label --stage <name>`. In-flight names map to ready.
    the background after merge; Pi and the mill neither populate collection data
    nor wait for completion. A later issue evaluates collection progress.
 
-## Event wake vs cron
+## Lokalny heartbeat
 
-The LaunchAgent cron (`ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`)
-remains the steady heartbeat. **Event wake** nudges the same mill host sooner
-when GitHub signals new work — it does **not** start a second parallel coding
-fleet. Serial by design (default K=1) is unchanged; the mill lock still
-serializes overlap.
+Lokay nie używa GitHub Actions, webhookowych workflow ani runnerów Actions.
+LaunchAgent `ai.mikolaj.lokay-mill` uruchamia tę samą lokalną maszynę Fali w
+stałym rytmie. To jest jedyny trwały mechanizm pobudzania produktu. Blokada
+`mill.lock` serializuje przebiegi, a domyślne K=1 zachowuje wykonanie ticket po
+tickecie.
 
-| Signal | Workflow | `lokay-wake` path |
-| --- | --- | --- |
-| Issue opened / labeled `ai:ready` | `.github/workflows/lokay-wake-issue.yml` | `issue_triage` |
-| PR checks complete (`workflow_run` / AI-PR `check_*`) | `.github/workflows/lokay-wake-checks.yml` | `pr_triage` (pr+branch) or bounded `factory_pass` (max-passes 1) |
-| Manual / factory nudge | `workflow_dispatch` or `--reason factory` | bounded `factory_pass` |
-
-**Design B (preferred):** run wake jobs on a **self-hosted** Actions runner on
-the mill Mac, labeled `lokay-mill`. The job calls `uv run lokay-wake` against
-the existing checkout (`LOKAY_ROOT`, default `~/Developer/OSS/lokay`) — same
-`gh` auth, clones, and Pi executor as the LaunchAgent.
-
-Enable:
-
-1. Install/register a GitHub self-hosted runner on the mill host; add labels
-   `self-hosted` and `lokay-mill`.
-2. Set repository variables: `LOKAY_ROOT` (optional), `LOKAY_CONFIG` (optional),
-   `LOKAY_WAKE_LIVE=true` only when live mutations are intended (default omits
-   `--live` → planned / dry-run path).
-3. Copy or mirror the wake workflows into managed catalog repos that should
-   wake this runner (org-level runner registration makes `runs-on:
-   [self-hosted, lokay-mill]` available fleet-wide).
-
-Atom: `lokay-wake --reason …` (JSON envelope). `--plan-only` prints routing
-without invoking Fala. Spam / `invalid` / `wontfix` labels skip; labeled
-events only wake on `ai:ready`.
-
-**Residual risk:** live wake uses the mill host credentials; prefer host-local
-`gh` over putting long-lived PATs in Actions secrets.
+`lokay-wake` pozostaje lokalnym poleceniem operatorskim i testowalnym routerem.
+Nie jest wywoływany przez `.github/workflows` i nie tworzy drugiej floty.
 
 ## Night mill profile
 
@@ -164,7 +138,7 @@ Profile knobs (also overridable via env):
 | `mode` | `live` (`LOKAY_MODE=live`) |
 | `executor.enabled` | `true` (`LOKAY_EXECUTOR_ENABLED=1`) |
 | `merge.enabled` | `true` (`LOKAY_MERGE_ENABLED=1`) |
-| `merge.require_checks` | `true` (`LOKAY_REQUIRE_CHECKS=1`) |
+| `merge.require_checks` | `false` — GitHub Actions nie są używane |
 | `merge.require_llm_review` | `true` (`LOKAY_REQUIRE_LLM_REVIEW=1`) |
 | `limits.max_issue_to_pr_per_pass` | `1` (serial by design) |
 
@@ -225,7 +199,7 @@ envelope (and daemon logs), not as a separate time-series product. Keep it light
 | --- | --- |
 | `idle` | No remaining actionable work |
 | `progress` | Queue moved this pass |
-| `waiting` | Pending CI / review limbo — honest wait, not stall |
+| `waiting` | Review/evidence limbo — honest wait, not stall |
 | `repairing` | Repair / request_changes cycle — honest wait |
 | `stall` | Actionable work with no progress — investigate |
 | `survey_error` | List atoms failed — fix auth/network before trusting idle |

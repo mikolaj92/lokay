@@ -26,7 +26,7 @@ There is no alternate Python fallback graph and no Hermes/Kanban execution ledge
 
 ## Quick start
 
-Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), authenticated GitHub CLI `gh`, and a local Fala checkout at `../Fala` as configured in `pyproject.toml`. CI clones that sibling automatically (see `.github/workflows/checks.yml` and [`docs/MILL_HEALTH.md`](docs/MILL_HEALTH.md)).
+Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), authenticated GitHub CLI `gh`, and a local Fala checkout at `../Fala` as configured in `pyproject.toml`. Verification is local; Lokay does not use GitHub Actions.
 
 ```bash
 uv sync
@@ -44,7 +44,7 @@ uv run lokay tick --config config.yaml
 uv run lokay mill --config config.yaml --live --max-passes 8
 ```
 
-For a documented night / live autonomous profile (merge on, checks required,
+For a documented night / live autonomous profile (merge on, local verification,
 serial K=1), see `config.live-autonomous.example.yaml` and
 [`docs/AUTONOMY.md`](docs/AUTONOMY.md).
 
@@ -59,29 +59,214 @@ uv run lokay-daemon --config config.yaml --max-passes 8 \
 
 This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill-daemon.sh`, and logs under `~/.lokay/logs/`. The repository does not install or version a LaunchAgent plist.
 
-## Workflow paths
+## Maszyna stanów Lokaya
 
-```text
-factory_pass:  factory_tick → composes one or more child path runs
-issue_triage: get_issue → triage_issue → intake_issue → issue_split
-pr_repair:    pr_checks → stage_repairing → worktree_add → localize → run_agent
-              → commit_all → test_local → push
-pr_triage:    pr_checks → pr_review → worktree_add → test_local → pr_merge
-              → stage_clear → close_issue
-issue_to_pr:  get_issue → assign_issue / stage_implementing / make_branch → worktree_add
-              → plan_issue → localize → run_agent → commit_all → rebase_onto_base → test_local
-              → (red: repair_agent → test_local_recheck) → push → pr_create
-              → stage_pr_open → list_prs → pr_label
+Lokay jest maszyną stanów sterowaną przez Falę. Stan domenowy pochodzi z
+GitHuba (`issue`, PR, SHA, merge), a Fala wybiera następny minimalny proces
+Unixowy. Proces może odczytać fakt albo wykonać jeden efekt uboczny. Nie może
+ukrywać kolejnego grafu. Agent występuje tylko na granicy niedeterministycznej
+i zwraca jeden wynik z zamkniętego schematu.
+
+Ten diagram jest kontraktem projektowym. **Każda zmiana przepływu zaczyna się
+od zmiany i przeglądu diagramu. Dopiero zaakceptowany diagram wolno zakodować
+w pakiecie Fali.** Test sprawdza, że diagram oraz `fala/lokay.fala-package.toml`
+wymieniają te same ścieżki.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Heartbeat
+    Heartbeat --> FactoryPass
+    FactoryPass --> Survey
+    Survey --> IssueTriage: inbox
+    Survey --> PullRequestCloseout: otwarty AI PR
+    Survey --> IssueToPullRequest: ai:ready i wolne repo
+    Survey --> Health: brak wybranej pracy
+    IssueTriage --> FactoryPass: CLOSE / READY / SPLIT / NEEDS_HUMAN
+    PullRequestCloseout --> FactoryPass: merge / repair / evidence / terminal
+    IssueToPullRequest --> FactoryPass: PR otwarty / brak efektu / błąd
+    FactoryPass --> Health
+    Health --> RecordPass
+    RecordPass --> [*]: progress / waiting / idle
+    RecordPass --> Recovery: potwierdzona awaria nośnika
+    Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
-`run_agent` is the only nondeterministic coding node. `plan_issue` writes
-`.lokay/approach.md` beforehand (deterministic evidence, not a human gate).
-`localize` then produces a non-empty edit-path list (Agentless file-before-patch;
-empty list fails closed so the agent does not start).
-Intake is deterministic (CLOSE / READY / SPLIT / rare NEEDS_HUMAN); oversized
-work auto-splits via `issue_split`. The mill re-checks intake before
-`issue_to_pr`. Humans are a residual mailbox (`lokay status --human`), not a
-brake. All other nodes are deterministic GitHub, Git, or pure operations.
+### Triage issue — `issue_triage`
+
+```mermaid
+stateDiagram-v2
+    [*] --> GetIssue
+    GetIssue --> TriageAgent
+    TriageAgent --> ValidateTriageResult
+    ValidateTriageResult --> TriageAgent: invalid JSON + informacja zwrotna
+    ValidateTriageResult --> CollectIssueEvidence: NEEDS_EVIDENCE
+    CollectIssueEvidence --> TriageAgent
+    ValidateTriageResult --> IntakeDecision: wynik poprawny
+    IntakeDecision --> CloseIssue: CLOSE
+    IntakeDecision --> MarkReady: READY
+    IntakeDecision --> SplitIssue: SPLIT
+    IntakeDecision --> HumanTerminal: NEEDS_HUMAN
+    SplitIssue --> MarkTracker
+    CloseIssue --> [*]
+    MarkReady --> [*]
+    MarkTracker --> [*]
+    HumanTerminal --> [*]
+```
+
+### Implementacja issue — `issue_to_pr`
+
+```mermaid
+stateDiagram-v2
+    [*] --> RecheckOpenIssue
+    RecheckOpenIssue --> PrepareBranch: issue otwarte
+    RecheckOpenIssue --> NoEffect: issue zamknięte
+    PrepareBranch --> PrepareWorktree
+    PrepareWorktree --> PlanIssue
+    PlanIssue --> Localize
+    Localize --> CodingAgent
+    CodingAgent --> ValidateCodingResult
+    ValidateCodingResult --> CodingAgent: invalid JSON + informacja zwrotna
+    ValidateCodingResult --> CollectCodingEvidence: NEEDS_EVIDENCE
+    CollectCodingEvidence --> CodingAgent
+    ValidateCodingResult --> Commit: IMPLEMENTED
+    ValidateCodingResult --> HumanTerminal: NEEDS_HUMAN
+    Commit --> RebaseOntoMain
+    RebaseOntoMain --> LocalTest
+    LocalTest --> VerifyRealDiff: PASS
+    LocalTest --> RepairAgent: FAIL
+    RepairAgent --> LocalTestAgain
+    LocalTestAgain --> VerifyRealDiff: PASS
+    LocalTestAgain --> RepairTerminal: FAIL
+    VerifyRealDiff --> PushBranch
+    PushBranch --> CreatePullRequest
+    CreatePullRequest --> LabelPullRequest
+    LabelPullRequest --> PullRequestOpen
+    PullRequestOpen --> [*]
+    NoEffect --> [*]
+    HumanTerminal --> [*]
+    RepairTerminal --> [*]
+```
+
+### Zamknięcie PR — `pr_triage`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectPullRequest
+    InspectPullRequest --> ConflictRecovery: konflikt
+    InspectPullRequest --> HumanTerminal: terminal ręczny
+    InspectPullRequest --> CollectReviewEvidence: gotowy do recenzji
+    CollectReviewEvidence --> ReviewAgent: brak werdyktu dla SHA
+    CollectReviewEvidence --> ReviewVerdict: werdykt zapisany dla SHA
+    ReviewAgent --> ValidateReviewResult
+    ValidateReviewResult --> ReviewAgent: invalid JSON + informacja zwrotna
+    ValidateReviewResult --> CollectReviewEvidence: NEEDS_EVIDENCE
+    ValidateReviewResult --> ReviewVerdict: wynik poprawny
+    ReviewVerdict --> LocalMergeGate: APPROVE
+    ReviewVerdict --> RepairPullRequest: REQUEST_CHANGES
+    ReviewVerdict --> CollectReviewEvidence: NEEDS_EVIDENCE
+    ReviewVerdict --> HumanTerminal: NEEDS_HUMAN
+    RepairPullRequest --> CollectReviewEvidence: nowy SHA
+    LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
+    LocalMergeGate --> RepairPullRequest: test lokalny nie przechodzi
+    MergePullRequest --> CloseIssue
+    CloseIssue --> Delivered
+    ConflictRecovery --> [*]
+    HumanTerminal --> [*]
+    Delivered --> [*]
+```
+
+### Naprawa istniejącego PR — `pr_repair`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareRepairWorktree
+    PrepareRepairWorktree --> CollectRepairEvidence
+    CollectRepairEvidence --> RepairAgent
+    RepairAgent --> ValidateRepairResult
+    ValidateRepairResult --> RepairAgent: invalid JSON + informacja zwrotna
+    ValidateRepairResult --> CollectRepairEvidence: NEEDS_EVIDENCE
+    ValidateRepairResult --> CommitRepair: REPAIRED
+    ValidateRepairResult --> HumanTerminal: NEEDS_HUMAN
+    CommitRepair --> LocalRepairTest
+    LocalRepairTest --> VerifyRepairDiff: PASS
+    LocalRepairTest --> RepairAgent: FAIL i budżet pozostał
+    LocalRepairTest --> RepairTerminal: FAIL i brak budżetu
+    VerifyRepairDiff --> PushNewSha
+    PushNewSha --> [*]
+    HumanTerminal --> [*]
+    RepairTerminal --> [*]
+```
+
+### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
+
+```mermaid
+stateDiagram-v2
+    [*] --> BeginObservation
+    BeginObservation --> RunFactoryPass
+    RunFactoryPass --> ObserveCarrier
+    ObserveCarrier --> RecordEvidence
+    RecordEvidence --> [*]: healthy / progress / waiting / idle
+    RecordEvidence --> ConfirmIncident: powtarzalna awaria nośnika
+    ConfirmIncident --> PrepareRecovery
+    PrepareRecovery --> RecoveryAgent
+    RecoveryAgent --> ValidateRecoveryResult
+    ValidateRecoveryResult --> RecoveryAgent: invalid JSON + informacja zwrotna
+    ValidateRecoveryResult --> RecoveryEvidence: NEEDS_EVIDENCE
+    RecoveryEvidence --> RecoveryAgent
+    ValidateRecoveryResult --> ValidatePatch: FIXED
+    ValidateRecoveryResult --> HumanTerminal: NEEDS_HUMAN
+    ValidatePatch --> CommitRecovery
+    CommitRecovery --> PushMainFastForward
+    PushMainFastForward --> ActivateRelease
+    ActivateRelease --> PreflightRelease
+    PreflightRelease --> CloseIncident: PASS
+    PreflightRelease --> ConfirmIncident: FAIL
+    CloseIncident --> [*]
+    HumanTerminal --> [*]
+```
+
+### Zgodność diagramu z implementacją
+
+Diagram jest docelowym kontraktem maszyny. Nie oznacza, że każda pokazana
+krawędź już istnieje. Implementacja może ruszyć dopiero po zaakceptowaniu tego
+kontraktu. Aktualny audyt:
+
+| Fragment | Stan obecny |
+| --- | --- |
+| `approve → lokalne testy → merge` | zaimplementowane w Fali |
+| `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane; pełny powrót między przebiegami wymaga dalszego audytu |
+| `needs_human → terminal` | zaimplementowane w Fali |
+| `needs_evidence → zbierz dowody → ponów agenta` | **do implementacji** |
+| `invalid JSON → feedback walidatora → ponów agenta` | **do implementacji** |
+| `issue_triage` bez ukrytego drzewa Python | **do refaktoru** |
+| `issue_to_pr` bez ukrytego drzewa Python | **do refaktoru** |
+| odzyskanie lokalnego work item bez globalnej awarii Lokaya | **do refaktoru** |
+
+### Ścieżki Fali odpowiadające diagramowi
+
+| Stan z diagramu | Ścieżka Fali | Efekt domenowy |
+| --- | --- | --- |
+| `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
+| `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
+| `ImplementIssue` | `issue_to_pr` | otwarty i oznaczony PR dla issue |
+| `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
+| `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
+| `SelfRepair` | `self_repair` | zweryfikowany fast-forward Lokaya |
+
+### Reguły przejść
+
+1. GitHub przechowuje stan domenowy. Dziennik Fali przechowuje wykonanie i
+   obserwowalność. Etykieta nie może rekonstruować ani nadpisywać werdyktu.
+2. Wynik agenta jest związany z konkretnym SHA i ma zamknięty schemat. Informacje
+   `skipped`, `cached` i `already_reviewed_head` są tylko metadanymi wykonania.
+3. Każda strzałka oznacza proces, który można osobno ponowić i obserwować.
+4. Złożona gałąź jest osobną ścieżką lub pod-Falą. Nie wolno implementować jej
+   jako rozbudowanego dispatchera Python.
+5. Efekty uboczne następują dopiero po deterministycznej krawędzi Fali:
+   etykieta, commit, push, utworzenie PR, merge i zamknięcie issue.
+6. Lokay nie używa GitHub Actions. Testy i walidacja wykonują się lokalnie w
+   zadeklarowanym środowisku repozytorium. LaunchAgent daje stały heartbeat.
 
 ## Safety
 
@@ -90,7 +275,7 @@ brake. All other nodes are deterministic GitHub, Git, or pure operations.
 - Issue bodies and repository content are untrusted input to the executor.
 - Product runtime does not force-push or delete repositories.
 - Invalid structured review, requested changes, secrets, and human-review requirements fail closed.
-- Pending CI, manual review, and survey errors are not reported as successful progress.
+- Failed local verification, manual review, and survey errors are not reported as successful progress.
 
 ## Commands and layout
 

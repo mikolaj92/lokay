@@ -229,6 +229,10 @@ def test_pr_triage_path_in_package():
     assert node_ids == [
         "pr_checks",
         "pr_review",
+        "review_repair_gate",
+        "pr_repair_subflow",
+        "review_repair_manual",
+        "review_manual",
         "worktree_add",
         "test_local",
         "pr_merge",

@@ -123,19 +123,6 @@ def test_execute_wake_skip_ok():
 
 
 
-def test_wake_workflows_present():
+def test_github_actions_workflows_are_absent():
     workflows = ROOT / ".github" / "workflows"
-    issue = workflows / "lokay-wake-issue.yml"
-    checks = workflows / "lokay-wake-checks.yml"
-    assert issue.is_file(), "lokay-wake-issue.yml must ship"
-    assert checks.is_file(), "lokay-wake-checks.yml must ship"
-    issue_text = issue.read_text(encoding="utf-8")
-    checks_text = checks.read_text(encoding="utf-8")
-    assert "lokay-wake" in issue_text
-    assert "self-hosted" in issue_text
-    assert "lokay-mill" in issue_text
-    assert "issues:" in issue_text
-    assert "lokay-wake" in checks_text
-    assert "workflow_run:" in checks_text or "check_suite:" in checks_text
-    assert "self-hosted" in checks_text
-    assert "lokay-mill" in checks_text
+    assert not workflows.exists() or not any(workflows.iterdir())

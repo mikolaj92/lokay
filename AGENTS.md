@@ -8,6 +8,14 @@
 - Domain engines stay separate; Fala orchestrates.
 - Nested Fala OK.
 
+## State-machine-first (non-negotiable)
+
+- Lokay is a state machine with explicit side effects.
+- Before changing routing, update and review the Mermaid state machine in `README.md`.
+- Only after the diagram is coherent may the transition be implemented in Fala.
+- The README path table and authored Fala paths must stay synchronized.
+- Do not use GitHub Actions. Verification and product execution are local.
+
 ## Design law
 
 **Product = Fala graph(s).** Unix atoms are replaceable blocks. Coding harness is not the product.

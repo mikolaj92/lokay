@@ -562,7 +562,7 @@ def test_live_autonomous_example_profile_knobs():
     assert data["mode"] == "live"
     assert data["executor"]["enabled"] is True
     assert data["merge"]["enabled"] is True
-    assert data["merge"]["require_checks"] is True
+    assert data["merge"]["require_checks"] is False
     assert data["merge"]["require_llm_review"] is True
     assert data["limits"]["max_issue_to_pr_per_pass"] == 1
     assert data["github"]["assignee"] == "mikolaj92"
@@ -581,7 +581,7 @@ def test_live_autonomous_example_profile_knobs():
     assert cfg.mode == "live"
     assert cfg.executor_enabled is True
     assert cfg.merge_enabled is True
-    assert cfg.require_checks is True
+    assert cfg.require_checks is False
     assert cfg.require_llm_review is True
     assert cfg.max_issue_to_pr_per_pass == 1
     assert cfg.assignee == "mikolaj92"

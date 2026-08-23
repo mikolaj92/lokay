@@ -127,6 +127,7 @@ def handle_lanes(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]
                 "ok": True,
                 "skipped": True,
                 "reason": "llm_review_not_required",
+                "decision": {"verdict": "approve"},
                 "merge_ok": True,
                 "repo": repo,
                 "pr": pr_number,
