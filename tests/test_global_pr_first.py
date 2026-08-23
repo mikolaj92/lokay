@@ -159,6 +159,7 @@ def test_actionable_pr_blocks_same_repo_intake_and_triage(tmp_path, monkeypatch)
     monkeypatch.setattr(
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
+    monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
 
     assert triage == []
@@ -235,6 +236,7 @@ def test_merge_then_same_repo_does_not_start_sibling(tmp_path, monkeypatch):
     monkeypatch.setattr(
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
+    monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
 
     assert intake == []
@@ -288,6 +290,7 @@ def test_malformed_labels_fail_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
+    monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
     assert result["remaining"]["actionable_open_ai_prs"] == 1
     assert result["remaining"]["manual_open_ai_prs"] == 0
@@ -337,6 +340,7 @@ def test_only_parked_needs_review_is_waiting_not_stall(tmp_path, monkeypatch):
     monkeypatch.setattr(
         tick, "run_plan_pass", lambda **kwargs: _run_plan(kwargs["pass_dir"])
     )
+    monkeypatch.setattr(tick, "run_refresh_occupancy", lambda **kwargs: {"ok": True})
     result = tick.compose_tick(config_path=config, live=True)
     assert result["health"] == "waiting"
     assert result["ok"] is True

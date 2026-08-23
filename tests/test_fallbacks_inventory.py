@@ -137,6 +137,9 @@ state:
         )
         and {"ok": True},
     )
+    monkeypatch.setattr(
+        tick_mod, "run_refresh_occupancy", lambda **kwargs: {"ok": True}
+    )
     out = tick_mod.compose_tick(config_path=str(cfg), live=True)
     assert out["progress"] == 0
     assert out["remaining"]["inbox"] == 1
