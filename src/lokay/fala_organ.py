@@ -40,6 +40,7 @@ from lokay.organ.occupancy_refresh_boundary import handle_occupancy_refresh
 from lokay.organ.stale_implementing_boundary import handle_stale_implementing
 from lokay.organ.over_budget_boundary import handle_over_budget
 from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
+from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
@@ -169,6 +170,7 @@ def _handle(
         handle_stale_implementing,
         handle_over_budget,
         handle_self_repair_prepare,
+        handle_self_repair_validate,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
