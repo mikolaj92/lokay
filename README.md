@@ -100,20 +100,40 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> GetIssue
-    GetIssue --> TriageAgent
+    GetIssue --> ResolveIssueCandidate
+    ResolveIssueCandidate --> CollectLinkedPullRequests
+    CollectLinkedPullRequests --> CollectCoveringPullRequests
+    CollectCoveringPullRequests --> ResolveHardFacts
+    ResolveHardFacts --> IntakeDecision: wynik fizyczny CLOSE / BLOCKED / SKIP
+    ResolveHardFacts --> TriageAgent: potrzebna ocena semantyczna
     TriageAgent --> ValidateTriageResult
-    ValidateTriageResult --> TriageAgent: invalid JSON + informacja zwrotna
-    ValidateTriageResult --> CollectIssueEvidence: NEEDS_EVIDENCE
-    CollectIssueEvidence --> TriageAgent
+    ValidateTriageResult --> TriageRetryAgent: invalid JSON + informacja zwrotna
+    TriageRetryAgent --> ValidateTriageRetry
+    ValidateTriageRetry --> IntakeDecision: wynik poprawny
+    ValidateTriageRetry --> HumanTerminal: nadal invalid JSON
     ValidateTriageResult --> IntakeDecision: wynik poprawny
+    IntakeDecision --> SelectIssueEvidence: NEEDS_EVIDENCE
+    SelectIssueEvidence --> CollectRepoShape: repo_shape
+    SelectIssueEvidence --> CollectNamedPaths: named_paths
+    SelectIssueEvidence --> CollectLinkedPullRequests: linked_prs
+    SelectIssueEvidence --> CollectCoveringPullRequests: covering_prs
+    CollectRepoShape --> EvidenceTriageAgent
+    CollectNamedPaths --> EvidenceTriageAgent
+    CollectLinkedPullRequests --> EvidenceTriageAgent
+    CollectCoveringPullRequests --> EvidenceTriageAgent
+    EvidenceTriageAgent --> ValidateEvidenceTriage
+    ValidateEvidenceTriage --> IntakeDecision: wynik poprawny
+    ValidateEvidenceTriage --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
     IntakeDecision --> CloseIssue: CLOSE
     IntakeDecision --> MarkReady: READY
     IntakeDecision --> SplitIssue: SPLIT
     IntakeDecision --> HumanTerminal: NEEDS_HUMAN
+    IntakeDecision --> NoEffect: SKIP / BLOCKED
     SplitIssue --> MarkTracker
     CloseIssue --> [*]
     MarkReady --> [*]
     MarkTracker --> [*]
+    NoEffect --> [*]
     HumanTerminal --> [*]
 ```
 
