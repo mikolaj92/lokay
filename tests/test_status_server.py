@@ -34,10 +34,13 @@ def test_dashboard_uses_product_shell_platform_assets_and_server_html(tmp_path: 
     response = client.get("/")
     assert response.status_code == 200
     assert "owner/repo" in response.text
-    assert "Supported repositories" in response.text
-    assert "Issues delivered / hour" in response.text
-    assert "Open issues remaining" in response.text
-    assert "Current delivery backlog" in response.text
+    assert "Obsługiwane repozytoria" in response.text
+    assert "Ukończone zadania w ostatniej godzinie" in response.text
+    assert "Otwarte zadania do wykonania" in response.text
+    assert "Co pozostało do zrobienia" in response.text
+    assert "Operator notes" not in response.text
+    assert "Mill health" not in response.text
+    assert "Loading…" not in response.text
     assert "/static/platform/" in response.text
     assert 'id="main-content"' in response.text
     assert "cdn.jsdelivr" not in response.text

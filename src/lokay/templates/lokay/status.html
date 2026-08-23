@@ -1,62 +1,62 @@
 {% extends "app_factory/product_shell.html" %}
-{% block title %}Lokay · Factory status{% endblock %}
+{% block title %}Lokay · Wyniki{% endblock %}
+{% block loading_label %}Ładowanie…{% endblock %}
 {% block content %}
 <section class="app-page" aria-labelledby="status-title">
   {% set status = data.status %}
   {% set remaining = (status.last_pass or {}).remaining or {} %}
   <header class="app-header">
     <div>
-      <p class="text-sm text-muted-foreground">Read-only local telemetry</p>
-      <h1 id="status-title">Factory status</h1>
-      <p class="text-sm text-muted-foreground">Updated {{ data.generated_at }}</p>
+      <p class="text-sm text-muted-foreground">Bieżące wyniki Lokaya</p>
+      <h1 id="status-title">Lokay</h1>
+      <p class="text-sm text-muted-foreground">Dane zaktualizowano: {{ data.generated_at }}</p>
     </div>
-    <a class="btn" data-variant="outline" href="/" hx-get="/" hx-target="#main-content" hx-select="#main-content" hx-swap="outerHTML">Refresh</a>
+    <a class="btn" data-variant="outline" href="/" hx-get="/" hx-target="#main-content" hx-select="#main-content" hx-swap="outerHTML">Odśwież</a>
   </header>
 
   <div class="app-card-grid">
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Issues delivered / hour</p><p class="text-2xl font-semibold">{{ data.kpis.issues_per_hour }}</p><p class="text-sm text-muted-foreground">Merged AI PRs in the last rolling hour</p></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Open issues remaining</p><p class="text-2xl font-semibold">{{ data.kpis.open_issues }}</p><p class="text-sm text-muted-foreground">Inbox {{ data.backlog.inbox }} · Ready {{ data.backlog.ready }}</p></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">PRs created / hour</p><p class="text-2xl font-semibold">{{ data.kpis.prs_per_hour }}</p><p class="text-sm text-muted-foreground">{{ data.kpis.starts_per_hour }} implementation starts</p></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Mill health</p><p class="text-2xl font-semibold">{{ status.health }}</p><span class="badge" data-variant="{{ 'default' if status.mill_ready else 'destructive' }}">{{ 'ready' if status.mill_ready else 'blocked' }}</span></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Ukończone zadania w ostatniej godzinie</p><p class="text-2xl font-semibold">{{ data.kpis.issues_per_hour }}</p><p class="text-sm text-muted-foreground">Zadanie liczymy po scaleniu jego pull requestu</p></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Otwarte zadania do wykonania</p><p class="text-2xl font-semibold">{{ data.kpis.open_issues }}</p><p class="text-sm text-muted-foreground">{{ data.backlog.inbox }} czeka na przygotowanie · {{ data.backlog.ready }} gotowych</p></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Nowe pull requesty w ostatniej godzinie</p><p class="text-2xl font-semibold">{{ data.kpis.prs_per_hour }}</p><p class="text-sm text-muted-foreground">Rozpoczęte zadania: {{ data.kpis.starts_per_hour }}</p></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Stan Lokaya</p><p class="text-2xl font-semibold">{{ data.health.label }}</p><span class="badge" data-variant="{{ 'destructive' if data.health.needs_attention else 'default' }}">{{ 'wymaga uwagi' if data.health.needs_attention else 'działa prawidłowo' }}</span></div></article>
   </div>
 
   <article class="card app-stack app-stack--tight" aria-labelledby="backlog-title">
-    <h2 id="backlog-title">Current delivery backlog</h2>
+    <h2 id="backlog-title">Co pozostało do zrobienia</h2>
     <div class="app-cluster">
-      <span class="badge">{{ data.backlog.inbox }} inbox</span>
-      <span class="badge">{{ data.backlog.ready }} ready</span>
-      <span class="badge">{{ data.backlog.ready_with_open_pr }} ready with PR</span>
-      <span class="badge">{{ data.backlog.open_ai_prs }} open AI PRs</span>
-      <span class="badge">{{ data.backlog.review_limbo }} review limbo</span>
-      <span class="badge">{{ data.backlog.needs_repair }} needs repair</span>
-      <span class="badge" data-variant="{{ 'destructive' if data.backlog.survey_errors else 'outline' }}">{{ data.backlog.survey_errors }} survey errors</span>
+      <span class="badge">{{ data.backlog.inbox }} czeka na przygotowanie</span>
+      <span class="badge">{{ data.backlog.ready }} gotowych do rozpoczęcia</span>
+      <span class="badge">{{ data.backlog.ready_with_open_pr }} z otwartym pull requestem</span>
+      <span class="badge">{{ data.backlog.open_ai_prs }} otwarte pull requesty Lokaya</span>
+      <span class="badge">{{ data.backlog.review_limbo }} czeka na decyzję po przeglądzie</span>
+      <span class="badge">{{ data.backlog.needs_repair }} wymaga naprawy</span>
+      <span class="badge" data-variant="{{ 'destructive' if data.backlog.survey_errors else 'outline' }}">{{ data.backlog.survey_errors }} błędów pobierania danych</span>
     </div>
-    <p class="text-sm text-muted-foreground">Open issues is the disjoint inbox + ready backlog. Ready-with-PR is diagnostic and is not counted twice.</p>
+    <p class="text-sm text-muted-foreground">Liczba otwartych zadań to zadania czekające na przygotowanie oraz gotowe do rozpoczęcia. Zadania z pull requestem nie są liczone drugi raz.</p>
   </article>
 
-  {% if status.blockers or status.policy_notes %}
-  <article class="card app-stack app-stack--tight"><h2>Operator notes</h2>
-    {% for note in status.blockers %}<p class="text-sm">Blocker: {{ note }}</p>{% endfor %}
-    {% for note in status.policy_notes %}<p class="text-sm text-muted-foreground">{{ note }}</p>{% endfor %}
+  {% if status.blockers %}
+  <article class="card app-stack app-stack--tight"><h2>Problemy wymagające działania</h2>
+    {% for note in status.blockers %}<p class="text-sm">{{ note }}</p>{% endfor %}
   </article>
   {% endif %}
 
-  <section class="app-stack" aria-labelledby="throughput-title"><h2 id="throughput-title">Local event throughput</h2>
-    <div class="table-container"><table class="table"><thead><tr><th>Window</th><th>Events</th><th>Issue starts</th><th>PRs created</th><th>Issues delivered</th><th>Failures</th></tr></thead><tbody>
+  <section class="app-stack" aria-labelledby="throughput-title"><h2 id="throughput-title">Wyniki w czasie</h2>
+    <div class="table-container"><table class="table"><thead><tr><th>Okres</th><th>Wszystkie zdarzenia</th><th>Rozpoczęte zadania</th><th>Nowe pull requesty</th><th>Ukończone zadania</th><th>Nieudane próby</th></tr></thead><tbody>
     {% for window, metrics in data.throughput.items() %}<tr><th>{{ window }}</th><td>{{ metrics.events }}</td><td>{{ metrics.starts }}</td><td>{{ metrics.prs }}</td><td>{{ metrics.merges }}</td><td>{{ metrics.failures }}</td></tr>{% endfor %}
-    </tbody></table></div><p class="text-sm text-muted-foreground">Local state events are operational evidence. One successful local PR-merge receipt counts as one delivered issue. GitHub remains authoritative for completed merges.</p>
+    </tbody></table></div><p class="text-sm text-muted-foreground">Ukończone zadanie oznacza pull request scalony przez Lokaya. GitHub pozostaje ostatecznym źródłem informacji o scaleniu.</p>
   </section>
 
-  <section class="app-stack" aria-labelledby="repos-title"><h2 id="repos-title">Supported repositories</h2>
-    <div class="table-container"><table class="table"><thead><tr><th>Repository</th><th>Enabled</th><th>Clone</th><th>Inbox</th><th>Ready</th><th>Open AI PRs</th><th>Blockers</th></tr></thead><tbody>
-    {% for repo in data.catalog %}{% set live = (remaining.by_repo or status.by_repo or []) | selectattr('repo', 'equalto', repo.name) | first | default({}, true) %}<tr><th>{{ repo.name }}</th><td>{{ 'yes' if repo.enabled else 'no' }}</td><td>{{ 'available' if repo.clone_available else 'missing' }}</td><td>{{ live.inbox or 0 }}</td><td>{{ live.ready or 0 }}</td><td>{{ live.open_ai_prs or 0 }}</td><td>{% if live.survey_error %}survey error{% elif live.needs_repair %}repair {{ live.needs_repair }}{% elif live.review_limbo %}review {{ live.review_limbo }}{% else %}—{% endif %}</td></tr>{% endfor %}
+  <section class="app-stack" aria-labelledby="repos-title"><h2 id="repos-title">Obsługiwane repozytoria</h2>
+    <div class="table-container"><table class="table"><thead><tr><th>Repozytorium</th><th>Obsługiwane</th><th>Gotowe lokalnie</th><th>Czeka na przygotowanie</th><th>Gotowe</th><th>Otwarte pull requesty</th><th>Problem</th></tr></thead><tbody>
+    {% for repo in data.catalog %}{% set live = (remaining.by_repo or status.by_repo or []) | selectattr('repo', 'equalto', repo.name) | first | default({}, true) %}<tr><th>{{ repo.name }}</th><td>{{ 'tak' if repo.enabled else 'nie' }}</td><td>{{ 'tak' if repo.clone_available else 'nie' }}</td><td>{{ live.inbox or 0 }}</td><td>{{ live.ready or 0 }}</td><td>{{ live.open_ai_prs or 0 }}</td><td>{% if live.survey_error %}nie udało się pobrać danych{% elif live.needs_repair %}wymaga naprawy: {{ live.needs_repair }}{% elif live.review_limbo %}czeka na decyzję: {{ live.review_limbo }}{% else %}—{% endif %}</td></tr>{% endfor %}
     </tbody></table></div>
   </section>
 
-  <section class="app-stack" aria-labelledby="history-title"><h2 id="history-title">Recent pass receipts</h2>
-    {% if data.history %}<div class="table-container"><table class="table"><thead><tr><th>Time</th><th>Health</th><th>Progress</th><th>Inbox</th><th>Ready</th><th>Open AI PRs</th><th>Error / note</th></tr></thead><tbody>
-    {% for receipt in data.history %}{% set rem = receipt.remaining or {} %}<tr><td>{{ receipt.ts }}</td><td>{{ receipt.health }}</td><td>{{ receipt.progress or 0 }}</td><td>{{ rem.inbox or 0 }}</td><td>{{ rem.ready or 0 }}</td><td>{{ rem.open_ai_prs or 0 }}</td><td>{{ receipt.error or receipt.note or '—' }}</td></tr>{% endfor %}
-    </tbody></table></div>{% else %}<p class="text-sm text-muted-foreground">History starts with the next completed factory pass.</p>{% endif %}
+  <section class="app-stack" aria-labelledby="history-title"><h2 id="history-title">Ostatnie przebiegi Lokaya</h2>
+    {% if data.history %}<div class="table-container"><table class="table"><thead><tr><th>Czas</th><th>Stan</th><th>Wykonane kroki</th><th>Czeka na przygotowanie</th><th>Gotowe</th><th>Otwarte pull requesty</th><th>Informacja</th></tr></thead><tbody>
+    {% for receipt in data.history %}{% set rem = receipt.remaining or {} %}<tr><td>{{ receipt.ts }}</td><td>{{ receipt.health_label }}</td><td>{{ receipt.progress or 0 }}</td><td>{{ rem.inbox or 0 }}</td><td>{{ rem.ready or 0 }}</td><td>{{ rem.open_ai_prs or 0 }}</td><td>{{ receipt.message_label }}</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="text-sm text-muted-foreground">Historia pojawi się po następnym zakończonym przebiegu Lokaya.</p>{% endif %}
   </section>
 </section>
 {% endblock %}

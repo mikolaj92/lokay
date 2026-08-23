@@ -17,18 +17,18 @@ TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / 
 PLATFORM = PlatformConfig(
     app_name="Lokay",
     brand_href="/",
-    brand_meta="factory status",
-    menu=(MenuItem("Overview", "/", key="overview", use_htmx=True),),
+    brand_meta="wyniki",
+    menu=(MenuItem("Wyniki", "/", key="overview", use_htmx=True),),
     htmx_nav=True,
     paths=PlatformPaths(account=""),
     show_register=False,
 )
-LOCAL_OPERATOR = PlatformUser(display_name="Local operator", user_id="local")
+LOCAL_OPERATOR = PlatformUser(display_name="Operator lokalny", user_id="local")
 
 
 def create_app(*, config_path: str | None = None) -> FastAPI:
     """Create an observational app. Requests never survey GitHub or mutate the mill."""
-    app = FastAPI(title="Lokay status", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Lokay · Wyniki", docs_url=None, redoc_url=None)
     install_platform(app, environments=[TEMPLATES.env], config=PLATFORM)
 
     @app.get("/health")
@@ -42,7 +42,7 @@ def create_app(*, config_path: str | None = None) -> FastAPI:
         data = dashboard_snapshot(config_path)
         context = {
             "request": request,
-            "page_title": "Factory status",
+            "page_title": "Wyniki Lokaya",
             "nav_active": "overview",
             "data": data,
             **build_platform_context(PLATFORM, user=LOCAL_OPERATOR, current_path=request.url.path),

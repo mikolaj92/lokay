@@ -20,6 +20,47 @@ def _counts(report: dict[str, Any]) -> dict[str, int]:
     }
 
 
+
+
+_HEALTH_LABELS = {
+    "progress": "Lokay pracuje",
+    "idle": "Brak pracy do wykonania",
+    "waiting": "Oczekiwanie na zewnętrzny wynik",
+    "repairing": "Naprawianie pull requestu",
+    "pass_ceiling": "Zakończono zaplanowaną serię przebiegów",
+    "stall": "Lokay nie zrobił postępu",
+    "overlap": "Poprzedni przebieg nadal trwa",
+    "local": "Brak jeszcze wyniku przebiegu",
+}
+
+
+def _health_label(value: Any) -> str:
+    raw = str(value or "local")
+    return _HEALTH_LABELS.get(raw, "Stan wymaga sprawdzenia")
+
+
+
+
+_ERROR_LABELS = {
+    "stall: actionable work remains but no progress this pass": "Lokay nie zrobił postępu mimo zadań gotowych do pracy",
+}
+
+
+def _history_view(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        health = str(row.get("health") or "local")
+        message = row.get("error") or row.get("note")
+        out.append(
+            {
+                **row,
+                "health_label": _health_label(health),
+                "message_label": _ERROR_LABELS.get(str(message), str(message)) if message else "—",
+            }
+        )
+    return out
+
+
 def dashboard_snapshot(config_path: str | None, *, history_limit: int = 50) -> dict[str, Any]:
     """Combine authoritative local status, event yield, catalog and pass history."""
     cfg = load_config(config_path)
@@ -60,6 +101,12 @@ def dashboard_snapshot(config_path: str | None, *, history_limit: int = 50) -> d
         "needs_repair": int(remaining.get("needs_repair") or 0),
         "survey_errors": int(remaining.get("survey_errors") or 0),
     }
+    health_code = str(status.get("health") or "local")
+    health = {
+        "code": health_code,
+        "label": _health_label(health_code),
+        "needs_attention": health_code == "stall" or backlog["survey_errors"] > 0,
+    }
     one_hour = windows["1h"]
     kpis = {
         "issues_per_hour": int(one_hour.get("merges") or 0),
@@ -74,9 +121,10 @@ def dashboard_snapshot(config_path: str | None, *, history_limit: int = 50) -> d
     return {
         "generated_at": now.isoformat(),
         "status": status,
+        "health": health,
         "throughput": windows,
         "kpis": kpis,
         "backlog": backlog,
         "catalog": catalog,
-        "history": history,
+        "history": _history_view(history),
     }

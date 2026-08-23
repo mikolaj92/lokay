@@ -49,4 +49,5 @@ def test_snapshot_is_local_and_exposes_catalog_and_throughput(tmp_path: Path, mo
     assert data["kpis"]["issues_per_hour"] == 1
     assert data["kpis"]["open_issues"] == 5
     assert data["backlog"]["ready_with_open_pr"] == 1
+    assert data["health"]["label"] == "Lokay pracuje"
     assert data["status"]["survey"] is False
