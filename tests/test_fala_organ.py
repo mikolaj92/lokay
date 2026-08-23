@@ -55,6 +55,7 @@ def test_review_not_required_bypasses_disabled_executor_and_allows_merge(tmp_pat
         "ok": True,
         "skipped": True,
         "reason": "llm_review_not_required",
+        "decision": {"verdict": "approve"},
         "merge_ok": True,
         "repo": "a/b",
         "pr": 7,

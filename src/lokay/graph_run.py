@@ -185,8 +185,9 @@ def run_path(
             "commit_all", "test_local", "assert_real_diff", "push",
         ),
         "pr_triage": (
-            "pr_checks", "pr_review", "worktree_add", "test_local",
-            "pr_merge", "stage_clear", "close_issue",
+            "pr_checks", "pr_review", "review_repair_gate",
+            "pr_repair_subflow", "review_repair_manual", "review_manual",
+            "worktree_add", "test_local", "pr_merge", "stage_clear", "close_issue",
         ),
         "self_repair": (
             "self_repair_prepare", "self_repair_run_agent", "self_repair_validate",
@@ -397,26 +398,36 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     if path_id == "pr_triage":
         review = terminal.get("pr_review", {})
         decision = review.get("decision") if isinstance(review.get("decision"), dict) else {}
+        repair = terminal.get("pr_repair_subflow", {})
+        repair_manual = terminal.get("review_repair_manual", {})
+        manual = terminal.get("review_manual", {})
         merge = terminal.get("pr_merge", {})
         close = terminal.get("close_issue", {})
-        if review.get("skipped") and not review.get("merge_ok"):
-            # Idempotent review reuses the verdict for the same head. The merge
-            # policy still owns whether that verdict must enter repair. Do not
-            # turn an already-reviewed request_changes into an inert PR.
-            repairable = bool(merge.get("repairable"))
+        verdict = str(decision.get("verdict") or "")
+        out["review"] = decision
+        if repair and repair.get("reason") != "condition_not_met":
             out.update(
                 skipped=True,
-                reason=(
-                    str(merge.get("reason") or "llm_review_requested_changes")
-                    if repairable
-                    else str(review.get("reason") or "pr_review_skipped")
-                ),
-                repairable=repairable,
-                waiting=bool(merge.get("waiting")),
-                needs_review=bool(merge.get("needs_review")),
-                review=decision,
+                reason=str(repair.get("reason") or "review_requested_changes"),
+                repairable=False,
+                repaired=bool(repair.get("ok")),
             )
-        elif review.get("merge_ok") and review.get("reason") == "llm_review_not_required":
+        elif repair_manual and repair_manual.get("reason") != "condition_not_met":
+            out.update(
+                skipped=True,
+                reason=str(repair_manual.get("reason") or "review_repair_escalated"),
+                repairable=False,
+                needs_review=True,
+                escalated=bool(review.get("escalated")),
+            )
+        elif manual and manual.get("reason") != "condition_not_met":
+            out.update(
+                skipped=True,
+                reason=str(manual.get("reason") or "review_needs_human"),
+                repairable=False,
+                needs_review=True,
+            )
+        elif verdict == "approve":
             if merge.get("skipped"):
                 reason = str(merge.get("reason") or "pr_merge_skipped")
                 out.update(
@@ -432,50 +443,9 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                     merged=bool(merge.get("merged") or merge.get("planned")),
                     closed_issue=close.get("issue"),
                 )
-        elif str(decision.get("verdict") or "") != "approve":
-            # Escalated request_changes (cap) is terminal/manual — not another repair.
-            repairable = (
-                decision.get("verdict") == "request_changes"
-                and not bool(decision.get("secrets"))
-                and not bool(review.get("escalated"))
-            )
-            out.update(
-                skipped=True,
-                reason=(
-                    "llm_review_escalated_needs_review"
-                    if review.get("escalated")
-                    else (
-                        "llm_review_requested_changes"
-                        if repairable
-                        else "llm_review_not_approved"
-                    )
-                ),
-                repairable=repairable,
-                escalated=bool(review.get("escalated")),
-                needs_review=bool(
-                    review.get("escalated")
-                    or decision.get("secrets")
-                    or decision.get("verdict") == "needs_human"
-                ),
-                review=decision,
-            )
-        elif merge.get("skipped"):
-            reason = str(merge.get("reason") or "pr_merge_skipped")
-            out.update(
-                skipped=True,
-                reason=reason,
-                repairable=bool(merge.get("repairable")),
-                waiting=bool(merge.get("waiting"))
-                or reason in {"checks_pending", "checks_none_require_checks", "merge_disabled"},
-                needs_review=bool(merge.get("needs_review")),
-                review=decision,
-            )
         else:
-            out.update(
-                merged=bool(merge.get("merged") or merge.get("planned")),
-                closed_issue=close.get("issue"),
-                review=decision,
-            )
+            # A successful path must terminate through one authored verdict branch.
+            out.update(ok=False, error=f"unrouted PR review verdict: {verdict or 'missing'}")
     elif path_id == "issue_triage":
         triage = terminal.get("triage_issue", {})
         intake = terminal.get("intake_issue", {})
@@ -647,6 +617,7 @@ def describe_package(package_path: str | Path | None = None) -> dict[str, Any]:
                     "id": eff.get("id"),
                     "atom": (eff.get("config") or {}).get("atom"),
                     "conduction": list(eff.get("conduction") or []),
+                    "when": dict(eff.get("when") or {}),
                 }
             )
         paths.append({"id": path.get("id"), "title": path.get("title"), "nodes": nodes})
