@@ -34,6 +34,7 @@ from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
 from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.recovery import handle_recovery
+from lokay.organ.repair_boundary import handle_repair_boundary
 from lokay.organ.self_repair import handle_self_repair
 
 _MUTATING_ATOMS = frozenset(
@@ -42,6 +43,9 @@ _MUTATING_ATOMS = frozenset(
         "repair_agent",
         "coding_retry_agent",
         "evidence_coding_agent",
+        "pr_repair_retry_agent",
+        "evidence_repair_agent",
+        "pr_test_repair_agent",
         "issue_to_pr_subflow",
         "close_existing_delivery",
         "commit_all",
@@ -121,6 +125,7 @@ def _handle(
         handle_self_repair,
         handle_review_boundary,
         handle_coding_boundary,
+        handle_repair_boundary,
         handle_issue_split,
         handle_issue_triage,
         handle_pr_outcome,

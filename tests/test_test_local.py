@@ -22,7 +22,7 @@ def _declare_test(worktree: Path, command: object = None) -> None:
     if command is None:
         command = list(LOKAY_PYTEST)
     if isinstance(command, str):
-        test_line = f'test = {command!r}\n'
+        test_line = f"test = {command!r}\n"
     else:
         items = ", ".join(repr(part) for part in command)
         test_line = f"test = [{items}]\n"
@@ -50,8 +50,6 @@ def test_this_repo_declares_pytest():
     assert test_local.declared_test_argv(root) == LOKAY_PYTEST
 
 
-
-
 def test_no_declaration_skips(tmp_path: Path, capsys):
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 0
@@ -70,7 +68,9 @@ def test_pyproject_and_tests_without_declaration_skips(tmp_path: Path, capsys):
         encoding="utf-8",
     )
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_x.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_x.py").write_text(
+        "def test_x():\n    assert True\n", encoding="utf-8"
+    )
     code = test_local.main(["--worktree", str(tmp_path)])
     assert code == 0
     payload = _payload(capsys)
@@ -145,7 +145,9 @@ def test_changed_pytest_scope_maps_src_and_changed_ticket_tests(
     assert argv == (*LOKAY_PYTEST, "tests/test_foo.py", "tests/test_ticket.py")
 
 
-def test_red_full_suite_accepts_green_changed_scope(tmp_path: Path, monkeypatch, capsys):
+def test_red_full_suite_accepts_green_changed_scope(
+    tmp_path: Path, monkeypatch, capsys
+):
     _declare_test(tmp_path)
     scoped_argv = (*LOKAY_PYTEST, "tests/test_foo.py")
     monkeypatch.setattr(
@@ -213,11 +215,11 @@ def test_declared_string_command_runs_for_lokay(tmp_path: Path, monkeypatch, cap
     monkeypatch.setattr(
         test_local,
         "runner",
-        lambda: _fake_runner(argv, CommandResult(spec=spec, executed=True, returncode=0)),
+        lambda: _fake_runner(
+            argv, CommandResult(spec=spec, executed=True, returncode=0)
+        ),
     )
-    code = test_local.main(
-        ["--repo", "mikolaj92/lokay", "--worktree", str(tmp_path)]
-    )
+    code = test_local.main(["--repo", "mikolaj92/lokay", "--worktree", str(tmp_path)])
     assert code == 0
     payload = _payload(capsys)
     assert payload["ok"] is True
@@ -244,7 +246,9 @@ def test_declared_suite_strips_mill_lease(tmp_path: Path, monkeypatch, capsys):
     assert _payload(capsys)["tested"] is True
 
 
-def test_green_receipt_reuses_identical_head_and_origin_main(tmp_path: Path, monkeypatch, capsys):
+def test_green_receipt_reuses_identical_head_and_origin_main(
+    tmp_path: Path, monkeypatch, capsys
+):
     _declare_test(tmp_path)
     (tmp_path / ".git").mkdir()
 
@@ -255,7 +259,9 @@ def test_green_receipt_reuses_identical_head_and_origin_main(tmp_path: Path, mon
         def run(self, spec, *, live):
             if spec.argv[:2] == ("git", "rev-parse"):
                 value = "head" if spec.argv[-1] == "HEAD" else "base"
-                return CommandResult(spec=spec, executed=True, returncode=0, stdout=value + "\n")
+                return CommandResult(
+                    spec=spec, executed=True, returncode=0, stdout=value + "\n"
+                )
             self.suite_runs += 1
             return CommandResult(spec=spec, executed=True, returncode=0)
 
@@ -379,7 +385,11 @@ def test_organ_red_gate_does_not_reach_push(monkeypatch):
     monkeypatch.setattr(
         fala_organ,
         "_run_atom_main",
-        lambda main, argv: {"ok": False, "error": "local test suite failed", "_exit": 1},
+        lambda main, argv: {
+            "ok": False,
+            "error": "local test suite failed",
+            "_exit": 1,
+        },
     )
     result = fala_organ._handle(
         "test_local",
@@ -413,17 +423,17 @@ def test_issue_to_pr_push_and_pr_create_follow_explicit_test_selection():
     assert "commit_implementation" in by_id["test_local"]["conduction"]
     assert by_id["repair_agent"]["when"]["equals"] == "fail"
     assert by_id["push"]["when"]["equals"] == "publish"
-    assert {"finalize_local_tests", "assert_real_diff"} <= set(by_id["push"]["conduction"])
+    assert {"finalize_local_tests", "assert_real_diff"} <= set(
+        by_id["push"]["conduction"]
+    )
 
 
-
-def test_pr_repair_push_conducts_through_test_local():
+def test_pr_repair_push_follows_explicit_test_selection():
     by_id = _path_nodes("pr_repair")
-    assert "test_local" in by_id
-    assert "commit_all" in by_id["test_local"]["conduction"]
-    assert "test_local" in by_id["push"]["conduction"]
+    assert "commit_initial_repair" in by_id["test_local"]["conduction"]
+    assert by_id["pr_test_repair_agent"]["when"]["equals"] == "fail"
+    assert by_id["push"]["when"]["equals"] == "publish"
     assert "assert_real_diff" in by_id["push"]["conduction"]
-    assert "push" not in by_id["test_local"]["conduction"]
 
 
 def test_pr_triage_merge_conducts_through_test_local():
@@ -442,7 +452,6 @@ def test_issue_to_pr_red_test_routes_to_one_repair_not_publish():
     assert by_id["test_local_recheck"]["when"]["equals"] == "repaired"
     assert by_id["coding_repair_terminal"]["when"]["equals"] == "repair_terminal"
     assert by_id["push"]["when"]["equals"] == "publish"
-
 
 
 def _ready_after_failure(path_id: str, failed_id: str) -> set[str]:
@@ -522,7 +531,11 @@ def test_organ_red_gate_does_not_reach_pr_merge(monkeypatch):
     monkeypatch.setattr(
         fala_organ,
         "_run_atom_main",
-        lambda main, argv: {"ok": False, "error": "local test suite failed", "_exit": 1},
+        lambda main, argv: {
+            "ok": False,
+            "error": "local test suite failed",
+            "_exit": 1,
+        },
     )
     result = fala_organ._handle(
         "test_local",

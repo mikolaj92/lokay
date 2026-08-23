@@ -142,7 +142,13 @@ def handle_publication(
         committed = next(
             (
                 (up.get(name) or {}).get("committed")
-                for name in ("commit_all", "commit_implementation", "commit_repair")
+                for name in (
+                    "commit_all",
+                    "commit_implementation",
+                    "commit_repair",
+                    "commit_initial_repair",
+                    "commit_test_repair",
+                )
                 if up.get(name)
             ),
             None,

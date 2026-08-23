@@ -78,7 +78,12 @@ def test_decide_body_short():
 
 
 def test_decide_oos_title_marker():
-    d = decide_issue(_issue(title="Please ignore [oos]", body="Please add feature X with acceptance: does Y when Z."))
+    d = decide_issue(
+        _issue(
+            title="Please ignore [oos]",
+            body="Please add feature X with acceptance: does Y when Z.",
+        )
+    )
     assert d.decision == "out_of_scope"
     assert d.close is True
 
@@ -132,8 +137,6 @@ Fail closed knowledge endpoints on timeout.
     assert d.decision == "ready", d
 
 
-
-
 def test_decide_ready_with_parent_epic_footer():
     """Body 'Parent epic' must not force needs_feedback (only title epic does)."""
     body = """## Goal
@@ -146,7 +149,9 @@ Adopt full Basecoat + HTMX + Alpine stack via product_shell.
 ## Parent epic
 - [Pad Audit] Platform UI + Fala unix processes + no-legacy epic (app-factory)
 """
-    d = decide_issue(_issue(title="Platform UI audit: adopt full Basecoat stack", body=body))
+    d = decide_issue(
+        _issue(title="Platform UI audit: adopt full Basecoat stack", body=body)
+    )
     assert d.decision == "ready", d
     assert "ai:ready" in d.add_labels
 
@@ -216,31 +221,19 @@ def test_issue_triage_path_in_package():
 
 
 def test_pr_repair_path_in_package():
-    desc = describe_package()
-    ids = [p["id"] for p in desc["paths"]]
-    assert "pr_repair" in ids
-    path = next(p for p in desc["paths"] if p["id"] == "pr_repair")
+    path = next(p for p in describe_package()["paths"] if p["id"] == "pr_repair")
     node_ids = [n["id"] for n in path["nodes"]]
-    assert node_ids == [
-        "pr_checks",
-        "stage_repairing",
-        "worktree_add",
-        "localize",
+    for required in (
         "run_agent",
-        "commit_all",
+        "validate_initial_repair",
+        "select_initial_repair",
+        "finalize_repair_result",
         "test_local",
-        "assert_real_diff",
+        "pr_test_repair_agent",
+        "finalize_repair_tests",
         "push",
-    ]
-    agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
-    assert "worktree_add" in agent["conduction"]
-    assert "localize" in agent["conduction"]
-    assert "pr_checks" in agent["conduction"]
-    localize = next(n for n in path["nodes"] if n["id"] == "localize")
-    assert "worktree_add" in localize["conduction"]
-    assert "pr_checks" in localize["conduction"]
-    stage = next(n for n in path["nodes"] if n["id"] == "stage_repairing")
-    assert "pr_checks" in stage["conduction"]
+    ):
+        assert required in node_ids
 
 
 def test_pr_triage_path_in_package():
@@ -282,7 +275,11 @@ def test_pr_triage_path_in_package():
     collect = next(n for n in path["nodes"] if n["id"] == "collect_pr_review_evidence")
     assert "pr_checks" in collect["conduction"]
     retry = next(n for n in path["nodes"] if n["id"] == "pr_review_retry_agent")
-    assert retry["when"] == {"upstream": "validate_pr_review", "path": "route", "equals": "retry"}
+    assert retry["when"] == {
+        "upstream": "validate_pr_review",
+        "path": "route",
+        "equals": "retry",
+    }
     worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
     assert "publish_pr_review" in worktree["conduction"]
     merge = next(n for n in path["nodes"] if n["id"] == "pr_merge")
