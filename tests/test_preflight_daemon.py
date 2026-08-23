@@ -1601,3 +1601,10 @@ def test_install_fails_closed_when_launchagent_cannot_be_restored(tmp_path):
     assert not (tmp_path / ".lokay" / "launchd-keepalive.stamp").exists()
     incident = tmp_path / ".lokay" / "preflight-bootstrap-incidents.log"
     assert "launchagent_reload_failed" in incident.read_text(encoding="utf-8")
+
+
+def test_restart_required_never_reloads_inside_live_job():
+    script = _script().read_text(encoding="utf-8")
+    tail = script[script.index("FORCE_LAUNCHAGENT_RELOAD=0") :]
+    assert "reload_launchagent" not in tail
+    assert tail.index("os.setsid()") < tail.index('os.execv("/bin/bash"')
