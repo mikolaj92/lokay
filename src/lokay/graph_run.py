@@ -103,12 +103,16 @@ def run_path(
     if db_path:
         work = Path(db_path)
     elif (
-        path_id in {"issue_to_pr", "issue_split"}
+        path_id in {"issue_to_pr", "issue_to_pr_delivery", "issue_split"}
         and issue is not None
         and "/" in str(repo)
     ):
         owner, name = str(repo).split("/", 1)
-        family = "i2pr" if path_id == "issue_to_pr" else "issue-split"
+        family = {
+            "issue_to_pr": "i2pr",
+            "issue_to_pr_delivery": "i2pr-delivery",
+            "issue_split": "issue-split",
+        }[path_id]
         work = (
             Path.home() / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
         )

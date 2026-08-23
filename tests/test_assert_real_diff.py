@@ -308,13 +308,13 @@ def test_organ_push_without_real_diff_fails(monkeypatch):
     assert result["ok"] is False
     assert result["reason"] == "real_diff_missing"
     desc = describe_package()
-    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
+    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr_delivery")
     by_id = {n["id"]: n for n in path["nodes"]}
     assert "assert_real_diff" in by_id
     assert "assert_real_diff" in by_id["push"]["conduction"]
     assert "assert_real_diff" in by_id["pr_create"]["conduction"]
-    assert "run_agent" in by_id["assert_real_diff"]["conduction"]
-    # commit_all must not wait on assert_real_diff (that cycle never reaches push).
-    assert "assert_real_diff" not in by_id["commit_all"]["conduction"]
+    assert "finalize_local_tests" in by_id["assert_real_diff"]["conduction"]
+    assert "assert_implementation_diff" in by_id["commit_implementation"]["conduction"]
+    assert "assert_real_diff" not in by_id["commit_implementation"]["conduction"]
     assert "push" not in by_id["assert_real_diff"]["conduction"]
     assert "pr_create" not in by_id["assert_real_diff"]["conduction"]

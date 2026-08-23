@@ -315,7 +315,7 @@ def test_localize_cli_empty_paths_fails(tmp_path: Path, capsys):
 
 def test_issue_to_pr_localize_before_run_agent():
     desc = describe_package()
-    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
+    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr_delivery")
     by_id = {n["id"]: n for n in path["nodes"]}
     assert "localize" in by_id
     assert "localize" in by_id["run_agent"]["conduction"]

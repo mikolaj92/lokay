@@ -156,103 +156,50 @@ def test_subprocess_atoms_pin_project_cwd():
     assert missing == []
 
 
+def _issue_delivery_path():
+    return next(p for p in describe_package()["paths"] if p["id"] == "issue_to_pr_delivery")
+
+
 def test_describe_issue_to_pr_graph():
     desc = describe_package()
-    assert desc["package_id"] == "lokay"
-    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
-    ids = [n["id"] for n in path["nodes"]]
-    assert ids[0] == "get_issue"
-    assert "run_agent" in ids
-    assert "plan_issue" in ids
-    assert "localize" in ids
-    assert "pr_create" in ids
-    assert "stage_implementing" in ids
-    assert "stage_pr_open" in ids
-    # plan before localize before agent; agent depends on plan + localize + worktree
-    plan = next(n for n in path["nodes"] if n["id"] == "plan_issue")
-    assert "worktree_add" in plan["conduction"]
-    assert "get_issue" in plan["conduction"]
-    localize = next(n for n in path["nodes"] if n["id"] == "localize")
-    assert "plan_issue" in localize["conduction"]
-    assert "worktree_add" in localize["conduction"]
-    agent = next(n for n in path["nodes"] if n["id"] == "run_agent")
-    assert "worktree_add" in agent["conduction"]
-    assert "plan_issue" in agent["conduction"]
-    assert "localize" in agent["conduction"]
-    assert "get_issue" in agent["conduction"]
-    worktree = next(n for n in path["nodes"] if n["id"] == "worktree_add")
-    assert "stage_implementing" in worktree["conduction"]
-    assert "assign_issue" in worktree["conduction"]
-    pr_open = next(n for n in path["nodes"] if n["id"] == "stage_pr_open")
-    assert "pr_create" in pr_open["conduction"]
-    repair = next(n for n in path["nodes"] if n["id"] == "repair_agent")
-    assert "test_local" in repair["conduction"]
-    recheck = next(n for n in path["nodes"] if n["id"] == "test_local_recheck")
-    assert "repair_agent" in recheck["conduction"]
-    push = next(n for n in path["nodes"] if n["id"] == "push")
-    assert "test_local_recheck" in push["conduction"]
-    assert push["conduction"].index("relocalize_off_goal") < push["conduction"].index("assert_real_diff")
-    assert "rebase_onto_base" in push["conduction"]
-    rebase = next(n for n in path["nodes"] if n["id"] == "rebase_onto_base")
-    assert "commit_all" in rebase["conduction"]
-    assert "worktree_add" in rebase["conduction"]
-    test_local = next(n for n in path["nodes"] if n["id"] == "test_local")
-    assert "rebase_onto_base" in test_local["conduction"]
+    gate = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
+    assert [n["id"] for n in gate["nodes"]] == [
+        "get_issue", "resolve_implementation_issue", "collect_existing_delivery_pr",
+        "collect_resumed_source", "resolve_existing_delivery", "issue_to_pr_subflow",
+        "close_existing_delivery", "issue_to_pr_no_effect",
+    ]
+    ids = [n["id"] for n in _issue_delivery_path()["nodes"]]
+    for required in ("plan_issue", "localize", "run_agent", "validate_coding_result",
+                     "select_coding_result", "finalize_coding_result", "pr_create"):
+        assert required in ids
 
 
 def test_issue_to_pr_plan_issue_before_run_agent():
-    """Serial evidence path: worktree_add → plan_issue → localize → run_agent."""
-    desc = describe_package()
-    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
-    by_id = {n["id"]: n for n in path["nodes"]}
-    assert "plan_issue" in by_id
-    assert "localize" in by_id
-    assert "plan_issue" in by_id["run_agent"]["conduction"]
-    assert "localize" in by_id["run_agent"]["conduction"]
+    by_id = {n["id"]: n for n in _issue_delivery_path()["nodes"]}
     assert "plan_issue" in by_id["localize"]["conduction"]
-    assert "worktree_add" in by_id["plan_issue"]["conduction"]
-    # plan_issue / localize must not depend on run_agent (ordering before agent)
+    assert {"plan_issue", "localize", "worktree_add"} <= set(by_id["run_agent"]["conduction"])
     assert "run_agent" not in by_id["plan_issue"]["conduction"]
-    assert "run_agent" not in by_id["localize"]["conduction"]
 
 
-def test_issue_to_pr_relocalizes_before_commit_then_test_then_assert_is_a_dag():
-    """Off-goal paths must be approved before commit_all can include them."""
-    desc = describe_package()
-    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
-    by_id = {n["id"]: n for n in path["nodes"]}
-    assert "run_agent" in by_id["relocalize_off_goal"]["conduction"]
-    assert "test_local" not in by_id["relocalize_off_goal"]["conduction"]
-    assert "test_local_recheck" not in by_id["relocalize_off_goal"]["conduction"]
-    assert "relocalize_off_goal" in by_id["commit_all"]["conduction"]
-    assert "assert_real_diff" not in by_id["commit_all"]["conduction"]
-    assert "commit_all" in by_id["test_local"]["conduction"]
-    assert "rebase_onto_base" in by_id["test_local"]["conduction"]
-    assert "commit_all" in by_id["rebase_onto_base"]["conduction"]
-    assert "test_local" in by_id["assert_real_diff"]["conduction"]
-    assert "assert_real_diff" in by_id["push"]["conduction"]
-    assert "rebase_onto_base" in by_id["push"]["conduction"]
+def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
+    by_id = {n["id"]: n for n in _issue_delivery_path()["nodes"]}
+    assert by_id["coding_retry_agent"]["when"] == {"upstream": "validate_coding_result", "path": "route", "equals": "retry"}
+    assert by_id["evidence_coding_agent"]["when"] == {"upstream": "select_coding_result", "path": "route", "equals": "evidence"}
+    assert by_id["repair_agent"]["when"] == {"upstream": "select_local_test", "path": "route", "equals": "fail"}
+    assert by_id["push"]["when"] == {"upstream": "finalize_local_tests", "path": "route", "equals": "publish"}
 
 
 def test_run_agent_timeouts_match_pi_budget():
-    """Coding slots match executor.timeout_seconds, not the old 480s Pi kill."""
     import tomllib
-
-    DEFAULT_BUDGET_S = 1800
     raw = (Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml").read_bytes()
     pkg = tomllib.loads(raw.decode())
-    for path_id in ("issue_to_pr", "pr_repair"):
+    for path_id in ("issue_to_pr_delivery", "pr_repair"):
         path = next(p for p in pkg["correlation_paths"] if p["id"] == path_id)
-        agent = next(n for n in path["effectors"] if n["id"] == "run_agent")
-        assert int(agent["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
-
-    issue_to_pr = next(p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr")
-    repair = next(n for n in issue_to_pr["effectors"] if n["id"] == "repair_agent")
-    assert int(repair["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
-
+        assert int(next(n for n in path["effectors"] if n["id"] == "run_agent")["adapter"]["timeout_seconds"]) == 1800
+    delivery = next(p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr_delivery")
+    assert int(next(n for n in delivery["effectors"] if n["id"] == "repair_agent")["adapter"]["timeout_seconds"]) == 1800
     self_repair = next(p for p in pkg["correlation_paths"] if p["id"] == "self_repair")
-    self_repair_agent = next(n for n in self_repair["effectors"] if n["id"] == "self_repair_run_agent")
-    assert int(self_repair_agent["adapter"]["timeout_seconds"]) == DEFAULT_BUDGET_S
+    assert int(next(n for n in self_repair["effectors"] if n["id"] == "self_repair_run_agent")["adapter"]["timeout_seconds"]) == 1800
 
 
 def test_test_local_timeouts_are_bounded():

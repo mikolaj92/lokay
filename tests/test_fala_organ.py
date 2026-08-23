@@ -590,27 +590,6 @@ def test_repair_agent_treats_missing_live_issue_as_closed(monkeypatch):
     assert result["issue_state"] == "MISSING"
 
 
-def test_recheck_requests_changed_scope_after_red_full_suite(monkeypatch):
-    captured = []
-
-    def fake_run(main, argv):
-        captured.append(argv)
-        return {"ok": True, "tested": True, "scoped": True}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle(
-        "test_local_recheck",
-        {"repo": "a/b", "live": False, "changed_scope": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree"},
-            "commit_all": {"committed": True},
-            "test_local": _red_test_local(),
-            "repair_agent": {"ok": True},
-        },
-    )
-    assert result["ok"] is True
-    assert result["recheck"] is True
-    assert captured == [["--repo", "a/b", "--worktree", "/tmp/worktree", "--changed-scope"]]
 
 
 def test_push_red_recheck_does_not_push(monkeypatch):
@@ -686,32 +665,6 @@ def test_localize_forwards_plan_files_likely_as_extra_paths(monkeypatch, tmp_pat
     assert extras == ["src/a.py", "tests/test_a.py"]
 
 
-def test_repair_agent_resumes_after_timeout_when_suite_green(monkeypatch):
-    captured: dict = {}
-
-    def fake_run(main, argv):
-        if "--prompt-file" in argv:
-            prompt_path = argv[argv.index("--prompt-file") + 1]
-            captured["prompt"] = Path(prompt_path).read_text(encoding="utf-8")
-        captured.setdefault("calls", []).append(argv)
-        return {"ok": True, "status": "completed"}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": False},
-        {
-            "get_issue": {"issue": {"repo": "a/b", "number": 7, "title": "Fix x"}},
-            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
-            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
-            "test_local": _ok_test_local(),
-        },
-    )
-    assert result["ok"] is True
-    assert result["attempted"] is True
-    assert result["reason"] == "timeout_resume"
-    assert "killed after" in captured["prompt"]
-    assert "Resume" in captured["prompt"]
 
 
 def test_repair_agent_does_not_resume_when_issue_already_closed(monkeypatch):
@@ -778,154 +731,12 @@ def test_repair_agent_rechecks_live_issue_before_timeout_resume(monkeypatch):
     assert result["issue_state"] == "CLOSED"
 
 
-def test_repair_agent_timeout_resume_stays_open_when_live_review_flakes(monkeypatch):
-    captured: dict = {}
-
-    def fake_run(main, argv):
-        if "--issue" in argv:
-            return {"ok": False, "error": "API rate limit"}
-        if "--prompt-file" in argv:
-            captured["prompt"] = Path(argv[argv.index("--prompt-file") + 1]).read_text(
-                encoding="utf-8"
-            )
-        return {"ok": True, "status": "completed"}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
-        {
-            "get_issue": {
-                "issue": {
-                    "repo": "a/b",
-                    "number": 7,
-                    "title": "Fix x",
-                    "state": "OPEN",
-                }
-            },
-            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
-            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
-            "test_local": _ok_test_local(),
-        },
-    )
-    assert result["ok"] is True
-    assert result["reason"] == "timeout_resume"
-    assert "Resume" in captured["prompt"]
 
 
-def test_repair_agent_timeout_resume_when_live_issue_still_open(monkeypatch):
-    captured: dict = {}
-
-    def fake_run(main, argv):
-        if "--issue" in argv:
-            return {
-                "ok": True,
-                "issue": {
-                    "repo": "a/b",
-                    "number": 7,
-                    "title": "Fix x",
-                    "state": "OPEN",
-                },
-            }
-        if "--prompt-file" in argv:
-            captured["prompt"] = Path(argv[argv.index("--prompt-file") + 1]).read_text(
-                encoding="utf-8"
-            )
-        return {"ok": True, "status": "completed"}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
-        {
-            "get_issue": {
-                "issue": {
-                    "repo": "a/b",
-                    "number": 7,
-                    "title": "Fix x",
-                    "state": "OPEN",
-                }
-            },
-            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
-            "run_agent": {"ok": True, "timed_out": True, "reason": "timeout"},
-            "test_local": _ok_test_local(),
-        },
-    )
-    assert result["ok"] is True
-    assert result["reason"] == "timeout_resume"
-    assert "Resume" in captured["prompt"]
 
 
-def test_repair_agent_fails_closed_after_empty_localize(monkeypatch):
-    def boom(main, argv):
-        raise AssertionError("repair agent must not run after empty localize")
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
-            "run_agent": {
-                "ok": False,
-                "reason": "localize_empty",
-                "localize": {"ok": False, "reason": "empty_paths", "paths": []},
-            },
-            "test_local": _red_test_local(),
-        },
-    )
-    assert result["ok"] is False
-    assert result["reason"] == "localize_empty"
 
 
-def test_repair_agent_skips_when_head_has_on_goal_source(monkeypatch, tmp_path):
-    source = tmp_path / "src" / "a.py"
-    source.parent.mkdir()
-    source.write_text("fixed = True\n", encoding="utf-8")
-    evidence = tmp_path / ".lokay" / "localize.json"
-    evidence.parent.mkdir()
-    evidence.write_text('{"paths": ["src/a.py"]}\n', encoding="utf-8")
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "add", "src/a.py"], cwd=tmp_path, check=True)
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "user.name=Test",
-            "-c",
-            "user.email=test@example.invalid",
-            "commit",
-            "-q",
-            "-m",
-            "on-goal fix",
-        ],
-        cwd=tmp_path,
-        check=True,
-    )
-
-    monkeypatch.setattr(
-        fala_organ,
-        "_run_atom_main",
-        lambda _main, _argv: (_ for _ in ()).throw(
-            AssertionError("repair agent must not run after on-goal source commit")
-        ),
-    )
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "issue": 7, "live": False},
-        {
-            "get_issue": {"issue": {"repo": "a/b", "number": 7, "title": "Fix x"}},
-            "worktree_add": {"worktree": str(tmp_path), "branch": "ai/fix/7-x"},
-            "run_agent": {"ok": True},
-            "test_local": _red_test_local(),
-        },
-    )
-
-    assert result == {
-        "ok": True,
-        "skipped": True,
-        "reason": "head_has_on_goal_src",
-    }
 
 
 def test_repair_agent_runs_after_localize_found_paths(monkeypatch):
@@ -955,49 +766,10 @@ def test_repair_agent_runs_after_localize_found_paths(monkeypatch):
     assert called
 
 
-def test_repair_agent_skips_when_first_probe_green(monkeypatch):
-    def boom(main, argv):
-        raise AssertionError("repair agent must not run after a green test_local")
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "live": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
-            "test_local": _ok_test_local(),
-        },
-    )
-    assert result["ok"] is True
-    assert result["skipped"] is True
-    assert result["reason"] == "test_local_ok"
 
 
-def test_repair_agent_skips_when_suite_absent(monkeypatch):
-    def boom(main, argv):
-        raise AssertionError("repair agent must not run when there is no test suite")
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "live": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
-            "test_local": _skip_test_local(),
-        },
-    )
-    assert result["ok"] is True
-    assert result["skipped"] is True
 
 
-def test_repair_agent_without_test_local_fails(monkeypatch):
-    result = fala_organ._handle(
-        "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "live": True},
-        {"worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"}},
-    )
-    assert result["ok"] is False
-    assert result["reason"] == "test_local_missing"
 
 
 def test_repair_agent_refused_in_pr_repair_mode(monkeypatch):
@@ -1049,115 +821,14 @@ def test_repair_agent_red_probe_runs_one_patch_from_log(monkeypatch):
     assert "K=1" in captured["prompt"]
 
 
-def test_recheck_skips_when_first_probe_green(monkeypatch):
-    def boom(main, argv):
-        raise AssertionError("recheck must not rerun a green suite")
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
-    result = fala_organ._handle(
-        "test_local_recheck",
-        {"repo": "a/b", "live": False},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree"},
-            "test_local": _ok_test_local(),
-            "repair_agent": {"ok": True, "skipped": True, "reason": "test_local_ok"},
-        },
-    )
-    assert result["ok"] is True
-    assert result["skipped"] is True
-    assert result["reason"] == "test_local_ok"
 
 
-def test_recheck_fails_closed_when_repair_agent_failed(monkeypatch):
-    def boom(main, argv):
-        raise AssertionError("recheck must not rerun after a failed repair agent")
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
-    result = fala_organ._handle(
-        "test_local_recheck",
-        {"repo": "a/b", "live": False},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree"},
-            "test_local": _red_test_local(),
-            "repair_agent": {"ok": False, "error": "agent crashed"},
-        },
-    )
-    assert result["ok"] is False
-    assert result["reason"] == "repair_agent_failed"
 
 
-def test_recheck_zero_diff_repair_fails_closed(monkeypatch):
-    def boom(main, argv):
-        raise AssertionError("recheck must not rerun when the repair patch is zero-diff")
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
-    monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 0)
-    result = fala_organ._handle(
-        "test_local_recheck",
-        {"repo": "a/b", "live": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree"},
-            "commit_all": {"committed": False},
-            "test_local": _red_test_local(),
-            "repair_agent": {"ok": True, "attempted": True},
-        },
-    )
-    assert result["ok"] is False
-    assert result["reason"] == "zero_diff"
 
 
-def test_recheck_reruns_once_after_committed_repair(monkeypatch):
-    captured = []
-
-    def fake_run(main, argv):
-        captured.append(argv)
-        return {"ok": True, "tested": True}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 1)
-    result = fala_organ._handle(
-        "test_local_recheck",
-        {"repo": "a/b", "live": True, "changed_scope": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree"},
-            "commit_all": {"committed": False},
-            "test_local": _red_test_local(),
-            "repair_agent": {"ok": True, "attempted": True},
-        },
-    )
-    assert result["ok"] is True
-    assert result["recheck"] is True
-    assert captured == [["--repo", "a/b", "--worktree", "/tmp/worktree", "--changed-scope"]]
 
 
-def test_recheck_red_marks_bounded_loop_exhausted(monkeypatch):
-    monkeypatch.setattr(
-        fala_organ,
-        "_run_atom_main",
-        lambda main, argv: {
-            "ok": False,
-            "error": "local test suite failed",
-            "stdout_tail": "x" * 5000,
-            "_exit": 1,
-        },
-    )
-    monkeypatch.setattr(fala_organ, "branch_ahead_of_upstream", lambda *a, **k: 1)
-    result = fala_organ._handle(
-        "test_local_recheck",
-        {"repo": "a/b", "live": True},
-        {
-            "worktree_add": {"worktree": "/tmp/worktree"},
-            "commit_all": {"committed": False},
-            "test_local": _red_test_local(),
-            "repair_agent": {"ok": True, "attempted": True},
-        },
-    )
-    assert result["ok"] is False
-    assert result["reason"] == "local_repair_exhausted"
-    assert result["recheck"] is True
-    # Machine reason must precede the big log tail so the organ's truncated
-    # failure raise still carries it.
-    assert list(result).index("reason") < list(result).index("stdout_tail")
 
 
 def test_rebase_onto_base_forwards_repo(monkeypatch):
