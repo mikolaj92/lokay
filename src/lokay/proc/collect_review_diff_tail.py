@@ -9,7 +9,7 @@ def collect(*, repo: str, pr: int, live: bool) -> dict:
         value=gh_text(runner(),["pr","diff",str(pr),"--repo",repo],live=live,require_success=True)
     except Exception as exc:
         return ok(collected=False,reason=f"failed to collect diff tail evidence: {exc}",probe_failed=True)
-    return ok(collected=True,repo=repo,pr=pr,evidence_kind="diff_tail",additional_evidence={"diff_tail":value[-12000:]})
+    return ok(collected=True,repo=repo,pr=pr,evidence_kind="diff_tail",additional_evidence={"total_chars":len(value),"sampled":len(value)>12000,"diff_tail":value[-12000:]})
 
 
 def main(argv=None):

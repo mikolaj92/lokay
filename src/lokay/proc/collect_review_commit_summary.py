@@ -14,7 +14,7 @@ def collect(*, repo: str, pr: int, live: bool) -> dict:
         return ok(collected=False,reason=f"failed to collect commits evidence: {exc}",probe_failed=True)
     rows=[{"sha":str(row.get("sha") or ""),"message":str(((row.get("commit") or {}).get("message") or ""))[:200]} for row in commits]
     sample=rows if len(rows) <= 50 else rows[:25]+rows[-25:]
-    return ok(collected=True,repo=repo,pr=pr,evidence_kind="commit_summary",additional_evidence={"total":len(rows),"complete":len(rows)<=50,"sample":sample})
+    return ok(collected=True,repo=repo,pr=pr,evidence_kind="commit_summary",additional_evidence={"total":len(rows),"sampled":len(rows)>50,"sample":sample})
 
 def main(argv=None):
     import argparse
