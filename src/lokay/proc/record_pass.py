@@ -36,7 +36,7 @@ def run_record_pass(*, pass_dir: str) -> dict[str, Any]:
 
     # Preserve complete tick envelope for the parent path normalizer. Domain
     # stall/work_remaining is successful Fala conduction with tick.ok=false.
-    return ok(pass_dir=pass_dir, tick=payload)
+    return ok(pass_dir=pass_dir, tick=payload, result=payload)
 
 
 def main(argv: list[str] | None = None) -> int:

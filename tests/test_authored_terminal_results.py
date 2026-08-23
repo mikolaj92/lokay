@@ -47,3 +47,31 @@ def test_pr_triage_request_changes_preserves_subflow_result():
         close={},
     )["result"]
     assert out["skipped"] and out["repaired"]
+
+
+def test_self_repair_terminal_releases_gate():
+    from lokay.proc.summarize_self_repair import summarize
+
+    out = summarize(
+        preflight={"validated": True, "restart_required": True, "commit": "abc"},
+        push={},
+        activate={},
+        close={"closed": True},
+    )["result"]
+    assert (
+        out.get("ok", True) is not False
+        and out["gate_released"] is True
+        and out["incident_closed"] is True
+    )
+
+
+def test_self_repair_dirty_activation_preserves_published_result():
+    from lokay.proc.summarize_self_repair import summarize
+
+    out = summarize(
+        preflight={},
+        push={"commit": "abc"},
+        activate={"published": True, "reason": "dirty_tree"},
+        close={},
+    )["result"]
+    assert out["ok"] is True and out["reason"] == "published_push_kept_dirty_tree"

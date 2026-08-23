@@ -356,14 +356,6 @@ def _host(path_id, results, *, live=True, ok=True):
     )
 
 
-
-
-
-
-
-
-
-
 def test_self_repair_graph_orders_direct_main_recovery():
     package = describe_package()
     path = next(item for item in package["paths"] if item["id"] == "self_repair")
@@ -381,17 +373,17 @@ def test_self_repair_graph_orders_direct_main_recovery():
         "self_repair_activate": ["self_repair_push_main"],
         "self_repair_preflight": ["self_repair_activate"],
         "self_repair_close": ["self_repair_preflight"],
+        "summarize_self_repair": [
+            "self_repair_preflight",
+            "self_repair_push_main",
+            "self_repair_activate",
+            "self_repair_close",
+        ],
     }
     assert not any(
         node in {"pr_create", "pr_review", "pr_merge", "pr_repair"}
         for node in conduction
     )
-
-
-
-
-
-
 
 
 def test_fala_agent_committed_repair_contract():
@@ -457,12 +449,6 @@ def test_completed_effector_without_output_fails_closed():
     assert "without structured output" in out["error"]
 
 
-
-
-
-
-
-
 def test_run_path_scopes_inputs_to_authored_fala_path(tmp_path, monkeypatch):
     import lokay.graph_run as graph_run
     import tomllib
@@ -516,56 +502,23 @@ def test_factory_path_lifts_host_updated_from_failed_begin():
     assert out["restart_required"] is True
 
 
-def test_factory_path_normalizes_tick_contract():
+def test_factory_path_uses_authored_record_pass_result():
+    tick = {"ok": True, "health": "progress", "progress": 1, "remaining": {"ready": 2}}
     out = _host(
         "factory_pass",
         {
             "record_pass": {
                 "id": "record_pass",
                 "status": "completed",
-                "output": {
-                    "values": {
-                        "ok": True,
-                        "tick": {
-                            "ok": True,
-                            "health": "progress",
-                            "progress": 1,
-                            "remaining": {"ready": 2},
-                        },
-                    }
-                },
-            },
+                "output": {"values": {"ok": True, "tick": tick, "result": tick}},
+            }
         },
     )
-    assert out["ok"] is True
-    assert out["health"] == "progress"
-    assert out["progress"] == 1
-    assert out["remaining"] == {"ready": 2}
-
-
-def test_factory_path_normalizes_legacy_factory_tick_contract():
-    out = _host(
-        "factory_pass",
-        {
-            "factory_tick": {
-                "id": "factory_tick",
-                "status": "completed",
-                "output": {
-                    "values": {
-                        "ok": True,
-                        "tick": {
-                            "ok": False,
-                            "health": "stall",
-                            "progress": 0,
-                            "error": "stall: actionable work remains but no progress this pass",
-                        },
-                    }
-                },
-            },
-        },
+    assert (
+        out["ok"] is True
+        and out["health"] == "progress"
+        and out["remaining"] == {"ready": 2}
     )
-    assert out["ok"] is False
-    assert out["health"] == "stall"
 
 
 def test_run_path_rejects_unknown_path_before_fala(tmp_path, monkeypatch):

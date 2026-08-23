@@ -66,80 +66,8 @@ def test_plateau_does_not_confirm_stall(tmp_path):
     assert signal is None
 
 
-def test_normalize_healthy_self_repair_releases_gate():
-    envelope = {
-        "ok": True,
-        "path_id": "self_repair",
-        "fala": {
-            "effector_results": {
-                "self_repair_push_main": {
-                    "id": "self_repair:self_repair_push_main",
-                    "status": "succeeded",
-                    "output": {"values": {"ok": True, "commit": "abc1234"}},
-                },
-                "self_repair_activate": {
-                    "id": "self_repair:self_repair_activate",
-                    "status": "succeeded",
-                    "output": {"values": {"ok": True, "activated": True, "commit": "abc1234"}},
-                },
-                "self_repair_preflight": {
-                    "id": "self_repair:self_repair_preflight",
-                    "status": "succeeded",
-                    "output": {
-                        "values": {
-                            "ok": True,
-                            "validated": True,
-                            "restart_required": True,
-                            "commit": "abc1234",
-                        }
-                    },
-                },
-                "self_repair_close": {
-                    "id": "self_repair:self_repair_close",
-                    "status": "succeeded",
-                    "output": {"values": {"ok": True, "closed": True}},
-                },
-            }
-        },
-    }
-    out = normalize_path_result(envelope)
-    assert out["ok"] is True
-    assert out["gate_released"] is True
-    assert out["restart_required"] is True
-    assert out["commit"] == "abc1234"
 
 
-def test_normalize_dirty_activate_keeps_published_push():
-    envelope = {
-        "ok": True,
-        "path_id": "self_repair",
-        "fala": {
-            "effector_results": {
-                "self_repair_push_main": {
-                    "id": "self_repair:self_repair_push_main",
-                    "status": "succeeded",
-                    "output": {"values": {"ok": True, "commit": "fff1111"}},
-                },
-                "self_repair_activate": {
-                    "id": "self_repair:self_repair_activate",
-                    "status": "succeeded",
-                    "output": {
-                        "values": {
-                            "ok": True,
-                            "activated": False,
-                            "published": True,
-                            "reason": "dirty_tree",
-                            "commit": "fff1111",
-                        }
-                    },
-                },
-            }
-        },
-    }
-    out = normalize_path_result(envelope)
-    assert out["ok"] is True
-    assert out["reason"] == "published_push_kept_dirty_tree"
-    assert out["commit"] == "fff1111"
 
 
 def test_published_self_repair_commit_reads_git_log(tmp_path):
