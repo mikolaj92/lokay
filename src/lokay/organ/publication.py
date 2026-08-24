@@ -1,16 +1,17 @@
 """Fala bindings for physical commit, verification, and publication effects."""
 
 from __future__ import annotations
+
 import tempfile
 from pathlib import Path
 from typing import Any
+
 from lokay.models import Issue
 from lokay.organ.common import (
     _issue_no_longer_open,
     _require_push,
     _require_real_diff,
     _require_test_local,
-    _run_atom_main,
 )
 from lokay.prompts import pr_body
 
@@ -21,15 +22,14 @@ def handle_publication(
     up: dict[str, dict[str, Any]],
     ctx: dict[str, Any],
 ) -> dict[str, Any] | None:
+    from lokay.git_commit import branch_ahead_of_upstream
     from lokay.proc import (
-        assert_real_diff,
         commit_all,
         get_issue,
         pr_create,
         push_branch,
         rebase_onto_base,
     )
-    from lokay.git_commit import branch_ahead_of_upstream
     from lokay.proc._common import runner
 
     cfg = ctx["cfg"]
@@ -49,14 +49,28 @@ def handle_publication(
     if atom == "commit_all":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        gate = _run_atom_main(assert_real_diff.main, ["--worktree", worktree])
-        if not (isinstance(gate, dict) and gate.get("real") is True):
+        gate = next(
+            (
+                up[name]
+                for name in (
+                    "assert_implementation_diff",
+                    "assert_initial_repair_diff",
+                    "assert_test_repair_diff",
+                    "assert_repair_diff",
+                    "assert_real_diff",
+                )
+                if name in up
+            ),
+            None,
+        )
+        if not isinstance(gate, dict) or gate.get("real") is not True:
             return {
                 "ok": False,
                 "error": str(
-                    (gate or {}).get("error") or "refusing commit: not a real diff"
+                    (gate or {}).get("error")
+                    or "refusing commit: real-diff conduction missing or failed"
                 ),
-                "reason": str((gate or {}).get("reason") or "plan_only"),
+                "reason": str((gate or {}).get("reason") or "real_diff_missing"),
                 "committed": False,
                 "kind": (gate or {}).get("kind"),
             }
@@ -123,7 +137,12 @@ def handle_publication(
     if atom == "assert_real_diff":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
         assert worktree
-        return _run_atom_main(assert_real_diff.main, ["--worktree", worktree])
+        from lokay.proc.assert_real_diff_subflow import run as run_real_diff
+
+        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        return run_real_diff(
+            worktree=worktree, issue_body=str(issue_raw.get("body") or ""), repo=repo
+        )
 
     if atom == "push":
         worktree = str(up.get("worktree_add", {}).get("worktree") or "")
