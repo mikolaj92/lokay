@@ -28,7 +28,6 @@ def handle_publication(
         pr_create,
         push_branch,
         rebase_onto_base,
-        test_local,
     )
     from lokay.git_commit import branch_ahead_of_upstream
     from lokay.proc._common import runner
@@ -97,7 +96,9 @@ def handle_publication(
         argv = [*repo_flags, "--worktree", worktree]
         if inputs.get("changed_scope"):
             argv.append("--changed-scope")
-        out = _run_atom_main(test_local.main, argv)
+        from lokay.proc.test_local_execution_subflow import run
+
+        out = run(worktree=worktree, changed_scope=bool(inputs.get("changed_scope")))
         if (
             inputs.get("record_red")
             and isinstance(out, dict)

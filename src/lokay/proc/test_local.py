@@ -52,9 +52,7 @@ def _changed_pytest_argv(
     if not source_stems:
         return None
     tests = {
-        path
-        for path in paths
-        if path.startswith("tests/") and path.endswith(".py")
+        path for path in paths if path.startswith("tests/") and path.endswith(".py")
     }
     test_root = worktree / "tests"
     if test_root.is_dir():
@@ -90,121 +88,12 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-test-local")
     p.add_argument("--repo", default=MINI_MILL_REPO)
     p.add_argument("--worktree", required=True)
-    p.add_argument(
-        "--changed-scope",
-        action="store_true",
-        help="if the full pytest suite is red, verify tests covering changed src",
-    )
+    p.add_argument("--changed-scope", action="store_true")
     args = p.parse_args(argv)
-    worktree = Path(args.worktree).resolve()
-    if not worktree.is_dir():
-        return emit_exit(err("worktree is not a directory", worktree=str(worktree)))
-    try:
-        test_argv = declared_test_argv(worktree)
-    except ValueError as exc:
-        return emit_exit(
-            err(
-                str(exc),
-                reason="invalid_test_declaration",
-                tested=False,
-                worktree=str(worktree),
-            )
-        )
-    if not test_argv:
-        return emit_exit(
-            ok(
-                skipped=True,
-                reason="no_declared_test",
-                tested=False,
-                worktree=str(worktree),
-            )
-        )
-    run = runner()
-    key = cache_key(run, worktree, test_argv)
-    cached = read_green(worktree, key)
-    if cached is not None:
-        return emit_exit(
-            ok(
-                skipped=False,
-                tested=True,
-                cached=True,
-                worktree=str(worktree),
-                tests=str(cached.get("tests") or " ".join(test_argv)),
-            )
-        )
-    try:
-        tests = run.run(
-            CommandSpec(
-                test_argv,
-                cwd=str(worktree),
-                # Verifier is not a mill atom — do not inherit the capability.
-                env={
-                    "LOKAY_HEALTH_LEASE": "",
-                    "LOKAY_HEALTH_LEASE_PATH": "",
-                },
-                timeout_seconds=TEST_TIMEOUT_SECONDS,
-            ),
-            live=True,
-        )
-    except Exception as exc:  # noqa: BLE001
-        return emit_exit(err(str(exc), worktree=str(worktree)))
-    command = " ".join(test_argv)
-    if tests.returncode != 0 and args.changed_scope:
-        try:
-            scoped_argv = _changed_pytest_argv(run, worktree, test_argv)
-            if scoped_argv is not None:
-                scoped = run.run(
-                    CommandSpec(
-                        scoped_argv,
-                        cwd=str(worktree),
-                        env={
-                            "LOKAY_HEALTH_LEASE": "",
-                            "LOKAY_HEALTH_LEASE_PATH": "",
-                        },
-                        timeout_seconds=TEST_TIMEOUT_SECONDS,
-                    ),
-                    live=True,
-                )
-                if scoped.returncode == 0:
-                    command = " ".join(scoped_argv)
-                    write_green(worktree, key, command)
-                    return emit_exit(
-                        ok(
-                            skipped=False,
-                            tested=True,
-                            cached=False,
-                            scoped=True,
-                            full_suite_returncode=tests.returncode,
-                            worktree=str(worktree),
-                            tests=command,
-                        )
-                    )
-                tests = scoped
-                command = " ".join(scoped_argv)
-        except Exception as exc:  # noqa: BLE001
-            return emit_exit(err(str(exc), worktree=str(worktree)))
-    if tests.returncode != 0:
-        # Bounded failure log for the one-shot repair patch nest (AlphaCodium:
-        # the test log drives exactly one repair attempt, never a PR).
-        return emit_exit(
-            err(
-                "local test suite failed",
-                returncode=tests.returncode,
-                worktree=str(worktree),
-                tests=command,
-                stdout_tail=(tests.stdout or "")[-4000:],
-                stderr_tail=(tests.stderr or "")[-2000:],
-            )
-        )
-    write_green(worktree, key, command)
+    from lokay.proc.test_local_execution_subflow import run
+
     return emit_exit(
-        ok(
-            skipped=False,
-            tested=True,
-            cached=False,
-            worktree=str(worktree),
-            tests=command,
-        )
+        run(worktree=args.worktree, changed_scope=bool(args.changed_scope))
     )
 
 
