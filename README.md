@@ -256,6 +256,27 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Deterministyczny plan jednego issue — `plan_issue_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareIssuePlanRequest
+    PrepareIssuePlanRequest --> BuildIssueApproach
+    BuildIssueApproach --> AuthorizeIssuePlanWrite
+    AuthorizeIssuePlanWrite --> WriteIssueApproach: mutation dozwolona
+    AuthorizeIssuePlanWrite --> RecordIssueApproachWrite: dry-run
+    WriteIssueApproach --> RecordIssueApproachWrite
+    RecordIssueApproachWrite --> IssuePlanTerminal
+    IssuePlanTerminal --> [*]
+```
+
+Pod-Fala tworzy jeden deterministyczny `approach.md`. Normalizacja issue,
+budowa planu, mutation gate, pojedynczy zapis, stabilizacja dry-run i terminal są
+osobnymi procesami. Nie ma opcjonalnego atrapowego LLM: ten krok nie wymaga
+semantycznej decyzji, bo zamknięty plan jest mechaniczną transformacją treści
+issue. Gdy późniejszy krok potrzebuje semantyki, korzysta z jawnego agenta w
+odpowiedniej pod-Fali.
+
 ### Jedna zmiana etapu issue — `stage_label_execution`
 
 ```mermaid
@@ -1196,6 +1217,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `PlanIssueExecution` | `plan_issue_execution` | prowadzi deterministic approach build, mutation gate, write i terminal |
 | `StageLabelExecution` | `stage_label_execution` | prowadzi fresh issue gate oraz osobne remove/add/comment efekty etapu |
 | `PRCreateExecution` | `pr_create_execution` | prowadzi duplicate/issue facts i pojedynczy fizyczny efekt publikacji PR |
 | `StatusSnapshot` | `status_snapshot` | składa read-only config, lease, grafy i ostatni pass receipt bez uruchamiania produktu |
