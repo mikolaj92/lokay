@@ -256,6 +256,36 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Dowód rzeczywistego diffu — `assert_real_diff_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectDiffWorktree
+    InspectDiffWorktree --> ReadChangedPaths: poprawny worktree
+    InspectDiffWorktree --> RealDiffTerminal: błędny worktree
+    ReadChangedPaths --> ClassifyDiffKind
+    ReadChangedPaths --> RealDiffTerminal: błąd Git
+    ClassifyDiffKind --> ReadLocalizeScope
+    ReadLocalizeScope --> ReadIssueFileScope: poprawny lub brak dowodu
+    ReadLocalizeScope --> RealDiffTerminal: błędny dowód
+    ReadIssueFileScope --> ClassifyTicketScopePresence
+    ClassifyTicketScopePresence --> ClassifyTicketScopeExtra: wymagany plik obecny
+    ClassifyTicketScopePresence --> ClassifyLocalizedScope: brak jawnego scope
+    ClassifyTicketScopePresence --> RealDiffTerminal: wymagany plik nieobecny
+    ClassifyTicketScopeExtra --> ClassifyLocalizedScope: brak nadmiarowego source
+    ClassifyTicketScopeExtra --> RealDiffTerminal: source poza scope issue
+    ClassifyLocalizedScope --> ClassifyRealProgress: wszystko w localize scope
+    ClassifyLocalizedScope --> RealDiffTerminal: source poza localize scope
+    ClassifyRealProgress --> RealDiffTerminal: real / plan-only / zero diff
+    RealDiffTerminal --> [*]
+```
+
+Pod-Fala składa wyłącznie mechaniczne fakty. Odczyt Git, walidacja dowodu
+`localize.json`, rozpoznanie jawnego scope issue, obecność wymaganego pliku,
+nadmiarowe ścieżki source i rodzaj postępu są osobnymi procesami. Fala prowadzi
+kolejność odmów. Nie ma tu decyzji semantycznej ani agenta: wynik zależy tylko
+od fizycznego diffu i już zapisanych, zamkniętych dowodów.
+
 ### Jedna relokalizacja off-goal — `relocalize_off_goal`
 
 ```mermaid
@@ -1056,6 +1086,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `AssertRealDiffExecution` | `assert_real_diff_execution` | składa fizyczny diff, scope issue/localize i zamknięty terminal |
 | `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
