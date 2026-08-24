@@ -256,6 +256,45 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Jedna relokalizacja off-goal — `relocalize_off_goal`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectRelocalizationEvidence
+    InspectRelocalizationEvidence --> RelocalizationTerminal: brak localize / błędny dowód
+    InspectRelocalizationEvidence --> ReadChangedPaths
+    ReadChangedPaths --> ReadIssueExplicitPaths
+    ReadIssueExplicitPaths --> ClassifyProtectedResidue
+    ClassifyProtectedResidue --> AuthorizeProtectedRestore: residue istnieje
+    ClassifyProtectedResidue --> ClassifyOffGoalPaths: brak residue
+    AuthorizeProtectedRestore --> RestoreProtectedResidue: mutation dozwolona
+    AuthorizeProtectedRestore --> RecordProtectedRestore: dry-run
+    RestoreProtectedResidue --> RecordProtectedRestore
+    RecordProtectedRestore --> ClassifyOffGoalPaths
+    ClassifyOffGoalPaths --> RelocalizationTerminal: wszystko on-goal
+    ClassifyOffGoalPaths --> BuildRelocalizationAgentRequest: off-goal istnieje
+    BuildRelocalizationAgentRequest --> RunRelocalizationAgent
+    RunRelocalizationAgent --> ValidateRelocalizationAgentJSON: completed
+    RunRelocalizationAgent --> RelocalizationTerminal: timeout / executor failed
+    ValidateRelocalizationAgentJSON --> ValidateApprovedOffGoalPaths: poprawny JSON
+    ValidateRelocalizationAgentJSON --> BuildRelocalizationRetry: błędny JSON
+    BuildRelocalizationRetry --> RetryRelocalizationAgent
+    RetryRelocalizationAgent --> ValidateRelocalizationRetryJSON
+    ValidateRelocalizationRetryJSON --> ValidateApprovedOffGoalPaths: poprawny JSON
+    ValidateRelocalizationRetryJSON --> RelocalizationTerminal: drugi błędny JSON
+    ValidateApprovedOffGoalPaths --> WriteRelocalizationEvidence: agent zatwierdził subset off-goal
+    ValidateApprovedOffGoalPaths --> RelocalizationTerminal: agent nie zatwierdził
+    WriteRelocalizationEvidence --> RelocalizationTerminal
+    RelocalizationTerminal --> [*]
+```
+
+Pod-Fala wykonuje najwyżej jedną semantyczną relokalizację. Chronione residue,
+mutation gate i restore są mechanicznymi faktami/efektami. Agent zwraca zamknięty
+JSON `paths + notes`; poprawny wynik jest autorytatywny, ale fizyczny validator
+może zachować tylko istniejący subset bieżących off-goal paths. Błędny JSON ma
+dokładny feedback i jeden retry. Timeout, executor failure, brak zatwierdzonych
+ścieżek albo drugi błędny JSON kończą się jawnie bez rozszerzenia scope.
+
 ### Lokalizacja zakresu zmiany — `localize_execution`
 
 ```mermaid
@@ -1017,6 +1056,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
 | `LeftoverCloseout` | `leftover_closeout` | domyka CLOSED ready labels przez jawne sloty repo, etykiet i issue |

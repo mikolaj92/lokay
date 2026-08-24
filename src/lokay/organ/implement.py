@@ -21,7 +21,6 @@ def handle_implement(
         make_branch,
         pi_budget,
         plan_issue,
-        relocalize_off_goal,
         worktree_add,
     )
 
@@ -143,13 +142,18 @@ def handle_implement(
         )
 
     if atom == "relocalize_off_goal":
-        worktree = str(
-            up.get("worktree_add", {}).get("worktree") or inputs.get("worktree") or ""
-        )
-        assert worktree
-        return _run_atom_main(
-            relocalize_off_goal.main,
-            [*cfg, *live, "--worktree", worktree],
+        from lokay.proc.relocalize_off_goal_subflow import run
+
+        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        return run(
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+            extra_inputs={
+                "worktree": worktree,
+                "base": str(inputs.get("base") or "origin/main"),
+                "repo": repo,
+                "issue_raw": dict(up.get("get_issue", {}).get("issue") or {}),
+            },
         )
 
     if atom == "cycle_start":

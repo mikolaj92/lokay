@@ -50,6 +50,7 @@ from lokay.organ.test_local_boundary import handle_test_local
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
 from lokay.organ.factory_begin_boundary import handle_factory_begin
 from lokay.organ.localize_boundary import handle_localize
+from lokay.organ.relocalize_boundary import handle_relocalize
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
@@ -189,6 +190,7 @@ def _handle(
         handle_leftover_closeout,
         handle_factory_begin,
         handle_localize,
+        handle_relocalize,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
