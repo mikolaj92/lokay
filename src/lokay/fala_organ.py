@@ -11,11 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from fala import sdk
-
 from lokay.git_commit import branch_ahead_of_upstream  # noqa: F401 — tests patch this
 from lokay.organ.agent import handle_agent
 from lokay.organ.coding_boundary import handle_coding_boundary
-from lokay.organ.conflict_resolution_boundary import handle_conflict_resolution
 from lokay.organ.common import (  # noqa: F401
     _conduction_values,
     _issue_no_longer_open,
@@ -25,41 +23,43 @@ from lokay.organ.common import (  # noqa: F401
     _run_atom_main,
     _test_local_ok,
 )
+from lokay.organ.conflict_resolution_boundary import handle_conflict_resolution
 from lokay.organ.factory import handle_factory
+from lokay.organ.factory_begin_boundary import handle_factory_begin
 from lokay.organ.implement import handle_implement
-from lokay.organ.issue_triage_boundary import handle_issue_triage
-from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.implementation_dispatch_boundary import handle_implementation_dispatch
 from lokay.organ.implementation_selection_boundary import (
     handle_implementation_selection,
 )
-from lokay.organ.lanes import handle_lanes
-from lokay.organ.pr_finalize import handle_pr_finalize
-from lokay.organ.pass_plan_boundary import handle_pass_plan
-from lokay.organ.occupancy_refresh_boundary import handle_occupancy_refresh
-from lokay.organ.stale_implementing_boundary import handle_stale_implementing
-from lokay.organ.over_budget_boundary import handle_over_budget
-from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
-from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
 from lokay.organ.inbox_survey_boundary import handle_inbox_survey
-from lokay.organ.pr_closeout_boundary import handle_pr_closeout
-from lokay.organ.pr_survey_boundary import handle_pr_survey
-from lokay.organ.ready_hygiene_boundary import handle_ready_hygiene
-from lokay.organ.product_budget_boundary import handle_product_budget
-from lokay.organ.test_local_boundary import handle_test_local
+from lokay.organ.issue_split_boundary import handle_issue_split
+from lokay.organ.issue_triage_boundary import handle_issue_triage
+from lokay.organ.lanes import handle_lanes
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
-from lokay.organ.factory_begin_boundary import handle_factory_begin
 from lokay.organ.localize_boundary import handle_localize
-from lokay.organ.relocalize_boundary import handle_relocalize
+from lokay.organ.occupancy_refresh_boundary import handle_occupancy_refresh
+from lokay.organ.over_budget_boundary import handle_over_budget
+from lokay.organ.pass_plan_boundary import handle_pass_plan
+from lokay.organ.pr_closeout_boundary import handle_pr_closeout
+from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
+from lokay.organ.pr_survey_boundary import handle_pr_survey
+from lokay.organ.product_budget_boundary import handle_product_budget
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
-from lokay.organ.review_boundary import handle_review_boundary
+from lokay.organ.ready_hygiene_boundary import handle_ready_hygiene
+from lokay.organ.real_diff_boundary import handle_real_diff
 from lokay.organ.recovery import handle_recovery
+from lokay.organ.relocalize_boundary import handle_relocalize
 from lokay.organ.repair_boundary import handle_repair_boundary
+from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.self_repair import handle_self_repair
+from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
+from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
+from lokay.organ.stale_implementing_boundary import handle_stale_implementing
 from lokay.organ.stale_worktree_boundary import handle_stale_worktree
 from lokay.organ.survey_ready_boundary import handle_survey_ready
+from lokay.organ.test_local_boundary import handle_test_local
 from lokay.organ.triage_dispatch_boundary import handle_triage_dispatch
 
 _MUTATING_ATOMS = frozenset(
@@ -191,6 +191,7 @@ def _handle(
         handle_factory_begin,
         handle_localize,
         handle_relocalize,
+        handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
