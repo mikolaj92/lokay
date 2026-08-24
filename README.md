@@ -222,6 +222,28 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Budżet kolejnych passów — `product_pass_budget`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareProductBudget
+    PrepareProductBudget --> RunFactoryPassSlot
+    RunFactoryPassSlot --> RunLeftoverCloseout
+    RunLeftoverCloseout --> EvaluateProductPass
+    EvaluateProductPass --> RunFactoryPassSlot: continue i następny jawny slot
+    EvaluateProductPass --> SelectProductBudgetResult: idle / waiting / hard failure / plateau
+    EvaluateProductPass --> SelectProductBudgetResult: budżet wyczerpany
+    SelectProductBudgetResult --> ProductBudgetResult
+    ProductBudgetResult --> [*]
+```
+
+Fala rozwija do ośmiu kolejnych, jawnych slotów `factory_pass`. Każdy slot ma
+osobny leftover-closeout effect i czysty evaluator porównujący fizyczny wynik
+z poprzednim slotem. Python nie prowadzi pętli, nie wybiera następnego passu i
+nie rekonstruuje terminala. `K` pozostaje budżetem seryjnych passów, nigdy
+harmonogramem równoległych worktree. Wartość większa niż authored limit kończy
+się fail-closed.
+
 ### Higiena gotowych issue — `ready_hygiene`
 
 ```mermaid
@@ -865,6 +887,7 @@ kontraktu. Aktualny audyt:
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
+| `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
 | `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
