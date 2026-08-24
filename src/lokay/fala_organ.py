@@ -40,6 +40,7 @@ from lokay.organ.localize_boundary import handle_localize
 from lokay.organ.occupancy_refresh_boundary import handle_occupancy_refresh
 from lokay.organ.over_budget_boundary import handle_over_budget
 from lokay.organ.pass_plan_boundary import handle_pass_plan
+from lokay.organ.plan_issue_boundary import handle_plan_issue
 from lokay.organ.pr_closeout_boundary import handle_pr_closeout
 from lokay.organ.pr_create_boundary import handle_pr_create
 from lokay.organ.pr_finalize import handle_pr_finalize
@@ -199,6 +200,7 @@ def _handle(
         handle_status,
         handle_pr_create,
         handle_stage_label,
+        handle_plan_issue,
         handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)

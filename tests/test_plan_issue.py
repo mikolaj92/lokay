@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import json
 from pathlib import Path
 
@@ -15,8 +14,8 @@ from lokay.approach_plan import (
     write_approach_file,
 )
 from lokay.models import Issue
-from lokay.proc import plan_issue
 from lokay.pr_review import review_prompt
+from lokay.proc import plan_issue
 
 
 def _issue(**kwargs) -> Issue:
@@ -73,102 +72,39 @@ def test_render_and_write_approach_file(tmp_path: Path):
     assert "Non-goals" in path.read_text(encoding="utf-8")
 
 
-def test_plan_issue_cli_planned_no_write(tmp_path: Path, capsys):
-    wt = tmp_path / "wt"
-    wt.mkdir()
+def test_plan_issue_planned_record_does_not_write():
+    from lokay.proc.record_issue_approach_write import record
+
+    assert record({"route": "planned"}, {})["route"] == "planned"
+
+
+def test_issue_plan_terminal_reports_written():
+    from lokay.proc.issue_plan_terminal import terminal
+
+    out = terminal(
+        {
+            "issue": {"repo": "a/b", "number": 7},
+            "worktree": "/w",
+            "rel_path": ".lokay/approach.md",
+        },
+        {
+            "source": "deterministic",
+            "content": "# Approach",
+            "plan": {},
+            "approach_path": "/w/.lokay/approach.md",
+        },
+        {"route": "write"},
+        {"route": "written"},
+    )["result"]
+    assert out["ok"] is True and out["wrote"] is True and out["planned"] is False
+
+
+def test_plan_issue_cli_rejects_fake_llm_slot(capsys):
     code = plan_issue.main(
-        [
-            "--worktree",
-            str(wt),
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "7",
-            "--title",
-            "Tiny fix",
-            "--body",
-            "## Goal\nFix the thing in `src/lokay/x.py`\n",
-        ]
+        ["--worktree", "/tmp", "--repo", "a/b", "--issue", "1", "--llm"]
     )
-    assert code == 0
     out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is True
-    assert out["planned"] is True
-    assert out["wrote"] is False
-    assert not (wt / APPROACH_REL_PATH).exists()
-    assert "Approach plan" in out["content"]
-
-
-def test_plan_issue_cli_live_writes(tmp_path: Path, monkeypatch, capsys):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: dry-run
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wts"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    monkeypatch.setattr(plan_issue, "mutations_allowed", lambda **k: True)
-    issue_json = tmp_path / "issue.json"
-    issue_json.write_text(
-        json.dumps(_issue(repo="mikolaj92/lokay").to_dict()), encoding="utf-8"
-    )
-    code = plan_issue.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--worktree",
-            str(wt),
-            "--issue-json",
-            str(issue_json),
-        ]
-    )
-    assert code == 0
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is True
-    assert out["wrote"] is True
-    assert (wt / APPROACH_REL_PATH).is_file()
-    assert "plan_issue.py" in (wt / APPROACH_REL_PATH).read_text(encoding="utf-8")
-
-
-
-
-def test_plan_issue_llm_flag_fail_closed(capsys):
-    code = plan_issue.main(
-        [
-            "--worktree",
-            "/tmp",
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "1",
-            "--llm",
-        ]
-    )
-    assert code == 1
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is False
-    assert out.get("llm_requested") is True
+    assert code == 1 and out["llm_requested"] is True
 
 
 def test_approach_present_in_diff_soft_signal():

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
-from pathlib import Path
 from typing import Any
 
 
@@ -20,7 +17,6 @@ def handle_implement(
         cycle_start,
         make_branch,
         pi_budget,
-        plan_issue,
         worktree_add,
     )
 
@@ -81,30 +77,16 @@ def handle_implement(
             up.get("worktree_add", {}).get("worktree") or inputs.get("worktree") or ""
         )
         issue_raw = up.get("get_issue", {}).get("issue") or {}
-        assert worktree
-        if not issue_raw and issue_number is not None and repo:
-            issue_raw = {
-                "repo": repo,
-                "number": issue_number,
-                "title": str(inputs.get("title") or ""),
-                "body": str(inputs.get("body") or ""),
-                "labels": [],
-                "assignees": [],
-                "url": str(inputs.get("url") or ""),
-            }
-        assert issue_raw
-        with tempfile.NamedTemporaryFile(
-            "w", suffix=".json", delete=False, encoding="utf-8"
-        ) as fh:
-            json.dump(issue_raw, fh, ensure_ascii=False)
-            issue_path = fh.name
-        try:
-            return _run_atom_main(
-                plan_issue.main,
-                [*cfg, *live, "--worktree", worktree, "--issue-json", issue_path],
-            )
-        finally:
-            Path(issue_path).unlink(missing_ok=True)
+        assert worktree and issue_raw
+        from lokay.proc.plan_issue_subflow import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+            worktree=worktree,
+            issue_raw=dict(issue_raw),
+            repo=str(issue_raw.get("repo") or repo),
+        )
 
     if atom == "localize":
         from lokay.proc.localize_execution_subflow import run
