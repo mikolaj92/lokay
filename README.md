@@ -256,6 +256,28 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Publikacja jednego PR — `pr_create_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PreparePRCreateRequest
+    PreparePRCreateRequest --> FindExistingDeliveryPR
+    FindExistingDeliveryPR --> RecordExistingDeliveryPR
+    RecordExistingDeliveryPR --> ReadPRCreateIssue: brak istniejącego PR
+    RecordExistingDeliveryPR --> PRCreateTerminal: istniejący PR
+    ReadPRCreateIssue --> ClassifyPRCreateIssue
+    ClassifyPRCreateIssue --> CreatePullRequest: issue OPEN lub brak issue
+    ClassifyPRCreateIssue --> PRCreateTerminal: issue missing / closed
+    CreatePullRequest --> PRCreateTerminal
+    PRCreateTerminal --> [*]
+```
+
+Pod-Fala publikuje jeden PR. Normalizacja head/issue/body, covering-PR lookup,
+ponowny fizyczny odczyt issue, klasyfikacja stanu, pojedynczy efekt `gh pr
+create` oraz terminal są osobnymi procesami. Fala nie pozwala uruchomić efektu,
+gdy istnieje już covering PR albo issue przestało być otwarte. Dry-run pozostaje
+planem fizycznego efektu, a nie udawanym utworzeniem PR.
+
 ### Obserwacyjny snapshot statusu — `status_snapshot`
 
 ```mermaid
@@ -1151,6 +1173,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `PRCreateExecution` | `pr_create_execution` | prowadzi duplicate/issue facts i pojedynczy fizyczny efekt publikacji PR |
 | `StatusSnapshot` | `status_snapshot` | składa read-only config, lease, grafy i ostatni pass receipt bez uruchamiania produktu |
 | `SelfRepairActivateExecution` | `self_repair_activate_execution` | aktywuje dokładny recovery commit przez jawne fakty Git i efekty |
 | `AssertRealDiffExecution` | `assert_real_diff_execution` | składa fizyczny diff, scope issue/localize i zamknięty terminal |
