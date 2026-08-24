@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from lokay.compose.tick import compose_tick
 from lokay.envelope import emit_exit, err
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
@@ -41,14 +40,22 @@ def compose_factory_pass(
             kind="factory_pass",
         )
     if _offline():
-        # Test-only escape: hermetic compose_tick (factory_begin returns the
-        # offline envelope immediately — not a second live policy brain).
-        return compose_tick(config_path=config_path, live=False)
+        return {
+            "ok": True,
+            "health": "offline",
+            "offline": True,
+            "live": False,
+            "planned": True,
+            "kind": "factory_pass",
+            "engine": "fala",
+        }
     skipped = skip_idle_factory_pass(live=live)
     if skipped is not None:
         skipped.update(kind="factory_pass", engine="fala", planned=not live)
         return skipped
-    parent_db = Path(db_path) if db_path else Path.home() / ".lokay" / "fala" / "factory"
+    parent_db = (
+        Path(db_path) if db_path else Path.home() / ".lokay" / "fala" / "factory"
+    )
     result = run_path(
         path_id="factory_pass",
         repo="__lokay_factory__",

@@ -16,7 +16,9 @@ from lokay.stuck import excluded_numbers, load_stuck, stuck_path_for
 
 def _receipt(path: Path, *, repo: str, issue: int, pid: int) -> None:
     path.write_text(
-        json.dumps({"ok": True, "detached": True, "pid": pid, "repo": repo, "issue": issue}),
+        json.dumps(
+            {"ok": True, "detached": True, "pid": pid, "repo": repo, "issue": issue}
+        ),
         encoding="utf-8",
     )
 
@@ -83,12 +85,22 @@ def test_cycle_start_without_pid_does_not_block_live_sibling(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
-    _receipt(cycle / "mikolaj92__lokay-135.json", repo="mikolaj92/lokay", issue=135, pid=42)
+    _receipt(
+        cycle / "mikolaj92__lokay-135.json", repo="mikolaj92/lokay", issue=135, pid=42
+    )
     (cycle / "mikolaj92__lokay__135.json").write_text(
-        json.dumps({"repo": "mikolaj92/lokay", "issue": 135, "started_ts": "2026-08-15T15:15:15Z"}),
+        json.dumps(
+            {
+                "repo": "mikolaj92/lokay",
+                "issue": 135,
+                "started_ts": "2026-08-15T15:15:15Z",
+            }
+        ),
         encoding="utf-8",
     )
-    _event(state, repo="mikolaj92/lokay", issue=135, ok=False, reason="invalid_branch_ref")
+    _event(
+        state, repo="mikolaj92/lokay", issue=135, ok=False, reason="invalid_branch_ref"
+    )
     stuck = {"issues": {}}
     harvest_fail_closed_children(
         stuck,
@@ -162,9 +174,9 @@ def test_harvest_closed_issue_list_refuses_truncation(monkeypatch):
 
     assert child_harvest._github_closed_mill_issues("mikolaj92/lokay") == set()
     source = Path(child_harvest.__file__).read_text(encoding="utf-8")
-    assert "Harvest CLOSED list refuses truncation before clearing stuck rows." in source
-
-
+    assert (
+        "Harvest CLOSED list refuses truncation before clearing stuck rows." in source
+    )
 
 
 def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
@@ -329,8 +341,6 @@ def test_harvest_drops_out_of_scope_cycle_start_files(tmp_path: Path, monkeypatc
     assert live.exists()
 
 
-
-
 def test_harvest_without_repos_keeps_cycle_start_files(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
@@ -392,7 +402,16 @@ def test_dead_pid_with_pr_on_receipt_is_not_blocked(tmp_path: Path):
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
     (cycle / "a__b-3.json").write_text(
-        json.dumps({"ok": True, "detached": True, "pid": 1, "repo": "a/b", "issue": 3, "pr": 88}),
+        json.dumps(
+            {
+                "ok": True,
+                "detached": True,
+                "pid": 1,
+                "repo": "a/b",
+                "issue": 3,
+                "pr": 88,
+            }
+        ),
         encoding="utf-8",
     )
     stuck = {"issues": {}}
@@ -433,7 +452,12 @@ def test_nested_adapter_envelope_invalid_branch_is_fail_closed(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
-    _receipt(cycle / "mikolaj92__ShowMeThePlayer-7.json", repo="mikolaj92/ShowMeThePlayer", issue=7, pid=8)
+    _receipt(
+        cycle / "mikolaj92__ShowMeThePlayer-7.json",
+        repo="mikolaj92/ShowMeThePlayer",
+        issue=7,
+        pid=8,
+    )
     nested = (
         "subprocess adapter failed: "
         '{"ok": false, "atom": "worktree_add", "error": '
@@ -441,7 +465,7 @@ def test_nested_adapter_envelope_invalid_branch_is_fail_closed(tmp_path: Path):
         "Preparing worktree (new branch "
         "'ai/fix/7-uv.sources-pinuje-splot-na-..-splot-bez-ce23b5da')\\n"
         "fatal: 'ai/fix/7-uv.sources-pinuje-splot-na-..-splot-bez-ce23b5da' "
-        'is not a valid branch name\\nhint: See \'git help check-ref-format\'\\n"}'
+        "is not a valid branch name\\nhint: See 'git help check-ref-format'\\n\"}"
     )
     ev = {
         "kind": "issue_to_pr",
@@ -477,7 +501,10 @@ def test_nested_adapter_envelope_invalid_branch_is_fail_closed(tmp_path: Path):
         is_live=lambda _pid: False,
     )
     assert 7 in excluded_numbers(stuck, "mikolaj92/ShowMeThePlayer")
-    assert stuck["issues"]["mikolaj92/ShowMeThePlayer#7"].get("reason") == "invalid_branch_ref"
+    assert (
+        stuck["issues"]["mikolaj92/ShowMeThePlayer#7"].get("reason")
+        == "invalid_branch_ref"
+    )
 
 
 def test_empty_jsonl_reason_falls_back_to_fala_journal_invalid_ref(tmp_path: Path):
@@ -501,7 +528,12 @@ def test_empty_jsonl_reason_falls_back_to_fala_journal_invalid_ref(tmp_path: Pat
     )
     con.execute(
         "INSERT INTO processes VALUES (?, ?, ?, ?)",
-        ("failed", "{}", '{"message":"subprocess adapter failed: \\n"}', "2026-01-01T00:00:02Z"),
+        (
+            "failed",
+            "{}",
+            '{"message":"subprocess adapter failed: \\n"}',
+            "2026-01-01T00:00:02Z",
+        ),
     )
     con.execute(
         "INSERT INTO processes VALUES (?, ?, ?, ?)",
@@ -573,7 +605,12 @@ def test_fala_journal_fallback_when_jsonl_silent(tmp_path: Path):
     )
     con.execute(
         "INSERT INTO processes VALUES (?, ?, ?, ?)",
-        ("failed", "{}", '{"message":"local_repair_exhausted"}', "2026-01-01T00:00:00Z"),
+        (
+            "failed",
+            "{}",
+            '{"message":"local_repair_exhausted"}',
+            "2026-01-01T00:00:00Z",
+        ),
     )
     con.commit()
     con.close()
@@ -599,7 +636,9 @@ def test_tmp_mill_does_not_inherit_host_cycle(tmp_path: Path):
     _receipt(host_cycle / "a__one-2.json", repo="a/one", issue=2, pid=999_999_999)
     host_state = host / ".lokay" / "state.jsonl"
     host_state.parent.mkdir(parents=True, exist_ok=True)
-    _event(host_state, repo="a/one", issue=2, ok=False, reason="test_local_recheck_failed")
+    _event(
+        host_state, repo="a/one", issue=2, ok=False, reason="test_local_recheck_failed"
+    )
     stuck = {"issues": {}}
     harvest_fail_closed_children(
         stuck,
@@ -611,6 +650,9 @@ def test_tmp_mill_does_not_inherit_host_cycle(tmp_path: Path):
 
 
 def test_factory_begin_harvests_into_stuck(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "")
+    monkeypatch.setenv("LOKAY_HEALTH_LEASE_PATH", "")
+    monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "")
     from lokay.proc.factory_begin import run_factory_begin
 
     monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
@@ -647,7 +689,9 @@ def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monke
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
-    filler = json.dumps({"kind": "pass_receipt", "repo": "x/y", "issue": 1, "pad": "z" * 256})
+    filler = json.dumps(
+        {"kind": "pass_receipt", "repo": "x/y", "issue": 1, "pad": "z" * 256}
+    )
     with state.open("w", encoding="utf-8") as fh:
         for i in range(3000):
             fh.write(filler + "\n")
@@ -731,7 +775,14 @@ def test_three_plan_only_already_blocked_stays_blocked(tmp_path: Path):
     state = tmp_path / "state.jsonl"
     _receipt(cycle / "a__b-137.json", repo="a/b", issue=137, pid=8)
     for i in range(1, 4):
-        _event(state, repo="a/b", issue=137, ok=False, reason="plan_only", run_id=f"run-{i}")
+        _event(
+            state,
+            repo="a/b",
+            issue=137,
+            ok=False,
+            reason="plan_only",
+            run_id=f"run-{i}",
+        )
     stuck = {
         "issues": {
             "a/b#137": {
@@ -964,14 +1015,15 @@ def test_two_push_failed_leave_the_slot(tmp_path: Path):
     assert stuck["issues"]["a/b#86"].get("failures") == 2
 
 
-
 def test_one_rebase_conflict_does_not_leave_the_slot(tmp_path: Path):
     """Conflict close + re-ready is the product; harvest must not bury the retry."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
     _receipt(cycle / "a__b-142.json", repo="a/b", issue=142, pid=1)
-    _event(state, repo="a/b", issue=142, ok=False, reason="rebase_conflict", run_id="r1")
+    _event(
+        state, repo="a/b", issue=142, ok=False, reason="rebase_conflict", run_id="r1"
+    )
     stuck: dict = {"issues": {}}
     harvest_fail_closed_children(
         stuck,
@@ -1010,12 +1062,19 @@ def test_three_rebase_conflicts_leave_the_slot(tmp_path: Path):
     assert stuck["issues"]["a/b#142"].get("reason") == "rebase_conflict"
 
 
-def test_terminal_influenzer_86_plan_only_row_with_zero_diff_error_is_not_refreshed(tmp_path: Path):
+def test_terminal_influenzer_86_plan_only_row_with_zero_diff_error_is_not_refreshed(
+    tmp_path: Path,
+):
     """#86's recorded plan_only row and final zero_diff error stay terminal."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
-    _receipt(cycle / "mikolaj92__influenzer-86.json", repo="mikolaj92/influenzer", issue=86, pid=8)
+    _receipt(
+        cycle / "mikolaj92__influenzer-86.json",
+        repo="mikolaj92/influenzer",
+        issue=86,
+        pid=8,
+    )
     _event(
         state,
         repo="mikolaj92/influenzer",
@@ -1061,7 +1120,12 @@ def test_terminal_influenzer_137_plan_only_is_not_refreshed(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
-    _receipt(cycle / "mikolaj92__influenzer-137.json", repo="mikolaj92/influenzer", issue=137, pid=8)
+    _receipt(
+        cycle / "mikolaj92__influenzer-137.json",
+        repo="mikolaj92/influenzer",
+        issue=137,
+        pid=8,
+    )
     _event(
         state,
         repo="mikolaj92/influenzer",
@@ -1102,7 +1166,6 @@ def test_terminal_influenzer_137_plan_only_is_not_refreshed(tmp_path: Path):
     assert 137 in excluded_numbers(stuck, "mikolaj92/influenzer")
 
 
-
 def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
@@ -1119,15 +1182,12 @@ def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path
     assert stuck["issues"]["a/b#4796"].get("reason") == "plan_only"
 
 
-
-
 def test_harvest_idle_mill_stuck_skips_when_not_live(tmp_path: Path):
     from lokay.child_harvest import harvest_idle_mill_stuck
 
     stuck_path = tmp_path / "stuck.json"
     stuck_path.write_text(
-        json.dumps({"issues": {}, "mikolaj92/Temida#4805": {"blocked": True}})
-        + "\n",
+        json.dumps({"issues": {}, "mikolaj92/Temida#4805": {"blocked": True}}) + "\n",
         encoding="utf-8",
     )
     harvest_idle_mill_stuck(config_path=str(tmp_path / "missing.yaml"), live=False)
