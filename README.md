@@ -10,14 +10,14 @@ Lokay continuously mills work across configured GitHub repositories: survey, per
 4. Implements ready issues through `issue_to_pr` **serially by design** (`limits.max_issue_to_pr_per_pass`, default **1** — an optional pass budget, not concurrent worktrees/Pi/tmux). Never a second AI PR in the same repo. A contradiction gate demotes/defers clear queue conflicts before implement.
 5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes.
 
-The top-level mill runs the parent `factory_pass` Fala. Its `factory_tick` effector applies the multi-repo pass policy and composes the smaller `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr` child Falas. Parent and child runs use separate journals.
+The top-level Lokay runs the parent `factory_pass` Fala. Catalog surveys, planning, closeout, dispatch and recovery are authored paths or nested authored paths. Parent and child runs use separate journals.
 
 ## Architecture
 
 - **Core value:** authored Fala process graph(s) (`fala/`). Workers, GitHub, and atom bodies are replaceable blocks under JSON contracts — see `docs/PROCESS.md`.
 - `src/lokay/proc/`: small command-line atoms. They exchange JSON envelopes on stdout.
 - `fala/lokay.fala-package.toml`: authored parent `factory_pass` plus child conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
-- `src/lokay/compose/`: graph entrypoints plus the Python tick, mill, and status policy.
+- `src/lokay/compose/`: thin graph and read-only status entrypoints; product ordering stays in Fala.
 - `executor.command` and `executor.args`: the sole nondeterministic coding slot. Lokay rejects fake, stub, and no-op agents.
 - Local verification is repository-declared (`[tool.lokay] test` in the worktree `pyproject.toml`). No declaration is an honest skip — Lokay does not invent `pytest` from `pyproject` / `tests/`.
 - `repos.mikolaj92.yaml`: managed repository scope.
@@ -94,6 +94,40 @@ stateDiagram-v2
     RecordPass --> Recovery: potwierdzona awaria nośnika
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
+
+### Otwarcie workspace passu — `factory_begin`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectFactoryLease
+    InspectFactoryLease --> RestoreDelegatedLease: brak pliku tego samego tokena
+    InspectFactoryLease --> RunFactoryPreflight: brak delegowanej capability
+    InspectFactoryLease --> LoadFactoryConfig: ważna capability
+    RestoreDelegatedLease --> InspectFactoryLeaseAgain
+    InspectFactoryLeaseAgain --> FactoryBeginTerminal: capability nieważna
+    InspectFactoryLeaseAgain --> LoadFactoryConfig: capability ważna
+    RunFactoryPreflight --> FactoryBeginTerminal: preflight failed
+    RunFactoryPreflight --> LoadFactoryConfig: preflight green / dry-run
+    LoadFactoryConfig --> ClassifyFactoryMode
+    ClassifyFactoryMode --> FactoryBeginTerminal: live + config nie-live / offline
+    ClassifyFactoryMode --> SelectFactoryScope
+    SelectFactoryScope --> ReadFactoryStuckLedger
+    ReadFactoryStuckLedger --> HarvestFactoryChildren
+    HarvestFactoryChildren --> PersistFactoryStuckLedger
+    PersistFactoryStuckLedger --> CreateFactoryPassDirectory
+    CreateFactoryPassDirectory --> SelectFactorySurveyRepos
+    SelectFactorySurveyRepos --> BuildFactoryBeginState
+    BuildFactoryBeginState --> PersistFactoryBeginState
+    PersistFactoryBeginState --> FactoryBeginTerminal
+    FactoryBeginTerminal --> [*]
+```
+
+Lease/preflight, config mode, scope, stuck ledger, harvest, pass directory,
+survey rotation, zbudowanie stanu i dwa zapisy są osobnymi procesami. Fala
+posiada jedyne drzewo otwarcia passu. Odzyskanie delegowanej capability jest
+jednym ograniczonym efektem, nie pętlą. Offline i preflight failure są jawnymi
+terminalami. Nie ma agenta: wszystkie decyzje wynikają z lease, konfiguracji i
+lokalnych ledgerów.
 
 ### Przegląd gotowych issue — `survey_ready`
 
@@ -934,6 +968,7 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `FactoryBegin` | `factory_begin` | otwiera workspace passu przez jawny preflight, ledger i persist |
 | `ReadySurvey` | `survey_ready` | seryjny odczyt i klasyfikacja gotowych issue |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
