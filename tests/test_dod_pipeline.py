@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-
 import json
 from pathlib import Path
 
-from lokay.proc import assign_issue, pr_create, pr_merge
+from lokay.proc import assign_issue, pr_merge
 from lokay.runner import CommandResult, CommandSpec
 
 
@@ -79,58 +78,30 @@ def test_assign_live_fixture_applies_configured_self(tmp_path, monkeypatch, caps
     assert "164" in joined
 
 
-def test_pr_create_after_push_shaped_success_has_number(tmp_path, monkeypatch, capsys):
-    cfg = _cfg(tmp_path, mode="live")
-    runner = _GhRunner(stdout="https://github.com/mikolaj92/lokay/pull/88\n")
-    monkeypatch.setattr(pr_create, "runner", lambda: runner)
-    monkeypatch.setattr(pr_create, "mutations_allowed", lambda **k: True)
-    code = pr_create.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--repo",
-            "mikolaj92/lokay",
-            "--title",
-            "fix: shaped success",
-            "--body",
-            "delivery body",
-            "--head",
-            "ai/fix/shaped-success",
-        ]
-    )
-    assert code == 0
-    env = _envelope(capsys)
-    assert env["ok"] is True
-    assert env["pr"] == 88
-    assert env["pull"]["number"] == 88
-    assert "pr create" in " ".join(runner.calls[0])
-    assert "--head" in runner.calls[0]
+def test_pr_create_after_push_shaped_success_has_number():
+    from lokay.proc.pr_create_terminal import terminal
+
+    out = terminal(
+        {"repo": "a/b", "head": "ai/fix/1", "issue": 1},
+        {"route": "none"},
+        {"issue_state": "OPEN"},
+        {"route": "create"},
+        {"route": "created", "pull": {"number": 239}, "planned": False},
+    )["result"]
+    assert out["ok"] is True and out["pr"] == 239 and out["planned"] is False
 
 
-def test_pr_create_dry_run_has_planned_pr_fields(tmp_path, capsys):
-    cfg = _cfg(tmp_path)
-    code = pr_create.main(
-        [
-            "--config",
-            str(cfg),
-            "--repo",
-            "mikolaj92/lokay",
-            "--title",
-            "fix: planned",
-            "--body",
-            "body",
-            "--head",
-            "ai/fix/1-x",
-        ]
-    )
-    assert code == 0
-    env = _envelope(capsys)
-    assert env["ok"] is True
-    assert env["planned"] is True
-    assert env["pull"]["planned"] is True
-    assert env["pull"]["head"] == "ai/fix/1-x"
-    assert env["pr"] is None
+def test_pr_create_dry_run_has_planned_pr_fields():
+    from lokay.proc.pr_create_terminal import terminal
+
+    out = terminal(
+        {"repo": "a/b", "head": "ai/fix/1", "issue": 1},
+        {"route": "none"},
+        {"issue_state": "OPEN"},
+        {"route": "create"},
+        {"route": "created", "pull": {"number": None}, "planned": True},
+    )["result"]
+    assert out["ok"] is True and out["planned"] is True and out["existing"] is False
 
 
 def test_pr_merge_mergeable_reports_merged(tmp_path, monkeypatch, capsys):
@@ -201,8 +172,6 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
             "164",
         ]
     ]
-
-
 
 
 def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):

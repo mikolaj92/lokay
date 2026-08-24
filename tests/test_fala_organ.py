@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 from lokay import fala_organ
@@ -501,20 +500,16 @@ def test_pr_create_failed_push_never_creates(monkeypatch):
     assert result["reason"] == "push_failed"
 
 
-def test_pr_create_passes_issue_number_to_create(monkeypatch):
+def test_pr_create_passes_issue_number_to_authored_subflow(monkeypatch):
     called = []
-
-    def fake_run(main, argv):
-        called.append(argv)
-        return {"ok": True, "pr": {"url": "https://example.test/pr/1"}}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    monkeypatch.setattr(
+        "lokay.proc.pr_create_subflow.run",
+        lambda **kwargs: called.append(kwargs) or {"ok": True, "pr": 1},
+    )
     result = fala_organ._handle(
         "pr_create", {"repo": "a/b", "live": False}, _pr_create_up()
     )
-    assert result["ok"] is True
-    assert called
-    assert called[0][called[0].index("--issue") + 1] == "7"
+    assert result["ok"] is True and called[0]["issue"] == 7
 
 
 def test_pr_create_does_not_open_when_issue_already_closed(monkeypatch):
@@ -551,29 +546,29 @@ def test_pr_create_rechecks_live_issue_before_opening(monkeypatch):
     assert result["reason"] == "issue_closed"
 
 
-def test_pr_create_runs_when_live_issue_still_open(monkeypatch):
+def test_pr_create_runs_authored_subflow_when_live_issue_still_open(monkeypatch):
     called = []
 
     def fake_run(main, argv):
-        if "--issue" in argv and "--head" not in argv:
-            return {
-                "ok": True,
-                "issue": {
-                    "repo": "a/b",
-                    "number": 7,
-                    "title": "Fix thing",
-                    "state": "OPEN",
-                },
-            }
-        called.append(argv)
-        return {"ok": True, "pr": {"url": "https://example.test/pr/1"}}
+        return {
+            "ok": True,
+            "issue": {
+                "repo": "a/b",
+                "number": 7,
+                "title": "Fix thing",
+                "state": "OPEN",
+            },
+        }
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    monkeypatch.setattr(
+        "lokay.proc.pr_create_subflow.run",
+        lambda **kwargs: called.append(kwargs) or {"ok": True, "pr": 1},
+    )
     result = fala_organ._handle(
         "pr_create", {"repo": "a/b", "live": True}, _pr_create_up()
     )
-    assert result["ok"] is True
-    assert called and "--head" in called[0]
+    assert result["ok"] is True and called[0]["head"]
 
 
 def test_repair_agent_treats_missing_live_issue_as_closed(monkeypatch):
