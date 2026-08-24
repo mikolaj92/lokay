@@ -73,7 +73,6 @@ def handle_factory(
         reap_stale_implementing,
         reap_stale_worktrees,
         refresh_occupancy,
-        ready_hygiene,
         compact_state,
         survey_ready,
         survey_repos,
@@ -182,7 +181,12 @@ def handle_factory(
         )
 
     if atom == "ready_hygiene":
-        return _run_atom_main(ready_hygiene.main, [*cfg, *live])
+        from lokay.proc.ready_hygiene_subflow import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
 
     if atom == "plan_pass":
         from lokay.proc.plan_pass_subflow import run

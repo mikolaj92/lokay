@@ -83,75 +83,9 @@ def _clear_hygiene_stamp(stamp: Path | None) -> None:
 
 
 def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:
-    args = argparse.Namespace(config=config_path, live=live)
-    cfg = load_cfg(args)
-    stamp = hygiene_stamp_path(cfg)
-    # Fresh leftover-ready skip does not require healthy. Hosted leftover-ready parks still do.
-    # Idle leftover-ready skip outlives leftover-probe.
-    # Hosted factory_pass stays at 300s. Leftover-probe host still lists when stamp is missing.
-    idle_ttl = (
-        IDLE_HYGIENE_TTL_SECONDS
-        if os.environ.get("LOKAY_LEFTOVER_PROBE_GH_OK") == "1"
-        else None
-    )
-    if hygiene_recently_empty(stamp, ttl=idle_ttl):
-        # Fresh leftover-ready skip is not applied.
-        # Leftover-ready skip reports probe_failed.
-        return ok(
-            planned=not live,
-            applied=False,
-            cleaned=[],
-            cleaned_count=0,
-            skipped=True,
-            reason="recent_empty",
-            probe_failed=False,
-        )
-    apply = mutations_allowed(live_flag=live, cfg=cfg)
-    cleaned: list[dict[str, Any]] = []
-    probed = False
-    probe_failed = False
-    for repo in cfg.active_repos():
-        probed = True
-        # Unhealthy leftover-ready still lists GitHub. Hosted leftover-ready parks still do.
-        try:
-            issues = list_labeled_issues(
-                runner(cfg),
-                cfg,
-                repo,
-                label=cfg.ready_label,
-                live=live,
-            )
-        except RuntimeError as exc:
-            if is_github_rate_limit_error(exc):
-                probe_failed = True
-                continue
-            raise
-        for issue in issues:
-            if WORK_READY_LABEL in issue.labels:
-                continue
-            remove_issue_labels(
-                runner(cfg), repo.name, issue.number, [cfg.ready_label], live=apply
-            )
-            row = {"repo": repo.name, "issue": issue.number}
-            if not apply:
-                row["planned"] = True
-            cleaned.append(row)
-    if apply and probed and not probe_failed:
-        if cleaned:
-            _clear_hygiene_stamp(stamp)
-        else:
-            _touch_hygiene_stamp(stamp)
-    removed = [row for row in cleaned if not row.get("planned")]
-    # Unhealthy leftover-ready parks are planned.
-    # Empty leftover-ready host is not applied.
-    # Leftover-ready rate limit does not stamp empty.
-    return ok(
-        planned=not apply if cleaned else not live,
-        applied=apply if cleaned else False,
-        probe_failed=probe_failed,
-        cleaned=cleaned,
-        cleaned_count=len(removed),
-    )
+    from lokay.proc.ready_hygiene_subflow import run
+
+    return run(config_path=config_path, live=live)
 
 
 def main(argv: list[str] | None = None) -> int:
