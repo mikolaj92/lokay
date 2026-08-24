@@ -26,7 +26,6 @@ def handle_publication(
     from lokay.proc import (
         commit_all,
         get_issue,
-        pr_create,
         push_branch,
         rebase_onto_base,
     )
@@ -229,25 +228,17 @@ def handle_publication(
             fh.write(body)
             body_path = fh.name
         try:
-            return _run_atom_main(
-                pr_create.main,
-                [
-                    *cfg,
-                    *live,
-                    "--repo",
-                    repo,
-                    "--title",
-                    title,
-                    "--body-file",
-                    body_path,
-                    "--head",
-                    branch,
-                    *(
-                        ["--issue", str(issue_number)]
-                        if issue_number is not None
-                        else []
-                    ),
-                ],
+            from lokay.proc.pr_create_subflow import run
+
+            return run(
+                config_path=str(inputs.get("config_path") or "") or None,
+                live=bool(inputs.get("live")),
+                repo=repo,
+                issue=issue_number,
+                title=title,
+                body=Path(body_path).read_text(encoding="utf-8"),
+                head=branch,
+                base="main",
             )
         finally:
             Path(body_path).unlink(missing_ok=True)
