@@ -16,6 +16,7 @@ def test_describe_parent_factory_graph():
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
         "host_ff",
+        "factory_begin_host_gate",
         "factory_begin",
         "survey_prs",
         "survey_inbox",
@@ -37,7 +38,8 @@ def test_describe_parent_factory_graph():
         "record_pass",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
-    assert conduction["factory_begin"] == ["host_ff"]
+    assert conduction["factory_begin_host_gate"] == ["host_ff"]
+    assert conduction["factory_begin"] == ["factory_begin_host_gate"]
     assert conduction["survey_prs"] == ["factory_begin"]
     assert "survey_prs" in conduction["survey_inbox"]
     assert "survey_inbox" in conduction["survey_ready"]

@@ -116,30 +116,22 @@ def handle_factory(
             argv.extend(["--checkout", str(checkout)])
         return _run_atom_main(host_ff.main, argv)
 
-    if atom == "factory_begin":
-        # In-cycle host_ff updates git; this process still imported the
-        # previous package and the Fala graph is already materialized.
-        # Refuse product work so the next launchd tick reinstalls.
-        # Launchd-ff under mill.lock can eat updated=true; then HEAD
-        # moved under LOKAY_PROCESS_HEAD and we still refuse.
-        from lokay.git_host_ff import process_head_moved
+    if atom == "factory_begin_host_gate":
+        from lokay.proc.gate_factory_begin_host import gate
 
-        host = up.get("host_ff") or {}
-        if "--live" in live and host.get("updated") is True:
-            return {
-                "ok": False,
-                "error": "host checkout updated; restart required before product work",
-                "reason": "host_updated",
-                "health": "host_updated",
-                "restart_required": True,
-                "head": host.get("head"),
-                "origin_main": host.get("origin_main"),
-            }
-        checkout = inputs.get("checkout") or os.environ.get("LOKAY_ROOT")
-        moved = process_head_moved(Path(str(checkout))) if checkout else None
-        if "--live" in live and moved is not None:
-            return moved
-        return _run_atom_main(factory_begin.main, [*cfg, *live])
+        return gate(
+            up.get("host_ff") or {},
+            live=bool(inputs.get("live")),
+            checkout=str(inputs.get("checkout") or os.environ.get("LOKAY_ROOT") or ""),
+        )
+
+    if atom == "factory_begin":
+        from lokay.proc.factory_begin_subflow import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
 
     if atom == "survey_repos":
         # Legacy bridge atom (not in parent factory_pass graph).

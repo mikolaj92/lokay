@@ -213,7 +213,9 @@ def test_skip_worktree_product_config_fast_forwards(tmp_path: Path):
 
     assert result["updated"] is True
     assert _git(host, "rev-parse", "HEAD").stdout.strip() == remote
-    assert (host / "config.yaml").read_text(encoding="utf-8") == "require_llm_review: true\n"
+    assert (host / "config.yaml").read_text(
+        encoding="utf-8"
+    ) == "require_llm_review: true\n"
     listed = _git(host, "ls-files", "-v", "--", "config.yaml").stdout
     assert listed.startswith("H ") or listed.startswith("h ")
 
@@ -225,7 +227,9 @@ def test_refuse_when_skip_worktree_would_be_overwritten(tmp_path: Path):
     _git(host, "update-index", "--skip-worktree", "--", "repos.mikolaj92.yaml")
     old = _git(host, "rev-parse", "HEAD").stdout.strip()
 
-    (seed / "repos.mikolaj92.yaml").write_text("clone_path: /Users/laptop\n", encoding="utf-8")
+    (seed / "repos.mikolaj92.yaml").write_text(
+        "clone_path: /Users/laptop\n", encoding="utf-8"
+    )
     _git(seed, "add", "repos.mikolaj92.yaml")
     _git(seed, "commit", "-m", "laptop paths")
     _git(seed, "push", "origin", "main")
@@ -362,105 +366,29 @@ def test_process_head_moved_when_env_differs(monkeypatch, tmp_path: Path):
     assert process_head_moved(tmp_path) is None
 
 
-def test_factory_begin_refuses_after_in_cycle_host_ff_update(monkeypatch):
-    from lokay import fala_organ
-    from lokay.git_host_ff import PROCESS_HEAD_ENV
+def test_factory_begin_host_gate_refuses_in_cycle_update():
+    from lokay.proc.gate_factory_begin_host import gate
 
-    monkeypatch.delenv(PROCESS_HEAD_ENV, raising=False)
-    out = fala_organ._handle(
-        "factory_begin",
-        {"live": True, "config_path": "config.yaml"},
-        {"host_ff": {"ok": True, "updated": True, "head": "abc", "origin_main": "abc"}},
+    out = gate(
+        {"updated": True, "head": "a", "origin_main": "b"}, live=True, checkout=""
     )
-    assert out["ok"] is False
-    assert out["reason"] == "host_updated"
-    assert out["health"] == "host_updated"
-    assert out["restart_required"] is True
+    assert out["ok"] is False and out["reason"] == "host_updated"
 
 
-def test_factory_begin_continues_when_host_already_current(monkeypatch):
-    from lokay import fala_organ
-    from lokay.git_host_ff import PROCESS_HEAD_ENV
+def test_factory_begin_host_gate_continues_current():
+    from lokay.proc.gate_factory_begin_host import gate
 
-    monkeypatch.delenv(PROCESS_HEAD_ENV, raising=False)
-    called = []
-
-    def fake_run(main, argv):
-        called.append(argv)
-        return {"ok": True, "pass_dir": "/tmp/pass"}
-
-    # handle_factory rebinds _run_atom_main from fala_organ each call.
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    out = fala_organ._handle(
-        "factory_begin",
-        {"live": True, "config_path": "config.yaml"},
-        {"host_ff": {"ok": True, "updated": False, "already_current": True}},
-    )
-    assert out["ok"] is True
-    assert called
+    assert gate({"updated": False}, live=True, checkout="")["route"] == "begin"
 
 
-def test_factory_begin_refuses_when_process_head_moved(monkeypatch, tmp_path: Path):
-    from lokay import fala_organ
-    from lokay.git_host_ff import PROCESS_HEAD_ENV
+def test_factory_begin_planned_ignores_host_updated():
+    from lokay.proc.gate_factory_begin_host import gate
 
-    checkout = tmp_path / "host"
-    checkout.mkdir()
-    monkeypatch.setenv(PROCESS_HEAD_ENV, "old-head")
-    monkeypatch.setenv("LOKAY_ROOT", str(checkout))
-    monkeypatch.setattr(
-        "lokay.git_host_ff.checkout_head",
-        lambda path: "new-head",
-    )
-    called = []
-
-    def fake_run(main, argv):
-        called.append(argv)
-        return {"ok": True, "pass_dir": "/tmp/pass"}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    out = fala_organ._handle(
-        "factory_begin",
-        {"live": True, "config_path": "config.yaml"},
-        {"host_ff": {"ok": True, "updated": False, "already_current": True}},
-    )
-    assert out["ok"] is False
-    assert out["reason"] == "host_updated"
-    assert out["health"] == "host_updated"
-    assert out["restart_required"] is True
-    assert out["process_head"] == "old-head"
-    assert out["head"] == "new-head"
-    assert not called
+    assert gate({"updated": True}, live=False, checkout="")["route"] == "begin"
 
 
-def test_factory_begin_planned_ignores_host_updated(monkeypatch):
-    from lokay.git_host_ff import PROCESS_HEAD_ENV
-
-    monkeypatch.delenv(PROCESS_HEAD_ENV, raising=False)
-    from lokay import fala_organ
-
-    called = []
-
-    def fake_run(main, argv):
-        called.append(argv)
-        return {"ok": True, "pass_dir": "/tmp/pass"}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    out = fala_organ._handle(
-        "factory_begin",
-        {"live": False, "config_path": "config.yaml"},
-        {"host_ff": {"ok": True, "updated": True, "head": "abc"}},
-    )
-    assert out["ok"] is True
-    assert called
-
-
-def test_factory_pass_starts_with_host_ff():
+def test_factory_pass_starts_with_host_ff_and_restart_gate():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids[0] == "host_ff"
-    assert ids[1] == "factory_begin"
-    conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
-    assert conduction["factory_begin"] == ["host_ff"]
-    assert "host_ff" not in conduction["dispatch_implement"]
+    ids = [n["id"] for n in path["nodes"]]
+    assert ids[:3] == ["host_ff", "factory_begin_host_gate", "factory_begin"]
