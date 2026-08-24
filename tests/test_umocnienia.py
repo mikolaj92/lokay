@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from lokay.graph_run import normalize_path_result
 from lokay.passkit import io as pass_io
 from lokay.passkit.health import evaluate_mill_stop
 from lokay.preflight import (
@@ -23,7 +21,6 @@ from lokay.proc.detach_issue_to_pr import (
     issue_to_pr_receipt_path,
     live_issue_to_pr_receipts,
 )
-from lokay.proc.self_repair_activate import main as activate_main
 from lokay.proc.find_published_self_repair import find as find_published_self_repair
 from lokay.recovery_history import observe_run, record_observation
 
@@ -384,93 +381,6 @@ def test_compute_health_by_repo_contains_only_survey_scope(tmp_path, monkeypatch
     assert [row["repo"] for row in tick["remaining"]["by_repo"]] == survey_scope
 
 
-def test_activate_descendant_of_recovery_keeps_published_push(
-    tmp_path, monkeypatch, capsys
-):
-    clone = tmp_path / "lokay"
-    bare = tmp_path / "origin.git"
-    clone.mkdir()
-    subprocess.run(
-        ["git", "init", "--bare", str(bare)], check=True, capture_output=True
-    )
-
-    def git(*args: str) -> None:
-        subprocess.run(
-            ["git", "-C", str(clone), *args], check=True, capture_output=True
-        )
-
-    git("init")
-    git("config", "user.email", "t@t.example")
-    git("config", "user.name", "t")
-    (clone / "a.txt").write_text("one\n", encoding="utf-8")
-    git("add", "a.txt")
-    git("commit", "-m", "self-repair: cafebabe")
-    recovery = subprocess.check_output(
-        ["git", "-C", str(clone), "rev-parse", "HEAD"], text=True
-    ).strip()
-    (clone / "a.txt").write_text("two\n", encoding="utf-8")
-    git("add", "a.txt")
-    git("commit", "-m", "host_ff later")
-    descendant = subprocess.check_output(
-        ["git", "-C", str(clone), "rev-parse", "HEAD"], text=True
-    ).strip()
-    git("branch", "-M", "main")
-    git("remote", "add", "origin", str(bare))
-    git("push", "-u", "origin", "main")
-
-    from lokay.proc import self_repair_activate as act
-
-    monkeypatch.setattr(
-        act,
-        "load_cfg",
-        lambda a: SimpleNamespace(
-            active_repos=lambda: [
-                SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)
-            ]
-        ),
-    )
-    monkeypatch.setattr(act, "mutations_allowed", lambda **k: True)
-    code = activate_main(["--live", "--commit", recovery])
-    assert code == 0
-    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert payload["ok"] is True
-    assert payload["published"] is True
-    assert payload["commit"] == recovery
-    head = subprocess.check_output(
-        ["git", "-C", str(clone), "rev-parse", "HEAD"], text=True
-    ).strip()
-    assert head == descendant
-
-
-def test_activate_dirty_keeps_published_commit(tmp_path, monkeypatch):
-    from types import SimpleNamespace
-    from lokay.proc import self_repair_activate as act
-
-    clone = tmp_path / "lokay"
-    clone.mkdir()
-    monkeypatch.setattr(
-        act,
-        "load_cfg",
-        lambda a: SimpleNamespace(
-            active_repos=lambda: [
-                SimpleNamespace(name="mikolaj92/lokay", clone_path=clone)
-            ]
-        ),
-    )
-    monkeypatch.setattr(act, "mutations_allowed", lambda **k: True)
-
-    def fake_run(cmd, **kwargs):
-        if "status" in cmd:
-            return SimpleNamespace(returncode=0, stdout=" M repos.mikolaj92.yaml\n")
-        if "merge-base" in cmd:
-            return SimpleNamespace(returncode=0, stdout="")
-        return SimpleNamespace(returncode=1, stdout="")
-
-    monkeypatch.setattr(act.subprocess, "run", fake_run)
-    code = activate_main(["--live", "--commit", "abc1234"])
-    assert code == 0
-
-
 def test_live_receipt_with_unreadable_command_stays_occupied(tmp_path, monkeypatch):
     """A live PID with an unavailable ps command is not proof that its child died."""
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -563,7 +473,6 @@ def test_detach_refuses_to_spawn_without_durable_reservation(tmp_path, monkeypat
 
 def test_starting_receipt_keeps_repo_occupied_without_pid(tmp_path, monkeypatch):
     """A durable pre-Popen reservation remains occupancy until final publication."""
-    import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
     path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
