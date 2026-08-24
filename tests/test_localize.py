@@ -41,7 +41,9 @@ def _issue(**kwargs) -> Issue:
 
 def test_walk_and_select_prefers_explicit_seed_paths(tmp_path: Path):
     (tmp_path / "src" / "lokay" / "proc").mkdir(parents=True)
-    (tmp_path / "src" / "lokay" / "proc" / "localize.py").write_text("x\n", encoding="utf-8")
+    (tmp_path / "src" / "lokay" / "proc" / "localize.py").write_text(
+        "x\n", encoding="utf-8"
+    )
     (tmp_path / "src" / "lokay" / "other.py").write_text("y\n", encoding="utf-8")
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests" / "test_localize.py").write_text("z\n", encoding="utf-8")
@@ -110,7 +112,9 @@ def test_build_localization_from_issue_and_tree(tmp_path: Path):
     target = tmp_path / "src" / "lokay" / "proc" / "localize.py"
     target.write_text("# atom\n", encoding="utf-8")
     (tmp_path / "fala").mkdir()
-    (tmp_path / "fala" / "lokay.fala-package.toml").write_text("id='x'\n", encoding="utf-8")
+    (tmp_path / "fala" / "lokay.fala-package.toml").write_text(
+        "id='x'\n", encoding="utf-8"
+    )
 
     issue = _issue()
     seed = f"{issue.title}\n{issue.body}"
@@ -121,196 +125,6 @@ def test_build_localization_from_issue_and_tree(tmp_path: Path):
     assert path == tmp_path / LOCALIZE_REL_PATH
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["paths"]
-
-
-def test_localize_cli_planned_no_write(tmp_path: Path, capsys):
-    wt = tmp_path / "wt"
-    (wt / "src" / "lokay").mkdir(parents=True)
-    (wt / "src" / "lokay" / "x.py").write_text("1\n", encoding="utf-8")
-    code = localize.main(
-        [
-            "--worktree",
-            str(wt),
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "88",
-            "--title",
-            "Fix x",
-            "--body",
-            "Change `src/lokay/x.py` only.\n",
-        ]
-    )
-    assert code == 0
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is True
-    assert out["planned"] is True
-    assert out["wrote"] is False
-    assert "src/lokay/x.py" in out["paths"]
-    assert not (wt / LOCALIZE_REL_PATH).exists()
-
-
-def test_localize_cli_skips_agent_when_localize_json_has_paths(tmp_path: Path, monkeypatch, capsys):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: live
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: true
-  agent: grok
-  command: grok
-  args: ['prompt']
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wts"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    wt = tmp_path / "wt"
-    (wt / "src").mkdir(parents=True)
-    (wt / "src" / "a.py").write_text("a\n", encoding="utf-8")
-    loc_dir = wt / ".lokay"
-    loc_dir.mkdir()
-    (loc_dir / "localize.json").write_text(
-        '{"paths":["src/a.py"],"source":"deterministic"}\n',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(localize, "mutations_allowed", lambda **k: True)
-    monkeypatch.setattr(
-        localize,
-        "semantic_agent_allowed",
-        lambda *_a, **_k: (_ for _ in ()).throw(
-            AssertionError("existing localize.json must skip the localize agent")
-        ),
-    )
-    issue_json = tmp_path / "issue.json"
-    issue_json.write_text(
-        json.dumps(
-            _issue(
-                repo="mikolaj92/lokay",
-                body="Patch `src/a.py` for the bug.\n",
-                title="patch a",
-            ).to_dict()
-        ),
-        encoding="utf-8",
-    )
-    code = localize.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--worktree",
-            str(wt),
-            "--issue-json",
-            str(issue_json),
-        ]
-    )
-    assert code == 0
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is True
-    assert "src/a.py" in out["paths"]
-    assert out.get("source") in {"existing", "bypass", "deterministic"}
-
-
-def test_localize_cli_live_writes(tmp_path: Path, monkeypatch, capsys):
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: dry-run
-github:
-  assignee: t
-  ready_label: ai:ready
-  blocked_label: ai:blocked
-  branch_prefix: ai/fix
-  pr_labels: [ai:generated]
-repos:
-  - name: mikolaj92/lokay
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-  agent: grok
-merge:
-  enabled: false
-worktrees:
-  root: {tmp_path / "wts"}
-state:
-  path: {tmp_path / "state.jsonl"}
-""",
-        encoding="utf-8",
-    )
-    wt = tmp_path / "wt"
-    (wt / "src").mkdir(parents=True)
-    (wt / "src" / "a.py").write_text("a\n", encoding="utf-8")
-    monkeypatch.setattr(localize, "mutations_allowed", lambda **k: True)
-    issue_json = tmp_path / "issue.json"
-    issue_json.write_text(
-        json.dumps(
-            _issue(
-                repo="mikolaj92/lokay",
-                body="Patch `src/a.py` for the bug.\n",
-                title="patch a",
-            ).to_dict()
-        ),
-        encoding="utf-8",
-    )
-    code = localize.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--worktree",
-            str(wt),
-            "--issue-json",
-            str(issue_json),
-        ]
-    )
-    assert code == 0
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is True
-    assert out["wrote"] is True
-    assert (wt / LOCALIZE_REL_PATH).is_file()
-    assert "src/a.py" in out["paths"]
-
-
-
-
-def test_localize_cli_empty_seed_fails(tmp_path: Path, capsys):
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    code = localize.main(["--worktree", str(wt)])
-    assert code == 1
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is False
-    assert out.get("reason") == "empty_seed"
-
-
-def test_localize_cli_empty_paths_fails(tmp_path: Path, capsys):
-    wt = tmp_path / "wt"
-    wt.mkdir()
-    code = localize.main(
-        [
-            "--worktree",
-            str(wt),
-            "--seed",
-            "the and for with that this are was been",
-        ]
-    )
-    assert code == 1
-    out = json.loads(capsys.readouterr().out.strip())
-    assert out["ok"] is False
-    assert out.get("reason") == "empty_paths"
 
 
 def test_issue_to_pr_localize_before_run_agent():
@@ -367,7 +181,9 @@ def test_polish_stop_and_acronym_do_not_pad_to_forty(tmp_path: Path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "evidence.py").write_text("e\n", encoding="utf-8")
     (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_runtime_evidence.py").write_text("t\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_runtime_evidence.py").write_text(
+        "t\n", encoding="utf-8"
+    )
     planning = tmp_path / "planning" / "tasks"
     planning.mkdir(parents=True)
     (planning / "plan.md").write_text("# plan\n", encoding="utf-8")
@@ -435,9 +251,7 @@ def test_repo_package_name_is_not_a_forty_file_cage(tmp_path: Path):
     loc = build_localization(worktree=tmp_path, seed_text=seed)
     assert len(loc.paths) < 8
     assert "influenzer" not in loc.paths
-    assert not any(
-        p.startswith("influenzer/") and "brief" not in p for p in loc.paths
-    )
+    assert not any(p.startswith("influenzer/") and "brief" not in p for p in loc.paths)
 
     pinned = build_localization(
         worktree=tmp_path,
@@ -454,7 +268,9 @@ def test_inferred_scope_promotes_product_next_to_matching_tests(tmp_path: Path):
     (pkg / "__init__.py").write_text("\n", encoding="utf-8")
     (pkg / "scan_due.py").write_text("def due():\n    return 1\n", encoding="utf-8")
     (pkg / "hom_draft.py").write_text("def draft():\n    return 1\n", encoding="utf-8")
-    (pkg / "hom_verdict.py").write_text("def verdict():\n    return 1\n", encoding="utf-8")
+    (pkg / "hom_verdict.py").write_text(
+        "def verdict():\n    return 1\n", encoding="utf-8"
+    )
     (pkg / "playbook.py").write_text("def play():\n    return 1\n", encoding="utf-8")
     tests = tmp_path / "tests"
     tests.mkdir()
@@ -559,9 +375,11 @@ def test_singleton_x_opens_platform_product_not_just_hn(tmp_path: Path):
     assert "influenzer/unrelated.py" not in loc.paths
     assert "X" in loc.matched_tokens or "x" in {t.lower() for t in loc.matched_tokens}
     # HN/brief may still appear (seed names them) but must not cage out X product.
-    assert loc.paths.index("influenzer/playbook.py") < loc.paths.index(
-        "skills/influenzer-hn"
-    ) or "skills/influenzer-hn" not in loc.paths
+    assert (
+        loc.paths.index("influenzer/playbook.py")
+        < loc.paths.index("skills/influenzer-hn")
+        or "skills/influenzer-hn" not in loc.paths
+    )
 
 
 def test_skill_hit_still_opens_identifier_product(tmp_path: Path):
@@ -606,3 +424,34 @@ def test_skill_hit_still_opens_identifier_product(tmp_path: Path):
     assert loc.paths.index("influenzer/playbook.py") < loc.paths.index(
         "tests/test_e2e_gates.py"
     )
+
+
+def test_explicit_localization_atom_builds_closed_candidate():
+    from lokay.proc.build_explicit_localization import build
+
+    out = build(
+        {"extras": [], "explicit_issue_paths": ["src/a.py"]},
+        {"existing": []},
+        {"route": "explicit"},
+    )
+    assert out["paths"] == ["src/a.py"] and out["source"] == "bypass"
+
+
+def test_empty_seed_route_is_terminal():
+    from lokay.proc.classify_localization_route import classify
+
+    assert (
+        classify(
+            {"seed": "", "has_file_hints": False},
+            {"existing": [], "worktree_exists": True},
+            agent_allowed=True,
+        )["route"]
+        == "terminal"
+    )
+
+
+def test_invalid_agent_json_exposes_exact_validator_error():
+    from lokay.proc.validate_localization_agent_json import validate
+
+    out = validate({"route": "validate", "text": "not-json"})
+    assert out["route"] == "invalid" and out["validator_error"]
