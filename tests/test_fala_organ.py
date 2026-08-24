@@ -13,7 +13,12 @@ def _ok_real_diff() -> dict:
 
 
 def _skip_test_local() -> dict:
-    return {"ok": True, "skipped": True, "reason": "no_python_test_suite", "tested": False}
+    return {
+        "ok": True,
+        "skipped": True,
+        "reason": "no_python_test_suite",
+        "tested": False,
+    }
 
 
 def _red_test_local() -> dict:
@@ -110,7 +115,9 @@ def test_closed_issue_skips_all_mutating_atoms_at_organ_boundary(monkeypatch):
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
     for atom in ("commit_all", "push", "pr_create", "pr_merge"):
-        result = fala_organ._handle(atom, {"repo": "a/b", "issue": 7}, _closed_issue_up())
+        result = fala_organ._handle(
+            atom, {"repo": "a/b", "issue": 7}, _closed_issue_up()
+        )
         assert result["ok"] is False
         assert result["reason"] == "issue_closed"
 
@@ -118,7 +125,9 @@ def test_closed_issue_skips_all_mutating_atoms_at_organ_boundary(monkeypatch):
 def test_live_closed_issue_skips_mutating_atoms_before_handlers(monkeypatch):
     def fake_run(main, argv):
         if "--head" in argv or "--worktree" in argv:
-            raise AssertionError("mutating handler must not run after live CLOSED re-view")
+            raise AssertionError(
+                "mutating handler must not run after live CLOSED re-view"
+            )
         return {
             "ok": True,
             "issue": {"repo": "a/b", "number": 7, "state": "CLOSED"},
@@ -500,7 +509,9 @@ def test_pr_create_passes_issue_number_to_create(monkeypatch):
         return {"ok": True, "pr": {"url": "https://example.test/pr/1"}}
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, _pr_create_up())
+    result = fala_organ._handle(
+        "pr_create", {"repo": "a/b", "live": False}, _pr_create_up()
+    )
     assert result["ok"] is True
     assert called
     assert called[0][called[0].index("--issue") + 1] == "7"
@@ -533,7 +544,9 @@ def test_pr_create_rechecks_live_issue_before_opening(monkeypatch):
         raise AssertionError("gh pr create must not run after a live CLOSED re-view")
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": True}, _pr_create_up())
+    result = fala_organ._handle(
+        "pr_create", {"repo": "a/b", "live": True}, _pr_create_up()
+    )
     assert result["ok"] is False
     assert result["reason"] == "issue_closed"
 
@@ -556,7 +569,9 @@ def test_pr_create_runs_when_live_issue_still_open(monkeypatch):
         return {"ok": True, "pr": {"url": "https://example.test/pr/1"}}
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
-    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": True}, _pr_create_up())
+    result = fala_organ._handle(
+        "pr_create", {"repo": "a/b", "live": True}, _pr_create_up()
+    )
     assert result["ok"] is True
     assert called and "--head" in called[0]
 
@@ -588,8 +603,6 @@ def test_repair_agent_treats_missing_live_issue_as_closed(monkeypatch):
     assert result["ok"] is False
     assert result["reason"] == "issue_closed"
     assert result["issue_state"] == "MISSING"
-
-
 
 
 def test_push_red_recheck_does_not_push(monkeypatch):
@@ -665,8 +678,6 @@ def test_localize_forwards_plan_files_likely_as_extra_paths(monkeypatch, tmp_pat
     assert extras == ["src/a.py", "tests/test_a.py"]
 
 
-
-
 def test_repair_agent_does_not_resume_when_issue_already_closed(monkeypatch):
     def boom(main, argv):
         raise AssertionError("timeout-resume must not run after the issue closed")
@@ -731,14 +742,6 @@ def test_repair_agent_rechecks_live_issue_before_timeout_resume(monkeypatch):
     assert result["issue_state"] == "CLOSED"
 
 
-
-
-
-
-
-
-
-
 def test_repair_agent_runs_after_localize_found_paths(monkeypatch):
     called = []
 
@@ -766,12 +769,6 @@ def test_repair_agent_runs_after_localize_found_paths(monkeypatch):
     assert called
 
 
-
-
-
-
-
-
 def test_repair_agent_refused_in_pr_repair_mode(monkeypatch):
     def boom(main, argv):
         raise AssertionError("no nested repair session on the pr_repair lane")
@@ -779,7 +776,13 @@ def test_repair_agent_refused_in_pr_repair_mode(monkeypatch):
     monkeypatch.setattr(fala_organ, "_run_atom_main", boom)
     result = fala_organ._handle(
         "repair_agent",
-        {"repo": "a/b", "branch": "ai/fix/7-x", "live": True, "mode": "repair", "pr": 3},
+        {
+            "repo": "a/b",
+            "branch": "ai/fix/7-x",
+            "live": True,
+            "mode": "repair",
+            "pr": 3,
+        },
         {
             "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
             "test_local": _red_test_local(),
@@ -819,16 +822,6 @@ def test_repair_agent_red_probe_runs_one_patch_from_log(monkeypatch):
     assert "--worktree" in captured["argv"]
     assert "FAILED tests/test_x.py::test_y" in captured["prompt"]
     assert "K=1" in captured["prompt"]
-
-
-
-
-
-
-
-
-
-
 
 
 def test_rebase_onto_base_forwards_repo(monkeypatch):
@@ -877,24 +870,20 @@ def test_push_forwards_repo(monkeypatch):
     assert argv[argv.index("--branch") + 1] == "ai/fix/7-x"
 
 
-def test_test_local_forwards_repo(monkeypatch):
+def test_test_local_dispatches_nested_subflow(monkeypatch):
     captured = []
-
-    def fake_run(main, argv):
-        captured.append(argv)
-        return {"ok": True, "tested": True}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    monkeypatch.setattr(
+        "lokay.proc.test_local_execution_subflow.run",
+        lambda **kwargs: captured.append(kwargs) or {"ok": True, "tested": True},
+    )
     result = fala_organ._handle(
         "test_local",
-        {"repo": "mikolaj92/lokay", "live": False},
+        {"changed_scope": True},
         {"worktree_add": {"worktree": "/tmp/worktree"}},
     )
-    assert result["ok"] is True
-    assert captured
-    argv = captured[0]
-    assert argv[argv.index("--repo") + 1] == "mikolaj92/lokay"
-    assert argv[argv.index("--worktree") + 1] == "/tmp/worktree"
+    assert result["ok"] is True and captured == [
+        {"worktree": "/tmp/worktree", "changed_scope": True}
+    ]
 
 
 def test_ensure_project_cwd_prefers_lokay_root(tmp_path, monkeypatch):
