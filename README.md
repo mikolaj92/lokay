@@ -256,6 +256,39 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Lokalizacja zakresu zmiany — `localize_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareLocalizationRequest
+    PrepareLocalizationRequest --> InspectExistingLocalization
+    InspectExistingLocalization --> ClassifyLocalizationRoute
+    ClassifyLocalizationRoute --> ValidateLocalizationPaths: existing / jawne Files
+    ClassifyLocalizationRoute --> BuildDeterministicLocalization: agent niedozwolony
+    ClassifyLocalizationRoute --> BuildLocalizationAgentRequest: semantyka potrzebna
+    BuildLocalizationAgentRequest --> RunLocalizationAgent
+    RunLocalizationAgent --> ValidateLocalizationAgentJSON: completed
+    RunLocalizationAgent --> BuildDeterministicLocalization: executor failed / timeout
+    ValidateLocalizationAgentJSON --> ValidateLocalizationPaths: poprawny zamknięty JSON
+    ValidateLocalizationAgentJSON --> RetryLocalizationAgent: błędny JSON
+    RetryLocalizationAgent --> ValidateLocalizationRetryJSON
+    ValidateLocalizationRetryJSON --> ValidateLocalizationPaths: poprawny JSON
+    ValidateLocalizationRetryJSON --> LocalizationTerminal: drugi błędny JSON
+    BuildDeterministicLocalization --> ValidateLocalizationPaths
+    ValidateLocalizationPaths --> WriteLocalizationEvidence: ścieżki niepuste
+    ValidateLocalizationPaths --> LocalizationTerminal: pusty / odrzucony zakres
+    WriteLocalizationEvidence --> LocalizationTerminal
+    LocalizationTerminal --> [*]
+```
+
+Fala wybiera istniejący dowód, jawne ścieżki issue, deterministyczny fallback
+albo jeden agent semantyczny. Agent zwraca zamknięty JSON `paths + notes`.
+Błędny JSON dostaje dokładny feedback walidatora i najwyżej jeden retry.
+Python nie zamienia awarii agenta w ukrytą decyzję semantyczną: Fala jawnie
+prowadzi fallback albo terminal. Przygotowanie requestu, tree fact, agent call,
+walidacja JSON, walidacja fizycznych ścieżek, zapis i terminal są osobnymi
+procesami.
+
 ### Lokalne testy repozytorium — `test_local_execution`
 
 ```mermaid
@@ -983,6 +1016,7 @@ kontraktu. Aktualny audyt:
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
+| `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
 | `LeftoverCloseout` | `leftover_closeout` | domyka CLOSED ready labels przez jawne sloty repo, etykiet i issue |

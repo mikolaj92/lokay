@@ -645,37 +645,26 @@ def test_push_green_recheck_pushes(monkeypatch):
     assert result["pushed"] is True
 
 
-def test_localize_forwards_plan_files_likely_as_extra_paths(monkeypatch, tmp_path):
-    captured: dict = {}
-
-    def fake_run(main, argv):
-        captured["argv"] = argv
-        return {"ok": True, "paths": ["src/a.py"]}
-
-    monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+def test_localize_forwards_plan_files_likely_to_nested_subflow(monkeypatch, tmp_path):
+    captured = {}
+    monkeypatch.setattr(
+        "lokay.proc.localize_execution_subflow.run",
+        lambda **kwargs: captured.update(kwargs) or {"ok": True, "paths": ["src/a.py"]},
+    )
     result = fala_organ._handle(
         "localize",
         {"repo": "a/b", "issue": 7, "live": False},
         {
             "get_issue": {
-                "issue": {
-                    "repo": "a/b",
-                    "number": 7,
-                    "title": "Fix a",
-                    "body": "",
-                    "labels": [],
-                    "assignees": [],
-                    "url": "",
-                }
+                "issue": {"repo": "a/b", "number": 7, "title": "Fix a", "body": ""}
             },
             "worktree_add": {"worktree": str(tmp_path)},
             "plan_issue": {"plan": {"files_likely": ["src/a.py", "tests/test_a.py"]}},
         },
     )
-    assert result["ok"] is True
-    argv = captured["argv"]
-    extras = [argv[i + 1] for i, tok in enumerate(argv) if tok == "--extra-path"]
-    assert extras == ["src/a.py", "tests/test_a.py"]
+    assert result["ok"] and captured["extra_inputs"]["plan"]["plan"][
+        "files_likely"
+    ] == ["src/a.py", "tests/test_a.py"]
 
 
 def test_repair_agent_does_not_resume_when_issue_already_closed(monkeypatch):
