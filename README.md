@@ -271,6 +271,39 @@ nie rekonstruuje terminala. `K` pozostaje budżetem seryjnych passów, nigdy
 harmonogramem równoległych worktree. Wartość większa niż authored limit kończy
 się fail-closed.
 
+### Domknięcie pozostałych etykiet — `leftover_closeout`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareLeftoverCloseout
+    PrepareLeftoverCloseout --> SelectLeftoverRepoSlot
+    SelectLeftoverRepoSlot --> SelectLeftoverLabelSlot: aktywne repo
+    SelectLeftoverRepoSlot --> RecordLeftoverRepo: recent-empty / pusty slot
+    SelectLeftoverLabelSlot --> ListClosedReadyIssues: aktywna etykieta
+    ListClosedReadyIssues --> ClassifyClosedReadyProbe
+    ClassifyClosedReadyProbe --> SelectLeftoverLabelSlot: następna etykieta
+    SelectLeftoverLabelSlot --> RecordLeftoverRepo: koniec etykiet
+    RecordLeftoverRepo --> SelectLeftoverRepoSlot: następne repo
+    RecordLeftoverRepo --> ReduceLeftoverCandidates: ostatnie repo
+    ReduceLeftoverCandidates --> SelectLeftoverCandidateSlot
+    SelectLeftoverCandidateSlot --> ParkClosedReadyIssue: kandydat
+    SelectLeftoverCandidateSlot --> RecordLeftoverCandidate: pusty slot
+    ParkClosedReadyIssue --> RecordLeftoverCandidate
+    RecordLeftoverCandidate --> SelectLeftoverCandidateSlot: następny kandydat
+    RecordLeftoverCandidate --> ReduceLeftoverCloseout: ostatni kandydat
+    ReduceLeftoverCloseout --> UpdateLeftoverStamp
+    UpdateLeftoverStamp --> LeftoverCloseoutResult
+    LeftoverCloseoutResult --> [*]
+```
+
+Pod-Fala ma 30 jawnych slotów repozytoriów, po dwa jawne sloty etykiet na repo
+i 30 jawnych slotów kandydatów. TTL, wybór repo i etykiety, listing GitHub,
+klasyfikacja rate limitu, deduplikacja, mutation gate, parkowanie, redukcja i
+efekt stamp są oddzielnymi procesami. Overflow katalogu lub kandydatów kończy
+się fail-closed. Błąd sondy nie udaje pustego katalogu i nie zapisuje empty
+stamp. Nie ma agenta: stan CLOSED, etykiety i mutation policy są faktami
+mechanicznymi.
+
 ### Higiena gotowych issue — `ready_hygiene`
 
 ```mermaid
@@ -917,6 +950,7 @@ kontraktu. Aktualny audyt:
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
+| `LeftoverCloseout` | `leftover_closeout` | domyka CLOSED ready labels przez jawne sloty repo, etykiet i issue |
 | `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
