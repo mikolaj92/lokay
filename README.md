@@ -256,6 +256,36 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Obserwacyjny snapshot statusu — `status_snapshot`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ReadStatusConfig
+    ReadStatusConfig --> ClassifyStatusReadiness
+    ReadStatusConfig --> ReadStatusCloneFacts
+    ReadStatusConfig --> ReadStatusLease
+    ReadStatusConfig --> ReadStatusPassReceipt
+    ReadStatusConfig --> DescribeStatusGraphs
+    ReadStatusConfig --> RunStatusPreflight: jawne --preflight
+    ReadStatusConfig --> RecordStatusPreflight: bez --preflight
+    RunStatusPreflight --> RecordStatusPreflight
+    ClassifyStatusReadiness --> ReduceStatusSnapshot
+    ReadStatusCloneFacts --> ReduceStatusSnapshot
+    ReadStatusLease --> ReduceStatusSnapshot
+    ReadStatusPassReceipt --> ReduceStatusSnapshot
+    DescribeStatusGraphs --> ReduceStatusSnapshot
+    RecordStatusPreflight --> ReduceStatusSnapshot
+    ReduceStatusSnapshot --> StatusSnapshotTerminal
+    StatusSnapshotTerminal --> [*]
+```
+
+Status nie uruchamia produktu, passa ani survey GitHub. Pod-Fala składa tylko
+read-only fakty konfiguracji, brakujących checkoutów, lease, opisu grafów,
+opcjonalnego preflightu i ostatniego trwałego receipt. `--full` oznacza pełny
+widok dostępnego snapshotu, a nie synchroniczny pass. Żaden node nie zapisuje
+receiptu, etykiety ani innego stanu domenowego. Dashboard i CLI czytają ten sam
+zamknięty wynik.
+
 ### Aktywacja dokładnej samonaprawy — `self_repair_activate_execution`
 
 ```mermaid
@@ -1121,6 +1151,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `StatusSnapshot` | `status_snapshot` | składa read-only config, lease, grafy i ostatni pass receipt bez uruchamiania produktu |
 | `SelfRepairActivateExecution` | `self_repair_activate_execution` | aktywuje dokładny recovery commit przez jawne fakty Git i efekty |
 | `AssertRealDiffExecution` | `assert_real_diff_execution` | składa fizyczny diff, scope issue/localize i zamknięty terminal |
 | `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |

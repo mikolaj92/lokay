@@ -59,6 +59,7 @@ from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
 from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
 from lokay.organ.stale_implementing_boundary import handle_stale_implementing
 from lokay.organ.stale_worktree_boundary import handle_stale_worktree
+from lokay.organ.status_boundary import handle_status
 from lokay.organ.survey_ready_boundary import handle_survey_ready
 from lokay.organ.test_local_boundary import handle_test_local
 from lokay.organ.triage_dispatch_boundary import handle_triage_dispatch
@@ -193,6 +194,7 @@ def _handle(
         handle_factory_begin,
         handle_localize,
         handle_relocalize,
+        handle_status,
         handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)
