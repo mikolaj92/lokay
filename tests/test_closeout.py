@@ -592,70 +592,31 @@ def test_closed_ready_numbers_pin_refuses_silent_truncation():
     assert "Leftover-closeout refuses a silently truncated CLOSED issue list." in source
 
 
-def test_mill_tick_leftover_closed_ready_does_not_start_i2pr(monkeypatch, tmp_path):
-    cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(
-        "\n".join(
-            [
-                "mode: live",
-                "repos:",
-                "  - name: owner/repo",
-                "    clone_path: /tmp",
-                "executor:",
-                "  enabled: true",
-                "  agent: grok",
-                "  command: grok",
-                "  args: ['prompt']",
-                "merge:",
-                "  enabled: true",
-                "  require_checks: false",
-                "worktrees:",
-                "  root: /tmp/wt",
-                "state:",
-                "  path: /tmp/state.jsonl",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+def test_leftover_closed_ready_clears_inflight_signal():
+    from lokay.proc.apply_product_leftover import apply
+    from lokay.proc.record_product_pass import record
+    from lokay.proc.classify_product_pass import classify as classify_pass
+    from lokay.proc.classify_product_plateau import classify as classify_plateau
+    from lokay.proc.decide_product_pass_stop import decide
+    from lokay.proc.finalize_product_pass import finalize
+
+    def evaluate(prepared, selected, tick, leftover, previous):
+        applied = apply(tick, leftover)
+        recorded = record(selected, applied, previous)
+        classified = classify_pass(prepared, recorded)
+        plateau = classify_plateau(classified)
+        decided = decide(prepared, plateau)
+        return finalize(prepared, decided)
+
+    prepared = {"mode": "live", "live": True, "budget": 1}
+    tick = {
+        "ok": True,
+        "health": "progress",
+        "progress": 0,
+        "remaining": {"ready": 1, "issue_to_pr_started": 1},
+    }
+    out = evaluate(
+        prepared, {"slot": 1}, tick, {"labels_removed": True, "leftover_closed": 1}, {}
     )
-    leftover_calls: list[dict[str, object]] = []
-
-    def fake_leftover(**kwargs):
-        leftover_calls.append(kwargs)
-        return {
-            "ok": True,
-            "labels_removed": True,
-            "issue_to_pr_started": 0,
-            "leftover_closed": 1,
-        }
-
-    def fake_pass(**_kwargs):
-        return {
-            "ok": True,
-            "idle": True,
-            "health": "idle",
-            "progress": 0,
-            "remaining": {
-                "inbox": 0,
-                "ready": 0,
-                "issue_to_pr_started": 0,
-                "open_ai_prs": 0,
-                "mergeable_green": 0,
-                "merge_disabled": 0,
-                "needs_repair": 0,
-                "no_checks_blocked": 0,
-                "merge_conflicts": 0,
-                "survey_errors": 0,
-            },
-        }
-
-    monkeypatch.setattr(mill_mod, "closeout_leftover_ready", fake_leftover)
-    monkeypatch.setattr(mill_mod, "compose_factory_pass", fake_pass)
-    monkeypatch.setattr(mill_mod, "run_preflight", lambda *_a, **_k: {"ok": True})
-    out = mill_mod.compose_mill(config_path=str(cfg_path), live=True, max_passes=2)
-    assert leftover_calls
-    assert out["ok"] is True
-    last = out.get("last") or (out.get("results") or [{}])[-1]
-    remaining = last.get("remaining") or {}
-    assert int(remaining.get("issue_to_pr_started") or 0) == 0
-    assert leftover_calls[0]["live"] is True
+    assert out["payload"]["remaining"]["issue_to_pr_started"] == 0
+    assert out["payload"]["progress"] == 1

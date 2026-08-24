@@ -45,6 +45,7 @@ from lokay.organ.inbox_survey_boundary import handle_inbox_survey
 from lokay.organ.pr_closeout_boundary import handle_pr_closeout
 from lokay.organ.pr_survey_boundary import handle_pr_survey
 from lokay.organ.ready_hygiene_boundary import handle_ready_hygiene
+from lokay.organ.product_budget_boundary import handle_product_budget
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
@@ -179,6 +180,7 @@ def _handle(
         handle_pr_closeout,
         handle_pr_survey,
         handle_ready_hygiene,
+        handle_product_budget,
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
