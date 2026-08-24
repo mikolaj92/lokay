@@ -222,6 +222,33 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Lokalne testy repozytorium — `test_local_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectTestDeclaration
+    InspectTestDeclaration --> TestTerminal: brak deklaracji / invalid / brak worktree
+    InspectTestDeclaration --> ReadGreenTestCache
+    ReadGreenTestCache --> TestTerminal: exact cache hit
+    ReadGreenTestCache --> RunDeclaredTests: cache miss
+    RunDeclaredTests --> SelectTestOutcome
+    SelectTestOutcome --> WriteGreenTestCache: green
+    SelectTestOutcome --> DeriveChangedTestScope: red i changed-scope
+    SelectTestOutcome --> TestTerminal: red bez scoped retry
+    DeriveChangedTestScope --> RunChangedScopeTests: scope istnieje
+    DeriveChangedTestScope --> TestTerminal: brak mechanicznego scope
+    RunChangedScopeTests --> WriteGreenTestCache: green
+    RunChangedScopeTests --> TestTerminal: red
+    WriteGreenTestCache --> TestTerminal
+    TestTerminal --> [*]
+```
+
+Deklaracja, exact cache, pełne uruchomienie, mechaniczne wyznaczenie changed scope,
+jedno scoped uruchomienie, zapis cache i terminal są osobnymi procesami. Fala
+prowadzi jedyne drzewo. Brak deklaracji jest zamkniętym wynikiem `skip`; czerwony
+wynik pozostaje fail-closed. Nie ma agenta, ponieważ routing opiera się wyłącznie
+na deklaracji repo, SHA, diffie i kodzie wyjścia procesu.
+
 ### Budżet kolejnych passów — `product_pass_budget`
 
 ```mermaid
@@ -888,6 +915,7 @@ kontraktu. Aktualny audyt:
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu przez jawne sloty repozytoriów |
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
+| `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
 | `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
