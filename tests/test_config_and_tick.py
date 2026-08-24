@@ -442,6 +442,10 @@ state:
 """,
         encoding="utf-8",
     )
+    monkeypatch.setattr(
+        "lokay.proc.product_pass_budget_subflow.run",
+        lambda **kwargs: {"ok": True, "health": "offline", "passes": 1},
+    )
     result = compose_mill(config_path=str(cfg_path), live=False, max_passes=3)
     assert result.get("health") == "offline"
     assert result.get("passes") == 1

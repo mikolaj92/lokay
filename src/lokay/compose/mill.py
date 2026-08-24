@@ -35,13 +35,15 @@ def compose_mill(
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     owns_lease = False
     owns_lease_path = False
-    if preflight is None and live and not inherited_lease and not os.environ.get(
-        "LOKAY_HEALTH_LEASE_PATH"
+    if (
+        preflight is None
+        and live
+        and not inherited_lease
+        and not os.environ.get("LOKAY_HEALTH_LEASE_PATH")
     ):
         cfg = load_cfg(argparse.Namespace(config=config_path))
         os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(
-            cfg.state_path.parent
-            / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
+            cfg.state_path.parent / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
         )
         owns_lease_path = True
     try:
@@ -94,157 +96,9 @@ def _compose_mill(
             progress=0,
             results=[],
         )
+    from lokay.proc.product_pass_budget_subflow import run
 
-    cfg = load_cfg(argparse.Namespace(config=config_path))
-    if live and cfg.mode != "live":
-        return err("refusing --live while config mode is not live")
-
-    max_passes = max(1, int(max_passes))
-    results: list[dict[str, Any]] = []
-    total_progress = 0
-    prev_work_key: tuple[int, ...] | None = None
-
-    def _work_key(remaining: Any) -> tuple[int, ...]:
-        if not isinstance(remaining, dict):
-            return (-1,)
-        return (
-            int(remaining.get("inbox") or 0),
-            int(remaining.get("ready") or 0),
-            int(remaining.get("open_ai_prs") or 0),
-            int(remaining.get("mergeable_green") or 0),
-            int(remaining.get("merge_disabled") or 0),
-            int(remaining.get("needs_repair") or 0),
-            int(remaining.get("no_checks_blocked") or 0),
-            int(remaining.get("merge_conflicts") or 0),
-            int(remaining.get("survey_errors") or 0),
-        )
-
-    def _issue_to_pr_in_flight(remaining: Any) -> bool:
-        if not isinstance(remaining, dict):
-            return False
-        if int(remaining.get("issue_to_pr_started") or 0) > 0:
-            return True
-        by_repo = remaining.get("by_repo")
-        return isinstance(by_repo, list) and any(
-            isinstance(row, dict) and bool(row.get("occupied")) for row in by_repo
-        )
-
-    for i in range(max_passes):
-        tick = compose_factory_pass(config_path=config_path, live=live)
-        leftover = closeout_leftover_ready(config_path=config_path, live=live)
-        remaining = tick.get("remaining")
-        if leftover.get("labels_removed") and isinstance(remaining, dict):
-            remaining = {**remaining, "issue_to_pr_started": 0}
-            tick = {
-                **tick,
-                "remaining": remaining,
-                "progress": int(tick.get("progress") or 0)
-                + int(leftover.get("leftover_closed") or 1),
-                "leftover_closeout": leftover,
-            }
-        results.append(
-            {
-                "pass": i + 1,
-                "ok": tick.get("ok"),
-                "health": tick.get("health"),
-                "idle": tick.get("idle"),
-                "progress": tick.get("progress"),
-                "remaining": remaining,
-                "error": tick.get("error"),
-            }
-        )
-        total_progress += int(tick.get("progress") or 0)
-        work_key = _work_key(remaining)
-
-        if tick.get("idle") or tick.get("health") == "idle":
-            return ok(
-                mode=cfg.mode,
-                live=live,
-                idle=True,
-                health="idle",
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-            )
-
-        # Survey-only: one pass is enough to know work remains.
-        if not live:
-            return {
-                **tick,
-                "mill": True,
-                "passes": 1,
-                "max_passes": max_passes,
-                "progress": total_progress,
-                "results": results,
-            }
-
-        if prev_work_key is not None and work_key == prev_work_key:
-            in_flight = _issue_to_pr_in_flight(remaining)
-            if in_flight and tick.get("health") in {"progress", "running", "waiting"}:
-                # A detached worker keeps the issue ready until it opens a PR.
-                # The unchanged catalog is an honest wait, not a green noop.
-                tick = {**tick, "health": "waiting", "progress": 0}
-            elif not in_flight:
-                tick = {**tick, "health": "plateau"}
-        decision = evaluate_mill_stop(tick)
-        if decision["stop"] and decision["health"] == "plateau":
-            return err(
-                decision["error"],
-                mode=cfg.mode,
-                live=live,
-                idle=False,
-                health="plateau",
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-                remaining=remaining,
-            )
-        if decision["stop"] and decision["hard"]:
-            return err(
-                decision["error"],
-                mode=cfg.mode,
-                live=live,
-                idle=False,
-                health=decision["health"],
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-            )
-        if decision["stop"] and not decision["hard"]:
-            return ok(
-                mode=cfg.mode,
-                live=live,
-                idle=False,
-                health=decision["health"],
-                passes=i + 1,
-                max_passes=max_passes,
-                progress=total_progress,
-                results=results,
-                last=tick,
-                note="stopped: zero progress this pass (waiting or blocked)",
-            )
-        prev_work_key = work_key
-
-    # Budget exhausted with work still present.
-    last = results[-1] if results else {}
-    return err(
-        "mill budget exhausted before idle",
-        mode=cfg.mode,
-        live=live,
-        idle=False,
-        health="budget_exhausted",
-        passes=max_passes,
-        max_passes=max_passes,
-        progress=total_progress,
-        results=results,
-        remaining=last.get("remaining"),
-    )
+    return run(config_path=config_path, live=live, max_passes=max_passes)
 
 
 def main(argv: list[str] | None = None) -> int:
