@@ -22,8 +22,16 @@ LEFTOVER_TTL_SECONDS = 300
 LEFTOVER_STAMP_NAME = "leftover-closeout.stamp"
 
 
-def _park_ready(*, repo: str, issue: int, allowed: bool, config_path: str | None = None) -> dict[str, Any]:
-    argv = [*(["--config", config_path] if config_path else []), "--repo", repo, "--issue", str(issue)]
+def _park_ready(
+    *, repo: str, issue: int, allowed: bool, config_path: str | None = None
+) -> dict[str, Any]:
+    argv = [
+        *(["--config", config_path] if config_path else []),
+        "--repo",
+        repo,
+        "--issue",
+        str(issue),
+    ]
     argv.append("--live" if allowed else "--dry-run")
     return run_proc(p_park.main, argv)
 
@@ -38,7 +46,9 @@ def run_closeout(
     )
     if pull is None:
         return ok(repo=repo, issue=issue, delivered=False, labels_removed=False)
-    parked = _park_ready(repo=repo, issue=issue, allowed=allowed, config_path=config_path)
+    parked = _park_ready(
+        repo=repo, issue=issue, allowed=allowed, config_path=config_path
+    )
     return ok(
         repo=repo,
         issue=issue,
@@ -74,7 +84,9 @@ def leftover_recently_empty(stamp: Path | None, *, now: float | None = None) -> 
     if stamp is None:
         return False
     # Pytest must not skip leftover GitHub lists using the mill stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_leftover_stamp(stamp):
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_leftover_stamp(
+        stamp
+    ):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -111,17 +123,25 @@ def closed_ready_numbers(
     result = issue_runner.run_checked(
         gh_spec(
             [
-                "issue", "list", "--repo", repo, "--state", "closed",
-                "--label", label, "--json", "number,state", "--limit", str(cap),
+                "issue",
+                "list",
+                "--repo",
+                repo,
+                "--state",
+                "closed",
+                "--label",
+                label,
+                "--json",
+                "number,state",
+                "--limit",
+                str(cap),
             ],
             timeout_seconds=60,
         ),
         live=live,
     )
     # Leftover-closeout refuses a silently truncated CLOSED issue list.
-    rows = parse_survey_list(
-        result.stdout, kind="closed-ready", repo=repo, cap=cap
-    )
+    rows = parse_survey_list(result.stdout, kind="closed-ready", repo=repo, cap=cap)
     out: list[int] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -135,76 +155,10 @@ def closed_ready_numbers(
 
 
 def run_closeout_leftover(*, config_path: str | None, live: bool) -> dict[str, Any]:
-    """Strip leftover ready labels on CLOSED mill issues.
+    """Invoke the authored leftover-closeout Fala."""
+    from lokay.proc.leftover_closeout_subflow import run
 
-    GitHub CLOSED is enough. Fresh leftover skip does not require healthy.
-    Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub.
-    """
-    cfg = load_cfg(argparse.Namespace(config=config_path))
-    stamp = leftover_stamp_path(cfg)
-    if leftover_recently_empty(stamp):
-        # Fresh leftover-closeout skip is not applied.
-        # Leftover-closeout skip reports planned=not live.
-        # Leftover-closeout skip reports probe_failed.
-        return ok(
-            leftover_closed=0,
-            labels_removed=False,
-            issue_to_pr_started=0,
-            closed_out=[],
-            skipped=True,
-            reason="recent_empty",
-            planned=not live,
-            applied=False,
-            probe_failed=False,
-        )
-    allowed = mutations_allowed(live_flag=live, cfg=cfg)
-    issue_runner = runner(cfg)
-    labels = [WORK_READY_LABEL]
-    ready = str(getattr(cfg, "ready_label", "") or "")
-    if ready and ready not in labels:
-        labels.append(ready)
-    closed_out: list[dict[str, Any]] = []
-    seen: set[tuple[str, int]] = set()
-    probe_failed = False
-    for repo in list(cfg.repos or []):
-        name = str(repo.name)
-        for label in labels:
-            try:
-                numbers = closed_ready_numbers(issue_runner, name, label, live=live)
-            except RuntimeError as exc:
-                if is_github_rate_limit_error(exc):
-                    probe_failed = True
-                    break
-                raise
-            for number in numbers:
-                key = (name, number)
-                if key in seen:
-                    continue
-                seen.add(key)
-                parked = _park_ready(repo=name, issue=number, allowed=allowed, config_path=config_path)
-                if parked.get("ok") and parked.get("removed"):
-                    closed_out.append({"repo": name, "issue": number})
-                elif parked.get("ok"):
-                    closed_out.append({"repo": name, "issue": number, "planned": True})
-    removed = [row for row in closed_out if not row.get("planned")]
-    if allowed and not probe_failed:
-        if removed:
-            _clear_leftover_stamp(stamp)
-        else:
-            _touch_leftover_stamp(stamp)
-    # Unhealthy leftover-closeout parks are planned.
-    # Hosted leftover-closeout reports applied.
-    # Empty leftover-closeout host is not applied.
-    # Leftover-closeout rate limit does not stamp empty.
-    return ok(
-        leftover_closed=len(removed),
-        labels_removed=bool(removed),
-        issue_to_pr_started=0,
-        closed_out=closed_out,
-        planned=not allowed if closed_out else not live,
-        applied=allowed if closed_out else False,
-        probe_failed=probe_failed,
-    )
+    return run(config_path=config_path, live=live)
 
 
 def main(argv: list[str] | None = None) -> int:
