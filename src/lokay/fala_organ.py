@@ -54,6 +54,7 @@ from lokay.organ.relocalize_boundary import handle_relocalize
 from lokay.organ.repair_boundary import handle_repair_boundary
 from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.self_repair import handle_self_repair
+from lokay.organ.self_repair_activate_boundary import handle_self_repair_activate
 from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
 from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
 from lokay.organ.stale_implementing_boundary import handle_stale_implementing
@@ -181,6 +182,7 @@ def _handle(
         handle_over_budget,
         handle_self_repair_prepare,
         handle_self_repair_validate,
+        handle_self_repair_activate,
         handle_inbox_survey,
         handle_pr_closeout,
         handle_pr_survey,

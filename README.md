@@ -256,6 +256,41 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Aktywacja dokładnej samonaprawy — `self_repair_activate_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareSelfRepairActivation
+    PrepareSelfRepairActivation --> ActivationTerminal: brak canonical checkout
+    PrepareSelfRepairActivation --> ActivationTerminal: dry-run plan
+    PrepareSelfRepairActivation --> ReadCanonicalCheckoutStatus: live
+    ReadCanonicalCheckoutStatus --> ClassifyCanonicalCheckout
+    ReadCanonicalCheckoutStatus --> ActivationTerminal: status unreadable
+    ClassifyCanonicalCheckout --> CheckDirtyCommitOnOrigin: dirty
+    CheckDirtyCommitOnOrigin --> ActivationTerminal: commit opublikowany
+    CheckDirtyCommitOnOrigin --> ActivationTerminal: dirty i commit nieopublikowany
+    ClassifyCanonicalCheckout --> FetchCanonicalMain: clean
+    FetchCanonicalMain --> FastForwardRecoveryCommit: fetch OK
+    FetchCanonicalMain --> ActivationTerminal: fetch failed
+    FastForwardRecoveryCommit --> ReadActivatedHead: merge OK
+    FastForwardRecoveryCommit --> ActivationTerminal: merge failed
+    ReadActivatedHead --> ClassifyActivatedHead
+    ReadActivatedHead --> ActivationTerminal: HEAD unreadable
+    ClassifyActivatedHead --> ActivationTerminal: exact commit
+    ClassifyActivatedHead --> CheckRecoveryAncestorOfHead: inny HEAD
+    CheckRecoveryAncestorOfHead --> ActivationTerminal: commit jest przodkiem HEAD
+    CheckRecoveryAncestorOfHead --> CheckRecoveryAncestorOfOrigin: commit nie jest przodkiem HEAD
+    CheckRecoveryAncestorOfOrigin --> ActivationTerminal: commit jest przodkiem origin/main
+    CheckRecoveryAncestorOfOrigin --> ActivationTerminal: exact commit nieaktywny
+    ActivationTerminal --> [*]
+```
+
+Pod-Fala aktywuje jeden dokładny, wcześniej zwalidowany commit. Konfiguracja i
+mutation gate, status checkoutu, ancestry, fetch, fast-forward, odczyt HEAD oraz
+terminal są osobnymi procesami. Jedynymi efektami są pojedynczy `fetch` i
+pojedynczy `merge --ff-only`. Fala decyduje, które z nich wolno uruchomić.
+Dirty checkout nigdy nie jest czyszczony ani nadpisywany.
+
 ### Dowód rzeczywistego diffu — `assert_real_diff_execution`
 
 ```mermaid
@@ -1086,6 +1121,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `SelfRepairActivateExecution` | `self_repair_activate_execution` | aktywuje dokładny recovery commit przez jawne fakty Git i efekty |
 | `AssertRealDiffExecution` | `assert_real_diff_execution` | składa fizyczny diff, scope issue/localize i zamknięty terminal |
 | `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
