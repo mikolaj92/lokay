@@ -256,6 +256,29 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Jedna zmiana etapu issue — `stage_label_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareStageTransition
+    PrepareStageTransition --> ReadStageIssue
+    ReadStageIssue --> ClassifyStageIssue
+    ClassifyStageIssue --> StageLabelTerminal: issue missing / closed
+    ClassifyStageIssue --> RemoveStageLabels: issue OPEN i są etykiety do usunięcia
+    ClassifyStageIssue --> AddStageLabels: brak etykiet do usunięcia
+    RemoveStageLabels --> AddStageLabels
+    AddStageLabels --> CommentStageReceipt: komentarz istnieje
+    AddStageLabels --> StageLabelTerminal: brak komentarza
+    CommentStageReceipt --> StageLabelTerminal
+    StageLabelTerminal --> [*]
+```
+
+Pod-Fala zmienia jeden etap jednego issue. Plan przejścia, świeży stan issue,
+klasyfikacja, usunięcie starych etykiet, dodanie nowych etykiet, opcjonalny
+receipt i terminal są osobnymi procesami. Fala prowadzi kolejność efektów.
+Issue zamknięte nie uruchamia żadnej mutacji, a dry-run raportuje plan zamiast
+udawać zastosowany etap.
+
 ### Publikacja jednego PR — `pr_create_execution`
 
 ```mermaid
@@ -1173,6 +1196,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `StageLabelExecution` | `stage_label_execution` | prowadzi fresh issue gate oraz osobne remove/add/comment efekty etapu |
 | `PRCreateExecution` | `pr_create_execution` | prowadzi duplicate/issue facts i pojedynczy fizyczny efekt publikacji PR |
 | `StatusSnapshot` | `status_snapshot` | składa read-only config, lease, grafy i ostatni pass receipt bez uruchamiania produktu |
 | `SelfRepairActivateExecution` | `self_repair_activate_execution` | aktywuje dokładny recovery commit przez jawne fakty Git i efekty |

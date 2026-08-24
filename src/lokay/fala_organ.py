@@ -58,6 +58,7 @@ from lokay.organ.self_repair import handle_self_repair
 from lokay.organ.self_repair_activate_boundary import handle_self_repair_activate
 from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
 from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
+from lokay.organ.stage_label_boundary import handle_stage_label
 from lokay.organ.stale_implementing_boundary import handle_stale_implementing
 from lokay.organ.stale_worktree_boundary import handle_stale_worktree
 from lokay.organ.status_boundary import handle_status
@@ -197,6 +198,7 @@ def _handle(
         handle_relocalize,
         handle_status,
         handle_pr_create,
+        handle_stage_label,
         handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)

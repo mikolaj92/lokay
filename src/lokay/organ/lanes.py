@@ -2,29 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import os
-import tempfile
-from pathlib import Path
 from typing import Any
 
-from lokay.models import Issue
 from lokay.organ.common import (
-    _cfg_flags,
-    _live_flags,
-    _localize_paths,
-    _require_push,
-    _require_real_diff,
     _require_test_local,
-    _run_atom_main,
-    _test_local_ok,
-)
-from lokay.prompts import (
-    issue_fix_prompt,
-    local_test_repair_prompt,
-    pr_body,
-    repair_pr_prompt,
-    self_repair_prompt,
 )
 
 
@@ -35,57 +16,11 @@ def handle_lanes(
     ctx: dict[str, Any],
 ) -> dict[str, Any] | None:
     from lokay.proc import (
-        assign_issue,
         close_issue,
-        commit_all,
-        closeout_prs,
-        compute_health,
-        cycle_end,
-        cycle_start,
-        dispatch_implement,
-        dispatch_triage,
-        factory_begin,
-        factory_tick,
         get_issue,
-        host_ff,
-        list_prs,
-        make_branch,
-        plan_issue,
-        localize,
-        pi_budget,
-        plan_pass,
         pr_checks,
-        pr_create,
-        pr_label,
         pr_merge,
-        push_branch,
-        record_pass,
-        recovery_begin,
-        recovery_incident,
-        recovery_mill,
-        recovery_observe,
-        recovery_record,
-        recovery_run_self_repair,
-        resolve_conflicts,
-        run_agent,
-        select_implement,
-        queue_conflict,
-        stage_label,
-        survey_inbox,
-        survey_prs,
-        survey_ready,
-        survey_repos,
-        test_local,
-        worktree_add,
-        assert_real_diff,
-        self_repair_activate,
-        self_repair_close,
-        self_repair_prepare,
-        self_repair_preflight,
-        self_repair_push_main,
-        self_repair_validate,
     )
-    from lokay.git_commit import branch_ahead_of_upstream
     from lokay.stuck import issue_number_from_branch
 
     cfg = ctx["cfg"]
@@ -93,16 +28,11 @@ def handle_lanes(
     repo = ctx["repo"]
     issue_number = ctx["issue_number"]
     pr_number = ctx["pr_number"]
-    repair_mode = ctx["repair_mode"]
     branch = ctx["branch"]
 
     import lokay.fala_organ as _fo
 
     _run_atom_main = _fo._run_atom_main
-    branch_ahead_of_upstream = getattr(_fo, "branch_ahead_of_upstream", None)
-    if branch_ahead_of_upstream is None:
-        from lokay.git_commit import branch_ahead_of_upstream
-
     if atom == "get_issue":
         assert repo and issue_number is not None
         return _run_atom_main(
@@ -229,7 +159,6 @@ def handle_lanes(
                 "branch": branch,
                 "pr": pr_number,
             }
-        # clear/merged only after a real (or planned) merge in pr_triage.
         if stage in {"clear", "merged"}:
             merged = up.get("pr_merge") or {}
             if merged.get("skipped") or not (
@@ -243,21 +172,16 @@ def handle_lanes(
                     "repo": repo,
                     "pr": pr_number,
                 }
-        argv = [
-            *cfg,
-            *live,
-            "--repo",
-            repo,
-            "--issue",
-            str(issue_number),
-            "--stage",
-            stage,
-        ]
-        if inputs.get("receipt"):
-            argv.append("--receipt")
-        comment = str(inputs.get("comment") or "").strip()
-        if comment:
-            argv.extend(["--comment", comment])
-        return _run_atom_main(stage_label.main, argv)
+        from lokay.proc.stage_label_subflow import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+            repo=repo,
+            issue=int(issue_number),
+            stage=stage,
+            receipt=bool(inputs.get("receipt")),
+            comment=str(inputs.get("comment") or ""),
+        )
 
     return None

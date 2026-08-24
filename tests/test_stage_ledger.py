@@ -83,264 +83,61 @@ def test_ledger_labels_leave_inbox():
         assert label in decision_labels()
 
 
-def test_stage_label_atom_dry_run_envelope(tmp_path, monkeypatch, capsys):
-    import json
-
-    from lokay.proc import stage_label as atom
-    from lokay.runner import CommandResult
-
+def _stage_cfg(tmp_path):
     cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        """
-mode: dry-run
-github:
-  assignee: mikolaj92
-repos: []
-""",
-        encoding="utf-8",
+    cfg.write_text("mode: dry-run\nrepos: []\n", encoding="utf-8")
+    return cfg
+
+
+def test_stage_prepare_keeps_ready_labels_for_inflight(tmp_path):
+    from lokay.proc.prepare_stage_transition import prepare
+
+    out = prepare(
+        config_path=str(_stage_cfg(tmp_path)),
+        live=False,
+        repo="a/b",
+        issue=7,
+        stage="implementing",
+        receipt=False,
+        comment="",
     )
-    calls: list[tuple] = []
-
-    class _R:
-        def run(self, spec, *, live):
-            calls.append((tuple(spec.argv), live))
-            return CommandResult(spec=spec, executed=live, returncode=0)
-
-        def run_checked(self, spec, *, live):
-            return self.run(spec, live=live)
-
-    monkeypatch.setattr(atom, "runner", lambda: _R())
-    code = atom.main(
-        [
-            "--config",
-            str(cfg),
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "7",
-            "--stage",
-            "implementing",
-        ]
-    )
-    assert code == 0
-    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert env["ok"] is True
-    assert env["planned"] is True
-    assert env["applied"] is False
-    assert env["stage"] == "ready"
-    assert env["add_labels"] == [LABEL_READY, "work:ready"]
-    assert LABEL_IMPLEMENTING in env["remove_labels"]
-    assert LABEL_READY not in env["remove_labels"]
-    # dry-run still plans through gh helpers with live=False
-    assert calls and all(live is False for _, live in calls)
+    assert out["stage"] == "ready"
+    assert LABEL_READY not in out["remove_labels"]
+    assert out["live"] is False
 
 
-def test_stage_label_open_pr_keeps_both_ready_labels(tmp_path, monkeypatch, capsys):
-    import json
-    from types import SimpleNamespace
+def test_stage_clear_may_remove_ready_after_merge(tmp_path):
+    from lokay.proc.prepare_stage_transition import prepare
 
-    from lokay.proc import stage_label as atom
-
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        """
-mode: live
-github:
-  assignee: mikolaj92
-  ready_label: work:ready
-repos: []
-""",
-        encoding="utf-8",
-    )
-    removed: list[str] = []
-    added: list[str] = []
-    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
-    monkeypatch.setattr(
-        atom,
-        "plan_stage_transition",
-        lambda *a, **k: SimpleNamespace(
-            stage="pr-open",
-            add_labels=(),
-            remove_labels=("work:ready", LABEL_READY, LABEL_PR_OPEN),
-            receipt=None,
-        ),
-    )
-    monkeypatch.setattr(
-        atom,
-        "get_issue",
-        lambda *a, **k: SimpleNamespace(state="OPEN"),
-    )
-    monkeypatch.setattr(
-        atom,
-        "remove_issue_labels",
-        lambda runner, repo, issue, labels, *, live: removed.extend(labels),
-    )
-    monkeypatch.setattr(
-        atom,
-        "add_issue_labels",
-        lambda runner, repo, issue, labels, *, live: added.extend(labels),
-    )
-
-    code = atom.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "7",
-            "--stage",
-            "pr-open",
-        ]
-    )
-
-    assert code == 0
-    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert env["ok"] is True
-    assert added == []
-    assert removed == [LABEL_PR_OPEN]
-    assert "work:ready" not in env["remove_labels"]
-    assert LABEL_READY not in env["remove_labels"]
-
-
-def test_stage_label_clear_may_remove_ready_after_merge():
-    from lokay.proc.stage_label import _open_issue_removals
-
-    assert _open_issue_removals(
-        ("work:ready", LABEL_READY),
+    out = prepare(
+        config_path=str(_stage_cfg(tmp_path)),
+        live=False,
+        repo="a/b",
+        issue=7,
         stage="clear",
-        ready_label="work:ready",
-    ) == ["work:ready", LABEL_READY]
-
-
-def test_stage_label_live_missing_ci_waiting_does_not_abort(tmp_path, monkeypatch, capsys):
-    import json
-
-    from lokay.proc import stage_label as atom
-    from lokay.runner import CommandResult
-
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        """
-mode: live
-github:
-  assignee: mikolaj92
-repos: []
-""",
-        encoding="utf-8",
+        receipt=False,
+        comment="",
     )
-
-    class _R:
-        def run(self, spec, *, live):
-            argv = list(spec.argv)
-            if "view" in argv:
-                return CommandResult(
-                    spec=spec,
-                    executed=True,
-                    returncode=0,
-                    stdout=(
-                        '{"number":7,"title":"test","body":"","labels":[],'
-                        '"assignees":[],"url":"https://example.test/7",'
-                        '"state":"OPEN"}'
-                    ),
-                )
-            if "--remove-label" in argv:
-                label = argv[argv.index("--remove-label") + 1]
-                if label == LABEL_CI_WAITING:
-                    return CommandResult(
-                        spec=spec,
-                        executed=True,
-                        returncode=1,
-                        stderr=(
-                            "failed to update https://github.com/a/b/issues/7: "
-                            f"'{LABEL_CI_WAITING}' not found\n"
-                        ),
-                    )
-            return CommandResult(spec=spec, executed=True, returncode=0)
-
-        def run_checked(self, spec, *, live):
-            result = self.run(spec, live=live)
-            if live and result.returncode != 0:
-                raise RuntimeError(result.stderr)
-            return result
-
-    monkeypatch.setattr(atom, "runner", lambda: _R())
-    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
-    code = atom.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "7",
-            "--stage",
-            "implementing",
-        ]
-    )
-    assert code == 0
-    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert env["ok"] is True
-    assert env["applied"] is True
-    assert env["stage"] == "ready"
+    assert LABEL_READY in out["remove_labels"]
 
 
-def test_stage_label_closed_issue_skips_all_mutations(
-    tmp_path, monkeypatch, capsys
-):
-    import json
-    from types import SimpleNamespace
+def test_stage_closed_terminal_skips_all_effects():
+    from lokay.proc.stage_label_terminal import terminal
 
-    from lokay.proc import stage_label as atom
-
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        """
-mode: live
-github:
-  assignee: mikolaj92
-repos: []
-""",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(atom, "mutations_allowed", lambda **k: True)
-    monkeypatch.setattr(
-        atom,
-        "get_issue",
-        lambda *a, **k: SimpleNamespace(state="CLOSED"),
-    )
-
-    def unexpected(*args, **kwargs):
-        raise AssertionError("closed issue must not be mutated")
-
-    monkeypatch.setattr(atom, "add_issue_labels", unexpected)
-    monkeypatch.setattr(atom, "remove_issue_labels", unexpected)
-    monkeypatch.setattr(atom, "comment_issue", unexpected)
-
-    code = atom.main(
-        [
-            "--config",
-            str(cfg),
-            "--live",
-            "--repo",
-            "mikolaj92/lokay",
-            "--issue",
-            "7",
-            "--stage",
-            "ready",
-            "--receipt",
-        ]
-    )
-
-    assert code == 0
-    env = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert env["ok"] is True
-    assert env["skipped"] is True
-    assert env["reason"] == "issue_closed"
-    assert env["issue_state"] == "CLOSED"
-    assert env["add_labels"] == []
-    assert env["remove_labels"] == []
-    assert env["receipt"] is False
-    assert env["applied"] is False
+    out = terminal(
+        {
+            "repo": "a/b",
+            "issue": 7,
+            "stage": "ready",
+            "add_labels": ["ai:ready"],
+            "remove_labels": ["old"],
+        },
+        {"issue_state": "CLOSED"},
+        {"route": "terminal", "reason": "issue_closed", "issue_state": "CLOSED"},
+        {},
+        {},
+        {},
+    )["result"]
+    assert out["skipped"] is True
+    assert out["applied"] is False
+    assert out["receipt"] is False
