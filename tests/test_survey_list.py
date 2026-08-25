@@ -127,6 +127,24 @@ def test_list_ready_defaults_missing_state_to_open_and_excludes_closed(tmp_path)
     assert [(issue.number, issue.state) for issue in issues] == [(8, "OPEN")]
 
 
+def test_list_ready_keeps_unassigned_unlabeled_when_allow_unassigned_is_false(
+    tmp_path,
+):
+    runner = _ListRunner([_issue_row(9)])
+    runner.rows[0]["assignees"] = []
+    repo = RepoConfig(name="mikolaj92/Temida", clone_path=tmp_path)
+    cfg = Config(
+        assignee="mikolaj92",
+        allow_unassigned=False,
+        repos=[repo],
+        ready_label="ai:ready",
+        blocked_label="ai:blocked",
+        branch_prefix="ai/fix",
+    )
+    issues = list_ready_issues(runner, cfg, repo, live=True)
+    assert [issue.number for issue in issues] == [9]
+
+
 def test_list_ready_keeps_unlabeled_and_excludes_human_stops(tmp_path):
     runner = _ListRunner(
         [

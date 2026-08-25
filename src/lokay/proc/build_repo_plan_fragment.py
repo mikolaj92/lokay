@@ -2,6 +2,7 @@
 
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import is_manual_pr
+from lokay.proc.catalog_work import work_by_repo
 from lokay.stuck import is_blocked_in_ledger
 
 
@@ -10,7 +11,9 @@ def build(*, pass_dir: str, prepared: dict, selected: dict) -> dict:
     survey = pass_io.read_json(pass_io.survey_path(pass_dir))
     prs = list((survey.get("prs_by_repo") or {}).get(repo) or [])
     inbox = list((survey.get("inbox_issues_by_repo") or {}).get(repo) or [])
-    ready = list((survey.get("ready_by_repo") or {}).get(repo) or [])
+    ready = list(
+        work_by_repo(survey, stuck=prepared.get("stuck")).get(repo) or []
+    )
     actions = []
     triage = []
     if prepared.get("live") and inbox:

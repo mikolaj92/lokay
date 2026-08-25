@@ -1002,7 +1002,7 @@ stateDiagram-v2
     SelectImplementationRepoSlot --> InspectImplementationEligibility: slot zawiera repo
     SelectImplementationRepoSlot --> RecordIneligibleRepo: slot pusty
     InspectImplementationEligibility --> RecordEligibleRepo: repo spełnia wszystkie bramki
-    InspectImplementationEligibility --> RecordIneligibleRepo: outside scope / survey failed / PR-first / occupied / stuck / brak ready / agent disabled
+    InspectImplementationEligibility --> RecordIneligibleRepo: outside scope / survey failed / PR-first / occupied / stuck / brak work / agent disabled
     RecordEligibleRepo --> SelectImplementationSlotOutcome
     RecordIneligibleRepo --> SelectImplementationSlotOutcome
     SelectImplementationSlotOutcome --> SelectImplementationRepoSlot: następny jawny slot
@@ -1014,10 +1014,12 @@ stateDiagram-v2
 
 Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Każdy slot sprawdza jeden
 repozytoryjny zestaw twardych faktów: zakres, kompletność survey PR, PR-first,
-occupancy, stuck ledger, obecność gotowego issue i dostępność executora. Fala
-prowadzi rozłączne krawędzie `eligible` i `ineligible`. Czysty reduktor wybiera
-pierwsze kwalifikujące się repo w kolejności konfiguracji; nie uruchamia procesu
-ani mutacji. Osobny efekt materializuje plan implementacji.
+occupancy, stuck ledger, obecność otwartego issue (inbox albo ready;
+`work:ready` nie jest bramką) i dostępność executora. Otwarte issue z inboxu
+jest pracą: nie wolno ignorować inboxu, bo brak drugiej etykiety ready.
+Fala prowadzi rozłączne krawędzie `eligible` i `ineligible`. Czysty reduktor
+wybiera pierwsze kwalifikujące się repo w kolejności konfiguracji; nie
+uruchamia procesu ani mutacji. Osobny efekt materializuje plan implementacji.
 
 ### Higiena kolejki implementacji — `queue_conflict`
 

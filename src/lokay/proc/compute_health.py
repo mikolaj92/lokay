@@ -11,6 +11,7 @@ from lokay.passkit.health import health_payload
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
+from lokay.proc.catalog_work import remaining_ready_count, work_by_repo
 from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
 from lokay.proc.pass_lane import classify_pass_lane, self_repo
 
@@ -20,7 +21,11 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     live = bool(begin.get("live"))
     prs_by_repo = dict(working.get("prs_by_repo") or {})
-    ready_by_repo = dict(working.get("ready_by_repo") or {})
+    ready_by_repo = work_by_repo(
+        working,
+        stuck=working.get("stuck") or begin.get("stuck"),
+        branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
+    )
     inbox_by_repo = dict(working.get("inbox_by_repo") or {})
     pr_survey_failed = set(working.get("pr_survey_failed") or [])
     inbox_survey_failed = set(working.get("inbox_survey_failed") or [])
@@ -58,7 +63,8 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
 
     remaining = {
         "inbox": int(working.get("remaining_inbox") or 0),
-        "ready": int(working.get("remaining_ready") or 0),
+        "ready": remaining_ready_count(ready_by_repo)
+        or int(working.get("remaining_ready") or 0),
         "ready_with_open_pr": int(working.get("remaining_ready_with_pr") or 0),
         "open_ai_prs": int(working.get("remaining_prs") or 0),
         "actionable_open_ai_prs": int(working.get("actionable_prs") or 0),

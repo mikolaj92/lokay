@@ -4,6 +4,7 @@ from pathlib import Path
 from lokay.passkit import io as pass_io
 from lokay.stuck import load_stuck
 from lokay.mill_scope import mill_repo, scoped_repos
+from lokay.proc.catalog_work import work_by_repo
 from lokay.proc.pass_lane import product_candidates, self_repo
 
 
@@ -26,7 +27,11 @@ def prepare(*, pass_dir: str, slot_count: int) -> dict:
     active = bool(begin.get("live")) and int(begin.get("issue_budget") or 0) > 0
     self_id = self_repo(begin)
     product = product_candidates(
-        ready_by_repo=working.get("ready_by_repo"),
+        ready_by_repo=work_by_repo(
+            working,
+            stuck=stuck,
+            branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
+        ),
         prs_by_repo=working.get("prs_by_repo"),
         self_id=self_id,
     )

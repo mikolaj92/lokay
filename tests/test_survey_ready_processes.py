@@ -85,6 +85,30 @@ def test_classify_excludes_human_stops_and_keeps_unlabeled(tmp_path):
     assert [x["number"] for x in result["implementable"]] == [1, 5]
 
 
+def test_reduce_folds_inbox_only_unlabeled_into_ready(tmp_path):
+    from lokay.proc.reduce_ready_survey import reduce_state
+
+    path = workspace(tmp_path, repos=("mikolaj92/Temida",))
+    working = pass_io.read_json(pass_io.working_path(path))
+    working["inbox_issues_by_repo"] = {
+        "mikolaj92/Temida": [{"number": 4968, "labels": [], "title": "inbox"}]
+    }
+    out = reduce_state(
+        prepared={"skipped_repos": [], "recent_empty": False},
+        working=working,
+        results=[
+            {
+                "repo": "mikolaj92/Temida",
+                "route": "record",
+                "implementable": [],
+                "covered": [],
+            }
+        ],
+    )
+    assert out["remaining_ready"] == 1
+    assert out["ready_by_repo"]["mikolaj92/Temida"][0]["number"] == 4968
+
+
 def test_finalize_only_materializes_reactions(tmp_path):
     from lokay.proc.finalize_ready_survey import finalize
     from lokay.proc.reduce_ready_survey import reduce_state

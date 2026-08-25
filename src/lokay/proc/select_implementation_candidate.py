@@ -1,6 +1,7 @@
 """Select at most one implementation candidate from the pass snapshot."""
 
 from lokay.passkit import io as pass_io
+from lokay.proc.catalog_work import work_by_repo
 from lokay.stuck import excluded_numbers
 
 
@@ -11,7 +12,11 @@ def select(*, pass_dir: str) -> dict:
     if not begin.get("live") or int(implement.get("issue_budget") or 0) <= 0:
         return {"ok": True, "route": "none", "reason": "no_live_budget"}
     stuck = dict(working.get("stuck") or begin.get("stuck") or {})
-    ready = dict(working.get("ready_by_repo") or {})
+    ready = work_by_repo(
+        working,
+        stuck=stuck,
+        branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
+    )
     for repo in list(implement.get("clean_repos") or []):
         excluded = excluded_numbers(stuck, str(repo))
         candidates = sorted(

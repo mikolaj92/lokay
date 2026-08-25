@@ -136,7 +136,8 @@ product. Green repository verification may be reused only for the identical
    - `request_changes` may auto-repair a few times (`limits.max_request_changes_per_pr`,
      default 2); then escalate to `ai:needs-review` (manual terminal).
    - `ai:request-changes` alone is **not** a terminal label; only `ai:needs-review` is.
-5. **Implement ready (serial by design)**: one ticket after another. `K` /
+5. **Implement open catalog work (serial by design)**: unlabeled inbox is
+   work — `work:ready` is not a gate. One ticket after another. `K` /
    `limits.max_issue_to_pr_per_pass` (default **1**; legacy alias
    `max_issues_per_tick`) is an **optional pass budget**, not concurrent
    worktrees / Pi / tmux. At most one attempt / one open AI PR per repo.
