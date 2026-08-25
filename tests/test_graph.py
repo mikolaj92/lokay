@@ -104,9 +104,11 @@ def test_factory_pass_docs_match_package_atom_order():
         encoding="utf-8"
     )
     top = mermaid.split("```mermaid")[1].split("```")[0]
-    camel = ["".join(part.title() for part in atom.split("_")) for atom in ids]
-    for name in camel:
-        assert name in top, name
+    def mermaid_id(atom: str) -> str:
+        return "".join("FF" if part == "ff" else part.title() for part in atom.split("_"))
+
+    for atom in ids:
+        assert mermaid_id(atom) in top, atom
     graph = (Path(__file__).resolve().parents[1] / "docs" / "GRAPH.md").read_text(
         encoding="utf-8"
     )

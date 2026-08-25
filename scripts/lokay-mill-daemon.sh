@@ -49,7 +49,7 @@ PY
 
 write_host_plist() {
   # Host setup only. Missing plist stays missing. Do not invent a job.
-  # plutil, not python plistlib — tick path never rewrites the interval.
+  # plutil only — tick path never rewrites the interval.
   local plist="${LOKAY_LAUNCHD_PLIST}"
   [[ -f "${plist}" ]] || return 0
   command -v plutil >/dev/null 2>&1 || return 0

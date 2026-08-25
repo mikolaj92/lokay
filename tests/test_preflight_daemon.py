@@ -20,6 +20,7 @@ def test_daemon_is_os_only():
     assert "idle_skip" not in script
     assert "host_ff_already_current" not in script
     assert "plistlib" not in script
+    assert "import plistlib" not in script
     assert "uv run lokay-host-ff" not in script
     assert "uv run lokay-repos" not in script
     assert "uv run lokay-mill" not in script
