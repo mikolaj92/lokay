@@ -48,14 +48,41 @@ def find_default_package() -> Path:
 ROOT = _project_root()
 
 
-def _materialize_package(src: Path, dest: Path, *, project: Path) -> Path:
+_PATH_TABLE = "[[correlation_paths]]"
+
+
+def _slice_package_to_path(text: str, path_id: str) -> str:
+    """Keep header + one correlation path. Native Fala loads the whole file."""
+    first = text.find(_PATH_TABLE)
+    if first < 0:
+        raise ValueError("package has no [[correlation_paths]]")
+    header = text[:first]
+    kept: list[str] = []
+    for chunk in text[first:].split(_PATH_TABLE):
+        if not chunk.strip():
+            continue
+        match = re.search(r'(?m)^id = "([^"]+)"', chunk)
+        if match and match.group(1) == path_id:
+            kept.append(_PATH_TABLE + chunk.rstrip() + "\n")
+    if not kept:
+        raise ValueError(f"unknown Fala correlation path: {path_id}")
+    return header + "".join(kept)
+
+
+def _materialize_package(
+    src: Path, dest: Path, *, project: Path, path_id: str | None = None
+) -> Path:
     """Write package with absolute project path; organs always run via `uv run`.
 
     Canonical substitution only: PLACEHOLDER_PROJECT → checkout path.
     Package adapters hardcode `uv` (never bare python3 / PLACEHOLDER_PYTHON).
+    When path_id is set, drop every other correlation path so native Fala
+    does not allocate the whole 3k-effector catalog to run one job.
     """
     text = src.read_text(encoding="utf-8")
     text = text.replace("PLACEHOLDER_PROJECT", str(project.resolve()))
+    if path_id:
+        text = _slice_package_to_path(text, path_id)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
     return dest
@@ -127,7 +154,7 @@ def run_path(
             if (cand / "pyproject.toml").is_file() and (cand / "fala").is_dir():
                 project = cand
                 break
-    _materialize_package(pkg_src, pkg_runtime, project=project)
+    _materialize_package(pkg_src, pkg_runtime, project=project, path_id=path_id)
     db = work / "state.sqlite"
 
     if os.environ.get("LOKAY_HEALTH_LEASE", "") != inherited_health_lease:
