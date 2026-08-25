@@ -125,7 +125,7 @@ classify_factory_idle
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
 | `record_pass` | write `last-pass.json` + terminal tick envelope with `lane: product \| oil \| idle` |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
-| mill Fala journals | idle mill sqlite under `~/.lokay/fala/{daemon-cycle,factory}` rotates when oversized; recovery stays on `state.jsonl`. Live `fala/i2pr/` journals stay |
+| mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/` (including the child journal at that root) rotates at a 64 MiB ceiling; recovery stays on `state.jsonl`. Over-cap is fail-closed if the file cannot be cut |
 | leftover closeout | after each factory pass, park leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /

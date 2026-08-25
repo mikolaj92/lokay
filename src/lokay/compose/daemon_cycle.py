@@ -10,7 +10,7 @@ import signal
 from typing import Any
 
 from lokay.config import load_config
-from lokay.envelope import mill_glance
+from lokay.envelope import err, mill_glance
 from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
@@ -61,8 +61,8 @@ def compose_daemon_cycle(
         try:
             try:
                 rotate_mill_fala_journals()
-            except OSError:
-                pass
+            except OSError as exc:
+                return err(str(exc), reason="journal_rotate")
             return finalize_daemon_payload(
                 run_path(
                     path_id="daemon_cycle",
