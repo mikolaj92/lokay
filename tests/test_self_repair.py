@@ -1,8 +1,6 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 from lokay import self_repair
-from lokay.proc import self_repair_validate
 
 
 def cfg(tmp_path, **kw):
@@ -33,105 +31,11 @@ def setup_lane(monkeypatch, tmp_path, **cfg_kw):
     )
 
 
-def test_missing_deduplicated_incident_never_runs_fala(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path)
-    monkeypatch.setattr(
-        self_repair, "run_path", lambda **k: (_ for _ in ()).throw(AssertionError())
-    )
-    result = self_repair.run_self_repair("x", unhealthy(url=None))
-    assert not result["ok"] and result["reason"] == "deduplicated_incident_unavailable"
-
-
-def test_bootstrap_dependency_failure_avoids_recursion(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path)
-    value = unhealthy()
-    value["findings"] = [{"name": "executor_availability", "ok": False}]
-    monkeypatch.setattr(
-        self_repair, "run_path", lambda **k: (_ for _ in ()).throw(AssertionError())
-    )
-    result = self_repair.run_self_repair("x", value)
-    assert result["reason"] == "bootstrap_dependency_unavailable"
-
-
-def test_carrier_unhealthy_never_runs_fala(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path)
-    value = unhealthy()
-    value["carrier_ok"] = False
-    monkeypatch.setattr(
-        self_repair, "run_path", lambda **k: (_ for _ in ()).throw(AssertionError())
-    )
-    result = self_repair.run_self_repair("x", value)
-    assert result["reason"] == "carrier_unhealthy"
-
-
-def test_self_repair_is_one_fala_path_and_returns_restart(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path)
-    calls = []
-
-    def fake_path(**kwargs):
-        calls.append(kwargs)
-        return {
-            "ok": True,
-            "validated": True,
-            "restart_required": True,
-            "commit": "deadbeef",
-            "incident_closed": True,
-            "gate_released": False,
-        }
-
-    monkeypatch.setattr(self_repair, "run_path", fake_path)
-    result = self_repair.run_self_repair("x", unhealthy())
-
-    assert result["ok"] and result["health"] == "restart_required"
-    assert result["commit"] == "deadbeef" and result["gate_released"]
-    assert len(calls) == 1
-    call = calls[0]
-    assert call["path_id"] == "self_repair"
-    assert call["repo"] == "mikolaj92/lokay"
-    assert call["issue"] == 44 and call["live"] is True
-    assert call["extra_inputs"]["fingerprint"] == "abc"
-
-
-def test_fala_failure_stays_closed(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path)
-    monkeypatch.setattr(
-        self_repair, "run_path", lambda **k: {"ok": False, "error": "push rejected"}
-    )
-    result = self_repair.run_self_repair("x", unhealthy())
-    assert not result["ok"]
-    assert result["health"] == "self_repair_failed"
-    assert result["reason"] == "fala_self_repair_failed"
-
-
-def test_self_repair_honors_configured_incident_repo(monkeypatch, tmp_path):
-    setup_lane(monkeypatch, tmp_path, incident_repo="acme/ops")
-    calls = []
-
-    def fake_path(**kwargs):
-        calls.append(kwargs)
-        return {
-            "ok": True,
-            "validated": True,
-            "restart_required": True,
-            "commit": "abc",
-        }
-
-    monkeypatch.setattr(self_repair, "run_path", fake_path)
-    result = self_repair.run_self_repair(
-        "x",
-        unhealthy(url="https://github.com/acme/ops/issues/44"),
-    )
-    assert result["ok"]
-    assert calls[0]["repo"] == "acme/ops"
-    assert calls[0]["issue"] == 44
-
-
 def test_self_repair_resume_candidate_skips_agent_and_commit_but_revalidates(
     tmp_path, monkeypatch
 ):
     from lokay.organ.self_repair import handle_self_repair
     from lokay.proc import self_repair_push_main as push_module
-    from lokay.proc import self_repair_validate as validate_module
 
     calls: list[tuple[object, list[str]]] = []
 
@@ -139,7 +43,7 @@ def test_self_repair_resume_candidate_skips_agent_and_commit_but_revalidates(
         calls.append((main, list(argv)))
         return {"ok": True, "validated": True, "commit": "c" * 40}
 
-    import lokay.fala_organ as fala_organ
+    from lokay import fala_organ
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_atom)
     prepared = {
@@ -216,7 +120,7 @@ def test_self_repair_dirty_resume_skips_agent_but_runs_validation_and_commit(
     tmp_path, monkeypatch
 ):
     from lokay.organ.self_repair import handle_self_repair
-    from lokay.proc import commit_all, self_repair_validate as validate_module
+    from lokay.proc import commit_all
 
     calls: list[tuple[object, list[str]]] = []
 
@@ -229,7 +133,7 @@ def test_self_repair_dirty_resume_skips_agent_but_runs_validation_and_commit(
             "commit": "d" * 40,
         }
 
-    import lokay.fala_organ as fala_organ
+    from lokay import fala_organ
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_atom)
     prepared = {
@@ -314,3 +218,22 @@ def test_commit_all_reports_exact_created_commit(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert payload["committed"] is True
     assert payload["commit"] == "c" * 40
+
+
+def test_self_repair_facade_invokes_one_authored_entry(monkeypatch):
+    calls = []
+    preflight = unhealthy()
+    monkeypatch.setattr(
+        "lokay.proc.self_repair_entry_subflow.run",
+        lambda **k: calls.append(k) or {"ok": True, "health": "restart_required"},
+    )
+    result = self_repair.run_self_repair("x", preflight)
+    assert result["health"] == "restart_required"
+    assert calls == [{"config_path": "x", "preflight": preflight}]
+
+
+def test_self_repair_facade_contains_no_routing():
+    import inspect
+
+    source = inspect.getsource(self_repair.run_self_repair)
+    assert "if " not in source and "run_path" not in source
