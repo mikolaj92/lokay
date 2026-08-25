@@ -50,6 +50,7 @@ from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
 from lokay.organ.pr_survey_boundary import handle_pr_survey
 from lokay.organ.product_budget_boundary import handle_product_budget
+from lokay.organ.product_entry_boundary import handle_product_entry
 from lokay.organ.publication import handle_publication
 from lokay.organ.queue_conflict_boundary import handle_queue_conflict
 from lokay.organ.ready_hygiene_boundary import handle_ready_hygiene
@@ -197,6 +198,7 @@ def _handle(
         handle_pr_survey,
         handle_ready_hygiene,
         handle_product_budget,
+        handle_product_entry,
         handle_test_local,
         handle_leftover_closeout,
         handle_factory_begin,

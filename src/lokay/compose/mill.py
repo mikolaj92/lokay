@@ -12,12 +12,10 @@ import os
 import secrets
 from typing import Any
 
-from lokay.compose.factory import compose_factory_pass
-from lokay.envelope import emit_exit, err, ok
-from lokay.passkit.health import evaluate_mill_stop
+from lokay.envelope import emit_exit
+from lokay.preflight import health_lease_status, revoke_health_lease, run_preflight
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.proc.closeout import run_closeout_leftover
-from lokay.preflight import health_lease_status, revoke_health_lease, run_preflight
 
 
 def closeout_leftover_ready(*, config_path: str | None, live: bool) -> dict[str, Any]:
@@ -35,6 +33,11 @@ def compose_mill(
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     owns_lease = False
     owns_lease_path = False
+    required_empty = []
+    for key in ("LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH"):
+        if key not in os.environ:
+            os.environ[key] = ""
+            required_empty.append(key)
     if (
         preflight is None
         and live
@@ -75,6 +78,8 @@ def compose_mill(
             revoke_health_lease()
         if owns_lease_path:
             os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
+        for key in required_empty:
+            os.environ.pop(key, None)
 
 
 def _compose_mill(
@@ -86,19 +91,14 @@ def _compose_mill(
 ) -> dict[str, Any]:
     if preflight is None:
         preflight = run_preflight(config_path, remediate=True) if live else {"ok": True}
-    if not preflight.get("ok"):
-        return err(
-            "preflight failed; product workflow blocked",
-            health="preflight_failed",
-            preflight=preflight,
-            live=live,
-            idle=False,
-            progress=0,
-            results=[],
-        )
-    from lokay.proc.product_pass_budget_subflow import run
+    from lokay.proc.product_entry_subflow import run
 
-    return run(config_path=config_path, live=live, max_passes=max_passes)
+    return run(
+        config_path=config_path,
+        live=live,
+        max_passes=max_passes,
+        preflight=preflight,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

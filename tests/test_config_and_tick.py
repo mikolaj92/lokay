@@ -2,11 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from lokay.passkit import io as pass_io
 from lokay.agent import build_agent_argv
-from lokay.compose.tick import compose_tick
 from lokay.config import Config, RepoConfig, load_config
 from lokay.git_branch import branch_for_issue
+from lokay.passkit import io as pass_io
 from lokay.proc.make_branch import main as make_branch_main
 
 
@@ -417,7 +416,7 @@ state:
         encoding="utf-8",
     )
     monkeypatch.setattr(
-        "lokay.proc.product_pass_budget_subflow.run",
+        "lokay.proc.product_entry_subflow.run",
         lambda **kwargs: {"ok": True, "health": "offline", "passes": 1},
     )
     result = compose_mill(config_path=str(cfg_path), live=False, max_passes=3)
