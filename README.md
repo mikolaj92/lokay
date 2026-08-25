@@ -1274,8 +1274,10 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> BeginObservation
     BeginObservation --> RunFactoryPass
-    RunFactoryPass --> ObserveCarrier
-    ObserveCarrier --> RecordEvidence
+    RunFactoryPass --> ClassifyRecoveryScope
+    ClassifyRecoveryScope --> RecordEvidence: jawny carrier / source-integrity failure
+    ClassifyRecoveryScope --> RecordNoIncident: issue / PR / worktree / test-local failure
+    RecordNoIncident --> [*]
     RecordEvidence --> [*]: healthy / progress / waiting / idle
     RecordEvidence --> ConfirmIncident: powtarzalna awaria nośnika
     ConfirmIncident --> PrepareRecovery
@@ -1311,7 +1313,7 @@ kontraktu. Aktualny audyt:
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
 | `issue_triage` bez ukrytego drzewa Python | zaimplementowane w Fali wraz z pod-Falą `issue_split` |
 | `issue_to_pr` bez ukrytego drzewa Python | zaimplementowane jako gate Fali + pod-Fala `issue_to_pr_delivery` |
-| odzyskanie lokalnego work item bez globalnej awarii Lokaya | **do refaktoru** |
+| odzyskanie lokalnego work item bez globalnej awarii Lokaya | jawna allowlista carrier events/health; lokalny błąd nigdy nie wchodzi do globalnego quorum |
 
 ### Ścieżki Fali odpowiadające diagramowi
 

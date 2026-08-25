@@ -52,7 +52,11 @@ def test_successful_delivery_breaks_systemic_failure_evidence(tmp_path):
         + json.dumps({"kind": "other", "ok": False, "error": "same failure"})
         + "\n"
     )
-    row = observe_run(state_path=state, state_offset=0, mill={"ok": False, "health": "budget_exhausted", "progress": 9})
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={"ok": False, "health": "budget_exhausted", "progress": 9},
+    )
     assert row["delivered"] is True
     assert row["fingerprint"] is None
 
@@ -67,7 +71,11 @@ def test_skipped_pr_merge_is_not_delivery(tmp_path):
                 "skipped": True,
                 "reason": "llm_review_requested_changes",
                 "terminal": {
-                    "pr_merge": {"ok": True, "skipped": True, "reason": "llm_review_not_approved"}
+                    "pr_merge": {
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "llm_review_not_approved",
+                    }
                 },
             }
         )
@@ -79,8 +87,8 @@ def test_skipped_pr_merge_is_not_delivery(tmp_path):
         mill={"ok": False, "health": "budget_exhausted", "progress": 8},
     )
     assert row["delivered"] is False
-    assert row["fingerprint"] is not None
-    assert row["evidence"] == "budget_exhausted"
+    assert row["fingerprint"] is None
+    assert row["evidence"] == ""
 
 
 def test_actual_pr_merge_is_delivery(tmp_path):
@@ -106,10 +114,15 @@ def test_actual_pr_merge_is_delivery(tmp_path):
 
 def test_observation_reads_only_current_run_tail(tmp_path):
     state = tmp_path / "state.jsonl"
-    state.write_text(json.dumps({"ok": False, "error": "old failure"}) + "\n")
+    state.write_text(
+        json.dumps({"kind": "carrier", "ok": False, "error": "old failure"}) + "\n"
+    )
     offset = state.stat().st_size
     with state.open("a") as handle:
-        handle.write(json.dumps({"ok": False, "error": "new failure 123"}) + "\n")
+        handle.write(
+            json.dumps({"kind": "carrier", "ok": False, "error": "new failure 123"})
+            + "\n"
+        )
     row = observe_run(state_path=state, state_offset=offset, mill={"ok": False})
     assert "new failure" in row["evidence"]
     assert "old failure" not in row["evidence"]
@@ -145,7 +158,10 @@ def test_empty_adapter_failed_is_not_stall_fingerprint(tmp_path):
         mill={
             "ok": False,
             "health": "failed",
-            "error": {"code": "adapter_failed", "message": "subprocess adapter failed: \n"},
+            "error": {
+                "code": "adapter_failed",
+                "message": "subprocess adapter failed: \n",
+            },
             "progress": 0,
         },
     )
@@ -153,7 +169,7 @@ def test_empty_adapter_failed_is_not_stall_fingerprint(tmp_path):
     assert row["evidence"] == ""
 
 
-def test_adapter_failed_with_product_detail_still_fingerprints(tmp_path):
+def test_product_adapter_failure_does_not_become_global_source_incident(tmp_path):
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
     row = observe_run(
@@ -169,8 +185,8 @@ def test_adapter_failed_with_product_detail_still_fingerprints(tmp_path):
             "progress": 0,
         },
     )
-    assert row["fingerprint"]
-    assert "survey_ready" in row["evidence"]
+    assert row["fingerprint"] is None
+    assert row["evidence"] == ""
 
 
 def test_running_health_is_not_failure_fingerprint(tmp_path):
@@ -467,7 +483,9 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
 
     def forbid_repair(*_a, **_k):
         repair_calls.append(True)
-        raise AssertionError("recovery_run_self_repair must not run for soft mill health")
+        raise AssertionError(
+            "recovery_run_self_repair must not run for soft mill health"
+        )
 
     monkeypatch.setattr(
         "lokay.proc.recovery_run_self_repair.main",
@@ -554,3 +572,39 @@ def test_parked_needs_review_waiting_mill_never_fingerprints(tmp_path):
         assert observation["fingerprint"] is None
         assert observation["health"] == "waiting"
         assert record_observation(history, observation) is None
+
+
+def test_local_work_item_failure_never_enters_global_repair_quorum(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text(
+        json.dumps(
+            {
+                "kind": "issue_to_pr",
+                "ok": False,
+                "reason": "test_local_failed",
+                "error": "pytest failed",
+            }
+        )
+        + "\n"
+    )
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={"ok": False, "health": "failed", "progress": 0},
+    )
+    assert row["fingerprint"] is None
+
+
+def test_explicit_carrier_failure_can_enter_global_repair_quorum(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        mill={
+            "ok": False,
+            "health": "carrier_failed",
+            "error": "trusted manifest unreadable",
+        },
+    )
+    assert row["fingerprint"] and "manifest" in row["evidence"]
