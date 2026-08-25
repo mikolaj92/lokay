@@ -5,5 +5,11 @@ from lokay.stuck import save_stuck
 
 
 def persist(ledger: dict, harvested: dict) -> dict:
-    save_stuck(Path(ledger["stuck_path"]), dict(harvested["stuck"]))
-    return {"ok": True, "stuck_path": ledger["stuck_path"], "stuck": harvested["stuck"]}
+    stuck = dict(harvested["stuck"])
+    save_stuck(Path(ledger["stuck_path"]), stuck)
+    issues = stuck.get("issues") or {}
+    return {
+        "ok": True,
+        "stuck_path": ledger["stuck_path"],
+        "issue_count": len(issues) if isinstance(issues, dict) else 0,
+    }

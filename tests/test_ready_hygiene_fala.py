@@ -1,28 +1,29 @@
-"""Native Fala proof for ready-hygiene repo and candidate slots."""
+"""Native Fala proof for one ready-hygiene catalog atom."""
 
-from test_issue_triage_fala import base_effector
 from test_implementation_selection_fala import run_graph
+from test_issue_triage_fala import base_effector
 
 
-def test_one_repo_one_candidate(tmp_path):
+def test_ready_hygiene_is_one_catalog_atom(tmp_path):
     body = base_effector(
         """if a=='prepare_ready_hygiene':v.update(route='probe',repos=['o/r'])
-if a.startswith('select_ready_hygiene_repo_'):v.update(route='probe' if a.endswith('_1') else 'empty',repo='o/r' if a.endswith('_1') else '')
-if a.startswith('list_ready_hygiene_repo_'):v.update(route='listed',issues=[])
-if a.startswith('classify_ready_hygiene_repo_') or a.startswith('record_ready_hygiene_repo_'):v.update(route='record' if a.endswith('_1') else 'empty')
-if a=='reduce_ready_hygiene_candidates':v.update(route='mutate',candidates=[{'repo':'o/r','number':1}])
-if a.startswith('select_ready_hygiene_candidate_'):v.update(route='remove' if a.endswith('_1') else 'empty',repo='o/r',number=1)
-if a.startswith('remove_ready_hygiene_candidate_'):v.update(route='removed')
-if a.startswith('record_ready_hygiene_candidate_'):v.update(route='removed' if a.endswith('_1') else 'empty')
-if a=='reduce_ready_hygiene':v.update(cleaned_count=1)
+if a=='ready_hygiene_catalog':v.update(cleaned_count=1)
 if a=='update_ready_hygiene_stamp':v['result']={'cleaned_count':1}"""
     )
-    result = run_graph(tmp_path, body, "ready-hygiene-one", path_id="ready_hygiene")
-    status = {k: v["status"] for k, v in result["effector_results"].items()}
-    assert (
-        status["list_ready_hygiene_repo_1"] == "succeeded"
-        and status["list_ready_hygiene_repo_2"] == "skipped"
-        and status["remove_ready_hygiene_candidate_1"] == "succeeded"
-        and status["remove_ready_hygiene_candidate_2"] == "skipped"
-        and status["update_ready_hygiene_stamp"] == "succeeded"
+    result = run_graph(tmp_path, body, "ready-hygiene-catalog", path_id="ready_hygiene")
+    order = [
+        "prepare_ready_hygiene",
+        "ready_hygiene_catalog",
+        "update_ready_hygiene_stamp",
+    ]
+    statuses = result["effector_results"]
+    assert all(statuses[name]["status"] == "succeeded" for name in order)
+    assert not any(
+        name.startswith("select_ready_hygiene_")
+        or name.startswith("list_ready_hygiene_")
+        or name.startswith("classify_ready_hygiene_")
+        or name.startswith("record_ready_hygiene_")
+        or name.startswith("remove_ready_hygiene_")
+        or name.startswith("reduce_ready_hygiene")
+        for name in statuses
     )

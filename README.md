@@ -163,8 +163,10 @@ closed-catalog, out-of-scope i stale-cycle-start cleanup. Żaden pojedynczy proc
 sekwencji. Fala
 posiada jedyne drzewo otwarcia passu. Odzyskanie delegowanej capability jest
 jednym ograniczonym efektem, nie pętlą. Offline i preflight failure są jawnymi
-terminalami. Nie ma agenta: wszystkie decyzje wynikają z lease, konfiguracji i
-lokalnych ledgerów.
+terminalami. Węzeł `factory_begin` w `factory_pass` prowadzi wyłącznie kwit
+(`pass_dir`, `stuck_path`, `planned`, counts) — duże listingi zostają na dysku
+i nie wjeżdżają w conduction każdego następnego atomu. Nie ma agenta: wszystkie
+decyzje wynikają z lease, konfiguracji i lokalnych ledgerów.
 
 ### Przegląd gotowych issue — `survey_ready`
 
@@ -709,28 +711,17 @@ mechanicznymi.
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareReadyHygiene
-    PrepareReadyHygiene --> SelectHygieneRepoSlot
-    SelectHygieneRepoSlot --> ListReadyLabelIssues: probe
-    SelectHygieneRepoSlot --> RecordHygieneRepo: recent-empty / pusty slot
-    ListReadyLabelIssues --> ClassifyOrphanReady
-    ClassifyOrphanReady --> RecordHygieneRepo
-    RecordHygieneRepo --> SelectHygieneRepoSlot: następne repo
-    RecordHygieneRepo --> ReduceHygieneCandidates: ostatnie repo
-    ReduceHygieneCandidates --> SelectHygieneCandidateSlot
-    SelectHygieneCandidateSlot --> RemoveOrphanReadyLabel: kandydat
-    SelectHygieneCandidateSlot --> RecordHygieneCandidate: pusty slot
-    RemoveOrphanReadyLabel --> RecordHygieneCandidate
-    RecordHygieneCandidate --> SelectHygieneCandidateSlot: następny kandydat
-    RecordHygieneCandidate --> ReduceReadyHygiene: ostatni kandydat
-    ReduceReadyHygiene --> UpdateReadyHygieneStamp
+    PrepareReadyHygiene --> ReadyHygieneCatalog
+    ReadyHygieneCatalog --> UpdateReadyHygieneStamp
     UpdateReadyHygieneStamp --> ReadyHygieneResult
     ReadyHygieneResult --> [*]
 ```
 
-Pod-Fala ma 30 jawnych slotów repozytoriów i 30 jawnych slotów osieroconych
-issue. Listing, czysta klasyfikacja `ai:ready` bez `work:ready`, mutation effect,
-redukcja oraz TTL są osobnymi procesami. Overflow katalogu lub kandydatów jest
-fail-closed. Rate limit nie udaje pustej sondy i nie zapisuje empty stamp.
+Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, mutation policy), jeden
+atom katalogu, który w procesie listuje / klasyfikuje / zdejmuje osierocone
+`ai:ready`, i efekt stamp. Nie ma 30-slotowego rozwinięcia Fali. Overflow
+katalogu lub kandydatów jest fail-closed. Rate limit nie udaje pustej sondy
+i nie zapisuje empty stamp.
 
 ### Przegląd pull requestów — `survey_prs`
 
@@ -1367,7 +1358,7 @@ kontraktu. Aktualny audyt:
 | `AssertRealDiffExecution` | `assert_real_diff_execution` | składa fizyczny diff, scope issue/localize i zamknięty terminal |
 | `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
-| `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jawne sloty repo i issue |
+| `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
 | `LeftoverCloseout` | `leftover_closeout` | domyka CLOSED ready labels przez jawne sloty repo, etykiet i issue |
 | `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |

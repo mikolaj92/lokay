@@ -34,6 +34,6 @@ def build(ledger: dict) -> dict:
         pr_survey_failed=[],
         inbox_survey_failed=[],
         ready_survey_failed=[],
-        stuck=ledger["stuck"],
+        stuck_path=ledger["stuck_path"],
     )
     return {"ok": True, "working": working}

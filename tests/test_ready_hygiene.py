@@ -87,6 +87,44 @@ def test_rate_limit_result_does_not_look_empty():
     assert out["probe_failed"] is True and out["applied"] is False
 
 
+def test_catalog_skip_does_not_list():
+    from lokay.proc.ready_hygiene_catalog import run
+
+    out = run({"route": "skip", "repos": ["o/r"], "live": True}, config_path=None, live=True)
+    assert out["skipped"] is True and out["cleaned_count"] == 0
+
+
+def test_catalog_removes_one_orphan(monkeypatch):
+    from lokay.proc import ready_hygiene_catalog
+
+    monkeypatch.setattr(
+        "lokay.proc.list_ready_hygiene_issues.fetch",
+        lambda selected, **kwargs: {
+            **selected,
+            "ok": True,
+            "route": "listed",
+            "issues": [{"repo": "o/r", "number": 1, "labels": ["ai:ready"]}],
+        },
+    )
+    monkeypatch.setattr(
+        "lokay.proc.remove_ready_hygiene_label.remove",
+        lambda selected, **kwargs: {**selected, "ok": True, "route": "removed"},
+    )
+    out = ready_hygiene_catalog.run(
+        {
+            "ok": True,
+            "route": "probe",
+            "repos": ["o/r"],
+            "ready_label": "ai:ready",
+            "mutations_allowed": True,
+            "live": True,
+        },
+        config_path=None,
+        live=True,
+    )
+    assert out["cleaned_count"] == 1 and out["applied"] is True
+
+
 def test_idle_leftover_ready_facade_is_gone():
     from lokay.compose import mill
 
