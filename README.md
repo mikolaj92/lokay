@@ -278,6 +278,22 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Bezpośrednie wejście Lokaya — `product_entry`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ClassifyProductEntryPreflight
+    ClassifyProductEntryPreflight --> RunProductPassBudget: healthy
+    ClassifyProductEntryPreflight --> ProductEntryTerminal: preflight failed
+    RunProductPassBudget --> ProductEntryTerminal
+    ProductEntryTerminal --> [*]
+```
+
+Wrapper bezpośredniego CLI posiada tylko capability unikalnej health lease,
+jeden preflight i jej bezpieczne revoke. Zamknięty wynik przekazuje do Fali.
+Fala, a nie `compose/mill.py`, wybiera terminal preflight albo istniejącą
+`product_pass_budget` pod-Falę. Wrapper nie odtwarza pętli passów ani routingu.
+
 ### Wejście jednej self-repair — `self_repair_entry`
 
 ```mermaid
@@ -1321,6 +1337,7 @@ kontraktu. Aktualny audyt:
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
 | `SelfRepairEntry` | `self_repair_entry` | prowadzi preconditions, events, istniejącą self_repair pod-Falę i restart terminal |
+| `ProductEntry` | `product_entry` | prowadzi zamknięty preflight do terminala albo authored budżetu passów |
 | `DaemonEntry` | `daemon_entry` | prowadzi zamknięty wynik preflight do produktu, terminala albo jednej self-repair pod-Fali |
 | `IntakeCheckExecution` | `intake_check_execution` | prowadzi jeden wybrany mechaniczny intake check przez jawną gałąź |
 | `PlanIssueExecution` | `plan_issue_execution` | prowadzi deterministic approach build, mutation gate, write i terminal |
