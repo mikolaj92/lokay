@@ -278,38 +278,37 @@ def test_mill_survey_probe_failure_is_none() -> None:
     )
 
 
-def test_live_idle_factory_pass_skips_fala(monkeypatch, tmp_path: Path) -> None:
+def test_live_idle_factory_pass_still_hosts_fala(monkeypatch, tmp_path: Path) -> None:
     from lokay.compose import factory as factory_mod
 
     stamp = tmp_path / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")
-
-    def boom(**_kwargs):
-        raise AssertionError("idle mill must not host factory_pass Fala")
+    called = []
 
     monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
-    monkeypatch.setattr(factory_mod, "run_path", boom)
     monkeypatch.setattr(
         factory_mod,
-        "skip_idle_factory_pass",
-        lambda **_k: {
+        "run_path",
+        lambda **kwargs: called.append(kwargs)
+        or {
             "ok": True,
             "health": "idle",
             "idle": True,
-            "live": True,
-            "progress": 0,
-            "remaining": {"ready": 0, "inbox": 0},
             "skipped": True,
             "reason": "recent_empty_survey",
+            "lane": "idle",
         },
     )
     out = factory_mod.compose_factory_pass(
         config_path="config.yaml", live=True, db_path=str(tmp_path / "factory")
     )
-    assert out["ok"] is True
-    assert out["skipped"] is True
+    assert called and called[0]["path_id"] == "factory_pass"
+    assert called[0]["live"] is True
     assert out["engine"] == "fala"
     assert out["kind"] == "factory_pass"
+    assert "skip_idle_factory_pass" not in Path(factory_mod.__file__).read_text(
+        encoding="utf-8"
+    )
 
 
 def test_live_daemon_cycle_always_hosts_authored_fala(monkeypatch, tmp_path):

@@ -15,11 +15,6 @@ from typing import Any
 from lokay.envelope import emit_exit
 from lokay.preflight import health_lease_status, revoke_health_lease, run_preflight
 from lokay.proc._common import add_config_live, load_cfg
-from lokay.proc.closeout import run_closeout_leftover
-
-
-def closeout_leftover_ready(*, config_path: str | None, live: bool) -> dict[str, Any]:
-    return run_closeout_leftover(config_path=config_path, live=live)
 
 
 def compose_mill(

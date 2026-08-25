@@ -195,12 +195,12 @@ LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
 the mill turning; event wake (`lokay-wake` on a self-hosted `lokay-mill`
 runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
 complete. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
-restarts immediately; idle 0 waits the 60s StartInterval. Already 60s
-crash KeepAlive skips python `plistlib`; missing plists stay missing. Delayed
-`--install` double-forks out of the launchd process group so idle 0
-cannot kill the reload. Trailing delayed `--install` checks keepalive
-stamp before `mill_lock_busy`. Same serial mill (K=1), same lock — not a
-parallel fleet. Details:
+restarts immediately; idle 0 waits the 60s StartInterval. Plist
+`StartInterval=60` and crash KeepAlive are host `--install` setup
+(`plutil`, not a per-tick rewrite). Missing plists stay missing. The
+LaunchAgent shell leases `mill.lock` and execs `lokay-daemon`; idle TTL
+and host-ff live in `factory_pass`. Same serial mill (K=1), same lock —
+not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 
 LaunchAgent or:
@@ -279,21 +279,20 @@ See [`GRAPH.md`](GRAPH.md).
 Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
 - `factory_pass` is the parent Fala run used by the mill. It conducts
-  `host_ff → factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
+  `classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
+  survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  refresh_occupancy → reap_stale_worktrees → select_implement →
-  queue_conflict → dispatch_implement → compute_health → record_pass`.
+  reap_over_budget → refresh_occupancy → reap_stale_worktrees →
+  select_implement → queue_conflict → dispatch_implement → compute_health →
+  compact_state → record_pass → record_factory_idle → factory_pass_terminal`.
+  One pass is oil XOR product (product wins). Last-pass receipt includes
+  `lane: product | oil | idle`.
   `factory_begin` fail-closes when in-cycle `host_ff` just fast-forwarded (`health=host_updated`)
-  so a later launchd tick reinstalls and imports the new checkout. Launchd host-ff
-  that already moved HEAD continues into uv reinstall + `lokay-daemon` in the same tick.
-  Launchd does not `host_ff` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
+  so a later launchd tick imports the new checkout. Launchd does not exec
+  `lokay-daemon` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
-  After caretaker `lokay-host-ff`, mill-daemon sets `LOKAY_HOST_FF_FETCHED=1`
-  so in-cycle `factory_pass` `host_ff` skips a second `git fetch origin/main`
-  and preflight skips a second `git ls-remote origin HEAD`. Origin URL is
-  still checked. Caretaker `lokay-host-ff` skips `git fetch origin/main` when
-  GitHub `main` matches local `origin/main`. Probe failure or SHA mismatch
-  still fetches. Standalone `lokay-daemon` still probes. Healthy first host
+  Host-ff lives only in Fala. The mill-daemon shell is OS only (lock, exec,
+  logs, bootstrap incident). Standalone `lokay-daemon` still probes. Healthy first host
   check is not rerun (`gh api user` / ast.parse every lokay module). Repair
   still reruns `_check`.
   Fala inherit_env is a whitelist: every atom, including nested `recovery_mill`,
@@ -319,14 +318,13 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
   those GitHub lists for 120s without refreshing the stamp.
   Inbox rate limit does not stamp empty. A live mill with
-  that fresh stamp and an idle last-pass also skips hosting `factory_pass`
-  (20 organ spawns) and the parent `daemon_cycle` Fala (6 recovery organs).
-  When the stamp expires, the same idle mill cheap-probes those three GitHub
-  lists. An empty probe refreshes the stamp and skips Fala; probe failure or
-  remaining work hosts. Leftover closeout still runs after that skip via its
-  own 300s TTL, mill stuck is still harvested, CLOSED leftover mill
-  worktrees are still reaped, leftover-ready still runs, and leftover-cache
-  still runs. Idle CLASSIFY_CAP skips no-issue leftovers so
+  that fresh stamp and an idle last-pass still hosts `factory_pass`;
+  `classify_factory_idle` exits authored idle. Missing stamp, occupied
+  last-pass, or pytest always hosts the rest of the pass. When the stamp
+  expires, the same idle mill cheap-probes those three GitHub lists inside
+  Fala. An empty probe refreshes the stamp and idles; probe failure or
+  remaining work hosts. Leftover closeout is the authored `leftover_closeout`
+  path after a hosted product pass. Idle CLASSIFY_CAP skips no-issue leftovers so
   Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real leftovers
   so KEEP cannot starve mill issues. Harvest leftovers are not mill issues.
   Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers
@@ -336,48 +334,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   KEEP classification does not. Idle over-cap skip outlives leftover-probe.
   Nested clones are not mill leftover
   worktrees. Mill worktrees keep a .git file. Pytest must not skip GitHub surveys
-  using the mill stamp. Missing stamp, occupied last-pass, or pytest
-  always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
-  `main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
-  `host_ff_already_current` and the GitHub SHA probe. Fresh idle stamp age
-  reuses one date +%s. Busy lock still
-  probes. Probe failure or SHA mismatch still runs host-ff. Local clones
-  still run host-ff. Small mill / launchd logs skip
-  python truncate. Small launchd stdio skips python inode reopen; fat logs
-  still bound in place, then reopen. Fresh idle skip defers the first
-  launchd stdio bound; hosted/probe ticks still bound. Fresh idle skip
-  defers caretaker plist write; hosted/probe ticks still write. Missing or XML plist skips python
-  `launchd_stdout_paths`; binary plist still python. Fat truncate leaves
-  1KiB glance headroom so later idle lines stay under the cap. When
-  last-pass is idle, it skips `lokay-daemon` (preflight + Fala) while
-  empty-survey (120s) and leftover-closeout (300s) stamps are fresh;
-  mill-daemon skips python `idle_skip_daemon` on that path. After
-  leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
-  `work:ready` / `ai:ready` mill issues refreshes that stamp. Fresh leftover skip does not require
-  healthy. Hosted leftover parks still do. Hosted unbounded parks require
-  healthy. Planned parks do not. Hosted merge-now merges require healthy.
-  Planned merges do not.
-  Leftover-probe
-  still hosts `lokay-daemon` so idle reap continues. Leftover-probe still
-  hosts `lokay-daemon` even when mill-probe would also run.
-  Leftover-probe host skips GitHub `/user` this tick. Hosted ticks without
-  leftover lists still probe.
-  Leftover-probe skips GitHub SHA when survey stamp is still fresh.
-  Survey expiry probes GitHub SHA even when leftover stamp is still fresh. One batched GraphQL read
-  probes both CLOSED ready labels. After survey-stamp expiry, one batched GraphQL read probes mill PR / inbox /
-  ready state and refreshes the survey stamp. GraphQL idle-skip does not import ThreadPoolExecutor.
-  Pagination, malformed data, or
-  probe failure still hosts.
-  Remaining leftovers, occupied last-pass, digest mismatch, or host-ff update still
-  starts the daemon. Fresh idle skip with a persisted digest skips
-  `checkout_digest` and `package_matches`. An `already_current` host-ff
-  envelope skips python `host_ff_updated`. Fresh idle skip writes the
-  launchd glance in bash and skips python `emit_launchd_glance` plus extra
-  `bound_launchd_stdio`. Hosted ticks still scrape the mill log and bound
-  launchd stdio around glance. Already under keep skips python
-  `prune_mill_logs`. Fat mill-log dirs still prune. mill-daemon caches
-  `python3` so later `_python` helpers skip `command -v`. Probe skip, missing
-  digest, host-ff update, or a hosted daemon still checks the wheel.
+  using the mill stamp.
+  Leftover closeout stays the authored `leftover_closeout` path after a
+  hosted product pass. The LaunchAgent shell does not leftover-probe or
+  idle-skip. Host-ff and cheap mill-list probes run only inside Fala.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.

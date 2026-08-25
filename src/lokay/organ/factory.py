@@ -109,6 +109,28 @@ def handle_factory(
         # factory_pass mill as lokay-factory-pass — not an in-process spine.
         return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
 
+    if atom == "classify_factory_idle":
+        from lokay.proc.classify_factory_idle import classify
+
+        return classify(live=bool(inputs.get("live")))
+
+    if atom == "record_factory_idle":
+        from lokay.proc.record_factory_idle import record
+
+        return record(
+            up.get("classify_factory_idle") or {},
+            config_path=str(inputs.get("config_path") or "") or None,
+        )
+
+    if atom == "factory_pass_terminal":
+        from lokay.proc.factory_pass_terminal import terminal
+
+        return terminal(
+            up.get("classify_factory_idle") or {},
+            up.get("record_pass") or {},
+            up.get("record_factory_idle") or {},
+        )
+
     if atom == "host_ff":
         argv = [*cfg, *live]
         checkout = inputs.get("checkout") or os.environ.get("LOKAY_ROOT")

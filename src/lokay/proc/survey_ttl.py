@@ -7,8 +7,8 @@ Skip while the stamp is fresh does not refresh it, matching leftover closeout
 / over_cap TTL. A non-empty survey or a survey_error clears the stamp.
 
 After the stamp expires, a live idle mill cheap-probes those three GitHub
-lists. An empty probe refreshes the stamp and skips Fala. Probe failure or
-any open PR / inbox / ready hosts.
+lists. An empty probe refreshes the stamp and the first factory_pass atom
+exits authored idle. Probe failure or any open PR / inbox / ready hosts.
 """
 
 from __future__ import annotations
@@ -129,12 +129,12 @@ def skip_idle_factory_pass(
     now: float | None = None,
     probe: Callable[..., bool | None] | None = None,
 ) -> dict[str, Any] | None:
-    """Skip hosting factory_pass while a live idle mill has an empty survey.
+    """Classify authored idle while a live mill has an empty survey.
 
-    Fresh stamp: skip without GitHub and without refreshing the stamp.
+    Fresh stamp: idle without GitHub and without refreshing the stamp.
     Expired stamp: cheap-probe GitHub. Empty probe refreshes the stamp and
-    skips. Probe failure or remaining work hosts. Missing stamp always hosts.
-    Pytest must not skip the operator mill.
+    idles. Probe failure or remaining work hosts. Missing stamp always hosts.
+    Pytest must not skip the operator mill. Compose must still host Fala.
     """
     if not live:
         return None
