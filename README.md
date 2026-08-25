@@ -113,6 +113,17 @@ stateDiagram-v2
     ClassifyFactoryMode --> SelectFactoryScope
     SelectFactoryScope --> ReadFactoryStuckLedger
     ReadFactoryStuckLedger --> HarvestFactoryChildren
+    state HarvestFactoryChildren {
+        [*] --> ReadChildHarvestFacts
+        ReadChildHarvestFacts --> ReconcileDeadChildReceipts
+        ReconcileDeadChildReceipts --> ReconcileJournalMisses
+        ReconcileJournalMisses --> ReconcileDeliveredIssues
+        ReconcileDeliveredIssues --> ReconcileBlockedMisses
+        ReconcileBlockedMisses --> ClearClosedCatalogRows
+        ClearClosedCatalogRows --> DropOutOfScopeRows
+        DropOutOfScopeRows --> ClearStaleCycleStarts
+        ClearStaleCycleStarts --> [*]
+    }
     HarvestFactoryChildren --> PersistFactoryStuckLedger
     PersistFactoryStuckLedger --> CreateFactoryPassDirectory
     CreateFactoryPassDirectory --> SelectFactorySurveyRepos
@@ -122,8 +133,12 @@ stateDiagram-v2
     FactoryBeginTerminal --> [*]
 ```
 
-Lease/preflight, config mode, scope, stuck ledger, harvest, pass directory,
-survey rotation, zbudowanie stanu i dwa zapisy są osobnymi procesami. Fala
+Lease/preflight, config mode, scope, stuck ledger, pass directory,
+survey rotation, zbudowanie stanu i dwa zapisy są osobnymi procesami. Harvest
+jest osobną pod-Falą: jeden atom czyta lokalne receipt/journal facts, a Fala
+prowadzi osobne redukcje dead-child, miss, delivery, blocked, closed-catalog,
+out-of-scope i stale-cycle-start. Żaden pojedynczy proces nie ukrywa tej
+sekwencji. Fala
 posiada jedyne drzewo otwarcia passu. Odzyskanie delegowanej capability jest
 jednym ograniczonym efektem, nie pętlą. Offline i preflight failure są jawnymi
 terminalami. Nie ma agenta: wszystkie decyzje wynikają z lease, konfiguracji i
