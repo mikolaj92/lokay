@@ -36,20 +36,43 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Already under keep skips python" in script
     assert '"health":"idle","progress":0' in script
     assert "repos/mikolaj92/lokay/git/ref/heads/main" in script
-    assert script.index("host_ff_already_current") < script.index("uv run lokay-host-ff")
+    assert script.index("host_ff_already_current") < script.index(
+        "uv run lokay-host-ff"
+    )
     assert "recent_empty_survey" in script
     assert "recent_empty_survey_probe" in script
     assert "recent_empty_leftover_probe" in script
-    assert "Mill-probe batches PR, ready, and inbox reads into one GraphQL request." in script
+    assert (
+        "Mill-probe batches PR, ready, and inbox reads into one GraphQL request."
+        in script
+    )
     assert "Probe failure, pagination, or malformed data still hosts." in script
-    assert "Leftover-probe batches both CLOSED label reads into one GraphQL request." in script
+    assert (
+        "Leftover-probe batches both CLOSED label reads into one GraphQL request."
+        in script
+    )
     assert "Leftover-probe still hosts lokay-daemon so idle reap continues." in script
-    assert "Leftover-probe still hosts lokay-daemon even when mill-probe would also run." in script
+    assert (
+        "Leftover-probe still hosts lokay-daemon even when mill-probe would also run."
+        in script
+    )
     assert "Leftover-probe skips GitHub SHA when survey stamp is still fresh." in script
-    assert "Survey expiry probes GitHub SHA even when leftover stamp is still fresh." in script
-    assert "Trailing delayed --install checks keepalive stamp before mill_lock_busy." in script
-    assert "Fresh idle skip defers caretaker plist write; hosted/probe ticks still write." in script
-    assert "Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe." in script
+    assert (
+        "Survey expiry probes GitHub SHA even when leftover stamp is still fresh."
+        in script
+    )
+    assert (
+        "Trailing delayed --install checks keepalive stamp before mill_lock_busy."
+        in script
+    )
+    assert (
+        "Fresh idle skip defers caretaker plist write; hosted/probe ticks still write."
+        in script
+    )
+    assert (
+        "Leftover-probe host skips GitHub /user this tick. Hosted ticks without leftover lists still probe."
+        in script
+    )
     assert "export LOKAY_LEFTOVER_PROBE_GH_OK=1" in script
     assert "ThreadPoolExecutor(max_workers=3)" not in script
     assert "ThreadPoolExecutor(max_workers=2)" not in script
@@ -65,13 +88,25 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert 'size="${size// /}"' in script
     assert '[[ -n "${size}" && "${size}" -le "${LAUNCHD_STDOUT_MAX}" ]]' in script
     assert "skips python inode reopen" in script
-    assert "Missing or XML plist skips python plistlib. Binary plist still python." in script
+    assert (
+        "Missing or XML plist skips python plistlib. Binary plist still python."
+        in script
+    )
     assert '[[ "${magic}" == "bplist00" ]]' in script
-    assert "Leave 1KiB glance headroom so later idle lines stay under the cap." in script
+    assert (
+        "Leave 1KiB glance headroom so later idle lines stay under the cap." in script
+    )
     assert "| tee " not in script
-    assert 'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"' in script
-    assert script.index('export LOKAY_HOST_FF_FETCHED="${LOKAY_HOST_FF_FETCHED:-}"') < script.index("uv run lokay-host-ff")
-    assert script.index("uv run lokay-host-ff") < script.index("export LOKAY_HOST_FF_FETCHED=1")
+    assert (
+        'lokay-host-ff --config "${CFG}" --live --checkout "${ROOT}" >>"${LOG}"'
+        in script
+    )
+    assert script.index(
+        'export LOKAY_HOST_FF_FETCHED="${LOKAY_HOST_FF_FETCHED:-}"'
+    ) < script.index("uv run lokay-host-ff")
+    assert script.index("uv run lokay-host-ff") < script.index(
+        "export LOKAY_HOST_FF_FETCHED=1"
+    )
     assert "lock_busy" in script
     assert "mill_lock_busy" in script
     assert "loaded_keepalive_crash_only" in script
@@ -80,13 +115,22 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "Cache python3 so later helpers skip command -v." in script
     assert "Fresh idle stamps skip python host_ff_already_current." in script
     assert "Fresh idle host proof uses two Git processes instead of four." in script
-    assert "Fresh idle proof is cached within one tick; stamp expiry is cross-tick." in script
+    assert (
+        "Fresh idle proof is cached within one tick; stamp expiry is cross-tick."
+        in script
+    )
     assert "Fresh idle stamp age reuses one date +%s." in script
-    assert "Fresh idle skip already bounded launchd stdio and defers mill-log pruning" in script
-    assert "Fresh idle skip defers the first launchd stdio bound; hosted/probe ticks still bound." in script
+    assert (
+        "Fresh idle skip already bounded launchd stdio and defers mill-log pruning"
+        in script
+    )
+    assert (
+        "Fresh idle skip defers the first launchd stdio bound; hosted/probe ticks still bound."
+        in script
+    )
     assert "Fresh idle stamps skip python idle_skip_daemon." in script
     assert "GNU epoch first. Linux stat -f is filesystem, not mtime." in script
-    assert 'stat -c %Y' in script
+    assert "stat -c %Y" in script
     assert "plutil -extract StartInterval raw" in script
     assert '[[ "${plist}" == "${HOME}/Library/LaunchAgents/${label}.plist" ]]' in script
     assert "os.setsid()" in script
@@ -110,36 +154,36 @@ def _fake_uv(local_bin: Path) -> Path:
         "#!/bin/sh\n"
         "log=${LOKAY_UV_ARGV_LOG:-}\n"
         'if [ -n "$log" ]; then printf \'%s\\n\' "$*" >> "$log"; fi\n'
-        "case \"$*\" in\n"
+        'case "$*" in\n'
         "  *lokay-daemon*)\n"
-        "    if [ -n \"$LOKAY_UV_DAEMON_MARKER\" ]; then : > \"$LOKAY_UV_DAEMON_MARKER\"; fi\n"
-        "    while [ -n \"$LOKAY_UV_DAEMON_GATE\" ] && [ ! -e \"$LOKAY_UV_DAEMON_GATE\" ]; do sleep 0.01; done\n"
+        '    if [ -n "$LOKAY_UV_DAEMON_MARKER" ]; then : > "$LOKAY_UV_DAEMON_MARKER"; fi\n'
+        '    while [ -n "$LOKAY_UV_DAEMON_GATE" ] && [ ! -e "$LOKAY_UV_DAEMON_GATE" ]; do sleep 0.01; done\n'
         "    ;;\n"
         "esac\n"
         "if [ \"$1 $2\" = 'run lokay-host-ff' ]; then\n"
-        "  if [ -n \"$LOKAY_UV_HOST_FF_ENVELOPE\" ]; then\n"
+        '  if [ -n "$LOKAY_UV_HOST_FF_ENVELOPE" ]; then\n'
         "    printf '%s\\n' \"$LOKAY_UV_HOST_FF_ENVELOPE\"\n"
         "  else\n"
-        "    printf '%s\\n' '{\"ok\":true,\"health\":\"current\",\"updated\":false,\"already_current\":true}'\n"
+        '    printf \'%s\\n\' \'{"ok":true,"health":"current","updated":false,"already_current":true}\'\n'
         "  fi\n"
         "  exit 0\n"
         "fi\n"
-        "if [ \"$LOKAY_UV_REINSTALL_FAIL\" = 1 ] && "
+        'if [ "$LOKAY_UV_REINSTALL_FAIL" = 1 ] && '
         "[ \"$1 $2 $3 $4 $5\" = 'run --reinstall-package lokay --reinstall-package fala' ]; then\n"
         "  echo 'error: failed to reinstall' >&2\n"
         "  exit 1\n"
         "fi\n"
-        "if [ \"$1\" = run ] && [ \"$2\" = lokay-daemon ]; then\n"
-        "  printf '%s\\n' \"$(command -v pi)\" \"$PATH\"\n"
-        "  if [ -n \"$LOKAY_UV_ENVELOPE\" ]; then printf '%s\\n' \"$LOKAY_UV_ENVELOPE\"; else\n"
-        "    printf '%s\\n' '{\"ok\":false,\"health\":\"progress\",\"progress\":1}'\n"
+        'if [ "$1" = run ] && [ "$2" = lokay-daemon ]; then\n'
+        '  printf \'%s\\n\' "$(command -v pi)" "$PATH"\n'
+        '  if [ -n "$LOKAY_UV_ENVELOPE" ]; then printf \'%s\\n\' "$LOKAY_UV_ENVELOPE"; else\n'
+        '    printf \'%s\\n\' \'{"ok":false,"health":"progress","progress":1}\'\n'
         "  fi\n"
         "  exit 0\n"
         "fi\n"
         "if [ \"$1 $2 $3 $4 $5\" = 'run --reinstall-package lokay --reinstall-package fala' ]; then\n"
-        "  printf '%s\\n' \"$(command -v pi)\" \"$PATH\"\n"
-        "  if [ -n \"$LOKAY_UV_ENVELOPE\" ]; then printf '%s\\n' \"$LOKAY_UV_ENVELOPE\"; else\n"
-        "    printf '%s\\n' '{\"ok\":false,\"health\":\"progress\",\"progress\":1}'\n"
+        '  printf \'%s\\n\' "$(command -v pi)" "$PATH"\n'
+        '  if [ -n "$LOKAY_UV_ENVELOPE" ]; then printf \'%s\\n\' "$LOKAY_UV_ENVELOPE"; else\n'
+        '    printf \'%s\\n\' \'{"ok":false,"health":"progress","progress":1}\'\n'
         "  fi\n"
         "  exit 0\n"
         "fi\n"
@@ -192,9 +236,15 @@ def test_daemon_exposes_local_pi_to_preflight(tmp_path):
     assert completed.returncode == 0, completed.stderr
     logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
     assert logs
-    transcript = next(path.read_text() for path in logs if path.name != "mill-latest.log")
+    transcript = next(
+        path.read_text() for path in logs if path.name != "mill-latest.log"
+    )
     lines = [line for line in transcript.splitlines() if line]
-    pi_line = next(i for i, line in enumerate(lines) if str(tmp_path / ".local" / "bin" / "pi") in line)
+    pi_line = next(
+        i
+        for i, line in enumerate(lines)
+        if str(tmp_path / ".local" / "bin" / "pi") in line
+    )
     assert lines[pi_line + 1].split(os.pathsep)[0] == str(tmp_path / ".local" / "bin")
     glance = json.loads(completed.stdout.strip().splitlines()[-1])
     assert glance["health"] == "progress"
@@ -263,7 +313,9 @@ def test_host_ff_updated_starts_daemon_same_tick(tmp_path):
     assert '"updated": true' in body or '"updated":true' in body
     glance = json.loads(completed.stdout.strip().splitlines()[-1])
     assert glance["health"] == "progress"
-    assert any("--reinstall-package" in line and "lokay-daemon" in line for line in calls)
+    assert any(
+        "--reinstall-package" in line and "lokay-daemon" in line for line in calls
+    )
 
 
 def test_host_ff_already_current_still_starts_daemon(tmp_path):
@@ -276,12 +328,23 @@ def test_host_ff_already_current_still_starts_daemon(tmp_path):
 
 
 def _github_checkout(root: Path) -> str:
-    subprocess.run(["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "t@t"], cwd=root, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "init", "-b", "main"], cwd=root, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "config", "user.email", "t@t"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "t"], cwd=root, check=True, capture_output=True
+    )
     (root / "README").write_text("x\n", encoding="utf-8")
     subprocess.run(["git", "add", "README"], cwd=root, check=True, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "i"], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "-m", "i"], cwd=root, check=True, capture_output=True
+    )
     subprocess.run(
         ["git", "remote", "add", "origin", "git@github.com:mikolaj92/lokay.git"],
         cwd=root,
@@ -509,7 +572,10 @@ def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
     _github_checkout(root)
     gh = tmp_path / ".local" / "bin" / "gh"
     gh.parent.mkdir(parents=True, exist_ok=True)
-    gh.write_text("#!/bin/sh" + chr(10) + "echo fail >&2" + chr(10) + "exit 1" + chr(10), encoding="utf-8")
+    gh.write_text(
+        "#!/bin/sh" + chr(10) + "echo fail >&2" + chr(10) + "exit 1" + chr(10),
+        encoding="utf-8",
+    )
     gh.chmod(0o755)
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
@@ -547,11 +613,17 @@ def test_idle_stamps_skip_python_host_ff_already_current(tmp_path):
         assert str(root) not in log.read_text(encoding="utf-8")
     assert "rev-parse HEAD origin/main --abbrev-ref HEAD" in _script().read_text()
     assert _script().read_text().count('git -C "${checkout}"') == 2
-    assert 'LOKAY_IDLE_STAMPS_FRESH=1' in _script().read_text()
+    assert "LOKAY_IDLE_STAMPS_FRESH=1" in _script().read_text()
     assert _script().read_text().count('_stamp_age_seconds "${LOKAY_HOME}/') == 4
     assert 'now="$(date +%s)" || return 1' in _script().read_text()
-    assert '_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp" "${now}"' in _script().read_text()
-    assert '_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}"' in _script().read_text()
+    assert (
+        '_stamp_age_seconds "${LOKAY_HOME}/leftover-closeout.stamp" "${now}"'
+        in _script().read_text()
+    )
+    assert (
+        '_stamp_age_seconds "${LOKAY_HOME}/factory-survey.stamp" "${now}"'
+        in _script().read_text()
+    )
 
 
 def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):
@@ -562,7 +634,9 @@ def test_idle_skip_does_not_reinstall_stale_wheel_until_stamps_expire(tmp_path):
     src = tmp_path / "repo" / "src" / "lokay"
     src.mkdir(parents=True)
     (src / "gh_rate.py").write_text("SURVEY_LIST_CAP = 1000\n", encoding="utf-8")
-    stale = tmp_path / "repo" / ".venv" / "lib" / "python3.14" / "site-packages" / "lokay"
+    stale = (
+        tmp_path / "repo" / ".venv" / "lib" / "python3.14" / "site-packages" / "lokay"
+    )
     stale.mkdir(parents=True)
     (stale / "gh_rate.py").write_text("old\n", encoding="utf-8")
     lokay = tmp_path / ".lokay"
@@ -706,10 +780,6 @@ def _expire(path: Path, age: int) -> None:
     os.utime(path, (stamp, stamp))
 
 
-
-
-
-
 def test_idle_expired_survey_graphql_pagination_hosts(tmp_path):
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
@@ -785,12 +855,6 @@ def test_idle_expired_survey_probe_failure_hosts(tmp_path):
     assert abs(survey.stat().st_mtime - before) < 1
 
 
-
-
-
-
-
-
 def test_idle_expired_leftover_graphql_pagination_hosts(tmp_path):
     first = _run_daemon(tmp_path)
     assert first.returncode == 0, first.stderr
@@ -828,7 +892,7 @@ def test_idle_expired_leftover_remaining_hosts(tmp_path):
     gh = tmp_path / ".local" / "bin" / "gh"
     gh.parent.mkdir(parents=True, exist_ok=True)
     gh.write_text(
-        "#!/bin/sh\nprintf '%s\\n' '[{\"number\":1,\"state\":\"CLOSED\"}]'\nexit 0\n",
+        '#!/bin/sh\nprintf \'%s\\n\' \'[{"number":1,"state":"CLOSED"}]\'\nexit 0\n',
         encoding="utf-8",
     )
     gh.chmod(0o755)
@@ -897,9 +961,7 @@ def test_lokay_python3_env_is_cached_for_helpers(tmp_path):
     wrapper = tmp_path / "pywrap"
     log = tmp_path / "pywrap.log"
     wrapper.write_text(
-        "#!/bin/sh\n"
-        f"printf called\\n >> '{log}'\n"
-        'exec /usr/bin/python3 "$@"\n',
+        "#!/bin/sh\n" f"printf called\\n >> '{log}'\n" 'exec /usr/bin/python3 "$@"\n',
         encoding="utf-8",
     )
     wrapper.chmod(0o755)
@@ -1050,9 +1112,7 @@ def test_mill_log_and_launchd_stdout_are_bounded(tmp_path):
     assert fat.stat().st_size < 4096
     assert b"truncated" in fat.read_bytes()
     mill_logs = [
-        path
-        for path in logs.glob("mill-*.log")
-        if path.name != "mill-latest.log"
+        path for path in logs.glob("mill-*.log") if path.name != "mill-latest.log"
     ]
     assert mill_logs
     assert all(path.stat().st_size < 8192 for path in mill_logs)
@@ -1088,7 +1148,9 @@ def test_stale_site_packages_forces_reinstall_when_digest_matches(tmp_path):
     src = tmp_path / "repo" / "src" / "lokay"
     src.mkdir(parents=True)
     (src / "gh_rate.py").write_text("SURVEY_LIST_CAP = 1000\n", encoding="utf-8")
-    stale = tmp_path / "repo" / ".venv" / "lib" / "python3.14" / "site-packages" / "lokay"
+    stale = (
+        tmp_path / "repo" / ".venv" / "lib" / "python3.14" / "site-packages" / "lokay"
+    )
     stale.mkdir(parents=True)
     (stale / "gh_rate.py").write_text("old\n", encoding="utf-8")
 
@@ -1291,7 +1353,9 @@ def test_fresh_idle_skip_defers_mill_log_prune(tmp_path):
     second = _run_daemon(tmp_path, extra_env={"LOKAY_MILL_LOG_KEEP": "1"})
     assert second.returncode == 0, second.stderr
     assert stale.exists()
-    logs_body = chr(10).join(path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log"))
+    logs_body = chr(10).join(
+        path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log")
+    )
     assert "recent_empty_survey" in logs_body
 
 
@@ -1308,7 +1372,9 @@ def test_fresh_idle_skip_defers_first_launchd_stdio_bound(tmp_path):
     second = _run_daemon(tmp_path, extra_env={"LOKAY_LAUNCHD_STDOUT_MAX": "2048"})
     assert second.returncode == 0, second.stderr
     assert fat.stat().st_size == 8000
-    logs_body = chr(10).join(path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log"))
+    logs_body = chr(10).join(
+        path.read_text(encoding="utf-8") for path in logs.glob("mill-*.log")
+    )
     assert "recent_empty_survey" in logs_body
 
 
@@ -1325,9 +1391,7 @@ def test_mill_logs_over_keep_still_prune(tmp_path):
     completed = _run_daemon(tmp_path, extra_env={"LOKAY_MILL_LOG_KEEP": "2"})
     assert completed.returncode == 0, completed.stderr
     remaining = [
-        path
-        for path in logs.glob("mill-*.log")
-        if path.name != "mill-latest.log"
+        path for path in logs.glob("mill-*.log") if path.name != "mill-latest.log"
     ]
     assert len(remaining) == 2
     assert not stale.exists()
@@ -1375,23 +1439,35 @@ state:
 
 
 def test_process_exit_zero_when_pass_did_work():
-    assert process_exit_code({"ok": False, "health": "host_updated", "reason": "host_updated"}) == 0
+    assert (
+        process_exit_code(
+            {"ok": False, "health": "host_updated", "reason": "host_updated"}
+        )
+        == 0
+    )
     assert process_exit_code({"ok": False, "health": "progress", "progress": 2}) == 0
-    assert process_exit_code(
-        {"ok": False, "remaining": {"issue_to_pr_started": 1}}
-    ) == 0
-    assert process_exit_code(
-        {"ok": False, "mill": {"health": "progress", "progress": 1}}
-    ) == 0
+    assert (
+        process_exit_code({"ok": False, "remaining": {"issue_to_pr_started": 1}}) == 0
+    )
+    assert (
+        process_exit_code({"ok": False, "mill": {"health": "progress", "progress": 1}})
+        == 0
+    )
     assert process_exit_code({"ok": False, "health": "stall"}) == 1
-    assert process_exit_code(
-        {"ok": False},
-        last_pass={"health": "progress", "progress": 4},
-    ) == 0
-    assert process_exit_code(
-        {"ok": False, "health": "stall"},
-        last_pass={"health": "progress", "progress": 4},
-    ) == 1
+    assert (
+        process_exit_code(
+            {"ok": False},
+            last_pass={"health": "progress", "progress": 4},
+        )
+        == 0
+    )
+    assert (
+        process_exit_code(
+            {"ok": False, "health": "stall"},
+            last_pass={"health": "progress", "progress": 4},
+        )
+        == 1
+    )
 
 
 def test_process_exit_zero_at_pass_ceiling():
@@ -1497,20 +1573,23 @@ def test_daemon_cycle_short_pass_is_unchanged(monkeypatch, tmp_path):
     assert out.get("reason") != "pass_ceiling"
 
 
-def test_daemon_progress_despite_fala_ok_false_exits_zero(monkeypatch, tmp_path, capsys):
+def test_daemon_progress_despite_fala_ok_false_exits_zero(
+    monkeypatch, tmp_path, capsys
+):
     cfg = _write_cfg(tmp_path)
     monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: True)
     monkeypatch.setattr(daemon, "run_preflight", lambda *a, **k: {"ok": True})
     monkeypatch.setattr(
-        daemon,
-        "compose_daemon_cycle",
+        "lokay.proc.daemon_entry_subflow.run",
         lambda **k: {"ok": False, "health": "progress", "progress": 1},
     )
     assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 0
-    assert '"health": "progress"' in capsys.readouterr().out
+    assert "progress" in capsys.readouterr().out
 
 
-def _fake_launchctl(tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0) -> tuple[Path, Path]:
+def _fake_launchctl(
+    tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0
+) -> tuple[Path, Path]:
     local_bin = tmp_path / ".local" / "bin"
     local_bin.mkdir(parents=True, exist_ok=True)
     state = tmp_path / "fake-launchctl-loaded"
@@ -1523,20 +1602,20 @@ def _fake_launchctl(tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0
     launchctl.write_text(
         "#!/bin/bash\n"
         f"state='{state}'\nfailures='{failures}'\ncalls='{calls}'\n"
-        "printf '%s\\n' \"$*\" >> \"$calls\"\n"
-        "case \"$1\" in\n"
+        'printf \'%s\\n\' "$*" >> "$calls"\n'
+        'case "$1" in\n'
         "  print)\n"
-        "    if [[ -f \"$state\" ]]; then\n"
+        '    if [[ -f "$state" ]]; then\n'
         "      printf 'path = /tmp/probe.plist\\nrun interval = 60 seconds\\nkeep alive = { SuccessfulExit => false }\\n'\n"
         "      exit 0\n"
         "    fi\n"
         "    exit 113\n"
         "    ;;\n"
-        "  bootout) rm -f \"$state\"; exit 0 ;;\n"
+        '  bootout) rm -f "$state"; exit 0 ;;\n'
         "  bootstrap)\n"
-        "    n=$(cat \"$failures\")\n"
+        '    n=$(cat "$failures")\n'
         "    if (( n > 0 )); then printf '%s' $((n-1)) > \"$failures\"; exit 5; fi\n"
-        "    : > \"$state\"; exit 0\n"
+        '    : > "$state"; exit 0\n'
         "    ;;\n"
         "esac\nexit 0\n",
         encoding="utf-8",
@@ -1545,7 +1624,9 @@ def _fake_launchctl(tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0
     return local_bin, calls
 
 
-def _run_install_with_fake_launchctl(tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0):
+def _run_install_with_fake_launchctl(
+    tmp_path: Path, *, loaded: bool, bootstrap_failures: int = 0
+):
     import plistlib
 
     plist = tmp_path / "Library" / "LaunchAgents" / "ai.mikolaj.lokay-test.plist"
