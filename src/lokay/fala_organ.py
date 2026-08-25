@@ -32,6 +32,7 @@ from lokay.organ.implementation_selection_boundary import (
     handle_implementation_selection,
 )
 from lokay.organ.inbox_survey_boundary import handle_inbox_survey
+from lokay.organ.intake_check_boundary import handle_intake_check
 from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.issue_triage_boundary import handle_issue_triage
 from lokay.organ.lanes import handle_lanes
@@ -201,6 +202,7 @@ def _handle(
         handle_pr_create,
         handle_stage_label,
         handle_plan_issue,
+        handle_intake_check,
         handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)

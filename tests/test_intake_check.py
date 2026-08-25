@@ -1,32 +1,33 @@
-"""CLI boundary tests for the atomic intake check."""
-
-from __future__ import annotations
-
-import json
+"""Contracts for minimal authored mechanical intake check."""
 
 
-from lokay.proc import intake_check
+def test_foreign_repo_is_explicit_skip():
+    from lokay.proc.prepare_intake_check import prepare
 
-
-
-
-def test_lokay_repo_still_fetches_issue(monkeypatch, capsys):
-    calls = []
-    monkeypatch.setattr(intake_check, "load_cfg", lambda args: object())
-    monkeypatch.setattr(intake_check, "read_live", lambda args: False)
-    monkeypatch.setattr(intake_check, "runner", lambda: object())
-
-    def get_issue(*args, **kwargs):
-        calls.append((args, kwargs))
-        return None
-
-    monkeypatch.setattr(intake_check, "get_issue", get_issue)
-
-    code = intake_check.main(
-        ["--repo", "mikolaj92/lokay", "--issue", "516", "--check", "open"]
+    out = prepare(
+        repo="a/b",
+        issue=7,
+        check="open",
+        merged_prs=[],
+        tracker_done=False,
+        covering_prs=[],
+        live=False,
     )
+    assert out["route"] == "terminal" and out["reason"] == "repo_not_intake_target"
 
-    output = json.loads(capsys.readouterr().out)
-    assert code != 0
-    assert output["ok"] is False
-    assert calls
+
+def test_covering_pr_parser_is_closed_and_bounded():
+    from lokay.proc.parse_intake_covering_prs import parse
+
+    out = parse({"covering_prs": ["7:merged", "8:open"]})
+    assert out["route"] == "parsed" and out["prs"] == [
+        {"number": 7, "state": "MERGED", "merged": True},
+        {"number": 8, "state": "OPEN", "merged": False},
+    ]
+
+
+def test_selector_requires_exactly_one_branch():
+    from lokay.proc.select_intake_check_result import select
+
+    good = {"route": "selected", "check": {"verdict": "pass"}}
+    assert select({}, good, {}) == good and select(good, good)["route"] == "terminal"
