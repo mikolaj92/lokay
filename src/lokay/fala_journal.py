@@ -86,17 +86,25 @@ def _rotate_sqlite(db: Path, *, min_bytes: int, keep: int) -> dict[str, Any] | N
                 sidecar.unlink()
             except OSError:
                 pass
-    _prune_rotated(db, keep=keep)
+    _prune_rotated(db, keep=keep, retain=dest)
     return {"path": str(db), "archived": str(dest), "before_bytes": size}
 
 
-def _prune_rotated(db: Path, *, keep: int) -> None:
+def _prune_rotated(db: Path, *, keep: int, retain: Path | None = None) -> None:
     backups = [
         path
         for path in db.parent.glob(f"{db.name}.*")
         if path.is_file() and not path.name.endswith(("-wal", "-shm"))
     ]
-    backups.sort(key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+    backups.sort(
+        key=lambda path: (
+            path.stat().st_mtime if path.exists() else 0,
+            path.name,
+        ),
+        reverse=True,
+    )
+    if retain is not None:
+        backups.sort(key=lambda path: path.resolve() != retain.resolve())
     for stale in backups[keep:]:
         try:
             stale.unlink()
