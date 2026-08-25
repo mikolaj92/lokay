@@ -24,6 +24,7 @@ from lokay.organ.common import (  # noqa: F401
     _test_local_ok,
 )
 from lokay.organ.conflict_resolution_boundary import handle_conflict_resolution
+from lokay.organ.daemon_entry_boundary import handle_daemon_entry
 from lokay.organ.factory import handle_factory
 from lokay.organ.factory_begin_boundary import handle_factory_begin
 from lokay.organ.implement import handle_implement
@@ -203,6 +204,7 @@ def _handle(
         handle_stage_label,
         handle_plan_issue,
         handle_intake_check,
+        handle_daemon_entry,
         handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)
