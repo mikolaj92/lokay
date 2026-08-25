@@ -256,6 +256,40 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Jeden mechaniczny intake check — `intake_check_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareIntakeCheck
+    PrepareIntakeCheck --> IntakeCheckTerminal: repo poza jawnym targetem
+    PrepareIntakeCheck --> ReadIntakeIssue
+    ReadIntakeIssue --> ResolveIntakeClone: issue istnieje
+    ReadIntakeIssue --> IntakeCheckTerminal: probe failed / issue missing
+    ResolveIntakeClone --> ClassifyIntakeCheck
+    ClassifyIntakeCheck --> CheckIntakeOpen: open
+    ClassifyIntakeCheck --> CheckIntakeSuperseded: superseded
+    ClassifyIntakeCheck --> ProbeIntakeShape: shape
+    ClassifyIntakeCheck --> CheckIntakeSatisfied: satisfied
+    ClassifyIntakeCheck --> CheckIntakeAmbiguity: ambiguity
+    ClassifyIntakeCheck --> ParseIntakeCoveringPRs: duplicate_ai_pr
+    ProbeIntakeShape --> CheckIntakeShape
+    ParseIntakeCoveringPRs --> CheckIntakeDuplicatePR
+    CheckIntakeOpen --> SelectIntakeCheckResult
+    CheckIntakeSuperseded --> SelectIntakeCheckResult
+    CheckIntakeShape --> SelectIntakeCheckResult
+    CheckIntakeSatisfied --> SelectIntakeCheckResult
+    CheckIntakeAmbiguity --> SelectIntakeCheckResult
+    CheckIntakeDuplicatePR --> SelectIntakeCheckResult
+    SelectIntakeCheckResult --> IntakeCheckTerminal
+    IntakeCheckTerminal --> [*]
+```
+
+Pod-Fala wykonuje dokładnie jeden wybrany mechaniczny check. Odczyt issue,
+rozwiązanie checkoutu, klasyfikacja typu checku, bounded collector kształtu,
+parsowanie covering-PR evidence, osobne czyste reguły i terminal są jawnymi
+node’ami. Fala wybiera gałąź; proces CLI nie rekonstruuje drzewa przez `if/elif`.
+To narzędzie nie podejmuje końcowej semantycznej decyzji triage.
+
 ### Deterministyczny plan jednego issue — `plan_issue_execution`
 
 ```mermaid
@@ -1217,6 +1251,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `IntakeCheckExecution` | `intake_check_execution` | prowadzi jeden wybrany mechaniczny intake check przez jawną gałąź |
 | `PlanIssueExecution` | `plan_issue_execution` | prowadzi deterministic approach build, mutation gate, write i terminal |
 | `StageLabelExecution` | `stage_label_execution` | prowadzi fresh issue gate oraz osobne remove/add/comment efekty etapu |
 | `PRCreateExecution` | `pr_create_execution` | prowadzi duplicate/issue facts i pojedynczy fizyczny efekt publikacji PR |
