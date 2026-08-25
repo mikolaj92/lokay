@@ -256,6 +256,28 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Wejście jednego heartbeat daemona — `daemon_entry`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ClassifyDaemonPreflight
+    ClassifyDaemonPreflight --> RunDaemonProductCycle: healthy
+    ClassifyDaemonPreflight --> DaemonEntryTerminal: overlap
+    ClassifyDaemonPreflight --> DaemonEntryTerminal: carrier failed
+    ClassifyDaemonPreflight --> RunInitialSelfRepair: recoverable integrity failure
+    RunDaemonProductCycle --> DaemonEntryTerminal
+    RunInitialSelfRepair --> DaemonEntryTerminal: repair failed
+    RunInitialSelfRepair --> DaemonEntryTerminal: restart required
+    DaemonEntryTerminal --> [*]
+```
+
+Wrapper daemona posiada tylko nierozdzielną fizyczną capability: singleton lock,
+unikalną ścieżkę health lease i jeden preflight, którego lease musi pozostać w
+środowisku rodzica. Następnie przekazuje zamknięty wynik preflight do Fali.
+Fala wybiera produkt, overlap, carrier terminal albo jedną pod-Falę
+self-repair. Pythonowy entrypoint nie wybiera już kolejności produktu i
+recovery. Zapis outboxu i kod procesu są mechanicznym raportowaniem terminala.
+
 ### Jeden mechaniczny intake check — `intake_check_execution`
 
 ```mermaid
@@ -1251,6 +1273,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `DaemonEntry` | `daemon_entry` | prowadzi zamknięty wynik preflight do produktu, terminala albo jednej self-repair pod-Fali |
 | `IntakeCheckExecution` | `intake_check_execution` | prowadzi jeden wybrany mechaniczny intake check przez jawną gałąź |
 | `PlanIssueExecution` | `plan_issue_execution` | prowadzi deterministic approach build, mutation gate, write i terminal |
 | `StageLabelExecution` | `stage_label_execution` | prowadzi fresh issue gate oraz osobne remove/add/comment efekty etapu |
