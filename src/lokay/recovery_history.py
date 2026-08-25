@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +63,39 @@ def normalize_failure(text: str) -> str:
     return value[:1000]
 
 
+# A failure owned by one issue/PR/worktree is product evidence, never evidence that
+# Lokay's own source/carrier is broken. Local authored paths own their bounded
+# repair/terminal. Only explicit carrier events or a carrier-class envelope may
+# enter global self-repair quorum.
+_LOCAL_WORK_KINDS = frozenset(
+    {
+        "issue_to_pr",
+        "pr_triage",
+        "pr_repair",
+        "issue_triage",
+        "issue_split",
+        "queue_conflict",
+        "stale_worktree",
+        "over_budget",
+        "test_local",
+    }
+)
+_CARRIER_EVENT_KINDS = frozenset({"preflight", "carrier", "host_ff", "factory_carrier"})
+_CARRIER_HEALTH = frozenset(
+    {"preflight_failed", "carrier_failed", "host_failed", "source_integrity_failed"}
+)
+_CARRIER_ERROR_CODES = frozenset(
+    {"manifest_untrusted", "manifest_mismatch", "lokay_integrity", "carrier_failed"}
+)
+
+
+def _carrier_envelope_failure(mill: dict[str, Any]) -> bool:
+    if str(mill.get("health") or "") in _CARRIER_HEALTH:
+        return True
+    error = mill.get("error")
+    return isinstance(error, dict) and str(error.get("code") or "") in _CARRIER_ERROR_CODES
+
+
 _SOFT_REASON_NORMALIZED = frozenset(
     normalize_failure(reason) for reason in _SOFT_PRODUCT_REASONS
 )
@@ -73,9 +106,7 @@ def _strings(value: Any, *, keys: frozenset[str]):
         yield value
     elif isinstance(value, dict):
         for key, item in value.items():
-            if key in keys:
-                yield from _strings(item, keys=keys)
-            elif isinstance(item, (dict, list)):
+            if key in keys or isinstance(item, (dict, list)):
                 yield from _strings(item, keys=keys)
     elif isinstance(value, list):
         for item in value:
@@ -94,7 +125,11 @@ def _delivered(row: dict[str, Any]) -> bool:
             return False
         if isinstance(created.get("pr"), int) or created.get("pr_number"):
             return True
-        pull = created.get("pull") if isinstance(created.get("pull"), dict) else created.get("pr")
+        pull = (
+            created.get("pull")
+            if isinstance(created.get("pull"), dict)
+            else created.get("pr")
+        )
         return isinstance(pull, dict) and bool(pull.get("url") or pull.get("number"))
     if row.get("kind") == "pr_triage":
         merged = terminal.get("pr_merge")
@@ -125,7 +160,7 @@ def _empty_adapter_failure(text: str) -> bool:
         "message",
         "error",
     ):
-        remainder = re.sub(re.escape(token), " ", remainder, flags=re.I)
+        remainder = re.sub(re.escape(token), " ", remainder, flags=re.IGNORECASE)
     # str(dict) keeps the newline as the two-character sequence \\n.
     remainder = re.sub(r"\\[nrt]", " ", remainder)
     remainder = re.sub(r"[^A-Za-z0-9]+", "", remainder)
@@ -142,8 +177,7 @@ def _soft_mill_health(mill: dict[str, Any]) -> bool:
 def _soft_product_outcome(row: dict[str, Any]) -> bool:
     """True for merge_policy waiting / repair / needs-review product waits."""
     if any(
-        row.get(flag)
-        for flag in ("waiting", "repairable", "needs_review", "escalated")
+        row.get(flag) for flag in ("waiting", "repairable", "needs_review", "escalated")
     ):
         return True
     if str(row.get("reason") or "") in _SOFT_PRODUCT_REASONS:
@@ -153,7 +187,11 @@ def _soft_product_outcome(row: dict[str, Any]) -> bool:
         action = str(policy.get("action") or "")
         if action in {"waiting", "repair", "disabled"}:
             return True
-        if policy.get("waiting") or policy.get("repairable") or policy.get("needs_review"):
+        if (
+            policy.get("waiting")
+            or policy.get("repairable")
+            or policy.get("needs_review")
+        ):
             return True
         if str(policy.get("reason") or "") in _SOFT_PRODUCT_REASONS:
             return True
@@ -185,7 +223,9 @@ def _failure_texts(row: dict[str, Any]):
         yield raw, normalized
 
 
-def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) -> dict[str, Any]:
+def observe_run(
+    *, state_path: Path, state_offset: int, mill: dict[str, Any]
+) -> dict[str, Any]:
     """Describe one run using only events appended while that run held mill.lock."""
     events: list[dict[str, Any]] = []
     try:
@@ -210,12 +250,14 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
     detached_started = int(remaining.get("issue_to_pr_started") or 0)
     if delivered or _soft_mill_health(mill) or detached_started > 0:
         return {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "fingerprint": None,
             "evidence": "",
             "delivered": delivered,
-            "health": mill.get("health") if detached_started == 0 else (
-                mill.get("health") or "running"
+            "health": (
+                mill.get("health")
+                if detached_started == 0
+                else (mill.get("health") or "running")
             ),
             "progress": max(int(mill.get("progress") or 0), detached_started),
         }
@@ -225,20 +267,19 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
     for row in events:
         if row.get("ok") is not False:
             continue
+        kind = str(row.get("kind") or "")
+        if kind in _LOCAL_WORK_KINDS or kind not in _CARRIER_EVENT_KINDS:
+            continue
         for raw, normalized in _failure_texts(row):
             fingerprint = hashlib.sha256(normalized.encode()).hexdigest()[:16]
             failures.append(fingerprint)
             evidence.setdefault(fingerprint, raw[:4000])
     # True carrier/preflight/product-mill failures only: envelope fallback when
     # no event text was available and health is not an honest soft wait.
-    if not failures and not mill.get("ok"):
+    if not failures and not mill.get("ok") and _carrier_envelope_failure(mill):
         mill_error = mill.get("error")
         if isinstance(mill_error, dict):
-            raw = str(
-                mill_error.get("message")
-                or mill_error.get("code")
-                or mill_error
-            )
+            raw = str(mill_error.get("message") or mill_error.get("code") or mill_error)
         else:
             raw = str(mill_error or mill.get("health") or "mill failed")
         # Soft-looking mill errors must not confirm either.
@@ -249,7 +290,7 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
             or _empty_adapter_failure(raw)
         ):
             return {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "fingerprint": None,
                 "evidence": "",
                 "delivered": False,
@@ -262,7 +303,7 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
         evidence[fingerprint] = raw
     dominant = Counter(failures).most_common(1)[0][0] if failures else None
     return {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "fingerprint": dominant,
         "evidence": "" if dominant is None else evidence[dominant],
         "delivered": False,
@@ -271,7 +312,9 @@ def observe_run(*, state_path: Path, state_offset: int, mill: dict[str, Any]) ->
     }
 
 
-def record_observation(path: Path, observation: dict[str, Any]) -> dict[str, Any] | None:
+def record_observation(
+    path: Path, observation: dict[str, Any]
+) -> dict[str, Any] | None:
     """Append an observation and return a confirmed signal at 4 matching of 5.
 
     Soft waiting/repairing rows may occupy the rolling window (diluting quorum)
@@ -293,7 +336,9 @@ def record_observation(path: Path, observation: dict[str, Any]) -> dict[str, Any
     rows = [*rows, stored][-_WINDOW:]
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(rows, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    tmp.write_text(
+        json.dumps(rows, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+    )
     tmp.replace(path)
 
     fingerprint = stored.get("fingerprint")
