@@ -24,11 +24,14 @@
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
 - **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
-  (`host_ff → factory_begin → survey_prs → survey_inbox → survey_ready → plan_pass →
-  dispatch_triage → resolve_conflicts → closeout_prs → refresh_occupancy → reap_stale_worktrees →
-  select_implement →
-  queue_conflict → dispatch_implement → compute_health → record_pass`), not a
-  fat `compose/tick.py`.
+  (`classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
+  survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
+  dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
+  reap_over_budget → refresh_occupancy → reap_stale_worktrees →
+  select_implement → queue_conflict → dispatch_implement → compute_health →
+  compact_state → record_pass → record_factory_idle → factory_pass_terminal`).
+  Idle TTL is the first authored atom; compose never skips `run_path`. One pass
+  is oil XOR product (product wins). Not a fat `compose/tick.py`.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
   flatten the mill to one-way issue→done.
 - **Serial by design.** Default `limits.max_issue_to_pr_per_pass` is **1**

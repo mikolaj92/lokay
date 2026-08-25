@@ -22,10 +22,11 @@ The daemon owns only the singleton lock, health lease and initial carrier
 preflight. Fala owns product/recovery order. Every node above is a separate
 `lokay-recovery-*` Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
-A live mill with a fresh empty-survey stamp and idle last-pass skips hosting
-this parent path; leftover closeout still runs, mill stuck is still
-harvested, CLOSED leftover mill worktrees are still reaped, leftover-ready
-still runs, and leftover-cache still runs.
+Idle TTL lives in `factory_pass` as `classify_factory_idle`. Compose and the
+LaunchAgent shell cannot decide that a tick does not run. A fresh empty-survey
+stamp still hosts Fala and exits the authored idle route. Missing stamp hosts
+the rest of the pass. Leftover closeout remains the authored
+`leftover_closeout` path after a hosted product pass — not a bash skip.
 Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
 Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
 Harvest leftovers are not mill issues. Idle CLASSIFY_CAP reaps empty
@@ -36,49 +37,16 @@ Idle over-cap skip outlives leftover-probe.
 Nested clones are not mill leftover
 worktrees. Mill worktrees keep a .git file.
 `uv.lock`-only is not real uncommitted content. After the
-stamp expires, a cheap GitHub probe of mill PR / inbox / ready lists
-refreshes the stamp and skips Fala when all three are still empty. Probe
-failure or remaining work hosts. Missing stamp, occupied last-pass, or
-pytest always hosts. mill-daemon skips caretaker `lokay-host-ff` when GitHub
-`main` already matches HEAD and `origin/main`. Fresh idle stamps skip python
-`host_ff_already_current` and the GitHub SHA probe. Fresh idle stamp age
-reuses one date +%s. Busy lock still
-probes. Probe failure or SHA mismatch still runs host-ff. Local clones
-still run host-ff. Small mill / launchd logs skip
-python truncate. Small launchd stdio skips python inode reopen; fat logs
-still bound in place, then reopen. Fresh idle skip defers the first
-launchd stdio bound; hosted/probe ticks still bound. Fresh idle skip
-defers caretaker plist write; hosted/probe ticks still write. Missing or XML plist skips python
-`launchd_stdout_paths`; binary plist still python. Fat truncate leaves
-1KiB glance headroom so later idle lines stay under the cap. When
-last-pass is idle, it skips `lokay-daemon` while empty-survey and
-leftover-closeout stamps are fresh; mill-daemon skips python
-`idle_skip_daemon` on that path. After
-leftover-stamp expiry, a cheap empty GitHub probe of CLOSED
-`work:ready` / `ai:ready` mill issues refreshes that stamp. Fresh leftover skip does not require healthy. Hosted leftover parks still do.
-Hosted unbounded parks require healthy. Planned parks do not.
-Hosted merge-now merges require healthy. Planned merges do not.
-Leftover-probe
-still hosts `lokay-daemon` so idle reap continues. Leftover-probe still
-hosts `lokay-daemon` even when mill-probe would also run.
-Leftover-probe host skips GitHub `/user` this tick. Hosted ticks without
-leftover lists still probe.
-Leftover-probe skips GitHub SHA when survey stamp is still fresh.
-Survey expiry probes GitHub SHA even when leftover stamp is still fresh. One batched GraphQL read
-probes both CLOSED ready labels. After survey-stamp expiry, one batched GraphQL read probes mill PR / inbox /
-ready state and refreshes the survey stamp. GraphQL idle-skip does not import ThreadPoolExecutor.
-Pagination, malformed data, or
-probe failure still hosts.
-Probe failure, remaining leftovers, occupied last-pass, digest mismatch,
-or host-ff update still starts the daemon. Fresh idle skip with a persisted
-digest skips `checkout_digest` and `package_matches`. An `already_current`
-host-ff envelope skips python `host_ff_updated`. Fresh idle skip writes the
-launchd glance in bash and skips python `emit_launchd_glance` plus extra
-`bound_launchd_stdio`. Hosted ticks still scrape the mill log and bound
-launchd stdio around glance. Already under keep skips python `prune_mill_logs`.
-Fat mill-log dirs still prune. mill-daemon caches `python3` so later `_python`
-helpers skip `command -v`. Probe skip, missing digest, host-ff update, or a
-hosted daemon still checks the wheel.
+stamp expires, the authored idle atom cheap-probes mill PR / inbox / ready
+lists. An empty probe refreshes the stamp and exits idle inside Fala. Probe
+failure or remaining work hosts the rest of `factory_pass`. Missing stamp,
+occupied last-pass, or pytest always hosts. `scripts/lokay-mill-daemon.sh`
+is OS only: lock, exec `lokay-daemon`, logs, bootstrap incident if exec
+fails. It does not idle-skip, host-ff, or rewrite the LaunchAgent plist
+on each tick. Plist `StartInterval=60` and crash KeepAlive
+(`SuccessfulExit=false`) are host `--install` setup. Busy lock is an OS
+lease and may skip exec. Host-ff runs only as the second `factory_pass`
+atom after idle classify routes `host`.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
 durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not
@@ -105,33 +73,41 @@ path conducts one-job atoms; child workflow Falas are started from dispatch
 atoms via `run_path`.
 
 ```text
-host_ff
-  → factory_begin
-    → survey_prs
-      → survey_inbox
-        → survey_ready
-          → ready_hygiene       → remove legacy ai:ready without work:ready
-            → plan_pass
-            → dispatch_triage          → issue_triage child Fala
-              → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
-                → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
-                  → reap_stale_implementing  → leftover in-flight cache → ai:ready
-                    → reap_over_budget  → kill plan_only over budget; harvest real diff to PR
-                    → refresh_occupancy  → occupy live/merged; re-list leftover-ready only
-                      → reap_stale_worktrees → drop leftover corners that cannot resume
-                      → select_implement
-                      → queue_conflict   → SKIP/CLOSE/READY queue hygiene
-                      → dispatch_implement → issue_to_pr child Fala
-                        → compute_health
-                          → compact_state  → bound the existing state.jsonl
-                            → record_pass  → last-pass.json
+classify_factory_idle
+  → host_ff
+    → factory_begin_host_gate
+      → factory_begin
+        → survey_prs
+          → survey_inbox
+            → survey_ready
+              → ready_hygiene       → remove legacy ai:ready without work:ready
+                → plan_pass
+                → dispatch_triage          → issue_triage child Fala
+                  → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
+                    → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
+                      → reap_stale_implementing  → leftover in-flight cache → ai:ready
+                        → reap_over_budget  → kill plan_only over budget; harvest real diff to PR
+                        → refresh_occupancy  → occupy live/merged; re-list leftover-ready only
+                          → reap_stale_worktrees → drop leftover corners that cannot resume
+                          → select_implement     → oil XOR product; product wins
+                          → queue_conflict   → SKIP/CLOSE/READY queue hygiene
+                          → dispatch_implement → issue_to_pr child Fala
+                            → compute_health
+                              → compact_state  → bound the existing state.jsonl
+                                → record_pass  → last-pass.json (lane: product | oil | idle)
+                                  → record_factory_idle  → authored idle receipt (when classify routes idle)
+                                    → factory_pass_terminal  → lift idle or hosted result
 ```
 
 | Atom | One job |
 | --- | --- |
-| `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / host catalog skip-worktree would overwrite. Product `config.yaml` follows origin/main. Launchd caretaker skips the mill pass when `mill.lock` is held. After ff moves HEAD, mill-daemon reinstalls and starts `lokay-daemon` in the same tick; live i2pr is not killed. Crash KeepAlive (`SuccessfulExit=false`) restarts a failed tick without waiting StartInterval; idle 0 stays on the 60s heartbeat. Already 60s crash KeepAlive skips python `plistlib`; missing plists stay missing. Delayed `--install` double-forks out of the launchd process group so idle 0 cannot kill the reload. Trailing delayed `--install` checks keepalive stamp before `mill_lock_busy`. After caretaker `lokay-host-ff`, mill-daemon sets `LOKAY_HOST_FF_FETCHED=1` so in-cycle `host_ff` does not fetch origin/main twice and preflight skips a second `ls-remote`. Caretaker `lokay-host-ff` skips `git fetch origin/main` when GitHub `main` matches local `origin/main`. Probe failure or SHA mismatch still fetches. Every Fala inherit_env lists that key; nested `recovery_mill` must not drop it. Standalone `lokay-daemon` still probes |
+| `classify_factory_idle` | first `factory_pass` atom. Fresh empty-survey stamp + idle last-pass → route `idle` (no GitHub, do not refresh stamp). Expired stamp cheap-probes mill PR / inbox / ready; empty probe refreshes and idles. Missing stamp, occupied last-pass, remaining work, probe failure, dry-run, or pytest on the operator mill → route `host`. Envelope `idle` is authored here, then `record_factory_idle`. |
+| `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / host catalog skip-worktree would overwrite. Product `config.yaml` follows origin/main. Runs only when idle classify routes `host`. Launchd shell skips exec only when `mill.lock` is held (OS lease). Crash KeepAlive (`SuccessfulExit=false`) and StartInterval=60 are host `--install` setup, not a per-tick plist rewrite. Standalone `lokay-daemon` still probes |
+| `factory_begin_host_gate` | refuse when in-cycle `host_ff` just updated or `LOKAY_PROCESS_HEAD` drifted (restart; do not mill on the previous import). |
+| `record_factory_idle` | write last-pass with `lane=idle` when classify routes idle. Does not refresh the survey stamp. |
+| `factory_pass_terminal` | lift idle `result` or hosted `record_pass.result` so `normalize_path_result` sees one authored tick. |
 | `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token. Healthy first host check is not rerun (`gh api user` / ast.parse). Repair still reruns `_check`. Healthy preflight closes leftover `<!-- lokay-preflight:… -->` tickets. After an empty leftover-incident probe, skip that GitHub list for 300s without refreshing the stamp. Fresh leftover-incident skip is not applied. Leftover-incident skip reports planned=not live. Empty leftover-incident host is not applied. Empty leftover-incident host reports planned=not live. Leftover-incident probe failure reports probe_failed. Leftover-incident probe failure reports planned=not live. Leftover-incident ImportError is not applied. Leftover-incident ImportError reports planned=not live. Leftover-incident empty name is not applied. Leftover-incident empty name reports planned=not live. Leftover-incident OSError is not applied. Leftover-incident OSError reports planned=not live. Leftover-incident host reports probe_failed. Leftover-incident skip reports probe_failed. Leftover-incident ImportError reports probe_failed. Leftover-incident empty name reports probe_failed. Leftover-incident OSError reports probe_failed. Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass stays at 300s. Pytest must not skip leftover-incident GitHub lists using the mill stamp. |
-| `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error). After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. A live mill with that fresh stamp and idle last-pass also skips hosting `factory_pass` and parent `daemon_cycle` Fala. After the stamp expires, a cheap GitHub probe refreshes it and skips Fala when PR / inbox / ready are still empty. Leftover closeout still runs after that skip. Pytest must not skip GitHub surveys using the mill stamp. |
+| `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error). After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. A live mill with that fresh stamp and idle last-pass still hosts `factory_pass`; `classify_factory_idle` exits authored idle. After the stamp expires, a cheap GitHub probe refreshes it and idles inside Fala when PR / inbox / ready are still empty. Pytest must not skip GitHub surveys using the mill stamp. |
 | `survey_inbox` | list undecided inbox issues (full page; cap is survey_error). Shares the 120s empty-survey stamp with `survey_prs` / `survey_ready`. Inbox rate limit does not stamp empty. |
 | `survey_ready` | list implementable `work:ready` (intake/triage/stage award it with `ai:ready`); skip those covered by open AI PRs. Missing `state` is still OPEN ready; only explicit CLOSED parks. After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. |
 | `ready_hygiene` | remove leftover `ai:ready` from issues without `work:ready`. READY awards both labels. After an empty leftover-ready probe, skip that GitHub list for 300s without refreshing the stamp. Fresh leftover-ready skip does not require healthy. Fresh leftover-ready skip is not applied. Leftover-ready skip reports probe_failed. Hosted leftover-ready parks still do. Unhealthy leftover-ready still lists GitHub. Unhealthy leftover-ready parks are planned. Empty leftover-ready host is not applied. Leftover-ready rate limit does not stamp empty. Idle leftover-ready skip outlives leftover-probe. Hosted factory_pass stays at 300s. Idle daemon_cycle skip still runs leftover-ready. Pytest must not skip leftover-ready GitHub lists using the mill stamp. |
@@ -143,11 +119,11 @@ host_ff
 | `reap_over_budget` | kill over-budget plan_only i2pr and park the slot. A live coder with a **real** diff is harvested (`commit_all` → `push` → `pr_create`) without SIGTERM |
 | `refresh_occupancy` | union just-merged + live i2pr; re-list PRs only on leftover-ready repos that are not occupied. A live receipt whose process command is unreadable remains occupied; an unreadable lifecycle receipt occupies every configured repo. Unknown is not idle. A `reaped` receipt is idle even if pi has not exited |
 | `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Over-cap stacks view at most 4 oldest issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the mill stamp. Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |
-| `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied). Live mill delivers every enabled repository in the configured catalog |
+| `select_implement` | clean repos eligible for issue_to_pr (serial K budget; skip occupied). One pass is oil XOR product: product `work:ready` or a product AI PR wins; oil on the canonical self repo (`incident_repo`) only when the product lane is empty. Live mill delivers every enabled repository in the configured catalog |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design). If its live `ps` mutex survey fails, it refuses every launch: unknown is not idle. `plan_only` parks the slot; it does not CLOSE the issue. |
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
-| `record_pass` | write `last-pass.json` + terminal tick envelope |
+| `record_pass` | write `last-pass.json` + terminal tick envelope with `lane: product \| oil \| idle` |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
 | mill Fala journals | idle mill sqlite under `~/.lokay/fala/{daemon-cycle,factory}` rotates when oversized; recovery stays on `state.jsonl`. Live `fala/i2pr/` journals stay |
 | leftover closeout | after each factory pass, park leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |

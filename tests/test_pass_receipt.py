@@ -53,6 +53,7 @@ def test_build_and_write_pass_receipt_roundtrip(tmp_path: Path):
         config_path=str(tmp_path / "config.yaml"),
     )
     assert receipt["kind"] == "pass_receipt"
+    assert receipt["lane"] == "idle"
     assert receipt["health"] == "waiting"
     assert receipt["probe_failed"] is True
     assert receipt["merge_enabled"] is True

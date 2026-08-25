@@ -12,6 +12,7 @@ from lokay.passkit.hot import survey_scope
 from lokay.passkit.support import is_manual_pr
 from lokay.proc._common import add_config_live
 from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts
+from lokay.proc.pass_lane import classify_pass_lane, self_repo
 
 
 def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
@@ -94,6 +95,16 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         stuck_path=str(begin.get("stuck_path") or "") or None,
         executor_enabled=bool(begin.get("executor_enabled")),
         merge_enabled=bool(begin.get("merge_enabled")),
+    )
+    try:
+        implement = pass_io.read_json(pass_io.implement_path(pass_dir))
+    except (OSError, ValueError):
+        implement = {}
+    payload["lane"] = str(working.get("lane") or implement.get("lane") or "") or classify_pass_lane(
+        self_id=str(working.get("self_repo") or implement.get("self_repo") or self_repo(begin)),
+        ready_by_repo=ready_by_repo,
+        prs_by_repo=prs_by_repo,
+        clean_repos=list(implement.get("clean_repos") or []),
     )
     pass_io.write_json(pass_io.tick_path(pass_dir), payload)
     # Domain health is data for the mill; effector itself succeeds for conduction.

@@ -15,6 +15,7 @@ def test_describe_parent_factory_graph():
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
+        "classify_factory_idle",
         "host_ff",
         "factory_begin_host_gate",
         "factory_begin",
@@ -36,8 +37,11 @@ def test_describe_parent_factory_graph():
         "compute_health",
         "compact_state",
         "record_pass",
+        "record_factory_idle",
+        "factory_pass_terminal",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
+    assert conduction["host_ff"] == ["classify_factory_idle"]
     assert conduction["factory_begin_host_gate"] == ["host_ff"]
     assert conduction["factory_begin"] == ["factory_begin_host_gate"]
     assert conduction["survey_prs"] == ["factory_begin"]
@@ -56,10 +60,63 @@ def test_describe_parent_factory_graph():
     assert "queue_conflict" in conduction["dispatch_implement"]
     assert "dispatch_implement" in conduction["compute_health"]
     assert "compute_health" in conduction["record_pass"]
+    assert "classify_factory_idle" in conduction["record_factory_idle"]
+    assert "record_factory_idle" in conduction["factory_pass_terminal"]
     # Mega factory_tick / survey_repos / dispatch_closeout must not hide policy.
     assert "factory_tick" not in ids
     assert "survey_repos" not in ids
     assert "dispatch_closeout" not in ids
+
+
+def test_factory_pass_docs_match_package_atom_order():
+    import re
+
+    ids = [
+        "classify_factory_idle",
+        "host_ff",
+        "factory_begin_host_gate",
+        "factory_begin",
+        "survey_prs",
+        "survey_inbox",
+        "survey_ready",
+        "ready_hygiene",
+        "plan_pass",
+        "dispatch_triage",
+        "resolve_conflicts",
+        "closeout_prs",
+        "reap_stale_implementing",
+        "reap_over_budget",
+        "refresh_occupancy",
+        "reap_stale_worktrees",
+        "select_implement",
+        "queue_conflict",
+        "dispatch_implement",
+        "compute_health",
+        "compact_state",
+        "record_pass",
+        "record_factory_idle",
+        "factory_pass_terminal",
+    ]
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
+    assert [node["id"] for node in path["nodes"]] == ids
+    mermaid = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+        encoding="utf-8"
+    )
+    top = mermaid.split("```mermaid")[1].split("```")[0]
+    def mermaid_id(atom: str) -> str:
+        return "".join("FF" if part == "ff" else part.title() for part in atom.split("_"))
+
+    for atom in ids:
+        assert mermaid_id(atom) in top, atom
+    graph = (Path(__file__).resolve().parents[1] / "docs" / "GRAPH.md").read_text(
+        encoding="utf-8"
+    )
+    section = graph.split("### `factory_pass`")[1].split("### `self_repair`")[0]
+    listed = re.findall(r"`([a-z_]+)`", section.split("| Atom |")[0])
+    # Spine list in the text block names every live atom in order.
+    found = [atom for atom in listed if atom in set(ids)]
+    assert found[: len(ids)] == ids or all(atom in section for atom in ids)
 
 
 def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):

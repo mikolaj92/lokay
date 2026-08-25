@@ -27,4 +27,5 @@ def load(*, config_path: str | None, live: bool) -> dict:
         "ready_label": cfg.ready_label,
         "blocked_label": cfg.blocked_label,
         "branch_prefix": cfg.branch_prefix,
+        "incident_repo": str(cfg.incident_repo or "").strip(),
     }

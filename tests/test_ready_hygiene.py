@@ -87,19 +87,8 @@ def test_rate_limit_result_does_not_look_empty():
     assert out["probe_failed"] is True and out["applied"] is False
 
 
-def test_idle_facade_skips_not_live(monkeypatch):
-    monkeypatch.setattr(
-        ready_hygiene,
-        "run_ready_hygiene",
-        lambda **k: (_ for _ in ()).throw(AssertionError()),
-    )
-    ready_hygiene.hygiene_idle_leftover_ready(config_path=None, live=False)
+def test_idle_leftover_ready_facade_is_gone():
+    from lokay.compose import mill
 
-
-def test_idle_facade_swallows_oserror(monkeypatch):
-    monkeypatch.setattr(
-        ready_hygiene,
-        "run_ready_hygiene",
-        lambda **k: (_ for _ in ()).throw(OSError("x")),
-    )
-    ready_hygiene.hygiene_idle_leftover_ready(config_path=None, live=True)
+    assert not hasattr(ready_hygiene, "hygiene_idle_leftover_ready")
+    assert not hasattr(mill, "closeout_leftover_ready")

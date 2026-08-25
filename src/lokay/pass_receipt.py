@@ -154,6 +154,7 @@ def build_pass_receipt(
         },
         "error": tick.get("error"),
         "note": tick.get("note"),
+        "lane": str(tick.get("lane") or "idle"),
     }
 
 

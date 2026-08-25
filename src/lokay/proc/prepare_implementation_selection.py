@@ -4,6 +4,7 @@ from pathlib import Path
 from lokay.passkit import io as pass_io
 from lokay.stuck import load_stuck
 from lokay.mill_scope import mill_repo, scoped_repos
+from lokay.proc.pass_lane import product_candidates, self_repo
 
 
 def prepare(*, pass_dir: str, slot_count: int) -> dict:
@@ -23,6 +24,12 @@ def prepare(*, pass_dir: str, slot_count: int) -> dict:
         stuck = load_stuck(Path(path))
     _, skipped = scoped_repos(repos, mill=mill_repo())
     active = bool(begin.get("live")) and int(begin.get("issue_budget") or 0) > 0
+    self_id = self_repo(begin)
+    product = product_candidates(
+        ready_by_repo=working.get("ready_by_repo"),
+        prs_by_repo=working.get("prs_by_repo"),
+        self_id=self_id,
+    )
     return {
         "ok": True,
         "route": "select" if active else "no_budget",
@@ -31,4 +38,6 @@ def prepare(*, pass_dir: str, slot_count: int) -> dict:
         "executor_enabled": bool(begin.get("executor_enabled")),
         "skipped_repos": skipped,
         "stuck": stuck,
+        "self_repo": self_id,
+        "product_queue": product,
     }

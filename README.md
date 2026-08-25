@@ -80,18 +80,33 @@ wymieniają te same ścieżki.
 stateDiagram-v2
     [*] --> Heartbeat
     Heartbeat --> FactoryPass
-    FactoryPass --> Survey
-    Survey --> IssueTriage: inbox
-    Survey --> PullRequestCloseout: otwarty AI PR
-    Survey --> IssueToPullRequest: ai:ready i wolne repo
-    Survey --> Health: brak wybranej pracy
-    IssueTriage --> FactoryPass: CLOSE / READY / SPLIT / NEEDS_HUMAN
-    PullRequestCloseout --> FactoryPass: merge / repair / evidence / terminal
-    IssueToPullRequest --> FactoryPass: PR otwarty / brak efektu / błąd
-    FactoryPass --> Health
-    Health --> RecordPass
-    RecordPass --> [*]: progress / waiting / idle
-    RecordPass --> Recovery: potwierdzona awaria nośnika
+    FactoryPass --> ClassifyFactoryIdle
+    ClassifyFactoryIdle --> RecordFactoryIdle: świeży pusty stempel
+    ClassifyFactoryIdle --> HostFF: brak stempla / praca / sonda
+    HostFF --> FactoryBeginHostGate
+    FactoryBeginHostGate --> FactoryBegin
+    FactoryBegin --> SurveyPrs
+    SurveyPrs --> SurveyInbox
+    SurveyInbox --> SurveyReady
+    SurveyReady --> ReadyHygiene
+    ReadyHygiene --> PlanPass
+    PlanPass --> DispatchTriage
+    DispatchTriage --> ResolveConflicts
+    ResolveConflicts --> CloseoutPrs
+    CloseoutPrs --> ReapStaleImplementing
+    ReapStaleImplementing --> ReapOverBudget
+    ReapOverBudget --> RefreshOccupancy
+    RefreshOccupancy --> ReapStaleWorktrees
+    ReapStaleWorktrees --> SelectImplement
+    SelectImplement --> QueueConflict
+    QueueConflict --> DispatchImplement
+    DispatchImplement --> ComputeHealth
+    ComputeHealth --> CompactState
+    CompactState --> RecordPass
+    RecordPass --> FactoryPassTerminal: lane product / oil / idle
+    RecordFactoryIdle --> FactoryPassTerminal: lane idle
+    FactoryPassTerminal --> [*]
+    FactoryPassTerminal --> Recovery: potwierdzona awaria nośnika
     Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
