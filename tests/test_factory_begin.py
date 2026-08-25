@@ -59,7 +59,7 @@ def test_factory_begin_subflow_returns_small_receipt(monkeypatch, tmp_path):
 
     pad = "y" * 200_000
     monkeypatch.setattr(
-        "lokay.graph_run.run_path",
+        "lokay.proc.factory_begin_subflow.run_path",
         lambda **kwargs: {
             "ok": True,
             "pass_dir": str(tmp_path),
