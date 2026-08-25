@@ -14,7 +14,8 @@ def handle_child_harvest(
         "reconcile_harvest_journal_misses": "reconcile_dead_child_receipts",
         "reconcile_harvest_deliveries": "reconcile_harvest_journal_misses",
         "reconcile_harvest_blocked_misses": "reconcile_harvest_deliveries",
-        "clear_harvest_closed_rows": "record_harvest_catalog_30",
+        "harvest_catalog": "reconcile_harvest_blocked_misses",
+        "clear_harvest_closed_rows": "harvest_catalog",
         "drop_harvest_out_of_scope": "clear_harvest_closed_rows",
         "clear_harvest_cycle_starts": "drop_harvest_out_of_scope",
         "child_harvest_terminal": "clear_harvest_cycle_starts",
@@ -44,29 +45,10 @@ def handle_child_harvest(
         from lokay.proc.reconcile_harvest_blocked_misses import reconcile
 
         return reconcile(facts)
-    if atom.startswith("select_harvest_catalog_"):
-        from lokay.proc.select_harvest_catalog_slot import select
+    if atom == "harvest_catalog":
+        from lokay.proc.harvest_catalog import harvest
 
-        slot = int(atom.rsplit("_", 1)[1])
-        prior = (
-            up.get("reconcile_harvest_blocked_misses") or {}
-            if slot == 1
-            else up.get(f"record_harvest_catalog_{slot - 1}") or {}
-        )
-        return select(prior, slot=slot)
-    if atom.startswith("probe_harvest_closed_"):
-        from lokay.proc.probe_harvest_closed_repo import probe
-
-        slot = int(atom.rsplit("_", 1)[1])
-        return probe(up.get(f"select_harvest_catalog_{slot}") or {})
-    if atom.startswith("record_harvest_catalog_"):
-        from lokay.proc.record_harvest_catalog_slot import record
-
-        slot = int(atom.rsplit("_", 1)[1])
-        return record(
-            up.get(f"select_harvest_catalog_{slot}") or {},
-            up.get(f"probe_harvest_closed_{slot}") or {},
-        )
+        return harvest(facts)
     if atom == "clear_harvest_closed_rows":
         from lokay.proc.clear_harvest_closed_rows import clear
 
