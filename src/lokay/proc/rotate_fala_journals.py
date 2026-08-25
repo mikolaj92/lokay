@@ -1,4 +1,4 @@
-"""Atomic: rotate oversized mill Fala sqlite journals."""
+"""Atomic: rotate oversized Fala sqlite journals under ~/.lokay/fala/."""
 
 from __future__ import annotations
 

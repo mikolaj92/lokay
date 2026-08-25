@@ -297,10 +297,11 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   still reruns `_check`.
   Fala inherit_env is a whitelist: every atom, including nested `recovery_mill`,
   must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the mill.
-  Mill Fala sqlite under `~/.lokay/fala/daemon-cycle` and `factory` rotates
-  when oversized (default 64 MiB) so idle ticks do not reopen a multi-GB
-  journal. Product recovery stays on `state.jsonl`. Live `fala/i2pr/`
-  journals stay.
+  Every live Fala sqlite under `~/.lokay/fala/` (including `state.sqlite`)
+  rotates when oversized (default 64 MiB) so idle ticks do not reopen a
+  multi-GB journal. The journal is a pass trace, not world history.
+  Product recovery stays on `state.jsonl`. Over-cap is fail-closed if the
+  file cannot be cut.
   After each factory pass, leftover closeout parks leftover `work:ready` /
   `ai:ready` on GitHub-CLOSED mill issues. That is not a second hunt through
   every mill PR; GitHub CLOSED is enough. After an empty leftover, skip
