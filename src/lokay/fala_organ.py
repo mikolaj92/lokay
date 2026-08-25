@@ -59,6 +59,7 @@ from lokay.organ.repair_boundary import handle_repair_boundary
 from lokay.organ.review_boundary import handle_review_boundary
 from lokay.organ.self_repair import handle_self_repair
 from lokay.organ.self_repair_activate_boundary import handle_self_repair_activate
+from lokay.organ.self_repair_entry_boundary import handle_self_repair_entry
 from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
 from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
 from lokay.organ.stage_label_boundary import handle_stage_label
@@ -205,6 +206,7 @@ def _handle(
         handle_plan_issue,
         handle_intake_check,
         handle_daemon_entry,
+        handle_self_repair_entry,
         handle_real_diff,
     ):
         result = handler(atom, inputs, up, ctx)

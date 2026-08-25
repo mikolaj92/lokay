@@ -256,6 +256,30 @@ i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
 kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
 akcje wyjaśniające odrzucone cele.
 
+### Wejście jednej self-repair — `self_repair_entry`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareSelfRepairEntry
+    PrepareSelfRepairEntry --> ClassifySelfRepairEntry
+    ClassifySelfRepairEntry --> RecordSelfRepairStart: eligible
+    ClassifySelfRepairEntry --> RecordSelfRepairFailure: carrier / incident / bootstrap / executor terminal
+    RecordSelfRepairStart --> RunAuthoredSelfRepair
+    RunAuthoredSelfRepair --> ClassifySelfRepairOutcome
+    ClassifySelfRepairOutcome --> WriteRestartRequired: validated restart
+    ClassifySelfRepairOutcome --> RecordSelfRepairFailure: Fala failure
+    WriteRestartRequired --> RecordSelfRepairSuccess
+    RecordSelfRepairSuccess --> SelfRepairEntryTerminal
+    RecordSelfRepairFailure --> SelfRepairEntryTerminal
+    SelfRepairEntryTerminal --> [*]
+```
+
+Pod-Fala przygotowuje incident identity, klasyfikuje preconditions, zapisuje
+jawny event start/failure/success, uruchamia dokładnie jedną istniejącą
+`self_repair` pod-Falę, klasyfikuje jej zamknięty wynik, zapisuje restart marker
+i kończy terminalem. Compatibility wrapper nie rekonstruuje precondition ani
+post-result routing w Pythonie.
+
 ### Wejście jednego heartbeat daemona — `daemon_entry`
 
 ```mermaid
@@ -1273,6 +1297,7 @@ kontraktu. Aktualny audyt:
 | `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
+| `SelfRepairEntry` | `self_repair_entry` | prowadzi preconditions, events, istniejącą self_repair pod-Falę i restart terminal |
 | `DaemonEntry` | `daemon_entry` | prowadzi zamknięty wynik preflight do produktu, terminala albo jednej self-repair pod-Fali |
 | `IntakeCheckExecution` | `intake_check_execution` | prowadzi jeden wybrany mechaniczny intake check przez jawną gałąź |
 | `PlanIssueExecution` | `plan_issue_execution` | prowadzi deterministic approach build, mutation gate, write i terminal |
