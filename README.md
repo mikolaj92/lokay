@@ -119,7 +119,12 @@ stateDiagram-v2
         ReconcileDeadChildReceipts --> ReconcileJournalMisses
         ReconcileJournalMisses --> ReconcileDeliveredIssues
         ReconcileDeliveredIssues --> ReconcileBlockedMisses
-        ReconcileBlockedMisses --> ClearClosedCatalogRows
+        ReconcileBlockedMisses --> SelectClosedCatalogSlot
+        SelectClosedCatalogSlot --> ProbeOneClosedRepo: slot has stuck rows
+        SelectClosedCatalogSlot --> RecordClosedCatalogSlot: empty slot
+        ProbeOneClosedRepo --> RecordClosedCatalogSlot
+        RecordClosedCatalogSlot --> SelectClosedCatalogSlot: next of 30 slots
+        RecordClosedCatalogSlot --> ClearClosedCatalogRows: final slot
         ClearClosedCatalogRows --> DropOutOfScopeRows
         DropOutOfScopeRows --> ClearStaleCycleStarts
         ClearStaleCycleStarts --> [*]
@@ -136,8 +141,10 @@ stateDiagram-v2
 Lease/preflight, config mode, scope, stuck ledger, pass directory,
 survey rotation, zbudowanie stanu i dwa zapisy są osobnymi procesami. Harvest
 jest osobną pod-Falą: jeden atom czyta lokalne receipt/journal facts, a Fala
-prowadzi osobne redukcje dead-child, miss, delivery, blocked, closed-catalog,
-out-of-scope i stale-cycle-start. Żaden pojedynczy proces nie ukrywa tej
+prowadzi osobne redukcje dead-child, miss, delivery i blocked. Catalog CLOSED
+facts mają 30 jawnych slotów: każdy fizyczny proces odpytuje najwyżej jedno
+repozytorium, a osobny record atom składa wynik. Potem osobne procesy wykonują
+closed-catalog, out-of-scope i stale-cycle-start cleanup. Żaden pojedynczy proces nie ukrywa tej
 sekwencji. Fala
 posiada jedyne drzewo otwarcia passu. Odzyskanie delegowanej capability jest
 jednym ograniczonym efektem, nie pętlą. Offline i preflight failure są jawnymi
@@ -1297,6 +1304,7 @@ kontraktu. Aktualny audyt:
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `FactoryBegin` | `factory_begin` | otwiera workspace passu przez jawny preflight, ledger i persist |
+| `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
 | `ReadySurvey` | `survey_ready` | seryjny odczyt i klasyfikacja gotowych issue |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |

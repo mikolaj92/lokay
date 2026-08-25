@@ -13,6 +13,7 @@ from typing import Any
 from fala import sdk
 from lokay.git_commit import branch_ahead_of_upstream  # noqa: F401 — tests patch this
 from lokay.organ.agent import handle_agent
+from lokay.organ.child_harvest_boundary import handle_child_harvest
 from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.organ.common import (  # noqa: F401
     _conduction_values,
@@ -170,6 +171,7 @@ def _handle(
         handle_triage_dispatch,
         handle_review_boundary,
         handle_coding_boundary,
+        handle_child_harvest,
         handle_conflict_resolution,
         handle_repair_boundary,
         handle_issue_split,
