@@ -6,7 +6,7 @@ GitHub Issue jest księgą **decyzji**. Etykiety `ai:*` na issue to wyłącznie 
 
 | Stan | Etykieta | Kto widzi | Co wolno |
 | --- | --- | --- | --- |
-| **undecided** | brak etykiety decyzyjnej | `list_inbox` | triage (nie implement) |
+| **undecided** | brak etykiety decyzyjnej | `list_inbox` | triage **oraz** `issue_to_pr` — otwarte issue jest pracą; `work:ready` nie jest bramką |
 | **ready** | otwarte issue (ślad `ai:ready` / `work:ready` opcjonalny) | `list_ready` / `survey_ready` (pełna strona, nie newest-50) | `issue_to_pr`, o ile brak human stop, żywego joba i covering open PR |
 | **blocked** | `ai:blocked` | nikt | człowiek |
 | **needs-feedback** | `ai:needs-feedback` | nikt | człowiek |

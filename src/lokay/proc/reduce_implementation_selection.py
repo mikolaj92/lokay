@@ -1,5 +1,6 @@
 """Purely reduce authored repository-slot reactions into one selection."""
 
+from lokay.proc.catalog_work import remaining_ready_count, work_by_repo
 from lokay.proc.pass_lane import (
     classify_pass_lane,
     classify_repo_lane,
@@ -10,8 +11,8 @@ from lokay.proc.pass_lane import (
 
 def reduce_state(*, prepared: dict, results: list[dict], working: dict) -> dict:
     actions = list(working.get("actions") or [])
-    ready = dict(working.get("ready_by_repo") or {})
-    remaining = int(working.get("remaining_ready") or 0)
+    ready = work_by_repo(working, stuck=prepared.get("stuck"))
+    remaining = remaining_ready_count(ready)
     self_id = str(prepared.get("self_repo") or self_repo())
     product_queue = bool(prepared.get("product_queue")) or product_candidates(
         ready_by_repo=ready,
@@ -54,7 +55,7 @@ def reduce_state(*, prepared: dict, results: list[dict], working: dict) -> dict:
                 for item in list(ready.get(repo) or [])
                 if int(item.get("number", -1)) not in blocked_numbers
             ]
-            remaining = max(0, remaining - len(blocked))
+            remaining = remaining_ready_count(ready)
             actions.append(
                 {
                     "step": "skip_stuck",

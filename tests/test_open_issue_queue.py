@@ -18,6 +18,47 @@ def test_unlabeled_is_open_work_and_human_stops_are_not() -> None:
     assert is_human_stopped(["ai:blocked"]) is True
 
 
+def test_inbox_only_unlabeled_product_is_catalog_work() -> None:
+    from lokay.proc.catalog_work import remaining_ready_count, work_by_repo
+
+    work = work_by_repo(
+        {
+            "ready_by_repo": {},
+            "inbox_issues_by_repo": {
+                "mikolaj92/Temida": [{"number": 4968, "labels": []}]
+            },
+        }
+    )
+    assert remaining_ready_count(work) == 1
+    assert (
+        product_candidates(ready_by_repo=work, self_id="mikolaj92/lokay") is True
+    )
+    assert (
+        classify_pass_lane(self_id="mikolaj92/lokay", ready_by_repo=work)
+        == "product"
+    )
+
+
+def test_inbox_human_stop_and_covering_pr_are_not_work() -> None:
+    from lokay.proc.catalog_work import remaining_ready_count, work_by_repo
+
+    work = work_by_repo(
+        {
+            "ready_by_repo": {},
+            "inbox_issues_by_repo": {
+                "mikolaj92/Temida": [
+                    {"number": 1, "labels": ["ai:blocked"]},
+                    {"number": 2, "labels": []},
+                ]
+            },
+            "prs_by_repo": {
+                "mikolaj92/Temida": [{"head_ref": "ai/fix/2-x"}]
+            },
+        }
+    )
+    assert remaining_ready_count(work) == 0
+
+
 def test_unlabeled_product_issue_yields_product_lane() -> None:
     ready = {"mikolaj92/Temida": [{"number": 4968, "labels": []}]}
     assert (

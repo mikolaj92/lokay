@@ -92,14 +92,6 @@ def ensure_labels(runner: Runner, repo: str, labels: list[str], *, live: bool) -
             )
 
 
-def _eligible(assignees: list[str], config: Config) -> bool:
-    if not config.assignee:
-        return True
-    if config.assignee in assignees:
-        return True
-    return (not assignees) and config.allow_unassigned
-
-
 def _author_login(row: dict) -> str:
     author = row.get("author")
     if isinstance(author, dict):
@@ -197,8 +189,7 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
             needs_feedback_label=config.needs_feedback_label,
         ):
             continue
-        if not _eligible(issue.assignees, config):
-            continue
+        # Assignee is not an admission gate. An open catalog issue is the work.
         issues.append(issue)
     return issues
 
