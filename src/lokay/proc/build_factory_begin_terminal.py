@@ -9,6 +9,7 @@ def ready(config: dict, ledger: dict, workspace: dict, begin: dict) -> dict:
         "mode": config.get("mode"),
         "planned": begin["begin"]["planned"],
         "stuck_path": ledger["stuck_path"],
+        "issue_count": int(ledger.get("issue_count") or 0),
         "offline": False,
     }
     return {"ok": True, "kind": "ready", "result": result}

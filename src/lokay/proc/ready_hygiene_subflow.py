@@ -9,5 +9,5 @@ def run(*, config_path: str | None, live: bool) -> dict:
         repo="local/ready-hygiene",
         config_path=config_path,
         live=live,
-        max_ticks=512,
+        max_ticks=16,
     )

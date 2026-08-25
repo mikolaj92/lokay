@@ -87,6 +87,13 @@ def test_rate_limit_result_does_not_look_empty():
     assert out["probe_failed"] is True and out["applied"] is False
 
 
+def test_catalog_skip_does_not_list():
+    from lokay.proc.ready_hygiene_catalog import run
+
+    out = run({"route": "skip", "repos": ["o/r"], "live": True}, config_path=None, live=True)
+    assert out["skipped"] is True and out["cleaned_count"] == 0
+
+
 def test_idle_leftover_ready_facade_is_gone():
     from lokay.compose import mill
 

@@ -68,6 +68,17 @@ def test_describe_parent_factory_graph():
     assert "dispatch_closeout" not in ids
 
 
+def test_ready_hygiene_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "ready_hygiene")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_ready_hygiene",
+        "ready_hygiene_catalog",
+        "update_ready_hygiene_stamp",
+    ]
+    assert not any(node["id"].endswith("_1") or node["id"].endswith("_30") for node in path["nodes"])
+
+
 def test_factory_pass_docs_match_package_atom_order():
     import re
 

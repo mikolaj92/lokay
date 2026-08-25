@@ -29,7 +29,6 @@ def build(
             "repos": repos,
             "survey_repos": survey["survey_repos"],
             "stuck_path": ledger["stuck_path"],
-            "stuck": ledger["stuck"],
             "planned": planned,
         },
     }
