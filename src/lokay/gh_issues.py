@@ -7,7 +7,7 @@ from lokay.gh_rate import parse_survey_list, survey_list_cap, survey_pace
 from lokay.models import Issue
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import is_blocked_in_ledger, load_stuck, stuck_path_for
-from lokay.triage import is_parked, is_undecided
+from lokay.triage import is_open_work_issue, is_undecided
 
 WORK_READY_LABEL = "work:ready"
 
@@ -177,24 +177,25 @@ def list_labeled_issues(
 
 
 def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
+    """Open catalog issues minus human stops. Mill labels are not a gate."""
     rows = _list_open_issues(
         runner,
         config,
         repo,
         live=live,
-        label=config.ready_label,
         kind="ready-issue",
-        state="all",
+        state="open",
         # Ready-list rate limit is not an empty queue.
     )
     issues: list[Issue] = []
     for row in rows:
         issue = _issue_from_row(repo.name, row)
-        if issue.state == "CLOSED":
-            continue
-        if config.blocked_label in issue.labels:
-            continue
-        if is_parked(issue.labels):
+        if not is_open_work_issue(
+            issue.labels,
+            state=issue.state,
+            blocked_label=config.blocked_label,
+            needs_feedback_label=config.needs_feedback_label,
+        ):
             continue
         if not _eligible(issue.assignees, config):
             continue

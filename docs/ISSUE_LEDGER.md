@@ -7,20 +7,21 @@ GitHub Issue jest księgą **decyzji**. Etykiety `ai:*` na issue to wyłącznie 
 | Stan | Etykieta | Kto widzi | Co wolno |
 | --- | --- | --- | --- |
 | **undecided** | brak etykiety decyzyjnej | `list_inbox` | triage (nie implement) |
-| **ready** | `ai:ready` | `list_ready` / `survey_ready` (pełna strona, nie newest-50) | `issue_to_pr`, o ile brak żywego joba i brak covering open PR |
+| **ready** | otwarte issue (ślad `ai:ready` / `work:ready` opcjonalny) | `list_ready` / `survey_ready` (pełna strona, nie newest-50) | `issue_to_pr`, o ile brak human stop, żywego joba i covering open PR |
 | **blocked** | `ai:blocked` | nikt | człowiek |
 | **needs-feedback** | `ai:needs-feedback` | nikt | człowiek |
 | **parked** | `frozen` / `ai:frozen` / `ai:tracker` | nikt | człowiek / rodzic splitu |
 | **closed** | issue closed | nikt | koniec |
 
-`ai:ready` jest **wynikiem triaży**, nie biletem wstępu. Wejście to otwarte, nierozstrzygnięte issue (inbox). Zostaje na issue przez cały bieg, aż merge + `stage_clear` + close.
+Otwarte issue **jest kolejką**. `ai:ready` / `work:ready` są **śladem ledgeru**, nie biletem wstępu. Wejście to otwarte issue na repo z katalogu. Human stop (`ai:blocked` / `ai:needs-feedback` / park) wyklucza, nie wpuszcza.
 
 Chrom **PR** (`ai:generated`, `ai:pr-opened`) zostaje na pull requescie.
 
 ## Mutex (fakt, nie etykieta)
 
 ```text
-wolno brać  =  ai:ready
+wolno brać  =  otwarte issue
+            ∧  brak human stop (blocked / needs-feedback / park)
             ∧  brak żywego issue_to_pr na repo#n
             ∧  brak otwartego covering AI PR
             ∧  repo nie jest occupied (właśnie zmergowane / still-coding)

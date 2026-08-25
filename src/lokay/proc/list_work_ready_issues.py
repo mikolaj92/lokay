@@ -1,4 +1,4 @@
-"""List physical open work:ready issues for one repository."""
+"""List open catalog issues for one repository. Mill labels are not a gate."""
 
 from lokay.passkit.support import run_proc
 from lokay.proc import list_issues
@@ -9,7 +9,7 @@ def fetch(selected: dict, *, config_path: str | None, live: bool) -> dict:
     argv = (
         (["--config", config_path] if config_path else [])
         + (["--live"] if live else [])
-        + ["--repo", repo, "--label", "work:ready"]
+        + ["--repo", repo]
     )
     listed = run_proc(list_issues.main, argv)
     return {

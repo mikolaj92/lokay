@@ -64,6 +64,27 @@ def test_classify_is_pure_and_closed(tmp_path):
     assert [x["number"] for x in result["implementable"]] == [9]
 
 
+def test_classify_excludes_human_stops_and_keeps_unlabeled(tmp_path):
+    from lokay.proc.classify_ready_repo_issues import classify
+
+    path = workspace(tmp_path)
+    result = classify(
+        pass_dir=str(path),
+        selected={"route": "survey", "repo": "a/one"},
+        listed={
+            "route": "listed",
+            "issues": [
+                {"number": 1, "labels": []},
+                {"number": 2, "labels": ["ai:blocked"]},
+                {"number": 3, "labels": ["ai:needs-feedback"]},
+                {"number": 4, "labels": ["frozen"]},
+                {"number": 5, "labels": ["ai:ready"]},
+            ],
+        },
+    )
+    assert [x["number"] for x in result["implementable"]] == [1, 5]
+
+
 def test_finalize_only_materializes_reactions(tmp_path):
     from lokay.proc.finalize_ready_survey import finalize
     from lokay.proc.reduce_ready_survey import reduce_state

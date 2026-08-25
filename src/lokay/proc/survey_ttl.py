@@ -1,14 +1,15 @@
 """Fail-closed TTL for empty factory_pass GitHub surveys.
 
-Idle ticks listed open PRs, inbox, and work:ready every pass (~2s) even when
-all three were empty. After a complete empty mill survey, stamp beside mill
-state and skip those GitHub lists for 120s. Missing stamp always hosts Fala.
-Skip while the stamp is fresh does not refresh it, matching leftover closeout
-/ over_cap TTL. A non-empty survey or a survey_error clears the stamp.
+Idle ticks listed open PRs and open issues every pass (~2s) even when both
+were empty. After a complete empty mill survey, stamp beside mill state and
+skip those GitHub lists for 120s. Missing stamp always hosts Fala. Skip
+while the stamp is fresh does not refresh it, matching leftover closeout /
+over_cap TTL. A non-empty survey or a survey_error clears the stamp.
 
-After the stamp expires, a live idle mill cheap-probes those three GitHub
-lists. An empty probe refreshes the stamp and the first factory_pass atom
-exits authored idle. Probe failure or any open PR / inbox / ready hosts.
+After the stamp expires, a live idle mill cheap-probes open PRs and open
+issues. An empty probe refreshes the stamp and the first factory_pass atom
+exits authored idle. Probe failure or any open PR / open work issue hosts.
+``work:ready`` / ``ai:ready`` are not the idle probe.
 """
 
 from __future__ import annotations
@@ -23,15 +24,9 @@ from typing import Any, Callable
 
 from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.mill_scope import mill_repo
-from lokay.stage_ledger import LABEL_WORK_READY, LEDGER_ACTIVE_LABELS
-from lokay.triage import PARK_LABELS
+from lokay.triage import is_open_work_issue
 
 _CSI = re.compile(r"\[[0-9;]*[mK]")
-_DECIDED_LABELS = (
-    frozenset({"ai:ready", "ai:blocked", "ai:needs-feedback", LABEL_WORK_READY})
-    | frozenset(PARK_LABELS)
-    | LEDGER_ACTIVE_LABELS
-)
 _BRANCH_PREFIX = "ai/fix/"
 
 SURVEY_TTL_SECONDS = 120
@@ -132,8 +127,9 @@ def skip_idle_factory_pass(
     """Classify authored idle while a live mill has an empty survey.
 
     Fresh stamp: idle without GitHub and without refreshing the stamp.
-    Expired stamp: cheap-probe GitHub. Empty probe refreshes the stamp and
-    idles. Probe failure or remaining work hosts. Missing stamp always hosts.
+    Expired stamp: cheap-probe open PRs and open issues. Empty probe
+    refreshes the stamp and idles. Probe failure or remaining work hosts.
+    Missing stamp always hosts.
     Pytest must not skip the operator mill. Compose must still host Fala.
     """
     if not live:
@@ -167,7 +163,9 @@ def skip_idle_factory_pass(
         stamp.stat()
     except OSError:
         return None
-    checker = probe or mill_survey_still_empty
+    checker = probe or (
+        lambda: mill_survey_still_empty(repos=catalog_repos_from_receipt(receipt))
+    )
     empty = checker()
     if empty is not True:
         return None
@@ -228,18 +226,32 @@ def _label_names(raw: Any) -> set[str]:
     return names
 
 
-def mill_survey_still_empty(
+def catalog_repos_from_receipt(receipt: dict[str, Any] | None) -> list[str]:
+    """Catalog repos from last-pass remaining. Missing catalog falls back to mill."""
+    remaining = receipt.get("remaining") if isinstance(receipt, dict) else {}
+    rows = remaining.get("by_repo") if isinstance(remaining, dict) else []
+    if not isinstance(rows, list):
+        rows = []
+    names: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("repo") or "").strip()
+        if name and name not in seen:
+            seen.add(name)
+            names.append(name)
+    if names:
+        return names
+    fallback = str(mill_repo() or "").strip()
+    return [fallback] if fallback else []
+
+
+def _repo_still_empty(
+    name: str,
     *,
-    repo: str | None = None,
     run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> bool | None:
-    """Cheap GitHub probe of mill PR / inbox / ready lists.
-
-    True: all three empty. False: work remains. None: probe failed.
-    """
-    name = str(repo or mill_repo() or "").strip()
-    if not name:
-        return None
     prs = _gh_json_list(
         [
             "pr",
@@ -263,33 +275,7 @@ def mill_survey_still_empty(
         if isinstance(row, dict)
     ):
         return False
-    ready = _gh_json_list(
-        [
-            "issue",
-            "list",
-            "--repo",
-            name,
-            "--state",
-            "open",
-            "--label",
-            LABEL_WORK_READY,
-            "--json",
-            "number,state",
-            "--limit",
-            str(SURVEY_LIST_CAP),
-        ],
-        run=run,
-    )
-    if ready is None:
-        return None
-    if any(
-        isinstance(row, dict)
-        and str(row.get("state") or "").upper() != "CLOSED"
-        and int(row.get("number") or 0) > 0
-        for row in ready
-    ):
-        return False
-    inbox = _gh_json_list(
+    issues = _gh_json_list(
         [
             "issue",
             "list",
@@ -298,17 +284,48 @@ def mill_survey_still_empty(
             "--state",
             "open",
             "--json",
-            "labels",
+            "number,state,labels",
             "--limit",
             str(SURVEY_LIST_CAP),
         ],
         run=run,
     )
-    if inbox is None:
+    if issues is None:
         return None
-    for row in inbox:
+    for row in issues:
         if not isinstance(row, dict):
             continue
-        if not (_label_names(row.get("labels")) & _DECIDED_LABELS):
+        if int(row.get("number") or 0) <= 0:
+            continue
+        if is_open_work_issue(
+            _label_names(row.get("labels")),
+            state=str(row.get("state") or "OPEN"),
+        ):
             return False
+    return True
+
+
+def mill_survey_still_empty(
+    *,
+    repo: str | None = None,
+    repos: list[str] | None = None,
+    run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> bool | None:
+    """Cheap GitHub probe of catalog PR / open-issue lists.
+
+    True: catalog empty of work. False: work remains. None: probe failed.
+    Human stops exclude. ``work:ready`` / ``ai:ready`` do not admit.
+    """
+    names = [str(item).strip() for item in list(repos or []) if str(item).strip()]
+    if repo:
+        names = [str(repo).strip()]
+    if not names:
+        names = [str(mill_repo() or "").strip()]
+    names = [item for item in names if item]
+    if not names:
+        return None
+    for name in names:
+        empty = _repo_still_empty(name, run=run)
+        if empty is not True:
+            return empty
     return True

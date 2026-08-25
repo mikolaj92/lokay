@@ -253,19 +253,34 @@ def test_mill_survey_probe_empty_is_true() -> None:
     assert (
         survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
     )
-    assert len(calls) == 3
+    assert len(calls) == 2
+    assert all("--label" not in call for call in calls)
 
 
-def test_mill_survey_probe_ready_is_false() -> None:
+def test_mill_survey_probe_open_issue_is_false() -> None:
     def fake_run(argv, **_k):
-        joined = " ".join(argv)
-        if "--label" in argv:
-            return _gh_ok('[{"number": 12, "state": "OPEN"}]')
+        if "issue" in argv:
+            return _gh_ok('[{"number": 12, "state": "OPEN", "labels": []}]')
         return _gh_ok("[]")
 
     assert (
         survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run)
         is False
+    )
+
+
+def test_mill_survey_probe_human_stops_are_empty() -> None:
+    def fake_run(argv, **_k):
+        if "issue" in argv:
+            return _gh_ok(
+                '[{"number":1,"state":"OPEN","labels":[{"name":"ai:blocked"}]},'
+                '{"number":2,"state":"OPEN","labels":[{"name":"ai:needs-feedback"}]},'
+                '{"number":3,"state":"OPEN","labels":[{"name":"frozen"}]}]'
+            )
+        return _gh_ok("[]")
+
+    assert (
+        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
     )
 
 
