@@ -4,7 +4,13 @@ from pathlib import Path
 
 from lokay.graph_run import describe_package
 from lokay.models import Issue
-from lokay.triage import decide_issue, is_parked, is_undecided
+from lokay.triage import (
+    decide_issue,
+    is_human_stopped,
+    is_open_work_issue,
+    is_parked,
+    is_undecided,
+)
 
 
 def _issue(**kwargs) -> Issue:
@@ -35,6 +41,10 @@ def test_is_undecided():
     assert is_parked(["frozen"])
     assert is_parked(["ai:frozen"])
     assert not is_parked(["bug"])
+    assert is_open_work_issue([]) is True
+    assert is_open_work_issue(["work:ready"]) is True
+    assert is_human_stopped(["ai:blocked"]) is True
+    assert is_open_work_issue(["ai:needs-feedback"]) is False
 
 
 def test_decide_skip_frozen():

@@ -2,6 +2,19 @@
 
 from lokay.passkit.working import load_begin_working
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
+from lokay.triage import is_open_work_issue
+
+
+def _issue_labels(row: dict) -> list[str]:
+    names: list[str] = []
+    for item in list(row.get("labels") or []):
+        if isinstance(item, dict):
+            name = str(item.get("name") or "")
+        else:
+            name = str(item or "")
+        if name:
+            names.append(name)
+    return names
 
 
 def classify(*, pass_dir: str, selected: dict, listed: dict) -> dict:
@@ -32,7 +45,14 @@ def classify(*, pass_dir: str, selected: dict, listed: dict) -> dict:
     blocked_numbers = excluded_numbers(
         dict(working.get("stuck") or begin.get("stuck") or {}), repo
     )
-    issues = list(listed.get("issues") or [])
+    issues = [
+        row
+        for row in list(listed.get("issues") or [])
+        if is_open_work_issue(
+            _issue_labels(row),
+            state=str(row.get("state") or "OPEN"),
+        )
+    ]
     covered = [row for row in issues if int(row.get("number", -1)) in covered_numbers]
     blocked = [row for row in issues if int(row.get("number", -1)) in blocked_numbers]
     excluded = covered_numbers | blocked_numbers

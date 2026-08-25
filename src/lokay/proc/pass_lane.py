@@ -2,8 +2,8 @@
 
 Oil is the canonical self mill (config ``incident_repo``, default
 ``mikolaj92/lokay``). Product is every other catalog repo. One pass is
-oil XOR product; product wins when any product ready issue or product
-AI PR exists.
+oil XOR product; product wins when any product open issue or product
+AI PR exists. ``work:ready`` / ``ai:ready`` are not admission gates.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def product_candidates(
     prs_by_repo: dict[str, Any] | None = None,
     self_id: str,
 ) -> bool:
-    """True when a product ready issue or product AI PR is waiting."""
+    """True when a product open issue or product AI PR is waiting."""
     for repo in _ready_rows(ready_by_repo):
         if not is_oil_repo(repo, self_id=self_id):
             return True

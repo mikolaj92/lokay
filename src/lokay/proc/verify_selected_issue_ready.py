@@ -1,7 +1,8 @@
-"""Recheck the physical open + ready-label facts for one selected issue."""
+"""Recheck that one selected issue is still open work, not a human stop."""
 
 from lokay.gh_issues import get_issue
 from lokay.proc._common import load_cfg, runner
+from lokay.triage import is_open_work_issue
 import argparse
 
 
@@ -19,10 +20,11 @@ def verify(candidate: dict, *, config_path: str | None) -> dict:
             "error": str(exc),
             **candidate,
         }
-    ready = (
-        issue is not None
-        and (issue.state or "OPEN").upper() == "OPEN"
-        and cfg.ready_label in (issue.labels or [])
+    ready = issue is not None and is_open_work_issue(
+        issue.labels or [],
+        state=issue.state or "OPEN",
+        blocked_label=cfg.blocked_label,
+        needs_feedback_label=cfg.needs_feedback_label,
     )
     return {
         "ok": True,

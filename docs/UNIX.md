@@ -22,7 +22,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | Program | Job |
 | --- | --- |
 | `lokay-list-inbox` | undecided open issues |
-| `lokay-list-issues` | `ai:ready` issues |
+| `lokay-list-issues` | open catalog issues (human stops exclude) |
 | `lokay-triage-issue` | apply triage decision (ready \| split \| rare needs-feedback \| OOS) |
 | `lokay-intake-check` | one deterministic intake check (JSON) |
 | `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| SPLIT \| NEEDS_HUMAN (hard facts + one structured agent call) |
@@ -46,7 +46,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-host-ff` | mill host fetch + ff-only onto origin/main (fail-closed if behind/dirty) |
 | `lokay-survey-prs` | list open AI PRs (all repos) |
 | `lokay-survey-inbox` | list undecided inbox issues |
-| `lokay-survey-ready` | list ai:ready; unready covered-by-PR issues |
+| `lokay-survey-ready` | list open catalog issues; skip those covered by open AI PRs |
 | `lokay-survey-repos` | thin bridge: survey_prs + inbox + ready |
 | `lokay-plan-pass` | select triage / closeout targets (per-repo PR-first) |
 | `lokay-dispatch-triage` | run planned inbox triage children |

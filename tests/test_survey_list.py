@@ -106,19 +106,18 @@ def test_list_ready_asks_for_full_page_and_keeps_oldest(tmp_path):
     assert [i.number for i in issues] == [185, 45, 24]
     argv = runner.calls[0]
     assert argv[argv.index("--limit") + 1] == str(SURVEY_LIST_CAP)
-    assert "--label" in argv
-    assert argv[argv.index("--label") + 1] == "ai:ready"
-    assert argv[argv.index("--state") + 1] == "all"
+    assert "--label" not in argv
+    assert argv[argv.index("--state") + 1] == "open"
     assert "state" in argv[argv.index("--json") + 1].split(",")
 
 
 def test_list_ready_defaults_missing_state_to_open_and_excludes_closed(tmp_path):
-    missing_state = _issue_row(8, "ai:ready")
+    missing_state = _issue_row(8)
     missing_state.pop("state")
     runner = _ListRunner(
         [
             missing_state,
-            _issue_row(7, "ai:ready", state="closed"),
+            _issue_row(7, state="closed"),
         ]
     )
     cfg, repo = _cfg(tmp_path)
@@ -128,8 +127,24 @@ def test_list_ready_defaults_missing_state_to_open_and_excludes_closed(tmp_path)
     assert [(issue.number, issue.state) for issue in issues] == [(8, "OPEN")]
 
 
+def test_list_ready_keeps_unlabeled_and_excludes_human_stops(tmp_path):
+    runner = _ListRunner(
+        [
+            _issue_row(1),
+            _issue_row(2, "ai:blocked"),
+            _issue_row(3, "ai:needs-feedback"),
+            _issue_row(4, "frozen"),
+            _issue_row(5, "ai:tracker"),
+            _issue_row(6, "ai:ready"),
+        ]
+    )
+    cfg, repo = _cfg(tmp_path)
+    issues = list_ready_issues(runner, cfg, repo, live=True)
+    assert [issue.number for issue in issues] == [1, 6]
+
+
 def test_list_ready_fail_closed_when_page_is_full(tmp_path):
-    runner = _ListRunner([_issue_row(i, "ai:ready") for i in range(SURVEY_LIST_CAP)])
+    runner = _ListRunner([_issue_row(i) for i in range(SURVEY_LIST_CAP)])
     cfg, repo = _cfg(tmp_path)
     with pytest.raises(RuntimeError, match="newest-first cap"):
         list_ready_issues(runner, cfg, repo, live=True)

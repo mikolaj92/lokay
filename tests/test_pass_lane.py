@@ -47,3 +47,24 @@ def test_lane_product_oil_idle() -> None:
         == "oil"
     )
     assert classify_pass_lane(self_id=self_id) == "idle"
+
+
+def test_unlabeled_product_issue_is_product() -> None:
+    assert (
+        classify_pass_lane(
+            self_id="mikolaj92/lokay",
+            ready_by_repo={"mikolaj92/Temida": [{"number": 4968, "labels": []}]},
+        )
+        == "product"
+    )
+
+
+def test_unlabeled_self_issue_empty_product_is_oil() -> None:
+    self_id = "mikolaj92/lokay"
+    assert (
+        classify_pass_lane(
+            self_id=self_id,
+            ready_by_repo={self_id: [{"number": 786, "labels": []}]},
+        )
+        == "oil"
+    )

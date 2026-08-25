@@ -4,8 +4,8 @@ Lokay continuously mills work across configured GitHub repositories: survey, per
 
 ## What one tick does
 
-1. Surveys every enabled repository for inbox issues, `ai:ready` issues, and open `ai/fix/*` pull requests.
-2. Triages undecided issues through the `issue_triage` Fala path (triage + deterministic intake CLOSE/READY/SPLIT + optional auto-split before `ai:ready` sticks), skipping only repos that still have actionable open AI PRs.
+1. Surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests.
+2. Triages undecided issues through the `issue_triage` Fala path (triage + deterministic intake CLOSE/READY/SPLIT + optional auto-split; `ai:ready` may stay as a ledger trace), skipping only repos that still have actionable open AI PRs.
 3. Applies per-repo PR-first close-out: conflicts are closed and re-readied, failed work enters `pr_repair`, and approved mergeable work enters `pr_triage`.
 4. Implements ready issues through `issue_to_pr` **serially by design** (`limits.max_issue_to_pr_per_pass`, default **1** — an optional pass budget, not concurrent worktrees/Pi/tmux). Never a second AI PR in the same repo. A contradiction gate demotes/defers clear queue conflicts before implement.
 5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes.
@@ -189,7 +189,7 @@ stateDiagram-v2
 Pod-Fala rozwija skonfigurowany katalog do jawnych, statycznie ograniczonych
 slotów repozytoriów. Manifest Fali zawiera każdy slot i jego krawędzie; żaden
 proces Pythonowy nie iteruje po repozytoriach ani nie uruchamia kolejnego etapu.
-Listing `work:ready` jest fizycznym odczytem GitHub i zwraca tylko otwarte issue.
+Listing otwartych issue jest fizycznym odczytem GitHub. `work:ready` / `ai:ready` nie są bramką.
 Osobny czysty reduktor wyklucza issue pokryte przez PR albo ledger. Osobny efekt
 parkuje najwyżej jedno zablokowane issue na repozytorium i pass, więc mutacja
 pozostaje atomowa, a higiena postępuje bez ukrytej pętli. Finalizator wyłącznie
@@ -225,7 +225,7 @@ stateDiagram-v2
     SelectImplementationCandidate --> InspectRepositoryMutex: wybrano jedno repo i issue
     InspectRepositoryMutex --> KeepCandidateQueued: mutex zajęty lub nieznany
     InspectRepositoryMutex --> VerifyIssueReady: mutex wolny
-    VerifyIssueReady --> DropStaleCandidate: issue nie jest już fizycznie open + ai:ready
+    VerifyIssueReady --> DropStaleCandidate: issue nie jest już fizycznie open albo ma human stop
     VerifyIssueReady --> LaunchIssueToPullRequest: issue nadal gotowe
     LaunchIssueToPullRequest --> RecordDispatchSuccess: worker uruchomiony
     LaunchIssueToPullRequest --> RecordDispatchFailure: uruchomienie nieudane

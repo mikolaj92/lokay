@@ -108,6 +108,46 @@ def is_parked(labels: Iterable[str], *, park_labels: Iterable[str] = PARK_LABELS
     return bool(set(labels) & frozenset(park_labels))
 
 
+def is_human_stopped(
+    labels: Iterable[str],
+    *,
+    blocked_label: str = "ai:blocked",
+    needs_feedback_label: str = "ai:needs-feedback",
+    park_labels: Iterable[str] = PARK_LABELS,
+) -> bool:
+    """Human stop labels exclude work. They do not admit it."""
+    have = set(labels)
+    return bool(
+        have
+        & (
+            frozenset({blocked_label, needs_feedback_label})
+            | frozenset(park_labels)
+        )
+    )
+
+
+def is_open_work_issue(
+    labels: Iterable[str],
+    *,
+    state: str = "OPEN",
+    blocked_label: str = "ai:blocked",
+    needs_feedback_label: str = "ai:needs-feedback",
+    park_labels: Iterable[str] = PARK_LABELS,
+) -> bool:
+    """Open catalog issue is work unless a human stop excludes it.
+
+    ``work:ready`` / ``ai:ready`` are optional ledger traces, not a gate.
+    """
+    if str(state or "OPEN").upper() == "CLOSED":
+        return False
+    return not is_human_stopped(
+        labels,
+        blocked_label=blocked_label,
+        needs_feedback_label=needs_feedback_label,
+        park_labels=park_labels,
+    )
+
+
 def is_preflight_incident(*, title: str, body: str) -> bool:
     """True when GitHub issue is a mill preflight incident, not product work."""
     if _PREFLIGHT_MARKER.search(body or ""):

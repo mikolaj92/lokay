@@ -53,7 +53,7 @@ The issue is the conversation for **decisions**. In-flight work is a fact
 
 | Stage | Label | Set by |
 | --- | --- | --- |
-| ready | `ai:ready` | intake READY — stays through implement / PR |
+| ready | open issue (`ai:ready` optional trace) | survey of catalog issues — stays through implement / PR |
 | clear | (removes ready) | `pr_triage` → `stage_clear` then `close_issue` |
 
 Reuse: `ai:blocked`, `ai:needs-feedback`, `ai:needs-review`, `ai:tracker`.

@@ -106,7 +106,7 @@ product. Green repository verification may be reused only for the identical
 
 ## Full pass (one tick)
 
-1. **Survey** every managed repo: inbox, `work:ready` (with `ai:ready`), open `ai/fix/*` PRs
+1. **Survey** every managed repo: inbox, open catalog issues (human stops exclude; mill labels are not a gate), open `ai/fix/*` PRs
    (full newest-first page, cap 1000; hitting the cap is `survey_error`, not idle).
 2. **Per-repo PR-first**: PR close-out (conflict / repair / triage / waiting) is
    scoped to each repository. An **actionable** AI PR in repo A does **not**
