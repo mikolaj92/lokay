@@ -22,7 +22,8 @@ def test_daemon_bootstraps_before_uv_and_has_no_product_bypass():
     assert "uv run lokay-repos" not in script
     assert "uv run lokay-mill" not in script
     assert "preflight-bootstrap-incidents.log" in script
-    assert "--reinstall-package lokay --reinstall-package fala" in script
+    assert "--reinstall-package lokay" in script
+    assert "--reinstall-package fala" not in script
     assert "uv-install.digest" in script
     assert 'export PYTHONPATH="${ROOT}/src' in script
     assert "package_matches()" in script
@@ -169,7 +170,7 @@ def _fake_uv(local_bin: Path) -> Path:
         "  exit 0\n"
         "fi\n"
         'if [ "$LOKAY_UV_REINSTALL_FAIL" = 1 ] && '
-        "[ \"$1 $2 $3 $4 $5\" = 'run --reinstall-package lokay --reinstall-package fala' ]; then\n"
+        "[ \"$1 $2 $3\" = 'run --reinstall-package lokay' ]; then\n"
         "  echo 'error: failed to reinstall' >&2\n"
         "  exit 1\n"
         "fi\n"
@@ -180,7 +181,7 @@ def _fake_uv(local_bin: Path) -> Path:
         "  fi\n"
         "  exit 0\n"
         "fi\n"
-        "if [ \"$1 $2 $3 $4 $5\" = 'run --reinstall-package lokay --reinstall-package fala' ]; then\n"
+        "if [ \"$1 $2 $3\" = 'run --reinstall-package lokay' ]; then\n"
         '  printf \'%s\\n\' "$(command -v pi)" "$PATH"\n'
         '  if [ -n "$LOKAY_UV_ENVELOPE" ]; then printf \'%s\\n\' "$LOKAY_UV_ENVELOPE"; else\n'
         '    printf \'%s\\n\' \'{"ok":false,"health":"progress","progress":1}\'\n'

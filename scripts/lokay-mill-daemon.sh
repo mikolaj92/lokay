@@ -1198,7 +1198,7 @@ if [[ "${SKIP_REASON}" != "recent_empty_survey" ]]; then
   CURRENT_DIGEST="$(checkout_digest || true)"
   if [[ -z "${CURRENT_DIGEST}" || "${CURRENT_DIGEST}" != "${PREVIOUS_DIGEST}" ]] || ! package_matches || [[ "${HOST_FF_MOVED}" -eq 1 ]]; then
     SKIP_REASON=""
-    UV_REINSTALL_ARGS=(--reinstall-package lokay --reinstall-package fala)
+    UV_REINSTALL_ARGS=(--reinstall-package lokay)
   fi
 fi
 if [[ -n "${SKIP_REASON}" ]]; then
