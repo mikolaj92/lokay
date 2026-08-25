@@ -68,3 +68,28 @@ def test_normalize_prefers_authored_terminal_result():
 
     out = normalize_path_result(result)
     assert out["ok"] is True and out["pr"] == 77 and out["branch"] == "ai/fix/7"
+
+def test_slice_package_keeps_one_path():
+    from lokay.graph_run import _slice_package_to_path, find_default_package
+
+    text = find_default_package().read_text(encoding="utf-8")
+    sliced = _slice_package_to_path(text, "factory_pass")
+    assert 'id = "factory_pass"' in sliced
+    assert sliced.count("[[correlation_paths]]") == 1
+    assert "[[capabilities]]" in sliced
+    # factory_pass has a thin reap_over_budget atom; the 723-step path stays out
+    assert "select_budget_receipt_1" not in sliced
+    assert "prepare_over_budget_reap" not in sliced
+    assert 'id = "issue_to_pr"' not in sliced
+
+
+def test_slice_package_unknown_path():
+    from lokay.graph_run import _slice_package_to_path
+
+    try:
+        _slice_package_to_path('version = "2"\n[[correlation_paths]]\nid = "x"\n', "nope")
+    except ValueError as exc:
+        assert "unknown" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
+
