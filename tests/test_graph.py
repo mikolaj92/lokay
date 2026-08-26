@@ -816,6 +816,21 @@ def test_no_dangling_when_upstream():
             )
 
 
+def test_parent_814_moving_forward_does_not_replace_factory():
+    """#814: moving → repair does not fire; not-moving repair still hosts 2–4."""
+    from lokay.proc.classify_auto_repair import classify
+
+    assert classify({}, {"health": "progress"})["route"] == "pass"
+    assert classify({}, {"health": "carrier_failed"})["route"] == "repair"
+    path = next(p for p in describe_package()["paths"] if p["id"] == "factory_pass")
+    by = {n["id"]: n for n in path["nodes"]}
+    assert by["pr_triage"].get("when") in (None, {})
+    assert by["stale_worktree_reap"].get("when") in (None, {})
+    assert by["issue_triage"].get("when") in (None, {})
+    assert by["pr_triage"]["conduction"] == ["self_repair"]
+    assert "self_repair" in by["issue_triage"]["conduction"]
+
+
 def test_leftover_fail_routes_host_not_recovery():
     desc = describe_package()
     factory = next(p for p in desc["paths"] if p["id"] == "factory_pass")

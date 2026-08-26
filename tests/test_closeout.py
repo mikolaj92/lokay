@@ -101,6 +101,7 @@ def test_leftover_catalog_fail_closed_when_prepare_failed():
     )
     assert out["ok"] is True and out["skipped"] is True
     assert out["route"] == "skip" and "exceeds authored slots" in out["error"]
+    assert out["probe_failed"] is False
 
 
 def test_leftover_catalog_overflow_is_fail_closed():
@@ -113,6 +114,7 @@ def test_leftover_catalog_overflow_is_fail_closed():
     )
     assert out["ok"] is True and out["skipped"] is True
     assert out["route"] == "skip" and "exceeds authored slots" in out["error"]
+    assert out["probe_failed"] is False
 
 
 def test_leftover_catalog_stops_after_first_probe_fail(monkeypatch):
@@ -139,6 +141,7 @@ def test_leftover_catalog_stops_after_first_probe_fail(monkeypatch):
     )
     assert out["ok"] is True and out["skipped"] is True
     assert out["reason"] == "leftover_probe_failed"
+    assert out["probe_failed"] is True
     assert calls == ["o/r0"]
 
 
@@ -246,6 +249,8 @@ def test_leftover_catalog_candidate_overflow_fails_closed(monkeypatch):
     )
     assert out["ok"] is True and out["skipped"] is True
     assert out["route"] == "skip" and "exceed authored slots" in out["error"]
+    assert out["probe_failed"] is False
+    assert out["reason"] == "candidates_exceed_slots"
 
 
 def test_existing_delivery_closeout_is_explicit_fala_edge():

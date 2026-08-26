@@ -22,7 +22,7 @@ def skip(*, reason: str, extra: dict | None = None) -> dict:
         "closed_out": [],
         "planned": True,
         "applied": False,
-        "probe_failed": reason != "recent_empty",
+        "probe_failed": reason == "leftover_probe_failed",
         "failed_repos": list((extra or {}).get("failed_repos") or []),
     }
     if extra:
