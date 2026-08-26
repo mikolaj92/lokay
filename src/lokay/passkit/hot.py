@@ -1,9 +1,11 @@
 """Pick which repos a factory pass must survey live.
 
 A 29-repo walk eats the 5–10 min cycle before implement. Repos that last
-pass already showed empty (no inbox, ready, or AI PR) stay cold: surveys
-skip GitHub and treat them as empty. Always re-walk last-pass hot repos
-plus a couple of rotated cold ones so new work still wakes up.
+pass already showed empty (no inbox, ready, or AI PR) stay cold only when
+they also have no open work:ready+ai:ready: surveys skip the full GitHub
+walk and treat them as empty. Dual-label ready on a currently-cold catalog
+repo wakes survey_inbox / survey_ready. Always re-walk last-pass hot repos
+plus a couple of rotated cold ones so unlabeled new work still wakes up.
 """
 
 from __future__ import annotations

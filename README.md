@@ -182,8 +182,10 @@ stateDiagram-v2
 Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, hot/cold), jeden atom
 katalogu, który w procesie listuje / klasyfikuje / parkuje zablokowane issue
 i zapisuje remaining, oraz efekt stamp. Nie ma 30-slotowego rozwinięcia Fali.
-`work:ready` / `ai:ready` nie są bramką. Overflow katalogu jest fail-closed.
-Conduction niesie kwit; remaining liczy się z wylistowanych wierszy w procesie.
+`skip_cold_repo` tylko gdy repo nie ma otwartego dual-label `work:ready`+`ai:ready`
+(sonda katalogu, analog `leftover_catalog`). `work:ready` / `ai:ready` nie są
+bramką implementu. Overflow katalogu jest fail-closed. Conduction niesie kwit;
+remaining liczy się z wylistowanych wierszy w procesie.
 
 ### Uruchomienie triage — `dispatch_triage`
 
@@ -778,10 +780,11 @@ stateDiagram-v2
 Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, hot/cold), jeden atom
 katalogu, który w procesie listuje / klasyfikuje undecided issue i zapisuje
 `remaining_inbox` z wylistowanych wierszy, oraz efekt stamp. Nie ma
-30-slotowego rozwinięcia Fali. Etykiety bez `ai:ready` / `ai:blocked` /
-`ai:needs-feedback` nadal liczą się jako inbox. Overflow katalogu jest
-fail-closed. Błąd listingu pozostaje jawnym `probe_failed` i nie udaje
-pustego inboxu. Conduction niesie kwit, nie listy issue.
+30-slotowego rozwinięcia Fali. `skip_cold_repo` tylko gdy sonda dual-ready
+nie znajduje otwartego `work:ready`+`ai:ready`. Etykiety bez `ai:ready` /
+`ai:blocked` / `ai:needs-feedback` nadal liczą się jako inbox. Overflow
+katalogu jest fail-closed. Błąd listingu pozostaje jawnym `probe_failed` i
+nie udaje pustego inboxu. Conduction niesie kwit, nie listy issue.
 
 ### Walidacja self-repair — `self_repair_validate`
 

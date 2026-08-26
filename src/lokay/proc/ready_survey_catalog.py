@@ -16,6 +16,20 @@ def run(
     from lokay.proc.select_ready_repo_slot import select
 
     _, working = load_begin_working(pass_dir)
+    if prepared.get("route") != "skip" and not prepared.get("recent_empty"):
+        from lokay.proc.dual_ready_catalog import run as wake_catalog
+        from lokay.proc.reduce_dual_ready_catalog import apply_wake
+
+        wake = wake_catalog(
+            prepared, config_path=config_path, live=live, working=working
+        )
+        if not wake.get("ok"):
+            return wake
+        prepared = apply_wake(prepared, wake)
+        working = {
+            **working,
+            "dual_ready_wake_repos": list(wake.get("wake_repos") or []),
+        }
     repos = list(prepared.get("repos") or [])
     results = []
     if prepared.get("route") != "skip":

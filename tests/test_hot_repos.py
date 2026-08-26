@@ -107,3 +107,198 @@ def test_pr_survey_slot_skips_cold_scope(tmp_path):
 def test_survey_scope_none_means_all():
     assert survey_scope({"repos": ["a/one"]}) is None
     assert survey_scope({"survey_repos": ["a/one"]}) == ["a/one"]
+
+
+def _pass_workspace(tmp_path, repos, scope):
+    from lokay.passkit import io as pass_io
+
+    path = tmp_path / "pass"
+    path.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(path),
+        {"repos": list(repos), "survey_repos": list(scope), "stuck": {"issues": {}}},
+    )
+    pass_io.write_json(
+        pass_io.working_path(path),
+        {
+            "actions": [],
+            "progress": 0,
+            "survey_errors": 0,
+            "prs_by_repo": {},
+            "inbox_by_repo": {},
+            "inbox_issues_by_repo": {},
+            "stuck": {"issues": {}},
+        },
+    )
+    return path
+
+
+def test_cold_dual_ready_is_surveyed_not_skip_cold(tmp_path, monkeypatch):
+    from lokay.passkit import io as pass_io
+    from lokay.proc.inbox_survey_catalog import run as run_inbox
+    from lokay.proc.ready_survey_catalog import run as run_ready
+
+    repos = ["mikolaj92/lokay", "mikolaj92/app-factory"]
+    path = _pass_workspace(tmp_path, repos, ["mikolaj92/lokay"])
+    monkeypatch.setattr(
+        "lokay.proc.list_dual_ready_issues.fetch",
+        lambda selected, **kwargs: {
+            **selected,
+            "ok": True,
+            "route": "listed",
+            "issues": (
+                [{"number": 64, "labels": ["work:ready", "ai:ready"]}]
+                if selected["repo"] == "mikolaj92/app-factory"
+                else []
+            ),
+        },
+    )
+    listed_inbox = []
+    monkeypatch.setattr(
+        "lokay.proc.list_inbox_repo_issues.fetch",
+        lambda selected, **kwargs: listed_inbox.append(selected["repo"])
+        or {
+            **selected,
+            "ok": True,
+            "route": "listed",
+            "issues": [],
+            "listed": {"ok": True, "issues": []},
+        },
+    )
+    listed_ready = []
+    monkeypatch.setattr(
+        "lokay.proc.list_work_ready_issues.fetch",
+        lambda selected, **kwargs: listed_ready.append(selected["repo"])
+        or {
+            "ok": True,
+            "route": "listed",
+            "repo": selected["repo"],
+            "issues": (
+                [{"number": 64, "labels": ["work:ready", "ai:ready"]}]
+                if selected["repo"] == "mikolaj92/app-factory"
+                else []
+            ),
+        },
+    )
+    inbox_prepared = {
+        "ok": True,
+        "repos": repos,
+        "mini_repo": "mikolaj92/lokay",
+        "skipped_repos": [],
+        "active_repos": ["mikolaj92/lokay"],
+        "scoped": True,
+        "stuck": {"issues": {}},
+        "recent_empty": False,
+    }
+    inbox = run_inbox(
+        inbox_prepared, pass_dir=str(path), config_path=None, live=False
+    )
+    inbox_actions = pass_io.read_json(pass_io.working_path(path)).get("actions") or []
+    assert "mikolaj92/app-factory" in listed_inbox
+    assert not any(
+        row.get("step") == "skip_cold_repo" and row.get("repo") == "mikolaj92/app-factory"
+        for row in inbox_actions
+    )
+    assert inbox["ok"] is True
+
+    ready = run_ready(
+        {
+            "ok": True,
+            "route": "survey",
+            "repos": repos,
+            "active_repos": ["mikolaj92/lokay"],
+            "skipped_repos": [],
+            "recent_empty": False,
+        },
+        pass_dir=str(path),
+        config_path=None,
+        live=False,
+    )
+    ready_actions = pass_io.read_json(pass_io.working_path(path)).get("actions") or []
+    assert "mikolaj92/app-factory" in listed_ready
+    assert ready["remaining_ready"] == 1
+    assert not any(
+        row.get("step") == "skip_cold_repo" and row.get("repo") == "mikolaj92/app-factory"
+        for row in ready_actions
+    )
+
+
+def test_empty_cold_repos_stay_skipped_without_30_slot_balloon(tmp_path, monkeypatch):
+    from lokay.passkit import io as pass_io
+    from lokay.proc.inbox_survey_catalog import run as run_inbox
+    from lokay.proc.ready_survey_catalog import run as run_ready
+
+    repos = ["mikolaj92/lokay", *(f"mikolaj92/product-{i}" for i in range(29))]
+    path = _pass_workspace(tmp_path, repos, ["mikolaj92/lokay"])
+    probed = []
+    monkeypatch.setattr(
+        "lokay.proc.list_dual_ready_issues.fetch",
+        lambda selected, **kwargs: probed.append(selected["repo"])
+        or {**selected, "ok": True, "route": "listed", "issues": []},
+    )
+    listed_inbox = []
+    monkeypatch.setattr(
+        "lokay.proc.list_inbox_repo_issues.fetch",
+        lambda selected, **kwargs: listed_inbox.append(selected["repo"])
+        or {
+            **selected,
+            "ok": True,
+            "route": "listed",
+            "issues": [],
+            "listed": {"ok": True, "issues": []},
+        },
+    )
+    listed_ready = []
+    monkeypatch.setattr(
+        "lokay.proc.list_work_ready_issues.fetch",
+        lambda selected, **kwargs: listed_ready.append(selected["repo"])
+        or {
+            "ok": True,
+            "route": "listed",
+            "repo": selected["repo"],
+            "issues": [],
+        },
+    )
+    inbox = run_inbox(
+        {
+            "ok": True,
+            "repos": repos,
+            "mini_repo": "mikolaj92/lokay",
+            "skipped_repos": [],
+            "active_repos": ["mikolaj92/lokay"],
+            "scoped": True,
+            "stuck": {"issues": {}},
+            "recent_empty": False,
+        },
+        pass_dir=str(path),
+        config_path=None,
+        live=False,
+    )
+    ready = run_ready(
+        {
+            "ok": True,
+            "route": "survey",
+            "repos": repos,
+            "active_repos": ["mikolaj92/lokay"],
+            "skipped_repos": [],
+            "recent_empty": False,
+        },
+        pass_dir=str(path),
+        config_path=None,
+        live=False,
+    )
+    working = pass_io.read_json(pass_io.working_path(path))
+    actions = list(working.get("actions") or [])
+    cold = [name for name in repos if name != "mikolaj92/lokay"]
+    assert listed_inbox == ["mikolaj92/lokay"]
+    assert listed_ready == ["mikolaj92/lokay"]
+    assert set(probed) == set(cold)
+    assert inbox["remaining_inbox"] == 0
+    assert ready["remaining_ready"] == 0
+    assert {
+        (row.get("repo"), row.get("survey"))
+        for row in actions
+        if row.get("step") == "skip_cold_repo"
+    } == {(name, survey) for name in cold for survey in ("inbox", "ready")}
+    assert len(repos) == 30
+    assert len(actions) < 394
