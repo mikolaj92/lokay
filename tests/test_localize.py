@@ -132,9 +132,9 @@ def test_issue_to_pr_localize_before_run_agent():
     path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr_delivery")
     by_id = {n["id"]: n for n in path["nodes"]}
     assert "localize" in by_id
-    assert "localize" in by_id["run_agent"]["conduction"]
+    assert "localize" in by_id["coding_execution"]["conduction"]
     assert "plan_issue" in by_id["localize"]["conduction"]
-    assert "run_agent" not in by_id["localize"]["conduction"]
+    assert "coding_execution" not in by_id["localize"]["conduction"]
 
 
 def test_pr_repair_localize_before_run_agent():

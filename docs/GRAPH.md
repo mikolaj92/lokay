@@ -219,21 +219,25 @@ get_issue
   ├─→ stage_implementing   ← no-op on labels: keep ai:ready, strip leftover cache
   └─→ make_branch
         └─→ worktree_add
-              └─→ plan_issue   ← deterministic approach.md (trust-with-evidence)
-                    └─→ localize     ← Agentless file-before-patch path list
-                          └─→ run_agent     ← only non-deterministic coding node
+              └─→ plan_issue   ← grandchild Fala plan_issue_execution
+                    └─→ localize     ← grandchild Fala localize_execution
+                          └─→ coding_execution  ← child Fala: run_agent + one JSON retry + one evidence round
                                 └─→ commit_all
-                                      └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed (no dirty PR)
-                                            └─→ test_local   ← local pytest; skip if no suite
-                                            ├─ (red, recorded) → repair_agent   ← ONE patch from the test log (K=1)
-                                            │                      └─→ test_local_recheck
+                                      └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
+                                            └─→ test_local_execution   ← grandchild Fala; skip if no suite
+                                            ├─ (red, recorded) → local_repair_execution   ← child Fala: K=1 patch + recheck
                                             └─→ assert_real_diff ← refuse plan/localize-only diffs
-                                                  └─→ push            ← only after green / honest skip (recheck if nest ran)
-                                                        └─→ pr_create   ← only after successful push; never off a red suite or plan-only diff
+                                                  └─→ push            ← only after green / honest skip
+                                                        └─→ pr_create   ← grandchild Fala; only after successful push
                                                               └─→ stage_pr_open   ← no-op on labels: keep ai:ready
                                                                     └─→ list_prs
                                                                           └─→ pr_label
 ```
+
+Delivery is not a god path. Grandchildren that already have their own Fala
+(`plan_issue`, `localize`, `test_local_execution`, `pr_create`) stay separate
+nodes. The two extracted nests are `coding_execution` and
+`local_repair_execution`.
 
 `plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree
 **before** `run_agent`: goal, files likely touched, test plan, non-goals.
@@ -326,11 +330,21 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts). `pr_create` additionally requires a successful `push`. `push` / `pr_create` also require `assert_real_diff`: a diff that is only `.lokay/approach.md` / `.lokay/localize.json` is not progress and never opens a PR.
-- **issue_to_pr red suite** does **not by itself** open a PR. One bounded AlphaCodium nest runs instead: `test_local` (first probe, records red so Fala can continue) → `repair_agent` (K=1 patch from the test log) → `test_local_recheck`. The recheck first runs the declared suite; if it is still red and the branch changes Python under `src/`, it may fall back to changed ticket tests plus conventional `tests/test_<changed-module>.py` tests. That changed scope must be green; an unknown or red ticket scope still fails closed. A green full or changed-scope recheck → push → pr_create. Recheck red / zero-diff / agent fail → path fails closed (`local_repair_exhausted`); the mill marks that seed stuck and takes the next one. There is no third repair attempt.
+- **issue_to_pr red suite** does **not by itself** open a PR. The delivery
+  parent records the first `test_local_execution` probe red, then invokes
+  child Fala `local_repair_execution`: `repair_agent` (K=1 patch from the
+  test log) → `test_local_recheck`. The recheck first runs the declared suite;
+  if it is still red and the branch changes Python under `src/`, it may fall
+  back to changed ticket tests plus conventional
+  `tests/test_<changed-module>.py` tests. That changed scope must be green; an
+  unknown or red ticket scope still fails closed. A green full or
+  changed-scope recheck → push → pr_create. Recheck red / zero-diff / agent
+  fail → path fails closed (`local_repair_exhausted`); the mill marks that
+  seed stuck and takes the next one. There is no third repair attempt.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the mill do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
 - **localize** proposes paths immediately before the coding slot (serial path:
-  `worktree_add → plan_issue → localize → run_agent`). Existing
+  `worktree_add → plan_issue → localize → coding_execution`). Existing
   `.lokay/localize.json` paths skip the localize executor. Live mode may call the
   configured executor once for a JSON path list; Python validates and still
   fails closed on missing/empty localize — the coding agent does not start.

@@ -9,9 +9,11 @@ from typing import Any
 from lokay.models import Issue
 from lokay.organ.common import (
     _issue_no_longer_open,
+    _issue_raw,
     _require_push,
     _require_real_diff,
     _require_test_local,
+    _worktree_path,
 )
 from lokay.prompts import pr_body
 
@@ -46,7 +48,7 @@ def handle_publication(
         _fo, "branch_ahead_of_upstream", branch_ahead_of_upstream
     )
     if atom == "commit_all":
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        worktree = _worktree_path(up, inputs)
         assert worktree
         gate = next(
             (
@@ -73,7 +75,7 @@ def handle_publication(
                 "committed": False,
                 "kind": (gate or {}).get("kind"),
             }
-        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        issue_raw = _issue_raw(up, inputs)
         if repair_mode and pr_number is not None:
             msg = str(inputs.get("message") or f"repair: {repo} PR #{pr_number} checks")
         else:
@@ -97,14 +99,14 @@ def handle_publication(
         return out
 
     if atom == "rebase_onto_base":
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        worktree = _worktree_path(up, inputs)
         assert worktree
         return _run_atom_main(
             rebase_onto_base.main, [*cfg, *live, *repo_flags, "--worktree", worktree]
         )
 
-    if atom == "test_local":
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+    if atom in {"test_local", "test_local_execution"}:
+        worktree = _worktree_path(up, inputs)
         assert worktree
         argv = [*repo_flags, "--worktree", worktree]
         if inputs.get("changed_scope"):
@@ -134,17 +136,17 @@ def handle_publication(
         return out
 
     if atom == "assert_real_diff":
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        worktree = _worktree_path(up, inputs)
         assert worktree
         from lokay.proc.assert_real_diff_subflow import run as run_real_diff
 
-        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        issue_raw = _issue_raw(up, inputs)
         return run_real_diff(
             worktree=worktree, issue_body=str(issue_raw.get("body") or ""), repo=repo
         )
 
     if atom == "push":
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        worktree = _worktree_path(up, inputs)
         branch = str(
             up.get("make_branch", {}).get("branch")
             or inputs.get("branch")
@@ -212,7 +214,7 @@ def handle_publication(
         if refused is not None:
             return refused
         branch = str(up.get("make_branch", {}).get("branch") or "")
-        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        issue_raw = _issue_raw(up, inputs)
         issue = Issue.from_dict(issue_raw)
         agent = up.get("run_agent", {})
         summary = str(agent.get("stdout_tail") or agent.get("status") or "")
