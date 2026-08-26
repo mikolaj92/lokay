@@ -1,4 +1,4 @@
-"""Native Fala proofs for explicit implementation-repository slots."""
+"""Native Fala proofs for one implementation-selection catalog atom."""
 
 import json, os, subprocess, sys, tomllib
 from pathlib import Path
@@ -55,46 +55,46 @@ def run_graph(tmp_path, body, run_id, path_id="select_implement"):
     return json.loads(run.stdout.strip().splitlines()[-1])
 
 
-def test_first_repo_eligible_is_selected(tmp_path):
+def test_select_implement_is_one_catalog_atom(tmp_path):
     body = base_effector(
         """if a=='prepare_implementation_selection':v.update(route='select',repos=['a/one'])
-if a.startswith('select_implementation_repo_'):v.update(route='repo' if a.endswith('_1') else 'empty',repo='a/one' if a.endswith('_1') else '')
-if a.startswith('inspect_implementation_eligibility_'):v.update(route='eligible',repo='a/one')
-if a.startswith('select_implementation_eligibility_gate_'):v.update(route='eligible' if a.endswith('_1') else 'empty',repo='a/one' if a.endswith('_1') else '')
-if a.startswith('record_eligible_implementation_repo_'):v.update(route='eligible',repo='a/one')
-if a.startswith('record_ineligible_implementation_repo_'):v.update(route='empty')
-if a.startswith('select_implementation_slot_outcome_'):v.update(route='eligible' if a.endswith('_1') else 'empty',repo='a/one' if a.endswith('_1') else '')
-if a=='reduce_implementation_selection':v.update(route='selected',clean_repos=['a/one'])
+if a=='implementation_selection_catalog':v.update(route='selected',clean_repos=['a/one'])
 if a=='persist_implementation_selection':v.update(selected=1)
 if a=='summarize_implementation_selection':v['result']={'selected':1}"""
     )
-    result = run_graph(tmp_path, body, "select-one", path_id="select_implement")
-    status = {k: v["status"] for k, v in result["effector_results"].items()}
-    assert (
-        status["inspect_implementation_eligibility_1"] == "succeeded"
-        and status["inspect_implementation_eligibility_2"] == "skipped"
-        and status["summarize_implementation_selection"] == "succeeded"
+    result = run_graph(tmp_path, body, "select-catalog", path_id="select_implement")
+    order = [
+        "prepare_implementation_selection",
+        "implementation_selection_catalog",
+        "persist_implementation_selection",
+        "summarize_implementation_selection",
+    ]
+    statuses = result["effector_results"]
+    assert all(statuses[name]["status"] == "succeeded" for name in order)
+    assert list(statuses) == order
+    assert not any(
+        name.startswith("select_implementation_repo_")
+        or name.startswith("inspect_implementation_eligibility_")
+        or name.startswith("select_implementation_eligibility_gate_")
+        or name.startswith("record_eligible_implementation_repo_")
+        or name.startswith("record_ineligible_implementation_repo_")
+        or name.startswith("select_implementation_slot_outcome_")
+        or name.startswith("reduce_implementation_selection")
+        for name in statuses
     )
+    assert result.get("ticks_used", 16) <= 16
 
 
-def test_no_budget_skips_all_inspections(tmp_path):
-    wrong = tmp_path / "wrong"
+def test_select_implement_no_budget_finishes_without_184_effectors(tmp_path):
     body = base_effector(
         """if a=='prepare_implementation_selection':v.update(route='no_budget',repos=[])
-if a.startswith('select_implementation_repo_'):v['route']='empty'
-if a.startswith('inspect_implementation_eligibility_'):Path(%r).write_text(a)
-if a.startswith('select_implementation_eligibility_gate_'):v['route']='empty'
-if a.startswith('record_ineligible_implementation_repo_') or a.startswith('select_implementation_slot_outcome_'):v['route']='empty'
-if a=='reduce_implementation_selection':v.update(route='no_budget',clean_repos=[])
+if a=='implementation_selection_catalog':v.update(route='no_budget',clean_repos=[])
 if a=='persist_implementation_selection':v.update(selected=0)
-if a=='summarize_implementation_selection':v['result']={'selected':0}""" % str(wrong)
+if a=='summarize_implementation_selection':v['result']={'selected':0}"""
     )
     result = run_graph(tmp_path, body, "select-none", path_id="select_implement")
-    status = {k: v["status"] for k, v in result["effector_results"].items()}
-    assert (
-        all(
-            status[f"inspect_implementation_eligibility_{i}"] == "skipped"
-            for i in range(1, 31)
-        )
-        and not wrong.exists()
-    )
+    statuses = result["effector_results"]
+    assert len(statuses) == 4
+    assert statuses["implementation_selection_catalog"]["status"] == "succeeded"
+    assert statuses["summarize_implementation_selection"]["status"] == "succeeded"
+    assert result.get("ticks_used", 16) < 64

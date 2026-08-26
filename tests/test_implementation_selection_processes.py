@@ -3,6 +3,15 @@
 from lokay.passkit import io as pass_io
 
 
+def test_select_implement_subflow_uses_handful_of_ticks():
+    from lokay.proc.select_implement_subflow import run
+    import inspect
+
+    source = inspect.getsource(run)
+    assert "max_ticks=16" in source
+    assert "max_ticks=64" not in source
+
+
 def workspace(tmp_path, repos=("a/one",)):
     path = tmp_path / "pass"
     path.mkdir()
@@ -28,6 +37,43 @@ def workspace(tmp_path, repos=("a/one",)):
         },
     )
     return path
+
+
+def test_catalog_fail_closed_when_prepare_failed():
+    from lokay.proc.implementation_selection_catalog import run
+
+    out = run(
+        {"ok": False, "error": "implementation catalog exceeds authored slots"},
+        pass_dir="unused",
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_catalog_selects_first_eligible_repo(tmp_path):
+    from lokay.proc.implementation_selection_catalog import run
+    from lokay.proc.prepare_implementation_selection import prepare
+
+    path = workspace(tmp_path)
+    prepared = prepare(pass_dir=str(path), slot_count=30)
+    out = run(prepared, pass_dir=str(path))
+    assert out["ok"] is True
+    assert out["route"] == "selected"
+    assert out["clean_repos"] == ["a/one"]
+
+
+def test_catalog_no_budget_skips_repo_loop(tmp_path):
+    from lokay.proc.implementation_selection_catalog import run
+    from lokay.proc.prepare_implementation_selection import prepare
+
+    path = workspace(tmp_path)
+    begin = pass_io.read_json(pass_io.begin_path(path))
+    begin["issue_budget"] = 0
+    pass_io.write_json(pass_io.begin_path(path), begin)
+    prepared = prepare(pass_dir=str(path), slot_count=30)
+    out = run(prepared, pass_dir=str(path))
+    assert out["ok"] is True
+    assert out["route"] == "no_budget"
+    assert out["clean_repos"] == []
 
 
 def test_prepare_and_slot_are_bounded(tmp_path):

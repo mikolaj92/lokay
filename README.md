@@ -266,22 +266,20 @@ materializacja stanu są oddzielnymi procesami. Fala prowadzi każdą gałąź;
 ```mermaid
 stateDiagram-v2
     [*] --> PreparePassPlan
-    PreparePassPlan --> SelectPlanRepoSlot
-    SelectPlanRepoSlot --> BuildRepoPlanFragment: slot zawiera repo
-    SelectPlanRepoSlot --> RecordRepoPlanFragment: slot pusty
-    BuildRepoPlanFragment --> RecordRepoPlanFragment
-    RecordRepoPlanFragment --> SelectPlanRepoSlot: następny jawny slot
-    RecordRepoPlanFragment --> ReducePassPlan: ostatni slot
-    ReducePassPlan --> PersistPassPlan
-    PersistPassPlan --> PassPlanResult
+    PreparePassPlan --> PlanCatalog
+    PlanCatalog --> PersistPassPlan
+    PersistPassPlan --> SummarizePassPlan
+    SummarizePassPlan --> PassPlanResult
     PassPlanResult --> [*]
 ```
 
-Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Jeden czysty proces buduje
-fragment planu jednego repozytorium na podstawie survey, stuck ledgera, budżetu
-i PR-first. Fala prowadzi kolejność slotów. Osobny czysty reduktor zachowuje
-kolejność katalogu i globalny budżet triage. Osobny efekt zapisuje plan oraz
-akcje wyjaśniające odrzucone cele.
+Pod-Fala ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
+w procesie buduje fragmenty planu i redukuje globalny budżet triage, persist
+oraz summarize. Nie ma 30-slotowego rozwinięcia Fali. Overflow katalogu jest
+fail-closed. Jeden czysty proces nadal buduje fragment jednego repozytorium
+na podstawie survey, stuck ledgera, budżetu i PR-first; atom katalogu składa
+je w procesie. Osobny efekt zapisuje plan oraz akcje wyjaśniające odrzucone
+cele.
 
 ### Bezpośrednie wejście Lokaya — `product_entry`
 
@@ -949,29 +947,24 @@ reduktory składają occupancy i snapshot PR; osobny efekt zapisuje stan pass.
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareImplementationSelection
-    PrepareImplementationSelection --> PersistImplementationSelection: brak live budget
-    PrepareImplementationSelection --> SelectImplementationRepoSlot: budżet aktywny
-    SelectImplementationRepoSlot --> InspectImplementationEligibility: slot zawiera repo
-    SelectImplementationRepoSlot --> RecordIneligibleRepo: slot pusty
-    InspectImplementationEligibility --> RecordEligibleRepo: repo spełnia wszystkie bramki
-    InspectImplementationEligibility --> RecordIneligibleRepo: outside scope / survey failed / PR-first / occupied / stuck / brak work / agent disabled
-    RecordEligibleRepo --> SelectImplementationSlotOutcome
-    RecordIneligibleRepo --> SelectImplementationSlotOutcome
-    SelectImplementationSlotOutcome --> SelectImplementationRepoSlot: następny jawny slot
-    SelectImplementationSlotOutcome --> ReduceImplementationSelection: ostatni slot
-    ReduceImplementationSelection --> PersistImplementationSelection
-    PersistImplementationSelection --> ImplementationSelectionResult
+    PrepareImplementationSelection --> ImplementationSelectionCatalog
+    ImplementationSelectionCatalog --> PersistImplementationSelection
+    PersistImplementationSelection --> SummarizeImplementationSelection
+    SummarizeImplementationSelection --> ImplementationSelectionResult
     ImplementationSelectionResult --> [*]
 ```
 
-Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Każdy slot sprawdza jeden
-repozytoryjny zestaw twardych faktów: zakres, kompletność survey PR, PR-first,
-occupancy, stuck ledger, obecność otwartego issue (inbox albo ready;
-`work:ready` nie jest bramką) i dostępność executora. Otwarte issue z inboxu
-jest pracą: nie wolno ignorować inboxu, bo brak drugiej etykiety ready.
-Fala prowadzi rozłączne krawędzie `eligible` i `ineligible`. Czysty reduktor
-wybiera pierwsze kwalifikujące się repo w kolejności konfiguracji; nie
-uruchamia procesu ani mutacji. Osobny efekt materializuje plan implementacji.
+Pod-Fala ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
+w procesie sprawdza kwalifikację każdego repo i redukuje wybór, persist oraz
+summarize. Nie ma 30-slotowego rozwinięcia Fali. Overflow katalogu jest
+fail-closed. Atom katalogu sprawdza twardy zestaw faktów: zakres, kompletność
+survey PR, PR-first, occupancy, stuck ledger, obecność otwartego issue (inbox
+albo ready; `work:ready` nie jest bramką) i dostępność executora. Otwarte
+issue z inboxu jest pracą: nie wolno ignorować inboxu, bo brak drugiej
+etykiety ready. Czysty reduktor wybiera pierwsze kwalifikujące się repo w
+kolejności konfiguracji; nie uruchamia procesu ani mutacji. Osobny efekt
+materializuje plan implementacji. Brak live budget kończy się w procesie
+katalogu, nie osobną krawędzią Fali.
 
 ### Higiena kolejki implementacji — `queue_conflict`
 
@@ -1296,8 +1289,8 @@ kontraktu. Aktualny audyt:
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
 | `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
-| `ImplementationSelection` | `select_implement` | prowadzi katalog przez jawne bramki kwalifikacji repo |
-| `PassPlan` | `plan_pass` | składa repozytoryjne fragmenty planu przez jawne sloty |
+| `ImplementationSelection` | `select_implement` | jeden atom katalogu: kwalifikacja repo do issue_to_pr |
+| `PassPlan` | `plan_pass` | jeden atom katalogu: fragmenty planu i budżet triage |
 | `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
 | `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
 | `OverBudgetReap` | `reap_over_budget` | jeden atom katalogu: harvest albo plan-only reap |

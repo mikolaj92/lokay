@@ -130,6 +130,49 @@ def test_reap_over_budget_path_is_a_handful_of_effectors():
     )
 
 
+def test_plan_pass_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "plan_pass")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_pass_plan",
+        "plan_catalog",
+        "persist_pass_plan",
+        "summarize_pass_plan",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_plan_repo_")
+        or node["id"].startswith("build_repo_plan_fragment_")
+        or node["id"].startswith("record_repo_plan_fragment_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
+def test_select_implement_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "select_implement")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_implementation_selection",
+        "implementation_selection_catalog",
+        "persist_implementation_selection",
+        "summarize_implementation_selection",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_implementation_repo_")
+        or node["id"].startswith("inspect_implementation_eligibility_")
+        or node["id"].startswith("select_implementation_eligibility_gate_")
+        or node["id"].startswith("record_eligible_implementation_repo_")
+        or node["id"].startswith("record_ineligible_implementation_repo_")
+        or node["id"].startswith("select_implementation_slot_outcome_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
 def test_factory_pass_docs_match_package_atom_order():
     import re
 
