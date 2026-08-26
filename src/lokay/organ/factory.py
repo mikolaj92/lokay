@@ -236,6 +236,26 @@ def handle_factory(
             live=bool(inputs.get("live")),
         )
 
+    if atom == "issues":
+        from lokay.proc.issues_subflow import run
+
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
+    if atom == "prs":
+        from lokay.proc.prs_subflow import run
+
+        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
     if atom == "closeout_prs":
         from lokay.proc.closeout_prs_subflow import run
 
