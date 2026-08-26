@@ -76,7 +76,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "factory_pass"
 title = "Lokay factory pass"
-description = "Parent Fala conducts one multi-repo pass: classify_factory_idle -> host_ff -> survey_prs/inbox/ready -> plan -> triage -> conflicts -> closeout -> occupancy -> select -> queue_conflict -> implement -> reap leftover worktrees -> health -> receipt. Serial K=1; mutex per repo. After closeout, refresh occupancy so a just-merged or still-coding repo cannot start a sibling i2pr from stale origin/main. Implement runs before leftover worktree reap so classification cannot consume the 180s ceiling. After queue_conflict parks needs_human/skip, the next implementable catalog row keeps clean_repos. Trust intentional owner/assignee issues; contradiction gate is queue hygiene, not a parallel scheduler."
+description = "Parent Fala conducts one multi-repo pass: classify_factory_idle -> host_ff -> factory_begin -> select -> queue_conflict -> implement -> health -> receipt. Housecleaning (surveys, triage, closeout, occupancy, leftover reaps) stays in the path beside work and is not the gate to select. select conducts from factory_begin; queue_conflict and dispatch_implement take when select.route == selected. compute_health conducts from dispatch_implement, not reap_stale_worktrees. Serial K=1; mutex per repo. After queue_conflict parks needs_human/skip, the next implementable catalog row keeps clean_repos. Trust intentional owner/assignee issues; contradiction gate is queue hygiene, not a parallel scheduler."
 
 [[correlation_paths.effectors]]
 id = "classify_factory_idle"
@@ -110,6 +110,60 @@ when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
 conduction = ["classify_factory_idle", "factory_begin_host_gate"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "factory_begin" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "select_implement"
+capability = "lokay_atom"
+when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
+conduction = ["classify_factory_idle", "factory_begin"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "select_implement" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "queue_conflict"
+capability = "lokay_atom"
+when = { upstream = "select_implement", path = "route", equals = "selected" }
+conduction = ["classify_factory_idle", "factory_begin", "select_implement"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "queue_conflict" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "dispatch_implement"
+capability = "lokay_atom"
+when = { upstream = "select_implement", path = "route", equals = "selected" }
+conduction = ["classify_factory_idle", "factory_begin", "queue_conflict"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "dispatch_implement" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "compute_health"
+capability = "lokay_atom"
+when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
+conduction = ["classify_factory_idle", "factory_begin", "dispatch_implement"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "compute_health" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "compact_state"
+capability = "lokay_atom"
+when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
+conduction = ["classify_factory_idle", "factory_begin", "compute_health"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "compact_state" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "record_pass"
+capability = "lokay_atom"
+when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
+conduction = ["classify_factory_idle", "factory_begin", "compute_health", "compact_state"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "record_pass" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
@@ -212,66 +266,12 @@ config = { atom = "refresh_occupancy" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "select_implement"
-capability = "lokay_atom"
-when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
-conduction = ["classify_factory_idle", "factory_begin", "refresh_occupancy"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "select_implement" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "queue_conflict"
-capability = "lokay_atom"
-when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
-conduction = ["classify_factory_idle", "factory_begin", "select_implement"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "queue_conflict" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "dispatch_implement"
-capability = "lokay_atom"
-when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
-conduction = ["classify_factory_idle", "factory_begin", "queue_conflict"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "dispatch_implement" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
 id = "reap_stale_worktrees"
 capability = "lokay_atom"
 when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
 conduction = ["classify_factory_idle", "factory_begin", "dispatch_implement"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "reap_stale_worktrees" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "compute_health"
-capability = "lokay_atom"
-when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
-conduction = ["classify_factory_idle", "factory_begin", "reap_stale_worktrees"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "compute_health" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "compact_state"
-capability = "lokay_atom"
-when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
-conduction = ["classify_factory_idle", "factory_begin", "compute_health"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "compact_state" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "record_pass"
-capability = "lokay_atom"
-when = { upstream = "classify_factory_idle", path = "route", equals = "host" }
-conduction = ["classify_factory_idle", "factory_begin", "compute_health", "compact_state"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "record_pass" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]

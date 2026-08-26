@@ -19,6 +19,12 @@ def test_describe_parent_factory_graph():
         "host_ff",
         "factory_begin_host_gate",
         "factory_begin",
+        "select_implement",
+        "queue_conflict",
+        "dispatch_implement",
+        "compute_health",
+        "compact_state",
+        "record_pass",
         "survey_prs",
         "survey_inbox",
         "survey_ready",
@@ -30,17 +36,12 @@ def test_describe_parent_factory_graph():
         "reap_stale_implementing",
         "reap_over_budget",
         "refresh_occupancy",
-        "select_implement",
-        "queue_conflict",
-        "dispatch_implement",
         "reap_stale_worktrees",
-        "compute_health",
-        "compact_state",
-        "record_pass",
         "record_factory_idle",
         "factory_pass_terminal",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
+    when = {node["id"]: node["when"] for node in path["nodes"]}
     assert conduction["host_ff"] == ["classify_factory_idle"]
     assert "host_ff" in conduction["factory_begin_host_gate"]
     assert "factory_begin_host_gate" in conduction["factory_begin"]
@@ -51,12 +52,42 @@ def test_describe_parent_factory_graph():
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "refresh_occupancy" in conduction["select_implement"]
+    assert conduction["select_implement"] == [
+        "classify_factory_idle",
+        "factory_begin",
+    ]
+    hygiene = {
+        "survey_prs",
+        "survey_inbox",
+        "survey_ready",
+        "ready_hygiene",
+        "plan_pass",
+        "dispatch_triage",
+        "resolve_conflicts",
+        "closeout_prs",
+        "reap_stale_implementing",
+        "reap_over_budget",
+        "refresh_occupancy",
+        "reap_stale_worktrees",
+    }
+    assert not hygiene.intersection(conduction["select_implement"])
     assert "reap_stale_worktrees" not in conduction["select_implement"]
     assert "select_implement" in conduction["queue_conflict"]
+    assert when["queue_conflict"] == {
+        "upstream": "select_implement",
+        "path": "route",
+        "equals": "selected",
+    }
     assert "queue_conflict" in conduction["dispatch_implement"]
+    assert when["dispatch_implement"] == {
+        "upstream": "select_implement",
+        "path": "route",
+        "equals": "selected",
+    }
     assert "dispatch_implement" in conduction["reap_stale_worktrees"]
-    assert "reap_stale_worktrees" in conduction["compute_health"]
+    assert "dispatch_implement" in conduction["compute_health"]
+    assert "reap_stale_worktrees" not in conduction["compute_health"]
+    assert "reap_stale_worktrees" not in conduction["record_pass"]
     assert "reap_over_budget" in conduction["refresh_occupancy"]
     assert "reap_stale_implementing" in conduction["reap_over_budget"]
     assert "closeout_prs" in conduction["reap_stale_implementing"]
@@ -279,6 +310,45 @@ def test_closeout_prs_path_is_a_handful_of_effectors():
     )
 
 
+def test_factory_pass_implement_does_not_wait_on_slow_hygiene():
+    """A catalog row can reach dispatch even if survey/closeout/reap would exceed 180s."""
+    path = next(p for p in describe_package()["paths"] if p["id"] == "factory_pass")
+    by_id = {node["id"]: node for node in path["nodes"]}
+    conduction = {node["id"]: set(node["conduction"]) for node in path["nodes"]}
+    slow = {
+        "survey_prs",
+        "survey_inbox",
+        "survey_ready",
+        "dispatch_triage",
+        "resolve_conflicts",
+        "closeout_prs",
+        "reap_stale_implementing",
+        "reap_over_budget",
+        "refresh_occupancy",
+        "reap_stale_worktrees",
+    }
+
+    def closure(node_id: str) -> set[str]:
+        seen: set[str] = set()
+        stack = list(conduction[node_id])
+        while stack:
+            current = stack.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            stack.extend(conduction.get(current, ()))
+        return seen
+
+    assert not slow.intersection(closure("select_implement"))
+    assert not slow.intersection(closure("queue_conflict") - {"select_implement"})
+    assert "factory_begin" in conduction["select_implement"]
+    assert by_id["queue_conflict"]["when"]["equals"] == "selected"
+    assert by_id["dispatch_implement"]["when"]["equals"] == "selected"
+    assert "reap_stale_worktrees" not in closure("compute_health")
+    assert "reap_stale_worktrees" not in closure("record_pass")
+    assert "dispatch_implement" in conduction["compute_health"]
+
+
 def test_factory_pass_docs_match_package_atom_order():
     import re
 
@@ -287,6 +357,12 @@ def test_factory_pass_docs_match_package_atom_order():
         "host_ff",
         "factory_begin_host_gate",
         "factory_begin",
+        "select_implement",
+        "queue_conflict",
+        "dispatch_implement",
+        "compute_health",
+        "compact_state",
+        "record_pass",
         "survey_prs",
         "survey_inbox",
         "survey_ready",
@@ -298,13 +374,7 @@ def test_factory_pass_docs_match_package_atom_order():
         "reap_stale_implementing",
         "reap_over_budget",
         "refresh_occupancy",
-        "select_implement",
-        "queue_conflict",
-        "dispatch_implement",
         "reap_stale_worktrees",
-        "compute_health",
-        "compact_state",
-        "record_pass",
         "record_factory_idle",
         "factory_pass_terminal",
     ]

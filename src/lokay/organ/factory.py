@@ -296,7 +296,9 @@ def handle_factory(
 
         pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
         assert pass_dir
-        return run(pass_dir=pass_dir)
+        out = run(pass_dir=pass_dir)
+        route = str(out.get("route") or "none")
+        return {**out, "route": route}
 
     if atom == "queue_conflict":
         from lokay.proc.queue_conflict_subflow import run

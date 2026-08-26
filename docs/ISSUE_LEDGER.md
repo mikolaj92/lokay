@@ -28,7 +28,8 @@ wolno brać  =  otwarte issue
 ```
 
 Źródła: receipt `~/.lokay/cycle/` + `gh pr list` + `merged_this_pass`.
-`refresh_occupancy` składa to po closeout; `select_implement` tylko czyta.
+`factory_begin` podaje tani katalog / live occupancy do `select_implement`.
+`refresh_occupancy` składa to po closeout jako higiena, nie jako bramka wyboru.
 
 ## Przejścia
 
@@ -60,12 +61,14 @@ Launchd nie robi `host_ff` gdy `mill.lock` jest trzymany (inaczej zjada
 Pass katalogu (`factory_pass`):
 
 ```text
-survey PRs → inbox → ready → triage → konflikty
-  → closeout (najpierw merge otwartych PR)
-    → reap resztek in-flight cache → ai:ready
-      → refresh_occupancy (occupy live/merged; re-list leftover-ready only)
-        → reap leftover worktrees (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; one ls-remote per repo)
-          → select / implement (K=1; skip occupied)
+factory_begin (tani katalog / occupancy)
+  → select / queue_conflict / implement (K=1; skip occupied)
+    → health / receipt
+  → survey PRs → inbox → ready → triage → konflikty
+    → closeout (najpierw merge otwartych PR)
+      → reap resztek in-flight cache → ai:ready
+        → refresh_occupancy (occupy live/merged; re-list leftover-ready only)
+  → reap leftover worktrees po dispatch (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; one ls-remote per repo)
 ```
 
 ## Resztki (do zmiecenia)

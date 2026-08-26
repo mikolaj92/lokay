@@ -2,4 +2,5 @@
 
 
 def summarize(persisted: dict) -> dict:
-    return {"ok": True, "result": persisted}
+    route = str(persisted.get("route") or ("selected" if persisted.get("selected") else "none"))
+    return {"ok": True, "route": route, "result": persisted}
