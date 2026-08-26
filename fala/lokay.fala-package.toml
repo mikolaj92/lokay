@@ -641,7 +641,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_triage"
 title = "Issue triage"
-description = "Resolve hard facts, validate one closed agent verdict with one retry and one bounded evidence round, then route effects in Fala."
+description = "NODE wiring: get, candidate, hard facts, one agent verdict with one retry and one evidence round, apply or issue_split child, receipt."
 
 [[correlation_paths.effectors]]
 id = "get_issue"

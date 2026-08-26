@@ -384,6 +384,77 @@ def test_issues_atoms_do_not_collide_with_dispatch_organs():
     assert not issues.intersection(by_path["implementation_dispatch"])
 
 
+def test_issue_triage_node_wires_leaves_and_split_child():
+    raw = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    authored = next(p for p in raw["correlation_paths"] if p["id"] == "issue_triage")
+    assert "NODE wiring" in authored["description"]
+    assert "issue_split" in authored["description"]
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "issue_triage")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "get_issue",
+        "resolve_issue_candidate",
+        "collect_issue_linked_prs",
+        "collect_issue_covering_prs",
+        "resolve_issue_hard_facts",
+        "issue_triage_agent",
+        "validate_issue_triage",
+        "issue_triage_retry_agent",
+        "validate_issue_triage_retry",
+        "select_issue_triage",
+        "collect_issue_repo_shape",
+        "collect_issue_named_paths",
+        "verify_issue_evidence",
+        "issue_evidence_agent",
+        "validate_issue_evidence",
+        "select_issue_evidence",
+        "finalize_issue_triage",
+        "apply_issue_blocked",
+        "apply_issue_close",
+        "apply_issue_ready",
+        "issue_split_subflow",
+        "apply_issue_manual",
+        "summarize_issue_triage",
+    ]
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["issue_split_subflow"]["when"] == {
+        "upstream": "finalize_issue_triage",
+        "path": "decision.verdict",
+        "equals": "split",
+    }
+    assert by_id["apply_issue_ready"]["when"] == {
+        "upstream": "finalize_issue_triage",
+        "path": "decision.verdict",
+        "equals": "ready",
+    }
+    assert by_id["issue_triage_agent"]["when"] == {
+        "upstream": "resolve_issue_hard_facts",
+        "path": "route",
+        "equals": "agent",
+    }
+    assert set(by_id["summarize_issue_triage"]["conduction"]) == {
+        "finalize_issue_triage",
+        "apply_issue_ready",
+        "apply_issue_blocked",
+        "apply_issue_close",
+        "issue_split_subflow",
+        "apply_issue_manual",
+    }
+    issues = next(p for p in desc["paths"] if p["id"] == "issues")
+    assert [node["id"] for node in issues["nodes"]] == [
+        "list_open_issues",
+        "select_next_issue",
+        "issues_run_triage",
+        "select_issue_do",
+        "issues_launch_pr",
+        "summarize_issues",
+    ]
+    split = next(p for p in desc["paths"] if p["id"] == "issue_split")
+    assert "plan_issue_split" in [node["id"] for node in split["nodes"]]
+    assert "create_issue_split_child_1" not in ids
+
+
 def test_leftover_closeout_path_is_a_handful_of_effectors():
     path = next(p for p in describe_package()["paths"] if p["id"] == "leftover_closeout")
     ids = [node["id"] for node in path["nodes"]]

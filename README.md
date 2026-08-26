@@ -1031,54 +1031,75 @@ jego atomów.
 stateDiagram-v2
     [*] --> GetIssue
     GetIssue --> ResolveIssueCandidate
-    ResolveIssueCandidate --> CollectLinkedPullRequests
-    CollectLinkedPullRequests --> CollectCoveringPullRequests
-    CollectCoveringPullRequests --> ResolveHardFacts
-    ResolveHardFacts --> IntakeDecision: wynik fizyczny CLOSE / BLOCKED / SKIP
-    ResolveHardFacts --> TriageAgent: potrzebna ocena semantyczna
-    TriageAgent --> ValidateTriageResult
-    ValidateTriageResult --> TriageRetryAgent: invalid JSON + informacja zwrotna
-    TriageRetryAgent --> ValidateTriageRetry
-    ValidateTriageRetry --> IntakeDecision: wynik poprawny
-    ValidateTriageRetry --> HumanTerminal: nadal invalid JSON
-    ValidateTriageResult --> IntakeDecision: wynik poprawny
-    IntakeDecision --> SelectIssueEvidence: NEEDS_EVIDENCE
-    SelectIssueEvidence --> CollectRepoShape: repo_shape
-    SelectIssueEvidence --> CollectNamedPaths: named_paths
-    SelectIssueEvidence --> CollectLinkedPullRequests: linked_prs
-    SelectIssueEvidence --> CollectCoveringPullRequests: covering_prs
-    CollectRepoShape --> EvidenceTriageAgent
-    CollectNamedPaths --> EvidenceTriageAgent
-    CollectLinkedPullRequests --> EvidenceTriageAgent
-    CollectCoveringPullRequests --> EvidenceTriageAgent
-    EvidenceTriageAgent --> ValidateEvidenceTriage
-    ValidateEvidenceTriage --> IntakeDecision: wynik poprawny
-    ValidateEvidenceTriage --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
-    IntakeDecision --> CloseIssue: CLOSE
-    IntakeDecision --> MarkReady: READY
-    IntakeDecision --> PlanSplit: SPLIT
-    IntakeDecision --> HumanTerminal: NEEDS_HUMAN
-    IntakeDecision --> MarkBlocked: BLOCKED
-    IntakeDecision --> NoEffect: SKIP
-    PlanSplit --> HumanTerminal: plan niemożliwy
-    PlanSplit --> CreateChild1: plan poprawny
-    CreateChild1 --> CreateChild2
-    CreateChild2 --> CreateChild3: child 3 istnieje
-    CreateChild2 --> MarkTracker: tylko 2 dzieci
-    CreateChild3 --> CreateChild4: child 4 istnieje
-    CreateChild3 --> MarkTracker: tylko 3 dzieci
-    CreateChild4 --> CreateChild5: child 5 istnieje
-    CreateChild4 --> MarkTracker: tylko 4 dzieci
-    CreateChild5 --> MarkTracker
-    MarkTracker --> CommentTracker
-    CommentTracker --> CloseTracker
-    CloseIssue --> [*]
-    MarkReady --> [*]
-    MarkBlocked --> [*]
-    CloseTracker --> [*]
-    NoEffect --> [*]
-    HumanTerminal --> [*]
+    ResolveIssueCandidate --> CollectIssueLinkedPrs: evaluate
+    ResolveIssueCandidate --> ResolveIssueHardFacts: skip
+    CollectIssueLinkedPrs --> CollectIssueCoveringPrs
+    CollectIssueCoveringPrs --> ResolveIssueHardFacts
+    ResolveIssueHardFacts --> IssueTriageAgent: agent
+    ResolveIssueHardFacts --> SelectIssueTriage: terminal
+    IssueTriageAgent --> ValidateIssueTriage
+    ValidateIssueTriage --> IssueTriageRetryAgent: retry
+    ValidateIssueTriage --> SelectIssueTriage: valid
+    IssueTriageRetryAgent --> ValidateIssueTriageRetry
+    ValidateIssueTriageRetry --> SelectIssueTriage
+    SelectIssueTriage --> CollectIssueRepoShape: repo_shape
+    SelectIssueTriage --> CollectIssueNamedPaths: named_paths
+    SelectIssueTriage --> VerifyIssueEvidence
+    CollectIssueRepoShape --> VerifyIssueEvidence
+    CollectIssueNamedPaths --> VerifyIssueEvidence
+    VerifyIssueEvidence --> IssueEvidenceAgent: agent
+    VerifyIssueEvidence --> SelectIssueEvidence: not_applicable
+    IssueEvidenceAgent --> ValidateIssueEvidence
+    ValidateIssueEvidence --> SelectIssueEvidence
+    SelectIssueEvidence --> FinalizeIssueTriage
+    FinalizeIssueTriage --> ApplyIssueBlocked: blocked
+    FinalizeIssueTriage --> ApplyIssueClose: close
+    FinalizeIssueTriage --> ApplyIssueReady: ready
+    FinalizeIssueTriage --> IssueSplitSubflow: split
+    FinalizeIssueTriage --> ApplyIssueManual: needs_human
+    FinalizeIssueTriage --> SummarizeIssueTriage: skip
+    ApplyIssueBlocked --> SummarizeIssueTriage
+    ApplyIssueClose --> SummarizeIssueTriage
+    ApplyIssueReady --> SummarizeIssueTriage
+    IssueSplitSubflow --> SummarizeIssueTriage
+    ApplyIssueManual --> SummarizeIssueTriage
+    SummarizeIssueTriage --> [*]
 ```
+
+Dziecko `issue_triage` jest węzłem Fali. Liście: `get_issue`,
+`resolve_issue_candidate`, collectors, hard facts, jeden agent + jedna
+walidacja + jeden retry, jedna runda dowodu, apply, `summarize_issue_triage`.
+Węzeł-dziecko: `issue_split_subflow` → Fala `issue_split` gdy SPLIT.
+Ten PR tylko składa graf. Nie tłuszcze faktów, agenta i apply w jeden proces.
+Rodzic `issues` zostaje przy sześciu atomach.
+
+### Split issue — `issue_split`
+
+```mermaid
+stateDiagram-v2
+    [*] --> GetIssue
+    GetIssue --> PlanIssueSplit
+    PlanIssueSplit --> CreateIssueSplitChild1: child_1 present
+    PlanIssueSplit --> ApplyIssueManual: needs_human
+    PlanIssueSplit --> SummarizeIssueSplit: not_applicable
+    CreateIssueSplitChild1 --> CreateIssueSplitChild2: child_2 present
+    CreateIssueSplitChild1 --> MarkIssueTracker: tylko 1 dziecko
+    CreateIssueSplitChild2 --> CreateIssueSplitChild3: child_3 present
+    CreateIssueSplitChild2 --> MarkIssueTracker: tylko 2 dzieci
+    CreateIssueSplitChild3 --> CreateIssueSplitChild4: child_4 present
+    CreateIssueSplitChild3 --> MarkIssueTracker: tylko 3 dzieci
+    CreateIssueSplitChild4 --> CreateIssueSplitChild5: child_5 present
+    CreateIssueSplitChild4 --> MarkIssueTracker: tylko 4 dzieci
+    CreateIssueSplitChild5 --> MarkIssueTracker
+    MarkIssueTracker --> CommentIssueTracker
+    CommentIssueTracker --> CloseIssueTracker
+    CloseIssueTracker --> SummarizeIssueSplit
+    ApplyIssueManual --> SummarizeIssueSplit
+    SummarizeIssueSplit --> [*]
+```
+
+Węzeł-dziecko `issue_split` ma własną Falę. Rodzic `issue_triage` go tylko
+woła. Ta zmiana nie implementuje jego atomów.
 
 ### Implementacja issue — `issue_to_pr`
 

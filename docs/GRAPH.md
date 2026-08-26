@@ -237,11 +237,34 @@ embedding service and not a second planner.
 
 ### `issue_triage` (inbox → labels / split)
 
+The `issue_triage` NODE owns this wiring only. It does not implement
+`issue_split` internals and does not fatten facts+agent+apply into one process.
+Parent `issues` invokes this child via `issues_run_triage` and stays at six atoms.
+
 ```text
-get_issue
-  └─→ triage_issue   ← pure rules → ready | split | rare needs-feedback | OOS close
-        └─→ intake_issue  ← deterministic intake → CLOSE | READY | SPLIT | NEEDS_HUMAN
-              └─→ issue_split  ← when SPLIT: create bounded children (gh + rules)
+get_issue                         LEAF  fetch one issue (shared atom)
+  → resolve_issue_candidate       LEAF  skip already-decided, else evaluate
+    → collect_issue_linked_prs    LEAF  when route=evaluate
+      → collect_issue_covering_prs LEAF  when route=evaluate
+        → resolve_issue_hard_facts LEAF  CLOSE / BLOCKED / SKIP or agent
+          → issue_triage_agent    LEAF  when route=agent
+            → validate_issue_triage LEAF
+              → issue_triage_retry_agent LEAF  when route=retry
+                → validate_issue_triage_retry LEAF  when route=retry
+                  → select_issue_triage LEAF  publish or evidence
+                    → collect_issue_repo_shape LEAF  when evidence_kind=repo_shape
+                    → collect_issue_named_paths LEAF  when evidence_kind=named_paths
+                    → verify_issue_evidence LEAF
+                      → issue_evidence_agent LEAF  when route=agent
+                        → validate_issue_evidence LEAF
+                          → select_issue_evidence LEAF
+                            → finalize_issue_triage LEAF
+                              → apply_issue_blocked LEAF  when verdict=blocked
+                              → apply_issue_close LEAF  when verdict=close
+                              → apply_issue_ready LEAF  when verdict=ready
+                              → issue_split_subflow NODE  when verdict=split → child Fala issue_split
+                              → apply_issue_manual LEAF  when verdict=needs_human
+                                → summarize_issue_triage LEAF  receipt
 ```
 
 **Minimize human in the loop:** CLOSE / SPLIT / READY+implement are the exits.
@@ -266,6 +289,20 @@ the executor once) then re-runs `intake_issue` with `--require-ready` before
 every `issue_to_pr`. **Serial by design:** default
 `limits.max_issue_to_pr_per_pass` is **1** (ticket after ticket). K is an
 optional pass budget, not concurrent worktrees/Pi/tmux.
+
+### `issue_split` (child of `issue_triage`)
+
+The `issue_split` NODE owns its own Fala. `issue_triage` only invokes it via
+`issue_split_subflow` when `finalize.decision.verdict == split`.
+
+```text
+get_issue
+  → plan_issue_split
+    → create_issue_split_child_1..5   when child_N=present
+      → mark_issue_tracker / comment / close   when route=children
+    → apply_issue_manual               when route=needs_human
+      → summarize_issue_split
+```
 
 ### `pr_repair` (red checks on open ai/fix PR)
 
