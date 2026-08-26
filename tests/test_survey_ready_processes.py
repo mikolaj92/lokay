@@ -142,3 +142,62 @@ def test_prepare_fails_closed_when_catalog_exceeds_authored_slots(tmp_path):
     out = prepare(pass_dir=str(path), slot_count=1)
     assert out["ok"] is False
     assert out["error"] == "ready survey catalog exceeds authored slots"
+
+
+def test_survey_ready_subflow_uses_handful_of_ticks():
+    from lokay.proc.survey_ready_subflow import run
+    import inspect
+
+    source = inspect.getsource(run)
+    assert "max_ticks=16" in source
+    assert "max_ticks=64" not in source
+
+
+def test_catalog_skip_does_not_list(tmp_path, monkeypatch):
+    from lokay.proc.ready_survey_catalog import run
+
+    path = workspace(tmp_path)
+    called = []
+    monkeypatch.setattr(
+        "lokay.proc.list_work_ready_issues.fetch",
+        lambda *a, **k: called.append("listed") or {},
+    )
+    out = run(
+        {"route": "skip", "repos": ["a/one"], "recent_empty": True},
+        pass_dir=str(path),
+        config_path=None,
+        live=False,
+    )
+    assert called == []
+    assert out["remaining_ready"] == 0 and out["skipped"] is True
+
+
+def test_catalog_lists_and_finalizes_small_catalog(tmp_path, monkeypatch):
+    from lokay.proc.ready_survey_catalog import run
+
+    path = workspace(tmp_path, repos=("a/one",))
+    monkeypatch.setattr(
+        "lokay.proc.list_work_ready_issues.fetch",
+        lambda selected, **kwargs: {
+            "ok": True,
+            "route": "listed",
+            "repo": selected["repo"],
+            "issues": [{"number": 9, "labels": ["ai:ready", "work:ready"]}],
+        },
+    )
+    out = run(
+        {
+            "ok": True,
+            "route": "survey",
+            "repos": ["a/one"],
+            "active_repos": ["a/one"],
+            "skipped_repos": [],
+            "recent_empty": False,
+        },
+        pass_dir=str(path),
+        config_path=None,
+        live=False,
+    )
+    assert out["remaining_ready"] == 1
+    survey = pass_io.read_json(pass_io.survey_path(path))
+    assert survey["ready_by_repo"]["a/one"][0]["number"] == 9
