@@ -39,6 +39,12 @@ def finalize(*, pass_dir: str, reduced: dict) -> dict:
     )
     write_json(survey_path(pass_dir), {key: working.get(key) for key in SURVEY_KEYS})
     save_begin_working(pass_dir, begin, working)
+    from lokay.proc.record_inflight_remaining import record
+
+    try:
+        record(pass_dir=pass_dir, state_path=str(begin.get("state_path") or "") or None)
+    except OSError:
+        pass
     return {
         "ok": True,
         "pass_dir": pass_dir,

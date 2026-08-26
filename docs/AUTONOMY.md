@@ -165,7 +165,10 @@ uv run lokay status --config config.yaml --local   # readiness + last_pass
 uv run lokay status --config config.yaml --human   # residual mailbox only
 ```
 
-Each tick writes a compact receipt (default `~/.lokay/last-pass.json`):
+Each tick writes a compact receipt (default `~/.lokay/last-pass.json`).
+Inbox/ready persist rewrite `remaining` from this cycle's `working.json`
+(`remaining_source=inflight_working`) so the glance is not left at a previous
+`inbox=0` while later atoms such as reap still run:
 
 ```bash
 jq '{health, idle, progress, merge_enabled, require_checks, require_llm_review, k: .max_issue_to_pr_per_pass, remaining, by_repo}' \

@@ -113,6 +113,35 @@ def test_plan_only_park_is_reported():
     assert out["reaped"][0]["park"] == park
 
 
+def test_catalog_empty_receipts_skip_physical_effects(monkeypatch):
+    from lokay.proc.over_budget_catalog import run
+
+    called = []
+
+    def fail(*_a, **_k):
+        called.append(True)
+        raise AssertionError("physical effect must not run")
+
+    monkeypatch.setattr("lokay.proc.inspect_budget_issue_state.inspect", fail)
+    monkeypatch.setattr("lokay.proc.terminate_over_budget_worker.terminate", fail)
+    monkeypatch.setattr("lokay.proc.commit_over_budget_diff.commit", fail)
+    out = run(
+        {"ok": True, "receipts": [], "stuck_path": "/tmp/stuck.json"},
+        config_path=None,
+        live=True,
+        budget_s=480,
+    )
+    assert out["reaped_count"] == 0 and out["kept"] == [] and not called
+
+
+def test_reap_over_budget_subflow_uses_handful_of_ticks():
+    from lokay.proc.reap_over_budget_subflow import run
+    import inspect
+
+    source = inspect.getsource(run)
+    assert "max_ticks=16" in source
+
+
 def test_prepare_overflow_is_fail_closed(monkeypatch):
     from lokay.proc.prepare_over_budget_reap import prepare
 
