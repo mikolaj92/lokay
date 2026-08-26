@@ -134,7 +134,7 @@ retry_policy = "none"
 id = "dispatch_implement"
 capability = "lokay_atom"
 when = { upstream = "select_implement", path = "route", equals = "selected" }
-conduction = ["classify_factory_idle", "factory_begin", "queue_conflict"]
+conduction = ["classify_factory_idle", "factory_begin", "select_implement", "queue_conflict"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 600, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "dispatch_implement" }
 retry_policy = "none"

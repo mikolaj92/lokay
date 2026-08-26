@@ -135,6 +135,7 @@ def test_describe_parent_factory_graph():
         "equals": "selected",
     }
     assert "queue_conflict" in conduction["dispatch_implement"]
+    assert "select_implement" in conduction["dispatch_implement"]
     assert when["dispatch_implement"] == {
         "upstream": "select_implement",
         "path": "route",
@@ -580,6 +581,19 @@ def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
     )
 
     assert captured["token"] == "parent-token"
+
+
+def test_effector_when_upstream_is_in_conduction():
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    dangling = []
+    for path in package["correlation_paths"]:
+        for node in path.get("effectors") or []:
+            upstream = str((node.get("when") or {}).get("upstream") or "")
+            if upstream and upstream not in list(node.get("conduction") or []):
+                dangling.append(
+                    f"{path['id']}:{node['id']}.when.upstream={upstream}"
+                )
+    assert dangling == []
 
 
 def test_every_subprocess_atom_inherits_pythonpath():
