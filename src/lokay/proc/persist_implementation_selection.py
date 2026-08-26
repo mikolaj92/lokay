@@ -23,10 +23,13 @@ def persist(*, pass_dir: str, reduced: dict) -> dict:
     }
     if reduced.get("route") == "no_budget":
         payload["reason"] = "no_live_budget"
+    route = str(reduced.get("route") or ("selected" if payload["clean_repos"] else "none"))
+    payload["route"] = route
     pass_io.write_json(pass_io.implement_path(pass_dir), payload)
     return {
         "ok": True,
         "pass_dir": pass_dir,
+        "route": route,
         "selected": len(payload["clean_repos"]),
         "issue_budget": payload["issue_budget"],
     }

@@ -1,9 +1,10 @@
 """Parent Fala composition for one complete Lokay factory pass.
 
 The parent path ``factory_pass`` owns pass order (idle classify → host-ff →
-survey → plan → triage → closeout → occupancy → reap leftover worktrees →
-select → implement → health → receipt). Python only fail-closes offline, then
-invokes ``graph_run.run_path``. Idle TTL is the first authored atom.
+begin → select → queue_conflict → implement → health → receipt; surveys /
+closeout / occupancy / leftover reaps stay as housecleaning beside work).
+Python only fail-closes offline, then invokes ``graph_run.run_path``. Idle
+TTL is the first authored atom.
 """
 
 from __future__ import annotations

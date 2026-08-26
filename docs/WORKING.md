@@ -158,10 +158,15 @@ product. Green repository verification may be reused only for the identical
    After closeout,
    `refresh_occupancy` marks just-merged / still-coding repos occupied
    and re-lists PRs only on leftover-ready repos that are not already
-   occupied, so a 29-repo catalog does not 429 the secondary budget
-   before `select_implement`. `reap_stale_worktrees` runs after
-   `dispatch_implement` so leftover classification cannot consume the
-   180s pass ceiling before implement. It drops leftover corners
+   occupied, so a 29-repo catalog does not 429 the secondary budget.
+   Occupancy refresh, surveys, closeout, and stale reaps stay in the
+   path as housecleaning — they are not the gate to `select_implement`.
+   Select conducts from `factory_begin` (cheap prior catalog / live
+   occupancy). `queue_conflict` / `dispatch_implement` take a visible
+   `when select_implement.route == selected`. `reap_stale_worktrees`
+   runs after `dispatch_implement` so leftover classification cannot
+   consume the 180s pass ceiling before implement. `compute_health`
+   / `record_pass` conduct from dispatch, not from the worktree reap. It drops leftover corners
    that cannot resume (merged, closed CONFLICTING, unpublished-behind-main).
    `uv.lock`-only is not real uncommitted content, so a CLOSED leftover with
    only a dirty lockfile can archive. KEEP a live i2pr (from receipts **or**
@@ -283,12 +288,12 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
 - `factory_pass` is the parent Fala run used by the mill. It conducts
   `classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
+  select_implement → queue_conflict → dispatch_implement → compute_health →
+  compact_state → record_pass →
   survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  reap_over_budget → refresh_occupancy →
-  select_implement → queue_conflict → dispatch_implement → reap_stale_worktrees →
-  compute_health →
-  compact_state → record_pass → record_factory_idle → factory_pass_terminal`.
+  reap_over_budget → refresh_occupancy → reap_stale_worktrees →
+  record_factory_idle → factory_pass_terminal`.
   One pass is oil XOR product (product wins). Last-pass receipt includes
   `lane: product | oil | idle`.
   `factory_begin` fail-closes when in-cycle `host_ff` just fast-forwarded (`health=host_updated`)

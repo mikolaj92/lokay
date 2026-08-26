@@ -79,6 +79,41 @@ def test_factory_begin_subflow_returns_small_receipt(monkeypatch, tmp_path):
     assert out["pass_dir"] == str(tmp_path)
 
 
+def test_persist_begin_seeds_prior_catalog_and_live_occupancy(tmp_path, monkeypatch):
+    from lokay.proc.persist_factory_begin_state import persist
+
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    prior = tmp_path / "factory-pass-1-aaaaaa"
+    prior.mkdir()
+    (prior / "working.json").write_text(
+        '{"ready_by_repo":{"mikolaj92/reviewkit":[{"number":205}]},"inbox_issues_by_repo":{},"prs_by_repo":{},"occupied_repos":[]}\n',
+        encoding="utf-8",
+    )
+    current = tmp_path / "factory-pass-2-bbbbbb"
+    current.mkdir()
+    monkeypatch.setattr(
+        "lokay.proc.seed_prior_catalog.live_issue_to_pr_receipts",
+        lambda: [{"repo": "mikolaj92/Temida", "issue": 1}],
+    )
+    persist(
+        {"pass_dir": str(current)},
+        {
+            "begin": {
+                "pass_dir": str(current),
+                "stuck_path": str(tmp_path / "stuck.json"),
+                "state_path": str(state),
+                "planned": [],
+            }
+        },
+        {"working": {"progress": 0, "ready_by_repo": {}, "occupied_repos": []}},
+    )
+    working = json.loads((current / "working.json").read_text())
+    assert working["ready_by_repo"]["mikolaj92/reviewkit"][0]["number"] == 205
+    assert "mikolaj92/Temida" in working["occupied_repos"]
+    assert "mikolaj92/Temida" in working["live_issue_to_pr_repos"]
+
+
 def test_persist_begin_writes_stuck_from_disk(tmp_path):
     from lokay.proc.persist_factory_begin_state import persist
     from lokay.stuck import save_stuck

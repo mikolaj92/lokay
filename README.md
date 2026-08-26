@@ -85,6 +85,12 @@ stateDiagram-v2
     ClassifyFactoryIdle --> HostFF: brak stempla / praca / sonda
     HostFF --> FactoryBeginHostGate
     FactoryBeginHostGate --> FactoryBegin
+    FactoryBegin --> SelectImplement
+    SelectImplement --> QueueConflict: wybrano kandydata
+    SelectImplement --> ComputeHealth: brak kandydata
+    QueueConflict --> DispatchImplement
+    DispatchImplement --> ComputeHealth
+    DispatchImplement --> ReapStaleWorktrees
     FactoryBegin --> SurveyPrs
     SurveyPrs --> SurveyInbox
     SurveyInbox --> SurveyReady
@@ -96,11 +102,6 @@ stateDiagram-v2
     CloseoutPrs --> ReapStaleImplementing
     ReapStaleImplementing --> ReapOverBudget
     ReapOverBudget --> RefreshOccupancy
-    RefreshOccupancy --> SelectImplement
-    SelectImplement --> QueueConflict
-    QueueConflict --> DispatchImplement
-    DispatchImplement --> ReapStaleWorktrees
-    ReapStaleWorktrees --> ComputeHealth
     ComputeHealth --> CompactState
     CompactState --> RecordPass
     RecordPass --> FactoryPassTerminal: lane product / oil / idle
@@ -985,6 +986,9 @@ fail-closed. Atom katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP
 (live i2pr / occupancy / `pr_survey_failed` / covering PR / dirty unpublished /
 nieczytelny git). W `factory_pass` ten reap jest po `dispatch_implement`,
 żeby klasyfikacja leftoverów nie zjadała 180s sufitu przed implementacją.
+`compute_health` / `record_pass` nie czekają na ten reap: paragon jest po
+dispatchu. Select nie czeka na survey / closeout / occupancy — higiena
+zostaje w ścieżce obok pracy, nie przed jedynym cennym zlewem.
 
 ### Triage issue — `issue_triage`
 

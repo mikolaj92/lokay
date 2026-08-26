@@ -9,7 +9,7 @@ def build(
         "survey: list-prs + list-inbox + list-issues (hot repos + rotated cold)",
         "per-repo PR-first: conflict close / repair / merge open AI PRs",
         "inbox triage + deterministic intake (skip repos with actionable open AI PRs)",
-        "occupancy then reap leftover worktrees then issue_to_pr up to K across clean (not occupied) repos",
+        "issue_to_pr up to K across clean (not occupied) repos; occupancy and leftover reaps are housecleaning",
         "on failure: stuck ledger → ai:blocked",
     ]
     planned = [

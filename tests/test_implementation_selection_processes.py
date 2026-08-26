@@ -49,6 +49,30 @@ def test_catalog_fail_closed_when_prepare_failed():
     assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
+def test_persist_selection_exposes_selected_route(tmp_path):
+    from lokay.proc.persist_implementation_selection import persist
+    from lokay.proc.summarize_implementation_selection import summarize
+
+    path = workspace(tmp_path)
+    out = persist(
+        pass_dir=str(path),
+        reduced={
+            "route": "selected",
+            "clean_repos": ["a/one"],
+            "issue_budget": 1,
+            "actions": [],
+            "ready_by_repo": {"a/one": [{"number": 7}]},
+            "remaining_ready": 1,
+            "lane": "product",
+            "self_repo": "",
+            "product_queue": True,
+        },
+    )
+    assert out["route"] == "selected"
+    assert out["selected"] == 1
+    assert summarize(out)["route"] == "selected"
+
+
 def test_catalog_selects_first_eligible_repo(tmp_path):
     from lokay.proc.implementation_selection_catalog import run
     from lokay.proc.prepare_implementation_selection import prepare
