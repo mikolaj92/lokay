@@ -77,7 +77,7 @@ def test_slice_package_keeps_one_path():
     assert 'id = "factory_pass"' in sliced
     assert sliced.count("[[correlation_paths]]") == 1
     assert "[[capabilities]]" in sliced
-    # factory_pass has a thin reap_over_budget atom; the 723-step path stays out
+    # factory_pass has a thin reap_over_budget atom; the catalog path stays out
     assert "select_budget_receipt_1" not in sliced
     assert "prepare_over_budget_reap" not in sliced
     assert 'id = "issue_to_pr"' not in sliced

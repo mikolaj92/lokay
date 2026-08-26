@@ -113,6 +113,23 @@ def test_survey_ready_path_is_a_handful_of_effectors():
     )
 
 
+def test_reap_over_budget_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "reap_over_budget")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_over_budget_reap",
+        "over_budget_catalog",
+        "summarize_over_budget_reap",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_budget_receipt_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
 def test_factory_pass_docs_match_package_atom_order():
     import re
 

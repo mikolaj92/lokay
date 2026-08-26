@@ -11,6 +11,6 @@ def run(
         repo="local/over-budget",
         config_path=config_path,
         live=live,
-        max_ticks=1024,
+        max_ticks=16,
         extra_inputs={"pass_dir": pass_dir or "", "budget_s": budget_s},
     )

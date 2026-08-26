@@ -860,42 +860,19 @@ fail-closed bez usuwania dowodów.
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareOverBudgetReap
-    PrepareOverBudgetReap --> SelectBudgetReceiptSlot
-    SelectBudgetReceiptSlot --> InspectBudgetIssueState: slot zawiera receipt
-    SelectBudgetReceiptSlot --> RecordBudgetSlotOutcome: slot pusty
-    InspectBudgetIssueState --> CheckReceiptBudget
-    CheckReceiptBudget --> InspectBudgetCoder: issue otwarte i budżet przekroczony
-    CheckReceiptBudget --> SelectBudgetReceiptRoute: issue zamknięte / pod budżetem
-    InspectBudgetCoder --> InspectCoderDiff: żywy coder
-    InspectBudgetCoder --> SelectBudgetReceiptRoute: brak codera
-    InspectCoderDiff --> SelectBudgetReceiptRoute
-    SelectBudgetReceiptRoute --> CommitOverBudgetDiff: realny diff i harvest możliwy
-    CommitOverBudgetDiff --> SelectBudgetCommitOutcome
-    SelectBudgetCommitOutcome --> PushOverBudgetBranch: commit udany
-    SelectBudgetCommitOutcome --> SelectBudgetHarvestOutcome: commit nieudany
-    PushOverBudgetBranch --> SelectBudgetPushOutcome
-    SelectBudgetPushOutcome --> CreateOverBudgetPr: push udany
-    SelectBudgetPushOutcome --> SelectBudgetHarvestOutcome: push nieudany
-    CreateOverBudgetPr --> SelectBudgetHarvestOutcome
-    SelectBudgetHarvestOutcome --> TerminateOverBudgetWorker: plan-only / issue zamknięte
-    SelectBudgetHarvestOutcome --> RecordBudgetSlotOutcome: harvested / coder-live / pod budżetem
-    TerminateOverBudgetWorker --> StampReapedReceipt
-    StampReapedReceipt --> RecordPlanOnlyFailure: otwarte issue
-    StampReapedReceipt --> RecordBudgetSlotOutcome: zamknięte issue
-    RecordPlanOnlyFailure --> ParkPlanOnlyIssue
-    ParkPlanOnlyIssue --> RecordBudgetSlotOutcome
-    RecordBudgetSlotOutcome --> SelectBudgetReceiptSlot: następny jawny slot
-    RecordBudgetSlotOutcome --> ReduceOverBudgetReap: ostatni slot
-    ReduceOverBudgetReap --> OverBudgetResult
+    PrepareOverBudgetReap --> OverBudgetCatalog
+    OverBudgetCatalog --> SummarizeOverBudgetReap
+    SummarizeOverBudgetReap --> OverBudgetResult
     OverBudgetResult --> [*]
 ```
 
-Pod-Fala ma 30 jawnych slotów receiptów. Stan issue, budżet procesu, obecność
-codera i klasyfikacja diffu są osobnymi faktami. Harvest realnego diffu jest
-jawnym łańcuchem `commit → push → PR`, a nie funkcją-composerem. Niepewny diff
-zachowuje żywego codera fail-closed. Tylko plan-only lub zamknięte issue prowadzi
-do jawnej terminacji. Zapis receiptu, stuck ledger i parkowanie są oddzielnymi
-efektami.
+Pod-Fala ma trzy kroki: przygotowanie receiptów, jeden atom katalogu, który
+w procesie inspect / harvest / reap i redukuje wynik, oraz summarize. Nie ma
+723-slotowego rozwinięcia Fali. Harvest realnego diffu pozostaje łańcuchem
+`commit → push → PR` wewnątrz atomu katalogu. Niepewny diff zachowuje żywego
+codera fail-closed. Tylko plan-only lub zamknięte issue prowadzi do terminacji.
+Zapis receiptu, stuck ledger i parkowanie są oddzielnymi efektami wywoływanymi
+w procesie.
 
 ### Odzyskanie porzuconych etapów implementacji — `reap_stale_implementing`
 
@@ -1323,7 +1300,7 @@ kontraktu. Aktualny audyt:
 | `PassPlan` | `plan_pass` | składa repozytoryjne fragmenty planu przez jawne sloty |
 | `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
 | `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
-| `OverBudgetReap` | `reap_over_budget` | ogranicza receipt workera przez jawny harvest albo plan-only reap |
+| `OverBudgetReap` | `reap_over_budget` | jeden atom katalogu: harvest albo plan-only reap |
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
 | `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu jednym atomem katalogu |
