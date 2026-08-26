@@ -96,11 +96,11 @@ stateDiagram-v2
     CloseoutPrs --> ReapStaleImplementing
     ReapStaleImplementing --> ReapOverBudget
     ReapOverBudget --> RefreshOccupancy
-    RefreshOccupancy --> ReapStaleWorktrees
-    ReapStaleWorktrees --> SelectImplement
+    RefreshOccupancy --> SelectImplement
     SelectImplement --> QueueConflict
     QueueConflict --> DispatchImplement
-    DispatchImplement --> ComputeHealth
+    DispatchImplement --> ReapStaleWorktrees
+    ReapStaleWorktrees --> ComputeHealth
     ComputeHealth --> CompactState
     CompactState --> RecordPass
     RecordPass --> FactoryPassTerminal: lane product / oil / idle
@@ -950,8 +950,9 @@ stateDiagram-v2
     AddTrackerLabel --> RecordQueueConflict
     KeepQueueCandidate --> RecordQueueConflict
     DropQueueCandidate --> RecordQueueConflict
-    RecordQueueConflict --> QueueConflictResult
-    QueueConflictHumanTerminal --> QueueConflictResult
+    QueueConflictHumanTerminal --> RecordQueueConflict
+    RecordQueueConflict --> AdvanceImplementationSelection
+    AdvanceImplementationSelection --> QueueConflictResult
     QueueConflictResult --> [*]
 ```
 
@@ -961,34 +962,29 @@ zamknięty wynik `ready | skip | close | needs_human`. Dokładny błąd walidato
 może uruchomić jeden retry. Python nie zastępuje poprawnego wyniku agenta
 heurystyką ani statusem wykonania. Usunięcie `ai:ready`, opcjonalne dodanie
 `ai:tracker`, aktualizacja kolejki i terminal są osobnymi efektami Fali.
+Po `needs_human` / skip / close atom `advance_implementation_selection`
+ponownie redukuje katalog i zapisuje następne implementowalne issue
+(`clean_repos`). Jedno zaparkowane product issue nie opróżnia slotu K=1,
+gdy w katalogu zostaje kolejny wiersz.
 
 ### Higiena worktree — `reap_stale_worktrees`
 
 ```mermaid
 stateDiagram-v2
     [*] --> CollectWorktreeCandidates
-    CollectWorktreeCandidates --> ResolveReceiptSafety
-    ResolveReceiptSafety --> KeepAll: receipt nieczytelny
-    ResolveReceiptSafety --> SelectCandidate1: receipt czytelny
-    SelectCandidate1 --> ClassifyCandidate1
-    ClassifyCandidate1 --> KeepCandidate1: live / PR / dirty / unpublished / unreadable
-    ClassifyCandidate1 --> RemoveCandidate1: zamknięte issue / bezpiecznie stale
-    RemoveCandidate1 --> SelectCandidate2
-    KeepCandidate1 --> SelectCandidate2
-    SelectCandidate2 --> ClassifyCandidate2: kandydat istnieje
-    SelectCandidate2 --> ReapResult: brak dalszych kandydatów
-    ClassifyCandidate2 --> KeepCandidate2: chroniony
-    ClassifyCandidate2 --> RemoveCandidate2: bezpiecznie stale
-    KeepCandidate2 --> ReapResult
-    RemoveCandidate2 --> ReapResult
-    KeepAll --> ReapResult
+    CollectWorktreeCandidates --> StaleWorktreeCatalog
+    StaleWorktreeCatalog --> SummarizeStaleWorktreeReap
+    SummarizeStaleWorktreeReap --> ReapResult
     ReapResult --> [*]
 ```
 
-Pierwszy pion implementacji zachowa obecny `CLASSIFY_CAP`, ale przeniesie wybór,
-klasyfikację, efekt `keep/remove` i wynik do osobnej pod-Fali. Kolejne sloty są
-tym samym wzorcem co `Candidate2`; diagram skraca powtarzalne sloty, nie ukrywa
-innej reguły routingu.
+Pod-Fala ma trzy kroki: bounded inventory, jeden atom katalogu, który w
+procesie klasyfikuje i stosuje `keep` / `remove`, oraz summarize. Nie ma
+4-slotowego rozwinięcia Fali (14 efektorów). Overflow katalogu jest
+fail-closed. Atom katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP
+(live i2pr / occupancy / `pr_survey_failed` / covering PR / dirty unpublished /
+nieczytelny git). W `factory_pass` ten reap jest po `dispatch_implement`,
+żeby klasyfikacja leftoverów nie zjadała 180s sufitu przed implementacją.
 
 ### Triage issue — `issue_triage`
 
@@ -1277,7 +1273,7 @@ kontraktu. Aktualny audyt:
 | `CloseoutPRs` | `closeout_prs` | jeden atom katalogu: PR-y przez pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
-| `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |
+| `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |

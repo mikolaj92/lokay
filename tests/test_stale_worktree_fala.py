@@ -1,32 +1,42 @@
-"""Native Fala proofs for bounded stale-worktree hygiene."""
+"""Native Fala proof for one stale-worktree catalog atom."""
 
-from pathlib import Path
-from test_issue_triage_fala import run_graph, base_effector
+from test_implementation_selection_fala import run_graph
+from test_issue_triage_fala import base_effector
 
 
-def test_keep_and_remove_are_direct_exclusive_edges(tmp_path):
-    keep = tmp_path / "keep"
-    remove = tmp_path / "remove"
-    wrong = tmp_path / "wrong"
+def test_stale_worktree_reap_is_one_catalog_atom(tmp_path):
     body = base_effector(
-        """if a=='collect_stale_worktree_candidates':v.update(candidate_1={'present':True},candidate_2={'present':True},candidate_3={'present':False},candidate_4={'present':False},deferred=[],receipt_safe=True)
-if a=='classify_stale_worktree_1':v['route']='keep'
-if a=='classify_stale_worktree_2':v['route']='remove'
-if a in {'classify_stale_worktree_3','classify_stale_worktree_4'}:v['route']='absent'
-if a=='keep_stale_worktree_1':Path(%r).write_text('ran')
-if a=='remove_stale_worktree_2':Path(%r).write_text('ran')
-if a in {'remove_stale_worktree_1','keep_stale_worktree_2','keep_stale_worktree_3','remove_stale_worktree_3','keep_stale_worktree_4','remove_stale_worktree_4'}:Path(%r).write_text(a)
-if a=='summarize_stale_worktree_reap':v['result']={'kept_count':1,'reaped_count':1}"""
-        % (str(keep), str(remove), str(wrong))
+        """if a=='collect_stale_worktree_candidates':v.update(candidate_1={'present':True},candidate_2={'present':False},receipt_safe=True)
+if a=='stale_worktree_catalog':v.update(effects=[{'applied':True,'row':{'kept':True}}])
+if a=='summarize_stale_worktree_reap':v['result']={'kept_count':1,'reaped_count':0}"""
     )
-    result = run_graph(tmp_path, body, "stale-routes", path_id="stale_worktree_reap")
-    st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert (
-        st["keep_stale_worktree_1"] == "succeeded"
-        and st["remove_stale_worktree_1"] == "skipped"
+    result = run_graph(tmp_path, body, "stale-catalog", path_id="stale_worktree_reap")
+    order = [
+        "collect_stale_worktree_candidates",
+        "stale_worktree_catalog",
+        "summarize_stale_worktree_reap",
+    ]
+    statuses = result["effector_results"]
+    assert all(statuses[name]["status"] == "succeeded" for name in order)
+    assert list(statuses) == order
+    assert not any(
+        name.startswith("classify_stale_worktree_")
+        or name.startswith("keep_stale_worktree_")
+        or name.startswith("remove_stale_worktree_")
+        for name in statuses
     )
-    assert (
-        st["remove_stale_worktree_2"] == "succeeded"
-        and st["keep_stale_worktree_2"] == "skipped"
+    assert result.get("ticks_used", 16) <= 16
+
+
+def test_stale_worktree_reap_finishes_without_14_effectors(tmp_path):
+    body = base_effector(
+        """if a=='collect_stale_worktree_candidates':v.update(receipt_safe=True,deferred=[])
+if a=='stale_worktree_catalog':v.update(effects=[])
+if a=='summarize_stale_worktree_reap':v['result']={'kept_count':0,'reaped_count':0}"""
     )
-    assert keep.exists() and remove.exists() and not wrong.exists()
+    result = run_graph(tmp_path, body, "stale-empty", path_id="stale_worktree_reap")
+    statuses = result["effector_results"]
+    assert len(statuses) == 3
+    assert statuses["stale_worktree_catalog"]["status"] == "succeeded"
+    assert statuses["summarize_stale_worktree_reap"]["status"] == "succeeded"
+    assert result.get("ticks_used", 16) < 64

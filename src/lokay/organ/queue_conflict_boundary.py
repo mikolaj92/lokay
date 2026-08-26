@@ -99,11 +99,18 @@ def handle_queue_conflict(
             remove=up.get("remove_queue_ready_label") or {},
             tracker=up.get("add_queue_tracker_label") or {},
         )
+    if atom == "advance_implementation_selection":
+        from lokay.proc.advance_implementation_selection import run
+
+        return run(
+            pass_dir=pass_dir, recorded=up.get("record_queue_conflict") or {}
+        )
     if atom == "summarize_queue_conflict":
         from lokay.proc.summarize_queue_conflict import summarize
 
         return summarize(
             up.get("select_queue_conflict_candidate") or {},
             up.get("record_queue_conflict") or {},
+            up.get("advance_implementation_selection") or {},
         )
     return None

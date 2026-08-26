@@ -14,6 +14,7 @@ if a=='select_queue_conflict_outcome':v.update(route='ready',repo='a/b',issue=7,
 if a=='select_queue_tracker':v['route']='none'
 if a in {'queue_conflict_retry_agent','remove_queue_ready_label','add_queue_tracker_label'}:Path(%r).write_text(a)
 if a=='record_queue_conflict':v['route']='ready'
+if a=='advance_implementation_selection':v.update(route='ready',advanced=False)
 if a=='summarize_queue_conflict':v['result']={'kept':1}"""
         % str(wrong)
     )
@@ -46,6 +47,7 @@ if a=='select_queue_tracker':v['route']='tracker'
 if a=='remove_queue_ready_label':Path(%r).write_text('remove')
 if a=='add_queue_tracker_label':Path(%r).write_text('tracker')
 if a=='record_queue_conflict':v['route']='close'
+if a=='advance_implementation_selection':v.update(route='none',advanced=True,clean_repos=[])
 if a=='summarize_queue_conflict':v['result']={'demoted':1}"""
         % (str(retry), str(remove), str(tracker))
     )
@@ -70,6 +72,7 @@ if a in {'queue_conflict_agent','queue_conflict_retry_agent'}:Path(%r).write_tex
 if a=='select_queue_conflict_outcome':v.update(route='close',repo='a/b',issue=7,decision={'outcome':'close','reason':'covered','add_tracker':False})
 if a=='select_queue_tracker':v['route']='none'
 if a=='record_queue_conflict':v['route']='close'
+if a=='advance_implementation_selection':v.update(route='none',advanced=True,clean_repos=[])
 if a=='summarize_queue_conflict':v['result']={'demoted':1}"""
         % str(wrong)
     )
@@ -92,6 +95,7 @@ if a in {'queue_conflict_agent','queue_conflict_retry_agent','remove_queue_ready
 if a=='select_queue_conflict_outcome':v['route']='none'
 if a=='select_queue_tracker':v['route']='none'
 if a=='record_queue_conflict':v['route']='none'
+if a=='advance_implementation_selection':v.update(route='none',advanced=False)
 if a=='summarize_queue_conflict':v['result']={'kept':0}""" % str(wrong))
     result = run_graph(tmp_path, body, "queue-none", path_id="queue_conflict")
     status = {k: v["status"] for k, v in result["effector_results"].items()}
