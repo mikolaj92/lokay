@@ -1,4 +1,4 @@
-"""Native Fala proofs: parent conducts four children, not leaves."""
+"""Native Fala proofs: parent conducts children, not leaves."""
 
 import pytest
 
@@ -7,16 +7,16 @@ from test_issue_triage_fala import base_effector
 
 CHILDREN = (
     "factory_begin",
-    "closeout_prs",
+    "prs",
     "reap_stale_worktrees",
-    "dispatch_implement",
+    "issues",
     "record_pass",
     "factory_pass_terminal",
 )
 
 LEAVES = (
-    "host_ff",
-    "factory_begin_host_gate",
+    "closeout_prs",
+    "dispatch_implement",
     "select_implement",
     "queue_conflict",
     "survey_prs",
@@ -44,7 +44,7 @@ def _require_fala_host():
         pytest.skip(f"fala host unavailable: {exc}")
 
 
-def test_parent_runs_only_child_subgraphs(tmp_path):
+def test_parent_runs_prs_and_issues_children(tmp_path):
     _require_fala_host()
     receipt = str(tmp_path / "receipt")
     result = run_graph(
