@@ -107,48 +107,17 @@ def test_select_skips_live_issue_to_pr_repo(tmp_path):
 
 
 def _run_refresh(*, pass_dir, config_path=None, live=True):
-    from lokay.proc.prepare_occupancy_refresh import prepare
-    from lokay.proc.clear_merged_dead_receipts import clear as clear_merged
-    from lokay.proc.select_live_receipt_slot import select as select_receipt
-    from lokay.proc.inspect_live_receipt_issue import inspect as inspect_receipt
-    from lokay.proc.reduce_occupancy_facts import reduce_state as reduce_facts
-    from lokay.proc.select_occupancy_repo_slot import select as select_repo
-    from lokay.proc.inspect_repo_pr_refresh import inspect as inspect_repo
-    from lokay.proc.list_occupancy_pull_requests import fetch
-    from lokay.proc.reduce_occupancy_refresh import reduce_state as reduce_refresh
+    from lokay.proc.occupancy_catalog import SLOTS, run
     from lokay.proc.persist_occupancy_refresh import persist
+    from lokay.proc.prepare_occupancy_refresh import prepare
 
-    prepared = prepare(pass_dir=pass_dir, slot_count=30)
-    receipt_results = []
-    for slot in range(1, 31):
-        selected = select_receipt(prepared, slot=slot)
-        receipt_results.append(
-            inspect_receipt(selected, config_path=config_path, live=live)
-            if selected.get("route") == "receipt"
-            else selected
-        )
-    facts = reduce_facts(
-        prepared=prepared, merged_clear=clear_merged(prepared), results=receipt_results
+    prepared = prepare(pass_dir=pass_dir, slot_count=SLOTS)
+    return persist(
+        pass_dir=pass_dir,
+        reduced=run(
+            prepared, pass_dir=pass_dir, config_path=config_path, live=live
+        ),
     )
-    repo_results = []
-    for slot in range(1, 31):
-        selected = select_repo(prepared, slot=slot)
-        if selected.get("route") != "repo":
-            repo_results.append(selected)
-            continue
-        inspected = inspect_repo(pass_dir=pass_dir, selected=selected, facts=facts)
-        repo_results.append(
-            fetch(inspected, config_path=config_path, live=live)
-            if inspected.get("route") == "list"
-            else inspected
-        )
-    _, working = (
-        pass_io.load_begin_working(pass_dir)
-        if hasattr(pass_io, "load_begin_working")
-        else (None, pass_io.read_json(pass_io.working_path(pass_dir)))
-    )
-    reduced = reduce_refresh(facts=facts, results=repo_results, working=working)
-    return persist(pass_dir=pass_dir, reduced=reduced)
 
 
 @pytest.mark.parametrize(

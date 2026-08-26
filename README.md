@@ -877,70 +877,40 @@ w procesie.
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareStaleImplementingReap
-    PrepareStaleImplementingReap --> RecentEmptyResult: świeży stempel pustego wyniku
-    PrepareStaleImplementingReap --> SelectStaleRepoSlot: wymagany probe
-    SelectStaleRepoSlot --> SelectStaleLabelSlot: repo w zakresie survey
-    SelectStaleRepoSlot --> RecordStaleRepoOutcome: pusty slot / repo poza zakresem
-    SelectStaleLabelSlot --> ListStaleImplementingIssues: jawna etykieta ledgera
-    ListStaleImplementingIssues --> SelectStaleLabelSlot: następna etykieta
-    ListStaleImplementingIssues --> ReduceStaleRepoProbe: ostatnia etykieta
-    ReduceStaleRepoProbe --> RecordStaleRepoOutcome
-    RecordStaleRepoOutcome --> SelectStaleRepoSlot: następny jawny slot
-    RecordStaleRepoOutcome --> ReduceStaleImplementingProbe: ostatni slot
-    ReduceStaleImplementingProbe --> CheckStaleMutationGate: znaleziono kandydatów
-    ReduceStaleImplementingProbe --> UpdateStaleEmptyStamp: brak kandydatów / probe failed
-    CheckStaleMutationGate --> SelectStaleCandidateSlot
-    SelectStaleCandidateSlot --> RestoreStaleIssueReady: mutacje dozwolone
-    SelectStaleCandidateSlot --> RecordStaleCandidateOutcome: plan-only / pusty slot
-    RestoreStaleIssueReady --> RecordStaleCandidateOutcome
-    RecordStaleCandidateOutcome --> SelectStaleCandidateSlot: następny jawny slot
-    RecordStaleCandidateOutcome --> ReduceStaleReapEffects: ostatni slot
-    ReduceStaleReapEffects --> UpdateStaleEmptyStamp
-    UpdateStaleEmptyStamp --> PersistStaleImplementingReap
-    PersistStaleImplementingReap --> StaleImplementingResult
-    RecentEmptyResult --> [*]
+    PrepareStaleImplementingReap --> StaleImplementingCatalog
+    StaleImplementingCatalog --> PersistStaleImplementingReap
+    PersistStaleImplementingReap --> SummarizeStaleImplementingReap
+    SummarizeStaleImplementingReap --> StaleImplementingResult
     StaleImplementingResult --> [*]
 ```
 
-Pod-Fala rozwija pełny katalog do 30 jawnych slotów. Każde repo ma trzy
-jawne odczyty etykiet aktywnego ledgera. Rate limit kończy probe repo
-fail-closed bez udawania pustego wyniku. Mutation gate jest osobnym faktem, a
-każde przywrócenie `ai:ready` osobnym efektem. Stempel TTL aktualizuje osobny
-proces dopiero po redukcji kompletnego probe i efektów.
+Pod-Fala ma cztery kroki: przygotowanie (TTL, katalog, zakres), jeden atom
+katalogu, który w procesie listuje leftover ledger labels, przywraca
+`ai:ready` i aktualizuje stempel, persist oraz summarize. Nie ma 30-slotowego
+rozwinięcia Fali. Świeży pusty stempel, probe i mutacje zostają wewnątrz
+atomu katalogu, nie osobnymi krawędziami Fali. Overflow katalogu lub
+kandydatów jest fail-closed. Rate limit nie udaje pustej sondy i nie zapisuje
+empty stamp.
 
 ### Odświeżenie zajętości repozytoriów — `refresh_occupancy`
 
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareOccupancyRefresh
-    PrepareOccupancyRefresh --> ClearMergedDeadReceipts
-    ClearMergedDeadReceipts --> SelectLiveReceiptSlot
-    SelectLiveReceiptSlot --> InspectLiveReceiptIssue: slot zawiera żywy receipt
-    SelectLiveReceiptSlot --> RecordLiveReceiptOutcome: slot pusty
-    InspectLiveReceiptIssue --> TerminateClosedIssueWorker: issue fizycznie zamknięte
-    InspectLiveReceiptIssue --> RecordLiveReceiptOutcome: issue otwarte / odczyt niepewny
-    TerminateClosedIssueWorker --> ClearClosedIssueReceipt
-    ClearClosedIssueReceipt --> RecordLiveReceiptOutcome
-    RecordLiveReceiptOutcome --> SelectLiveReceiptSlot: następny jawny slot
-    RecordLiveReceiptOutcome --> ReduceOccupancyFacts: ostatni slot
-    ReduceOccupancyFacts --> SelectOccupancyRepoSlot
-    SelectOccupancyRepoSlot --> InspectRepoPrRefresh: slot zawiera repo
-    SelectOccupancyRepoSlot --> RecordRepoPrRefresh: slot pusty
-    InspectRepoPrRefresh --> ListOccupancyPullRequests: ready i repo wolne
-    InspectRepoPrRefresh --> RecordRepoPrRefresh: occupied / no_ready
-    ListOccupancyPullRequests --> RecordRepoPrRefresh
-    RecordRepoPrRefresh --> SelectOccupancyRepoSlot: następny jawny slot
-    RecordRepoPrRefresh --> ReduceOccupancyRefresh: ostatni slot
-    ReduceOccupancyRefresh --> PersistOccupancyRefresh
-    PersistOccupancyRefresh --> OccupancyRefreshResult
+    PrepareOccupancyRefresh --> OccupancyCatalog
+    OccupancyCatalog --> PersistOccupancyRefresh
+    PersistOccupancyRefresh --> SummarizeOccupancyRefresh
+    SummarizeOccupancyRefresh --> OccupancyRefreshResult
     OccupancyRefreshResult --> [*]
 ```
 
-Pod-Fala ma jawne sloty dla receiptów oraz pełnego katalogu. Odczyt issue,
-terminacja procesu, usunięcie receiptu i listing PR są oddzielnymi efektami.
-Niepewny odczyt issue zachowuje zajętość fail-closed. Nieczytelny receipt nie
-zajmuje całego katalogu, ale pozostaje jawnym faktem diagnostycznym. Czyste
-reduktory składają occupancy i snapshot PR; osobny efekt zapisuje stan pass.
+Pod-Fala ma cztery kroki: przygotowanie receiptów i katalogu, jeden atom
+katalogu, który w procesie czyści martwe receipty, odczytuje żywe issue,
+terminuje zamknięte workery i odświeża snapshoty PR, persist oraz summarize.
+Nie ma 30-slotowego rozwinięcia Fali. Niepewny odczyt issue zachowuje
+zajętość fail-closed. Nieczytelny receipt nie zajmuje całego katalogu, ale
+pozostaje jawnym faktem diagnostycznym. Overflow receiptów lub repozytoriów
+jest fail-closed.
 
 ### Wybór repozytorium do implementacji — `select_implement`
 
@@ -1291,8 +1261,8 @@ kontraktu. Aktualny audyt:
 | `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
 | `ImplementationSelection` | `select_implement` | jeden atom katalogu: kwalifikacja repo do issue_to_pr |
 | `PassPlan` | `plan_pass` | jeden atom katalogu: fragmenty planu i budżet triage |
-| `OccupancyRefresh` | `refresh_occupancy` | składa żywe receipty i repozytoryjne snapshoty PR przez jawne sloty |
-| `StaleImplementingReap` | `reap_stale_implementing` | odzyskuje porzucone etapy przez jawne sloty repozytoriów i etykiet |
+| `OccupancyRefresh` | `refresh_occupancy` | jeden atom katalogu: żywe receipty i snapshoty PR |
+| `StaleImplementingReap` | `reap_stale_implementing` | jeden atom katalogu: odzysk porzuconych etapów |
 | `OverBudgetReap` | `reap_over_budget` | jeden atom katalogu: harvest albo plan-only reap |
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |

@@ -10,5 +10,5 @@ def run(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
         config_path=config_path,
         live=live,
         extra_inputs={"pass_dir": pass_dir},
-        max_ticks=512,
+        max_ticks=16,
     )

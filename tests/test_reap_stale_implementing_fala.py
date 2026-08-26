@@ -1,26 +1,50 @@
-"""Native Fala proof for explicit stale-stage recovery slots."""
+"""Native Fala proof for one stale-implementing catalog atom."""
 
-from test_issue_triage_fala import base_effector
 from test_implementation_selection_fala import run_graph
+from test_issue_triage_fala import base_effector
 
 
-def test_recent_empty_skips_all_catalog_probes(tmp_path):
+def test_reap_stale_implementing_is_one_catalog_atom(tmp_path):
     body = base_effector(
         """if a=='prepare_stale_implementing_reap':v.update(route='recent_empty',repos=[])
-if a.startswith('select_stale_repo_'):v['route']='empty'
-if a.startswith('reduce_stale_repo_'):v['route']='empty'
-if a=='reduce_stale_implementing_probe':v.update(route='empty',candidates=[])
-if a=='check_stale_mutation_gate':v.update(route='no_candidates',apply=False)
-if a.startswith('select_stale_candidate_') or a.startswith('record_stale_candidate_'):v['route']='empty'
-if a=='reduce_stale_reap_effects':v.update(reaped=[],reaped_count=0)
+if a=='stale_implementing_catalog':v.update(reaped=[],reaped_count=0)
+if a=='persist_stale_implementing_reap':v.update(reaped=[],reaped_count=0)
 if a=='summarize_stale_implementing_reap':v['result']={'skipped':True,'reason':'recent_empty'}"""
     )
     result = run_graph(
-        tmp_path, body, "stale-recent", path_id="reap_stale_implementing"
+        tmp_path, body, "stale-catalog", path_id="reap_stale_implementing"
     )
-    status = {k: v["status"] for k, v in result["effector_results"].items()}
-    assert (
-        status["list_stale_repo_label_1_1"] == "skipped"
-        and status["restore_stale_issue_ready_1"] == "skipped"
-        and status["summarize_stale_implementing_reap"] == "succeeded"
+    order = [
+        "prepare_stale_implementing_reap",
+        "stale_implementing_catalog",
+        "persist_stale_implementing_reap",
+        "summarize_stale_implementing_reap",
+    ]
+    statuses = result["effector_results"]
+    assert all(statuses[name]["status"] == "succeeded" for name in order)
+    assert list(statuses) == order
+    assert not any(
+        name.startswith("select_stale_repo_")
+        or name.startswith("list_stale_repo_")
+        or name.startswith("reduce_stale_repo_")
+        or name.startswith("select_stale_candidate_")
+        or name.startswith("restore_stale_issue_ready_")
+        or name.startswith("reduce_stale_")
+        for name in statuses
     )
+    assert result.get("ticks_used", 16) <= 16
+
+
+def test_reap_stale_implementing_finishes_without_277_effectors(tmp_path):
+    body = base_effector(
+        """if a=='prepare_stale_implementing_reap':v.update(route='probe',repos=['a/one'])
+if a=='stale_implementing_catalog':v.update(reaped=[],reaped_count=0)
+if a=='persist_stale_implementing_reap':v.update(reaped=[],reaped_count=0)
+if a=='summarize_stale_implementing_reap':v['result']={'reaped_count':0}"""
+    )
+    result = run_graph(tmp_path, body, "stale-probe", path_id="reap_stale_implementing")
+    statuses = result["effector_results"]
+    assert len(statuses) == 4
+    assert statuses["stale_implementing_catalog"]["status"] == "succeeded"
+    assert statuses["summarize_stale_implementing_reap"]["status"] == "succeeded"
+    assert result.get("ticks_used", 16) < 64

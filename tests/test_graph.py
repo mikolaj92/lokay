@@ -173,6 +173,50 @@ def test_select_implement_path_is_a_handful_of_effectors():
     )
 
 
+def test_refresh_occupancy_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "refresh_occupancy")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_occupancy_refresh",
+        "occupancy_catalog",
+        "persist_occupancy_refresh",
+        "summarize_occupancy_refresh",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_live_receipt_")
+        or node["id"].startswith("inspect_live_receipt_")
+        or node["id"].startswith("select_occupancy_repo_")
+        or node["id"].startswith("list_occupancy_pull_requests_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
+def test_reap_stale_implementing_path_is_a_handful_of_effectors():
+    path = next(
+        p for p in describe_package()["paths"] if p["id"] == "reap_stale_implementing"
+    )
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_stale_implementing_reap",
+        "stale_implementing_catalog",
+        "persist_stale_implementing_reap",
+        "summarize_stale_implementing_reap",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_stale_repo_")
+        or node["id"].startswith("list_stale_repo_")
+        or node["id"].startswith("select_stale_candidate_")
+        or node["id"].startswith("restore_stale_issue_ready_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
 def test_factory_pass_docs_match_package_atom_order():
     import re
 

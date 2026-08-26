@@ -197,6 +197,77 @@ def test_applied_reap_clears_old_empty_stamp(tmp_path):
     assert not path.exists()
 
 
+def test_catalog_fail_closed_when_prepare_failed():
+    from lokay.proc.stale_implementing_catalog import run
+
+    out = run(
+        {"ok": False, "error": "stale implementing catalog exceeds authored slots"},
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_catalog_overflow_is_fail_closed():
+    from lokay.proc.stale_implementing_catalog import REPO_SLOTS, run
+
+    out = run(
+        {"ok": True, "route": "probe", "repos": [f"o/r{i}" for i in range(REPO_SLOTS + 1)]},
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_catalog_candidate_overflow_is_fail_closed(monkeypatch):
+    from lokay.proc.stale_implementing_catalog import CANDIDATE_SLOTS, run
+
+    monkeypatch.setattr(
+        "lokay.proc.stale_implementing_catalog._one_repo",
+        lambda prepared, **_k: {
+            "ok": True,
+            "route": "probed",
+            "issues": [
+                {"repo": "a/one", "issue": i} for i in range(CANDIDATE_SLOTS + 1)
+            ],
+        },
+    )
+    out = run(
+        {"ok": True, "route": "probe", "repos": ["a/one"]},
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceed authored slots" in out["error"]
+
+
+def test_catalog_recent_empty_skips_physical_effects(monkeypatch):
+    from lokay.proc.stale_implementing_catalog import run
+
+    called = []
+
+    def fail(*_a, **_k):
+        called.append(True)
+        raise AssertionError("physical effect must not run")
+
+    monkeypatch.setattr("lokay.proc.list_stale_implementing_issues.fetch", fail)
+    monkeypatch.setattr("lokay.proc.restore_stale_issue_ready.restore", fail)
+    out = run(
+        {"ok": True, "route": "recent_empty", "repos": ["a/one"], "stamp": ""},
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is True and out["reaped_count"] == 0 and not called
+
+
+def test_reap_stale_implementing_subflow_uses_handful_of_ticks():
+    from lokay.proc.reap_stale_implementing_subflow import run
+    import inspect
+
+    source = inspect.getsource(run)
+    assert "max_ticks=16" in source
+    assert "max_ticks=1024" not in source
+
+
 def test_idle_facade_runs_only_live(monkeypatch):
     from lokay.proc import reap_stale_implementing as facade
 
