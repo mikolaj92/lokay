@@ -978,10 +978,11 @@ stateDiagram-v2
     ReapResult --> [*]
 ```
 
-Pod-Fala ma trzy małe węzły: `collect` → `catalog` → `summarize`.
-Katalog składa dwa małe kroki (`overflow_skip` albo `apply_slot`);
-summarize składa `skip_result` albo `persist_result`. Nie ma jednego
-tłustego reapa, który parkuje leftover labels. Nie ma 4-slotowego
+Pod-Fala ma trzy liście: `collect` → `catalog` → `summarize`. Każdy
+liść składa dwa małe kroki: collect to `protection` albo `bound_slots`;
+catalog to `overflow_skip` albo `apply_slot`; summarize to `skip_result`
+albo `persist_result`. Nie ma `leftover_closeout` w tym grafie. Nie ma
+jednego tłustego reapa, który parkuje leftover labels. Nie ma 4-slotowego
 rozwinięcia Fali (14 efektorów). Overflow katalogu pomija reap (`skip`)
 i nie kończy passu fail-closed — nie blokuje PR-ów ani issue. Atom
 katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP (live i2pr / occupancy /

@@ -4,6 +4,41 @@ from lokay.proc.keep_stale_worktree_candidate import apply as keep
 from lokay.proc.resolve_existing_delivery import resolve
 
 
+def test_collect_protection_is_its_own_function():
+    from lokay.proc.collect_stale_worktree_candidates import protection
+
+    empty = dict(
+        repo="a/b",
+        branch="ai/fix/1",
+        issue=1,
+        receipt_unknown=False,
+        live_repos=set(),
+        survey_failed=set(),
+        covered={},
+        heads={},
+    )
+    assert protection(**empty) == ""
+    assert protection(**{**empty, "receipt_unknown": True}) == "receipt_state_unknown"
+    assert protection(**{**empty, "live_repos": {"a/b"}}) == "live_issue_to_pr"
+    assert protection(**{**empty, "survey_failed": {"a/b"}}) == "pr_survey_failed"
+    assert (
+        protection(**{**empty, "covered": {"a/b": {1}}}) == "covering_pr"
+    )
+
+
+def test_bound_slots_defers_overflow_without_failing():
+    from lokay.proc.collect_stale_worktree_candidates import SLOTS, bound_slots
+
+    rows = [
+        {"repo": "a/b", "issue": i, "branch": f"ai/fix/{i}", "present": True}
+        for i in range(1, SLOTS + 3)
+    ]
+    out = bound_slots(rows, pass_dir="/tmp/p", receipt_safe=True)
+    assert out["ok"] is True
+    assert len(out["candidates"]) == SLOTS
+    assert len(out["deferred"]) == 2
+
+
 def test_absent_candidate_is_explicit():
     assert classify({"present": False}, live=True)["route"] == "absent"
 
