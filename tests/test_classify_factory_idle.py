@@ -1,9 +1,8 @@
-"""Authored idle classify / terminal. Compose still hosts Fala."""
+"""Authored idle classify. Compose still hosts Fala."""
 
 from pathlib import Path
 
 from lokay.proc.classify_factory_idle import classify
-from lokay.proc.factory_pass_terminal import terminal
 
 
 def _idle_receipt() -> dict:
@@ -54,23 +53,3 @@ def test_dry_run_hosts(tmp_path: Path) -> None:
     stamp = tmp_path / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")
     assert classify(live=False, stamp=stamp, receipt=_idle_receipt())["route"] == "host"
-
-
-def test_terminal_lifts_idle_result() -> None:
-    out = terminal(
-        {"route": "idle", "reason": "recent_empty_survey"},
-        {},
-        {"result": {"ok": True, "health": "idle", "lane": "idle"}},
-    )
-    assert out["result"]["lane"] == "idle"
-    assert out["result"]["health"] == "idle"
-
-
-def test_terminal_lifts_hosted_record_pass() -> None:
-    out = terminal(
-        {"route": "host"},
-        {"result": {"ok": True, "health": "progress", "lane": "product"}},
-        {},
-    )
-    assert out["result"]["lane"] == "product"
-    assert out["result"]["health"] == "progress"
