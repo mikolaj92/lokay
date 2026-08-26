@@ -1,27 +1,32 @@
-"""List live open mill PRs from GitHub. No 30-slot catalog."""
+"""List live open PRs from GitHub for the authored repo scope. No mill filter."""
 
 from __future__ import annotations
 
-import argparse
 import json
 
-from lokay.proc._common import load_cfg, runner
+from lokay.proc._common import runner
 from lokay.runner import gh_spec
 
 
-def run(*, config_path: str | None, live: bool) -> dict:
-    cfg = load_cfg(argparse.Namespace(config=config_path))
+def run(scope: dict, *, live: bool) -> dict:
+    if scope.get("ok") is False:
+        return {
+            "ok": False,
+            "error": scope.get("error") or "PR scope failed",
+            "prs": [],
+            "count": 0,
+        }
     git = runner()
-    prefix = str(cfg.branch_prefix or "ai/fix").rstrip("/") + "/"
     rows: list[dict] = []
-    for repo in cfg.active_repos():
+    for name in list(scope.get("repos") or []):
+        repo = str(name)
         result = git.run(
             gh_spec(
                 [
                     "pr",
                     "list",
                     "--repo",
-                    repo.name,
+                    repo,
                     "--state",
                     "open",
                     "--json",
@@ -39,35 +44,32 @@ def run(*, config_path: str | None, live: bool) -> dict:
             text = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
             return {
                 "ok": False,
-                "error": text or f"open PR list failed for {repo.name}",
-                "repo": repo.name,
+                "error": text or f"open PR list failed for {repo}",
+                "repo": repo,
             }
         try:
             payload = json.loads(result.stdout or "[]")
         except json.JSONDecodeError as exc:
             return {
                 "ok": False,
-                "error": f"open PR list JSON failed for {repo.name}: {exc}",
-                "repo": repo.name,
+                "error": f"open PR list JSON failed for {repo}: {exc}",
+                "repo": repo,
             }
         if not isinstance(payload, list):
             return {
                 "ok": False,
-                "error": f"open PR list on {repo.name} returned non-list JSON",
-                "repo": repo.name,
+                "error": f"open PR list on {repo} returned non-list JSON",
+                "repo": repo,
             }
         for row in payload:
             if not isinstance(row, dict):
                 continue
-            branch = str(row.get("headRefName") or "")
-            if not branch.startswith(prefix):
-                continue
             rows.append(
                 {
-                    "repo": repo.name,
+                    "repo": repo,
                     "pr": int(row["number"]),
                     "title": str(row.get("title") or ""),
-                    "branch": branch,
+                    "branch": str(row.get("headRefName") or ""),
                 }
             )
     return {"ok": True, "prs": rows, "count": len(rows)}

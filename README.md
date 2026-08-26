@@ -721,19 +721,21 @@ pozostaje `probe_failed`; przekroczenie authored katalogu kończy się fail-clos
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ListOpenPrs
-    ListOpenPrs --> SelectNextPr
+    [*] --> ReadPrsScope
+    ReadPrsScope --> ListOpenPrs
+    ListOpenPrs --> FilterMillPrs
+    FilterMillPrs --> SelectNextPr
     SelectNextPr --> PrsRunTriage: jest otwarty PR
     SelectNextPr --> SummarizePrs: pusta lista
     PrsRunTriage --> SummarizePrs
     SummarizePrs --> [*]
 ```
 
-Dziecko listuje żywe otwarte PR-y mill z GitHuba (prefiks gałęzi). Nie ma
-30-slotowego katalogu i nie przejmuje leftover overflow. Pusta lista pomija
-recenzję i nie psuje passu. Jeden PR na pass: recenzja, naprawa albo merge
-przez pod-Falę `pr_triage`. Stary sibling `closeout_prs` zostaje katalogiem
-stempla — to dziecko posiada recenzję i merge.
+Każdy węzeł ma jedną robotę. Zakres (repo + prefiks) i listing GitHub są
+osobnymi procesami. Filtr mill jest czystą funkcją. Wybór jednego PR i
+pod-Fala `pr_triage` są osobno. Nie ma 30-slotowego katalogu, leftover
+overflow ani god `compose_pr_triage`. Pusta lista pomija recenzję i nie
+psuje passu. Stary sibling `closeout_prs` zostaje katalogiem stempla.
 
 ### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
 

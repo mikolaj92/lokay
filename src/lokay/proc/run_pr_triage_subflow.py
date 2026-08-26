@@ -1,17 +1,16 @@
-"""Run the authored PR review/repair/merge Fala for one PR."""
+"""Launch the authored pr_triage Fala for one selected PR."""
 
-from lokay.compose.pr_triage import compose_pr_triage
+from lokay.graph_run import run_path
 
 
 def run(target: dict, *, config_path: str | None, live: bool) -> dict:
-    if target.get("route") != "pr" or not target.get("branch"):
-        return {"ok": True, **target, "route": "skip"}
     try:
-        result = compose_pr_triage(
-            config_path=config_path,
+        result = run_path(
+            path_id="pr_triage",
             repo=str(target["repo"]),
-            pr_number=int(target["pr"]),
+            pr=int(target["pr"]),
             branch=str(target["branch"]),
+            config_path=config_path,
             live=live,
         )
     except Exception as exc:

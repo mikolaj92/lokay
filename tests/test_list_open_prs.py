@@ -1,4 +1,4 @@
-"""Live GitHub list for the prs child. No 30-slot catalog fail."""
+"""Live GitHub list for the prs child. No mill filter. No 30-slot catalog fail."""
 
 from __future__ import annotations
 
@@ -8,11 +8,8 @@ from types import SimpleNamespace
 from lokay.proc.list_open_prs import run
 
 
-def _cfg(names: list[str], *, prefix: str = "ai/fix") -> SimpleNamespace:
-    return SimpleNamespace(
-        branch_prefix=prefix,
-        active_repos=lambda: [SimpleNamespace(name=name) for name in names],
-    )
+def _scope(*names: str) -> dict:
+    return {"ok": True, "repos": list(names), "prefix": "ai/fix/"}
 
 
 def _result(*, returncode: int = 0, stdout: str = "[]", stderr: str = "") -> SimpleNamespace:
@@ -20,26 +17,16 @@ def _result(*, returncode: int = 0, stdout: str = "[]", stderr: str = "") -> Sim
 
 
 def test_empty_list_is_ok(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "lokay.proc.list_open_prs.load_cfg",
-        lambda _args: _cfg(["o/r"]),
-    )
-
     class Git:
         def run(self, spec, *, live):
             return _result()
 
     monkeypatch.setattr("lokay.proc.list_open_prs.runner", lambda: Git())
-    out = run(config_path=None, live=True)
+    out = run(_scope("o/r"), live=True)
     assert out == {"ok": True, "prs": [], "count": 0}
 
 
-def test_lists_live_mill_prs_and_skips_human(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "lokay.proc.list_open_prs.load_cfg",
-        lambda _args: _cfg(["mikolaj92/lokay"]),
-    )
-
+def test_lists_live_open_prs_including_human(monkeypatch) -> None:
     class Git:
         def run(self, spec, *, live):
             assert live is True
@@ -62,25 +49,14 @@ def test_lists_live_mill_prs_and_skips_human(monkeypatch) -> None:
             )
 
     monkeypatch.setattr("lokay.proc.list_open_prs.runner", lambda: Git())
-    out = run(config_path=None, live=True)
+    out = run(_scope("mikolaj92/lokay"), live=True)
     assert out["ok"] is True
-    assert out["count"] == 1
-    assert out["prs"] == [
-        {
-            "repo": "mikolaj92/lokay",
-            "pr": 9,
-            "title": "mill",
-            "branch": "ai/fix/9-x",
-        }
-    ]
+    assert out["count"] == 2
+    assert [row["pr"] for row in out["prs"]] == [9, 10]
 
 
 def test_forty_repos_do_not_catalog_fail(monkeypatch) -> None:
     names = [f"o/r{i}" for i in range(40)]
-    monkeypatch.setattr(
-        "lokay.proc.list_open_prs.load_cfg",
-        lambda _args: _cfg(names),
-    )
 
     class Git:
         def run(self, spec, *, live):
@@ -92,7 +68,7 @@ def test_forty_repos_do_not_catalog_fail(monkeypatch) -> None:
             )
 
     monkeypatch.setattr("lokay.proc.list_open_prs.runner", lambda: Git())
-    out = run(config_path=None, live=True)
+    out = run(_scope(*names), live=True)
     assert out["ok"] is True
     assert out["count"] == 40
     assert "catalog" not in str(out).lower()
@@ -100,15 +76,10 @@ def test_forty_repos_do_not_catalog_fail(monkeypatch) -> None:
 
 
 def test_dry_run_is_empty(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "lokay.proc.list_open_prs.load_cfg",
-        lambda _args: _cfg(["o/r"]),
-    )
-
     class Git:
         def run(self, spec, *, live):
             assert live is False
             return _result(stdout="not-json")
 
     monkeypatch.setattr("lokay.proc.list_open_prs.runner", lambda: Git())
-    assert run(config_path=None, live=False) == {"ok": True, "prs": [], "count": 0}
+    assert run(_scope("o/r"), live=False) == {"ok": True, "prs": [], "count": 0}

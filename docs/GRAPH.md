@@ -144,15 +144,16 @@ the ledger for step order.
 
 ### `prs` (open PR review / repair / merge)
 
-Child of `factory_pass`. Lists live open mill PRs from GitHub, picks one,
-then runs `pr_triage` (review, `pr_repair`, merge, close issue). Not the
-`closeout_prs` stamp catalog. Not leftover overflow.
+Child of `factory_pass`. One job per node. Not the `closeout_prs` stamp
+catalog. Not leftover overflow. `compose_pr_triage` stays a thin CLI.
 
 ```text
-list_open_prs
-  → select_next_pr
-    ├─→ prs_run_triage   ← when route == pr; compose_pr_triage
-    └─→ summarize_prs    ← empty list skips triage and does not fail
+read_prs_scope          ← repos + branch prefix
+  → list_open_prs       ← live GitHub list, no mill filter
+    → filter_mill_prs   ← keep mill prefix only
+      → select_next_pr
+        ├─→ prs_run_triage   ← when route == pr; run_path pr_triage
+        └─→ summarize_prs    ← empty list skips triage and does not fail
 ```
 
 One PR per pass. Empty list is `route=none` and skips. Catalog overflow
