@@ -105,9 +105,11 @@ stateDiagram-v2
     CompactState --> RecordPass
     RecordPass --> FactoryPassTerminal: lane product / oil / idle
     RecordFactoryIdle --> FactoryPassTerminal: lane idle
-    FactoryPassTerminal --> [*]
-    FactoryPassTerminal --> Recovery: potwierdzona awaria nośnika
-    Recovery --> Heartbeat: zweryfikowany fast-forward
+    FactoryPassTerminal --> ClassifyLastPass
+    ClassifyLastPass --> [*]: new PR / merge / leftover skip / empty survey / stale
+    ClassifyLastPass --> SelfRepair: last receipt did not move
+    SelfRepair --> CloseoutPrs
+    SelfRepair --> DispatchImplement
 ```
 
 ### Otwarcie workspace passu — `factory_begin`
@@ -1249,17 +1251,23 @@ stateDiagram-v2
 
 ### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
 
+Repair is a side child. It never replaces the factory mill. Moving
+forward is only a new PR or a merge on the last receipt. Leftover skip,
+empty survey, and a stale receipt stay on the factory and do not start
+recovery. After one repair the graph always returns to PRs / issues.
+
 ```mermaid
 stateDiagram-v2
-    [*] --> BeginObservation
-    BeginObservation --> RunFactoryPass
-    RunFactoryPass --> ClassifyRecoveryScope
-    ClassifyRecoveryScope --> RecordEvidence: jawny carrier / source-integrity failure
-    ClassifyRecoveryScope --> RecordNoIncident: issue / PR / worktree / test-local failure
-    RecordNoIncident --> [*]
-    RecordEvidence --> [*]: healthy / progress / waiting / idle
-    RecordEvidence --> ConfirmIncident: powtarzalna awaria nośnika
-    ConfirmIncident --> PrepareRecovery
+    [*] --> ClassifyLastPass
+    ClassifyLastPass --> RunFactoryPass: new PR / merge
+    ClassifyLastPass --> RunFactoryPass: leftover skip / empty survey / stale
+    ClassifyLastPass --> SelfRepair: last receipt did not move
+    SelfRepair --> RunFactoryPass
+    RunFactoryPass --> CloseoutPrs
+    RunFactoryPass --> DispatchImplement
+    CloseoutPrs --> [*]
+    DispatchImplement --> [*]
+    SelfRepair --> PrepareRecovery
     PrepareRecovery --> RecoveryAgent
     RecoveryAgent --> ValidateRecoveryResult
     ValidateRecoveryResult --> RecoveryAgent: invalid JSON + informacja zwrotna
@@ -1272,9 +1280,9 @@ stateDiagram-v2
     PushMainFastForward --> ActivateRelease
     ActivateRelease --> PreflightRelease
     PreflightRelease --> CloseIncident: PASS
-    PreflightRelease --> ConfirmIncident: FAIL
-    CloseIncident --> [*]
-    HumanTerminal --> [*]
+    PreflightRelease --> RunFactoryPass
+    CloseIncident --> RunFactoryPass
+    HumanTerminal --> RunFactoryPass
 ```
 
 ### Zgodność diagramu z implementacją
@@ -1298,7 +1306,7 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
+| `DaemonCycle` | `daemon_cycle` | factory first; self_repair only when last receipt did not move, then PRs/issues |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |

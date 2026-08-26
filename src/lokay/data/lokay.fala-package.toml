@@ -16,43 +16,20 @@ title = "Run one Lokay atom via Fala organ"
 [[correlation_paths]]
 id = "daemon_cycle"
 title = "Lokay daemon cycle"
-description = "Run product work, record 4-of-5 stall evidence, and conduct confirmed recovery."
+description = "Classify last receipt; repair only when it did not move; always return to factory PRs/issues."
 
 [[correlation_paths.effectors]]
-id = "recovery_begin"
+id = "classify_last_pass_progress"
 capability = "lokay_atom"
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "recovery_begin" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "recovery_mill"
-capability = "lokay_atom"
-conduction = ["recovery_begin"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "recovery_mill" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "recovery_observe"
-capability = "lokay_atom"
-conduction = ["recovery_begin", "recovery_mill"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "recovery_observe" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
-id = "recovery_record"
-capability = "lokay_atom"
-conduction = ["recovery_begin", "recovery_observe"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "recovery_record" }
+config = { atom = "classify_last_pass_progress" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
 id = "recovery_incident"
 capability = "lokay_atom"
-conduction = ["recovery_record"]
+conduction = ["classify_last_pass_progress"]
+when = { upstream = "classify_last_pass_progress", path = "route", equals = "repair" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "recovery_incident" }
 retry_policy = "none"
@@ -60,9 +37,18 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "recovery_run_self_repair"
 capability = "lokay_atom"
-conduction = ["recovery_incident"]
+conduction = ["classify_last_pass_progress", "recovery_incident"]
+when = { upstream = "classify_last_pass_progress", path = "route", equals = "repair" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "recovery_run_self_repair" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "recovery_mill"
+capability = "lokay_atom"
+conduction = ["classify_last_pass_progress", "recovery_run_self_repair"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "recovery_mill" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]

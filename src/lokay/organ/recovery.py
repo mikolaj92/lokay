@@ -111,6 +111,11 @@ def handle_recovery(
             repair=up.get("recovery_run_self_repair") or {},
         )
 
+    if atom == "classify_last_pass_progress":
+        from lokay.proc import classify_last_pass_progress
+
+        return _run_atom_main(classify_last_pass_progress.main, [*cfg, *live])
+
     if atom == "recovery_begin":
         return _run_atom_main(recovery_begin.main, [*cfg, *live])
 
@@ -151,21 +156,31 @@ def handle_recovery(
         )
 
     if atom == "recovery_incident":
-        recorded = up.get("recovery_record", {})
-        if recorded.get("confirmed") is not True:
-            return {"ok": True, "skipped": True, "reason": "stall_quorum_not_met"}
-        recovery = recorded.get("recovery") or {}
+        classified = up.get("classify_last_pass_progress") or {}
+        if classified.get("route") != "repair":
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": classified.get("reason") or "factory",
+            }
         return _run_atom_main(
             recovery_incident.main,
             [
                 "--fingerprint",
-                str(recovery.get("fingerprint") or ""),
+                str(classified.get("fingerprint") or "did_not_move"),
                 "--evidence",
-                str(recovery.get("evidence") or ""),
+                str(classified.get("evidence") or ""),
             ],
         )
 
     if atom == "recovery_run_self_repair":
+        classified = up.get("classify_last_pass_progress") or {}
+        if classified.get("route") != "repair":
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": classified.get("reason") or "factory",
+            }
         incident = up.get("recovery_incident", {})
         if incident.get("skipped"):
             return {"ok": True, "skipped": True, "reason": incident.get("reason")}
