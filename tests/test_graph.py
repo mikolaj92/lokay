@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import tomllib
 
 from lokay.graph_run import (
     _materialize_package,
@@ -8,6 +9,61 @@ from lokay.graph_run import (
     find_default_package,
     normalize_path_result,
 )
+
+FACTORY_HYGIENE = (
+    "survey_prs",
+    "survey_inbox",
+    "survey_ready",
+    "ready_hygiene",
+    "plan_pass",
+    "dispatch_triage",
+    "resolve_conflicts",
+    "closeout_prs",
+    "reap_stale_implementing",
+    "reap_over_budget",
+    "refresh_occupancy",
+    "reap_stale_worktrees",
+)
+
+
+def _factory_pass_raw() -> dict:
+    pkg = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    return next(p for p in pkg["correlation_paths"] if p["id"] == "factory_pass")
+
+
+def simulate_factory_pass(*, select_route: str, classify_route: str = "host") -> dict:
+    """Apply authored conduction + when. Skipped upstream satisfies conduction."""
+    routes = {
+        "classify_factory_idle": classify_route,
+        "select_implement": select_route,
+    }
+    status: dict[str, str] = {}
+
+    def matches(when: dict) -> bool:
+        if not when:
+            return True
+        upstream = str(when.get("upstream") or "")
+        if status.get(upstream) != "succeeded":
+            return False
+        actual = routes.get(upstream)
+        return actual == when.get("equals")
+
+    pending = list(_factory_pass_raw()["effectors"])
+    progressed = True
+    while pending and progressed:
+        progressed = False
+        leftover = []
+        for node in pending:
+            deps = list(node.get("conduction") or [])
+            if any(status.get(dep) not in {"succeeded", "skipped"} for dep in deps):
+                leftover.append(node)
+                continue
+            name = str(node["id"])
+            status[name] = "succeeded" if matches(dict(node.get("when") or {})) else "skipped"
+            progressed = True
+        pending = leftover
+    assert not pending, [node["id"] for node in pending]
+    return status
 
 
 def test_describe_parent_factory_graph():
@@ -361,6 +417,62 @@ def test_factory_pass_implement_does_not_wait_on_slow_hygiene():
     assert "reap_stale_worktrees" not in closure("compute_health")
     assert "reap_stale_worktrees" not in closure("record_pass")
     assert "dispatch_implement" in conduction["compute_health"]
+
+
+def test_selected_tick_writes_receipt_even_if_hygiene_would_exceed_ceiling():
+    """Selected work reaches dispatch + receipt; 1800–7200s oil atoms do not run."""
+    raw = _factory_pass_raw()
+    timeouts = {
+        str(node["id"]): int(node["adapter"]["timeout_seconds"])
+        for node in raw["effectors"]
+    }
+    old_ceiling = 180
+    slow = {
+        "survey_prs",
+        "survey_inbox",
+        "survey_ready",
+        "dispatch_triage",
+        "closeout_prs",
+        "reap_stale_implementing",
+        "reap_over_budget",
+        "refresh_occupancy",
+        "reap_stale_worktrees",
+    }
+    assert sum(timeouts[name] for name in FACTORY_HYGIENE) > old_ceiling
+    assert all(timeouts[name] >= 1800 for name in slow)
+
+    status = simulate_factory_pass(select_route="selected")
+    assert status["dispatch_implement"] == "succeeded"
+    assert status["compute_health"] == "succeeded"
+    assert status["compact_state"] == "succeeded"
+    assert status["record_pass"] == "succeeded"
+    assert status["factory_pass_terminal"] == "succeeded"
+    for name in FACTORY_HYGIENE:
+        assert status[name] == "skipped", name
+    work = {
+        "classify_factory_idle",
+        "host_ff",
+        "factory_begin_host_gate",
+        "factory_begin",
+        "select_implement",
+        "queue_conflict",
+        "dispatch_implement",
+        "compute_health",
+        "compact_state",
+        "record_pass",
+        "factory_pass_terminal",
+    }
+    assert {name for name, state in status.items() if state == "succeeded"} == work
+    assert sum(timeouts[name] for name in FACTORY_HYGIENE if status[name] == "succeeded") == 0
+
+
+def test_none_tick_still_runs_housecleaning():
+    status = simulate_factory_pass(select_route="none")
+    assert status["queue_conflict"] == "skipped"
+    assert status["dispatch_implement"] == "skipped"
+    for name in FACTORY_HYGIENE:
+        assert status[name] == "succeeded", name
+    assert status["record_pass"] == "succeeded"
 
 
 def test_factory_pass_docs_match_package_atom_order():

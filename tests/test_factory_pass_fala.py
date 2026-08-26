@@ -1,5 +1,7 @@
 """Native Fala proofs: selected work skips hygiene and still writes a receipt."""
 
+import pytest
+
 from test_implementation_selection_fala import run_graph
 from test_issue_triage_fala import base_effector
 
@@ -40,7 +42,18 @@ if a in {{{hygiene_py}}}:Path({hygiene_mark!r}).write_text(a)"""
     )
 
 
+def _require_fala_host():
+    pytest.importorskip("fala")
+    try:
+        from fala._build import ensure_process_host_library
+
+        ensure_process_host_library()
+    except Exception as exc:
+        pytest.skip(f"fala host unavailable: {exc}")
+
+
 def test_selected_tick_reaches_dispatch_and_receipt_without_hygiene(tmp_path):
+    _require_fala_host()
     hygiene = str(tmp_path / "hygiene")
     receipt = str(tmp_path / "receipt")
     dispatch = str(tmp_path / "dispatch")
@@ -63,6 +76,7 @@ def test_selected_tick_reaches_dispatch_and_receipt_without_hygiene(tmp_path):
 
 
 def test_none_tick_runs_hygiene_and_skips_implement(tmp_path):
+    _require_fala_host()
     hygiene = str(tmp_path / "hygiene")
     receipt = str(tmp_path / "receipt")
     dispatch = str(tmp_path / "dispatch")
