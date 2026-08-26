@@ -10,18 +10,14 @@ which jobs run after which.
 ### `daemon_cycle` (top-level parent)
 
 ```text
-recovery_begin
-  → recovery_mill
-    → recovery_observe
-      → recovery_record (persistent 4-of-5 quorum)
-        → recovery_incident (skipped until quorum)
-          → recovery_run_self_repair (self_repair child Fala)
+run_factory_pass
+  → summarize_daemon_cycle
 ```
 
-The daemon owns only the singleton lock, health lease and initial carrier
-preflight. Fala owns product/recovery order. Every node above is a separate
-`lokay-recovery-*` Unix process returning one JSON envelope. A product run that
-actually publishes or merges work records no systemic stall fingerprint.
+The daemon hosts `factory_pass`. `self_repair` is step (1) of that parent, not a
+`recovery_mill` loop that replaces steps 2–4. Leftover overflow / leftover-probe
+fail is skip under step (3); the next tick still hosts (2) and (4). Every hosted
+pass writes a receipt.
 Idle TTL lives in `factory_pass` as `classify_factory_idle`. Compose and the
 LaunchAgent shell cannot decide that a tick does not run. A fresh empty-survey
 stamp still hosts Fala and exits the authored idle route. Missing stamp hosts
@@ -68,39 +64,28 @@ incidents reuse the preflight cooldown ledger (`github.incident_cooldown_hours`)
 
 ### `factory_pass` (parent)
 
-**Order lives in Fala.** Fleet scheduling is not a fat Python tick. The parent
-path conducts one-job atoms; child workflow Falas are started from dispatch
-atoms via `run_path`.
+**Order lives in Fala.** The parent is four steps, then a receipt. Surveys,
+leftover catalogs, and recovery are children of (1) or (3) — not siblings.
 
 ```text
-classify_factory_idle
-  → host_ff
-    → factory_begin_host_gate
-      → factory_begin
-        → survey_prs
-          → survey_inbox
-            → survey_ready
-              → ready_hygiene       → leftover ledger-trace hygiene (not a queue gate)
-                → plan_pass
-                → dispatch_triage          → issue_triage child Fala
-                  → resolve_conflicts      → close CONFLICTING/DIRTY + re-ready
-                    → closeout_prs         → lokay-closeout-pr → pr_repair / pr_triage child Falas
-                      → reap_stale_implementing  → leftover in-flight cache → ai:ready
-                        → reap_over_budget  → kill plan_only over budget; harvest real diff to PR
-                        → refresh_occupancy  → occupy live/merged; re-list leftover-ready only
-                          → select_implement     → oil XOR product; product wins
-                          → queue_conflict   → SKIP/CLOSE/READY queue hygiene; after park, next catalog row
-                          → dispatch_implement → issue_to_pr child Fala
-                            → reap_stale_worktrees → drop leftover corners that cannot resume
-                            → compute_health
-                              → compact_state  → bound the existing state.jsonl
-                                → record_pass  → last-pass.json (lane: product | oil | idle)
-                                  → record_factory_idle  → authored idle receipt (when classify routes idle)
-                                    → factory_pass_terminal  → lift idle or hosted result
+self_repair            → (1) pass through when issue→PR→merge is moving; one repair if stalled
+  → pr_triage          → (2) PRs: merge, fix, review — as many as lie there
+    → stale_worktree_reap → (3) leftover_closeout child; overflow is skip; then delete worktrees
+      → issue_triage   → (4) triage; no → select_next_issue same pass
+        → issue_to_pr  → yes → implement then pr_triage_after (back to PRs)
+          → record_pass
+            → factory_pass_terminal
 ```
 
 | Atom | One job |
 | --- | --- |
+| `self_repair` | parent step (1). Open workspace. Pass through when issue→PR→merge is moving. Leftover / leftover-probe / pass_ceiling / daemon_exec preflight host the factory — they do not enter `recovery_mill`. One carrier repair, then continue to 2–4. |
+| `pr_triage` | parent step (2). Merge, fix, and review PRs that lie there. |
+| `stale_worktree_reap` | parent step (3). After merge, delete leftover worktrees. Child `leftover_closeout` overflow (200+ vs 30) is skip, not a repair loop, and does not block (2) or (4). |
+| `issue_triage` | parent step (4). Triage the next issue. Route `no` selects the next issue in the same pass. |
+| `select_next_issue` | authored same-pass next-issue edge when `issue_triage.route == no`. |
+| `issue_to_pr` | parent step (4). Get issue, branch, worktree, plan, code, test_local, commit, pr_create. |
+| `pr_triage_after` | after a new PR, return to PRs (merge / fix / review). |
 | `classify_factory_idle` | first `factory_pass` atom. Fresh empty-survey stamp + idle last-pass → route `idle` (no GitHub, do not refresh stamp). Expired stamp cheap-probes mill PR / open issues (human stops exclude; `work:ready` is not the probe); empty probe refreshes and idles. Missing stamp, occupied last-pass, remaining work, probe failure, dry-run, or pytest on the operator mill → route `host`. Envelope `idle` is authored here, then `record_factory_idle`. |
 | `host_ff` | mill host fetch + ff-only onto origin/main; refuse if dirty / host catalog skip-worktree would overwrite. Product `config.yaml` follows origin/main. Runs only when idle classify routes `host`. Launchd shell skips exec only when `mill.lock` is held (OS lease). Crash KeepAlive (`SuccessfulExit=false`) and StartInterval=60 are host `--install` setup, not a per-tick plist rewrite. Standalone `lokay-daemon` still probes |
 | `factory_begin_host_gate` | refuse when in-cycle `host_ff` just updated or `LOKAY_PROCESS_HEAD` drifted (restart; do not mill on the previous import). |
@@ -126,7 +111,7 @@ classify_factory_idle
 | `record_pass` | write `last-pass.json` + terminal tick envelope with `lane: product \| oil \| idle`. Inbox/ready persist also rewrite last-pass remaining from this cycle's `working.json` (`remaining_source=inflight_working`) so the glance is not left stale behind reap. |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |
 | mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/` (including the child journal at that root) rotates at a 64 MiB ceiling; recovery stays on `state.jsonl`. Over-cap is fail-closed if the file cannot be cut |
-| leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. No 30-slot unroll. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
+| leftover closeout | child of parent step (3). One in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. Candidates exceeding 30 authored slots skip leftover (route=skip) and host factory_pass — never `recovery_mill`. Leftover-probe fail skips remaining slots. No 30-slot unroll. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in

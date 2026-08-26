@@ -15,54 +15,28 @@ def test_describe_parent_factory_graph():
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
-        "classify_factory_idle",
-        "host_ff",
-        "factory_begin_host_gate",
-        "factory_begin",
-        "survey_prs",
-        "survey_inbox",
-        "survey_ready",
-        "ready_hygiene",
-        "plan_pass",
-        "dispatch_triage",
-        "resolve_conflicts",
-        "closeout_prs",
-        "reap_stale_implementing",
-        "reap_over_budget",
-        "refresh_occupancy",
-        "select_implement",
-        "queue_conflict",
-        "dispatch_implement",
-        "reap_stale_worktrees",
-        "compute_health",
-        "compact_state",
+        "self_repair",
+        "pr_triage",
+        "stale_worktree_reap",
+        "issue_triage",
+        "select_next_issue",
+        "issue_to_pr",
+        "pr_triage_after",
         "record_pass",
-        "record_factory_idle",
         "factory_pass_terminal",
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
-    assert conduction["host_ff"] == ["classify_factory_idle"]
-    assert "host_ff" in conduction["factory_begin_host_gate"]
-    assert "factory_begin_host_gate" in conduction["factory_begin"]
-    assert "factory_begin" in conduction["survey_prs"]
-    assert "survey_prs" in conduction["survey_inbox"]
-    assert "survey_inbox" in conduction["survey_ready"]
-    assert "survey_ready" in conduction["plan_pass"]
-    assert "plan_pass" in conduction["dispatch_triage"]
-    assert "dispatch_triage" in conduction["resolve_conflicts"]
-    assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "refresh_occupancy" in conduction["select_implement"]
-    assert "reap_stale_worktrees" not in conduction["select_implement"]
-    assert "select_implement" in conduction["queue_conflict"]
-    assert "queue_conflict" in conduction["dispatch_implement"]
-    assert "dispatch_implement" in conduction["reap_stale_worktrees"]
-    assert "reap_stale_worktrees" in conduction["compute_health"]
-    assert "reap_over_budget" in conduction["refresh_occupancy"]
-    assert "reap_stale_implementing" in conduction["reap_over_budget"]
-    assert "closeout_prs" in conduction["reap_stale_implementing"]
-    assert "compute_health" in conduction["record_pass"]
-    assert "classify_factory_idle" in conduction["record_factory_idle"]
-    assert "record_factory_idle" in conduction["factory_pass_terminal"]
+    assert conduction["pr_triage"] == ["self_repair"]
+    assert "self_repair" in conduction["stale_worktree_reap"]
+    assert "pr_triage" in conduction["stale_worktree_reap"]
+    assert "stale_worktree_reap" in conduction["issue_triage"]
+    assert "issue_triage" in conduction["select_next_issue"]
+    assert "issue_triage" in conduction["issue_to_pr"]
+    assert "issue_to_pr" in conduction["pr_triage_after"]
+    assert "issue_triage" in conduction["record_pass"]
+    assert "issue_to_pr" in conduction["record_pass"]
+    assert "pr_triage_after" in conduction["record_pass"]
+    assert conduction["factory_pass_terminal"] == ["record_pass"]
     # Mega factory_tick / survey_repos / dispatch_closeout must not hide policy.
     assert "factory_tick" not in ids
     assert "survey_repos" not in ids
@@ -283,29 +257,14 @@ def test_factory_pass_docs_match_package_atom_order():
     import re
 
     ids = [
-        "classify_factory_idle",
-        "host_ff",
-        "factory_begin_host_gate",
-        "factory_begin",
-        "survey_prs",
-        "survey_inbox",
-        "survey_ready",
-        "ready_hygiene",
-        "plan_pass",
-        "dispatch_triage",
-        "resolve_conflicts",
-        "closeout_prs",
-        "reap_stale_implementing",
-        "reap_over_budget",
-        "refresh_occupancy",
-        "select_implement",
-        "queue_conflict",
-        "dispatch_implement",
-        "reap_stale_worktrees",
-        "compute_health",
-        "compact_state",
+        "self_repair",
+        "pr_triage",
+        "stale_worktree_reap",
+        "issue_triage",
+        "select_next_issue",
+        "issue_to_pr",
+        "pr_triage_after",
         "record_pass",
-        "record_factory_idle",
         "factory_pass_terminal",
     ]
     desc = describe_package()
@@ -355,7 +314,8 @@ def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):
     injected = captured["effector_inputs"]
     assert set(injected) == set(ids)
     assert all(injected[step].get("live") is True for step in ids)
-    assert injected["ready_hygiene"]["live"] is True
+    assert injected["issue_to_pr"]["live"] is True
+    assert injected["pr_triage"]["live"] is True
 
 
 def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
@@ -840,3 +800,99 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
             "path": "decision.verdict",
             "equals": "approve",
         }
+
+
+def test_no_dangling_when_upstream():
+    for path in describe_package()["paths"]:
+        ids = {node["id"] for node in path["nodes"]}
+        for node in path["nodes"]:
+            when = node.get("when") or {}
+            upstream = when.get("upstream")
+            if not upstream:
+                continue
+            assert upstream in ids, f"{path['id']}:{node['id']} when.upstream missing"
+            assert upstream in (node.get("conduction") or []), (
+                f"{path['id']}:{node['id']} when.upstream not in conduction"
+            )
+
+
+def test_leftover_fail_routes_host_not_recovery():
+    desc = describe_package()
+    factory = next(p for p in desc["paths"] if p["id"] == "factory_pass")
+    daemon = next(p for p in desc["paths"] if p["id"] == "daemon_cycle")
+    leftover = next(p for p in desc["paths"] if p["id"] == "leftover_closeout")
+    factory_ids = [n["id"] for n in factory["nodes"]]
+    daemon_ids = [n["id"] for n in daemon["nodes"]]
+    leftover_ids = [n["id"] for n in leftover["nodes"]]
+    assert "recovery_mill" not in factory_ids
+    assert "recovery_mill" not in daemon_ids
+    assert daemon_ids == ["run_factory_pass", "summarize_daemon_cycle"]
+    assert leftover_ids == [
+        "prepare_leftover_closeout",
+        "leftover_catalog",
+        "update_leftover_stamp",
+    ]
+    assert factory_ids[:4] == [
+        "self_repair",
+        "pr_triage",
+        "stale_worktree_reap",
+        "issue_triage",
+    ]
+    by = {n["id"]: n for n in factory["nodes"]}
+    assert by["pr_triage"].get("when") in (None, {})
+    assert by["issue_triage"].get("when") in (None, {})
+    assert "record_pass" in factory_ids
+    assert "recovery_mill" not in leftover_ids
+
+
+def test_parked_first_row_selects_next_row_same_pass():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "factory_pass")
+    by = {n["id"]: n for n in path["nodes"]}
+    assert by["select_next_issue"]["when"] == {
+        "upstream": "issue_triage",
+        "path": "route",
+        "equals": "no",
+    }
+    assert "issue_triage" in by["select_next_issue"]["conduction"]
+    assert by["pr_triage_after"]["when"] == {
+        "upstream": "issue_to_pr",
+        "path": "route",
+        "equals": "done",
+    }
+    assert "issue_to_pr" in by["pr_triage_after"]["conduction"]
+    ids = [n["id"] for n in path["nodes"]]
+    assert ids.index("issue_triage") < ids.index("select_next_issue")
+    assert ids.index("select_next_issue") < ids.index("issue_to_pr")
+    assert ids.index("issue_to_pr") < ids.index("pr_triage_after")
+
+
+def test_parent_selected_pass_does_not_conduct_hygiene_timeouts():
+    import tomllib
+
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    factory = next(
+        path for path in package["correlation_paths"] if path["id"] == "factory_pass"
+    )
+    hygiene = {
+        "survey_prs",
+        "survey_inbox",
+        "survey_ready",
+        "dispatch_triage",
+        "closeout_prs",
+        "reap_stale_worktrees",
+        "leftover_catalog",
+        "recovery_mill",
+    }
+    ids = {node["id"] for node in factory["effectors"]}
+    assert hygiene.isdisjoint(ids)
+    for node in factory["effectors"]:
+        timeout = (node.get("adapter") or {}).get("timeout_seconds")
+        if node["id"] in {
+            "self_repair",
+            "pr_triage",
+            "issue_triage",
+            "issue_to_pr",
+            "pr_triage_after",
+        }:
+            continue
+        assert timeout not in {1800, 7200} or node["id"] == "stale_worktree_reap"

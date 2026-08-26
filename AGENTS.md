@@ -23,16 +23,15 @@
 - See **`docs/PROCESS.md`**, `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
-- **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
-  (`classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
-  survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
-  dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  reap_over_budget → refresh_occupancy →
-  select_implement → queue_conflict → dispatch_implement → reap_stale_worktrees →
-  compute_health →
-  compact_state → record_pass → record_factory_idle → factory_pass_terminal`).
-  Idle TTL is the first authored atom; compose never skips `run_path`. One pass
-  is oil XOR product (product wins). Not a fat `compose/tick.py`.
+- **Order lives in Fala.** Parent `factory_pass` is four children:
+ (`self_repair → pr_triage → stale_worktree_reap → issue_triage →
+ select_next_issue → issue_to_pr → pr_triage_after →
+ record_pass → factory_pass_terminal`).
+  `self_repair` runs only when the last receipt is not moving; leftover
+  exceed-slots is skip under step (3), never `recovery_mill`. Same-pass
+  next issue is an authored `when` under (4). After `issue_to_pr`, back
+  to PRs. Compose never skips `run_path`. One pass is oil XOR product
+  (product wins). Not a fat `compose/tick.py`.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
   flatten the mill to one-way issue→done.
 - **Serial by design.** Default `limits.max_issue_to_pr_per_pass` is **1**

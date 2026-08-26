@@ -103,11 +103,22 @@ def handle_recovery(
         from lokay.git_commit import branch_ahead_of_upstream
     known = False
 
+    if atom == "run_factory_pass":
+        from lokay.compose.factory import compose_factory_pass
+
+        return {
+            "ok": True,
+            "mill": compose_factory_pass(
+                config_path=str(inputs.get("config_path") or "") or None,
+                live=True,
+            ),
+        }
+
     if atom == "summarize_daemon_cycle":
         from lokay.proc.summarize_daemon_cycle import summarize
 
         return summarize(
-            mill_node=up.get("recovery_mill") or {},
+            mill_node=up.get("run_factory_pass") or up.get("recovery_mill") or {},
             repair=up.get("recovery_run_self_repair") or {},
         )
 

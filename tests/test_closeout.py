@@ -99,7 +99,8 @@ def test_leftover_catalog_fail_closed_when_prepare_failed():
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+    assert out["ok"] is True and out["skipped"] is True
+    assert out["route"] == "skip" and "exceeds authored slots" in out["error"]
 
 
 def test_leftover_catalog_overflow_is_fail_closed():
@@ -110,7 +111,35 @@ def test_leftover_catalog_overflow_is_fail_closed():
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+    assert out["ok"] is True and out["skipped"] is True
+    assert out["route"] == "skip" and "exceeds authored slots" in out["error"]
+
+
+def test_leftover_catalog_stops_after_first_probe_fail(monkeypatch):
+    from lokay.proc.leftover_catalog import run
+
+    calls = []
+
+    def fetch(selected, **kwargs):
+        calls.append(selected.get("repo"))
+        return {"ok": True, "route": "failed", "error": "rate limit", "numbers": []}
+
+    monkeypatch.setattr("lokay.proc.list_leftover_closed_ready.fetch", fetch)
+    out = run(
+        {
+            "ok": True,
+            "route": "probe",
+            "repos": [f"o/r{i}" for i in range(8)],
+            "labels": ["work:ready"],
+            "live": True,
+            "mutations_allowed": True,
+        },
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is True and out["skipped"] is True
+    assert out["reason"] == "leftover_probe_failed"
+    assert calls == ["o/r0"]
 
 
 def test_leftover_catalog_skip_does_not_list(monkeypatch):
@@ -187,7 +216,8 @@ def test_leftover_catalog_park_failure_fails_closed(monkeypatch):
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and out["error"] == "leftover park failed"
+    assert out["ok"] is True and out["skipped"] is True
+    assert out["route"] == "skip" and out["error"] == "leftover park failed"
 
 
 def test_leftover_catalog_candidate_overflow_fails_closed(monkeypatch):
@@ -214,7 +244,8 @@ def test_leftover_catalog_candidate_overflow_fails_closed(monkeypatch):
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceed authored slots" in out["error"]
+    assert out["ok"] is True and out["skipped"] is True
+    assert out["route"] == "skip" and "exceed authored slots" in out["error"]
 
 
 def test_existing_delivery_closeout_is_explicit_fala_edge():

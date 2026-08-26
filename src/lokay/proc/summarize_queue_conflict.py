@@ -3,6 +3,7 @@
 
 def summarize(selected: dict, recorded: dict, advanced: dict | None = None) -> dict:
     if selected.get("route") == "none":
+        route = "none"
         result = {"kept": 0, "skipped": 0, "demoted": 0, "needs_human": 0}
     else:
         route = str(recorded.get("route") or "needs_human")
@@ -12,6 +13,8 @@ def summarize(selected: dict, recorded: dict, advanced: dict | None = None) -> d
             "demoted": int(route == "close"),
             "needs_human": int(route == "needs_human"),
         }
+    if route in {"needs_human", "skip", "close"}:
+        route = "parked"
     nxt = dict(advanced or {})
     if nxt.get("advanced"):
         result["clean_repos"] = list(nxt.get("clean_repos") or [])
@@ -21,4 +24,4 @@ def summarize(selected: dict, recorded: dict, advanced: dict | None = None) -> d
                 "issue": nxt.get("issue"),
                 "candidate": nxt.get("candidate"),
             }
-    return {"ok": True, "result": result}
+    return {"ok": True, "route": route, "result": result}

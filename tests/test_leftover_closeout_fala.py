@@ -43,3 +43,16 @@ if a=='update_leftover_stamp':v['result']={'skipped':True}"""
     assert statuses["leftover_catalog"]["status"] == "succeeded"
     assert statuses["update_leftover_stamp"]["status"] == "succeeded"
     assert result.get("ticks_used", 16) < 64
+
+
+def test_leftover_catalog_overflow_skips_and_stamps(tmp_path):
+    body = base_effector(
+        """if a=='prepare_leftover_closeout':v.update(route='probe',repos=['o/r'],ok=True)
+if a=='leftover_catalog':v.update(ok=True,route='skip',skipped=True,reason='candidates_exceed_slots')
+if a=='update_leftover_stamp':v['result']={'skipped':True,'reason':'candidates_exceed_slots'}"""
+    )
+    result = run_graph(tmp_path, body, "leftover-overflow", path_id="leftover_closeout")
+    statuses = result["effector_results"]
+    assert statuses["leftover_catalog"]["status"] == "succeeded"
+    assert statuses["update_leftover_stamp"]["status"] == "succeeded"
+    assert "recovery_mill" not in statuses

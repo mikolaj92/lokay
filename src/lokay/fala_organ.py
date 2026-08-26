@@ -36,6 +36,7 @@ from lokay.organ.implementation_selection_boundary import (
 from lokay.organ.inbox_survey_boundary import handle_inbox_survey
 from lokay.organ.intake_check_boundary import handle_intake_check
 from lokay.organ.issue_split_boundary import handle_issue_split
+from lokay.organ.issue_work_boundary import handle_issue_work
 from lokay.organ.issue_triage_boundary import handle_issue_triage
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
@@ -163,6 +164,7 @@ def _handle(
     for handler in (
         handle_recovery,
         handle_factory,
+        handle_issue_work,
         handle_self_repair,
         handle_stale_worktree,
         handle_survey_ready,

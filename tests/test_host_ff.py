@@ -391,4 +391,9 @@ def test_factory_pass_starts_with_host_ff_and_restart_gate():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [n["id"] for n in path["nodes"]]
-    assert ids[:3] == ["host_ff", "factory_begin_host_gate", "factory_begin"]
+    assert ids[:4] == [
+        "self_repair",
+        "pr_triage",
+        "stale_worktree_reap",
+        "issue_triage",
+    ]

@@ -99,6 +99,15 @@ def handle_factory(
     import lokay.fala_organ as _fo
 
     _run_atom_main = _fo._run_atom_main
+
+    def _pass_dir() -> str:
+        return str(
+            (up.get("self_repair") or {}).get("pass_dir")
+            or (up.get("auto_repair") or {}).get("pass_dir")
+            or (up.get("factory_begin") or {}).get("pass_dir")
+            or inputs.get("pass_dir")
+            or ""
+        )
     branch_ahead_of_upstream = getattr(_fo, "branch_ahead_of_upstream", None)
     if branch_ahead_of_upstream is None:
         from lokay.git_commit import branch_ahead_of_upstream
@@ -114,11 +123,86 @@ def handle_factory(
 
         return classify(live=bool(inputs.get("live")))
 
+    if atom == "self_repair":
+        from lokay.proc.auto_repair import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
+    if atom == "pr_triage":
+        from lokay.proc.deal_with_prs import run
+
+        pass_dir = _pass_dir()
+        assert pass_dir
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
+    if atom == "stale_worktree_reap":
+        from lokay.proc.reap_after_merge import run
+
+        pass_dir = _pass_dir()
+        assert pass_dir
+        return run(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
+    if atom == "issue_triage":
+        from lokay.proc.factory_issue_step import triage
+
+        pass_dir = _pass_dir()
+        assert pass_dir
+        return triage(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
+    if atom == "select_next_issue":
+        from lokay.proc.factory_issue_step import select_next
+
+        pass_dir = _pass_dir()
+        assert pass_dir
+        return select_next(pass_dir=pass_dir, triage=up.get("issue_triage") or {})
+
+    if atom == "issue_to_pr":
+        from lokay.proc.factory_issue_step import implement
+
+        pass_dir = _pass_dir()
+        assert pass_dir
+        return implement(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+            triage=up.get("issue_triage") or {},
+            nxt=up.get("select_next_issue") or {},
+        )
+
+    if atom == "pr_triage_after":
+        from lokay.proc.factory_issue_step import back_to_prs
+
+        pass_dir = _pass_dir()
+        assert pass_dir
+        return back_to_prs(
+            pass_dir=pass_dir,
+            config_path=str(inputs.get("config_path") or "") or None,
+            live=bool(inputs.get("live")),
+        )
+
     if atom == "record_factory_idle":
         from lokay.proc.record_factory_idle import record
 
         return record(
-            up.get("classify_factory_idle") or {},
+            up.get("self_repair")
+            or up.get("auto_repair")
+            or up.get("classify_factory_idle")
+            or {},
             config_path=str(inputs.get("config_path") or "") or None,
         )
 
@@ -126,7 +210,10 @@ def handle_factory(
         from lokay.proc.factory_pass_terminal import terminal
 
         return terminal(
-            up.get("classify_factory_idle") or {},
+            up.get("self_repair")
+            or up.get("auto_repair")
+            or up.get("classify_factory_idle")
+            or {},
             up.get("record_pass") or {},
             up.get("record_factory_idle") or {},
         )
@@ -157,14 +244,14 @@ def handle_factory(
 
     if atom == "survey_repos":
         # Legacy bridge atom (not in parent factory_pass graph).
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return _run_atom_main(survey_repos.main, [*cfg, *live, "--pass-dir", pass_dir])
 
     if atom == "survey_prs":
         from lokay.proc.survey_prs_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -175,7 +262,7 @@ def handle_factory(
     if atom == "survey_inbox":
         from lokay.proc.survey_inbox_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -186,7 +273,7 @@ def handle_factory(
     if atom == "survey_ready":
         from lokay.proc.survey_ready_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -217,7 +304,7 @@ def handle_factory(
     if atom == "dispatch_triage":
         from lokay.proc.dispatch_triage_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -228,7 +315,7 @@ def handle_factory(
     if atom == "resolve_conflicts":
         from lokay.proc.resolve_conflicts_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -239,7 +326,7 @@ def handle_factory(
     if atom == "closeout_prs":
         from lokay.proc.closeout_prs_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -250,7 +337,7 @@ def handle_factory(
     if atom == "reap_stale_implementing":
         from lokay.proc.reap_stale_implementing_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "") or None
+        pass_dir = _pass_dir() or None
         return run(
             pass_dir=pass_dir,
             config_path=str(inputs.get("config_path") or "") or None,
@@ -261,7 +348,7 @@ def handle_factory(
         from lokay.proc.reap_over_budget_subflow import run
         from lokay.proc.pi_budget import DEFAULT_BUDGET_S
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "") or None
+        pass_dir = _pass_dir() or None
         return run(
             budget_s=DEFAULT_BUDGET_S,
             pass_dir=pass_dir,
@@ -272,7 +359,7 @@ def handle_factory(
     if atom == "refresh_occupancy":
         from lokay.proc.refresh_occupancy_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -283,7 +370,7 @@ def handle_factory(
     if atom == "reap_stale_worktrees":
         from lokay.proc.reap_stale_worktrees_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -294,25 +381,36 @@ def handle_factory(
     if atom == "select_implement":
         from lokay.proc.select_implement_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(pass_dir=pass_dir)
 
     if atom == "queue_conflict":
         from lokay.proc.queue_conflict_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
-        return run(
+        out = run(
             pass_dir=pass_dir,
             config_path=str(inputs.get("config_path") or "") or None,
             live=bool(inputs.get("live")),
         )
+        route = str(out.get("route") or "")
+        result = out.get("result") if isinstance(out.get("result"), dict) else {}
+        if not route:
+            route = str(result.get("route") or "")
+        if not route and result.get("kept"):
+            route = "ready"
+        elif not route and (
+            result.get("needs_human") or result.get("skipped") or result.get("demoted")
+        ):
+            route = "parked"
+        return {**out, "route": route or "none", "pass_dir": pass_dir}
 
     if atom == "dispatch_implement":
         from lokay.proc.dispatch_implementation_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return run(
             pass_dir=pass_dir,
@@ -321,14 +419,14 @@ def handle_factory(
         )
 
     if atom == "compute_health":
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         return _run_atom_main(
             compute_health.main, [*cfg, *live, "--pass-dir", pass_dir]
         )
 
     if atom == "record_pass":
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
+        pass_dir = _pass_dir()
         assert pass_dir
         # Domain health (stall/work_remaining) is successful conduction; the
         # tick envelope inside may still set ok=false for the mill.

@@ -80,34 +80,19 @@ wymieniają te same ścieżki.
 stateDiagram-v2
     [*] --> Heartbeat
     Heartbeat --> FactoryPass
-    FactoryPass --> ClassifyFactoryIdle
-    ClassifyFactoryIdle --> RecordFactoryIdle: świeży pusty stempel
-    ClassifyFactoryIdle --> HostFF: brak stempla / praca / sonda
-    HostFF --> FactoryBeginHostGate
-    FactoryBeginHostGate --> FactoryBegin
-    FactoryBegin --> SurveyPrs
-    SurveyPrs --> SurveyInbox
-    SurveyInbox --> SurveyReady
-    SurveyReady --> ReadyHygiene
-    ReadyHygiene --> PlanPass
-    PlanPass --> DispatchTriage
-    DispatchTriage --> ResolveConflicts
-    ResolveConflicts --> CloseoutPrs
-    CloseoutPrs --> ReapStaleImplementing
-    ReapStaleImplementing --> ReapOverBudget
-    ReapOverBudget --> RefreshOccupancy
-    RefreshOccupancy --> SelectImplement
-    SelectImplement --> QueueConflict
-    QueueConflict --> DispatchImplement
-    DispatchImplement --> ReapStaleWorktrees
-    ReapStaleWorktrees --> ComputeHealth
-    ComputeHealth --> CompactState
-    CompactState --> RecordPass
-    RecordPass --> FactoryPassTerminal: lane product / oil / idle
-    RecordFactoryIdle --> FactoryPassTerminal: lane idle
+    FactoryPass --> SelfRepair
+    SelfRepair --> PrTriage: moving forward / repair done
+    PrTriage --> StaleWorktreeReap
+    StaleWorktreeReap --> IssueTriage
+    IssueTriage --> SelectNextIssue: no / next issue
+    IssueTriage --> IssueToPr: yes
+    SelectNextIssue --> IssueToPr
+    IssueToPr --> PrTriageAfter: back to PRs
+    IssueTriage --> RecordPass
+    IssueToPr --> RecordPass
+    PrTriageAfter --> RecordPass
+    RecordPass --> FactoryPassTerminal
     FactoryPassTerminal --> [*]
-    FactoryPassTerminal --> Recovery: potwierdzona awaria nośnika
-    Recovery --> Heartbeat: zweryfikowany fast-forward
 ```
 
 ### Otwarcie workspace passu — `factory_begin`
@@ -1237,8 +1222,8 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
-| `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `DaemonCycle` | `daemon_cycle` | hostuje `factory_pass`; `self_repair` nie zastępuje kroków 2–4 |
+| `FactoryPass` | `factory_pass` | cztery dzieci: self_repair, pr_triage, stale_worktree_reap, issue_triage→issue_to_pr |
 | `FactoryBegin` | `factory_begin` | otwiera workspace passu przez jawny preflight, ledger i persist |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
 | `ReadySurvey` | `survey_ready` | listuje i klasyfikuje gotowe issue jednym atomem katalogu |
