@@ -307,6 +307,158 @@ def test_inbox_only_unlabeled_eligibility_does_not_require_work_ready(tmp_path):
     assert prepared["product_queue"] is True
 
 
+def test_reduce_keeps_product_catalog_not_a_singleton():
+    from lokay.proc.reduce_implementation_selection import reduce_state
+
+    out = reduce_state(
+        prepared={
+            "route": "select",
+            "issue_budget": 1,
+            "self_repo": _self(),
+            "product_queue": True,
+        },
+        results=[
+            {"route": "eligible", "repo": "mikolaj92/Temida"},
+            {"route": "eligible", "repo": "mikolaj92/reviewkit"},
+        ],
+        working={
+            "actions": [],
+            "remaining_ready": 2,
+            "ready_by_repo": {
+                "mikolaj92/Temida": [{"number": 4990, "title": "parked"}],
+                "mikolaj92/reviewkit": [{"number": 205, "title": "next"}],
+            },
+        },
+    )
+    assert out["clean_repos"] == ["mikolaj92/Temida", "mikolaj92/reviewkit"]
+    assert out["lane"] == "product"
+
+
+def test_reduce_needs_human_on_first_walks_to_next_catalog_row():
+    from lokay.proc.reduce_implementation_selection import reduce_state
+
+    out = reduce_state(
+        prepared={
+            "route": "select",
+            "issue_budget": 1,
+            "self_repo": _self(),
+            "product_queue": True,
+        },
+        results=[
+            {"route": "eligible", "repo": "mikolaj92/Temida"},
+            {"route": "eligible", "repo": "mikolaj92/reviewkit"},
+        ],
+        working={
+            "actions": [
+                {
+                    "step": "queue_conflict",
+                    "repo": "mikolaj92/Temida",
+                    "issue": 4990,
+                    "outcome": "needs_human",
+                    "reason": "execution_scope_ambiguous",
+                }
+            ],
+            "remaining_ready": 2,
+            "ready_by_repo": {
+                "mikolaj92/Temida": [{"number": 4990, "title": "parked"}],
+                "mikolaj92/reviewkit": [{"number": 205, "title": "next"}],
+            },
+        },
+    )
+    assert out["clean_repos"] == ["mikolaj92/reviewkit"]
+    assert "mikolaj92/Temida" not in out["ready_by_repo"]
+    assert [row["number"] for row in out["ready_by_repo"]["mikolaj92/reviewkit"]] == [205]
+    assert out["lane"] == "product"
+
+
+def test_needs_human_on_first_candidate_starts_next_issue_to_pr(tmp_path):
+    """Temida#4990 needs_human must not starve reviewkit#205 (i2pr can be > 0)."""
+    from lokay.proc.persist_implementation_selection import persist
+    from lokay.proc.record_dispatch_success import apply as record_launch
+    from lokay.proc.record_queue_conflict import record
+    from lokay.proc.reduce_implementation_selection import reduce_state
+    from lokay.proc.select_implementation_candidate import select
+
+    path = workspace(tmp_path, repos=("mikolaj92/Temida", "mikolaj92/reviewkit"))
+    pass_io.write_json(
+        pass_io.begin_path(path),
+        {
+            "repos": ["mikolaj92/Temida", "mikolaj92/reviewkit"],
+            "live": True,
+            "issue_budget": 1,
+            "executor_enabled": True,
+            "incident_repo": "mikolaj92/lokay",
+            "stuck_path": str(tmp_path / "stuck.json"),
+        },
+    )
+    pass_io.write_json(
+        pass_io.working_path(path),
+        {
+            "actions": [],
+            "remaining_ready": 2,
+            "ready_by_repo": {
+                "mikolaj92/Temida": [{"number": 4990, "title": "parked"}],
+                "mikolaj92/reviewkit": [{"number": 205, "title": "next"}],
+            },
+            "inbox_issues_by_repo": {
+                "mikolaj92/Temida": [{"number": 4990, "title": "parked"}],
+                "mikolaj92/reviewkit": [{"number": 205, "title": "next"}],
+            },
+            "prs_by_repo": {},
+            "pr_survey_failed": [],
+            "occupied_repos": [],
+            "issue_to_pr_started": 0,
+        },
+    )
+    reduced = reduce_state(
+        prepared={
+            "route": "select",
+            "issue_budget": 1,
+            "self_repo": _self(),
+            "product_queue": True,
+            "stuck": {},
+        },
+        results=[
+            {"route": "eligible", "repo": "mikolaj92/Temida"},
+            {"route": "eligible", "repo": "mikolaj92/reviewkit"},
+        ],
+        working=pass_io.read_json(pass_io.working_path(path)),
+    )
+    assert reduced["clean_repos"] == ["mikolaj92/Temida", "mikolaj92/reviewkit"]
+    persist(pass_dir=str(path), reduced=reduced)
+    parked = record(
+        pass_dir=str(path),
+        outcome={
+            "route": "needs_human",
+            "repo": "mikolaj92/Temida",
+            "issue": 4990,
+            "decision": {
+                "reason": "execution_scope_ambiguous",
+                "detail": {"note": "implement_here_or_create_separate_issue"},
+            },
+        },
+        remove={},
+        tracker={},
+    )
+    assert parked["route"] == "needs_human"
+    nxt = select(pass_dir=str(path))
+    assert nxt["route"] == "candidate"
+    assert nxt["repo"] == "mikolaj92/reviewkit"
+    assert nxt["issue"] == 205
+    launched = record_launch(
+        pass_dir=str(path),
+        launched={
+            "repo": nxt["repo"],
+            "issue": nxt["issue"],
+            "launch": {"ok": True, "route": "started"},
+        },
+    )
+    working = pass_io.read_json(pass_io.working_path(path))
+    assert launched["route"] == "receipt"
+    assert working["issue_to_pr_started"] > 0
+    assert working["issue_to_pr_started"] == 1
+
+
 def test_reduce_does_not_fall_through_to_oil_when_product_queue():
     from lokay.proc.reduce_implementation_selection import reduce_state
 

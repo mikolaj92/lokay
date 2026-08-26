@@ -15,7 +15,7 @@ machines are worthless. Bounded misses must free the slot.
 Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Fleet pass order
 lives in parent Fala ``factory_pass`` (`host_ff → survey_prs → survey_inbox → survey_ready
-→ plan → triage → conflicts → closeout → occupancy → reap leftover worktrees → select → queue_conflict → implement →
+→ plan → triage → conflicts → closeout → occupancy → select → queue_conflict → implement → reap leftover worktrees →
 health → receipt`). Serial by design (default K=1).
 `compose_tick` is a thin in-process bridge for canaries/CLI — not the multi-repo
 brain. The promises below are the public surface that must remain.

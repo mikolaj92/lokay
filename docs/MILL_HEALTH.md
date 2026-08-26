@@ -74,7 +74,7 @@ stops the pass (`health=host_updated`) so the next tick reloads. Launchd
 lifts `host_updated` if HEAD moved under the live daemon. `LastExitStatus=0` when the pass did work (`health=progress`
 or detached `issue_to_pr_started`), even if the Fala wrapper envelope has
 `ok: false`. `factory_begin` keeps a handful of `factory-pass-*` workspaces
-beside `state.jsonl` and deletes the rest. After occupancy,
+beside `state.jsonl` and deletes the rest. After dispatch,
 `reap_stale_worktrees` drops leftover `~/.lokay/worktrees` corners that
 cannot resume (merged / closed CONFLICTING / unpublished-behind-main) and
 `reap_stale_worktrees` drops leftover `~/.lokay/worktrees` corners that

@@ -88,15 +88,15 @@ classify_factory_idle
                       → reap_stale_implementing  → leftover in-flight cache → ai:ready
                         → reap_over_budget  → kill plan_only over budget; harvest real diff to PR
                         → refresh_occupancy  → occupy live/merged; re-list leftover-ready only
-                          → reap_stale_worktrees → drop leftover corners that cannot resume
-                          → select_implement     → oil XOR product; product wins
-                          → queue_conflict   → SKIP/CLOSE/READY queue hygiene
+                          → select_implement     → oil XOR product; product wins; keep catalog
+                          → queue_conflict   → SKIP/CLOSE/READY/needs_human queue hygiene
                           → dispatch_implement → issue_to_pr child Fala
-                            → compute_health
-                              → compact_state  → bound the existing state.jsonl
-                                → record_pass  → last-pass.json (lane: product | oil | idle)
-                                  → record_factory_idle  → authored idle receipt (when classify routes idle)
-                                    → factory_pass_terminal  → lift idle or hosted result
+                            → reap_stale_worktrees → drop leftover corners that cannot resume
+                              → compute_health
+                                → compact_state  → bound the existing state.jsonl
+                                  → record_pass  → last-pass.json (lane: product | oil | idle)
+                                    → record_factory_idle  → authored idle receipt (when classify routes idle)
+                                      → factory_pass_terminal  → lift idle or hosted result
 ```
 
 | Atom | One job |
@@ -118,10 +118,10 @@ classify_factory_idle
 | `reap_stale_implementing` | one in-process catalog atom: leftover in-flight cache → `ai:ready` (mill no longer awards those labels). No 30-slot unroll. After an empty leftover-cache probe, skip those GitHub lists for 300s without refreshing the stamp. Fresh leftover-cache skip does not require healthy. Fresh leftover-cache skip is not applied. Leftover-cache skip reports probe_failed. Hosted leftover-cache parks do. Unhealthy leftover-cache parks do not clear the stamp. Unhealthy leftover-cache parks are planned. Leftover-cache reaped_count excludes planned parks. Hosted leftover-cache reports applied. Leftover-cache rate limit does not stamp empty. Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass stays at 300s. Idle daemon_cycle skip still runs leftover-cache. Pytest must not skip leftover-cache GitHub lists using the mill stamp. |
 | `reap_over_budget` | one in-process catalog atom: kill over-budget plan_only i2pr and park the slot. A live coder with a **real** diff is harvested (`commit_all` → `push` → `pr_create`) without SIGTERM. No 723-slot unroll. |
 | `refresh_occupancy` | one in-process catalog atom: union just-merged + live i2pr; re-list PRs only on leftover-ready repos that are not occupied. No 30-slot unroll. A live receipt whose process command is unreadable remains occupied; an unreadable lifecycle receipt occupies every configured repo. Unknown is not idle. A `reaped` receipt is idle even if pi has not exited |
-| `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Over-cap stacks view at most 4 oldest issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the mill stamp. Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |
-| `select_implement` | one in-process catalog atom: clean repos eligible for issue_to_pr (serial K budget; skip occupied). No 30-slot unroll. Open catalog work is inbox ∪ ready (human stops / covering PR exclude; `work:ready` is not a gate). One pass is oil XOR product: a product open issue or a product AI PR wins; oil on the canonical self repo (`incident_repo`) only when the product lane is empty. Live mill delivers every enabled repository in the configured catalog |
+| `select_implement` | one in-process catalog atom: clean repos eligible for issue_to_pr (serial K budget; skip occupied). No 30-slot unroll. Open catalog work is inbox ∪ ready (human stops / covering PR exclude; `work:ready` is not a gate). Keeps the eligible product catalog, not a singleton: a `needs_human` / skip on the first row walks to the next implementable issue. One pass is oil XOR product: a product open issue or a product AI PR wins; oil on the canonical self repo (`incident_repo`) only when the product lane is empty. Live mill delivers every enabled repository in the configured catalog |
 | `queue_conflict` | contradiction gate before implement (queue hygiene) |
 | `dispatch_implement` | intake gate + `issue_to_pr` (serial by design). If its live `ps` mutex survey fails, it refuses every launch: unknown is not idle. `plan_only` parks the slot; it does not CLOSE the issue. |
+| `reap_stale_worktrees` | drop leftover worktrees that cannot resume (KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished; one `ls-remote` per repo). Hygiene after dispatch, not the gate to select. Over-cap stacks view at most 4 oldest issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the mill stamp. Failed PR survey, local process uncertainty, or receipt state is unknown, not idle; receipt uncertainty keeps every corner. |
 | `compute_health` | remaining counters + honest mill health (ready behind PR-first / occupancy is waiting, not stall) |
 | `record_pass` | write `last-pass.json` + terminal tick envelope with `lane: product \| oil \| idle`. Inbox/ready persist also rewrite last-pass remaining from this cycle's `working.json` (`remaining_source=inflight_working`) so the glance is not left stale behind reap. |
 | `compact_state` | atomically shrink the existing JSONL to recovery/yield facts when it exceeds 8 MiB |

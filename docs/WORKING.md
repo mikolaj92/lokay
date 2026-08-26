@@ -159,7 +159,8 @@ product. Green repository verification may be reused only for the identical
    `refresh_occupancy` marks just-merged / still-coding repos occupied
    and re-lists PRs only on leftover-ready repos that are not already
    occupied, so a 29-repo catalog does not 429 the secondary budget
-   before `select_implement`. Then `reap_stale_worktrees` drops leftover corners
+   before `select_implement`. `select_implement` conducts from occupancy.
+   After `dispatch_implement`, `reap_stale_worktrees` drops leftover corners
    that cannot resume (merged, closed CONFLICTING, unpublished-behind-main).
    `uv.lock`-only is not real uncommitted content, so a CLOSED leftover with
    only a dirty lockfile can archive. KEEP a live i2pr (from receipts **or**
@@ -283,8 +284,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   `classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
   survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  reap_over_budget → refresh_occupancy → reap_stale_worktrees →
-  select_implement → queue_conflict → dispatch_implement → compute_health →
+  reap_over_budget → refresh_occupancy → select_implement →
+  queue_conflict → dispatch_implement → reap_stale_worktrees → compute_health →
   compact_state → record_pass → record_factory_idle → factory_pass_terminal`.
   One pass is oil XOR product (product wins). Last-pass receipt includes
   `lane: product | oil | idle`.

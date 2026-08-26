@@ -27,8 +27,8 @@
   (`classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
   survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  reap_over_budget → refresh_occupancy → reap_stale_worktrees →
-  select_implement → queue_conflict → dispatch_implement → compute_health →
+  reap_over_budget → refresh_occupancy → select_implement →
+  queue_conflict → dispatch_implement → reap_stale_worktrees → compute_health →
   compact_state → record_pass → record_factory_idle → factory_pass_terminal`).
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
   is oil XOR product (product wins). Not a fat `compose/tick.py`.

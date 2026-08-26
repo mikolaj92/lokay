@@ -30,10 +30,10 @@ def test_describe_parent_factory_graph():
         "reap_stale_implementing",
         "reap_over_budget",
         "refresh_occupancy",
-        "reap_stale_worktrees",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
+        "reap_stale_worktrees",
         "compute_health",
         "compact_state",
         "record_pass",
@@ -51,15 +51,31 @@ def test_describe_parent_factory_graph():
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "reap_stale_worktrees" in conduction["select_implement"]
-    assert "refresh_occupancy" in conduction["reap_stale_worktrees"]
+    assert "refresh_occupancy" in conduction["select_implement"]
+    assert "reap_stale_worktrees" not in conduction["select_implement"]
+    assert "dispatch_implement" in conduction["reap_stale_worktrees"]
+    assert "refresh_occupancy" not in conduction["reap_stale_worktrees"]
     assert "reap_over_budget" in conduction["refresh_occupancy"]
     assert "reap_stale_implementing" in conduction["reap_over_budget"]
     assert "closeout_prs" in conduction["reap_stale_implementing"]
     assert "select_implement" in conduction["queue_conflict"]
     assert "queue_conflict" in conduction["dispatch_implement"]
+    assert "reap_stale_worktrees" in conduction["compute_health"]
     assert "dispatch_implement" in conduction["compute_health"]
     assert "compute_health" in conduction["record_pass"]
+
+
+def test_select_implement_is_reachable_without_reap_stale_worktrees():
+    """Reap is hygiene after dispatch; it must not gate implement."""
+    path = next(p for p in describe_package()["paths"] if p["id"] == "factory_pass")
+    conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids.index("refresh_occupancy") < ids.index("select_implement")
+    assert ids.index("select_implement") < ids.index("dispatch_implement")
+    assert ids.index("dispatch_implement") < ids.index("reap_stale_worktrees")
+    assert "refresh_occupancy" in conduction["select_implement"]
+    assert "reap_stale_worktrees" not in conduction["select_implement"]
+    assert "dispatch_implement" in conduction["reap_stale_worktrees"]
     assert "classify_factory_idle" in conduction["record_factory_idle"]
     assert "record_factory_idle" in conduction["factory_pass_terminal"]
     # Mega factory_tick / survey_repos / dispatch_closeout must not hide policy.
@@ -278,10 +294,10 @@ def test_factory_pass_docs_match_package_atom_order():
         "reap_stale_implementing",
         "reap_over_budget",
         "refresh_occupancy",
-        "reap_stale_worktrees",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
+        "reap_stale_worktrees",
         "compute_health",
         "compact_state",
         "record_pass",

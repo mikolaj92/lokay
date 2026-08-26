@@ -11,15 +11,22 @@ def record(*, pass_dir: str, outcome: dict, remove: dict, tracker: dict) -> dict
     decision = dict(outcome.get("decision") or {})
     route = str(outcome.get("route") or "needs_human")
     ready = dict(working.get("ready_by_repo") or {})
+    inbox = dict(working.get("inbox_issues_by_repo") or {})
     if route != "ready":
         ready[repo] = [
             row
             for row in list(ready.get(repo) or [])
             if int(row.get("number") or 0) != number
         ]
+        inbox[repo] = [
+            row
+            for row in list(inbox.get(repo) or [])
+            if int(row.get("number") or 0) != number
+        ]
         working["remaining_ready"] = max(
             0, int(working.get("remaining_ready") or 0) - 1
         )
+        working["inbox_issues_by_repo"] = inbox
     action = {
         "step": "queue_conflict",
         "repo": repo,

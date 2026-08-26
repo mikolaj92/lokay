@@ -2,6 +2,7 @@
 
 from lokay.passkit import io as pass_io
 from lokay.proc.catalog_work import work_by_repo
+from lokay.proc.reduce_implementation_selection import parked_issue_keys
 from lokay.stuck import excluded_numbers
 
 
@@ -12,6 +13,7 @@ def select(*, pass_dir: str) -> dict:
     if not begin.get("live") or int(implement.get("issue_budget") or 0) <= 0:
         return {"ok": True, "route": "none", "reason": "no_live_budget"}
     stuck = dict(working.get("stuck") or begin.get("stuck") or {})
+    parked = parked_issue_keys(working)
     ready = work_by_repo(
         working,
         stuck=stuck,
@@ -24,6 +26,7 @@ def select(*, pass_dir: str) -> dict:
                 x
                 for x in list(ready.get(repo) or [])
                 if int(x.get("number", -1)) not in excluded
+                and (str(repo), int(x.get("number", -1))) not in parked
             ),
             key=lambda x: int(x.get("number", 0)),
         )

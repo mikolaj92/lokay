@@ -44,6 +44,7 @@ def test_record_removes_nonready_candidate(tmp_path):
             "progress": 0,
             "remaining_ready": 2,
             "ready_by_repo": {"a/b": [{"number": 7}, {"number": 8}]},
+            "inbox_issues_by_repo": {"a/b": [{"number": 7}]},
         },
     )
     out = record(
@@ -59,4 +60,5 @@ def test_record_removes_nonready_candidate(tmp_path):
     )
     working = pass_io.read_json(pass_io.working_path(path))
     assert out["route"] == "skip" and working["ready_by_repo"]["a/b"] == [{"number": 8}]
+    assert working["inbox_issues_by_repo"]["a/b"] == []
     assert working["remaining_ready"] == 1

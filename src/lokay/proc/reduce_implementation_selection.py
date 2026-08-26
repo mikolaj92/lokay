@@ -8,10 +8,50 @@ from lokay.proc.pass_lane import (
     self_repo,
 )
 
+_PARKED_QUEUE = frozenset({"needs_human", "skip", "close"})
+
+
+def parked_issue_keys(working: dict) -> set[tuple[str, int]]:
+    """Issues already parked this pass (queue_conflict skip / human / close)."""
+    keys: set[tuple[str, int]] = set()
+    for action in list(working.get("actions") or []):
+        if not isinstance(action, dict):
+            continue
+        if action.get("step") != "queue_conflict":
+            continue
+        if str(action.get("outcome") or "") not in _PARKED_QUEUE:
+            continue
+        repo = str(action.get("repo") or "")
+        number = int(action.get("issue") or 0)
+        if repo and number > 0:
+            keys.add((repo, number))
+    return keys
+
+
+def drop_parked_rows(ready: dict, parked: set[tuple[str, int]]) -> dict:
+    out: dict = {}
+    for repo, rows in dict(ready or {}).items():
+        kept = [
+            row
+            for row in list(rows or [])
+            if (str(repo), int(row.get("number") or 0)) not in parked
+        ]
+        if kept:
+            out[str(repo)] = kept
+    return out
+
+
+def eligible_with_work(repos: list[str], ready: dict) -> list[str]:
+    """Keep every eligible catalog row that still has implementable work."""
+    return [repo for repo in repos if list(ready.get(repo) or [])]
+
 
 def reduce_state(*, prepared: dict, results: list[dict], working: dict) -> dict:
     actions = list(working.get("actions") or [])
-    ready = work_by_repo(working, stuck=prepared.get("stuck"))
+    parked = parked_issue_keys(working)
+    ready = drop_parked_rows(
+        work_by_repo(working, stuck=prepared.get("stuck")), parked
+    )
     remaining = remaining_ready_count(ready)
     self_id = str(prepared.get("self_repo") or self_repo())
     product_queue = bool(prepared.get("product_queue")) or product_candidates(
@@ -79,14 +119,17 @@ def reduce_state(*, prepared: dict, results: list[dict], working: dict) -> dict:
                 "product_lane": "skip_oil_product_lane",
             }.get(reason, "skip_implementation_repo")
             actions.append({"step": step, "repo": repo, "reason": reason})
-    if product_eligible:
-        clean = [product_eligible[0]]
+    product_left = eligible_with_work(product_eligible, ready)
+    oil_left = eligible_with_work(oil_eligible, ready)
+    if product_left:
+        clean = product_left
     elif product_queue:
         clean = []
-    elif oil_eligible:
-        clean = [oil_eligible[0]]
+    elif oil_left:
+        clean = oil_left
     else:
         clean = []
+    remaining = remaining_ready_count(ready)
     lane = classify_pass_lane(
         self_id=self_id,
         ready_by_repo=ready,

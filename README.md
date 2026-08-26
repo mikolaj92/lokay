@@ -96,11 +96,11 @@ stateDiagram-v2
     CloseoutPrs --> ReapStaleImplementing
     ReapStaleImplementing --> ReapOverBudget
     ReapOverBudget --> RefreshOccupancy
-    RefreshOccupancy --> ReapStaleWorktrees
-    ReapStaleWorktrees --> SelectImplement
+    RefreshOccupancy --> SelectImplement
     SelectImplement --> QueueConflict
     QueueConflict --> DispatchImplement
-    DispatchImplement --> ComputeHealth
+    DispatchImplement --> ReapStaleWorktrees
+    ReapStaleWorktrees --> ComputeHealth
     ComputeHealth --> CompactState
     CompactState --> RecordPass
     RecordPass --> FactoryPassTerminal: lane product / oil / idle
@@ -921,10 +921,12 @@ fail-closed. Atom katalogu sprawdza twardy zestaw faktów: zakres, kompletność
 survey PR, PR-first, occupancy, stuck ledger, obecność otwartego issue (inbox
 albo ready; `work:ready` nie jest bramką) i dostępność executora. Otwarte
 issue z inboxu jest pracą: nie wolno ignorować inboxu, bo brak drugiej
-etykiety ready. Czysty reduktor wybiera pierwsze kwalifikujące się repo w
-kolejności konfiguracji; nie uruchamia procesu ani mutacji. Osobny efekt
-materializuje plan implementacji. Brak live budget kończy się w procesie
-katalogu, nie osobną krawędzią Fali.
+etykiety ready. Czysty reduktor zostawia katalog kwalifikujących się repo
+w kolejności konfiguracji — nie tylko pierwsze. `needs_human` / skip na
+pierwszym wierszu schodzi do następnego implementowalnego; jeden zaparkowany
+ticket nie opróżnia `clean_repos`. Reduktor nie uruchamia procesu ani mutacji.
+Osobny efekt materializuje plan implementacji. Brak live budget kończy się w
+procesie katalogu, nie osobną krawędzią Fali.
 
 ### Higiena kolejki implementacji — `queue_conflict`
 
