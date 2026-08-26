@@ -8,5 +8,6 @@ def run(*, pass_dir: str) -> dict:
         path_id="select_implement",
         repo="local/implementation-selection",
         live=False,
+        max_ticks=16,
         extra_inputs={"pass_dir": pass_dir},
     )

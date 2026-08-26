@@ -11,31 +11,16 @@ import pytest
 from lokay.passkit import io as pass_io
 from lokay.proc import detach_issue_to_pr, refresh_occupancy
 from lokay.proc.closeout_prs import run_closeout_prs
+from lokay.proc.implementation_selection_catalog import run as _catalog
 from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
-from lokay.proc.select_implementation_repo_slot import select as _select_slot
-from lokay.proc.inspect_implementation_eligibility import inspect as _inspect_selection
-from lokay.proc.reduce_implementation_selection import reduce_state as _reduce_selection
 from lokay.proc.persist_implementation_selection import persist as _persist_selection
 
 
 def run_select_implement(*, pass_dir: str):
-    from lokay.passkit import io as pass_io
-
     prepared = _prepare_selection(pass_dir=pass_dir, slot_count=30)
-    results = []
-    for slot in range(1, 31):
-        selected = _select_slot(prepared, slot=slot)
-        results.append(
-            _inspect_selection(pass_dir=pass_dir, prepared=prepared, selected=selected)
-            if selected.get("route") == "repo"
-            else selected
-        )
-    reduced = _reduce_selection(
-        prepared=prepared,
-        results=results,
-        working=pass_io.read_json(pass_io.working_path(pass_dir)),
+    return _persist_selection(
+        pass_dir=pass_dir, reduced=_catalog(prepared, pass_dir=pass_dir)
     )
-    return _persist_selection(pass_dir=pass_dir, reduced=reduced)
 
 
 def _pass(

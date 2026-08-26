@@ -8,5 +8,6 @@ def run(*, pass_dir: str) -> dict:
         path_id="plan_pass",
         repo="local/pass-plan",
         live=False,
+        max_ticks=16,
         extra_inputs={"pass_dir": pass_dir},
     )
