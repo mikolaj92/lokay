@@ -114,59 +114,20 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> InspectFactoryLease
-    InspectFactoryLease --> RestoreDelegatedLease: brak pliku tego samego tokena
-    InspectFactoryLease --> RunFactoryPreflight: brak delegowanej capability
-    InspectFactoryLease --> LoadFactoryConfig: ważna capability
-    RestoreDelegatedLease --> InspectFactoryLeaseAgain
-    InspectFactoryLeaseAgain --> FactoryBeginTerminal: capability nieważna
-    InspectFactoryLeaseAgain --> LoadFactoryConfig: capability ważna
-    RunFactoryPreflight --> FactoryBeginTerminal: preflight failed
-    RunFactoryPreflight --> LoadFactoryConfig: preflight green / dry-run
-    LoadFactoryConfig --> ClassifyFactoryMode
-    ClassifyFactoryMode --> FactoryBeginTerminal: live + config nie-live / offline
-    ClassifyFactoryMode --> SelectFactoryScope
-    SelectFactoryScope --> ReadFactoryStuckLedger
-    ReadFactoryStuckLedger --> HarvestFactoryChildren
-    state HarvestFactoryChildren {
-        [*] --> ReadChildHarvestFacts
-        ReadChildHarvestFacts --> ReconcileDeadChildReceipts
-        ReconcileDeadChildReceipts --> ReconcileJournalMisses
-        ReconcileJournalMisses --> ReconcileDeliveredIssues
-        ReconcileDeliveredIssues --> ReconcileBlockedMisses
-        ReconcileBlockedMisses --> SelectClosedCatalogSlot
-        SelectClosedCatalogSlot --> ProbeOneClosedRepo: slot has stuck rows
-        SelectClosedCatalogSlot --> RecordClosedCatalogSlot: empty slot
-        ProbeOneClosedRepo --> RecordClosedCatalogSlot
-        RecordClosedCatalogSlot --> SelectClosedCatalogSlot: next of 30 slots
-        RecordClosedCatalogSlot --> ClearClosedCatalogRows: final slot
-        ClearClosedCatalogRows --> DropOutOfScopeRows
-        DropOutOfScopeRows --> ClearStaleCycleStarts
-        ClearStaleCycleStarts --> [*]
-    }
-    HarvestFactoryChildren --> PersistFactoryStuckLedger
-    PersistFactoryStuckLedger --> CreateFactoryPassDirectory
-    CreateFactoryPassDirectory --> SelectFactorySurveyRepos
-    SelectFactorySurveyRepos --> BuildFactoryBeginState
-    BuildFactoryBeginState --> PersistFactoryBeginState
-    PersistFactoryBeginState --> FactoryBeginTerminal
-    FactoryBeginTerminal --> [*]
+    [*] --> ProbeFactoryHost
+    ProbeFactoryHost --> LoadFactoryConfig
+    LoadFactoryConfig --> SelectFactoryScope
+    SelectFactoryScope --> CreateFactoryPassDirectory
+    CreateFactoryPassDirectory --> PersistFactoryBeginState
+    PersistFactoryBeginState --> [*]
 ```
 
-Lease/preflight, config mode, scope, stuck ledger, pass directory,
-survey rotation, zbudowanie stanu i dwa zapisy są osobnymi procesami. Harvest
-jest osobną pod-Falą: jeden atom czyta lokalne receipt/journal facts, a Fala
-prowadzi osobne redukcje dead-child, miss, delivery i blocked. Catalog CLOSED
-facts mają 30 jawnych slotów: każdy fizyczny proces odpytuje najwyżej jedno
-repozytorium, a osobny record atom składa wynik. Potem osobne procesy wykonują
-closed-catalog, out-of-scope i stale-cycle-start cleanup. Żaden pojedynczy proces nie ukrywa tej
-sekwencji. Fala
-posiada jedyne drzewo otwarcia passu. Odzyskanie delegowanej capability jest
-jednym ograniczonym efektem, nie pętlą. Offline i preflight failure są jawnymi
-terminalami. Węzeł `factory_begin` w `factory_pass` prowadzi wyłącznie kwit
-(`pass_dir`, `stuck_path`, `planned`, counts) — duże listingi zostają na dysku
-i nie wjeżdżają w conduction każdego następnego atomu. Nie ma agenta: wszystkie
-decyzje wynikają z lease, konfiguracji i lokalnych ledgerów.
+Jedna krótka sonda hosta, katalog z konfiguracji i miejsce na dysku.
+`pass_dir` powstaje, gdy host jest dostępny. Sonda nie zamyka passa
+w idle/skip przez pusty survey. Lease, preflight, harvest i cztery
+terminale nie stoją na ścieżce krytycznej — issues i PRs listują żywo
+z GitHuba. Węzeł `factory_begin` w `factory_pass` prowadzi kwit
+(`pass_dir`, `stuck_path`, `planned`, counts). Nie ma agenta.
 
 ### Przegląd gotowych issue — `survey_ready`
 
@@ -1307,7 +1268,7 @@ kontraktu. Aktualny audyt:
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
-| `FactoryBegin` | `factory_begin` | otwiera workspace passu przez jawny preflight, ledger i persist |
+| `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
 | `ReadySurvey` | `survey_ready` | listuje i klasyfikuje gotowe issue jednym atomem katalogu |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |

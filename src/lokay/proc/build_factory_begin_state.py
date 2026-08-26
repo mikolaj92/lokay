@@ -2,15 +2,13 @@
 
 
 def build(
-    config: dict, scope: dict, ledger: dict, workspace: dict, survey: dict
+    config: dict, scope: dict, ledger: dict, workspace: dict, survey: dict | None = None
 ) -> dict:
     repos = list(scope.get("repos") or [])
+    catalog = list((survey or {}).get("survey_repos") or repos)
     pipeline = [
-        "survey: list-prs + list-inbox + list-issues (hot repos + rotated cold)",
-        "per-repo PR-first: conflict close / repair / merge open AI PRs",
-        "inbox triage + deterministic intake (skip repos with actionable open AI PRs)",
-        "issue_to_pr up to K across clean (not occupied) repos; occupancy and leftover reaps are housecleaning",
-        "on failure: stuck ledger → ai:blocked",
+        "open workspace + configured catalog",
+        "prs and issues list live from GitHub",
     ]
     planned = [
         {
@@ -27,7 +25,7 @@ def build(
             **config,
             "pass_dir": workspace["pass_dir"],
             "repos": repos,
-            "survey_repos": survey["survey_repos"],
+            "survey_repos": catalog,
             "stuck_path": ledger["stuck_path"],
             "planned": planned,
         },

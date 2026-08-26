@@ -1,6 +1,51 @@
 """Contracts for minimal factory-begin atoms."""
 
 import json
+from pathlib import Path
+
+
+def test_persist_from_config_writes_pass_dir_not_idle(tmp_path, monkeypatch):
+    from lokay.proc.persist_factory_begin_state import persist
+
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        "lokay.proc.seed_prior_catalog.live_issue_to_pr_receipts",
+        lambda: [],
+    )
+    workspace = {"pass_dir": str(tmp_path / "factory-pass-now")}
+    Path(workspace["pass_dir"]).mkdir()
+    out = persist(
+        workspace,
+        {
+            "live": False,
+            "mode": "dry-run",
+            "state_path": str(state),
+            "repos": ["a/b"],
+            "agent": "pi",
+        },
+        {"repos": ["a/b"]},
+        {"route": "up", "offline": False},
+    )
+    assert out["ok"] is True
+    assert out["pass_dir"] == workspace["pass_dir"]
+    assert out["idle"] is False
+    assert out["planned"][0]["repos"] == ["a/b"]
+    assert (Path(workspace["pass_dir"]) / "begin.json").is_file()
+    assert (Path(workspace["pass_dir"]) / "working.json").is_file()
+    assert (Path(workspace["pass_dir"]) / "tick.json").is_file()
+
+
+def test_host_probe_stays_up_when_offline_or_empty(monkeypatch):
+    from lokay.proc.probe_factory_host import probe
+
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    assert probe()["route"] == "up"
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    out = probe()
+    assert out["ok"] is True
+    assert out["route"] == "up"
+    assert out["offline"] is True
 
 
 def test_live_non_live_config_routes_terminal():
@@ -79,7 +124,7 @@ def test_factory_begin_subflow_returns_small_receipt(monkeypatch, tmp_path):
     assert out["pass_dir"] == str(tmp_path)
 
 
-def test_persist_begin_seeds_prior_catalog_and_live_occupancy(tmp_path, monkeypatch):
+def test_persist_begin_seeds_live_occupancy_not_prior_survey(tmp_path, monkeypatch):
     from lokay.proc.persist_factory_begin_state import persist
 
     state = tmp_path / "state.jsonl"
@@ -96,7 +141,7 @@ def test_persist_begin_seeds_prior_catalog_and_live_occupancy(tmp_path, monkeypa
         "lokay.proc.seed_prior_catalog.live_issue_to_pr_receipts",
         lambda: [{"repo": "mikolaj92/Temida", "issue": 1}],
     )
-    persist(
+    out = persist(
         {"pass_dir": str(current)},
         {
             "begin": {
@@ -109,9 +154,15 @@ def test_persist_begin_seeds_prior_catalog_and_live_occupancy(tmp_path, monkeypa
         {"working": {"progress": 0, "ready_by_repo": {}, "occupied_repos": []}},
     )
     working = json.loads((current / "working.json").read_text())
-    assert working["ready_by_repo"]["mikolaj92/reviewkit"][0]["number"] == 205
+    tick = json.loads((current / "tick.json").read_text())
+    assert working["ready_by_repo"] == {}
     assert "mikolaj92/Temida" in working["occupied_repos"]
     assert "mikolaj92/Temida" in working["live_issue_to_pr_repos"]
+    assert out["ok"] is True
+    assert out["pass_dir"] == str(current)
+    assert out["idle"] is False
+    assert tick["idle"] is False
+    assert tick["health"] != "idle"
 
 
 def test_persist_begin_writes_stuck_from_disk(tmp_path):
@@ -127,7 +178,9 @@ def test_persist_begin_writes_stuck_from_disk(tmp_path):
         {"begin": {"pass_dir": str(pass_dir), "stuck_path": str(stuck_path), "planned": []}},
         {"working": {"progress": 0}},
     )
-    assert out == {"ok": True, "pass_dir": str(pass_dir)}
+    assert out["ok"] is True
+    assert out["pass_dir"] == str(pass_dir)
+    assert out["idle"] is False
     begin = json.loads((pass_dir / "begin.json").read_text())
     working = json.loads((pass_dir / "working.json").read_text())
     assert "a/b#1" in begin["stuck"]["issues"]

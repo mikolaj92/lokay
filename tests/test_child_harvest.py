@@ -649,40 +649,18 @@ def test_tmp_mill_does_not_inherit_host_cycle(tmp_path: Path):
     assert excluded_numbers(stuck, "a/one") == set()
 
 
-def test_factory_begin_harvests_into_stuck(tmp_path: Path, monkeypatch):
-    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "")
-    monkeypatch.setenv("LOKAY_HEALTH_LEASE_PATH", "")
-    monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "")
-    from lokay.proc.factory_begin import run_factory_begin
+def test_factory_begin_path_does_not_harvest():
+    import tomllib
 
-    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
-    state = tmp_path / "state.jsonl"
-    cycle = state.parent / "cycle"
-    cycle.mkdir(parents=True)
-    _receipt(cycle / "a__b-7.json", repo="a/b", issue=7, pid=999_999_999)
-    _event(state, repo="a/b", issue=7, ok=False, reason="local_repair_exhausted")
-    cfg = tmp_path / "config.yaml"
-    cfg.write_text(
-        f"""
-mode: dry-run
-github:
-  assignee: t
-repos:
-  - name: a/b
-    clone_path: {tmp_path / "clone"}
-executor:
-  enabled: false
-state:
-  path: {state}
-""",
-        encoding="utf-8",
+    root = Path(__file__).resolve().parents[1]
+    pkg = tomllib.loads(
+        (root / "fala" / "lokay.fala-package.toml").read_text(encoding="utf-8")
     )
-    out = run_factory_begin(config_path=str(cfg), live=False)
-    assert out.get("ok") is True
-    stuck = load_stuck(stuck_path_for(state))
-    assert 7 in excluded_numbers(stuck, "a/b")
-    assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
+    path = next(p for p in pkg["correlation_paths"] if p["id"] == "factory_begin")
+    ids = {node["id"] for node in path["effectors"]}
+    assert "harvest_factory_children" not in ids
+    assert "create_factory_pass_dir" in ids
+    assert "persist_factory_begin_state" in ids
 
 
 def test_harvest_indexes_state_jsonl_once_and_still_blocks(tmp_path: Path, monkeypatch):

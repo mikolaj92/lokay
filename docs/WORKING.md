@@ -162,7 +162,7 @@ product. Green repository verification may be reused only for the identical
    Occupancy refresh, surveys, closeout, and stale reaps stay in the
    path as housecleaning for passes with no selected work — they are
    not the gate to `select_implement`. Select conducts from
-   `factory_begin` (cheap prior catalog / live occupancy).
+   `factory_begin` (pass workspace + configured catalog).
    `queue_conflict` / `dispatch_implement` take a visible
    `when select_implement.route == selected`. Hygiene nodes take
    `when select_implement.route == none` and do not run in a selected
@@ -301,8 +301,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   run in a selected pass.
   One pass is oil XOR product (product wins). Last-pass receipt includes
   `lane: product | oil | idle`.
-  `factory_begin` fail-closes when in-cycle `host_ff` just fast-forwarded (`health=host_updated`)
-  so a later launchd tick imports the new checkout. Launchd does not exec
+  `factory_begin` opens a pass workspace after a short host-alive probe.
+  Empty survey snapshots do not idle or skip PRs and issues. Launchd does not exec
   `lokay-daemon` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
   Host-ff lives only in Fala. The mill-daemon shell is OS only (lock, exec,
