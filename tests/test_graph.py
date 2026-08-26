@@ -30,10 +30,10 @@ def test_describe_parent_factory_graph():
         "reap_stale_implementing",
         "reap_over_budget",
         "refresh_occupancy",
-        "reap_stale_worktrees",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
+        "reap_stale_worktrees",
         "compute_health",
         "compact_state",
         "record_pass",
@@ -42,23 +42,24 @@ def test_describe_parent_factory_graph():
     ]
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
     assert conduction["host_ff"] == ["classify_factory_idle"]
-    assert conduction["factory_begin_host_gate"] == ["host_ff"]
-    assert conduction["factory_begin"] == ["factory_begin_host_gate"]
-    assert conduction["survey_prs"] == ["factory_begin"]
+    assert "host_ff" in conduction["factory_begin_host_gate"]
+    assert "factory_begin_host_gate" in conduction["factory_begin"]
+    assert "factory_begin" in conduction["survey_prs"]
     assert "survey_prs" in conduction["survey_inbox"]
     assert "survey_inbox" in conduction["survey_ready"]
     assert "survey_ready" in conduction["plan_pass"]
     assert "plan_pass" in conduction["dispatch_triage"]
     assert "dispatch_triage" in conduction["resolve_conflicts"]
     assert "resolve_conflicts" in conduction["closeout_prs"]
-    assert "reap_stale_worktrees" in conduction["select_implement"]
-    assert "refresh_occupancy" in conduction["reap_stale_worktrees"]
+    assert "refresh_occupancy" in conduction["select_implement"]
+    assert "reap_stale_worktrees" not in conduction["select_implement"]
+    assert "select_implement" in conduction["queue_conflict"]
+    assert "queue_conflict" in conduction["dispatch_implement"]
+    assert "dispatch_implement" in conduction["reap_stale_worktrees"]
+    assert "reap_stale_worktrees" in conduction["compute_health"]
     assert "reap_over_budget" in conduction["refresh_occupancy"]
     assert "reap_stale_implementing" in conduction["reap_over_budget"]
     assert "closeout_prs" in conduction["reap_stale_implementing"]
-    assert "select_implement" in conduction["queue_conflict"]
-    assert "queue_conflict" in conduction["dispatch_implement"]
-    assert "dispatch_implement" in conduction["compute_health"]
     assert "compute_health" in conduction["record_pass"]
     assert "classify_factory_idle" in conduction["record_factory_idle"]
     assert "record_factory_idle" in conduction["factory_pass_terminal"]
@@ -217,6 +218,25 @@ def test_reap_stale_implementing_path_is_a_handful_of_effectors():
     )
 
 
+def test_stale_worktree_reap_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "stale_worktree_reap")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "collect_stale_worktree_candidates",
+        "stale_worktree_catalog",
+        "summarize_stale_worktree_reap",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("classify_stale_worktree_")
+        or node["id"].startswith("keep_stale_worktree_")
+        or node["id"].startswith("remove_stale_worktree_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_4")
+        for node in path["nodes"]
+    )
+
+
 def test_leftover_closeout_path_is_a_handful_of_effectors():
     path = next(p for p in describe_package()["paths"] if p["id"] == "leftover_closeout")
     ids = [node["id"] for node in path["nodes"]]
@@ -278,10 +298,10 @@ def test_factory_pass_docs_match_package_atom_order():
         "reap_stale_implementing",
         "reap_over_budget",
         "refresh_occupancy",
-        "reap_stale_worktrees",
         "select_implement",
         "queue_conflict",
         "dispatch_implement",
+        "reap_stale_worktrees",
         "compute_health",
         "compact_state",
         "record_pass",

@@ -29,3 +29,72 @@ def test_keep_effect_is_physical_noop():
 
 def test_existing_delivery_resolver_is_unrelated_to_reap():
     assert resolve({"route": "closed"}, {}, {})["route"] == "no_effect"
+
+
+def test_stale_worktree_catalog_fail_closed_when_collect_failed():
+    from lokay.proc.stale_worktree_catalog import run
+
+    out = run(
+        {"ok": False, "error": "stale worktree catalog exceeds authored slots"},
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_stale_worktree_catalog_overflow_is_fail_closed():
+    from lokay.proc.stale_worktree_catalog import SLOTS, run
+
+    out = run(
+        {
+            "ok": True,
+            "candidates": [{"present": True} for _ in range(SLOTS + 1)],
+        },
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_stale_worktree_catalog_keep_and_remove(monkeypatch):
+    from lokay.proc import stale_worktree_catalog
+
+    routes = ["keep", "remove", "absent", "absent"]
+
+    def classify(candidate, *, live):
+        slot = int(candidate.get("slot") or 0)
+        return {"ok": True, "route": routes[slot - 1], "row": dict(candidate)}
+
+    monkeypatch.setattr(
+        "lokay.proc.classify_stale_worktree_candidate.classify", classify
+    )
+    monkeypatch.setattr(
+        "lokay.proc.keep_stale_worktree_candidate.apply",
+        lambda classified: {"ok": True, "applied": True, "row": {**classified["row"], "kept": True}},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.remove_stale_worktree_candidate.apply",
+        lambda classified, **_k: {
+            "ok": True,
+            "applied": True,
+            "row": {**classified["row"], "removed": True},
+        },
+    )
+    collected = {
+        "ok": True,
+        "candidates": [
+            {"present": True, "slot": 1},
+            {"present": True, "slot": 2},
+            {"present": False, "slot": 3},
+            {"present": False, "slot": 4},
+        ],
+        "candidate_1": {"present": True, "slot": 1},
+        "candidate_2": {"present": True, "slot": 2},
+        "candidate_3": {"present": False, "slot": 3},
+        "candidate_4": {"present": False, "slot": 4},
+    }
+    out = stale_worktree_catalog.run(collected, config_path=None, live=True)
+    assert out["ok"] is True
+    assert out["effects"][0]["row"]["kept"] is True
+    assert out["effects"][1]["row"]["removed"] is True
+    assert out["effects"][2]["route"] == "absent"
