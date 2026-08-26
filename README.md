@@ -994,22 +994,24 @@ zostaje w ścieżce obok pracy, nie przed jedynym cennym zlewem.
 ```mermaid
 stateDiagram-v2
     [*] --> ListOpenIssues
-    ListOpenIssues --> SelectNextIssue
+    ListOpenIssues --> ClassifyOpenIssues
+    ClassifyOpenIssues --> SelectNextIssue
     SelectNextIssue --> IssuesRunTriage: jest issue
-    SelectNextIssue --> SelectIssueDo: pusta lista / leftover
-    IssuesRunTriage --> SelectIssueDo
+    SelectNextIssue --> ClassifyIssueDo: pusta lista / leftover
+    IssuesRunTriage --> ClassifyIssueDo
+    ClassifyIssueDo --> SelectIssueDo
     SelectIssueDo --> IssuesLaunchPr: robić
     SelectIssueDo --> SummarizeIssues: sito nie robić
     IssuesLaunchPr --> SummarizeIssues
-    SummarizeIssues --> [*]
+    SummarizeIssues --> WriteIssuesReceipt
+    WriteIssuesReceipt --> [*]
 ```
 
-Dziecko `issues` jest jedną Falą. Jeden atom listuje żywe otwarte issue z
-GitHuba — bez bramki `work:ready` / `ai:ready` i bez 30-slotowego katalogu.
-Overflow, leftover i pusta lista to skip, nie błąd passu. Sito bierze jedno
-issue. Werdykt „robić” odpala jeden `issue_to_pr`. Inny werdykt pomija
-implement i nie wali passu. Jeden implement na pass. Pusta lista i skip sito
-i tak piszą kwit.
+Dziecko `issues` jest jedną Falą z małymi węzłami. Lista tylko listuje.
+Klasyfikacja tylko mówi listed/skip. Sito to osobny classify i osobny select.
+Launch jest osobnym atomem. Kwit to summarize, potem zapis. Żaden węzeł nie
+robi list+sito+launch. Bez bramki `work:ready` / `ai:ready` i bez 30 slotów.
+Overflow, leftover i pusta lista to skip. Jeden implement na pass.
 
 ### Otwarte PR — `prs`
 

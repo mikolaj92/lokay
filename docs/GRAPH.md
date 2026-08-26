@@ -173,15 +173,18 @@ work never resumes in the stale daemon process.
 Parent `factory_pass` invokes this child. Labels are not a gate.
 
 ```text
-list_open_issues          → live GitHub open issues (human stops exclude;
-                            work:ready / ai:ready are not a gate; no 30-slot catalog)
-  → select_next_issue     → one issue, or skip when empty / leftover / overflow
-    → issues_run_triage   → when route=issue: issue_triage grandchild
-      → select_issue_do   → ready → do; else skip implement (pass does not fail)
-        → issues_launch_pr → when route=do: one issue_to_pr; unique atom name
-          → summarize_issues → receipt always (empty list and sito skip included)
+list_open_issues            → facts only: open issues, count, overflow
+  → classify_open_issues    → listed or skip (empty / overflow)
+    → select_next_issue     → one issue, leftover is next pass
+      → issues_run_triage   → when route=issue: issue_triage grandchild
+        → classify_issue_do → implementable fact from triage envelope
+          → select_issue_do → do or skip
+            → issues_launch_pr → when route=do: one issue_to_pr
+              → summarize_issues → receipt envelope
+                → write_issues_receipt → persist; always runs
 ```
 
+Each atom is one job. List, sito, and launch stay separate processes.
 Atom ids stay unique so they do not collide with `triage_dispatch`
 (`run_issue_triage_subflow`) or `implementation_dispatch` (`launch_issue_to_pr`).
 Overflow / leftover / empty list is skip, not error. One implement per pass.

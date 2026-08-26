@@ -1,4 +1,4 @@
-"""List open catalog issues from GitHub. Labels are not a gate."""
+"""List open catalog issues from GitHub. One job: list facts."""
 
 from __future__ import annotations
 
@@ -14,18 +14,10 @@ def run(*, config_path: str | None, live: bool) -> dict:
     git = runner()
     rows: list[dict] = []
     overflow = False
+    cap = survey_list_cap()
     for repo in cfg.active_repos():
-        try:
-            listed = list_ready_issues(
-                git, cfg, repo, live=live, on_cap="keep"
-            )
-        except RuntimeError as exc:
-            # Cap overflow is leftover skip. Other list failures stay errors.
-            if "newest-first cap" not in str(exc):
-                raise
-            overflow = True
-            continue
-        if live and len(listed) >= survey_list_cap():
+        listed = list_ready_issues(git, cfg, repo, live=live, on_cap="keep")
+        if live and len(listed) >= cap:
             overflow = True
         for issue in listed:
             rows.append(
@@ -36,18 +28,8 @@ def run(*, config_path: str | None, live: bool) -> dict:
                     "labels": list(issue.labels or []),
                 }
             )
-    if not rows:
-        return {
-            "ok": True,
-            "route": "skip",
-            "reason": "overflow" if overflow else "empty",
-            "skipped": True,
-            "issues": [],
-            "count": 0,
-        }
     return {
         "ok": True,
-        "route": "listed",
         "issues": rows,
         "count": len(rows),
         "overflow": overflow,

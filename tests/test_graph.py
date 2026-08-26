@@ -339,11 +339,14 @@ def test_issues_path_is_sito_then_one_implement():
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
         "list_open_issues",
+        "classify_open_issues",
         "select_next_issue",
         "issues_run_triage",
+        "classify_issue_do",
         "select_issue_do",
         "issues_launch_pr",
         "summarize_issues",
+        "write_issues_receipt",
     ]
     by_id = {node["id"]: node for node in path["nodes"]}
     assert by_id["issues_run_triage"]["when"] == {
@@ -356,6 +359,17 @@ def test_issues_path_is_sito_then_one_implement():
         "path": "route",
         "equals": "do",
     }
+    assert by_id["classify_open_issues"]["conduction"] == ["list_open_issues"]
+    assert by_id["select_next_issue"]["conduction"] == ["classify_open_issues"]
+    assert by_id["classify_issue_do"]["conduction"] == [
+        "select_next_issue",
+        "issues_run_triage",
+    ]
+    assert by_id["select_issue_do"]["conduction"] == [
+        "select_next_issue",
+        "classify_issue_do",
+    ]
+    assert by_id["write_issues_receipt"]["conduction"] == ["summarize_issues"]
     assert set(by_id["summarize_issues"]["conduction"]) == {
         "select_next_issue",
         "issues_run_triage",
@@ -364,6 +378,11 @@ def test_issues_path_is_sito_then_one_implement():
     }
     collide = {"run_issue_triage_subflow", "launch_issue_to_pr"}
     assert not collide.intersection(ids)
+    # One job per node: list, sito, and launch stay separate.
+    assert "list_open_issues" in ids and "issues_launch_pr" in ids
+    assert ids.index("list_open_issues") < ids.index("classify_open_issues")
+    assert ids.index("classify_issue_do") < ids.index("select_issue_do")
+    assert ids.index("select_issue_do") < ids.index("issues_launch_pr")
     assert not any(
         node["id"].endswith("_1") or node["id"].endswith("_30") for node in path["nodes"]
     )
