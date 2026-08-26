@@ -79,6 +79,40 @@ def test_ready_hygiene_path_is_a_handful_of_effectors():
     assert not any(node["id"].endswith("_1") or node["id"].endswith("_30") for node in path["nodes"])
 
 
+def test_survey_inbox_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "survey_inbox")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_inbox_survey",
+        "inbox_survey_catalog",
+        "update_inbox_survey_stamp",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("classify_inbox_repo_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
+def test_survey_ready_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "survey_ready")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_ready_survey",
+        "ready_survey_catalog",
+        "update_ready_survey_stamp",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("classify_ready_repo_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
 def test_factory_pass_docs_match_package_atom_order():
     import re
 

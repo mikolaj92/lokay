@@ -363,8 +363,30 @@ def test_finalize_daemon_payload_lifts_progress_and_drops_fala():
 def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
     cfg = _write_cfg(tmp_path)
     receipt = tmp_path / "lokay-state" / "last-pass.json"
-    remaining = {"by_repo": {"a/b": {"remaining_ready": 0}}}
-    receipt.write_text(json.dumps({"remaining": remaining}), encoding="utf-8")
+    stale = {"inbox": 0, "ready": 0, "by_repo": {"a/b": {"remaining_ready": 0}}}
+    receipt.write_text(json.dumps({"remaining": stale}), encoding="utf-8")
+    inflight = tmp_path / "lokay-state" / "factory-pass-1-deadbeef"
+    inflight.mkdir()
+    (inflight / "working.json").write_text(
+        json.dumps(
+            {
+                "remaining_inbox": 4,
+                "remaining_ready": 1,
+                "inbox_issues_by_repo": {
+                    "mikolaj92/Temida": [
+                        {"number": 4972, "labels": ["enhancement"]},
+                        {"number": 4973, "labels": ["bug"]},
+                        {"number": 4969, "labels": ["work:ready"]},
+                    ],
+                    "mikolaj92/Fala": [{"number": 176, "labels": ["oil"]}],
+                },
+                "ready_by_repo": {
+                    "mikolaj92/Temida": [{"number": 4968, "labels": ["ai:ready"]}]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
 
     def wait_forever(**_kwargs):
         import time
@@ -380,10 +402,65 @@ def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
 
     assert out["ok"] is False
     assert out["reason"] == "pass_ceiling"
-    assert out["remaining"] == remaining
+    assert out["remaining"]["inbox"] == 4
+    assert out["remaining"]["ready"] == 1
+    assert out["remaining_source"] == "inflight_working"
     persisted = json.loads(receipt.read_text())
     assert persisted["reason"] == "pass_ceiling"
-    assert persisted["remaining"] == remaining
+    assert persisted["remaining"]["inbox"] == 4
+    assert persisted["remaining"] != stale
+
+
+def test_remaining_from_inflight_working_counts_listed_rows_over_zero_counter(
+    tmp_path,
+):
+    pass_dir = tmp_path / "factory-pass-9-abcd"
+    pass_dir.mkdir()
+    (pass_dir / "working.json").write_text(
+        json.dumps(
+            {
+                "remaining_inbox": 0,
+                "inbox_issues_by_repo": {
+                    "mikolaj92/Temida": [
+                        {"number": 4972, "labels": ["enhancement"]},
+                        {"number": 4973, "labels": ["bug"]},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    remaining = daemon_cycle.remaining_from_inflight_working(tmp_path)
+    assert remaining["inbox"] == 2
+    assert remaining["by_repo"][0]["repo"] == "mikolaj92/Temida"
+
+
+def test_daemon_cycle_pass_ceiling_does_not_copy_stale_inbox_zero(
+    monkeypatch, tmp_path
+):
+    cfg = _write_cfg(tmp_path)
+    receipt = tmp_path / "lokay-state" / "last-pass.json"
+    receipt.write_text(
+        json.dumps({"remaining": {"inbox": 0, "ready": 0}}), encoding="utf-8"
+    )
+
+    def wait_forever(**_kwargs):
+        import time
+
+        time.sleep(1)
+        return {"ok": True}
+
+    monkeypatch.setattr(daemon_cycle, "run_path", wait_forever)
+    out = daemon_cycle.compose_daemon_cycle(
+        config_path=cfg,
+        pass_ceiling_seconds=0.02,
+    )
+
+    assert out["reason"] == "pass_ceiling"
+    assert "remaining" not in out
+    persisted = json.loads(receipt.read_text())
+    assert persisted["reason"] == "pass_ceiling"
+    assert "remaining" not in persisted
 
 
 def test_daemon_cycle_native_exception_after_ceiling_writes_receipt(

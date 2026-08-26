@@ -40,6 +40,49 @@ class _PassCeiling(BaseException):
     """Interrupt orchestration without terminating its detached workers."""
 
 
+def remaining_from_inflight_working(state_dir: Path) -> dict[str, Any] | None:
+    """Remaining from this cycle's working.json. Never last-pass."""
+    try:
+        dirs = [path for path in state_dir.glob("factory-pass-*") if path.is_dir()]
+    except OSError:
+        return None
+    dirs.sort(key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+    for path in dirs:
+        try:
+            working = json.loads((path / "working.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(working, dict):
+            continue
+        issues = dict(working.get("inbox_issues_by_repo") or {})
+        listed = sum(len(rows or []) for rows in issues.values())
+        inbox = listed if listed else int(working.get("remaining_inbox") or 0)
+        ready_by = dict(working.get("ready_by_repo") or {})
+        ready = sum(len(rows or []) for rows in ready_by.values()) or int(
+            working.get("remaining_ready") or 0
+        )
+        inbox_counts = dict(working.get("inbox_by_repo") or {})
+        by_repo = []
+        for repo in sorted({*issues, *ready_by, *inbox_counts}):
+            by_repo.append(
+                {
+                    "repo": repo,
+                    "inbox": len(issues.get(repo) or [])
+                    or int(inbox_counts.get(repo) or 0),
+                    "ready": len(ready_by.get(repo) or []),
+                }
+            )
+        return {
+            "inbox": inbox,
+            "ready": ready,
+            "ready_with_open_pr": int(working.get("remaining_ready_with_pr") or 0),
+            "open_ai_prs": int(working.get("remaining_prs") or 0),
+            "survey_errors": int(working.get("survey_errors") or 0),
+            "by_repo": by_repo,
+        }
+    return None
+
+
 def compose_daemon_cycle(
     *,
     config_path: str,
@@ -96,14 +139,10 @@ def compose_daemon_cycle(
             receipt = load_config(config_path).state_path.parent / "last-pass.json"
         except (OSError, ValueError, FileNotFoundError):
             receipt = Path.home() / ".lokay" / "last-pass.json"
-        try:
-            previous = json.loads(receipt.read_text(encoding="utf-8"))
-            if isinstance(previous, dict) and isinstance(
-                previous.get("remaining"), dict
-            ):
-                payload["remaining"] = previous["remaining"]
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            pass
+        inflight = remaining_from_inflight_working(receipt.parent)
+        if inflight is not None:
+            payload["remaining"] = inflight
+            payload["remaining_source"] = "inflight_working"
         try:
             receipt.parent.mkdir(parents=True, exist_ok=True)
             temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
