@@ -1,7 +1,10 @@
-"""Pick the first listed issue. One implement per pass."""
+"""Pick the first listed issue. Two small functions: classify, then select."""
+
+from lokay.proc.classify_open_issues import classify
 
 
-def select(classified: dict) -> dict:
+def select(listed: dict) -> dict:
+    classified = classify(listed)
     if classified.get("route") != "listed":
         return {
             "ok": True,

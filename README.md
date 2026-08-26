@@ -994,24 +994,21 @@ zostaje w ścieżce obok pracy, nie przed jedynym cennym zlewem.
 ```mermaid
 stateDiagram-v2
     [*] --> ListOpenIssues
-    ListOpenIssues --> ClassifyOpenIssues
-    ClassifyOpenIssues --> SelectNextIssue
+    ListOpenIssues --> SelectNextIssue
     SelectNextIssue --> IssuesRunTriage: jest issue
-    SelectNextIssue --> ClassifyIssueDo: pusta lista / leftover
-    IssuesRunTriage --> ClassifyIssueDo
-    ClassifyIssueDo --> SelectIssueDo
+    SelectNextIssue --> SelectIssueDo: pusta lista / leftover
+    IssuesRunTriage --> SelectIssueDo
     SelectIssueDo --> IssuesLaunchPr: robić
     SelectIssueDo --> SummarizeIssues: sito nie robić
     IssuesLaunchPr --> SummarizeIssues
-    SummarizeIssues --> WriteIssuesReceipt
-    WriteIssuesReceipt --> [*]
+    SummarizeIssues --> [*]
 ```
 
-Dziecko `issues` jest jedną Falą z małymi węzłami. Lista tylko listuje.
-Klasyfikacja tylko mówi listed/skip. Sito to osobny classify i osobny select.
-Launch jest osobnym atomem. Kwit to summarize, potem zapis. Żaden węzeł nie
-robi list+sito+launch. Bez bramki `work:ready` / `ai:ready` i bez 30 slotów.
-Overflow, leftover i pusta lista to skip. Jeden implement na pass.
+Dziecko `issues` jest węzłem Fali. Sześć krawędzi, nie jeden tłusty proces.
+Liście: `list_open_issues`, `select_next_issue`, `select_issue_do`,
+`summarize_issues`. Węzły-dzieci: `issues_run_triage` → Fala `issue_triage`,
+`issues_launch_pr` → Fala `issue_to_pr`. Ten PR tylko składa graf. Bez bramki
+`work:ready` / `ai:ready` i bez 30 slotów. Jeden implement na pass.
 
 ### Otwarte PR — `prs`
 

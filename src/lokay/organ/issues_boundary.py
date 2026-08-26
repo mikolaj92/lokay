@@ -1,4 +1,4 @@
-"""Fala bindings for the issues child. One atom, one proc."""
+"""Fala bindings for the issues NODE: six wired atoms, no fat step."""
 
 from typing import Any
 
@@ -15,28 +15,20 @@ def handle_issues(
         from lokay.proc.list_open_issues import run
 
         return run(config_path=config, live=live)
-    if atom == "classify_open_issues":
-        from lokay.proc.classify_open_issues import classify
-
-        return classify(up.get("list_open_issues") or {})
     if atom == "select_next_issue":
         from lokay.proc.select_next_issue import select
 
-        return select(up.get("classify_open_issues") or {})
+        return select(up.get("list_open_issues") or {})
     if atom == "issues_run_triage":
         from lokay.proc.run_issue_triage_subflow import run
 
         return run(up.get("select_next_issue") or {}, config_path=config)
-    if atom == "classify_issue_do":
-        from lokay.proc.classify_issue_do import classify
-
-        return classify(up.get("issues_run_triage") or {})
     if atom == "select_issue_do":
         from lokay.proc.select_issue_do import select
 
         return select(
             up.get("select_next_issue") or {},
-            up.get("classify_issue_do") or {},
+            up.get("issues_run_triage") or {},
         )
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch
@@ -49,12 +41,6 @@ def handle_issues(
             up.get("select_next_issue") or {},
             up.get("select_issue_do") or {},
             up.get("issues_launch_pr") or {},
-        )
-    if atom == "write_issues_receipt":
-        from lokay.proc.write_issues_receipt import write
-
-        return write(
-            up.get("summarize_issues") or {},
             pass_dir=str(inputs.get("pass_dir") or ""),
         )
     return None

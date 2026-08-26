@@ -1,7 +1,9 @@
-"""Receipt envelope for one issues child pass. Does not write."""
+"""Receipt for one issues pass. Two small functions: envelope, then write."""
+
+from lokay.proc.write_issues_receipt import write
 
 
-def summarize(picked: dict, do: dict, launched: dict) -> dict:
+def envelope(picked: dict, do: dict, launched: dict) -> dict:
     return {
         "ok": True,
         "result": {
@@ -12,3 +14,13 @@ def summarize(picked: dict, do: dict, launched: dict) -> dict:
             "launched": launched.get("route"),
         },
     }
+
+
+def summarize(
+    picked: dict,
+    do: dict,
+    launched: dict,
+    *,
+    pass_dir: str = "",
+) -> dict:
+    return write(envelope(picked, do, launched), pass_dir=pass_dir)

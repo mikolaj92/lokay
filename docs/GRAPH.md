@@ -173,21 +173,17 @@ work never resumes in the stale daemon process.
 Parent `factory_pass` invokes this child. Labels are not a gate.
 
 ```text
-list_open_issues            → facts only: open issues, count, overflow
-  → classify_open_issues    → listed or skip (empty / overflow)
-    → select_next_issue     → one issue, leftover is next pass
-      → issues_run_triage   → when route=issue: issue_triage grandchild
-        → classify_issue_do → implementable fact from triage envelope
-          → select_issue_do → do or skip
-            → issues_launch_pr → when route=do: one issue_to_pr
-              → summarize_issues → receipt envelope
-                → write_issues_receipt → persist; always runs
+list_open_issues          LEAF  live GitHub open issues
+  → select_next_issue     LEAF  one issue, or none
+    → issues_run_triage   NODE  when route=issue → child Fala issue_triage
+      → select_issue_do   LEAF  do or skip
+        → issues_launch_pr NODE  when route=do → child Fala issue_to_pr
+          → summarize_issues LEAF  receipt (empty / sito skip still write)
 ```
 
-Each atom is one job. List, sito, and launch stay separate processes.
-Atom ids stay unique so they do not collide with `triage_dispatch`
-(`run_issue_triage_subflow`) or `implementation_dispatch` (`launch_issue_to_pr`).
-Overflow / leftover / empty list is skip, not error. One implement per pass.
+The `issues` NODE owns this wiring only. It does not implement `issue_triage`
+or `issue_to_pr` internals and does not fatten list+sito+launch into one process.
+Atom ids stay unique versus `triage_dispatch` / `implementation_dispatch`.
 
 ### `issue_to_pr`
 
