@@ -5301,7 +5301,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "factory_begin"
 title = "Factory pass workspace opening"
-description = "One-job atoms: host probe, catalog, pass_dir, build, seed, attach, persist begin, persist working, persist tick."
+description = "NODE graph of named LEAF agents. No when/idle. harvest is child Fala, off this path."
 
 [[correlation_paths.effectors]]
 id = "probe_factory_host"

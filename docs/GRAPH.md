@@ -151,9 +151,10 @@ probe_factory_host
                       → persist_factory_tick
 ```
 
-Each atom is one job. Fala composes them. `pass_dir` is written on this
-path. Empty survey snapshots are not a queue and do not route idle.
-Lease, preflight, harvest, and four terminals stay off this path.
+NODE agent owns this graph. Each effector is a named LEAF agent (one
+Unix process). `harvest_factory_children` already invokes child Fala
+`child_harvest` — it is not a leaf on this path, so harvest skip cannot
+eat the factory. No leaf has `when`. Empty surveys are not idle.
 
 The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process

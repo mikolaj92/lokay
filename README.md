@@ -129,11 +129,26 @@ stateDiagram-v2
     PersistFactoryTick --> [*]
 ```
 
-Każdy węzeł to jedna robota. Fala składa sondę hosta, katalog, `pass_dir`,
-budowę begin/working, occupancy, zapis begin, zapis working i zapis tick.
-Żaden atom nie robi lease+preflight+harvest+idle. Pusty survey nie zamyka
-passa. Issues i PRs listują żywo z GitHuba. Kwit to `pass_dir`, `stuck_path`,
-`planned`. Nie ma agenta.
+NODE agent owns this graph. Each effector is a LEAF agent (one job, one
+process). `harvest_factory_children` is not a leaf here — it already
+invokes child Fala `child_harvest` and must not sit on this path, or a
+harvest skip would eat the factory. No `when` / idle on these leaves.
+
+| Effector | Agent | Kind |
+| --- | --- | --- |
+| `probe_factory_host` | leaf:probe_factory_host | LEAF |
+| `load_factory_config` | leaf:load_factory_config | LEAF |
+| `select_factory_scope` | leaf:select_factory_scope | LEAF |
+| `read_factory_stuck` | leaf:read_factory_stuck | LEAF |
+| `create_factory_pass_dir` | leaf:create_factory_pass_dir | LEAF |
+| `build_factory_begin_state` | leaf:build_factory_begin_state | LEAF |
+| `build_factory_working_state` | leaf:build_factory_working_state | LEAF |
+| `seed_factory_occupancy` | leaf:seed_factory_occupancy | LEAF |
+| `attach_factory_stuck` | leaf:attach_factory_stuck | LEAF |
+| `persist_factory_begin_state` | leaf:persist_factory_begin_state | LEAF |
+| `persist_factory_working_state` | leaf:persist_factory_working_state | LEAF |
+| `persist_factory_tick` | leaf:persist_factory_tick | LEAF |
+| `harvest_factory_children` | child:child_harvest | child Fala, off this path |
 
 ### Przegląd gotowych issue — `survey_ready`
 

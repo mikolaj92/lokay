@@ -47,13 +47,17 @@ def _factory_begin_path() -> dict:
     return next(p for p in pkg["correlation_paths"] if p["id"] == "factory_begin")
 
 
-def test_factory_begin_path_is_composed_one_job_atoms():
+def test_factory_begin_leaves_have_no_idle_skip():
     path = _factory_begin_path()
     ids = [node["id"] for node in path["effectors"]]
     assert ids == list(NODES)
     assert not set(CEREMONY).intersection(ids)
     when = {node["id"]: node.get("when") for node in path["effectors"]}
     assert all(not when[name] for name in NODES)
+    assert "harvest_factory_children" not in ids
+    for node in path["effectors"]:
+        assert (node.get("adapter") or {}).get("kind") == "subprocess"
+        assert (node.get("config") or {}).get("atom") == node["id"]
     conduction = {node["id"]: list(node.get("conduction") or []) for node in path["effectors"]}
     assert conduction["persist_factory_begin_state"] == [
         "create_factory_pass_dir",
