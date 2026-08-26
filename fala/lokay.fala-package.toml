@@ -404,7 +404,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "rebase_onto_base"
 capability = "lokay_atom"
-conduction = ["worktree_add", "commit_implementation"]
+conduction = ["worktree_add", "commit_implementation", "coding_execution"]
 when = { upstream = "coding_execution", path = "route", equals = "implemented" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "rebase_onto_base" }
@@ -413,7 +413,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "test_local_execution"
 capability = "lokay_atom"
-conduction = ["worktree_add", "commit_implementation", "rebase_onto_base"]
+conduction = ["worktree_add", "commit_implementation", "rebase_onto_base", "coding_execution"]
 when = { upstream = "coding_execution", path = "route", equals = "implemented" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 2100, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "test_local_execution", record_red = true }
