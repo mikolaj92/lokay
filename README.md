@@ -664,33 +664,18 @@ się fail-closed.
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareLeftoverCloseout
-    PrepareLeftoverCloseout --> SelectLeftoverRepoSlot
-    SelectLeftoverRepoSlot --> SelectLeftoverLabelSlot: aktywne repo
-    SelectLeftoverRepoSlot --> RecordLeftoverRepo: recent-empty / pusty slot
-    SelectLeftoverLabelSlot --> ListClosedReadyIssues: aktywna etykieta
-    ListClosedReadyIssues --> ClassifyClosedReadyProbe
-    ClassifyClosedReadyProbe --> SelectLeftoverLabelSlot: następna etykieta
-    SelectLeftoverLabelSlot --> RecordLeftoverRepo: koniec etykiet
-    RecordLeftoverRepo --> SelectLeftoverRepoSlot: następne repo
-    RecordLeftoverRepo --> ReduceLeftoverCandidates: ostatnie repo
-    ReduceLeftoverCandidates --> SelectLeftoverCandidateSlot
-    SelectLeftoverCandidateSlot --> ParkClosedReadyIssue: kandydat
-    SelectLeftoverCandidateSlot --> RecordLeftoverCandidate: pusty slot
-    ParkClosedReadyIssue --> RecordLeftoverCandidate
-    RecordLeftoverCandidate --> SelectLeftoverCandidateSlot: następny kandydat
-    RecordLeftoverCandidate --> ReduceLeftoverCloseout: ostatni kandydat
-    ReduceLeftoverCloseout --> UpdateLeftoverStamp
+    PrepareLeftoverCloseout --> LeftoverCatalog
+    LeftoverCatalog --> UpdateLeftoverStamp
     UpdateLeftoverStamp --> LeftoverCloseoutResult
     LeftoverCloseoutResult --> [*]
 ```
 
-Pod-Fala ma 30 jawnych slotów repozytoriów, po dwa jawne sloty etykiet na repo
-i 30 jawnych slotów kandydatów. TTL, wybór repo i etykiety, listing GitHub,
-klasyfikacja rate limitu, deduplikacja, mutation gate, parkowanie, redukcja i
-efekt stamp są oddzielnymi procesami. Overflow katalogu lub kandydatów kończy
-się fail-closed. Błąd sondy nie udaje pustego katalogu i nie zapisuje empty
-stamp. Nie ma agenta: stan CLOSED, etykiety i mutation policy są faktami
-mechanicznymi.
+Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, mutation policy), jeden
+atom katalogu, który w procesie listuje CLOSED ready labels, deduplikuje i
+parkowuje, i efekt stamp. Nie ma 30-slotowego rozwinięcia Fali. Overflow
+katalogu lub kandydatów kończy się fail-closed. Błąd sondy nie udaje pustego
+katalogu i nie zapisuje empty stamp. Nie ma agenta: stan CLOSED, etykiety i
+mutation policy są faktami mechanicznymi.
 
 ### Higiena gotowych issue — `ready_hygiene`
 
@@ -737,10 +722,22 @@ pozostaje `probe_failed`; przekroczenie authored katalogu kończy się fail-clos
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareCloseout
-    PrepareCloseout --> SelectCloseoutSlot
-    SelectCloseoutSlot --> CloseoutPR: jeden otwarty AI PR repo
-    SelectCloseoutSlot --> RecordCloseoutSlot: pusty slot / brak PR / naruszenie one-PR
-    CloseoutPR --> InspectPRIssue
+    PrepareCloseout --> CloseoutCatalog
+    CloseoutCatalog --> PersistCloseout
+    PersistCloseout --> SummarizeCloseout
+    SummarizeCloseout --> CloseoutResult
+    CloseoutResult --> [*]
+```
+
+Rodzic ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
+w procesie wybiera najwyżej jeden AI PR na repo i uruchamia pod-Falę
+`closeout_pr`, persist oraz summarize. Nie ma 30-slotowego rozwinięcia Fali.
+Overflow katalogu i naruszenie inwariantu jednego otwartego AI PR na repo są
+fail-closed. Wspólny budżet napraw zostaje seryjny między repozytoriami.
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectPRIssue
     InspectPRIssue --> GetPRIssue: branch wiąże issue
     InspectPRIssue --> StabilizePRIssue: brak issue
     GetPRIssue --> StabilizePRIssue
@@ -759,20 +756,13 @@ stateDiagram-v2
     ClassifyTriageOutcome --> FinalizeCloseoutPR: waiting / needs_human
     RepairPR --> FinalizeCloseoutPR
     ParkDeliveredIssue --> FinalizeCloseoutPR
-    FinalizeCloseoutPR --> RecordCloseoutSlot
-    RecordCloseoutSlot --> SelectCloseoutSlot: następny jawny slot
-    RecordCloseoutSlot --> ReduceCloseout: ostatni slot
-    ReduceCloseout --> PersistCloseout
-    PersistCloseout --> CloseoutResult
-    CloseoutResult --> [*]
+    FinalizeCloseoutPR --> CloseoutPRResult
+    CloseoutPRResult --> [*]
 ```
 
-Rodzic rozwija katalog do 30 jawnych slotów i prowadzi wspólny budżet napraw
-seryjnie między repozytoriami. Każdy kwalifikowany PR uruchamia tę samą
-pod-Falę `closeout_pr`. Odczyt issue, checks, routing, naprawa, SHA-bound
-triage/merge, parkowanie oraz redukcja pass state są osobnymi procesami.
-Naruszenie inwariantu jednego otwartego AI PR na repo jest terminalnym,
-fail-closed wynikiem slotu, a nie ukrytą pętlą.
+Każdy kwalifikowany PR uruchamia tę samą pod-Falę `closeout_pr`. Odczyt
+issue, checks, routing, naprawa, SHA-bound triage/merge i parkowanie są
+osobnymi procesami jednego PR.
 
 ### Przegląd inboxu — `survey_inbox`
 
@@ -1283,8 +1273,8 @@ kontraktu. Aktualny audyt:
 | `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
-| `LeftoverCloseout` | `leftover_closeout` | domyka CLOSED ready labels przez jawne sloty repo, etykiet i issue |
-| `CloseoutPRs` | `closeout_prs` | domyka katalog PR-ów przez jawne sloty i pod-Falę jednego PR |
+| `LeftoverCloseout` | `leftover_closeout` | jeden atom katalogu: CLOSED ready labels |
+| `CloseoutPRs` | `closeout_prs` | jeden atom katalogu: PR-y przez pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | klasyfikuje i usuwa ograniczoną liczbę bezpiecznie starych worktree |

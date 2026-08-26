@@ -9,5 +9,5 @@ def run(*, config_path: str | None, live: bool) -> dict:
         repo="local/leftover-closeout",
         config_path=config_path,
         live=live,
-        max_ticks=768,
+        max_ticks=16,
     )

@@ -71,6 +71,69 @@ def test_checks_route_repairs_once():
     )
 
 
+def test_closeout_prs_subflow_uses_handful_of_ticks():
+    import inspect
+    from lokay.proc.closeout_prs_subflow import run
+
+    source = inspect.getsource(run)
+    assert "max_ticks=16" in source
+    assert "max_ticks=512" not in source
+
+
+def test_closeout_catalog_fail_closed_when_prepare_failed():
+    from lokay.proc.closeout_catalog import run
+
+    out = run(
+        {"ok": False, "error": "PR closeout catalog exceeds authored slots"},
+        pass_dir="unused",
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_closeout_catalog_overflow_is_fail_closed():
+    from lokay.proc.closeout_catalog import SLOTS, run
+
+    out = run(
+        {"ok": True, "repos": [f"o/r{i}" for i in range(SLOTS + 1)]},
+        pass_dir="unused",
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+
+
+def test_closeout_catalog_nested_failure_fails_closed(tmp_path, monkeypatch):
+    from lokay.passkit import io as pass_io
+    from lokay.proc.closeout_catalog import run
+
+    monkeypatch.setattr(
+        "lokay.proc.closeout_pr_subflow.run",
+        lambda **_k: {"ok": False, "error": "closeout subflow failed"},
+    )
+    path = tmp_path / "pass"
+    path.mkdir()
+    pass_io.write_json(pass_io.begin_path(path), {"repos": ["o/r"]})
+    pass_io.write_json(
+        pass_io.working_path(path),
+        {"actions": [], "prs_by_repo": {"o/r": [{"number": 7}]}},
+    )
+    out = run(
+        {
+            "ok": True,
+            "repos": ["o/r"],
+            "prs_by_repo": {"o/r": [{"number": 7}]},
+            "repair_budget": 1,
+            "policy": {},
+        },
+        pass_dir=str(path),
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is False and out["error"] == "closeout subflow failed"
+
+
 def test_closeout_catalog_overflow_fails_closed(tmp_path):
     from lokay.proc.prepare_pr_closeout import prepare
 
