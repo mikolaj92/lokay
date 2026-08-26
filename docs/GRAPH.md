@@ -144,20 +144,20 @@ the ledger for step order.
 
 ### `prs` (open PR review / repair / merge)
 
-Child of `factory_pass`. One job per node. Not the `closeout_prs` stamp
-catalog. Not leftover overflow. `compose_pr_triage` stays a thin CLI.
+NODE for this child only. Four authored nodes. Not the `closeout_prs`
+stamp catalog. Not leftover overflow. Do not implement `pr_triage` /
+`pr_repair` internals here.
 
 ```text
-read_prs_scope          ← repos + branch prefix
-  → list_open_prs       ← live GitHub list, no mill filter
-    → filter_mill_prs   ← keep mill prefix only
-      → select_next_pr
-        ├─→ prs_run_triage   ← when route == pr; run_path pr_triage
-        └─→ summarize_prs    ← empty list skips triage and does not fail
+list_open_prs              LEAF  live GitHub mill PRs (two small functions)
+  → select_next_pr         LEAF  one PR
+    ├─→ run_pr_triage_subflow   NODE slot → child Fala `pr_triage` (owns pr_repair)
+    └─→ summarize_prs      LEAF  empty list skips the child and does not fail
 ```
 
-One PR per pass. Empty list is `route=none` and skips. Catalog overflow
-of 30 leftover/closeout slots is not this path. Atom ids are unique.
+Named child slot: `run_pr_triage_subflow` / `pr_triage`. A separate NODE
+agent owns that subgraph. This path only launches it. One PR per pass.
+Atom ids are unique.
 
 ### `self_repair` (emergency only)
 

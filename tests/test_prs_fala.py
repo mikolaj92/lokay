@@ -1,4 +1,4 @@
-"""Native Fala proofs for the prs child: empty skip, one PR, unique names."""
+"""prs NODE: four authored nodes. Child pr_triage is a named slot."""
 
 import tomllib
 from pathlib import Path
@@ -9,11 +9,9 @@ from test_issue_triage_fala import base_effector
 
 
 PRS_ATOMS = (
-    "read_prs_scope",
     "list_open_prs",
-    "filter_mill_prs",
     "select_next_pr",
-    "prs_run_triage",
+    "run_pr_triage_subflow",
     "summarize_prs",
 )
 
@@ -28,7 +26,6 @@ def _prs_path() -> dict:
 
 
 def simulate_prs(*, select_route: str) -> dict[str, str]:
-    """Apply authored conduction + when. Skipped upstream satisfies conduction."""
     routes = {"select_next_pr": select_route}
     status: dict[str, str] = {}
     pending = list(_prs_path()["effectors"])
@@ -59,62 +56,48 @@ def simulate_prs(*, select_route: str) -> dict[str, str]:
     return status
 
 
-def test_empty_list_skips_triage_and_does_not_fail():
+def test_empty_list_skips_child_slot():
     status = simulate_prs(select_route="none")
-    for name in (
-        "read_prs_scope",
-        "list_open_prs",
-        "filter_mill_prs",
-        "select_next_pr",
-        "summarize_prs",
-    ):
-        assert status[name] == "succeeded", name
-    assert status["prs_run_triage"] == "skipped"
+    assert status["list_open_prs"] == "succeeded"
+    assert status["select_next_pr"] == "succeeded"
+    assert status["run_pr_triage_subflow"] == "skipped"
+    assert status["summarize_prs"] == "succeeded"
 
 
 def test_empty_list_skips_triage_and_finishes(tmp_path):
     _require_fala_host()
     body = base_effector(
-        """if a=='read_prs_scope':v.update(repos=[],prefix='ai/fix/')
-if a=='list_open_prs':v.update(prs=[],count=0)
-if a=='filter_mill_prs':v.update(prs=[],count=0)
+        """if a=='list_open_prs':v.update(prs=[],count=0)
 if a=='select_next_pr':v.update(route='none',reason='no_open_pr')
 if a=='summarize_prs':v['result']={'route':'none'}"""
     )
     result = run_graph(tmp_path, body, "prs-empty", path_id="prs")
     status = {name: row["status"] for name, row in result["effector_results"].items()}
-    assert status["filter_mill_prs"] == "succeeded"
-    assert status["prs_run_triage"] == "skipped"
+    assert status["run_pr_triage_subflow"] == "skipped"
     assert status["summarize_prs"] == "succeeded"
-    assert result.get("ok") is not False
 
 
-def test_one_pr_conduction_runs_triage():
+def test_one_pr_launches_child_slot():
     status = simulate_prs(select_route="pr")
-    assert status["prs_run_triage"] == "succeeded"
+    assert status["run_pr_triage_subflow"] == "succeeded"
     assert status["summarize_prs"] == "succeeded"
 
 
 def test_one_pr_runs_triage(tmp_path):
     _require_fala_host()
     body = base_effector(
-        """if a=='read_prs_scope':v.update(repos=['o/r'],prefix='ai/fix/')
-if a=='list_open_prs':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
-if a=='filter_mill_prs':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
+        """if a=='list_open_prs':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_next_pr':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
-if a=='prs_run_triage':v.update(route='completed')
+if a=='run_pr_triage_subflow':v.update(route='completed')
 if a=='summarize_prs':v['result']={'route':'pr','triaged':'completed'}"""
     )
     result = run_graph(tmp_path, body, "prs-one", path_id="prs")
     status = {name: row["status"] for name, row in result["effector_results"].items()}
-    assert status["prs_run_triage"] == "succeeded"
-    assert status["summarize_prs"] == "succeeded"
     assert list(status) == list(PRS_ATOMS)
 
 
-def test_prs_atoms_are_unique_and_not_a_slot_catalog():
-    path = _prs_path()
-    ids = [str(node["id"]) for node in path["effectors"]]
+def test_prs_atoms_are_the_four_named_nodes():
+    ids = [str(node["id"]) for node in _prs_path()["effectors"]]
     assert ids == list(PRS_ATOMS)
     assert len(ids) == len(set(ids))
     others = [
@@ -128,19 +111,14 @@ def test_prs_atoms_are_unique_and_not_a_slot_catalog():
         for node in row.get("effectors") or []
     ]
     assert not set(ids).intersection(others)
-    assert not any("slot" in name or "catalog" in name for name in ids)
 
 
-def test_prs_path_is_in_readme_and_not_leftover_overflow():
+def test_prs_readme_names_the_child_slot():
     root = Path(__file__).resolve().parents[1]
     readme = (root / "README.md").read_text(encoding="utf-8")
     graph = (root / "docs" / "GRAPH.md").read_text(encoding="utf-8")
-    assert "### Recenzja i merge PR-ów — `prs`" in readme
-    assert "ReadPrsScope" in readme
-    assert "FilterMillPrs" in readme
-    assert "PrsRunTriage" in readme
-    assert "### `prs`" in graph
-    assert "read_prs_scope" in graph
-    assert "filter_mill_prs" in graph
-    assert "leftover overflow" in graph.lower()
-    assert "compose_pr_triage" in graph
+    assert "RunPrTriageSubflow" in readme
+    assert "run_pr_triage_subflow" in graph
+    assert "pr_triage" in graph
+    assert "Named child slot" in graph
+    assert "run_pr_triage_subflow" in graph

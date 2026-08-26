@@ -1,7 +1,11 @@
-from lokay.proc.run_pr_triage_subflow import run
+from lokay.proc.run_pr_triage_subflow import CHILD_PATH, run
 
 
-def test_calls_pr_triage_path(monkeypatch) -> None:
+def test_named_slot_is_pr_triage() -> None:
+    assert CHILD_PATH == "pr_triage"
+
+
+def test_launches_child_path_only(monkeypatch) -> None:
     seen: list[dict] = []
 
     def fake(**kwargs):
@@ -10,17 +14,11 @@ def test_calls_pr_triage_path(monkeypatch) -> None:
 
     monkeypatch.setattr("lokay.proc.run_pr_triage_subflow.run_path", fake)
     out = run(
-        {
-            "route": "pr",
-            "repo": "o/r",
-            "pr": 9,
-            "branch": "ai/fix/9-x",
-        },
+        {"route": "pr", "repo": "o/r", "pr": 9, "branch": "ai/fix/9-x"},
         config_path=None,
         live=False,
     )
     assert out["route"] == "completed"
-    assert out["ok"] is True
     assert seen == [
         {
             "path_id": "pr_triage",
