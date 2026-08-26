@@ -732,6 +732,64 @@ def test_describe_issue_to_pr_graph():
         assert required in ids
 
 
+def test_issue_to_pr_node_wires_leaves_and_delivery_child():
+    raw = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    authored = next(p for p in raw["correlation_paths"] if p["id"] == "issue_to_pr")
+    assert "NODE wiring" in authored["description"]
+    assert "issue_to_pr_delivery" in authored["description"]
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "issue_to_pr")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "get_issue",
+        "resolve_implementation_issue",
+        "collect_existing_delivery_pr",
+        "collect_resumed_source",
+        "resolve_existing_delivery",
+        "issue_to_pr_subflow",
+        "close_existing_delivery",
+        "issue_to_pr_no_effect",
+        "summarize_issue_to_pr",
+    ]
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["issue_to_pr_subflow"]["when"] == {
+        "upstream": "resolve_existing_delivery",
+        "path": "route",
+        "equals": "deliver",
+    }
+    assert by_id["close_existing_delivery"]["when"] == {
+        "upstream": "resolve_existing_delivery",
+        "path": "route",
+        "equals": "closeout",
+    }
+    assert by_id["issue_to_pr_no_effect"]["when"] == {
+        "upstream": "resolve_existing_delivery",
+        "path": "route",
+        "equals": "no_effect",
+    }
+    assert set(by_id["summarize_issue_to_pr"]["conduction"]) == {
+        "resolve_existing_delivery",
+        "issue_to_pr_subflow",
+        "close_existing_delivery",
+        "issue_to_pr_no_effect",
+    }
+    issues = next(p for p in desc["paths"] if p["id"] == "issues")
+    assert [node["id"] for node in issues["nodes"]] == [
+        "list_open_issues",
+        "select_next_issue",
+        "issues_run_triage",
+        "select_issue_do",
+        "issues_launch_pr",
+        "summarize_issues",
+    ]
+    delivery = next(p for p in desc["paths"] if p["id"] == "issue_to_pr_delivery")
+    delivery_ids = [node["id"] for node in delivery["nodes"]]
+    assert "plan_issue" in delivery_ids
+    assert "summarize_issue_delivery" in delivery_ids
+    assert "run_agent" not in ids
+    assert "pr_create" not in ids
+
+
 def test_issue_to_pr_plan_issue_before_run_agent():
     by_id = {n["id"]: n for n in _issue_delivery_path()["nodes"]}
     assert "plan_issue" in by_id["localize"]["conduction"]

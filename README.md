@@ -1084,57 +1084,98 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> RecheckOpenIssue
-    RecheckOpenIssue --> RecheckDelivery: issue otwarte
-    RecheckOpenIssue --> NoEffect: issue zamknięte
-    RecheckDelivery --> CloseExistingDelivery: istniejący PR dostarcza issue
-    RecheckDelivery --> NoEffect: wznowiona gałąź ma kod celu
-    RecheckDelivery --> PrepareBranch: brak dostawy
-    PrepareBranch --> PrepareWorktree
-    PrepareWorktree --> PlanIssue
-    PlanIssue --> Localize
-    Localize --> CodingAgent
-    CodingAgent --> ValidateCodingResult
-    ValidateCodingResult --> SelectCodingResult: wynik poprawny
-    ValidateCodingResult --> CodingRetryAgent: invalid JSON + informacja zwrotna
-    CodingRetryAgent --> ValidateCodingRetry
-    ValidateCodingRetry --> SelectCodingResult: wynik poprawny
-    ValidateCodingRetry --> HumanTerminal: nadal invalid JSON
-    SelectCodingResult --> CollectIssueSnapshot: NEEDS_EVIDENCE(issue_snapshot)
-    SelectCodingResult --> CollectRepoStructure: NEEDS_EVIDENCE(repo_structure)
-    SelectCodingResult --> CollectTestContract: NEEDS_EVIDENCE(test_contract)
-    SelectCodingResult --> CollectLocalizedDiff: NEEDS_EVIDENCE(localized_diff)
-    CollectIssueSnapshot --> EvidenceCodingAgent
-    CollectRepoStructure --> EvidenceCodingAgent
-    CollectTestContract --> EvidenceCodingAgent
-    CollectLocalizedDiff --> EvidenceCodingAgent
-    EvidenceCodingAgent --> ValidateEvidenceCoding
-    ValidateEvidenceCoding --> FinalizeCodingResult: wynik poprawny
-    ValidateEvidenceCoding --> HumanTerminal: invalid JSON
-    FinalizeCodingResult --> HumanTerminal: ponowne NEEDS_EVIDENCE / NEEDS_HUMAN
-    SelectCodingResult --> VerifyImplementationDiff: IMPLEMENTED
-    FinalizeCodingResult --> VerifyImplementationDiff: IMPLEMENTED
-    VerifyImplementationDiff --> CommitImplementation
-    CommitImplementation --> RebaseOntoMain
-    RebaseOntoMain --> LocalTest
-    LocalTest --> VerifyPublishDiff: PASS
-    LocalTest --> RepairAgent: FAIL
-    RepairAgent --> ValidateRepairResult
-    ValidateRepairResult --> CommitRepair: REPAIRED
-    ValidateRepairResult --> RepairTerminal: invalid JSON / NEEDS_HUMAN
-    CommitRepair --> LocalTestAgain
-    LocalTestAgain --> VerifyPublishDiff: PASS
-    LocalTestAgain --> RepairTerminal: FAIL
-    VerifyPublishDiff --> PushBranch
-    PushBranch --> CreatePullRequest
-    CreatePullRequest --> LabelPullRequest
-    LabelPullRequest --> PullRequestOpen
-    PullRequestOpen --> DeliveryResult
-    DeliveryResult --> [*]
-    NoEffect --> [*]
-    HumanTerminal --> [*]
-    RepairTerminal --> [*]
+    [*] --> GetIssue
+    GetIssue --> ResolveImplementationIssue
+    ResolveImplementationIssue --> CollectExistingDeliveryPr
+    ResolveImplementationIssue --> CollectResumedSource
+    CollectExistingDeliveryPr --> ResolveExistingDelivery
+    CollectResumedSource --> ResolveExistingDelivery
+    ResolveExistingDelivery --> IssueToPrSubflow: deliver
+    ResolveExistingDelivery --> CloseExistingDelivery: closeout
+    ResolveExistingDelivery --> IssueToPrNoEffect: no_effect
+    IssueToPrSubflow --> SummarizeIssueToPr
+    CloseExistingDelivery --> SummarizeIssueToPr
+    IssueToPrNoEffect --> SummarizeIssueToPr
+    SummarizeIssueToPr --> [*]
 ```
+
+Dziecko `issue_to_pr` jest węzłem Fali. Liście: `get_issue`,
+`resolve_implementation_issue`, `collect_existing_delivery_pr`,
+`collect_resumed_source`, `resolve_existing_delivery`,
+`close_existing_delivery`, `issue_to_pr_no_effect`, `summarize_issue_to_pr`.
+Węzeł-dziecko: `issue_to_pr_subflow` → Fala `issue_to_pr_delivery` gdy
+`route == deliver`. Ten PR tylko składa graf. Nie tłuszcze faktów i dostawy
+w jeden proces. Rodzic `issues` zostaje przy sześciu atomach.
+
+### Dostawa issue — `issue_to_pr_delivery`
+
+```mermaid
+stateDiagram-v2
+    [*] --> GetIssue
+    GetIssue --> ResolveImplementationIssue
+    ResolveImplementationIssue --> AssignIssue: open
+    ResolveImplementationIssue --> StageImplementing: open
+    ResolveImplementationIssue --> MakeBranch: open
+    AssignIssue --> WorktreeAdd
+    StageImplementing --> WorktreeAdd
+    MakeBranch --> WorktreeAdd
+    WorktreeAdd --> PlanIssue
+    PlanIssue --> Localize
+    Localize --> CycleStart
+    CycleStart --> RunAgent
+    RunAgent --> ValidateCodingResult
+    ValidateCodingResult --> CodingRetryAgent: retry
+    ValidateCodingResult --> SelectCodingResult: valid
+    CodingRetryAgent --> ValidateCodingRetry
+    ValidateCodingRetry --> SelectCodingResult
+    SelectCodingResult --> CollectCodingIssueSnapshot: issue_snapshot
+    SelectCodingResult --> CollectCodingRepoStructure: repo_structure
+    SelectCodingResult --> CollectCodingTestContract: test_contract
+    SelectCodingResult --> CollectCodingLocalizedDiff: localized_diff
+    CollectCodingIssueSnapshot --> EvidenceCodingAgent
+    CollectCodingRepoStructure --> EvidenceCodingAgent
+    CollectCodingTestContract --> EvidenceCodingAgent
+    CollectCodingLocalizedDiff --> EvidenceCodingAgent
+    SelectCodingResult --> EvidenceCodingAgent: evidence
+    EvidenceCodingAgent --> ValidateEvidenceCoding
+    ValidateEvidenceCoding --> SelectEvidenceCoding
+    SelectCodingResult --> SelectEvidenceCoding
+    SelectEvidenceCoding --> FinalizeCodingResult
+    FinalizeCodingResult --> CodingManual: human
+    FinalizeCodingResult --> RelocalizeOffGoal: implemented
+    RelocalizeOffGoal --> AssertImplementationDiff
+    AssertImplementationDiff --> CommitImplementation
+    CommitImplementation --> RebaseOntoBase
+    RebaseOntoBase --> LocalTest
+    LocalTest --> SelectLocalTest
+    SelectLocalTest --> RepairAgent: fail
+    RepairAgent --> ValidateRepairResult
+    ValidateRepairResult --> SelectRepairResult
+    SelectRepairResult --> AssertRepairDiff: repaired
+    AssertRepairDiff --> CommitRepair
+    CommitRepair --> LocalTestRecheck
+    LocalTestRecheck --> SelectLocalTestRecheck
+    SelectLocalTest --> FinalizeLocalTests
+    SelectRepairResult --> FinalizeLocalTests
+    SelectLocalTestRecheck --> FinalizeLocalTests
+    FinalizeLocalTests --> CodingRepairTerminal: repair_terminal
+    FinalizeLocalTests --> AssertRealDiff: publish
+    AssertRealDiff --> Push
+    Push --> CreatePullRequest
+    CreatePullRequest --> CycleEnd
+    CreatePullRequest --> StagePrOpen
+    StagePrOpen --> ListPrs
+    ListPrs --> PrLabel
+    PrLabel --> SummarizeIssueDelivery
+    FinalizeCodingResult --> SummarizeIssueDelivery
+    FinalizeLocalTests --> SummarizeIssueDelivery
+    CodingManual --> SummarizeIssueDelivery
+    CodingRepairTerminal --> SummarizeIssueDelivery
+    SummarizeIssueDelivery --> [*]
+```
+
+Węzeł-dziecko `issue_to_pr_delivery` ma własną Falę. Rodzic `issue_to_pr` go
+tylko woła. Ta zmiana nie implementuje jego atomów.
 
 ### Zamknięcie PR — `pr_triage`
 
@@ -1317,8 +1358,8 @@ kontraktu. Aktualny audyt:
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
 | `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
-| `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
-| `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |
+| `ImplementIssue` | `issue_to_pr` | NODE: fakty issue i dostawy, potem dziecko albo closeout albo no-effect |
+| `ImplementIssueDelivery` | `issue_to_pr_delivery` | dziecko: worktree, plan, localize, agent, otwarty i oznaczony PR |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
 | `SelfRepair` | `self_repair` | zweryfikowany fast-forward Lokaya |

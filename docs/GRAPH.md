@@ -187,6 +187,11 @@ Atom ids stay unique versus `triage_dispatch` / `implementation_dispatch`.
 
 ### `issue_to_pr`
 
+The `issue_to_pr` NODE owns this wiring only. It does not implement
+`issue_to_pr_delivery` internals and does not fatten facts+delivery into one
+process. Parent `issues` invokes this child via `issues_launch_pr` and stays
+at six atoms.
+
 Detached launch uses a durable `starting` receipt before `Popen`, then a
 private activation pipe: the child cannot enter this graph until its matching
 PID receipt is atomically published. If the launcher dies in that interval,
@@ -197,25 +202,41 @@ fail-closed occupancy/reap boundary. PID command inspection uses wide `ps` so
 macOS truncation cannot turn a live child into a stale worktree candidate.
 
 ```text
+get_issue                         LEAF  fetch one issue (shared atom)
+  → resolve_implementation_issue  LEAF  open or closed
+    → collect_existing_delivery_pr LEAF  covering open PR if any
+    → collect_resumed_source      LEAF  resumed on-goal source if any
+      → resolve_existing_delivery LEAF  deliver / closeout / no_effect
+        → issue_to_pr_subflow     NODE  when route=deliver → child Fala issue_to_pr_delivery
+        → close_existing_delivery LEAF  when route=closeout
+        → issue_to_pr_no_effect   LEAF  when route=no_effect
+          → summarize_issue_to_pr LEAF  receipt
+```
+
+### `issue_to_pr_delivery` (child of `issue_to_pr`)
+
+The `issue_to_pr_delivery` NODE owns its own Fala. `issue_to_pr` only invokes
+it via `issue_to_pr_subflow` when `resolve_existing_delivery.route == deliver`.
+
+```text
 get_issue
-  ├─→ assign_issue
-  ├─→ stage_implementing   ← no-op on labels: keep ai:ready, strip leftover cache
-  └─→ make_branch
-        └─→ worktree_add
-              └─→ plan_issue   ← deterministic approach.md (trust-with-evidence)
-                    └─→ localize     ← Agentless file-before-patch path list
-                          └─→ run_agent     ← only non-deterministic coding node
-                                └─→ commit_all
-                                      └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed (no dirty PR)
-                                            └─→ test_local   ← local pytest; skip if no suite
-                                            ├─ (red, recorded) → repair_agent   ← ONE patch from the test log (K=1)
-                                            │                      └─→ test_local_recheck
-                                            └─→ assert_real_diff ← refuse plan/localize-only diffs
-                                                  └─→ push            ← only after green / honest skip (recheck if nest ran)
-                                                        └─→ pr_create   ← only after successful push; never off a red suite or plan-only diff
-                                                              └─→ stage_pr_open   ← no-op on labels: keep ai:ready
-                                                                    └─→ list_prs
-                                                                          └─→ pr_label
+  → resolve_implementation_issue
+    → assign_issue / stage_implementing / make_branch   when route=open
+      → worktree_add
+        → plan_issue   ← deterministic approach.md (trust-with-evidence)
+          → localize     ← Agentless file-before-patch path list
+            → cycle_start
+              → run_agent     ← only non-deterministic coding node
+                → validate / one retry / one evidence round
+                  → commit_implementation → rebase_onto_base
+                    → test_local   ← local pytest; skip if no suite
+                    ├─ (red, recorded) → repair_agent   ← ONE patch from the test log (K=1)
+                    │                      └─→ test_local_recheck
+                    └─→ assert_real_diff ← refuse plan/localize-only diffs
+                          └─→ push            ← only after green / honest skip
+                                └─→ pr_create   ← only after successful push
+                                      └─→ stage_pr_open / list_prs / pr_label
+                                        → summarize_issue_delivery
 ```
 
 `plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree

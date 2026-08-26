@@ -219,7 +219,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_to_pr"
 title = "Issue to PR gate"
-description = "Fala checks issue and delivery facts, then invokes the authored delivery subflow only when work remains."
+description = "NODE wiring: get, resolve issue, collect delivery facts, issue_to_pr_delivery child or closeout or no-effect, receipt."
 
 [[correlation_paths.effectors]]
 id = "get_issue"
