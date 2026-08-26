@@ -333,6 +333,50 @@ def test_stale_worktree_reap_path_is_a_handful_of_effectors():
     )
 
 
+def test_issues_path_is_sito_then_one_implement():
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "issues")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "list_open_issues",
+        "select_next_issue",
+        "issues_run_triage",
+        "select_issue_do",
+        "issues_launch_pr",
+        "summarize_issues",
+    ]
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["issues_run_triage"]["when"] == {
+        "upstream": "select_next_issue",
+        "path": "route",
+        "equals": "issue",
+    }
+    assert by_id["issues_launch_pr"]["when"] == {
+        "upstream": "select_issue_do",
+        "path": "route",
+        "equals": "do",
+    }
+    assert set(by_id["summarize_issues"]["conduction"]) == {
+        "select_next_issue",
+        "issues_run_triage",
+        "select_issue_do",
+        "issues_launch_pr",
+    }
+    collide = {"run_issue_triage_subflow", "launch_issue_to_pr"}
+    assert not collide.intersection(ids)
+    assert not any(
+        node["id"].endswith("_1") or node["id"].endswith("_30") for node in path["nodes"]
+    )
+
+
+def test_issues_atoms_do_not_collide_with_dispatch_organs():
+    desc = describe_package()
+    by_path = {p["id"]: {n["id"] for n in p["nodes"]} for p in desc["paths"]}
+    issues = by_path["issues"]
+    assert not issues.intersection(by_path["triage_dispatch"])
+    assert not issues.intersection(by_path["implementation_dispatch"])
+
+
 def test_leftover_closeout_path_is_a_handful_of_effectors():
     path = next(p for p in describe_package()["paths"] if p["id"] == "leftover_closeout")
     ids = [node["id"] for node in path["nodes"]]

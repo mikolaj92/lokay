@@ -24,7 +24,17 @@ def select(picked: dict, triage_run: dict) -> dict:
     if picked.get("route") != "issue":
         return {"ok": True, "route": "skip", "reason": "no_issue"}
     if triage_run.get("route") != "completed":
-        return {"ok": True, "route": "skip", "reason": "triage_not_done", **picked}
+        return {
+            "ok": True,
+            **picked,
+            "route": "skip",
+            "reason": "triage_not_done",
+        }
     if _implementable(triage_run):
         return {"ok": True, "route": "do", "repo": picked["repo"], "issue": picked["issue"]}
-    return {"ok": True, "route": "skip", "reason": "sito_nie_robic", **picked}
+    return {
+        "ok": True,
+        **picked,
+        "route": "skip",
+        "reason": "sito_nie_robic",
+    }

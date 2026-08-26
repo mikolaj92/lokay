@@ -168,6 +168,24 @@ worktree; deterministic atoms alone commit and push directly to `main`. The
 other agent paths. A successful path always returns `restart_required`; product
 work never resumes in the stale daemon process.
 
+### `issues` (child: open issue → PR)
+
+Parent `factory_pass` invokes this child. Labels are not a gate.
+
+```text
+list_open_issues          → live GitHub open issues (human stops exclude;
+                            work:ready / ai:ready are not a gate; no 30-slot catalog)
+  → select_next_issue     → one issue, or skip when empty / leftover / overflow
+    → issues_run_triage   → when route=issue: issue_triage grandchild
+      → select_issue_do   → ready → do; else skip implement (pass does not fail)
+        → issues_launch_pr → when route=do: one issue_to_pr; unique atom name
+          → summarize_issues → receipt always (empty list and sito skip included)
+```
+
+Atom ids stay unique so they do not collide with `triage_dispatch`
+(`run_issue_triage_subflow`) or `implementation_dispatch` (`launch_issue_to_pr`).
+Overflow / leftover / empty list is skip, not error. One implement per pass.
+
 ### `issue_to_pr`
 
 Detached launch uses a durable `starting` receipt before `Popen`, then a

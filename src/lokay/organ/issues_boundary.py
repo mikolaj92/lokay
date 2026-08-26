@@ -22,7 +22,10 @@ def handle_issues(
     if atom == "issues_run_triage":
         from lokay.proc.run_issue_triage_subflow import run
 
-        return run(up.get("select_next_issue") or {}, config_path=config)
+        picked = up.get("select_next_issue") or {}
+        if picked.get("route") != "issue":
+            return {"ok": True, "route": "skip", "reason": "no_issue"}
+        return run(picked, config_path=config)
     if atom == "select_issue_do":
         from lokay.proc.select_issue_do import select
 
@@ -33,7 +36,10 @@ def handle_issues(
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch
 
-        return launch(up.get("select_issue_do") or {}, config_path=config)
+        chosen = up.get("select_issue_do") or {}
+        if chosen.get("route") != "do":
+            return {"ok": True, "route": "skip", "reason": "sito_nie_robic"}
+        return launch(chosen, config_path=config)
     if atom == "summarize_issues":
         from lokay.proc.summarize_issues import summarize
 
@@ -41,5 +47,6 @@ def handle_issues(
             up.get("select_next_issue") or {},
             up.get("select_issue_do") or {},
             up.get("issues_launch_pr") or {},
+            pass_dir=str(inputs.get("pass_dir") or ""),
         )
     return None

@@ -71,12 +71,19 @@ def parse_survey_list(
     kind: str,
     repo: str,
     cap: int,
+    on_cap: str = "fail",
 ) -> list[Any]:
-    """Decode a gh list JSON array. Hitting ``cap`` is a truncated page, not idle."""
+    """Decode a gh list JSON array. Hitting ``cap`` is a truncated page, not idle.
+
+    Survey callers keep ``on_cap="fail"``. The issues child keeps the page
+    (``on_cap="keep"``) so overflow is leftover skip, not a failed pass.
+    """
     rows = json.loads(stdout or "[]")
     if not isinstance(rows, list):
         raise RuntimeError(f"{kind} survey on {repo} returned non-list JSON")
     if len(rows) >= cap:
+        if on_cap == "keep":
+            return rows
         raise RuntimeError(
             f"{kind} survey on {repo} hit the {cap} newest-first cap; "
             "refuse a silent truncated queue"
