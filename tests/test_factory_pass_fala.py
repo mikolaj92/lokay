@@ -1,44 +1,32 @@
-"""Native Fala proofs: selected work skips hygiene and still writes a receipt."""
+"""Native Fala proofs: one pass is PRs, clean, then at most one implement."""
 
 import pytest
 
 from test_implementation_selection_fala import run_graph
 from test_issue_triage_fala import base_effector
 
-HYGIENE = (
-    "survey_prs",
-    "survey_inbox",
-    "survey_ready",
-    "ready_hygiene",
-    "plan_pass",
-    "dispatch_triage",
-    "resolve_conflicts",
+ALWAYS = (
+    "host_ff",
+    "factory_begin_host_gate",
+    "factory_begin",
     "closeout_prs",
-    "reap_stale_implementing",
-    "reap_over_budget",
-    "refresh_occupancy",
     "reap_stale_worktrees",
-)
-
-WORK = (
-    "queue_conflict",
-    "dispatch_implement",
-    "compute_health",
-    "compact_state",
+    "select_implement",
     "record_pass",
+    "factory_pass_terminal",
 )
 
+WORK = ("queue_conflict", "dispatch_implement")
 
-def _body(route: str, hygiene_mark: str, receipt_mark: str, dispatch_mark: str) -> str:
-    hygiene_py = " ".join(repr(name) for name in HYGIENE)
+
+def _body(route: str, work_mark: str, receipt_mark: str) -> str:
+    always_py = " ".join(repr(name) for name in ALWAYS)
     return base_effector(
-        f"""if a=='classify_factory_idle':v.update(route='host')
-if a=='factory_begin':v.update(pass_dir='/pass',planned=False)
-if a=='select_implement':v.update(route={route!r})
-if a=='dispatch_implement':Path({dispatch_mark!r}).write_text('dispatch')
+        f"""if a=='select_implement':v.update(route={route!r})
+if a=='dispatch_implement':Path({work_mark!r}).write_text('dispatch')
 if a=='record_pass':Path({receipt_mark!r}).write_text('receipt');v.update(result={{'ok':True,'health':'progress'}})
 if a=='factory_pass_terminal':v.update(result={{'ok':True,'health':'progress'}})
-if a in {{{hygiene_py}}}:Path({hygiene_mark!r}).write_text(a)"""
+if a in {{{always_py}}}:v.update(ok=True)"""
     )
 
 
@@ -52,47 +40,42 @@ def _require_fala_host():
         pytest.skip(f"fala host unavailable: {exc}")
 
 
-def test_selected_tick_reaches_dispatch_and_receipt_without_hygiene(tmp_path):
+def test_selected_runs_prs_clean_and_implement(tmp_path):
     _require_fala_host()
-    hygiene = str(tmp_path / "hygiene")
+    work = str(tmp_path / "dispatch")
     receipt = str(tmp_path / "receipt")
-    dispatch = str(tmp_path / "dispatch")
     result = run_graph(
         tmp_path,
-        _body("selected", hygiene, receipt, dispatch),
+        _body("selected", work, receipt),
         "factory-selected",
         path_id="factory_pass",
     )
     status = {name: row["status"] for name, row in result["effector_results"].items()}
-    assert status["select_implement"] == "succeeded"
-    assert status["dispatch_implement"] == "succeeded"
-    assert status["record_pass"] == "succeeded"
-    assert status["factory_pass_terminal"] == "succeeded"
-    for name in HYGIENE:
-        assert status[name] == "skipped", name
+    for name in ALWAYS:
+        assert status[name] == "succeeded", name
+    for name in WORK:
+        assert status[name] == "succeeded", name
     assert tmp_path.joinpath("dispatch").is_file()
     assert tmp_path.joinpath("receipt").is_file()
-    assert not tmp_path.joinpath("hygiene").exists()
+    assert "survey_prs" not in status
+    assert "classify_factory_idle" not in status
 
 
-def test_none_tick_runs_hygiene_and_skips_implement(tmp_path):
+def test_none_runs_prs_clean_skips_implement(tmp_path):
     _require_fala_host()
-    hygiene = str(tmp_path / "hygiene")
+    work = str(tmp_path / "dispatch")
     receipt = str(tmp_path / "receipt")
-    dispatch = str(tmp_path / "dispatch")
     result = run_graph(
         tmp_path,
-        _body("none", hygiene, receipt, dispatch),
+        _body("none", work, receipt),
         "factory-none",
         path_id="factory_pass",
     )
     status = {name: row["status"] for name, row in result["effector_results"].items()}
-    assert status["select_implement"] == "succeeded"
-    for name in WORK[:2]:
-        assert status[name] == "skipped", name
-    for name in HYGIENE:
+    for name in ALWAYS:
         assert status[name] == "succeeded", name
-    assert status["record_pass"] == "succeeded"
+    for name in WORK:
+        assert status[name] == "skipped", name
     assert tmp_path.joinpath("receipt").is_file()
-    assert tmp_path.joinpath("hygiene").is_file()
     assert not tmp_path.joinpath("dispatch").exists()
+    assert "survey_prs" not in status

@@ -12,10 +12,13 @@ def reduce_candidates(prepared: dict, rows: list[dict], *, slot_count: int) -> d
                 unique.append({"repo": key[0], "number": key[1]})
     if len(unique) > slot_count:
         return {
-            "ok": False,
-            "error": "leftover closeout candidates exceed authored slots",
+            "ok": True,
+            "route": "skip",
+            "skipped": True,
+            "reason": "leftover_overflow",
             "count": len(unique),
             "slot_count": slot_count,
+            "candidates": [],
         }
     failed = [str(x.get("repo") or "") for x in rows if x.get("route") == "failed"]
     return {

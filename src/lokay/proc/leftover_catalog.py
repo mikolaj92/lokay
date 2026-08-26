@@ -55,8 +55,10 @@ def run(prepared: dict, *, config_path: str | None, live: bool) -> dict:
     repos = list(prepared.get("repos") or [])
     if len(repos) > REPO_SLOTS:
         return {
-            "ok": False,
-            "error": "leftover closeout catalog exceeds authored slots",
+            "ok": True,
+            "route": "skip",
+            "skipped": True,
+            "reason": "leftover_overflow",
             "count": len(repos),
             "slot_count": REPO_SLOTS,
         }
@@ -67,6 +69,15 @@ def run(prepared: dict, *, config_path: str | None, live: bool) -> dict:
             for slot in range(1, len(repos) + 1)
         ]
     candidates = reduce_candidates(prepared, rows, slot_count=CANDIDATE_SLOTS)
+    if candidates.get("skipped") or candidates.get("route") == "skip":
+        return {
+            "ok": True,
+            "route": "skip",
+            "skipped": True,
+            "reason": candidates.get("reason") or "skip",
+            "count": candidates.get("count"),
+            "slot_count": candidates.get("slot_count"),
+        }
     if not candidates.get("ok"):
         return candidates
     cand_rows = []
