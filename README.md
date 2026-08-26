@@ -1287,8 +1287,6 @@ kontraktu. Aktualny audyt:
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
-| `WaitChecks` | `classify_pr_triage_checks` | pending / offline czeka; czerwone CI woła `pr_repair` |
-| `LocalMergeGate` | `select_pr_triage_outcome` | merge albo NODE `pr_repair` |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
 | `SelfRepair` | `self_repair` | zweryfikowany fast-forward Lokaya |
 
