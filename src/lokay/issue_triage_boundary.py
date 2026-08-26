@@ -13,7 +13,7 @@ from lokay.models import Issue
 from lokay.pr_review import extract_json_object, PrReviewError
 from lokay.triage import is_parked, is_undecided
 
-VERDICTS = frozenset({"ready", "close", "split", "needs_evidence", "needs_human"})
+VERDICTS = frozenset({"ready", "close", "needs_evidence", "needs_human"})
 EVIDENCE_KINDS = frozenset({"repo_shape", "named_paths", "linked_prs", "covering_prs"})
 _FIELDS = frozenset({"verdict", "reason", "evidence", "evidence_kind", "summary"})
 

@@ -991,6 +991,9 @@ zostaje w ścieżce obok pracy, nie przed jedynym cennym zlewem.
 
 ### Triage issue — `issue_triage`
 
+Dziecko rodzica `issues`. **Sito tylko:** robić / nie / zamknąć / człowiek.
+Nie implementuje. `issue_split` jest osobną pod-Falą na później.
+
 ```mermaid
 stateDiagram-v2
     [*] --> GetIssue
@@ -998,15 +1001,15 @@ stateDiagram-v2
     ResolveIssueCandidate --> CollectLinkedPullRequests
     CollectLinkedPullRequests --> CollectCoveringPullRequests
     CollectCoveringPullRequests --> ResolveHardFacts
-    ResolveHardFacts --> IntakeDecision: wynik fizyczny CLOSE / BLOCKED / SKIP
+    ResolveHardFacts --> SitoDecision: wynik fizyczny zamknąć / nie
     ResolveHardFacts --> TriageAgent: potrzebna ocena semantyczna
     TriageAgent --> ValidateTriageResult
     ValidateTriageResult --> TriageRetryAgent: invalid JSON + informacja zwrotna
     TriageRetryAgent --> ValidateTriageRetry
-    ValidateTriageRetry --> IntakeDecision: wynik poprawny
+    ValidateTriageRetry --> SitoDecision: wynik poprawny
     ValidateTriageRetry --> HumanTerminal: nadal invalid JSON
-    ValidateTriageResult --> IntakeDecision: wynik poprawny
-    IntakeDecision --> SelectIssueEvidence: NEEDS_EVIDENCE
+    ValidateTriageResult --> SitoDecision: wynik poprawny
+    SitoDecision --> SelectIssueEvidence: NEEDS_EVIDENCE
     SelectIssueEvidence --> CollectRepoShape: repo_shape
     SelectIssueEvidence --> CollectNamedPaths: named_paths
     SelectIssueEvidence --> CollectLinkedPullRequests: linked_prs
@@ -1016,33 +1019,23 @@ stateDiagram-v2
     CollectLinkedPullRequests --> EvidenceTriageAgent
     CollectCoveringPullRequests --> EvidenceTriageAgent
     EvidenceTriageAgent --> ValidateEvidenceTriage
-    ValidateEvidenceTriage --> IntakeDecision: wynik poprawny
+    ValidateEvidenceTriage --> SitoDecision: wynik poprawny
     ValidateEvidenceTriage --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
-    IntakeDecision --> CloseIssue: CLOSE
-    IntakeDecision --> MarkReady: READY
-    IntakeDecision --> PlanSplit: SPLIT
-    IntakeDecision --> HumanTerminal: NEEDS_HUMAN
-    IntakeDecision --> MarkBlocked: BLOCKED
-    IntakeDecision --> NoEffect: SKIP
-    PlanSplit --> HumanTerminal: plan niemożliwy
-    PlanSplit --> CreateChild1: plan poprawny
-    CreateChild1 --> CreateChild2
-    CreateChild2 --> CreateChild3: child 3 istnieje
-    CreateChild2 --> MarkTracker: tylko 2 dzieci
-    CreateChild3 --> CreateChild4: child 4 istnieje
-    CreateChild3 --> MarkTracker: tylko 3 dzieci
-    CreateChild4 --> CreateChild5: child 5 istnieje
-    CreateChild4 --> MarkTracker: tylko 4 dzieci
-    CreateChild5 --> MarkTracker
-    MarkTracker --> CommentTracker
-    CommentTracker --> CloseTracker
-    CloseIssue --> [*]
+    SitoDecision --> MarkReady: robić
+    SitoDecision --> ApplySkip: nie
+    SitoDecision --> MarkBlocked: nie
+    SitoDecision --> CloseIssue: zamknąć
+    SitoDecision --> HumanTerminal: człowiek
     MarkReady --> [*]
+    ApplySkip --> [*]
     MarkBlocked --> [*]
-    CloseTracker --> [*]
-    NoEffect --> [*]
+    CloseIssue --> [*]
     HumanTerminal --> [*]
 ```
+
+Sito nie rozcina issue i nie otwiera PR. Rodzic `issues` woła `issue_to_pr`
+tylko po **robić**. Incydent preflight to **nie** (liść `apply_issue_blocked`
+zostaje jednym zadaniem). `issue_split` nie jest wyjściem tego sita.
 
 ### Implementacja issue — `issue_to_pr`
 
@@ -1232,7 +1225,7 @@ kontraktu. Aktualny audyt:
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
-| `issue_triage` bez ukrytego drzewa Python | zaimplementowane w Fali wraz z pod-Falą `issue_split` |
+| `issue_triage` sito (robić / nie / zamknąć / człowiek) | zaimplementowane w Fali; nie implementuje; `issue_split` jest późniejszym dzieckiem |
 | `issue_to_pr` bez ukrytego drzewa Python | zaimplementowane jako gate Fali + pod-Fala `issue_to_pr_delivery` |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | jawna allowlista carrier events/health; lokalny błąd nigdy nie wchodzi do globalnego quorum |
 
@@ -1277,7 +1270,9 @@ kontraktu. Aktualny audyt:
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
-| `TriageInbox` | `issue_triage` | `CLOSE`, `READY`, `SPLIT`, `NEEDS_HUMAN` |
+| `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
+| `OpenPRs` | `prs` | lista otwartych PR, recenzja i merge jednego |
+| `TriageInbox` | `issue_triage` | sito: robić, nie, zamknąć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |

@@ -25,10 +25,10 @@ OWNED = frozenset(
         "select_issue_evidence",
         "finalize_issue_triage",
         "apply_issue_ready",
+        "apply_issue_skip",
         "apply_issue_blocked",
         "apply_issue_close",
         "apply_issue_manual",
-        "issue_split_subflow",
         "summarize_issue_triage",
     }
 )
@@ -218,21 +218,15 @@ def handle_issue_triage(
         return summarize(
             final=up.get("finalize_issue_triage") or {},
             ready=up.get("apply_issue_ready") or {},
+            skip=up.get("apply_issue_skip") or {},
             blocked=up.get("apply_issue_blocked") or {},
             close=up.get("apply_issue_close") or {},
-            split=up.get("issue_split_subflow") or {},
             manual=up.get("apply_issue_manual") or {},
         )
-    if atom == "issue_split_subflow":
-        from lokay.proc.issue_split_subflow import invoke
+    if atom == "apply_issue_skip":
+        from lokay.proc.apply_issue_skip import apply
 
-        return invoke(
-            config_path=str(inputs.get("config_path") or "") or None,
-            repo=repo,
-            issue=number,
-            decision=decision,
-            live=mutate,
-        )
+        return apply(decision=decision)
     if atom == "apply_issue_ready":
         from lokay.proc.apply_issue_ready import apply
 

@@ -114,20 +114,14 @@ product. Green repository verification may be reused only for the identical
    (`ai:needs-review`) never freeze unrelated repos. Issue-level
    `ai:needs-feedback` never freezes any repo. Safety: never open a second
    `ai/fix/*` PR in a repo that already has an open AI PR.
-3. **Inbox triage + intake + optional split** (per repo, when that repo has no
+3. **Inbox sito** (per repo, when that repo has no
    actionable open AI PR and its PR survey succeeded): undecided issues →
-   triage rules, then **intake** → `CLOSE` | `READY` | `SPLIT` |
-   rare `NEEDS_HUMAN`. Path: `issue_triage`
-   (`get_issue → triage_issue → intake_issue → issue_split`). Hard facts
-   (open/superseded/duplicate AI PR) stay deterministic. Semantic remainder is
-   one structured executor call with the previous heuristic frame as fallback.
-   Oversized / multi-epic / inventory blobs **auto-split**
-   into bounded child issues (parent becomes `ai:tracker`, not `ai:ready`).
-   A **bug** (`bug` / `kind:bug` / `[BUG]`) is one symptom, one fix: template
-   Subsystem / Environment checkboxes (`##` or `**bold**`) are routing, not
-   slices. Intake must not close the parent and mint empty children.
-   Children re-enter inbox/intake on later passes. Fail closed: a failed PR
-   survey for a repo refuses triage mutations **in that repo only**.
+   `issue_triage` sito: robić / nie / zamknąć / człowiek. Not implement.
+   Hard facts (open/superseded/duplicate AI PR) stay deterministic. Semantic
+   remainder is one structured executor call. Oversized / multi-epic work is
+   człowiek until the later `issue_split` child. A **bug**
+   (`bug` / `kind:bug` / `[BUG]`) is one symptom, one fix. Fail closed: a failed
+   PR survey for a repo refuses triage mutations **in that repo only**.
 4. **PR close-out**: for open AI PRs — conflicts → close + re-ready; confirmed
    failed CI → `pr_repair`; pending **or transient GitHub/rate-limit checks** →
    wait non-green; mergeable + policy → `pr_triage` (LLM review → merge → close

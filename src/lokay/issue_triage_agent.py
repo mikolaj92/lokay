@@ -6,7 +6,7 @@ from lokay.models import Issue
 from lokay.safety import untrusted_issue_block
 
 SCHEMA = """{
-  "verdict": "ready" | "close" | "split" | "needs_evidence" | "needs_human",
+  "verdict": "ready" | "close" | "needs_evidence" | "needs_human",
   "reason": "short_snake_case_reason",
   "evidence": ["one-line physical facts"],
   "evidence_kind": "repo_shape" | "named_paths" | "linked_prs" | "covering_prs" | null,
@@ -22,11 +22,11 @@ Schema:
 {SCHEMA}
 
 Rules:
-1. Prefer ready for intentional operator or configured-assignee work.
-2. close only for clearly obsolete, superseded, wrong-shape, or foreign essence objections.
-3. split oversized multi-epic work into implementable slices.
+1. Prefer ready (robić) for intentional operator or configured-assignee work.
+2. close (zamknąć) only for clearly obsolete, superseded, wrong-shape, or foreign essence objections.
+3. Do not split. Oversized or multi-epic work is needs_human (człowiek).
 4. needs_evidence selects exactly one closed evidence_kind when one physical fact prevents a verdict.
-5. needs_human is rare and terminal.
+5. needs_human (człowiek) is residual and terminal. Do not implement.
 6. Do not edit files or mutate GitHub.
 
 Hard physical facts:

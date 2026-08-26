@@ -219,7 +219,7 @@ def test_issue_triage_path_in_package():
         "apply_issue_blocked",
         "apply_issue_close",
         "apply_issue_ready",
-        "issue_split_subflow",
+        "apply_issue_skip",
         "apply_issue_manual",
         "summarize_issue_triage",
     ]
@@ -227,8 +227,9 @@ def test_issue_triage_path_in_package():
     assert "get_issue" in triage["conduction"]
     linked = path["nodes"][2]
     assert "resolve_issue_candidate" in linked["conduction"]
-    split = next(node for node in path["nodes"] if node["id"] == "issue_split_subflow")
-    assert "finalize_issue_triage" in split["conduction"]
+    skip = next(node for node in path["nodes"] if node["id"] == "apply_issue_skip")
+    assert "finalize_issue_triage" in skip["conduction"]
+    assert all(node["id"] != "issue_split_subflow" for node in path["nodes"])
 
 
 def test_pr_repair_path_in_package():
