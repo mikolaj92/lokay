@@ -3,11 +3,62 @@
 import tomllib
 from pathlib import Path
 
+from test_factory_pass_fala import _require_fala_host
 from test_implementation_selection_fala import run_graph
 from test_issue_triage_fala import base_effector
 
 
+def _prs_path() -> dict:
+    package = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "fala/lokay.fala-package.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    return next(row for row in package["correlation_paths"] if row["id"] == "prs")
+
+
+def simulate_prs(*, select_route: str) -> dict[str, str]:
+    """Apply authored conduction + when. Skipped upstream satisfies conduction."""
+    routes = {"select_next_pr": select_route}
+    status: dict[str, str] = {}
+    pending = list(_prs_path()["effectors"])
+    progressed = True
+    while pending and progressed:
+        progressed = False
+        leftover = []
+        for node in pending:
+            deps = list(node.get("conduction") or [])
+            if any(status.get(dep) not in {"succeeded", "skipped"} for dep in deps):
+                leftover.append(node)
+                continue
+            when = dict(node.get("when") or {})
+            name = str(node["id"])
+            if when:
+                upstream = str(when.get("upstream") or "")
+                if status.get(upstream) != "succeeded" or routes.get(upstream) != when.get(
+                    "equals"
+                ):
+                    status[name] = "skipped"
+                else:
+                    status[name] = "succeeded"
+            else:
+                status[name] = "succeeded"
+            progressed = True
+        pending = leftover
+    assert not pending, [node["id"] for node in pending]
+    return status
+
+
+def test_empty_list_skips_triage_and_does_not_fail():
+    status = simulate_prs(select_route="none")
+    assert status["list_open_prs"] == "succeeded"
+    assert status["select_next_pr"] == "succeeded"
+    assert status["prs_run_triage"] == "skipped"
+    assert status["summarize_prs"] == "succeeded"
+
+
 def test_empty_list_skips_triage_and_finishes(tmp_path):
+    _require_fala_host()
     body = base_effector(
         """if a=='list_open_prs':v.update(prs=[],count=0)
 if a=='select_next_pr':v.update(route='none',reason='no_open_pr')
@@ -22,7 +73,14 @@ if a=='summarize_prs':v['result']={'route':'none'}"""
     assert result.get("ok") is not False
 
 
+def test_one_pr_conduction_runs_triage():
+    status = simulate_prs(select_route="pr")
+    assert status["prs_run_triage"] == "succeeded"
+    assert status["summarize_prs"] == "succeeded"
+
+
 def test_one_pr_runs_triage(tmp_path):
+    _require_fala_host()
     body = base_effector(
         """if a=='list_open_prs':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_next_pr':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')

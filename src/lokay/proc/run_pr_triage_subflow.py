@@ -5,7 +5,7 @@ from lokay.compose.pr_triage import compose_pr_triage
 
 def run(target: dict, *, config_path: str | None, live: bool) -> dict:
     if target.get("route") != "pr" or not target.get("branch"):
-        return {"ok": True, "route": "skip", **target}
+        return {"ok": True, **target, "route": "skip"}
     try:
         result = compose_pr_triage(
             config_path=config_path,
@@ -15,5 +15,5 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
             live=live,
         )
     except Exception as exc:
-        return {"ok": True, "route": "failed", "error": str(exc), **target}
-    return {"ok": True, "route": "completed", "triage": result, **target}
+        return {"ok": True, **target, "route": "failed", "error": str(exc)}
+    return {"ok": True, **target, "route": "completed", "triage": result}
