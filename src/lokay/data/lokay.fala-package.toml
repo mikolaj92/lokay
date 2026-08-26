@@ -5301,7 +5301,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "factory_begin"
 title = "Factory pass workspace opening"
-description = "Short host-alive check, configured catalog, and pass workspace. Ceremony does not fail-close."
+description = "One-job atoms: host probe, catalog, pass_dir, build, seed, attach, persist begin, persist working, persist tick."
 
 [[correlation_paths.effectors]]
 id = "probe_factory_host"
@@ -5327,6 +5327,14 @@ config = { atom = "select_factory_scope" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
+id = "read_factory_stuck"
+capability = "lokay_atom"
+conduction = ["load_factory_config"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "read_factory_stuck" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
 id = "create_factory_pass_dir"
 capability = "lokay_atom"
 conduction = ["load_factory_config", "select_factory_scope"]
@@ -5335,11 +5343,59 @@ config = { atom = "create_factory_pass_dir" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
+id = "build_factory_begin_state"
+capability = "lokay_atom"
+conduction = ["load_factory_config", "select_factory_scope", "read_factory_stuck", "create_factory_pass_dir"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "build_factory_begin_state" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "build_factory_working_state"
+capability = "lokay_atom"
+conduction = ["read_factory_stuck"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "build_factory_working_state" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "seed_factory_occupancy"
+capability = "lokay_atom"
+conduction = ["build_factory_working_state"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "seed_factory_occupancy" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "attach_factory_stuck"
+capability = "lokay_atom"
+conduction = ["build_factory_begin_state", "seed_factory_occupancy", "read_factory_stuck"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "attach_factory_stuck" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
 id = "persist_factory_begin_state"
 capability = "lokay_atom"
-conduction = ["probe_factory_host", "load_factory_config", "select_factory_scope", "create_factory_pass_dir"]
+conduction = ["create_factory_pass_dir", "attach_factory_stuck"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "persist_factory_begin_state" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "persist_factory_working_state"
+capability = "lokay_atom"
+conduction = ["create_factory_pass_dir", "attach_factory_stuck", "persist_factory_begin_state"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "persist_factory_working_state" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "persist_factory_tick"
+capability = "lokay_atom"
+conduction = ["probe_factory_host", "read_factory_stuck", "create_factory_pass_dir", "attach_factory_stuck", "persist_factory_working_state"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "persist_factory_tick" }
 retry_policy = "none"
 
 [[correlation_paths]]

@@ -140,14 +140,20 @@ human writes issue → mill delivers.
 probe_factory_host
   → load_factory_config
     → select_factory_scope
-      → create_factory_pass_dir
-        → persist_factory_begin_state
+      → read_factory_stuck
+        → create_factory_pass_dir
+          → build_factory_begin_state
+            → build_factory_working_state
+              → seed_factory_occupancy
+                → attach_factory_stuck
+                  → persist_factory_begin_state
+                    → persist_factory_working_state
+                      → persist_factory_tick
 ```
 
-One short host-alive fact, the configured catalog, and a pass directory.
-`pass_dir` is written on this path. Empty survey snapshots are not a
-queue and do not route idle. Lease, preflight, harvest, and four
-terminals are off the critical path so they cannot skip PRs or issues.
+Each atom is one job. Fala composes them. `pass_dir` is written on this
+path. Empty survey snapshots are not a queue and do not route idle.
+Lease, preflight, harvest, and four terminals stay off this path.
 
 The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process

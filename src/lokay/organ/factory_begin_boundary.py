@@ -11,6 +11,14 @@ def handle_factory_begin(
 ) -> dict[str, Any] | None:
     config_path = str(inputs.get("config_path") or "") or None
     live = bool(inputs.get("live"))
+    config = up.get("load_factory_config") or {}
+    scope = up.get("select_factory_scope") or {}
+    ledger = up.get("read_factory_stuck") or {}
+    workspace = up.get("create_factory_pass_dir") or {}
+    begin = up.get("build_factory_begin_state") or {}
+    working = up.get("build_factory_working_state") or {}
+    seeded = up.get("seed_factory_occupancy") or working
+    attached = up.get("attach_factory_stuck") or {}
     if atom == "probe_factory_host":
         from lokay.proc.probe_factory_host import probe
 
@@ -22,18 +30,41 @@ def handle_factory_begin(
     if atom == "select_factory_scope":
         from lokay.proc.select_factory_scope import select
 
-        return select(up.get("load_factory_config") or {})
+        return select(config)
+    if atom == "read_factory_stuck":
+        from lokay.proc.read_factory_stuck import read
+
+        return read(config)
     if atom == "create_factory_pass_dir":
         from lokay.proc.create_factory_pass_dir import create
 
-        return create(up.get("load_factory_config") or {})
+        return create(config)
+    if atom == "build_factory_begin_state":
+        from lokay.proc.build_factory_begin_state import build
+
+        return build(config, scope, ledger, workspace)
+    if atom == "build_factory_working_state":
+        from lokay.proc.build_factory_working_state import build
+
+        return build(ledger)
+    if atom == "seed_factory_occupancy":
+        from lokay.proc.seed_factory_occupancy import run
+
+        return run(working)
+    if atom == "attach_factory_stuck":
+        from lokay.proc.attach_factory_stuck import attach
+
+        return attach(begin, seeded, ledger)
     if atom == "persist_factory_begin_state":
         from lokay.proc.persist_factory_begin_state import persist
 
-        return persist(
-            up.get("create_factory_pass_dir") or {},
-            up.get("load_factory_config") or {},
-            up.get("select_factory_scope") or {},
-            up.get("probe_factory_host") or {},
-        )
+        return persist(workspace, attached)
+    if atom == "persist_factory_working_state":
+        from lokay.proc.persist_factory_working_state import persist
+
+        return persist(workspace, attached)
+    if atom == "persist_factory_tick":
+        from lokay.proc.persist_factory_tick import persist
+
+        return persist(workspace, attached, up.get("probe_factory_host") or {}, ledger)
     return None

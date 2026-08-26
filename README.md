@@ -117,17 +117,23 @@ stateDiagram-v2
     [*] --> ProbeFactoryHost
     ProbeFactoryHost --> LoadFactoryConfig
     LoadFactoryConfig --> SelectFactoryScope
-    SelectFactoryScope --> CreateFactoryPassDirectory
-    CreateFactoryPassDirectory --> PersistFactoryBeginState
-    PersistFactoryBeginState --> [*]
+    SelectFactoryScope --> ReadFactoryStuck
+    ReadFactoryStuck --> CreateFactoryPassDirectory
+    CreateFactoryPassDirectory --> BuildFactoryBeginState
+    BuildFactoryBeginState --> BuildFactoryWorkingState
+    BuildFactoryWorkingState --> SeedFactoryOccupancy
+    SeedFactoryOccupancy --> AttachFactoryStuck
+    AttachFactoryStuck --> PersistFactoryBeginState
+    PersistFactoryBeginState --> PersistFactoryWorkingState
+    PersistFactoryWorkingState --> PersistFactoryTick
+    PersistFactoryTick --> [*]
 ```
 
-Jedna krótka sonda hosta, katalog z konfiguracji i miejsce na dysku.
-`pass_dir` powstaje, gdy host jest dostępny. Sonda nie zamyka passa
-w idle/skip przez pusty survey. Lease, preflight, harvest i cztery
-terminale nie stoją na ścieżce krytycznej — issues i PRs listują żywo
-z GitHuba. Węzeł `factory_begin` w `factory_pass` prowadzi kwit
-(`pass_dir`, `stuck_path`, `planned`, counts). Nie ma agenta.
+Każdy węzeł to jedna robota. Fala składa sondę hosta, katalog, `pass_dir`,
+budowę begin/working, occupancy, zapis begin, zapis working i zapis tick.
+Żaden atom nie robi lease+preflight+harvest+idle. Pusty survey nie zamyka
+passa. Issues i PRs listują żywo z GitHuba. Kwit to `pass_dir`, `stuck_path`,
+`planned`. Nie ma agenta.
 
 ### Przegląd gotowych issue — `survey_ready`
 

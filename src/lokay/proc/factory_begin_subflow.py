@@ -11,7 +11,7 @@ def run(*, config_path: str | None, live: bool) -> dict:
             repo="local/factory-begin",
             config_path=config_path,
             live=live,
-            max_ticks=16,
+            max_ticks=32,
             require_healthy=False,
         )
     )
