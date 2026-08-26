@@ -49,6 +49,19 @@ def test_pr_triage_request_changes_preserves_subflow_result():
     assert out["skipped"] and out["repaired"]
 
 
+def test_pr_triage_wait_terminal_does_not_fail():
+    out = pr_triage(
+        review={},
+        repair={},
+        repair_manual={},
+        manual={},
+        merge={},
+        close={},
+        outcome={"route": "wait", "reason": "checks_pending", "waiting": True},
+    )["result"]
+    assert out["skipped"] and out["waiting"] and out["reason"] == "checks_pending"
+
+
 def test_self_repair_terminal_releases_gate():
     from lokay.proc.summarize_self_repair import summarize
 

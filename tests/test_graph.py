@@ -1028,8 +1028,13 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
     package = describe_package()
     path = next(item for item in package["paths"] if item["id"] == "pr_triage")
     by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["collect_pr_review_evidence"]["when"] == {
+        "upstream": "classify_pr_triage_checks",
+        "path": "route",
+        "equals": "review",
+    }
     assert by_id["pr_repair_subflow"]["when"] == {
-        "upstream": "review_repair_gate",
+        "upstream": "select_pr_triage_outcome",
         "path": "route",
         "equals": "repair",
     }
@@ -1038,15 +1043,15 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
         "path": "decision.verdict",
         "equals": "needs_human",
     }
-    for node_id in (
-        "worktree_add",
-        "test_local",
-        "pr_merge",
-        "stage_clear",
-        "close_issue",
-    ):
+    for node_id in ("worktree_add", "test_local"):
         assert by_id[node_id]["when"] == {
             "upstream": "publish_pr_review",
             "path": "decision.verdict",
             "equals": "approve",
+        }
+    for node_id in ("pr_merge", "stage_clear", "close_issue"):
+        assert by_id[node_id]["when"] == {
+            "upstream": "select_pr_triage_outcome",
+            "path": "route",
+            "equals": "merge",
         }

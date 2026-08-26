@@ -21,6 +21,21 @@ def handle_pr_outcome(
             manual=up.get("review_manual") or {},
             merge=up.get("pr_merge") or {},
             close=up.get("close_issue") or {},
+            outcome=up.get("select_pr_triage_outcome") or {},
+        )
+
+    if atom == "classify_pr_triage_checks":
+        from lokay.proc.classify_pr_triage_checks import classify
+
+        return classify(up.get("pr_checks") or {})
+
+    if atom == "select_pr_triage_outcome":
+        from lokay.proc.select_pr_triage_outcome import select
+
+        return select(
+            up.get("classify_pr_triage_checks") or {},
+            up.get("review_repair_gate") or {},
+            up.get("test_local") or {},
         )
 
     if atom == "review_repair_gate":
