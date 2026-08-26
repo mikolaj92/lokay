@@ -1,6 +1,6 @@
 """Apply one leftover-closeout fact to one factory-pass envelope."""
 
-from lokay.proc.classify_last_pass_progress import leftover_skip_signal
+from lokay.proc.leftover_skip import leftover_skip_signal
 
 
 def apply(tick: dict, leftover: dict) -> dict:

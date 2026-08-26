@@ -111,10 +111,26 @@ def handle_recovery(
             repair=up.get("recovery_run_self_repair") or {},
         )
 
-    if atom == "classify_last_pass_progress":
-        from lokay.proc import classify_last_pass_progress
+    if atom == "last_pass_moving":
+        from lokay.proc import last_pass_moving
 
-        return _run_atom_main(classify_last_pass_progress.main, [*cfg, *live])
+        return _run_atom_main(last_pass_moving.main, [*cfg, *live])
+
+    if atom == "select_repair_route":
+        import argparse
+
+        from lokay.pass_receipt import read_pass_receipt
+        from lokay.proc._common import load_cfg
+        from lokay.proc.last_pass_moving import classify as classify_moving
+        from lokay.proc.leftover_skip import classify as leftover_classify
+        from lokay.proc.select_repair_route import select
+
+        config_path = str(inputs.get("config_path") or inputs.get("config") or "")
+        loaded = load_cfg(argparse.Namespace(config=config_path or None))
+        receipt = read_pass_receipt(state_path=loaded.state_path)
+        moving = up.get("last_pass_moving") or classify_moving(receipt)
+        leftover = up.get("leftover_skip") or leftover_classify(receipt)
+        return select(moving, leftover, receipt)
 
     if atom == "recovery_begin":
         return _run_atom_main(recovery_begin.main, [*cfg, *live])
@@ -156,7 +172,7 @@ def handle_recovery(
         )
 
     if atom == "recovery_incident":
-        classified = up.get("classify_last_pass_progress") or {}
+        classified = up.get("select_repair_route") or {}
         if classified.get("route") != "repair":
             return {
                 "ok": True,
@@ -174,7 +190,7 @@ def handle_recovery(
         )
 
     if atom == "recovery_run_self_repair":
-        classified = up.get("classify_last_pass_progress") or {}
+        classified = up.get("select_repair_route") or {}
         if classified.get("route") != "repair":
             return {
                 "ok": True,

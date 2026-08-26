@@ -105,9 +105,10 @@ stateDiagram-v2
     CompactState --> RecordPass
     RecordPass --> FactoryPassTerminal: lane product / oil / idle
     RecordFactoryIdle --> FactoryPassTerminal: lane idle
-    FactoryPassTerminal --> ClassifyLastPass
-    ClassifyLastPass --> [*]: new PR / merge / leftover skip / empty survey / stale
-    ClassifyLastPass --> SelfRepair: last receipt did not move
+    FactoryPassTerminal --> LastPassMoving
+    LastPassMoving --> SelectRepairRoute
+    SelectRepairRoute --> [*]: new PR / merge / leftover skip / empty survey / stale
+    SelectRepairRoute --> SelfRepair: last receipt did not move
     SelfRepair --> CloseoutPrs
     SelfRepair --> DispatchImplement
 ```
@@ -1251,38 +1252,35 @@ stateDiagram-v2
 
 ### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
 
-Repair is a side child. It never replaces the factory mill. Moving
-forward is only a new PR or a merge on the last receipt. Leftover skip,
-empty survey, and a stale receipt stay on the factory and do not start
-recovery. After one repair the graph always returns to PRs / issues.
+Repair is a side child. It never replaces the factory mill. The moving
+gate is one leaf (`last_pass_moving`: new PR or merge only). A second
+leaf (`select_repair_route`) composes leftover skip, empty survey, stale
+receipt, occupied, and soft health. Repair is the `self_repair` child
+graph — activate stays a leaf inside that child, not inside
+`recovery_mill`. After one repair the graph always returns to PRs /
+issues.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ClassifyLastPass
-    ClassifyLastPass --> RunFactoryPass: new PR / merge
-    ClassifyLastPass --> RunFactoryPass: leftover skip / empty survey / stale
-    ClassifyLastPass --> SelfRepair: last receipt did not move
+    [*] --> LastPassMoving
+    LastPassMoving --> SelectRepairRoute
+    SelectRepairRoute --> RunFactoryPass: new PR / merge
+    SelectRepairRoute --> RunFactoryPass: leftover skip / empty survey / stale
+    SelectRepairRoute --> SelfRepair: last receipt did not move
     SelfRepair --> RunFactoryPass
     RunFactoryPass --> CloseoutPrs
     RunFactoryPass --> DispatchImplement
     CloseoutPrs --> [*]
     DispatchImplement --> [*]
-    SelfRepair --> PrepareRecovery
-    PrepareRecovery --> RecoveryAgent
-    RecoveryAgent --> ValidateRecoveryResult
-    ValidateRecoveryResult --> RecoveryAgent: invalid JSON + informacja zwrotna
-    ValidateRecoveryResult --> RecoveryEvidence: NEEDS_EVIDENCE
-    RecoveryEvidence --> RecoveryAgent
-    ValidateRecoveryResult --> ValidatePatch: FIXED
-    ValidateRecoveryResult --> HumanTerminal: NEEDS_HUMAN
-    ValidatePatch --> CommitRecovery
-    CommitRecovery --> PushMainFastForward
-    PushMainFastForward --> ActivateRelease
-    ActivateRelease --> PreflightRelease
-    PreflightRelease --> CloseIncident: PASS
-    PreflightRelease --> RunFactoryPass
-    CloseIncident --> RunFactoryPass
-    HumanTerminal --> RunFactoryPass
+    SelfRepair --> SelfRepairPrepare
+    SelfRepairPrepare --> SelfRepairRunAgent
+    SelfRepairRunAgent --> SelfRepairCommit
+    SelfRepairCommit --> SelfRepairValidate
+    SelfRepairValidate --> SelfRepairPushMain
+    SelfRepairPushMain --> SelfRepairActivate
+    SelfRepairActivate --> SelfRepairPreflight
+    SelfRepairPreflight --> SelfRepairClose
+    SelfRepairClose --> RunFactoryPass
 ```
 
 ### Zgodność diagramu z implementacją
@@ -1306,7 +1304,7 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | factory first; self_repair only when last receipt did not move, then PRs/issues |
+| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then PRs/issues |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |

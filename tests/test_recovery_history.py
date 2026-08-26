@@ -509,7 +509,7 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
         incident = fala_handle(
             "recovery_incident",
             {},
-            {"classify_last_pass_progress": classified},
+            {"select_repair_route": classified},
         )
         assert incident.get("skipped") is True
         assert incident.get("reason") == health
@@ -517,7 +517,7 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
             "recovery_run_self_repair",
             {"config_path": str(tmp_path / "unused.yaml")},
             {
-                "classify_last_pass_progress": classified,
+                "select_repair_route": classified,
                 "recovery_incident": incident,
             },
         )

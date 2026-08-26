@@ -3,6 +3,8 @@
 from lokay.fala_organ import _handle as fala_handle
 from lokay.pass_receipt import build_pass_receipt
 from lokay.proc.classify_last_pass_progress import classify, leftover_skip_signal
+from lokay.proc.last_pass_moving import classify as classify_moving
+from lokay.proc.last_pass_moving import moved_forward
 
 
 def _receipt(**fields):
@@ -17,6 +19,19 @@ def _receipt(**fields):
     }
     base.update(fields)
     return base
+
+
+def test_moving_leaf_answers_only_new_pr_or_merge():
+    moving = classify_moving(_receipt(new_pr=True, health="stall", ok=False))
+    assert moving == {
+        "ok": True,
+        "moved_forward": True,
+        "new_pr": True,
+        "merged": False,
+    }
+    assert "route" not in moving
+    assert moved_forward(_receipt(merged=True)) is True
+    assert moved_forward(_receipt(health="stall")) is False
 
 
 def test_new_pr_is_moved_forward():
@@ -134,13 +149,13 @@ def test_organ_skips_repair_for_leftover_overflow(monkeypatch):
     incident = fala_handle(
         "recovery_incident",
         {},
-        {"classify_last_pass_progress": classified},
+        {"select_repair_route": classified},
     )
     repair = fala_handle(
         "recovery_run_self_repair",
         {"config_path": "unused.yaml"},
         {
-            "classify_last_pass_progress": classified,
+            "select_repair_route": classified,
             "recovery_incident": incident,
         },
     )

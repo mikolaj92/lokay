@@ -1,4 +1,4 @@
-"""Daemon cycle: repair is a side child; factory always runs."""
+"""Daemon cycle: two small gate processes; repair is a side child."""
 
 import tomllib
 from pathlib import Path
@@ -11,7 +11,7 @@ def _daemon_cycle_raw() -> dict:
     return next(p for p in pkg["correlation_paths"] if p["id"] == "daemon_cycle")
 
 
-def simulate_daemon_cycle(*, classify_route: str) -> dict[str, str]:
+def simulate_daemon_cycle(*, select_route: str) -> dict[str, str]:
     """Apply authored conduction + when. Skipped upstream satisfies conduction."""
     status: dict[str, str] = {}
 
@@ -21,7 +21,7 @@ def simulate_daemon_cycle(*, classify_route: str) -> dict[str, str]:
         upstream = str(when.get("upstream") or "")
         if status.get(upstream) != "succeeded":
             return False
-        return classify_route == when.get("equals")
+        return select_route == when.get("equals")
 
     pending = list(_daemon_cycle_raw()["effectors"])
     progressed = True
@@ -43,19 +43,22 @@ def simulate_daemon_cycle(*, classify_route: str) -> dict[str, str]:
     return status
 
 
-def test_daemon_cycle_starts_with_last_pass_gate_not_recovery_begin():
+def test_daemon_cycle_is_two_small_gate_processes_then_repair_child():
     ids = [node["id"] for node in _daemon_cycle_raw()["effectors"]]
-    assert ids[0] == "classify_last_pass_progress"
+    assert ids[:2] == ["last_pass_moving", "select_repair_route"]
+    assert "classify_last_pass_progress" not in ids
     assert "recovery_begin" not in ids
     assert "recovery_observe" not in ids
     assert "recovery_record" not in ids
     assert ids[-2] == "recovery_mill"
     assert ids[-1] == "summarize_daemon_cycle"
+    assert ids.index("recovery_run_self_repair") < ids.index("recovery_mill")
 
 
 def test_leftover_skip_runs_factory_and_skips_repair():
-    status = simulate_daemon_cycle(classify_route="factory")
-    assert status["classify_last_pass_progress"] == "succeeded"
+    status = simulate_daemon_cycle(select_route="factory")
+    assert status["last_pass_moving"] == "succeeded"
+    assert status["select_repair_route"] == "succeeded"
     assert status["recovery_incident"] == "skipped"
     assert status["recovery_run_self_repair"] == "skipped"
     assert status["recovery_mill"] == "succeeded"
@@ -63,12 +66,23 @@ def test_leftover_skip_runs_factory_and_skips_repair():
 
 
 def test_did_not_move_runs_repair_then_factory():
-    status = simulate_daemon_cycle(classify_route="repair")
-    assert status["classify_last_pass_progress"] == "succeeded"
+    status = simulate_daemon_cycle(select_route="repair")
+    assert status["last_pass_moving"] == "succeeded"
+    assert status["select_repair_route"] == "succeeded"
     assert status["recovery_incident"] == "succeeded"
     assert status["recovery_run_self_repair"] == "succeeded"
     assert status["recovery_mill"] == "succeeded"
     assert status["summarize_daemon_cycle"] == "succeeded"
+
+
+def test_recovery_mill_is_factory_only():
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "recovery_mill.py"
+    ).read_text(encoding="utf-8")
+    assert "compose_mill" in source
+    assert "self_repair" not in source
+    assert "moved_forward" not in source
+    assert "activate" not in source
 
 
 def test_docs_say_repair_returns_to_factory():
@@ -76,7 +90,9 @@ def test_docs_say_repair_returns_to_factory():
         encoding="utf-8"
     )
     section = graph.split("### `daemon_cycle`")[1].split("### `factory_pass`")[0]
-    assert "classify_last_pass_progress" in section
+    assert "last_pass_moving" in section
+    assert "select_repair_route" in section
     assert "leftover skip" in section.lower() or "leftover_overflow" in section
     assert "recovery_mill" in section
     assert "recovery_begin" not in section.split("```")[1]
+    assert "classify_last_pass_progress" not in section.split("```")[1]
