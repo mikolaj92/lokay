@@ -11,6 +11,7 @@ def envelope(picked: dict, do: dict, launched: dict) -> dict:
             "repo": picked.get("repo"),
             "route": str(do.get("route") or picked.get("route") or "none"),
             "reason": do.get("reason") or picked.get("reason"),
+            "leftover": int(picked.get("leftover") or 0),
             "launched": launched.get("route"),
         },
     }
