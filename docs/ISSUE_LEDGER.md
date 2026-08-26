@@ -62,13 +62,13 @@ Pass katalogu (`factory_pass`):
 
 ```text
 factory_begin (tani katalog / occupancy)
-  → select / queue_conflict / implement (K=1; skip occupied)
+  → select / queue_conflict / implement (K=1; skip occupied; gdy selected)
     → health / receipt
-  → survey PRs → inbox → ready → triage → konflikty
+  → survey PRs → inbox → ready → triage → konflikty  (gdy select.route == none)
     → closeout (najpierw merge otwartych PR)
       → reap resztek in-flight cache → ai:ready
         → refresh_occupancy (occupy live/merged; re-list leftover-ready only)
-  → reap leftover worktrees po dispatch (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; one ls-remote per repo)
+  → reap leftover worktrees gdy brak wybranego wiersza (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; one ls-remote per repo)
 ```
 
 ## Resztki (do zmiecenia)

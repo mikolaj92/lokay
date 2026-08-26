@@ -2,7 +2,8 @@
 
 The parent path ``factory_pass`` owns pass order (idle classify → host-ff →
 begin → select → queue_conflict → implement → health → receipt; surveys /
-closeout / occupancy / leftover reaps stay as housecleaning beside work).
+closeout / occupancy / leftover reaps stay as housecleaning when
+``select.route == none`` and do not run in a selected pass).
 Python only fail-closes offline, then invokes ``graph_run.run_path``. Idle
 TTL is the first authored atom.
 """

@@ -1,14 +1,13 @@
 # Lokay
 
-Lokay continuously mills work across configured GitHub repositories: survey, per-repo PR close-out, then triage and **serial** `issue_to_pr` (ticket after ticket; default K=1) with a real configured coding executor.
+Lokay continuously mills work across configured GitHub repositories: select then **serial** `issue_to_pr` (ticket after ticket; default K=1) with a real configured coding executor. Housecleaning (survey, triage, close-out, leftover reaps) runs only on a pass with no selected work.
 
 ## What one tick does
 
-1. Surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests.
-2. Triages undecided issues through the `issue_triage` Fala path (triage + deterministic intake CLOSE/READY/SPLIT + optional auto-split; `ai:ready` may stay as a ledger trace), skipping only repos that still have actionable open AI PRs.
-3. Applies per-repo PR-first close-out: conflicts are closed and re-readied, failed work enters `pr_repair`, and approved mergeable work enters `pr_triage`.
-4. Implements ready issues through `issue_to_pr` **serially by design** (`limits.max_issue_to_pr_per_pass`, default **1** — an optional pass budget, not concurrent worktrees/Pi/tmux). Never a second AI PR in the same repo. A contradiction gate demotes/defers clear queue conflicts before implement.
-5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes.
+1. Opens the pass and selects one implementable catalog row from the cheap prior catalog / live occupancy (`select_implement` after `factory_begin`).
+2. When `select_implement.route == selected`, runs the contradiction gate and detached `issue_to_pr` (`queue_conflict` → `dispatch_implement`), then health and the last-pass receipt. Surveys, triage, close-out, occupancy refresh, and leftover reaps do not run in that pass — they must not consume the short pass ceiling before start or the receipt.
+3. When no row is selected, housecleans: surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests; triages undecided issues through `issue_triage`; applies per-repo PR-first close-out (conflicts closed and re-readied, failed work enters `pr_repair`, approved mergeable work enters `pr_triage`); reaps leftover in-flight cache, over-budget plan-only, occupancy, and leftover worktrees.
+4. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes. Never a second AI PR in the same repo. Serial by design (`limits.max_issue_to_pr_per_pass`, default **1**).
 
 The top-level Lokay runs the parent `factory_pass` Fala. Catalog surveys, planning, closeout, dispatch and recovery are authored paths or nested authored paths. Parent and child runs use separate journals.
 
@@ -88,10 +87,10 @@ stateDiagram-v2
     FactoryBegin --> SelectImplement
     SelectImplement --> QueueConflict: wybrano kandydata
     SelectImplement --> ComputeHealth: brak kandydata
+    SelectImplement --> SurveyPrs: brak kandydata
+    SelectImplement --> ReapStaleWorktrees: brak kandydata
     QueueConflict --> DispatchImplement
     DispatchImplement --> ComputeHealth
-    DispatchImplement --> ReapStaleWorktrees
-    FactoryBegin --> SurveyPrs
     SurveyPrs --> SurveyInbox
     SurveyInbox --> SurveyReady
     SurveyReady --> ReadyHygiene

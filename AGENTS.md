@@ -31,6 +31,8 @@
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
   reap_over_budget → refresh_occupancy → reap_stale_worktrees →
   record_factory_idle → factory_pass_terminal`).
+  Hygiene after `record_pass` takes `when select.route == none` and does not
+  run in a selected pass.
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
   is oil XOR product (product wins). Not a fat `compose/tick.py`.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not

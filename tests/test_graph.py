@@ -84,6 +84,14 @@ def test_describe_parent_factory_graph():
         "path": "route",
         "equals": "selected",
     }
+    hygiene_when = {
+        "upstream": "select_implement",
+        "path": "route",
+        "equals": "none",
+    }
+    for name in hygiene:
+        assert when[name] == hygiene_when, name
+        assert "select_implement" in conduction[name]
     assert "dispatch_implement" in conduction["reap_stale_worktrees"]
     assert "dispatch_implement" in conduction["compute_health"]
     assert "reap_stale_worktrees" not in conduction["compute_health"]
@@ -344,6 +352,12 @@ def test_factory_pass_implement_does_not_wait_on_slow_hygiene():
     assert "factory_begin" in conduction["select_implement"]
     assert by_id["queue_conflict"]["when"]["equals"] == "selected"
     assert by_id["dispatch_implement"]["when"]["equals"] == "selected"
+    for name in slow | {"ready_hygiene", "plan_pass"}:
+        assert by_id[name]["when"] == {
+            "upstream": "select_implement",
+            "path": "route",
+            "equals": "none",
+        }, name
     assert "reap_stale_worktrees" not in closure("compute_health")
     assert "reap_stale_worktrees" not in closure("record_pass")
     assert "dispatch_implement" in conduction["compute_health"]

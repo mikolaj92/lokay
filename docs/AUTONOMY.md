@@ -16,7 +16,8 @@ Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Fleet pass order
 lives in parent Fala ``factory_pass`` (`host_ff → factory_begin → select →
 queue_conflict → implement → health → receipt`; surveys / closeout / occupancy
-/ leftover reaps stay as housecleaning beside work). Serial by design (default K=1).
+/ leftover reaps stay as housecleaning when `select.route == none` and do not
+run in a selected pass). Serial by design (default K=1).
 `compose_tick` is a thin in-process bridge for canaries/CLI — not the multi-repo
 brain. The promises below are the public surface that must remain.
 
