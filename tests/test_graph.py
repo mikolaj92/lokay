@@ -211,6 +211,48 @@ def test_reap_stale_implementing_path_is_a_handful_of_effectors():
         or node["id"].startswith("list_stale_repo_")
         or node["id"].startswith("select_stale_candidate_")
         or node["id"].startswith("restore_stale_issue_ready_")
+        or         node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
+def test_leftover_closeout_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "leftover_closeout")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_leftover_closeout",
+        "leftover_catalog",
+        "update_leftover_stamp",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_leftover_")
+        or node["id"].startswith("list_leftover_")
+        or node["id"].startswith("classify_leftover_")
+        or node["id"].startswith("record_leftover_")
+        or node["id"].startswith("park_leftover_")
+        or node["id"].startswith("reduce_leftover_")
+        or node["id"].endswith("_1")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
+def test_closeout_prs_path_is_a_handful_of_effectors():
+    path = next(p for p in describe_package()["paths"] if p["id"] == "closeout_prs")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
+        "prepare_pr_closeout",
+        "closeout_catalog",
+        "persist_pr_closeout",
+        "summarize_pr_closeout",
+    ]
+    assert len(ids) < 8
+    assert not any(
+        node["id"].startswith("select_pr_closeout_slot_")
+        or node["id"].startswith("run_pr_closeout_slot_")
+        or node["id"].startswith("record_pr_closeout_slot_")
         or node["id"].endswith("_1")
         or node["id"].endswith("_30")
         for node in path["nodes"]
