@@ -1,10 +1,9 @@
-"""Pick the first listed issue. Two small functions: classify, then select."""
+"""Pick one listed issue. Classify list facts, then pick. One implement per pass."""
 
 from lokay.proc.classify_open_issues import classify
 
 
-def select(listed: dict) -> dict:
-    classified = classify(listed)
+def pick(classified: dict) -> dict:
     if classified.get("route") != "listed":
         return {
             "ok": True,
@@ -14,10 +13,14 @@ def select(listed: dict) -> dict:
     rows = list(classified.get("issues") or [])
     if not rows:
         return {"ok": True, "route": "none", "reason": "no_open_issue"}
-    row = dict(rows[0])
+    leftover = max(0, len(rows) - 1)
     return {
+        **dict(rows[0]),
         "ok": True,
         "route": "issue",
-        "leftover": max(0, len(rows) - 1),
-        **row,
+        "leftover": leftover,
     }
+
+
+def select(listed: dict) -> dict:
+    return pick(classify(listed))
