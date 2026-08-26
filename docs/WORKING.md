@@ -160,13 +160,16 @@ product. Green repository verification may be reused only for the identical
    and re-lists PRs only on leftover-ready repos that are not already
    occupied, so a 29-repo catalog does not 429 the secondary budget.
    Occupancy refresh, surveys, closeout, and stale reaps stay in the
-   path as housecleaning — they are not the gate to `select_implement`.
-   Select conducts from `factory_begin` (cheap prior catalog / live
-   occupancy). `queue_conflict` / `dispatch_implement` take a visible
-   `when select_implement.route == selected`. `reap_stale_worktrees`
-   runs after `dispatch_implement` so leftover classification cannot
-   consume the 180s pass ceiling before implement. `compute_health`
-   / `record_pass` conduct from dispatch, not from the worktree reap. It drops leftover corners
+   path as housecleaning for passes with no selected work — they are
+   not the gate to `select_implement`. Select conducts from
+   `factory_begin` (cheap prior catalog / live occupancy).
+   `queue_conflict` / `dispatch_implement` take a visible
+   `when select_implement.route == selected`. Hygiene nodes take
+   `when select_implement.route == none` and do not run in a selected
+   pass, so their 1800–7200s budgets cannot consume the 180s pass
+   ceiling before `dispatch_implement` or the receipt.
+   `compute_health` / `record_pass` conduct from dispatch, not from
+   the worktree reap. It drops leftover corners
    that cannot resume (merged, closed CONFLICTING, unpublished-behind-main).
    `uv.lock`-only is not real uncommitted content, so a CLOSED leftover with
    only a dirty lockfile can archive. KEEP a live i2pr (from receipts **or**
@@ -294,6 +297,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
   reap_over_budget → refresh_occupancy → reap_stale_worktrees →
   record_factory_idle → factory_pass_terminal`.
+  Hygiene after `record_pass` takes `when select.route == none` and does not
+  run in a selected pass.
   One pass is oil XOR product (product wins). Last-pass receipt includes
   `lane: product | oil | idle`.
   `factory_begin` fail-closes when in-cycle `host_ff` just fast-forwarded (`health=host_updated`)

@@ -73,6 +73,14 @@ def test_persist_selection_exposes_selected_route(tmp_path):
     assert summarize(out)["route"] == "selected"
 
 
+def test_summarize_maps_non_selected_to_none_for_parent_when():
+    from lokay.proc.summarize_implementation_selection import summarize
+
+    assert summarize({"route": "no_budget", "selected": 0})["route"] == "none"
+    assert summarize({"route": "none", "selected": 0})["route"] == "none"
+    assert summarize({"route": "selected", "selected": 1})["route"] == "selected"
+
+
 def test_catalog_selects_first_eligible_repo(tmp_path):
     from lokay.proc.implementation_selection_catalog import run
     from lokay.proc.prepare_implementation_selection import prepare

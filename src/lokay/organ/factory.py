@@ -298,6 +298,9 @@ def handle_factory(
         assert pass_dir
         out = run(pass_dir=pass_dir)
         route = str(out.get("route") or "none")
+        # Parent when is binary: selected work vs housecleaning (none / no_budget).
+        if route != "selected":
+            route = "none"
         return {**out, "route": route}
 
     if atom == "queue_conflict":
