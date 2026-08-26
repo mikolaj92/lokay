@@ -123,100 +123,11 @@ def handle_factory(
 
         return classify(live=bool(inputs.get("live")))
 
-    if atom == "self_repair":
-        from lokay.proc.auto_repair import run
+    from lokay.organ.factory_parent import handle_factory_parent
 
-        return run(
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-        )
-
-    if atom == "pr_triage":
-        from lokay.proc.deal_with_prs import run
-
-        pass_dir = _pass_dir()
-        assert pass_dir
-        return run(
-            pass_dir=pass_dir,
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-        )
-
-    if atom == "stale_worktree_reap":
-        from lokay.proc.reap_after_merge import run
-
-        pass_dir = _pass_dir()
-        assert pass_dir
-        return run(
-            pass_dir=pass_dir,
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-        )
-
-    if atom == "issue_triage":
-        from lokay.proc.factory_issue_step import triage
-
-        pass_dir = _pass_dir()
-        assert pass_dir
-        return triage(
-            pass_dir=pass_dir,
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-        )
-
-    if atom == "select_next_issue":
-        from lokay.proc.factory_issue_step import select_next
-
-        pass_dir = _pass_dir()
-        assert pass_dir
-        return select_next(pass_dir=pass_dir, triage=up.get("issue_triage") or {})
-
-    if atom == "issue_to_pr":
-        from lokay.proc.factory_issue_step import implement
-
-        pass_dir = _pass_dir()
-        assert pass_dir
-        return implement(
-            pass_dir=pass_dir,
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-            triage=up.get("issue_triage") or {},
-            nxt=up.get("select_next_issue") or {},
-        )
-
-    if atom == "pr_triage_after":
-        from lokay.proc.factory_issue_step import back_to_prs
-
-        pass_dir = _pass_dir()
-        assert pass_dir
-        return back_to_prs(
-            pass_dir=pass_dir,
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-        )
-
-    if atom == "record_factory_idle":
-        from lokay.proc.record_factory_idle import record
-
-        return record(
-            up.get("self_repair")
-            or up.get("auto_repair")
-            or up.get("classify_factory_idle")
-            or {},
-            config_path=str(inputs.get("config_path") or "") or None,
-        )
-
-    if atom == "factory_pass_terminal":
-        from lokay.proc.factory_pass_terminal import terminal
-
-        return terminal(
-            up.get("self_repair")
-            or up.get("auto_repair")
-            or up.get("classify_factory_idle")
-            or {},
-            up.get("record_pass") or {},
-            up.get("record_factory_idle") or {},
-        )
+    parent = handle_factory_parent(atom, inputs, up, ctx)
+    if parent is not None:
+        return parent
 
     if atom == "host_ff":
         argv = [*cfg, *live]

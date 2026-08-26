@@ -80,7 +80,8 @@ def test_slice_package_keeps_one_path():
     # factory_pass has a thin reap_over_budget atom; the catalog path stays out
     assert "select_budget_receipt_1" not in sliced
     assert "prepare_over_budget_reap" not in sliced
-    assert 'id = "issue_to_pr"' not in sliced
+    assert 'id = "issue_to_pr_delivery"' not in sliced
+    assert "resolve_existing_delivery" not in sliced
 
 
 def test_slice_package_unknown_path():
