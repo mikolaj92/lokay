@@ -42,6 +42,28 @@ def test_stale_worktree_catalog_fail_closed_when_collect_failed():
     assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
+def test_overflow_skip_is_its_own_function():
+    from lokay.proc.stale_worktree_catalog import SLOTS, overflow_skip
+
+    assert overflow_skip([{"present": True}] * SLOTS) is None
+    out = overflow_skip([{"present": True}] * (SLOTS + 1))
+    assert out["ok"] is True and out["route"] == "skip"
+    assert "leftover" not in out["reason"]
+
+
+def test_skip_result_does_not_persist_or_park_labels():
+    from lokay.proc.summarize_stale_worktree_reap import skip_result
+
+    out = skip_result(
+        pass_dir="/tmp/unused",
+        collected={"ok": True, "receipt_safe": True, "deferred": []},
+        catalog={"route": "skip", "skipped": True, "reason": "stale_worktree_overflow"},
+        live=True,
+    )
+    assert out["ok"] is True and out["result"]["skipped"] is True
+    assert "leftover" not in str(out["result"]["reason"])
+
+
 def test_stale_worktree_catalog_overflow_skips_not_fail():
     from lokay.proc.stale_worktree_catalog import SLOTS, run
 

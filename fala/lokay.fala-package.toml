@@ -1489,7 +1489,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "stale_worktree_reap"
 title = "Stale worktree hygiene"
-description = "Collect, one in-process catalog atom, summarize. No 4-slot unroll. Overflow skips."
+description = "Collect, catalog, summarize. Catalog is overflow_skip or apply_slot. Overflow skips. Worktrees only."
 
 [[correlation_paths.effectors]]
 id = "collect_stale_worktree_candidates"
