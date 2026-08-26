@@ -1,4 +1,4 @@
-"""List open PRs from GitHub. One function, no 30-slot catalog."""
+"""List live open mill PRs from GitHub. No 30-slot catalog."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from lokay.runner import gh_spec
 def run(*, config_path: str | None, live: bool) -> dict:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     git = runner()
+    prefix = str(cfg.branch_prefix or "ai/fix").rstrip("/") + "/"
     rows: list[dict] = []
     for repo in cfg.active_repos():
         result = git.run(
@@ -26,7 +27,7 @@ def run(*, config_path: str | None, live: bool) -> dict:
                     "--json",
                     "number,title,headRefName,url",
                     "--limit",
-                    "50",
+                    "1000",
                 ],
                 timeout_seconds=60,
             ),
@@ -35,14 +36,38 @@ def run(*, config_path: str | None, live: bool) -> dict:
         if not live:
             continue
         if result.returncode != 0:
-            continue
-        for row in json.loads(result.stdout or "[]"):
+            text = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
+            return {
+                "ok": False,
+                "error": text or f"open PR list failed for {repo.name}",
+                "repo": repo.name,
+            }
+        try:
+            payload = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError as exc:
+            return {
+                "ok": False,
+                "error": f"open PR list JSON failed for {repo.name}: {exc}",
+                "repo": repo.name,
+            }
+        if not isinstance(payload, list):
+            return {
+                "ok": False,
+                "error": f"open PR list on {repo.name} returned non-list JSON",
+                "repo": repo.name,
+            }
+        for row in payload:
+            if not isinstance(row, dict):
+                continue
+            branch = str(row.get("headRefName") or "")
+            if not branch.startswith(prefix):
+                continue
             rows.append(
                 {
                     "repo": repo.name,
                     "pr": int(row["number"]),
                     "title": str(row.get("title") or ""),
-                    "branch": str(row.get("headRefName") or ""),
+                    "branch": branch,
                 }
             )
     return {"ok": True, "prs": rows, "count": len(rows)}

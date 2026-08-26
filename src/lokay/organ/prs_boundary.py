@@ -19,7 +19,7 @@ def handle_prs(
         from lokay.proc.select_next_pr import select
 
         return select(up.get("list_open_prs") or {})
-    if atom == "run_pr_triage_subflow":
+    if atom == "prs_run_triage":
         from lokay.proc.run_pr_triage_subflow import run
 
         return run(up.get("select_next_pr") or {}, config_path=config, live=live)
@@ -28,6 +28,6 @@ def handle_prs(
 
         return summarize(
             up.get("select_next_pr") or {},
-            up.get("run_pr_triage_subflow") or {},
+            up.get("prs_run_triage") or {},
         )
     return None

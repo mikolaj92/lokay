@@ -182,7 +182,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "prs"
 title = "Open PR review and merge"
-description = "List open PRs, review or merge one. Own Fala."
+description = "List live open mill PRs from GitHub, review/repair/merge one. Empty skips. No 30-slot catalog."
 
 [[correlation_paths.effectors]]
 id = "list_open_prs"
@@ -200,18 +200,18 @@ config = { atom = "select_next_pr" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "run_pr_triage_subflow"
+id = "prs_run_triage"
 capability = "lokay_atom"
 conduction = ["select_next_pr"]
 when = { upstream = "select_next_pr", path = "route", equals = "pr" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "run_pr_triage_subflow" }
+config = { atom = "prs_run_triage" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
 id = "summarize_prs"
 capability = "lokay_atom"
-conduction = ["select_next_pr", "run_pr_triage_subflow"]
+conduction = ["select_next_pr", "prs_run_triage"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_prs" }
 retry_policy = "none"

@@ -142,6 +142,22 @@ call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
 
+### `prs` (open PR review / repair / merge)
+
+Child of `factory_pass`. Lists live open mill PRs from GitHub, picks one,
+then runs `pr_triage` (review, `pr_repair`, merge, close issue). Not the
+`closeout_prs` stamp catalog. Not leftover overflow.
+
+```text
+list_open_prs
+  → select_next_pr
+    ├─→ prs_run_triage   ← when route == pr; compose_pr_triage
+    └─→ summarize_prs    ← empty list skips triage and does not fail
+```
+
+One PR per pass. Empty list is `route=none` and skips. Catalog overflow
+of 30 leftover/closeout slots is not this path. Atom ids are unique.
+
 ### `self_repair` (emergency only)
 
 ```text

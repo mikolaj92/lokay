@@ -717,6 +717,24 @@ manual/actionable są osobnymi procesami jednego repo. Repo-local reaction,
 katalogowa redukcja, persist i efekt TTL są rozdzielone. Failed listing
 pozostaje `probe_failed`; przekroczenie authored katalogu kończy się fail-closed.
 
+### Recenzja i merge PR-ów — `prs`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ListOpenPrs
+    ListOpenPrs --> SelectNextPr
+    SelectNextPr --> PrsRunTriage: jest otwarty PR
+    SelectNextPr --> SummarizePrs: pusta lista
+    PrsRunTriage --> SummarizePrs
+    SummarizePrs --> [*]
+```
+
+Dziecko listuje żywe otwarte PR-y mill z GitHuba (prefiks gałęzi). Nie ma
+30-slotowego katalogu i nie przejmuje leftover overflow. Pusta lista pomija
+recenzję i nie psuje passu. Jeden PR na pass: recenzja, naprawa albo merge
+przez pod-Falę `pr_triage`. Stary sibling `closeout_prs` zostaje katalogiem
+stempla — to dziecko posiada recenzję i merge.
+
 ### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
 
 ```mermaid
@@ -1273,6 +1291,8 @@ kontraktu. Aktualny audyt:
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
 | `LeftoverCloseout` | `leftover_closeout` | jeden atom katalogu: CLOSED ready labels |
+| `OpenPRs` | `prs` | lista żywych otwartych PR, recenzja/naprawa/merge jednego |
+| `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
 | `CloseoutPRs` | `closeout_prs` | jeden atom katalogu: PR-y przez pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
