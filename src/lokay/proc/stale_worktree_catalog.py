@@ -31,10 +31,13 @@ def run(collected: dict, *, config_path: str | None, live: bool) -> dict:
     ]
     if len(present) > SLOTS:
         return {
-            "ok": False,
-            "error": "stale worktree catalog exceeds authored slots",
+            "ok": True,
+            "route": "skip",
+            "skipped": True,
+            "reason": "stale_worktree_overflow",
             "count": len(present),
             "slot_count": SLOTS,
+            "effects": [],
         }
     effects = [
         _one_slot(collected, slot=slot, config_path=config_path, live=live)

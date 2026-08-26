@@ -4,8 +4,26 @@ from lokay.passkit.working import load_begin_working, save_begin_working
 
 
 def summarize(
-    *, pass_dir: str, collected: dict, effects: list[dict], live: bool
+    *, pass_dir: str, collected: dict, catalog: dict, live: bool
 ) -> dict:
+    if catalog.get("skipped") or catalog.get("route") == "skip":
+        result = {
+            "pass_dir": pass_dir,
+            "planned": not live,
+            "kept": [],
+            "reaped": [],
+            "failed": [],
+            "kept_count": 0,
+            "reaped_count": 0,
+            "deferred": list(collected.get("deferred") or []),
+            "receipt_state_unknown": not bool(collected.get("receipt_safe", True)),
+            "skipped": True,
+            "reason": catalog.get("reason") or "skip",
+            "count": catalog.get("count"),
+            "slot_count": catalog.get("slot_count"),
+        }
+        return {"ok": True, "result": result}
+    effects = list(catalog.get("effects") or [])
     rows = [dict(x.get("row") or {}) for x in effects if x.get("row")]
     kept = [x for x in rows if x.get("kept")]
     reaped = [x for x in rows if x.get("removed")]

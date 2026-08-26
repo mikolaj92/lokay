@@ -980,8 +980,10 @@ stateDiagram-v2
 
 Pod-Fala ma trzy kroki: bounded inventory, jeden atom katalogu, który w
 procesie klasyfikuje i stosuje `keep` / `remove`, oraz summarize. Nie ma
-4-slotowego rozwinięcia Fali (14 efektorów). Overflow katalogu jest
-fail-closed. Atom katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP
+4-slotowego rozwinięcia Fali (14 efektorów). Overflow katalogu pomija
+reap (`skip`) i nie kończy passu fail-closed — nie blokuje PR-ów ani
+issue. Leftover overflow (`leftover_catalog`) zostaje w `leftover_closeout`,
+nie w tym dziecku. Atom katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP
 (live i2pr / occupancy / `pr_survey_failed` / covering PR / dirty unpublished /
 nieczytelny git). W `factory_pass` ten reap jest po `dispatch_implement`,
 żeby klasyfikacja leftoverów nie zjadała 180s sufitu przed implementacją.

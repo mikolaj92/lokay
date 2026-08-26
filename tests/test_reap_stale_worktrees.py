@@ -42,7 +42,7 @@ def test_stale_worktree_catalog_fail_closed_when_collect_failed():
     assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
-def test_stale_worktree_catalog_overflow_is_fail_closed():
+def test_stale_worktree_catalog_overflow_skips_not_fail():
     from lokay.proc.stale_worktree_catalog import SLOTS, run
 
     out = run(
@@ -53,7 +53,35 @@ def test_stale_worktree_catalog_overflow_is_fail_closed():
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+    assert out["ok"] is True
+    assert out["route"] == "skip"
+    assert out["skipped"] is True
+    assert out["reason"] == "stale_worktree_overflow"
+    assert out["count"] == SLOTS + 1
+    assert out["effects"] == []
+
+
+def test_stale_worktree_summarize_overflow_skip_does_not_block():
+    from lokay.proc.summarize_stale_worktree_reap import summarize
+
+    out = summarize(
+        pass_dir="/tmp/unused",
+        collected={"ok": True, "receipt_safe": True, "deferred": []},
+        catalog={
+            "ok": True,
+            "route": "skip",
+            "skipped": True,
+            "reason": "stale_worktree_overflow",
+            "count": 5,
+            "slot_count": 4,
+            "effects": [],
+        },
+        live=True,
+    )
+    assert out["ok"] is True
+    assert out["result"]["skipped"] is True
+    assert out["result"]["reason"] == "stale_worktree_overflow"
+    assert out["result"]["reaped_count"] == 0
 
 
 def test_stale_worktree_catalog_keep_and_remove(monkeypatch):
