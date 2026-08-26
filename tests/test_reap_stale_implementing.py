@@ -205,7 +205,7 @@ def test_catalog_fail_closed_when_prepare_failed():
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceed authored slots" in out["error"]
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
 def test_catalog_overflow_is_fail_closed():
@@ -216,7 +216,7 @@ def test_catalog_overflow_is_fail_closed():
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceed authored slots" in out["error"]
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
 def test_catalog_candidate_overflow_is_fail_closed(monkeypatch):
