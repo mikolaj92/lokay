@@ -61,7 +61,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement (covering PR deterministic; rest one agent call) |
 | `lokay-dispatch-implement` | intake gate + up to K issue_to_pr (serial budget) |
 | `lokay-compute-health` | remaining + honest mill health |
-| `lokay-record-pass` | write last-pass.json receipt |
+| `lokay-record-pass` | write last-pass.json receipt (`new_pr` \| `merge` \| `none`; leftover overflow skips) |
 | `lokay-record-inflight-remaining` | rewrite last-pass remaining from this cycle's working.json |
 | `lokay-factory-pass` / `lokay-factory-tick` | parent Fala `factory_pass` (one mill) |
 | `lokay-mill` / `lokay-status` | continuous factory |
