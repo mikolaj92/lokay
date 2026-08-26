@@ -1351,7 +1351,7 @@ kontraktu. Aktualny audyt:
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
-| `SelfRepair` | `self_repair` | zweryfikowany fast-forward Lokaya |
+| `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and mill stay outside |
 
 ### Reguły przejść
 

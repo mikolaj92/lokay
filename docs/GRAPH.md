@@ -162,15 +162,20 @@ Atom ids are unique.
 ### `self_repair` (emergency only)
 
 ```text
-self_repair_prepare (detached exact origin/main)
-  → self_repair_run_agent
-    → self_repair_validate (full local suite)
-      → self_repair_commit
-        → self_repair_push_main (fast-forward only, exact unchanged base)
-          → self_repair_activate (exact commit)
-            → self_repair_preflight (fresh process)
-              → self_repair_close
+self_repair_prepare          child Fala: detached exact origin/main
+  → self_repair_run_agent    leaf: coding slot in that worktree
+    → self_repair_commit     leaf: commit_all
+      → self_repair_validate child Fala: identity + suite + diff
+        → self_repair_push_main   leaf: fast-forward only, exact unchanged base
+          → self_repair_activate  child Fala: exact commit
+            → self_repair_preflight  leaf: fresh process
+              → self_repair_close    leaf: close the incident
 ```
+
+Each `self_repair_*` step is its own leaf or child Fala. The moving-forward
+gate (`last_pass_moving`) is a leaf outside this graph. Activate is not
+inside `recovery_mill`. This path does not classify last-pass progress and
+does not run the factory.
 
 Entered only from:
 
