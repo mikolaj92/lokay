@@ -46,7 +46,7 @@ def test_catalog_fail_closed_when_prepare_failed():
         {"ok": False, "error": "implementation catalog exceeds authored slots"},
         pass_dir="unused",
     )
-    assert out["ok"] is False and "exceed authored slots" in out["error"]
+    assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
 def test_catalog_selects_first_eligible_repo(tmp_path):
