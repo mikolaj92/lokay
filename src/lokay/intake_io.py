@@ -181,7 +181,11 @@ def apply_intake(
     *,
     live: bool,
 ) -> bool:
-    """Apply intake labels / comment / close. Mutates only when live."""
+    """Apply intake labels / comment / close. Mutates only when live.
+
+    Close of a still-open issue is refused (label/comment only).
+    Already-closed is the only exception, same as apply_issue_close.
+    """
     if not live or decision.decision == "skip":
         return False
     if decision.decision == "blocked":
@@ -221,6 +225,6 @@ def apply_intake(
         add_issue_labels(runner, repo, issue_number, list(decision.add_labels), live=True)
     if decision.comment:
         comment_issue(runner, repo, issue_number, decision.comment, live=True)
-    if decision.close and (issue.state or "OPEN").upper() == "OPEN":
+    if decision.close and (issue.state or "OPEN").strip().upper() == "CLOSED":
         close_issue(runner, repo, issue_number, live=True)
     return True
