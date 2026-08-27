@@ -116,7 +116,8 @@ product. Green repository verification may be reused only for the identical
    `ai/fix/*` PR in a repo that already has an open AI PR.
 3. **Inbox sito** (per repo, when that repo has no
    actionable open AI PR and its PR survey succeeded): undecided issues →
-   `issue_triage` sito: robić / nie / zamknąć / człowiek. Not implement.
+   `issue_triage` sito: robić / nie / oznaczyć / człowiek. Not implement.
+   Sito may mark; it must not close someone else's issue.
    Hard facts (open/superseded/duplicate AI PR) stay deterministic. Semantic
    remainder is one structured executor call. Oversized / multi-epic work is
    człowiek until the later `issue_split` child. A **bug**

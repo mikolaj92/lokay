@@ -1037,8 +1037,10 @@ jego atomów.
 
 ### Triage issue — `issue_triage`
 
-Dziecko rodzica `issues`. **Sito tylko:** robić / nie / zamknąć / człowiek.
-Nie implementuje. `issue_split` jest osobną pod-Falą na później.
+Dziecko rodzica `issues`. **Sito tylko:** robić / nie / oznaczyć / człowiek.
+Nie implementuje. Nie zamyka cudzego issue. Werdykt zamknąć oznacza
+oznaczenie (`ai:blocked`), nie `close_issue`. `issue_split` jest osobną
+pod-Falą na później.
 
 ```mermaid
 stateDiagram-v2
@@ -1047,7 +1049,7 @@ stateDiagram-v2
     ResolveIssueCandidate --> CollectLinkedPullRequests
     CollectLinkedPullRequests --> CollectCoveringPullRequests
     CollectCoveringPullRequests --> ResolveHardFacts
-    ResolveHardFacts --> SitoDecision: wynik fizyczny zamknąć / nie
+    ResolveHardFacts --> SitoDecision: wynik fizyczny oznaczyć / nie
     ResolveHardFacts --> TriageAgent: potrzebna ocena semantyczna
     TriageAgent --> ValidateTriageResult
     ValidateTriageResult --> TriageRetryAgent: invalid JSON + informacja zwrotna
@@ -1070,18 +1072,20 @@ stateDiagram-v2
     SitoDecision --> MarkReady: robić
     SitoDecision --> ApplySkip: nie
     SitoDecision --> MarkBlocked: nie
-    SitoDecision --> CloseIssue: zamknąć
+    SitoDecision --> MarkIssue: zamknąć
     SitoDecision --> HumanTerminal: człowiek
     MarkReady --> [*]
     ApplySkip --> [*]
     MarkBlocked --> [*]
-    CloseIssue --> [*]
+    MarkIssue --> [*]
     HumanTerminal --> [*]
 ```
 
-Sito nie rozcina issue i nie otwiera PR. Rodzic `issues` woła `issue_to_pr`
-tylko po **robić**. Incydent preflight to **nie** (liść `apply_issue_blocked`
-zostaje jednym zadaniem). `issue_split` nie jest wyjściem tego sita.
+Sito nie rozcina issue, nie otwiera PR i nie zamyka cudzego issue. Rodzic
+`issues` woła `issue_to_pr` tylko po **robić**. Incydent preflight to **nie**
+(liść `apply_issue_blocked` zostaje jednym zadaniem). Werdykt zamknąć idzie
+do `apply_issue_mark` (etykieta + komentarz). `issue_split` nie jest wyjściem
+tego sita. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
 
 ### Implementacja issue — `issue_to_pr`
 
@@ -1306,7 +1310,7 @@ kontraktu. Aktualny audyt:
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
-| `issue_triage` sito (robić / nie / zamknąć / człowiek) | zaimplementowane w Fali; nie implementuje; `issue_split` jest późniejszym dzieckiem |
+| `issue_triage` sito (robić / nie / oznaczyć / człowiek) | zaimplementowane w Fali; nie implementuje; nie zamyka cudzego issue; `issue_split` jest późniejszym dzieckiem |
 | `issue_to_pr` bez ukrytego drzewa Python | zaimplementowane jako gate Fali + pod-Fala `issue_to_pr_delivery` |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | jawna allowlista carrier events/health; lokalny błąd nigdy nie wchodzi do globalnego quorum |
 
@@ -1357,7 +1361,7 @@ kontraktu. Aktualny audyt:
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
 | `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja i merge jednego |
-| `TriageInbox` | `issue_triage` | sito: robić, nie, zamknąć, człowiek |
+| `TriageInbox` | `issue_triage` | sito: robić, nie, oznaczyć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
