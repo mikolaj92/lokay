@@ -10,7 +10,7 @@ def envelope(picked: dict, do: dict, launched: dict) -> dict:
         leftover = picked.get("leftover")
     leftover = int(leftover or 0)
     if leftover_issues:
-        leftover = len(leftover_issues)
+        leftover = max(leftover, len(leftover_issues))
     return {
         "ok": True,
         "result": {

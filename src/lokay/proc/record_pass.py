@@ -101,7 +101,7 @@ def _issues_leftover_remaining(
     ]
     leftover = int(issues_r.get("leftover") or 0)
     if leftover_issues:
-        leftover = len(leftover_issues)
+        leftover = max(leftover, len(leftover_issues))
     out = {**remaining, "leftover": leftover}
     if leftover_issues:
         out["leftover_issues"] = leftover_issues
@@ -139,10 +139,13 @@ def run_record_pass(
     remaining = _issues_leftover_remaining(
         issues, _small_remaining(tick, overflow=overflow)
     )
+    leftover_n = int(remaining.get("leftover") or 0)
     progress = int(tick.get("progress") or 0)
     if outcome != "none":
         progress = max(progress, 1)
     health = str(tick.get("health") or ("progress" if outcome != "none" else "idle"))
+    if leftover_n and health in {"", "idle"}:
+        health = "waiting"
     if overflow and health in {"", "idle"}:
         health = "waiting"
     receipt = {
@@ -151,7 +154,12 @@ def run_record_pass(
         "outcome": outcome,
         "ok": True,
         "health": health,
-        "idle": bool(outcome == "none" and not overflow and tick.get("idle", outcome == "none")),
+        "idle": bool(
+            outcome == "none"
+            and not overflow
+            and leftover_n == 0
+            and tick.get("idle", outcome == "none")
+        ),
         "live": bool(begin.get("live", tick.get("live"))),
         "progress": progress,
         "lane": str(tick.get("lane") or ("product" if outcome != "none" else "idle")),

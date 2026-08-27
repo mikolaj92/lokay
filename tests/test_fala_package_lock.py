@@ -22,3 +22,20 @@ def test_packaged_fala_is_byte_identical_to_checkout():
         "cannot run a stale Fala (missing gates)"
     )
     assert b"PLACEHOLDER_PROJECT" in authored
+
+
+def test_correlation_path_titles_and_descriptions_are_ascii():
+    """Fala toml.mojo slices descriptions by byte; mid-codepoint is exit 33."""
+    text = CHECKOUT.read_text(encoding="utf-8")
+    in_path = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "[[correlation_paths]]":
+            in_path = True
+            continue
+        if stripped.startswith("[[") and not stripped.startswith("[[correlation_paths"):
+            in_path = False
+        if not in_path:
+            continue
+        if stripped.startswith("title =") or stripped.startswith("description ="):
+            assert all(ord(ch) < 128 for ch in line), line
