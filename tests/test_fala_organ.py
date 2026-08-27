@@ -278,6 +278,46 @@ def test_push_without_test_local_fails(monkeypatch):
     assert result["reason"] == "test_local_missing"
 
 
+def test_push_finalize_publish_without_probe_key_pushes(monkeypatch):
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda main, argv: {"ok": True, "pushed": True},
+    )
+    result = fala_organ._handle(
+        "push",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "live": False},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "commit_all": {"committed": True},
+            "finalize_local_tests": {"ok": True, "route": "publish"},
+            "assert_real_diff": _ok_real_diff(),
+        },
+    )
+    assert result["ok"] is True
+    assert result["pushed"] is True
+
+
+def test_push_test_local_execution_ok_pushes(monkeypatch):
+    monkeypatch.setattr(
+        fala_organ,
+        "_run_atom_main",
+        lambda main, argv: {"ok": True, "pushed": True},
+    )
+    result = fala_organ._handle(
+        "push",
+        {"repo": "a/b", "branch": "ai/fix/7-x", "live": False},
+        {
+            "worktree_add": {"worktree": "/tmp/worktree", "branch": "ai/fix/7-x"},
+            "commit_all": {"committed": True},
+            "test_local_execution": _ok_test_local(),
+            "assert_real_diff": _ok_real_diff(),
+        },
+    )
+    assert result["ok"] is True
+    assert result["pushed"] is True
+
+
 def test_push_skipped_suite_still_pushes(monkeypatch):
     monkeypatch.setattr(
         fala_organ,
@@ -450,6 +490,32 @@ def test_pr_create_without_test_local_fails(monkeypatch):
     result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, up)
     assert result["ok"] is False
     assert result["reason"] == "test_local_missing"
+
+
+def test_pr_create_finalize_publish_without_probe_key_creates(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "lokay.proc.pr_create_subflow.run",
+        lambda **kwargs: called.append(kwargs) or {"ok": True, "pr": 1},
+    )
+    up = _pr_create_up()
+    del up["test_local"]
+    up["finalize_local_tests"] = {"ok": True, "route": "publish"}
+    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, up)
+    assert result["ok"] is True and called and result["pr"] == 1
+
+
+def test_pr_create_test_local_execution_ok_creates(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "lokay.proc.pr_create_subflow.run",
+        lambda **kwargs: called.append(kwargs) or {"ok": True, "pr": 1},
+    )
+    up = _pr_create_up()
+    del up["test_local"]
+    up["test_local_execution"] = _ok_test_local()
+    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, up)
+    assert result["ok"] is True and called and result["pr"] == 1
 
 
 def test_pr_create_red_test_local_never_creates(monkeypatch):

@@ -461,7 +461,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "push"
 capability = "lokay_atom"
-conduction = ["make_branch", "worktree_add", "commit_implementation", "local_repair_execution", "finalize_local_tests", "assert_real_diff"]
+conduction = ["make_branch", "worktree_add", "commit_implementation", "test_local_execution", "local_repair_execution", "finalize_local_tests", "assert_real_diff"]
 when = { upstream = "finalize_local_tests", path = "route", equals = "publish" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "push" }
@@ -470,7 +470,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "pr_create"
 capability = "lokay_atom"
-conduction = ["get_issue", "make_branch", "coding_execution", "finalize_local_tests", "assert_real_diff", "push"]
+conduction = ["get_issue", "make_branch", "coding_execution", "test_local_execution", "finalize_local_tests", "assert_real_diff", "push"]
 when = { upstream = "finalize_local_tests", path = "route", equals = "publish" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 180, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "pr_create" }

@@ -363,7 +363,7 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 `issue_to_pr` from current main (one stuck conflict must not freeze the mill).
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
-- **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts). `pr_create` additionally requires a successful `push`. `push` / `pr_create` also require `assert_real_diff`: a diff that is only `.lokay/approach.md` / `.lokay/localize.json` is not progress and never opens a PR.
+- **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` / `test_local_execution` conduction is ok (skip / `no_python_test_suite` counts), or `finalize_local_tests.route == publish` on the delivery lane. Missing finalize and missing `test_local*` still fail closed. `pr_create` additionally requires a successful `push`. `push` / `pr_create` also require `assert_real_diff`: a diff that is only `.lokay/approach.md` / `.lokay/localize.json` is not progress and never opens a PR.
 - **issue_to_pr red suite** does **not by itself** open a PR. The delivery
   parent records the first `test_local_execution` probe red, then invokes
   child Fala `local_repair_execution`: `repair_agent` (K=1 patch from the

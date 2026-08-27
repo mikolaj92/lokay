@@ -206,13 +206,20 @@ def _issue_no_longer_open(
 def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
 
+    Delivery-lane publish (`finalize_local_tests.route == publish`) is already
+    on issue_to_pr_delivery push/pr_create conduction and is the verdict when
+    present. A skipped first-probe key must not wipe that. pr_repair/pr_triage
+    have no finalize node, so the first probe still gates.
+
     The issue_to_pr lane adds one bounded recheck (test_local_recheck or
     local_repair_execution) after the single repair patch. When that
     conduction exists, it is the verdict (a recorded-red first probe is
-    expected — that is why the nest ran). pr_repair/pr_triage have no
-    recheck node, so the first probe still gates.
+    expected — that is why the nest ran).
     Missing key, ok:false, or a red suite returns an error envelope. None means go.
     """
+    finalize = up.get("finalize_local_tests")
+    if isinstance(finalize, dict) and finalize.get("route") == "publish":
+        return None
     first = up.get("test_local")
     if first is None:
         first = up.get("test_local_execution")

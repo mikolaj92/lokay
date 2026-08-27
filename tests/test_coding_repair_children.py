@@ -39,6 +39,31 @@ def test_local_repair_terminal_pass_after_green_recheck():
     assert out["route"] == "pass" and out["passed"] is True
 
 
+def test_require_test_local_missing_probe_and_finalize_refuses():
+    refused = _require_test_local({})
+    assert refused is not None and refused["reason"] == "test_local_missing"
+    refused = _require_test_local(
+        {"finalize_local_tests": {"ok": True, "route": "repair_terminal"}}
+    )
+    assert refused is not None and refused["reason"] == "test_local_missing"
+
+
+def test_require_test_local_accepts_finalize_publish():
+    assert (
+        _require_test_local({"finalize_local_tests": {"ok": True, "route": "publish"}})
+        is None
+    )
+    assert (
+        _require_test_local(
+            {
+                "test_local_execution": {},
+                "finalize_local_tests": {"ok": True, "route": "publish"},
+            }
+        )
+        is None
+    )
+
+
 def test_require_test_local_accepts_execution_node_and_repair_child():
     assert (
         _require_test_local({"test_local_execution": {"ok": True, "tested": True}})

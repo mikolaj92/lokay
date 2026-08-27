@@ -779,6 +779,10 @@ def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
         "path": "route",
         "equals": "publish",
     }
+    assert "test_local_execution" in by_id["push"]["conduction"]
+    assert "finalize_local_tests" in by_id["push"]["conduction"]
+    assert "test_local_execution" in by_id["pr_create"]["conduction"]
+    assert "finalize_local_tests" in by_id["pr_create"]["conduction"]
 
 
 def test_run_agent_timeouts_match_pi_budget():
