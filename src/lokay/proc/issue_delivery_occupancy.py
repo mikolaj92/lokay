@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from lokay.localize import localize_belongs_to_issue
 from lokay.proc.issue_delivery_process import (
     coding_live_for_issue,
     is_live_issue_to_pr_pid,
@@ -123,11 +124,38 @@ def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:
     return False
 
 
+def _worktree_for_live_receipt(repo: str, issue: int) -> Path | None:
+    """Worktree for this receipt, same lookup classify uses.
+
+    Receipts are ``{repo, issue, pid}``. Path comes from
+    ``iter_worktrees`` + ``issue_number_from_branch``. Zero or several
+    matches is unknown (fail-closed occupy).
+    """
+    from lokay.config import Config, RepoConfig
+    from lokay.git_worktree import iter_worktrees
+    from lokay.stuck import issue_number_from_branch
+
+    cfg = Config()
+    repo_cfg = RepoConfig(name=str(repo), clone_path=Path("."))
+    found: Path | None = None
+    for path, branch in iter_worktrees(cfg, repo_cfg):
+        numbered = issue_number_from_branch(
+            branch, branch_prefix=cfg.branch_prefix
+        )
+        if numbered != issue:
+            continue
+        if found is not None:
+            return None
+        found = path
+    return found
+
+
 def live_issue_to_pr_receipts(
     cycle_dir: Path | None = None,
     *,
     pid_alive=None,
     issue_closed=None,
+    worktree_for=None,
 ) -> list[dict[str, Any]]:
     """Live or launching receipts that must keep a repo occupied."""
     root = (
@@ -135,6 +163,7 @@ def live_issue_to_pr_receipts(
     )
     check = pid_alive or is_live_issue_to_pr_pid
     closed = issue_closed or repo_mutex._issue_is_closed
+    worktree = worktree_for or _worktree_for_live_receipt
     if not root.is_dir():
         return []
     live: list[dict[str, Any]] = []
@@ -171,6 +200,11 @@ def live_issue_to_pr_receipts(
         # hold the repo once GitHub confirms CLOSED. Probe failure stays
         # occupied (fail-closed), matching mutex inspection.
         if closed(str(data["repo"]), issue):
+            continue
+        # Sibling of CLOSED: leftover / foreign localize.json does not
+        # occupy. Unreadable file or unknown worktree path stays occupied.
+        belongs = localize_belongs_to_issue(worktree(str(data["repo"]), issue), issue)
+        if belongs is False:
             continue
         live.append(data)
     return live

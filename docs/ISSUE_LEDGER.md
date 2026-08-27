@@ -68,7 +68,7 @@ factory_begin (tani katalog / occupancy)
     → closeout (najpierw merge otwartych PR)
       → reap resztek in-flight cache → ai:ready
         → refresh_occupancy (occupy live/merged; re-list leftover-ready only)
-  → reap leftover worktrees gdy brak wybranego wiersza (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; one ls-remote per repo)
+  → reap leftover worktrees gdy brak wybranego wiersza (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; foreign leftover localize = REMOVE; one ls-remote per repo)
 ```
 
 ## Resztki (do zmiecenia)

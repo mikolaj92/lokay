@@ -888,8 +888,11 @@ katalogu, który w procesie czyści martwe receipty, odczytuje żywe issue,
 terminuje zamknięte workery i odświeża snapshoty PR, persist oraz summarize.
 Nie ma 30-slotowego rozwinięcia Fali. Żywy pid przy zamkniętym zgłoszeniu
 nie zajmuje repo — ta sama reguła co `repo_mutex._issue_is_closed`.
-Niepewny odczyt issue zachowuje zajętość fail-closed. Nieczytelny receipt
-nie zajmuje całego katalogu, ale pozostaje jawnym faktem diagnostycznym.
+Żywy pid przy leftover / cudzym `.lokay/localize.json` też nie zajmuje —
+to samo sito co `issue_from_localize_payload` (#878). Nieczytelny plik
+albo nieznana ścieżka kopii zostaje zajęta fail-closed. Niepewny odczyt
+issue zachowuje zajętość fail-closed. Nieczytelny receipt nie zajmuje
+całego katalogu, ale pozostaje jawnym faktem diagnostycznym.
 Overflow receiptów lub repozytoriów jest fail-closed.
 
 ### Wybór repozytorium do implementacji — `select_implement`
@@ -977,6 +980,8 @@ rozwinięcia Fali (14 efektorów). Overflow katalogu pomija reap (`skip`)
 i nie kończy passu fail-closed — nie blokuje PR-ów ani issue. Atom
 katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP (live i2pr / occupancy /
 `pr_survey_failed` / covering PR / dirty unpublished / nieczytelny git).
+Cudze leftover sito (`foreign_localize`) jest REMOVE i bije KEEP z
+`live_issue_to_pr` / `unpublished_or_dirty` / `uncommitted_real`.
 W `factory_pass` ten reap jest osobnym dzieckiem od `factory_begin`.
 Rzuca / puste / `process.failed` to sklasyfikowany `route=failed`, nie
 abort passu. `prs` i `issues` nie czekają na sukces sprzątania. `record_pass`
