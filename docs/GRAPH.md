@@ -158,7 +158,9 @@ eat the factory. No leaf has `when`. Empty surveys are not idle.
 
 The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process
-mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Child paths:
+mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
+`coding_execution` children use per-issue journals under `i2pr/`,
+`i2pr-delivery/`, and `coding-execution/`. Other child paths:
 `~/.lokay/fala/state.sqlite`. Python `compose/*` may validate CLI contracts and
 call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not

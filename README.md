@@ -1099,6 +1099,7 @@ stateDiagram-v2
     Localize --> CodingExecution
     CodingExecution --> HumanTerminal: human
     CodingExecution --> VerifyImplementationDiff: implemented
+    CodingExecution --> DeliveryResult: failed
     VerifyImplementationDiff --> CommitImplementation
     CommitImplementation --> RebaseOntoMain
     RebaseOntoMain --> LocalTest
@@ -1360,7 +1361,7 @@ kontraktu. Aktualny audyt:
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
-| `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal |
+| `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal; nested fire to classified failed |
 | `LocalRepairExecution` | `local_repair_execution` | jedna naprawa z logu testu i recheck |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |

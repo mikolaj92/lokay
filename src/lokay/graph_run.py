@@ -50,6 +50,30 @@ ROOT = _project_root()
 
 _PATH_TABLE = "[[correlation_paths]]"
 
+# Nested issue children must not share ~/.lokay/fala/state.sqlite.
+_ISSUE_JOURNAL_FAMILIES = {
+    "issue_to_pr": "i2pr",
+    "issue_to_pr_delivery": "i2pr-delivery",
+    "issue_split": "issue-split",
+    "coding_execution": "coding-execution",
+}
+
+
+def issue_journal_dir(
+    path_id: str,
+    repo: str,
+    issue: int | None,
+    *,
+    home: Path | None = None,
+) -> Path | None:
+    """Per-issue journal for a nested issue child. None uses the shared host db."""
+    family = _ISSUE_JOURNAL_FAMILIES.get(path_id)
+    if family is None or issue is None or "/" not in str(repo):
+        return None
+    owner, name = str(repo).split("/", 1)
+    root = home if home is not None else Path.home()
+    return root / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
+
 
 def _slice_package_to_path(text: str, path_id: str) -> str:
     """Keep header + one correlation path. Native Fala loads the whole file."""
@@ -130,22 +154,10 @@ def run_path(
 
     if db_path:
         work = Path(db_path)
-    elif (
-        path_id in {"issue_to_pr", "issue_to_pr_delivery", "issue_split"}
-        and issue is not None
-        and "/" in str(repo)
-    ):
-        owner, name = str(repo).split("/", 1)
-        family = {
-            "issue_to_pr": "i2pr",
-            "issue_to_pr_delivery": "i2pr-delivery",
-            "issue_split": "issue-split",
-        }[path_id]
-        work = (
-            Path.home() / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
-        )
     else:
-        work = Path.home() / ".lokay" / "fala"
+        work = issue_journal_dir(path_id, repo, issue) or (
+            Path.home() / ".lokay" / "fala"
+        )
     work.mkdir(parents=True, exist_ok=True)
     pkg_runtime = work / "lokay.fala-package.toml"
     project = _project_root()

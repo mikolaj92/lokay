@@ -12,7 +12,9 @@ title = "Run one Lokay atom via Fala organ"
 
 # Parent factory Fala. It owns the top-level pass and invokes child Fala paths
 # through the factory_tick subprocess boundary. Parent and children use separate
-# journals (factory/ versus ~/.lokay/fala/state.sqlite).
+# journals (factory/, i2pr/, i2pr-delivery/, coding-execution/ versus a shared
+# ~/.lokay/fala/state.sqlite). Overlapping issue-to-PR / coding_execution
+# children never share one host sqlite.
 [[correlation_paths]]
 id = "daemon_cycle"
 title = "Lokay daemon cycle"
@@ -284,7 +286,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_to_pr_delivery"
 title = "Issue to PR delivery"
-description = "Thin conductor: branch, grandchild Falas, coding child, local test, repair child, PR. finalize_local_tests is the publish verdict."
+description = "Thin conductor: branch, grandchild Falas, coding child, local test, repair child, PR. finalize_local_tests is the publish verdict. coding_execution failed is a classified route; when-gated siblings skip."
 
 [[correlation_paths.effectors]]
 id = "get_issue"
@@ -519,7 +521,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "coding_execution"
 title = "One coding result"
-description = "Run the coding slot, one invalid-JSON retry, one closed evidence round, and a terminal."
+description = "Run the coding slot, one invalid-JSON retry, one closed evidence round, and a terminal. Nested fire failure is a classified failed route, never process.failed."
 
 [[correlation_paths.effectors]]
 id = "prepare_coding_request"
