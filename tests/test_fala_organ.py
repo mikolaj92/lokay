@@ -452,6 +452,19 @@ def test_pr_create_without_test_local_fails(monkeypatch):
     assert result["reason"] == "test_local_missing"
 
 
+def test_pr_create_with_only_finalize_publish_goes(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "lokay.proc.pr_create_subflow.run",
+        lambda **kwargs: called.append(kwargs) or {"ok": True, "pr": 1},
+    )
+    up = _pr_create_up()
+    del up["test_local"]
+    up["finalize_local_tests"] = {"ok": True, "route": "publish"}
+    result = fala_organ._handle("pr_create", {"repo": "a/b", "live": False}, up)
+    assert result["ok"] is True and called
+
+
 def test_pr_create_red_test_local_never_creates(monkeypatch):
     def boom(main, argv):
         raise AssertionError("gh pr create must never run after a red test_local")
