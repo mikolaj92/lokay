@@ -58,6 +58,24 @@ def simulate_factory_pass(*, reap_status: str = "succeeded") -> dict:
     return status
 
 
+def test_factory_pass_has_no_unrolled_catalog_slots():
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
+    ids = [node["id"] for node in path["nodes"]]
+    assert "run_issue_rows" not in ids
+    assert "issues" in ids
+    assert not any(
+        name.startswith("run_product_factory_pass_") or name.endswith("_9")
+        for name in ids
+    )
+    issues = next(p for p in desc["paths"] if p["id"] == "issues")
+    assert [node["id"] for node in issues["nodes"]] == [
+        "list_open_issues",
+        "run_issue_rows",
+        "summarize_issues",
+    ]
+
+
 def test_describe_parent_factory_graph():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
@@ -251,20 +269,42 @@ def test_stale_worktree_reap_path_is_a_handful_of_effectors():
     )
 
 
-def test_issues_path_is_sito_then_one_implement():
+def test_issues_path_nests_issue_row_until_idle():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "issues")
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
         "list_open_issues",
+        "run_issue_rows",
+        "summarize_issues",
+    ]
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["run_issue_rows"]["conduction"] == ["list_open_issues"]
+    assert by_id["summarize_issues"]["conduction"] == [
+        "list_open_issues",
+        "run_issue_rows",
+    ]
+    assert not any(
+        node["id"].endswith("_1")
+        or node["id"].endswith("_8")
+        or node["id"].endswith("_9")
+        or node["id"].endswith("_30")
+        for node in path["nodes"]
+    )
+
+
+def test_issue_row_path_is_one_question_then_one_implement():
+    desc = describe_package()
+    path = next(p for p in desc["paths"] if p["id"] == "issue_row")
+    ids = [node["id"] for node in path["nodes"]]
+    assert ids == [
         "select_next_issue",
         "issues_run_triage",
         "select_issue_do",
         "issues_launch_pr",
-        "summarize_issues",
+        "summarize_issue_row",
     ]
     by_id = {node["id"]: node for node in path["nodes"]}
-    assert by_id["select_next_issue"]["conduction"] == ["list_open_issues"]
     assert by_id["issues_run_triage"]["when"] == {
         "upstream": "select_next_issue",
         "path": "route",
@@ -279,7 +319,7 @@ def test_issues_path_is_sito_then_one_implement():
         "path": "route",
         "equals": "do",
     }
-    assert set(by_id["summarize_issues"]["conduction"]) == {
+    assert set(by_id["summarize_issue_row"]["conduction"]) == {
         "select_next_issue",
         "issues_run_triage",
         "select_issue_do",
@@ -287,8 +327,6 @@ def test_issues_path_is_sito_then_one_implement():
     }
     collide = {"run_issue_triage_subflow", "launch_issue_to_pr"}
     assert not collide.intersection(ids)
-    assert ids.index("list_open_issues") < ids.index("select_next_issue")
-    assert ids.index("select_issue_do") < ids.index("issues_launch_pr")
     assert not any(
         node["id"].endswith("_1") or node["id"].endswith("_30") for node in path["nodes"]
     )
@@ -297,7 +335,7 @@ def test_issues_path_is_sito_then_one_implement():
 def test_issues_atoms_do_not_collide_with_dispatch_organs():
     desc = describe_package()
     by_path = {p["id"]: {n["id"] for n in p["nodes"]} for p in desc["paths"]}
-    issues = by_path["issues"]
+    issues = by_path["issues"] | by_path["issue_row"]
     assert not issues.intersection(by_path["triage_dispatch"])
     assert not issues.intersection(by_path["implementation_dispatch"])
 

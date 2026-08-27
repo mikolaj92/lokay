@@ -33,3 +33,8 @@ def summarize(
     pass_dir: str = "",
 ) -> dict:
     return write(envelope(picked, do, launched), pass_dir=pass_dir)
+
+
+def summarize_nest(nest: dict, *, pass_dir: str = "") -> dict:
+    result = nest.get("result") if isinstance(nest.get("result"), dict) else nest
+    return write({"result": dict(result or {})}, pass_dir=pass_dir)

@@ -26,6 +26,8 @@
 - **Order lives in Fala.** Fleet pass spine is `factory_pass` children
   (`factory_begin → prs → issues → record_pass → factory_pass_terminal`;
   `reap_stale_worktrees` is a sibling child from `factory_begin`).
+  `issues` lists once and nests `issue_row` until leftover is empty or the
+  implement budget is spent. The parent does not unroll 1..8.
   Failed leftover-work-copy cleanup is a classified route, not
   `process.failed`. `issues` and `record_pass` do not conduct from cleanup.
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass

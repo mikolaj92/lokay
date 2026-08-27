@@ -6,8 +6,9 @@ Lokay continuously mills work across configured GitHub repositories: select then
 
 1. Opens the pass and selects one implementable catalog row from the cheap prior catalog / live occupancy (`select_implement` after `factory_begin`).
 2. When `select_implement.route == selected`, runs the contradiction gate and detached `issue_to_pr` (`queue_conflict` → `dispatch_implement`), then health and the last-pass receipt. Surveys, triage, close-out, occupancy refresh, and leftover reaps do not run in that pass — they must not consume the short pass ceiling before start or the receipt.
-3. When no row is selected, housecleans: surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests; triages undecided issues through `issue_triage`; applies per-repo PR-first close-out (conflicts closed and re-readied, failed work enters `pr_repair`, approved mergeable work enters `pr_triage`); reaps leftover in-flight cache, over-budget plan-only, occupancy, and leftover worktrees.
-4. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes. Never a second AI PR in the same repo. Serial by design (`limits.max_issue_to_pr_per_pass`, default **1**).
+    3. When no row is selected, housecleans: surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests; triages undecided issues through `issue_triage`; applies per-repo PR-first close-out (conflicts closed and re-readied, failed work enters `pr_repair`, approved mergeable work enters `pr_triage`); reaps leftover in-flight cache, over-budget plan-only, occupancy, and leftover worktrees.
+4. After a skip, the issues child returns to "is there a row?" on a visible edge. Two implementable rows in one budget do not wait for the next daemon tick. The parent does not unroll 1..8 slots.
+5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes. Never a second AI PR in the same repo. Serial by design (`limits.max_issue_to_pr_per_pass`, default **1**).
 
 The top-level Lokay runs the parent `factory_pass` Fala. Catalog surveys, planning, closeout, dispatch and recovery are authored paths or nested authored paths. Parent and child runs use separate journals.
 
@@ -83,7 +84,8 @@ stateDiagram-v2
     FactoryBegin --> Prs
     FactoryBegin --> ReapStaleWorktrees
     Prs --> Issues
-    Issues --> RecordPass
+    Issues --> Issues: leftover row
+    Issues --> RecordPass: empty / cap
     RecordPass --> FactoryPassTerminal
     ReapStaleWorktrees --> FactoryPassTerminal: cleaned / failed classified
     FactoryPassTerminal --> LastPassMoving
@@ -981,26 +983,37 @@ też nie. Leftover work copies nie zjadają issue-to-PR.
 ```mermaid
 stateDiagram-v2
     [*] --> ListOpenIssues
-    ListOpenIssues --> SelectNextIssue
-    SelectNextIssue --> IssuesRunTriage: jest issue
-    SelectNextIssue --> SelectIssueDo: pusta lista / leftover
-    IssuesRunTriage --> SelectIssueDo
-    SelectIssueDo --> IssuesLaunchPr: robić / leftover ready
-    SelectIssueDo --> SummarizeIssues: authored skip
-    IssuesLaunchPr --> SummarizeIssues
+    ListOpenIssues --> RunIssueRows
+    RunIssueRows --> SummarizeIssues
     SummarizeIssues --> [*]
 ```
 
-Dziecko `issues` jest węzłem Fali. Sześć krawędzi, nie jeden tłusty proces.
-Liście: `list_open_issues`, `select_next_issue`, `select_issue_do`,
-`summarize_issues`. Węzły-dzieci: `issues_run_triage` → Fala `issue_triage`,
-`issues_launch_pr` → Fala `issue_to_pr`. Leftover jest zjadane tylko przy
-authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
-adapter fail / `sito_nie_robic` zostawia wiersz; pierwszy leftover remain
-pickiem. Ready leftover w tym passie idzie do issue-to-PR. Oil lokay nie
-zajmuje product slotu. `leftover` jest na kwicie i na last-pass remaining.
-`leftover=0` tylko gdy lista się wyczerpała. Bez 30 slotów. Jeden implement
-na pass.
+Rodzic `issues` listuje raz i gnieździ jedno dziecko `issue_row` aż skrzynka
+pusta albo budżet. Nie rozwija 1..8. Tick daemona nie jest tą pętlą. Atom
+nie chowa "next". Leftover jest zjadane tylko przy authored skip
+(`needs_human`, `blocked`, already-closed). `triage_not_done` / adapter fail /
+`sito_nie_robic` zostawia wiersz; ready leftover idzie do issue-to-PR.
+Oil lokay nie zajmuje product slotu.
+
+### Jeden wiersz katalogu — `issue_row`
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectNextIssue
+    SelectNextIssue --> IssuesRunTriage: jest wiersz
+    SelectNextIssue --> SummarizeIssueRow: brak / strop
+    IssuesRunTriage --> SelectIssueDo
+    SelectIssueDo --> IssuesLaunchPr: robic / leftover ready
+    SelectIssueDo --> SummarizeIssueRow: authored skip
+    IssuesLaunchPr --> SummarizeIssueRow
+    SummarizeIssueRow --> [*]
+```
+
+Jedno pytanie, jeden `issue_to_pr`. `select_next_issue` tylko odpowiada czy
+jest wiersz. Authored skip zjada leftover; sito miss zostawia wiersz.
+Rodzic wraca krawędzią dziecka (`run_issue_rows` aż jałowe). `leftover=0`
+tylko gdy lista się wyczerpała. Bez bramki `work:ready` / `ai:ready` i bez
+30 slotów.
 
 ### Otwarte PR — `prs`
 
@@ -1302,7 +1315,8 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then PRs/issues |
 | `FactoryPass` | `factory_pass` | open, PRs, issues, receipt; leftover work-copy cleanup is a sibling child |
-| `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
+| `Issues` | `issues` | lista otwartych, gnieździ `issue_row` aż pusto albo budżet |
+| `IssueRow` | `issue_row` | jest wiersz? tak → jeden issue_to_pr; nie / strop → koniec |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
 | `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |

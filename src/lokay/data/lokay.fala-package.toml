@@ -124,7 +124,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issues"
 title = "Open issue to PR"
-description = "NODE wiring: list, sito one, issue_triage child, do/skip, issue_to_pr child, receipt. Leftover consume only on authored skip. Ready leftover goes to issue-to-PR. Oil is not the product slot."
+description = "List once, nest issue_row until leftover empty or budget spent. No 1..8 unroll. Leftover consume only on authored skip."
 
 [[correlation_paths.effectors]]
 id = "list_open_issues"
@@ -134,9 +134,29 @@ config = { atom = "list_open_issues" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "select_next_issue"
+id = "run_issue_rows"
 capability = "lokay_atom"
 conduction = ["list_open_issues"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "run_issue_rows" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "summarize_issues"
+capability = "lokay_atom"
+conduction = ["list_open_issues", "run_issue_rows"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "summarize_issues" }
+retry_policy = "none"
+
+[[correlation_paths]]
+id = "issue_row"
+title = "One catalog row"
+description = "Is there a row? yes -> one issue_to_pr. no / cap -> end. Parent nests until idle."
+
+[[correlation_paths.effectors]]
+id = "select_next_issue"
+capability = "lokay_atom"
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_next_issue" }
 retry_policy = "none"
@@ -168,11 +188,11 @@ config = { atom = "issues_launch_pr" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "summarize_issues"
+id = "summarize_issue_row"
 capability = "lokay_atom"
 conduction = ["select_next_issue", "issues_run_triage", "select_issue_do", "issues_launch_pr"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "summarize_issues" }
+config = { atom = "summarize_issue_row" }
 retry_policy = "none"
 
 [[correlation_paths]]

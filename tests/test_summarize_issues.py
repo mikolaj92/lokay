@@ -1,6 +1,6 @@
 import json
 
-from lokay.proc.summarize_issues import envelope, summarize
+from lokay.proc.summarize_issues import envelope, summarize, summarize_nest
 
 
 def _receipt(path):
@@ -105,3 +105,24 @@ def test_summarize_without_pass_dir_does_not_write(tmp_path):
     assert out["ok"] is True
     assert out["applied"] is False
     assert not tmp_path.joinpath("issues-receipt.json").exists()
+
+
+def test_summarize_nest_writes_aggregated_receipt(tmp_path):
+    out = summarize_nest(
+        {
+            "route": "idle",
+            "result": {
+                "route": "do",
+                "launched": "started",
+                "leftover": 0,
+                "rows": 2,
+                "spent": 2,
+            },
+        },
+        pass_dir=str(tmp_path),
+    )
+    assert out["ok"] is True
+    assert out["applied"] is True
+    assert out["result"]["rows"] == 2
+    assert out["result"]["launched"] == "started"
+    assert _receipt(tmp_path)["rows"] == 2
