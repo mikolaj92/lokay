@@ -203,16 +203,17 @@ def _issue_no_longer_open(
     return _closed_issue_payload(issue if isinstance(issue, dict) else None)
 
 
-def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
-    """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
+def _finalize_local_tests_ok(finalized: dict[str, Any] | None) -> bool:
+    """Closed publish verdict from finalize_local_tests."""
+    if not isinstance(finalized, dict) or not finalized:
+        return False
+    if finalized.get("route") == "publish":
+        return True
+    return _test_local_ok(finalized)
 
-    The issue_to_pr lane adds one bounded recheck (test_local_recheck or
-    local_repair_execution) after the single repair patch. When that
-    conduction exists, it is the verdict (a recorded-red first probe is
-    expected — that is why the nest ran). pr_repair/pr_triage have no
-    recheck node, so the first probe still gates.
-    Missing key, ok:false, or a red suite returns an error envelope. None means go.
-    """
+
+def _test_local_probe(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """First probe plus optional recheck. Missing probe is test_local_missing."""
     first = up.get("test_local")
     if first is None:
         first = up.get("test_local_execution")
@@ -244,14 +245,36 @@ def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             ),
             "reason": "test_local_recheck_failed",
         }
-    tl = first
-    if not _test_local_ok(tl):
+    if not _test_local_ok(first):
         return {
             "ok": False,
-            "error": str(tl.get("error") or "refusing: test_local did not succeed"),
+            "error": str(first.get("error") or "refusing: test_local did not succeed"),
             "reason": "test_local_failed",
         }
     return None
+
+
+def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
+
+    issue_to_pr_delivery conducts finalize_local_tests, not the raw probe,
+    onto push/pr_create. That closed route is the verdict. Lanes without
+    finalize still use the probe (and one bounded recheck when present).
+    Missing finalize and missing test_local* fail closed. None means go.
+    """
+    finalized = up.get("finalize_local_tests")
+    if isinstance(finalized, dict) and finalized:
+        if _finalize_local_tests_ok(finalized):
+            return None
+        return {
+            "ok": False,
+            "error": str(
+                finalized.get("error")
+                or "refusing: finalize_local_tests did not publish"
+            ),
+            "reason": "test_local_failed",
+        }
+    return _test_local_probe(up)
 
 
 def _require_push(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:

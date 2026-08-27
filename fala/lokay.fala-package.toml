@@ -284,7 +284,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_to_pr_delivery"
 title = "Issue to PR delivery"
-description = "Thin conductor: branch, grandchild Falas, coding child, local test, repair child, PR."
+description = "Thin conductor: branch, grandchild Falas, coding child, local test, repair child, PR. finalize_local_tests is the publish verdict."
 
 [[correlation_paths.effectors]]
 id = "get_issue"
