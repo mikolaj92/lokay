@@ -229,6 +229,13 @@ def test_issue_triage_path_in_package():
     assert "resolve_issue_candidate" in linked["conduction"]
     skip = next(node for node in path["nodes"] if node["id"] == "apply_issue_skip")
     assert "finalize_issue_triage" in skip["conduction"]
+    mark = next(node for node in path["nodes"] if node["id"] == "apply_issue_mark")
+    assert mark["when"] == {
+        "upstream": "finalize_issue_triage",
+        "path": "decision.verdict",
+        "equals": "close",
+    }
+    assert all(node["id"] != "apply_issue_close" for node in path["nodes"])
     assert all(node["id"] != "issue_split_subflow" for node in path["nodes"])
 
 

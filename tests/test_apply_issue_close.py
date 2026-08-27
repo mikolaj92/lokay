@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lokay.config import Config
+from lokay.graph_run import describe_package
 from lokay.proc import apply_issue_close, apply_issue_mark
 from lokay.proc.apply_issue_close import apply
 
@@ -274,3 +275,16 @@ def test_human_reopen_never_closes_again_in_same_pass(monkeypatch) -> None:
     assert first["applied"] is False and second["applied"] is False
     assert comments_a == comments_b == []
     assert closes_a == closes_b == []
+
+
+def test_temida_4995_graph_does_not_close_on_obsolete_verdict():
+    """Would have caught Temida#4995: sito close verdict must not fire apply_issue_close."""
+    path = next(p for p in describe_package()["paths"] if p["id"] == "issue_triage")
+    nodes = {n["id"]: n for n in path["nodes"]}
+    assert "apply_issue_close" not in nodes
+    mark = nodes["apply_issue_mark"]
+    assert mark["when"]["upstream"] == "finalize_issue_triage"
+    assert mark["when"]["path"] == "decision.verdict"
+    assert mark["when"]["equals"] == "close"
+    prs = next(p for p in describe_package()["paths"] if p["id"] == "pr_triage")
+    assert any(n["id"] == "close_issue" for n in prs["nodes"])
