@@ -84,6 +84,8 @@ _MUTATING_ATOMS = frozenset(
         "evidence_repair_agent",
         "pr_test_repair_agent",
         "issue_to_pr_subflow",
+        "coding_execution",
+        "local_repair_execution",
         "close_existing_delivery",
         "stale_worktree_catalog",
         "launch_issue_to_pr",

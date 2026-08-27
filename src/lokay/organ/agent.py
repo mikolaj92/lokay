@@ -11,6 +11,8 @@ from lokay.models import Issue
 from lokay.organ.agent_evidence import head_has_on_goal_src
 from lokay.organ.common import (
     _issue_no_longer_open,
+    _issue_raw,
+    _localize_conduction,
     _localize_paths,
     _require_push,
     _require_real_diff,
@@ -18,6 +20,7 @@ from lokay.organ.common import (
     _resume_after_timeout,
     _run_atom_main,
     _test_local_ok,
+    _worktree_path,
 )
 from lokay.prompts import (
     issue_fix_prompt,
@@ -63,27 +66,29 @@ def handle_agent(
         from lokay.git_commit import branch_ahead_of_upstream
 
     if atom == "run_agent":
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
+        worktree = _worktree_path(up, inputs)
         branch = str(
             up.get("make_branch", {}).get("branch")
             or inputs.get("branch")
             or up.get("worktree_add", {}).get("branch")
+            or (up.get("prepare_coding_request") or {}).get("branch")
             or ""
         )
         assert worktree
-        if "localize" not in up:
+        scoped = _localize_conduction(up, inputs)
+        if "localize" not in scoped:
             return {
                 "ok": False,
                 "error": "refusing run_agent: localize conduction missing",
                 "reason": "localize_missing",
             }
-        paths = _localize_paths(up)
+        paths = _localize_paths(scoped)
         if not paths:
             return {
                 "ok": False,
                 "error": "refusing run_agent: localize produced no edit paths",
                 "reason": "localize_empty",
-                "localize": up.get("localize") or {},
+                "localize": scoped.get("localize") or {},
             }
         if repair_mode:
             assert pr_number is not None and branch
@@ -101,7 +106,7 @@ def handle_agent(
                 paths=paths,
             )
         else:
-            issue_raw = up.get("get_issue", {}).get("issue") or {}
+            issue_raw = _issue_raw(up, inputs)
             issue = Issue.from_dict(issue_raw) if issue_raw else None
             assert issue is not None
             prompt = issue_fix_prompt(issue, branch=branch, paths=paths)
@@ -125,8 +130,12 @@ def handle_agent(
                 "error": "refusing: repair_agent is issue_to_pr-only",
                 "reason": "repair_agent_not_allowed",
             }
-        worktree = str(up.get("worktree_add", {}).get("worktree") or "")
-        first = up.get("test_local") or {}
+        worktree = _worktree_path(up, inputs)
+        first = (
+            up.get("test_local")
+            or (up.get("prepare_local_repair_request") or {}).get("first_test")
+            or {}
+        )
         assert worktree
         log_text = "\n".join(
             text
@@ -136,7 +145,13 @@ def handle_agent(
             )
             if text.strip()
         ) or str(first.get("error") or "")
-        issue_raw = up.get("get_issue", {}).get("issue") or {}
+        issue_raw = _issue_raw(up, inputs)
+        branch = str(
+            branch
+            or (up.get("prepare_local_repair_request") or {}).get("branch")
+            or inputs.get("branch")
+            or ""
+        )
         prompt = local_test_repair_prompt(
             repo=repo,
             branch=branch,

@@ -1,147 +1,224 @@
-"""Native Fala proofs for the explicit issue implementation branches."""
+"""Proofs for the thin issue delivery parent and extracted children.
+
+Native Fala host proofs run when the Mojo process host is available.
+Authored conduction + when is always simulated from the package.
+"""
 
 from pathlib import Path
-from test_issue_triage_fala import run_graph, base_effector
+
+import pytest
+import tomllib
+
+from test_issue_triage_fala import base_effector, run_graph
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_valid_implementation_skips_retry_and_evidence_then_publishes(tmp_path):
+def _package() -> dict:
+    return tomllib.loads((ROOT / "fala/lokay.fala-package.toml").read_text())
+
+
+def simulate_path(path_id: str, values: dict[str, dict]) -> dict[str, str]:
+    """Apply authored conduction + when. Skipped upstream satisfies conduction."""
+    path = next(p for p in _package()["correlation_paths"] if p["id"] == path_id)
+    status: dict[str, str] = {}
+    outputs: dict[str, dict] = {}
+
+    def matches(when: dict) -> bool:
+        if not when:
+            return True
+        upstream = str(when.get("upstream") or "")
+        if status.get(upstream) != "succeeded":
+            return False
+        actual = outputs.get(upstream, {}).get(when.get("path"))
+        return actual == when.get("equals")
+
+    pending = list(path["effectors"])
+    progressed = True
+    while pending and progressed:
+        progressed = False
+        leftover = []
+        for node in pending:
+            deps = list(node.get("conduction") or [])
+            if any(status.get(dep) not in {"succeeded", "skipped"} for dep in deps):
+                leftover.append(node)
+                continue
+            name = str(node["id"])
+            if matches(dict(node.get("when") or {})):
+                status[name] = "succeeded"
+                outputs[name] = dict(values.get(name) or {})
+            else:
+                status[name] = "skipped"
+            progressed = True
+        pending = leftover
+    assert not pending, [node["id"] for node in pending]
+    return status
+
+
+def _fala_host_ready() -> bool:
+    try:
+        from fala._build import ensure_native
+
+        ensure_native()
+        return True
+    except Exception:
+        return False
+
+
+def test_valid_implementation_skips_repair_then_publishes():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "coding_execution": {"route": "implemented"},
+            "select_local_test": {"route": "pass"},
+            "finalize_local_tests": {"route": "publish"},
+        },
+    )
+    assert st["local_repair_execution"] == "skipped"
+    assert st["push"] == "succeeded"
+    assert st["pr_create"] == "succeeded"
+
+
+def test_human_coding_skips_publish():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "coding_execution": {"route": "human"},
+        },
+    )
+    assert st["test_local_execution"] == "skipped"
+    assert st["local_repair_execution"] == "skipped"
+    assert st["push"] == "skipped"
+    assert st["pr_create"] == "skipped"
+
+
+def test_red_test_runs_local_repair_then_terminal():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "coding_execution": {"route": "implemented"},
+            "select_local_test": {"route": "fail"},
+            "local_repair_execution": {"route": "terminal"},
+            "finalize_local_tests": {"route": "repair_terminal"},
+        },
+    )
+    assert st["local_repair_execution"] == "succeeded"
+    assert st["coding_repair_terminal"] == "succeeded"
+    assert st["push"] == "skipped"
+
+
+def test_parent_gate_invokes_delivery_only_when_no_delivery_exists():
+    st = simulate_path(
+        "issue_to_pr",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "resolve_existing_delivery": {"route": "deliver"},
+        },
+    )
+    assert st["issue_to_pr_subflow"] == "succeeded"
+    assert st["close_existing_delivery"] == "skipped"
+    assert st["issue_to_pr_no_effect"] == "skipped"
+
+
+def test_parent_gate_closeout_skips_delivery_subflow():
+    st = simulate_path(
+        "issue_to_pr",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "resolve_existing_delivery": {"route": "closeout"},
+        },
+    )
+    assert st["close_existing_delivery"] == "succeeded"
+    assert st["issue_to_pr_subflow"] == "skipped"
+
+
+def test_coding_execution_skips_retry_and_evidence():
+    st = simulate_path(
+        "coding_execution",
+        {
+            "validate_coding_result": {"route": "valid"},
+            "select_coding_result": {
+                "route": "implemented",
+                "evidence_kind": "none",
+            },
+            "select_evidence_coding": {"route": "not_applicable"},
+            "finalize_coding_result": {"route": "implemented"},
+        },
+    )
+    assert st["coding_retry_agent"] == "skipped"
+    assert st["evidence_coding_agent"] == "skipped"
+    assert st["coding_execution_terminal"] == "succeeded"
+
+
+def test_coding_execution_invalid_json_runs_one_retry():
+    st = simulate_path(
+        "coding_execution",
+        {
+            "validate_coding_result": {"route": "retry"},
+            "validate_coding_retry": {"route": "valid"},
+            "select_coding_result": {"route": "human", "evidence_kind": "none"},
+            "select_evidence_coding": {"route": "not_applicable"},
+            "finalize_coding_result": {"route": "human"},
+        },
+    )
+    assert st["coding_retry_agent"] == "succeeded"
+    assert st["coding_manual"] == "succeeded"
+
+
+def test_coding_execution_runs_only_selected_collector():
+    st = simulate_path(
+        "coding_execution",
+        {
+            "validate_coding_result": {"route": "valid"},
+            "select_coding_result": {
+                "route": "evidence",
+                "evidence_kind": "test_contract",
+            },
+            "validate_evidence_coding": {"route": "valid"},
+            "select_evidence_coding": {"route": "human"},
+            "finalize_coding_result": {"route": "human"},
+        },
+    )
+    assert st["collect_coding_test_contract"] == "succeeded"
+    assert st["collect_coding_issue_snapshot"] == "skipped"
+    assert st["collect_coding_repo_structure"] == "skipped"
+    assert st["collect_coding_localized_diff"] == "skipped"
+
+
+def test_local_repair_invalid_json_is_terminal():
+    st = simulate_path(
+        "local_repair_execution",
+        {
+            "validate_repair_result": {"route": "retry"},
+            "select_repair_result": {"route": "terminal"},
+            "select_local_test_recheck": {"route": "not_applicable"},
+        },
+    )
+    assert st["repair_agent"] == "succeeded"
+    assert st["commit_repair"] == "skipped"
+    assert st["test_local_recheck"] == "skipped"
+    assert st["local_repair_terminal"] == "succeeded"
+
+
+def test_native_valid_implementation_skips_repair_then_publishes(tmp_path):
+    if not _fala_host_ready():
+        pytest.skip("Fala Mojo process host is not available")
     pushed = tmp_path / "push"
     wrong = tmp_path / "wrong"
     body = base_effector(
         """if a=='resolve_implementation_issue':v['route']='open'
-if a=='run_agent':v['stdout']='ok'
-if a=='validate_coding_result':v.update(route='valid',decision={'verdict':'implemented'})
-if a=='select_coding_result':v.update(route='implemented',evidence_kind='none',decision={'verdict':'implemented'})
-if a=='select_evidence_coding':v['route']='not_applicable'
-if a=='finalize_coding_result':v.update(route='implemented',decision={'verdict':'implemented'})
-if a=='test_local':v.update(tested=True)
+if a=='coding_execution':v.update(route='implemented',decision={'verdict':'implemented'})
+if a=='test_local_execution':v.update(tested=True)
 if a=='select_local_test':v['route']='pass'
-if a=='select_repair_result':v['route']='not_applicable'
-if a=='select_local_test_recheck':v['route']='not_applicable'
 if a=='finalize_local_tests':v['route']='publish'
 if a=='push':Path(%r).write_text('ran')
-if a in {'coding_retry_agent','evidence_coding_agent','repair_agent'}:Path(%r).write_text(a)"""
+if a=='local_repair_execution':Path(%r).write_text(a)"""
         % (str(pushed), str(wrong))
     )
     result = run_graph(tmp_path, body, "implemented", path_id="issue_to_pr_delivery")
     st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert (
-        st["coding_retry_agent"] == "skipped"
-        and st["evidence_coding_agent"] == "skipped"
-        and st["repair_agent"] == "skipped"
-    )
+    assert st["local_repair_execution"] == "skipped"
     assert st["push"] == "succeeded" and pushed.exists() and not wrong.exists()
-
-
-def test_invalid_json_runs_one_retry(tmp_path):
-    retry = tmp_path / "retry"
-    body = base_effector(
-        """if a=='resolve_implementation_issue':v['route']='open'
-if a=='validate_coding_result':v.update(route='retry',validation_error='bad')
-if a=='coding_retry_agent':Path(%r).write_text('ran')
-if a=='validate_coding_retry':v.update(route='valid',decision={'verdict':'needs_human'})
-if a=='select_coding_result':v.update(route='human',evidence_kind='none',decision={'verdict':'needs_human'})
-if a=='select_evidence_coding':v['route']='not_applicable'
-if a=='finalize_coding_result':v.update(route='human',decision={'verdict':'needs_human'})
-if a in {'select_local_test','select_repair_result','select_local_test_recheck','finalize_local_tests'}:v['route']='not_applicable'"""
-        % str(retry)
-    )
-    result = run_graph(tmp_path, body, "retry", path_id="issue_to_pr_delivery")
-    st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert (
-        st["coding_retry_agent"] == "succeeded"
-        and st["coding_manual"] == "succeeded"
-        and st["push"] == "skipped"
-        and retry.exists()
-    )
-
-
-def test_evidence_runs_only_selected_collector(tmp_path):
-    chosen = tmp_path / "chosen"
-    wrong = tmp_path / "wrong"
-    body = base_effector(
-        """if a=='resolve_implementation_issue':v['route']='open'
-if a=='validate_coding_result':v.update(route='valid',decision={'verdict':'needs_evidence','evidence_kind':'test_contract'})
-if a=='select_coding_result':v.update(route='evidence',evidence_kind='test_contract',decision={'verdict':'needs_evidence'})
-if a=='collect_coding_test_contract':Path(%r).write_text('ran')
-if a in {'collect_coding_issue_snapshot','collect_coding_repo_structure','collect_coding_localized_diff'}:Path(%r).write_text(a)
-if a=='validate_evidence_coding':v.update(route='valid',decision={'verdict':'needs_human'})
-if a=='select_evidence_coding':v.update(route='human',decision={'verdict':'needs_human'})
-if a=='finalize_coding_result':v.update(route='human',decision={'verdict':'needs_human'})
-if a in {'select_local_test','select_repair_result','select_local_test_recheck','finalize_local_tests'}:v['route']='not_applicable'"""
-        % (str(chosen), str(wrong))
-    )
-    result = run_graph(tmp_path, body, "evidence", path_id="issue_to_pr_delivery")
-    st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert st["collect_coding_test_contract"] == "succeeded" and all(
-        st[x] == "skipped"
-        for x in (
-            "collect_coding_issue_snapshot",
-            "collect_coding_repo_structure",
-            "collect_coding_localized_diff",
-        )
-    )
-    assert chosen.exists() and not wrong.exists()
-
-
-def test_red_test_runs_one_repair_then_terminal(tmp_path):
-    repair = tmp_path / "repair"
-    body = base_effector("""if a=='resolve_implementation_issue':v['route']='open'
-if a=='validate_coding_result':v.update(route='valid',decision={'verdict':'implemented'})
-if a=='select_coding_result':v.update(route='implemented',evidence_kind='none',decision={'verdict':'implemented'})
-if a=='select_evidence_coding':v['route']='not_applicable'
-if a=='finalize_coding_result':v.update(route='implemented',decision={'verdict':'implemented'})
-if a=='test_local':v.update(tested=True,recorded_red=True)
-if a=='select_local_test':v['route']='fail'
-if a=='repair_agent':Path(%r).write_text('ran')
-if a=='validate_repair_result':v['route']='retry'
-if a=='select_repair_result':v['route']='terminal'
-if a=='select_local_test_recheck':v['route']='not_applicable'
-if a=='finalize_local_tests':v['route']='repair_terminal'""" % str(repair))
-    result = run_graph(tmp_path, body, "repair", path_id="issue_to_pr_delivery")
-    st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert (
-        st["repair_agent"] == "succeeded"
-        and st["coding_repair_terminal"] == "succeeded"
-        and st["push"] == "skipped"
-        and repair.exists()
-    )
-
-
-def test_parent_gate_invokes_delivery_only_when_no_delivery_exists(tmp_path):
-    delivery = tmp_path / "delivery"
-    wrong = tmp_path / "wrong"
-    body = base_effector(
-        """if a=='resolve_implementation_issue':v['route']='open'
-if a=='resolve_existing_delivery':v['route']='deliver'
-if a=='issue_to_pr_subflow':Path(%r).write_text('ran')
-if a in {'close_existing_delivery','issue_to_pr_no_effect'}:Path(%r).write_text(a)"""
-        % (str(delivery), str(wrong))
-    )
-    result = run_graph(tmp_path, body, "parent-deliver", path_id="issue_to_pr")
-    st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert (
-        st["issue_to_pr_subflow"] == "succeeded"
-        and st["close_existing_delivery"] == "skipped"
-        and st["issue_to_pr_no_effect"] == "skipped"
-    )
-    assert delivery.exists() and not wrong.exists()
-
-
-def test_parent_gate_closeout_skips_delivery_subflow(tmp_path):
-    closeout = tmp_path / "closeout"
-    wrong = tmp_path / "wrong"
-    body = base_effector(
-        """if a=='resolve_implementation_issue':v['route']='open'
-if a=='resolve_existing_delivery':v['route']='closeout'
-if a=='close_existing_delivery':Path(%r).write_text('ran')
-if a in {'issue_to_pr_subflow','issue_to_pr_no_effect'}:Path(%r).write_text(a)"""
-        % (str(closeout), str(wrong))
-    )
-    result = run_graph(tmp_path, body, "parent-closeout", path_id="issue_to_pr")
-    st = {k: x["status"] for k, x in result["effector_results"].items()}
-    assert (
-        st["close_existing_delivery"] == "succeeded"
-        and st["issue_to_pr_subflow"] == "skipped"
-    )
-    assert closeout.exists() and not wrong.exists()

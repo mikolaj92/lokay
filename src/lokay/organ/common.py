@@ -23,6 +23,47 @@ from lokay.prompts import (
 )
 
 
+def _request_blob(up: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return dict(
+        up.get("prepare_coding_request")
+        or up.get("prepare_local_repair_request")
+        or {}
+    )
+
+
+def _worktree_path(
+    up: dict[str, dict[str, Any]], inputs: dict[str, Any] | None = None
+) -> str:
+    return str(
+        (up.get("worktree_add") or {}).get("worktree")
+        or _request_blob(up).get("worktree")
+        or (inputs or {}).get("worktree")
+        or ""
+    )
+
+
+def _issue_raw(
+    up: dict[str, dict[str, Any]], inputs: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    raw = (up.get("get_issue") or {}).get("issue")
+    if isinstance(raw, dict) and raw:
+        return dict(raw)
+    blob = _request_blob(up).get("issue_raw")
+    if isinstance(blob, dict) and blob:
+        return dict(blob)
+    extra = (inputs or {}).get("issue_raw")
+    return dict(extra) if isinstance(extra, dict) else {}
+
+
+def _localize_conduction(
+    up: dict[str, dict[str, Any]], inputs: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
+    if "localize" in up:
+        return up
+    loc = _request_blob(up).get("localize") or (inputs or {}).get("localize") or {}
+    return {**up, "localize": dict(loc) if isinstance(loc, dict) else {}}
+
+
 def _localize_paths(up: dict[str, dict[str, Any]]) -> list[str]:
     """Paths from localize conduction; empty means fail-closed before agent."""
     raw = up.get("localize", {}).get("paths") or []
@@ -84,6 +125,8 @@ def _test_local_ok(env: dict[str, Any] | None) -> bool:
     """
     if not isinstance(env, dict) or not env:
         return False
+    if env.get("route") == "pass":
+        return True
     if env.get("passed") is False:
         return False
     if env.get("skipped") or env.get("reason") == "no_python_test_suite":
@@ -163,19 +206,33 @@ def _issue_no_longer_open(
 def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
 
-    The issue_to_pr lane adds one bounded recheck (test_local_recheck) after
-    the single repair patch. When that conduction exists, it is the verdict
-    (a recorded-red first probe is expected — that is why the nest ran).
-    pr_repair/pr_triage have no recheck node, so the first probe still gates.
+    The issue_to_pr lane adds one bounded recheck (test_local_recheck or
+    local_repair_execution) after the single repair patch. When that
+    conduction exists, it is the verdict (a recorded-red first probe is
+    expected — that is why the nest ran). pr_repair/pr_triage have no
+    recheck node, so the first probe still gates.
     Missing key, ok:false, or a red suite returns an error envelope. None means go.
     """
-    if "test_local" not in up:
+    first = up.get("test_local")
+    if first is None:
+        first = up.get("test_local_execution")
+    if first is None:
         return {
             "ok": False,
             "error": "refusing: test_local conduction missing",
             "reason": "test_local_missing",
         }
     recheck = up.get("test_local_recheck")
+    if not isinstance(recheck, dict) or not recheck:
+        repair = up.get("local_repair_execution")
+        if isinstance(repair, dict) and repair.get("route") in {
+            "pass",
+            "fail",
+            "terminal",
+        }:
+            recheck = repair
+        else:
+            recheck = None
     if recheck is not None:
         if _test_local_ok(recheck):
             return None
@@ -187,7 +244,7 @@ def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             ),
             "reason": "test_local_recheck_failed",
         }
-    tl = up["test_local"]
+    tl = first
     if not _test_local_ok(tl):
         return {
             "ok": False,

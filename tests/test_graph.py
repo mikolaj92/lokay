@@ -725,41 +725,55 @@ def test_describe_issue_to_pr_graph():
     for required in (
         "plan_issue",
         "localize",
-        "run_agent",
-        "validate_coding_result",
-        "select_coding_result",
-        "finalize_coding_result",
+        "coding_execution",
+        "test_local_execution",
+        "local_repair_execution",
         "pr_create",
     ):
         assert required in ids
+    for banned in (
+        "run_agent",
+        "validate_coding_result",
+        "coding_retry_agent",
+        "evidence_coding_agent",
+        "repair_agent",
+        "test_local_recheck",
+    ):
+        assert banned not in ids
 
 
 def test_issue_to_pr_plan_issue_before_run_agent():
     by_id = {n["id"]: n for n in _issue_delivery_path()["nodes"]}
     assert "plan_issue" in by_id["localize"]["conduction"]
     assert {"plan_issue", "localize", "worktree_add"} <= set(
-        by_id["run_agent"]["conduction"]
+        by_id["coding_execution"]["conduction"]
     )
-    assert "run_agent" not in by_id["plan_issue"]["conduction"]
+    assert "coding_execution" not in by_id["plan_issue"]["conduction"]
 
 
 def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
+    desc = describe_package()
+    coding = next(p for p in desc["paths"] if p["id"] == "coding_execution")
+    repair = next(p for p in desc["paths"] if p["id"] == "local_repair_execution")
+    coding_by = {n["id"]: n for n in coding["nodes"]}
+    repair_by = {n["id"]: n for n in repair["nodes"]}
     by_id = {n["id"]: n for n in _issue_delivery_path()["nodes"]}
-    assert by_id["coding_retry_agent"]["when"] == {
+    assert coding_by["coding_retry_agent"]["when"] == {
         "upstream": "validate_coding_result",
         "path": "route",
         "equals": "retry",
     }
-    assert by_id["evidence_coding_agent"]["when"] == {
+    assert coding_by["evidence_coding_agent"]["when"] == {
         "upstream": "select_coding_result",
         "path": "route",
         "equals": "evidence",
     }
-    assert by_id["repair_agent"]["when"] == {
+    assert by_id["local_repair_execution"]["when"] == {
         "upstream": "select_local_test",
         "path": "route",
         "equals": "fail",
     }
+    assert repair_by["repair_agent"]["conduction"] == ["prepare_local_repair_request"]
     assert by_id["push"]["when"] == {
         "upstream": "finalize_local_tests",
         "path": "route",
@@ -774,7 +788,7 @@ def test_run_agent_timeouts_match_pi_budget():
         Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml"
     ).read_bytes()
     pkg = tomllib.loads(raw.decode())
-    for path_id in ("issue_to_pr_delivery", "pr_repair"):
+    for path_id in ("coding_execution", "pr_repair"):
         path = next(p for p in pkg["correlation_paths"] if p["id"] == path_id)
         assert (
             int(
@@ -784,12 +798,12 @@ def test_run_agent_timeouts_match_pi_budget():
             )
             == 1800
         )
-    delivery = next(
-        p for p in pkg["correlation_paths"] if p["id"] == "issue_to_pr_delivery"
+    repair = next(
+        p for p in pkg["correlation_paths"] if p["id"] == "local_repair_execution"
     )
     assert (
         int(
-            next(n for n in delivery["effectors"] if n["id"] == "repair_agent")[
+            next(n for n in repair["effectors"] if n["id"] == "repair_agent")[
                 "adapter"
             ]["timeout_seconds"]
         )

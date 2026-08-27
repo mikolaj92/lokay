@@ -1111,7 +1111,36 @@ stateDiagram-v2
     PrepareBranch --> PrepareWorktree
     PrepareWorktree --> PlanIssue
     PlanIssue --> Localize
-    Localize --> CodingAgent
+    Localize --> CodingExecution
+    CodingExecution --> HumanTerminal: human
+    CodingExecution --> VerifyImplementationDiff: implemented
+    VerifyImplementationDiff --> CommitImplementation
+    CommitImplementation --> RebaseOntoMain
+    RebaseOntoMain --> LocalTest
+    LocalTest --> VerifyPublishDiff: PASS
+    LocalTest --> LocalRepair: FAIL
+    LocalRepair --> VerifyPublishDiff: PASS
+    LocalRepair --> RepairTerminal: FAIL / human
+    VerifyPublishDiff --> PushBranch
+    PushBranch --> CreatePullRequest
+    CreatePullRequest --> LabelPullRequest
+    LabelPullRequest --> PullRequestOpen
+    PullRequestOpen --> DeliveryResult
+    DeliveryResult --> [*]
+    NoEffect --> [*]
+    HumanTerminal --> [*]
+    RepairTerminal --> [*]
+```
+
+Rodzic `issue_to_pr_delivery` nie trzyma gniazda kodu ani naprawy testów.
+`plan_issue`, `localize`, `test_local_execution` i `pr_create` zostają osobnymi
+węzłami (każde jest własną Falą). Dwa wyjęte dzieci:
+
+### Wynik kodowania — `coding_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> CodingAgent
     CodingAgent --> ValidateCodingResult
     ValidateCodingResult --> SelectCodingResult: wynik poprawny
     ValidateCodingResult --> CodingRetryAgent: invalid JSON + informacja zwrotna
@@ -1130,27 +1159,24 @@ stateDiagram-v2
     ValidateEvidenceCoding --> FinalizeCodingResult: wynik poprawny
     ValidateEvidenceCoding --> HumanTerminal: invalid JSON
     FinalizeCodingResult --> HumanTerminal: ponowne NEEDS_EVIDENCE / NEEDS_HUMAN
-    SelectCodingResult --> VerifyImplementationDiff: IMPLEMENTED
-    FinalizeCodingResult --> VerifyImplementationDiff: IMPLEMENTED
-    VerifyImplementationDiff --> CommitImplementation
-    CommitImplementation --> RebaseOntoMain
-    RebaseOntoMain --> LocalTest
-    LocalTest --> VerifyPublishDiff: PASS
-    LocalTest --> RepairAgent: FAIL
+    SelectCodingResult --> CodingResult: IMPLEMENTED
+    FinalizeCodingResult --> CodingResult: IMPLEMENTED
+    CodingResult --> [*]
+    HumanTerminal --> [*]
+```
+
+### Naprawa testu lokalnego — `local_repair_execution`
+
+```mermaid
+stateDiagram-v2
+    [*] --> RepairAgent
     RepairAgent --> ValidateRepairResult
     ValidateRepairResult --> CommitRepair: REPAIRED
     ValidateRepairResult --> RepairTerminal: invalid JSON / NEEDS_HUMAN
     CommitRepair --> LocalTestAgain
-    LocalTestAgain --> VerifyPublishDiff: PASS
+    LocalTestAgain --> RepairResult: PASS
     LocalTestAgain --> RepairTerminal: FAIL
-    VerifyPublishDiff --> PushBranch
-    PushBranch --> CreatePullRequest
-    CreatePullRequest --> LabelPullRequest
-    LabelPullRequest --> PullRequestOpen
-    PullRequestOpen --> DeliveryResult
-    DeliveryResult --> [*]
-    NoEffect --> [*]
-    HumanTerminal --> [*]
+    RepairResult --> [*]
     RepairTerminal --> [*]
 ```
 
@@ -1348,7 +1374,9 @@ kontraktu. Aktualny audyt:
 | `TriageInbox` | `issue_triage` | sito: robić, nie, zamknąć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
-| `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |
+| `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
+| `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal |
+| `LocalRepairExecution` | `local_repair_execution` | jedna naprawa z logu testu i recheck |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
 | `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and mill stay outside |

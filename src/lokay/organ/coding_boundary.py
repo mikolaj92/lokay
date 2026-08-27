@@ -4,9 +4,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from lokay.config import load_config
+from lokay.organ.common import _issue_raw, _worktree_path
 
 _ATOMS = frozenset(
     {
+        "prepare_coding_request",
+        "coding_execution",
+        "coding_execution_terminal",
+        "prepare_local_repair_request",
+        "local_repair_execution",
+        "local_repair_terminal",
         "validate_coding_result",
         "coding_retry_agent",
         "validate_coding_retry",
@@ -51,7 +58,110 @@ def handle_coding_boundary(
 ) -> dict[str, Any] | None:
     if not owns(atom):
         return None
-    worktree = Path(str((up.get("worktree_add") or {}).get("worktree") or ""))
+    if atom == "prepare_coding_request":
+        from lokay.proc.prepare_coding_request import prepare
+
+        return prepare(
+            worktree=_worktree_path(up, inputs),
+            repo=str(ctx.get("repo") or inputs.get("repo") or ""),
+            issue=ctx.get("issue_number")
+            if ctx.get("issue_number") is not None
+            else inputs.get("issue"),
+            issue_raw=_issue_raw(up, inputs),
+            localize=dict(inputs.get("localize") or up.get("localize") or {}),
+            branch=str(
+                (up.get("make_branch") or {}).get("branch")
+                or inputs.get("branch")
+                or ""
+            ),
+            live=bool(inputs.get("live")),
+        )
+    if atom == "coding_execution":
+        from lokay.proc.coding_execution_subflow import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or inputs.get("config") or "")
+            or None,
+            live=bool(inputs.get("live")),
+            extra_inputs={
+                "config_path": inputs.get("config_path") or inputs.get("config") or "",
+                "live": bool(inputs.get("live")),
+                "worktree": _worktree_path(up, inputs),
+                "repo": str(ctx.get("repo") or inputs.get("repo") or ""),
+                "issue": ctx.get("issue_number")
+                if ctx.get("issue_number") is not None
+                else inputs.get("issue"),
+                "issue_raw": _issue_raw(up, inputs),
+                "localize": dict(up.get("localize") or inputs.get("localize") or {}),
+                "branch": str(
+                    (up.get("make_branch") or {}).get("branch")
+                    or inputs.get("branch")
+                    or ""
+                ),
+            },
+        )
+    if atom == "coding_execution_terminal":
+        from lokay.proc.coding_execution_terminal import terminal
+
+        return terminal(
+            up.get("finalize_coding_result") or {},
+            up.get("coding_manual") or {},
+        )
+    if atom == "prepare_local_repair_request":
+        from lokay.proc.prepare_local_repair_request import prepare
+
+        return prepare(
+            worktree=_worktree_path(up, inputs),
+            repo=str(ctx.get("repo") or inputs.get("repo") or ""),
+            issue=ctx.get("issue_number")
+            if ctx.get("issue_number") is not None
+            else inputs.get("issue"),
+            issue_raw=_issue_raw(up, inputs),
+            branch=str(
+                (up.get("make_branch") or {}).get("branch")
+                or inputs.get("branch")
+                or ""
+            ),
+            first_test=dict(inputs.get("first_test") or {}),
+            live=bool(inputs.get("live")),
+        )
+    if atom == "local_repair_execution":
+        from lokay.proc.local_repair_execution_subflow import run
+
+        return run(
+            config_path=str(inputs.get("config_path") or inputs.get("config") or "")
+            or None,
+            live=bool(inputs.get("live")),
+            extra_inputs={
+                "config_path": inputs.get("config_path") or inputs.get("config") or "",
+                "live": bool(inputs.get("live")),
+                "worktree": _worktree_path(up, inputs),
+                "repo": str(ctx.get("repo") or inputs.get("repo") or ""),
+                "issue": ctx.get("issue_number")
+                if ctx.get("issue_number") is not None
+                else inputs.get("issue"),
+                "issue_raw": _issue_raw(up, inputs),
+                "branch": str(
+                    (up.get("make_branch") or {}).get("branch")
+                    or inputs.get("branch")
+                    or ""
+                ),
+                "first_test": dict(
+                    up.get("test_local_execution")
+                    or up.get("test_local")
+                    or inputs.get("first_test")
+                    or {}
+                ),
+            },
+        )
+    if atom == "local_repair_terminal":
+        from lokay.proc.local_repair_terminal import terminal
+
+        return terminal(
+            up.get("select_repair_result") or {},
+            up.get("select_local_test_recheck") or {},
+        )
+    worktree = Path(_worktree_path(up, inputs))
     if atom in {
         "validate_coding_result",
         "validate_coding_retry",
@@ -144,13 +254,14 @@ def handle_coding_boundary(
     if atom == "resolve_implementation_issue":
         from lokay.proc.resolve_implementation_issue import resolve
 
-        return resolve(dict((up.get("get_issue") or {}).get("issue") or {}))
+        return resolve(_issue_raw(up, inputs))
     if atom == "select_repair_result":
         from lokay.proc.select_repair_result import select
 
         return select(
             up.get("validate_repair_result") or {},
-            applicable=(up.get("select_local_test") or {}).get("route") == "fail",
+            applicable=(up.get("select_local_test") or {}).get("route") == "fail"
+            or "prepare_local_repair_request" in up,
         )
     if atom == "coding_retry_agent":
         from lokay.proc.run_coding_retry_agent import run
@@ -180,7 +291,7 @@ def handle_coding_boundary(
         if atom == "collect_coding_issue_snapshot":
             from lokay.proc.collect_coding_issue_snapshot import collect
 
-            return collect(dict((up.get("get_issue") or {}).get("issue") or {}))
+            return collect(_issue_raw(up, inputs))
         module = __import__(f"lokay.proc.{atom}", fromlist=["collect"])
         return module.collect(str(worktree))
     if atom == "evidence_coding_agent":
@@ -233,16 +344,21 @@ def handle_coding_boundary(
     if atom in {"select_local_test", "select_local_test_recheck"}:
         from lokay.proc.select_local_test import select
 
-        return select(
-            up.get(
-                "test_local" if atom == "select_local_test" else "test_local_recheck"
-            )
-            or {}
+        source = (
+            "test_local_recheck"
+            if atom == "select_local_test_recheck"
+            else "test_local_execution"
+            if "test_local_execution" in up
+            else "test_local"
         )
+        return select(up.get(source) or {})
     if atom == "finalize_local_tests":
         from lokay.proc.finalize_local_tests import finalize
 
         return finalize(
-            up.get("select_local_test") or {}, up.get("select_local_test_recheck") or {}
+            up.get("select_local_test") or {},
+            up.get("select_local_test_recheck")
+            or up.get("local_repair_execution")
+            or {},
         )
     raise AssertionError(atom)
