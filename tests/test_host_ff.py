@@ -387,14 +387,13 @@ def test_factory_begin_planned_ignores_host_updated():
     assert gate({"updated": True}, live=False, checkout="")["route"] == "begin"
 
 
-def test_factory_pass_starts_with_host_ff_and_restart_gate():
+def test_factory_pass_starts_with_begin_then_product_children():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [n["id"] for n in path["nodes"]]
-    assert ids[:5] == [
-        "classify_factory_idle",
-        "host_ff",
-        "factory_begin_host_gate",
+    assert ids[:4] == [
         "factory_begin",
-        "select_implement",
+        "prs",
+        "reap_stale_worktrees",
+        "issues",
     ]

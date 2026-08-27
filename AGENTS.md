@@ -23,16 +23,11 @@
 - See **`docs/PROCESS.md`**, `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.
 - New ordering → `fala/lokay.fala-package.toml` (conduction).
-- **Order lives in Fala.** Fleet pass spine is `factory_pass` atoms
-  (`classify_factory_idle → host_ff → factory_begin_host_gate → factory_begin →
-  select_implement → queue_conflict → dispatch_implement → compute_health →
-  compact_state → record_pass →
-  survey_prs → survey_inbox → survey_ready → ready_hygiene → plan_pass →
-  dispatch_triage → resolve_conflicts → closeout_prs → reap_stale_implementing →
-  reap_over_budget → refresh_occupancy → reap_stale_worktrees →
-  record_factory_idle → factory_pass_terminal`).
-  Hygiene after `record_pass` takes `when select.route == none` and does not
-  run in a selected pass.
+- **Order lives in Fala.** Fleet pass spine is `factory_pass` children
+  (`factory_begin → prs → issues → record_pass → factory_pass_terminal`;
+  `reap_stale_worktrees` is a sibling child from `factory_begin`).
+  Failed leftover-work-copy cleanup is a classified route, not
+  `process.failed`. `issues` and `record_pass` do not conduct from cleanup.
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
   is oil XOR product (product wins). Not a fat `compose/tick.py`.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
