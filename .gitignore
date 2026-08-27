@@ -10,5 +10,7 @@ build/
 .uv/
 config.yaml
 # Host/runtime under checkout — keep approach plan evidence trackable.
+# localize.json is a per-worktree sieve; never ship someone else's scope on main.
 .lokay/*
 !.lokay/approach.md
+.lokay/localize.json

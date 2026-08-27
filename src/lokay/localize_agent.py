@@ -115,6 +115,7 @@ def build_localization_with_agent(
     extra_paths: Iterable[str] = (),
     max_paths: int = 40,
     skip_agent: bool = False,
+    issue: int | None = None,
 ) -> Localization:
     started = time.monotonic()
 
@@ -128,7 +129,7 @@ def build_localization_with_agent(
         )
         return replace(value, semantic=trace.to_dict())
 
-    existing = load_existing_localize_paths(worktree)
+    existing = load_existing_localize_paths(worktree, issue=issue)
     if existing:
         value = Localization(
             paths=tuple(existing[: max(1, int(max_paths or 40))]),
@@ -136,6 +137,7 @@ def build_localization_with_agent(
             seed_paths=tuple(existing),
             notes=("Existing localize.json skipped semantic localization.",),
             worktree=str(Path(worktree)) if worktree is not None else "",
+            issue=int(issue or 0),
         )
         return traced(value, "existing", "completed")
 

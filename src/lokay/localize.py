@@ -15,6 +15,8 @@ from typing import Any, Iterable
 from lokay.approach_plan import extract_paths
 
 LOCALIZE_REL_PATH = ".lokay/localize.json"
+# Worktree leftover names encode the mill issue: ai/fix/333-… or ai__fix__333-…
+_WORKTREE_ISSUE_RE = re.compile(r"(?:ai(?:/|__)fix(?:/|__))(\d+)(?:-|$)")
 
 # Skip noise when walking the checkout.
 _SKIP_DIR_NAMES = frozenset(
@@ -419,6 +421,7 @@ class Localization:
     wrote: bool = False
     localize_rel: str = LOCALIZE_REL_PATH
     semantic: dict[str, Any] | None = None
+    issue: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -944,13 +947,45 @@ def build_localization(
     )
 
 
+def _positive_issue(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.strip().isdigit():
+        number = int(value.strip())
+        return number if number > 0 else None
+    return None
+
+
+def issue_from_localize_payload(raw: dict[str, Any]) -> int | None:
+    """Issue this localize.json belongs to, or None if missing/unparseable."""
+    for key in ("issue", "issue_number"):
+        owned = _positive_issue(raw.get(key))
+        if owned is not None:
+            return owned
+    worktree = str(raw.get("worktree") or "").replace("\\", "/")
+    match = _WORKTREE_ISSUE_RE.search(worktree)
+    if match:
+        return int(match.group(1))
+    return None
+
+
 def load_existing_localize_paths(
     worktree: Path | None,
     *,
     rel_path: str = LOCALIZE_REL_PATH,
+    issue: int | None = None,
 ) -> list[str]:
-    """Non-empty paths already written to localize.json, if any."""
+    """Non-empty paths already written for this issue, if any.
+
+    A file inherited from main (other issue in ``worktree``, missing issue id,
+    or leftover from another ticket) is not a sieve.
+    """
     if worktree is None:
+        return []
+    current = _positive_issue(issue)
+    if current is None:
         return []
     path = Path(worktree) / rel_path
     try:
@@ -958,6 +993,9 @@ def load_existing_localize_paths(
     except (OSError, ValueError):
         return []
     if not isinstance(raw, dict):
+        return []
+    owned = issue_from_localize_payload(raw)
+    if owned is None or owned != current:
         return []
     rows = raw.get("paths") or []
     if not isinstance(rows, list):
