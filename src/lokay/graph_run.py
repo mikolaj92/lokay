@@ -390,13 +390,28 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         steps.append(item)
         status = str(process.get("status") or "").lower()
         if status in {"failed", "cancelled", "canceled", "timed_out", "error"}:
+            if (
+                str(result.get("path_id") or "") == "factory_pass"
+                and effector_id == "reap_stale_worktrees"
+            ):
+                item["ok"] = True
+                item["route"] = str(item.get("route") or "failed")
+                terminal[effector_id] = item
+                continue
             failed.append(item)
 
     out = {**result, "terminal": terminal, "steps": steps}
     if results_error and result.get("ok"):
         out.update(ok=False, error=results_error)
         return out
-    if failed or not result.get("ok"):
+    cleanup_only = (
+        str(result.get("path_id") or "") == "factory_pass"
+        and not failed
+        and any(item.get("step") == "reap_stale_worktrees" for item in steps)
+        and str((terminal.get("reap_stale_worktrees") or {}).get("route") or "")
+        == "failed"
+    )
+    if (failed or not result.get("ok")) and not cleanup_only:
         out["ok"] = False
         out["error"] = failed[0].get("error") if failed else result.get("error")
         if not out.get("error"):

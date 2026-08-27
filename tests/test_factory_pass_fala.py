@@ -70,9 +70,9 @@ def test_failed_cleanup_still_picks_the_next_issue(tmp_path):
     body = base_effector(
         f"""if a=='factory_begin':v.update(pass_dir='/pass')
 if a=='reap_stale_worktrees':raise RuntimeError('cleanup process.failed')
-if a=='issues':Path({picked!r}).write_text('next');v.update(route='issue',leftover=1,leftover_issues=[{{'repo':'Temida/Temida','issue':4996}}])
-if a=='record_pass':Path({receipt!r}).write_text('receipt');v.update(result={{'ok':True,'health':'progress'}})
-if a=='factory_pass_terminal':v.update(result={{'ok':True,'health':'progress'}})
+if a=='issues':Path({picked!r}).write_text('pr');v.update(route='do',launched='pr',leftover=1,leftover_issues=[{{'repo':'Temida/Temida','issue':4996}}])
+if a=='record_pass':Path({receipt!r}).write_text('receipt');v.update(result={{'ok':True,'outcome':'new_pr'}})
+if a=='factory_pass_terminal':v.update(result={{'ok':True,'outcome':'new_pr'}})
 if a in {{{kids}}}:v.update(ok=True)"""
     )
     result = run_graph(
@@ -87,5 +87,5 @@ if a in {{{kids}}}:v.update(ok=True)"""
     assert status["issues"] == "succeeded"
     assert status["record_pass"] == "succeeded"
     assert status["factory_pass_terminal"] == "succeeded"
-    assert tmp_path.joinpath("picked").read_text() == "next"
+    assert tmp_path.joinpath("picked").read_text() == "pr"
     assert tmp_path.joinpath("receipt").is_file()

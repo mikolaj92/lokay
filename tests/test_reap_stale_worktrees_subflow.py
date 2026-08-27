@@ -16,6 +16,16 @@ def test_failed_helper_is_succeeded_classified_route():
     assert FIRE_STEP in str(out["error"])
 
 
+def test_cleanup_systemexit_yields_route(monkeypatch):
+    def boom(**_kwargs):
+        raise SystemExit("cleanup process.failed")
+
+    monkeypatch.setattr("lokay.proc.reap_stale_worktrees_subflow.run_path", boom)
+    out = run(pass_dir="/pass", config_path=None, live=False)
+    assert out["ok"] is True
+    assert out["route"] == "failed"
+
+
 def test_cleanup_throw_yields_route(monkeypatch):
     def boom(**_kwargs):
         raise RuntimeError(FIRE_STEP)
