@@ -4,6 +4,13 @@ from lokay.proc.write_issues_receipt import write
 
 
 def envelope(picked: dict, do: dict, launched: dict) -> dict:
+    leftover_issues = list(do.get("leftover_issues") or picked.get("leftover_issues") or [])
+    leftover = do.get("leftover")
+    if leftover is None:
+        leftover = picked.get("leftover")
+    leftover = int(leftover or 0)
+    if leftover_issues:
+        leftover = len(leftover_issues)
     return {
         "ok": True,
         "result": {
@@ -11,7 +18,8 @@ def envelope(picked: dict, do: dict, launched: dict) -> dict:
             "repo": picked.get("repo"),
             "route": str(do.get("route") or picked.get("route") or "none"),
             "reason": do.get("reason") or picked.get("reason"),
-            "leftover": int(picked.get("leftover") or 0),
+            "leftover": leftover,
+            "leftover_issues": leftover_issues,
             "launched": launched.get("route"),
         },
     }

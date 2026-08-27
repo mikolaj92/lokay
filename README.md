@@ -1014,8 +1014,11 @@ stateDiagram-v2
 Dziecko `issues` jest węzłem Fali. Sześć krawędzi, nie jeden tłusty proces.
 Liście: `list_open_issues`, `select_next_issue`, `select_issue_do`,
 `summarize_issues`. Węzły-dzieci: `issues_run_triage` → Fala `issue_triage`,
-`issues_launch_pr` → Fala `issue_to_pr`. Ten PR tylko składa graf. Bez bramki
-`work:ready` / `ai:ready` i bez 30 slotów. Jeden implement na pass.
+`issues_launch_pr` → Fala `issue_to_pr`. Po `select_issue_do` skip leftover
+zostaje kolejką: następny pick to następny wiersz, nie `rows[0]` w kółko.
+`leftover` jest na kwicie i na last-pass remaining. `leftover=0` tylko gdy
+lista się wyczerpała. Bez bramki `work:ready` / `ai:ready` i bez 30 slotów.
+Jeden implement na pass.
 
 ### Otwarte PR — `prs`
 

@@ -221,13 +221,17 @@ Parent `factory_pass` invokes this child. Labels are not a gate.
 
 ```text
 list_open_issues          LEAF  live GitHub open issues
-  → select_next_issue     LEAF  one issue, or none
+  → select_next_issue     LEAF  leftover walk, then one issue (not rows[0] forever)
     → issues_run_triage   NODE  when route=issue → child Fala issue_triage
-      → select_issue_do   LEAF  do or skip
+      → select_issue_do   LEAF  do or skip; leftover listed issues stay the queue
         → issues_launch_pr NODE  when route=do → child Fala issue_to_pr
-          → summarize_issues LEAF  receipt (empty / sito skip still write)
+          → summarize_issues LEAF  receipt leftover + leftover_issues (skip does not wipe)
 ```
 
+After `select_issue_do` skip (including `triage_not_done`), leftover listed
+issues stay the queue. Next pick is the next listed row. Leftover count belongs
+on the issues receipt and last-pass remaining. `leftover=0` only when the list
+is exhausted. Parked / human-stop rows are already excluded by `list_ready_issues`.
 The `issues` NODE owns this wiring only. It does not implement `issue_triage`
 or `issue_to_pr` internals and does not fatten list+sito+launch into one process.
 Atom ids stay unique versus `triage_dispatch` / `implementation_dispatch`.

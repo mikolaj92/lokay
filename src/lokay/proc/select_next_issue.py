@@ -1,6 +1,7 @@
-"""Pick one listed issue. Classify list facts, then pick. One implement per pass."""
+"""Pick one listed issue. Two small functions: leftover walk, then pick."""
 
 from lokay.proc.classify_open_issues import classify
+from lokay.proc.walk_issue_leftover import queue
 
 
 def pick(classified: dict) -> dict:
@@ -19,8 +20,15 @@ def pick(classified: dict) -> dict:
         "ok": True,
         "route": "issue",
         "leftover": leftover,
+        "leftover_issues": [dict(row) for row in rows[1:]],
     }
 
 
-def select(listed: dict) -> dict:
-    return pick(classify(listed))
+def select(listed: dict, last: dict | None = None) -> dict:
+    classified = classify(listed)
+    if classified.get("route") != "listed":
+        return pick(classified)
+    rows = queue(classified.get("issues"), last)
+    if not rows:
+        return {"ok": True, "route": "none", "reason": "exhausted", "leftover": 0}
+    return pick({**classified, "issues": rows, "route": "listed"})

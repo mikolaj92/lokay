@@ -91,6 +91,26 @@ def _state_path(begin: dict[str, Any], pass_dir: str) -> Path:
     return Path.home() / ".lokay" / "state.jsonl"
 
 
+def _issues_leftover_remaining(
+    issues: dict[str, Any] | None, remaining: dict[str, Any]
+) -> dict[str, Any]:
+    """Skip / triage_not_done must not wipe leftover. Count stays on last-pass."""
+    issues_r = _result(issues)
+    leftover_issues = [
+        row for row in list(issues_r.get("leftover_issues") or []) if isinstance(row, dict)
+    ]
+    leftover = int(issues_r.get("leftover") or 0)
+    if leftover_issues:
+        leftover = len(leftover_issues)
+    out = {**remaining, "leftover": leftover}
+    if leftover_issues:
+        out["leftover_issues"] = leftover_issues
+    if str(issues_r.get("route") or "") == "skip" and issues_r.get("issue") is not None:
+        out["skipped_issue"] = issues_r.get("issue")
+        out["skipped_repo"] = issues_r.get("repo")
+    return out
+
+
 def _small_remaining(tick: dict[str, Any], *, overflow: bool) -> dict[str, Any]:
     rem = tick.get("remaining") if isinstance(tick.get("remaining"), dict) else {}
     if overflow:
@@ -116,7 +136,9 @@ def run_record_pass(
     begin = {**disk_begin, **_blob(begin)}
     overflow = leftover_overflowed(leftover, tick, working, prs, issues, begin)
     outcome = classify_outcome(prs=prs, issues=issues, working=working, tick=tick)
-    remaining = _small_remaining(tick, overflow=overflow)
+    remaining = _issues_leftover_remaining(
+        issues, _small_remaining(tick, overflow=overflow)
+    )
     progress = int(tick.get("progress") or 0)
     if outcome != "none":
         progress = max(progress, 1)

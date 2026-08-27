@@ -13,6 +13,7 @@ def test_envelope_is_ok_on_empty():
     assert out["result"]["route"] == "skip"
     assert out["result"]["reason"] == "no_issue"
     assert out["result"]["leftover"] == 0
+    assert out["result"]["leftover_issues"] == []
     assert out["result"]["launched"] is None
 
 

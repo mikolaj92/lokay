@@ -1,6 +1,17 @@
 """Fala bindings for the issues NODE: six wired atoms, no fat step."""
 
+import os
 from typing import Any
+
+
+def _last_queue() -> dict[str, Any]:
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return {}
+    from lokay.pass_receipt import read_pass_receipt
+
+    receipt = read_pass_receipt() or {}
+    rem = receipt.get("remaining")
+    return rem if isinstance(rem, dict) else {}
 
 
 def handle_issues(
@@ -18,7 +29,7 @@ def handle_issues(
     if atom == "select_next_issue":
         from lokay.proc.select_next_issue import select
 
-        return select(up.get("list_open_issues") or {})
+        return select(up.get("list_open_issues") or {}, _last_queue())
     if atom == "issues_run_triage":
         from lokay.proc.run_issue_triage_subflow import run
 
@@ -29,6 +40,7 @@ def handle_issues(
         return select(
             up.get("select_next_issue") or {},
             up.get("issues_run_triage") or {},
+            up.get("list_open_issues") or {},
         )
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch

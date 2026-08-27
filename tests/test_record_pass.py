@@ -120,6 +120,38 @@ def test_leftover_overflow_still_records_merge(tmp_path: Path) -> None:
     assert out["result"]["leftover_overflow"] is True
 
 
+def test_issues_skip_leftover_stays_on_remaining(tmp_path: Path) -> None:
+    pass_dir = _begin(tmp_path)
+    pass_io.write_json(
+        pass_io.tick_path(pass_dir),
+        {"remaining": {"inbox": 3, "ready": 2}, "health": "hosted", "idle": False},
+    )
+    leftover_issues = [{"repo": "mikolaj92/reviewkit", "issue": 205}]
+    out = run_record_pass(
+        pass_dir=str(pass_dir),
+        issues={
+            "result": {
+                "route": "skip",
+                "reason": "triage_not_done",
+                "repo": "mikolaj92/lokay",
+                "issue": 806,
+                "leftover": 1,
+                "leftover_issues": leftover_issues,
+            }
+        },
+    )
+    rem = out["result"]["remaining"]
+    assert rem["inbox"] == 3
+    assert rem["ready"] == 2
+    assert rem["leftover"] == 1
+    assert rem["leftover_issues"] == leftover_issues
+    assert rem["skipped_issue"] == 806
+    receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
+    assert receipt is not None
+    assert receipt["remaining"]["leftover"] == 1
+    assert receipt["remaining"]["inbox"] == 3
+
+
 def test_writes_none_receipt_when_tick_missing(tmp_path: Path) -> None:
     out = run_record_pass(pass_dir=str(_begin(tmp_path)))
     assert out["ok"] is True
