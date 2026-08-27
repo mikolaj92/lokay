@@ -101,6 +101,7 @@ _MUTATING_ATOMS = frozenset(
         "pr_merge",
         "apply_issue_ready",
         "apply_issue_close",
+        "apply_issue_mark",
         "apply_issue_manual",
         "create_issue_split_child_1",
         "create_issue_split_child_2",

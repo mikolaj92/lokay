@@ -2,11 +2,18 @@
 
 
 def summarize(
-    *, final: dict, ready: dict, skip: dict, blocked: dict, close: dict, manual: dict
+    *,
+    final: dict,
+    ready: dict,
+    skip: dict,
+    blocked: dict,
+    close: dict,
+    manual: dict,
+    mark: dict | None = None,
 ) -> dict:
     decision = dict(final.get("decision") or {})
     verdict = str(decision.get("verdict") or "")
-    effects = (ready, skip, blocked, close, manual)
+    effects = (ready, skip, blocked, close, mark or {}, manual)
     applied = any(x.get("applied") is True for x in effects)
     return {
         "ok": True,

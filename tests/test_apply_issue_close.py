@@ -1,13 +1,113 @@
-"""apply_issue_close must not close a still-open product issue."""
+"""Sito close atom must not close a foreign issue."""
 
 from __future__ import annotations
 
+from lokay.config import Config
+from lokay.proc import apply_issue_close, apply_issue_mark
 from lokay.proc.apply_issue_close import apply
+
+
+class _Cfg(Config):
+    pass
 
 
 class _Runner:
     def __init__(self) -> None:
         self.calls: list[str] = []
+
+
+def test_apply_issue_close_refuses_obsolete_live(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(
+        apply_issue_close,
+        "comment_issue",
+        lambda *a, **k: calls.append("comment"),
+    )
+    monkeypatch.setattr(
+        apply_issue_close,
+        "close_issue",
+        lambda *a, **k: calls.append("close"),
+    )
+    out = apply_issue_close.apply(
+        runner=object(),
+        repo="mikolaj92/Temida",
+        issue=4995,
+        decision={"verdict": "close", "reason": "obsolete_argus_flow_assumption"},
+        live=True,
+    )
+    assert out["ok"] is False
+    assert out["error"] == "sito_must_not_close_obsolete"
+    assert out["closed"] is False
+    assert out["refused"] is True
+    assert out["applied"] is False
+    assert calls == []
+
+
+def test_apply_issue_close_refuses_obsolete_even_when_planned(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(
+        apply_issue_close,
+        "comment_issue",
+        lambda *a, **k: calls.append("comment"),
+    )
+    monkeypatch.setattr(
+        apply_issue_close,
+        "close_issue",
+        lambda *a, **k: calls.append("close"),
+    )
+    out = apply_issue_close.apply(
+        runner=object(),
+        repo="mikolaj92/Temida",
+        issue=4995,
+        decision={"reason": "obsolete_playbook"},
+        live=False,
+    )
+    assert out["ok"] is False
+    assert out["closed"] is False
+    assert out["refused"] is True
+    assert calls == []
+
+
+def test_apply_issue_mark_parks_without_closing(monkeypatch):
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        apply_issue_mark,
+        "remove_issue_labels",
+        lambda *a, **k: calls.append(("remove", a[3])),
+    )
+    monkeypatch.setattr(
+        apply_issue_mark,
+        "add_issue_labels",
+        lambda *a, **k: calls.append(("add", a[3])),
+    )
+    monkeypatch.setattr(
+        apply_issue_mark,
+        "comment_issue",
+        lambda *a, **k: calls.append(("comment", a[3])),
+    )
+    out = apply_issue_mark.apply(
+        runner=object(),
+        cfg=_Cfg(),
+        repo="mikolaj92/Temida",
+        issue=4995,
+        issue_data={"labels": ["ai:ready"]},
+        decision={"verdict": "close", "reason": "obsolete_argus_flow_assumption"},
+        live=True,
+    )
+    assert out == {
+        "ok": True,
+        "applied": True,
+        "verdict": "close",
+        "marked": True,
+        "reason": "obsolete_argus_flow_assumption",
+    }
+    assert ("remove", ["ai:ready"]) in calls
+    assert ("add", ["ai:blocked"]) in calls
+    assert any(
+        item[0] == "comment" and "Parked" in item[1] and "Closed" not in item[1]
+        for item in calls
+    )
+    assert all(item[0] != "close" for item in calls)
 
 
 def test_still_open_live_refuses_without_comment_or_close(monkeypatch) -> None:
@@ -30,11 +130,11 @@ def test_still_open_live_refuses_without_comment_or_close(monkeypatch) -> None:
         live=True,
         issue_data={"state": "OPEN", "number": 4995},
     )
-    assert out["ok"] is True
-    assert out["planned"] is True
+    assert out["ok"] is False
+    assert out["error"] == "sito_must_not_close_obsolete"
     assert out["refused"] is True
     assert out["applied"] is False
-    assert out["reason"] == "still_open"
+    assert out["closed"] is False
     assert comments == []
     assert closes == []
 
@@ -122,6 +222,7 @@ def test_4995_reopen_with_proof_stays_open(monkeypatch) -> None:
     )
     assert out["refused"] is True
     assert out["applied"] is False
+    assert out["error"] == "sito_must_not_close_obsolete"
     assert comments == []
     assert closes == []
 

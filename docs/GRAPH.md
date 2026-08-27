@@ -130,8 +130,9 @@ classify_factory_idle
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in
-the pass spine. Intake `CLOSE` remains for clear obsolete / wrong-shape /
-superseded cases only — never bias toward “distrust every ticket.” Goal:
+the pass spine. Intake `CLOSE` remains a sito verdict for clear obsolete /
+wrong-shape / superseded cases only — it marks (`ai:blocked`), it does not
+close GitHub. Never bias toward “distrust every ticket.” Goal:
 human writes issue → mill delivers.
 
 ### `factory_begin` (child)
@@ -292,8 +293,10 @@ embedding service and not a second planner.
 
 ### `issue_triage` (sito of parent `issues`)
 
-Child of `issues`. Sito only: **robić / nie / zamknąć / człowiek**.
-Not implement. `issue_split` is a later child Fala, not an exit here.
+Child of `issues`. Sito only: **robić / nie / oznaczyć / człowiek**.
+Not implement. Sito must not close someone else's issue. Verdict `close`
+parks (`apply_issue_mark`: `ai:blocked` + comment). `issue_split` is a later
+child Fala, not an exit here.
 
 ```text
 get_issue
@@ -306,13 +309,14 @@ get_issue
                 ├─→ apply_issue_ready     robić
                 ├─→ apply_issue_skip      nie
                 ├─→ apply_issue_blocked   nie (preflight incident leaf)
-                ├─→ apply_issue_close     zamknąć
+                ├─→ apply_issue_mark      zamknąć → park (no close_issue)
                 └─→ apply_issue_manual    człowiek
 ```
 
 Hard facts stay deterministic (still-open, superseded/merged PR, duplicate AI PR).
 Semantic remainder is one structured executor call; invalid JSON gets one retry;
-a second evidence request is człowiek. CLOSE posts a short receipt.
+a second evidence request is człowiek. A close verdict marks; it does not close
+GitHub. Own-work closeout after merge stays in `pr_triage` (`close_issue`).
 Oversized / multi-epic work is człowiek until `issue_split` has its own agent.
 Parent `issues` launches `issue_to_pr` only after robić.
 

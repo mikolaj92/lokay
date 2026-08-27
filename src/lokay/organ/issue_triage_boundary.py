@@ -28,6 +28,7 @@ OWNED = frozenset(
         "apply_issue_skip",
         "apply_issue_blocked",
         "apply_issue_close",
+        "apply_issue_mark",
         "apply_issue_manual",
         "summarize_issue_triage",
     }
@@ -221,6 +222,7 @@ def handle_issue_triage(
             skip=up.get("apply_issue_skip") or {},
             blocked=up.get("apply_issue_blocked") or {},
             close=up.get("apply_issue_close") or {},
+            mark=up.get("apply_issue_mark") or {},
             manual=up.get("apply_issue_manual") or {},
         )
     if atom == "apply_issue_skip":
@@ -259,6 +261,18 @@ def handle_issue_triage(
             decision=decision,
             live=mutate,
             issue_data=issue,
+        )
+    if atom == "apply_issue_mark":
+        from lokay.proc.apply_issue_mark import apply
+
+        return apply(
+            runner=runner(),
+            cfg=cfg,
+            repo=repo,
+            issue=number,
+            issue_data=issue,
+            decision=decision,
+            live=mutate,
         )
     if atom == "apply_issue_manual":
         from lokay.proc.apply_issue_manual import apply

@@ -217,7 +217,7 @@ def test_issue_triage_path_in_package():
         "select_issue_evidence",
         "finalize_issue_triage",
         "apply_issue_blocked",
-        "apply_issue_close",
+        "apply_issue_mark",
         "apply_issue_ready",
         "apply_issue_skip",
         "apply_issue_manual",
