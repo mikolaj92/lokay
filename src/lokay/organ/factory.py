@@ -349,11 +349,14 @@ def handle_factory(
         )
 
     if atom == "record_pass":
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
-        assert pass_dir
-        # Domain health (stall/work_remaining) is successful conduction; the
-        # tick envelope inside may still set ok=false for the mill.
-        return _run_atom_main(record_pass.main, [*cfg, *live, "--pass-dir", pass_dir])
+        begin = up.get("factory_begin") or {}
+        return record_pass.record(
+            pass_dir=str(begin.get("pass_dir") or ""),
+            begin=begin,
+            prs=up.get("prs") or {},
+            issues=up.get("issues") or {},
+            leftover=up.get("leftover_catalog") or up.get("leftover") or {},
+        )
 
     if atom == "compact_state":
         return _run_atom_main(compact_state.main, [*cfg])
