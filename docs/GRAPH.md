@@ -75,7 +75,7 @@ atoms via `run_path`.
 ```text
 factory_begin
   → prs                      → child Fala: list / select / triage-or-merge
-    → issues                 → child Fala: list / sito / issue_to_pr; leftover stays the queue
+    → issues                 → child Fala: list once, nest issue_row until idle or cap
       → record_pass          → last-pass.json (new_pr | merge | none)
         → factory_pass_terminal
   → reap_stale_worktrees     → sibling child from factory_begin (leftover work copies)
@@ -85,7 +85,7 @@ factory_begin
 | --- | --- |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `prs` | child Fala: list open mill PRs, select one, review or merge. Conducts from `factory_begin`. Does not wait on leftover work-copy cleanup. |
-| `issues` | child Fala: list open issues, sito one, `issue_to_pr` or skip leftover. Leftover consume only on authored skip; sito miss keeps the row. Ready leftover goes to issue-to-PR. Oil is not the product slot. Conducts from `factory_begin` and `prs`. Does not conduct from `reap_stale_worktrees`. A failed cleanup is not a gate. |
+| `issues` | child Fala: list open issues once, nest `issue_row` until leftover is empty or the implement budget is spent. Leftover consume only on authored skip; sito miss keeps the row. Ready leftover goes to issue-to-PR. Oil is not the product slot. Conducts from `factory_begin` and `prs`. Does not conduct from `reap_stale_worktrees`. A failed cleanup is not a gate. The parent does not unroll 1..8. |
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct `prs`, `issues`, or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin`, `prs`, and `issues`. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
@@ -182,29 +182,37 @@ worktree; deterministic atoms alone commit and push directly to `main`. The
 other agent paths. A successful path always returns `restart_required`; product
 work never resumes in the stale daemon process.
 
-### `issues` (child: open issue → PR)
+### `issues` (child: nest issue_row until idle)
 
 Parent `factory_pass` invokes this child. Labels are not a gate.
 
 ```text
-list_open_issues          LEAF  live GitHub open issues
-  → select_next_issue     LEAF  leftover walk, then one issue (not rows[0] forever)
-    → issues_run_triage   NODE  when route=issue → child Fala issue_triage
-      → select_issue_do   LEAF  do or skip; leftover consume only on authored skip
-        → issues_launch_pr NODE  when route=do → child Fala issue_to_pr
-          → summarize_issues LEAF  receipt leftover + leftover_issues (skip does not wipe)
+list_open_issues          LEAF  live GitHub open issues (once)
+  → run_issue_rows        NODE  nest issue_row until leftover empty or budget spent
+    → summarize_issues    LEAF  receipt leftover + leftover_issues (skip does not wipe)
 ```
 
-Leftover is consumed only on an authored skip (`needs_human`, `blocked`,
-already-closed). `triage_not_done` / adapter fail / `sito_nie_robic` keep the
-row; the first leftover row is still the pick. A leftover row that is still
+The catalog loop is this child nest, not a daemon tick and not eight copied
+slots. After an authored skip, `classify_issue_row` routes `continue` so the
+next listed row is the next `issue_row`. Leftover is consumed only on an
+authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
+adapter fail / `sito_nie_robic` keep the row; a leftover row that is still
 open and ready becomes `route=do` and goes to issue-to-PR in that pass. Lokay
-oil is not the product slot while product leftover remains. Leftover count
-belongs on the issues receipt and last-pass remaining. `leftover=0` only when
-the list is exhausted. Parked / human-stop rows are already excluded by
-`list_ready_issues`.
-The `issues` NODE owns this wiring only. It does not implement `issue_triage`
-or `issue_to_pr` internals and does not fatten list+sito+launch into one process.
+oil is not the product slot while product leftover remains. `leftover=0` only
+when the list is exhausted.
+
+### `issue_row` (one catalog question, one issue_to_pr)
+
+```text
+select_next_issue         LEAF  is there a row? leftover walk, then one issue
+  → issues_run_triage     NODE  when route=issue → child Fala issue_triage
+    → select_issue_do     LEAF  do or skip; leftover consume only on authored skip
+      → issues_launch_pr  NODE  when route=do → child Fala issue_to_pr
+        → summarize_issue_row LEAF  one-row receipt
+```
+
+`select_next_issue` only answers whether a row remains. It does not hide the
+loop. Parked / human-stop rows are already excluded by `list_ready_issues`.
 Atom ids stay unique versus `triage_dispatch` / `implementation_dispatch`.
 
 ### `issue_to_pr`
