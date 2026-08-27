@@ -102,14 +102,15 @@ def run_path(
     run_id: str | None = None,
     max_ticks: int = 64,
     extra_inputs: dict[str, Any] | None = None,
+    require_healthy: bool = True,
 ) -> dict[str, Any]:
     """Drive Fala host_run_package for a Lokay graph path."""
     # Preserve the daemon-issued capability across any defensive nested check.
     inherited_health_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
-    if live:
-        from lokay.preflight import require_healthy
+    if live and require_healthy:
+        from lokay.preflight import require_healthy as _require_healthy
 
-        require_healthy(str(config_path) if config_path else None)
+        _require_healthy(str(config_path) if config_path else None)
     try:
         from fala import host_run_package
     except ImportError as exc:  # pragma: no cover

@@ -117,59 +117,41 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> InspectFactoryLease
-    InspectFactoryLease --> RestoreDelegatedLease: brak pliku tego samego tokena
-    InspectFactoryLease --> RunFactoryPreflight: brak delegowanej capability
-    InspectFactoryLease --> LoadFactoryConfig: ważna capability
-    RestoreDelegatedLease --> InspectFactoryLeaseAgain
-    InspectFactoryLeaseAgain --> FactoryBeginTerminal: capability nieważna
-    InspectFactoryLeaseAgain --> LoadFactoryConfig: capability ważna
-    RunFactoryPreflight --> FactoryBeginTerminal: preflight failed
-    RunFactoryPreflight --> LoadFactoryConfig: preflight green / dry-run
-    LoadFactoryConfig --> ClassifyFactoryMode
-    ClassifyFactoryMode --> FactoryBeginTerminal: live + config nie-live / offline
-    ClassifyFactoryMode --> SelectFactoryScope
-    SelectFactoryScope --> ReadFactoryStuckLedger
-    ReadFactoryStuckLedger --> HarvestFactoryChildren
-    state HarvestFactoryChildren {
-        [*] --> ReadChildHarvestFacts
-        ReadChildHarvestFacts --> ReconcileDeadChildReceipts
-        ReconcileDeadChildReceipts --> ReconcileJournalMisses
-        ReconcileJournalMisses --> ReconcileDeliveredIssues
-        ReconcileDeliveredIssues --> ReconcileBlockedMisses
-        ReconcileBlockedMisses --> SelectClosedCatalogSlot
-        SelectClosedCatalogSlot --> ProbeOneClosedRepo: slot has stuck rows
-        SelectClosedCatalogSlot --> RecordClosedCatalogSlot: empty slot
-        ProbeOneClosedRepo --> RecordClosedCatalogSlot
-        RecordClosedCatalogSlot --> SelectClosedCatalogSlot: next of 30 slots
-        RecordClosedCatalogSlot --> ClearClosedCatalogRows: final slot
-        ClearClosedCatalogRows --> DropOutOfScopeRows
-        DropOutOfScopeRows --> ClearStaleCycleStarts
-        ClearStaleCycleStarts --> [*]
-    }
-    HarvestFactoryChildren --> PersistFactoryStuckLedger
-    PersistFactoryStuckLedger --> CreateFactoryPassDirectory
-    CreateFactoryPassDirectory --> SelectFactorySurveyRepos
-    SelectFactorySurveyRepos --> BuildFactoryBeginState
-    BuildFactoryBeginState --> PersistFactoryBeginState
-    PersistFactoryBeginState --> FactoryBeginTerminal
-    FactoryBeginTerminal --> [*]
+    [*] --> ProbeFactoryHost
+    ProbeFactoryHost --> LoadFactoryConfig
+    LoadFactoryConfig --> SelectFactoryScope
+    SelectFactoryScope --> ReadFactoryStuck
+    ReadFactoryStuck --> CreateFactoryPassDirectory
+    CreateFactoryPassDirectory --> BuildFactoryBeginState
+    BuildFactoryBeginState --> BuildFactoryWorkingState
+    BuildFactoryWorkingState --> SeedFactoryOccupancy
+    SeedFactoryOccupancy --> AttachFactoryStuck
+    AttachFactoryStuck --> PersistFactoryBeginState
+    PersistFactoryBeginState --> PersistFactoryWorkingState
+    PersistFactoryWorkingState --> PersistFactoryTick
+    PersistFactoryTick --> [*]
 ```
 
-Lease/preflight, config mode, scope, stuck ledger, pass directory,
-survey rotation, zbudowanie stanu i dwa zapisy są osobnymi procesami. Harvest
-jest osobną pod-Falą: jeden atom czyta lokalne receipt/journal facts, a Fala
-prowadzi osobne redukcje dead-child, miss, delivery i blocked. Catalog CLOSED
-facts mają 30 jawnych slotów: każdy fizyczny proces odpytuje najwyżej jedno
-repozytorium, a osobny record atom składa wynik. Potem osobne procesy wykonują
-closed-catalog, out-of-scope i stale-cycle-start cleanup. Żaden pojedynczy proces nie ukrywa tej
-sekwencji. Fala
-posiada jedyne drzewo otwarcia passu. Odzyskanie delegowanej capability jest
-jednym ograniczonym efektem, nie pętlą. Offline i preflight failure są jawnymi
-terminalami. Węzeł `factory_begin` w `factory_pass` prowadzi wyłącznie kwit
-(`pass_dir`, `stuck_path`, `planned`, counts) — duże listingi zostają na dysku
-i nie wjeżdżają w conduction każdego następnego atomu. Nie ma agenta: wszystkie
-decyzje wynikają z lease, konfiguracji i lokalnych ledgerów.
+NODE agent owns this graph. Each effector is a LEAF agent (one job, one
+process). `harvest_factory_children` is not a leaf here — it already
+invokes child Fala `child_harvest` and must not sit on this path, or a
+harvest skip would eat the factory. No `when` / idle on these leaves.
+
+| Effector | Agent | Kind |
+| --- | --- | --- |
+| `probe_factory_host` | leaf:probe_factory_host | LEAF |
+| `load_factory_config` | leaf:load_factory_config | LEAF |
+| `select_factory_scope` | leaf:select_factory_scope | LEAF |
+| `read_factory_stuck` | leaf:read_factory_stuck | LEAF |
+| `create_factory_pass_dir` | leaf:create_factory_pass_dir | LEAF |
+| `build_factory_begin_state` | leaf:build_factory_begin_state | LEAF |
+| `build_factory_working_state` | leaf:build_factory_working_state | LEAF |
+| `seed_factory_occupancy` | leaf:seed_factory_occupancy | LEAF |
+| `attach_factory_stuck` | leaf:attach_factory_stuck | LEAF |
+| `persist_factory_begin_state` | leaf:persist_factory_begin_state | LEAF |
+| `persist_factory_working_state` | leaf:persist_factory_working_state | LEAF |
+| `persist_factory_tick` | leaf:persist_factory_tick | LEAF |
+| `harvest_factory_children` | child:child_harvest | child Fala, off this path |
 
 ### Przegląd gotowych issue — `survey_ready`
 
@@ -1332,7 +1314,7 @@ kontraktu. Aktualny audyt:
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
-| `FactoryBegin` | `factory_begin` | otwiera workspace passu przez jawny preflight, ledger i persist |
+| `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
 | `ReadySurvey` | `survey_ready` | listuje i klasyfikuje gotowe issue jednym atomem katalogu |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |

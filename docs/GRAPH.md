@@ -106,7 +106,7 @@ classify_factory_idle
 | `factory_begin_host_gate` | refuse when in-cycle `host_ff` just updated or `LOKAY_PROCESS_HEAD` drifted (restart; do not mill on the previous import). |
 | `record_factory_idle` | write last-pass with `lane=idle` when classify routes idle. Does not refresh the survey stamp. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not idle-skip the factory. |
-| `factory_begin` | preflight + pass workspace + budgets; refuse when in-cycle `host_ff` just updated **or** `LOKAY_PROCESS_HEAD` drifted (restart, do not mill on the previous import). Auth probe must not treat a GitHub `/user` 503 as a missing token. Healthy first host check is not rerun (`gh api user` / ast.parse). Repair still reruns `_check`. Healthy preflight closes leftover `<!-- lokay-preflight:… -->` tickets. After an empty leftover-incident probe, skip that GitHub list for 300s without refreshing the stamp. Fresh leftover-incident skip is not applied. Leftover-incident skip reports planned=not live. Empty leftover-incident host is not applied. Empty leftover-incident host reports planned=not live. Leftover-incident probe failure reports probe_failed. Leftover-incident probe failure reports planned=not live. Leftover-incident ImportError is not applied. Leftover-incident ImportError reports planned=not live. Leftover-incident empty name is not applied. Leftover-incident empty name reports planned=not live. Leftover-incident OSError is not applied. Leftover-incident OSError reports planned=not live. Leftover-incident host reports probe_failed. Leftover-incident skip reports probe_failed. Leftover-incident ImportError reports probe_failed. Leftover-incident empty name reports probe_failed. Leftover-incident OSError reports probe_failed. Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass stays at 300s. Pytest must not skip leftover-incident GitHub lists using the mill stamp. |
+| `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `survey_prs` | list open AI PRs for all repos (full page; cap is survey_error). Visible `when`: `select_implement.route == none`. Does not run in a selected pass, so the 1800s survey budget cannot consume the short pass ceiling before `dispatch_implement` or the receipt. After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. A live mill with that fresh stamp and idle last-pass still hosts `factory_pass`; `classify_factory_idle` exits authored idle. After the stamp expires, a cheap GitHub probe refreshes it and idles inside Fala when open PRs and open work issues are still empty. Pytest must not skip GitHub surveys using the mill stamp. |
 | `survey_inbox` | list undecided inbox issues in one in-process catalog atom (full page; cap is survey_error). Visible `when`: `select_implement.route == none`. Remaining is counted from listed issue rows, not Fala conduction. Shares the 120s empty-survey stamp with `survey_prs` / `survey_ready`. Inbox rate limit does not stamp empty. |
 | `survey_ready` | list implementable open catalog issues in one in-process catalog atom (human stops exclude; `work:ready` / `ai:ready` are optional ledger traces, not a gate); skip those covered by open AI PRs. Visible `when`: `select_implement.route == none`. Missing `state` is still OPEN work; only explicit CLOSED parks. No 30-slot unroll. After a complete empty mill survey, skip GitHub lists for 120s without refreshing the stamp. |
@@ -133,6 +133,28 @@ configured assignee are purposeful. Do not invent new human-approval gates in
 the pass spine. Intake `CLOSE` remains for clear obsolete / wrong-shape /
 superseded cases only — never bias toward “distrust every ticket.” Goal:
 human writes issue → mill delivers.
+
+### `factory_begin` (child)
+
+```text
+probe_factory_host
+  → load_factory_config
+    → select_factory_scope
+      → read_factory_stuck
+        → create_factory_pass_dir
+          → build_factory_begin_state
+            → build_factory_working_state
+              → seed_factory_occupancy
+                → attach_factory_stuck
+                  → persist_factory_begin_state
+                    → persist_factory_working_state
+                      → persist_factory_tick
+```
+
+NODE agent owns this graph. Each effector is a named LEAF agent (one
+Unix process). `harvest_factory_children` already invokes child Fala
+`child_harvest` — it is not a leaf on this path, so harvest skip cannot
+eat the factory. No leaf has `when`. Empty surveys are not idle.
 
 The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process

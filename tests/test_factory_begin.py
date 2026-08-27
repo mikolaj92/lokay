@@ -1,6 +1,77 @@
 """Contracts for minimal factory-begin atoms."""
 
 import json
+from pathlib import Path
+
+
+def test_composed_begin_atoms_write_pass_dir_not_idle(tmp_path, monkeypatch):
+    from lokay.proc.attach_factory_stuck import attach
+    from lokay.proc.build_factory_begin_state import build as build_begin
+    from lokay.proc.build_factory_working_state import build as build_working
+    from lokay.proc.persist_factory_begin_state import persist as persist_begin
+    from lokay.proc.persist_factory_tick import persist as persist_tick
+    from lokay.proc.persist_factory_working_state import persist as persist_working
+    from lokay.proc.seed_factory_occupancy import run as seed_occupancy
+
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    monkeypatch.setattr(
+        "lokay.proc.seed_prior_catalog.live_issue_to_pr_receipts",
+        lambda: [],
+    )
+    workspace = {"pass_dir": str(tmp_path / "factory-pass-now")}
+    Path(workspace["pass_dir"]).mkdir()
+    config = {
+        "live": False,
+        "mode": "dry-run",
+        "state_path": str(state),
+        "repos": ["a/b"],
+        "agent": "pi",
+    }
+    scope = {"repos": ["a/b"]}
+    ledger = {"stuck_path": str(tmp_path / "stuck.json"), "issue_count": 0}
+    begin = build_begin(config, scope, ledger, workspace)
+    working = seed_occupancy(build_working(ledger))
+    attached = attach(begin, working, ledger)
+    assert persist_begin(workspace, attached)["pass_dir"] == workspace["pass_dir"]
+    assert persist_working(workspace, attached)["pass_dir"] == workspace["pass_dir"]
+    out = persist_tick(workspace, attached, {"offline": False}, ledger)
+    assert out["ok"] is True
+    assert out["pass_dir"] == workspace["pass_dir"]
+    assert out["idle"] is False
+    assert out["planned"][0]["repos"] == ["a/b"]
+    assert (Path(workspace["pass_dir"]) / "begin.json").is_file()
+    assert (Path(workspace["pass_dir"]) / "working.json").is_file()
+    assert (Path(workspace["pass_dir"]) / "tick.json").is_file()
+
+
+def test_persist_begin_writes_only_begin_json(tmp_path):
+    from lokay.proc.persist_factory_begin_state import persist
+    import inspect
+
+    source = inspect.getsource(persist)
+    assert "build_begin" not in source
+    assert "build_working" not in source
+    assert "seed(" not in source
+    assert "tick_path" not in source
+    workspace = {"pass_dir": str(tmp_path)}
+    out = persist(workspace, {"begin": {"pass_dir": str(tmp_path), "planned": []}})
+    assert out == {"ok": True, "pass_dir": str(tmp_path)}
+    assert (tmp_path / "begin.json").is_file()
+    assert not (tmp_path / "working.json").exists()
+    assert not (tmp_path / "tick.json").exists()
+
+
+def test_host_probe_stays_up_when_offline_or_empty(monkeypatch):
+    from lokay.proc.probe_factory_host import probe
+
+    monkeypatch.delenv("LOKAY_OFFLINE", raising=False)
+    assert probe()["route"] == "up"
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    out = probe()
+    assert out["ok"] is True
+    assert out["route"] == "up"
+    assert out["offline"] is True
 
 
 def test_live_non_live_config_routes_terminal():
@@ -79,59 +150,49 @@ def test_factory_begin_subflow_returns_small_receipt(monkeypatch, tmp_path):
     assert out["pass_dir"] == str(tmp_path)
 
 
-def test_persist_begin_seeds_prior_catalog_and_live_occupancy(tmp_path, monkeypatch):
-    from lokay.proc.persist_factory_begin_state import persist
+def test_seed_occupancy_ignores_prior_survey(monkeypatch):
+    from lokay.proc.seed_factory_occupancy import run
 
-    state = tmp_path / "state.jsonl"
-    state.write_text("", encoding="utf-8")
-    prior = tmp_path / "factory-pass-1-aaaaaa"
-    prior.mkdir()
-    (prior / "working.json").write_text(
-        '{"ready_by_repo":{"mikolaj92/reviewkit":[{"number":205}]},"inbox_issues_by_repo":{},"prs_by_repo":{},"occupied_repos":[]}\n',
-        encoding="utf-8",
-    )
-    current = tmp_path / "factory-pass-2-bbbbbb"
-    current.mkdir()
     monkeypatch.setattr(
         "lokay.proc.seed_prior_catalog.live_issue_to_pr_receipts",
         lambda: [{"repo": "mikolaj92/Temida", "issue": 1}],
     )
-    persist(
-        {"pass_dir": str(current)},
-        {
-            "begin": {
-                "pass_dir": str(current),
-                "stuck_path": str(tmp_path / "stuck.json"),
-                "state_path": str(state),
-                "planned": [],
-            }
-        },
-        {"working": {"progress": 0, "ready_by_repo": {}, "occupied_repos": []}},
-    )
-    working = json.loads((current / "working.json").read_text())
-    assert working["ready_by_repo"]["mikolaj92/reviewkit"][0]["number"] == 205
-    assert "mikolaj92/Temida" in working["occupied_repos"]
-    assert "mikolaj92/Temida" in working["live_issue_to_pr_repos"]
+    out = run({"working": {"ready_by_repo": {}, "occupied_repos": []}})
+    assert out["working"]["ready_by_repo"] == {}
+    assert "mikolaj92/Temida" in out["working"]["occupied_repos"]
+    assert "mikolaj92/Temida" in out["working"]["live_issue_to_pr_repos"]
 
 
-def test_persist_begin_writes_stuck_from_disk(tmp_path):
-    from lokay.proc.persist_factory_begin_state import persist
+def test_attach_stuck_then_persist_writes_both_files(tmp_path):
+    from lokay.proc.attach_factory_stuck import attach
+    from lokay.proc.persist_factory_begin_state import persist as persist_begin
+    from lokay.proc.persist_factory_tick import persist as persist_tick
+    from lokay.proc.persist_factory_working_state import persist as persist_working
     from lokay.stuck import save_stuck
 
     stuck_path = tmp_path / "stuck.json"
     save_stuck(stuck_path, {"issues": {"a/b#1": {"blocked": True}}})
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()
-    out = persist(
-        {"pass_dir": str(pass_dir)},
+    workspace = {"pass_dir": str(pass_dir)}
+    attached = attach(
         {"begin": {"pass_dir": str(pass_dir), "stuck_path": str(stuck_path), "planned": []}},
         {"working": {"progress": 0}},
+        {"stuck_path": str(stuck_path), "issue_count": 1},
     )
-    assert out == {"ok": True, "pass_dir": str(pass_dir)}
+    persist_begin(workspace, attached)
+    persist_working(workspace, attached)
+    out = persist_tick(workspace, attached, {}, {"stuck_path": str(stuck_path), "issue_count": 1})
+    assert out["ok"] is True
+    assert out["pass_dir"] == str(pass_dir)
+    assert out["idle"] is False
     begin = json.loads((pass_dir / "begin.json").read_text())
     working = json.loads((pass_dir / "working.json").read_text())
+    tick = json.loads((pass_dir / "tick.json").read_text())
     assert "a/b#1" in begin["stuck"]["issues"]
     assert working["stuck"] == begin["stuck"]
+    assert tick["idle"] is False
+    assert tick["health"] != "idle"
 
 
 def test_persist_stuck_conducts_path_and_count(tmp_path):

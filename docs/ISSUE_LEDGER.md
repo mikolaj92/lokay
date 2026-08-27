@@ -28,7 +28,7 @@ wolno brać  =  otwarte issue
 ```
 
 Źródła: receipt `~/.lokay/cycle/` + `gh pr list` + `merged_this_pass`.
-`factory_begin` podaje tani katalog / live occupancy do `select_implement`.
+`factory_begin` otwiera `pass_dir` i katalog z konfiguracji. Issues i PR-y listują żywo z GitHuba.
 `refresh_occupancy` składa to po closeout jako higiena, nie jako bramka wyboru.
 
 ## Przejścia
