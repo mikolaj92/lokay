@@ -94,6 +94,23 @@ def test_human_coding_skips_publish():
     assert st["pr_create"] == "skipped"
 
 
+def test_failed_coding_skips_relocalize_and_publish():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "coding_execution": {"route": "failed"},
+        },
+    )
+    assert st["coding_execution"] == "succeeded"
+    assert st["relocalize_off_goal"] == "skipped"
+    assert st["assert_implementation_diff"] == "skipped"
+    assert st["test_local_execution"] == "skipped"
+    assert st["push"] == "skipped"
+    assert st["pr_create"] == "skipped"
+    assert st["summarize_issue_delivery"] == "succeeded"
+
+
 def test_red_test_runs_local_repair_then_terminal():
     st = simulate_path(
         "issue_to_pr_delivery",
@@ -222,3 +239,22 @@ if a=='local_repair_execution':Path(%r).write_text(a)"""
     st = {k: x["status"] for k, x in result["effector_results"].items()}
     assert st["local_repair_execution"] == "skipped"
     assert st["push"] == "succeeded" and pushed.exists() and not wrong.exists()
+
+
+def test_native_failed_coding_skips_relocalize(tmp_path):
+    if not _fala_host_ready():
+        pytest.skip("Fala Mojo process host is not available")
+    reloc = tmp_path / "reloc"
+    body = base_effector(
+        """if a=='resolve_implementation_issue':v['route']='open'
+if a=='coding_execution':v.update(route='failed')
+if a=='relocalize_off_goal':Path(%r).write_text(a)"""
+        % str(reloc)
+    )
+    result = run_graph(tmp_path, body, "coding-failed", path_id="issue_to_pr_delivery")
+    st = {k: x["status"] for k, x in result["effector_results"].items()}
+    assert st["coding_execution"] == "succeeded"
+    assert st["relocalize_off_goal"] == "skipped"
+    assert st["pr_create"] == "skipped"
+    assert not reloc.exists()
+    assert "adapter_failed" not in str(result.get("error") or "")

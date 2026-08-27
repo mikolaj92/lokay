@@ -93,3 +93,16 @@ def test_slice_package_unknown_path():
     else:
         raise AssertionError("expected ValueError")
 
+
+def test_issue_journal_dir_isolates_coding_execution(tmp_path):
+    from lokay.graph_run import issue_journal_dir
+
+    first = issue_journal_dir("coding_execution", "Temida/Temida", 4999, home=tmp_path)
+    second = issue_journal_dir("coding_execution", "Temida/Temida", 4996, home=tmp_path)
+    shared = tmp_path / ".lokay" / "fala"
+    assert first is not None and second is not None
+    assert first != second
+    assert first.parent.name == "coding-execution"
+    assert str(shared) not in {str(first), str(second)}
+    assert issue_journal_dir("localize_execution", "Temida/Temida", 4999, home=tmp_path) is None
+
