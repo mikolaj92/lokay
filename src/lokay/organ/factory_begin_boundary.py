@@ -67,4 +67,22 @@ def handle_factory_begin(
         from lokay.proc.persist_factory_tick import persist
 
         return persist(workspace, attached, up.get("probe_factory_host") or {}, ledger)
+    if atom == "classify_leftover_remaining":
+        from lokay.pass_receipt import read_pass_receipt
+        from lokay.proc.classify_leftover_remaining import classify_receipt
+
+        state_path = str(config.get("state_path") or "") or None
+        return classify_receipt(read_pass_receipt(state_path=state_path))
+    if atom == "merge_leftover_remaining":
+        from lokay.proc.merge_leftover_remaining import merge
+
+        persisted = (
+            up.get("persist_factory_tick")
+            or up.get("persist_factory_working_state")
+            or workspace
+        )
+        return merge(
+            pass_dir=str(persisted.get("pass_dir") or workspace.get("pass_dir") or ""),
+            state_path=str(config.get("state_path") or "") or None,
+        )
     return None

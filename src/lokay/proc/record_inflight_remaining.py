@@ -31,7 +31,7 @@ def remaining_from_working(working: dict[str, Any]) -> dict[str, Any]:
                 "ready": len(ready_by.get(repo) or []),
             }
         )
-    return {
+    remaining = {
         "inbox": inbox,
         "ready": ready,
         "ready_with_open_pr": int(working.get("remaining_ready_with_pr") or 0),
@@ -39,6 +39,10 @@ def remaining_from_working(working: dict[str, Any]) -> dict[str, Any]:
         "survey_errors": int(working.get("survey_errors") or 0),
         "by_repo": by_repo,
     }
+    for key, value in working.items():
+        if key == "leftover" or str(key).startswith("leftover_"):
+            remaining[key] = value
+    return remaining
 
 
 def remaining_from_pass_dir(pass_dir: str | Path) -> dict[str, Any] | None:

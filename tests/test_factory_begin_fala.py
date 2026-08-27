@@ -21,6 +21,8 @@ NODES = (
     "persist_factory_begin_state",
     "persist_factory_working_state",
     "persist_factory_tick",
+    "classify_leftover_remaining",
+    "merge_leftover_remaining",
 )
 
 CEREMONY = (
@@ -83,7 +85,9 @@ if a=='seed_factory_occupancy':v['working']={}
 if a=='attach_factory_stuck':v.update(begin={},working={})
 if a=='persist_factory_begin_state':v['pass_dir']='/pass'
 if a=='persist_factory_working_state':v['pass_dir']='/pass'
-if a=='persist_factory_tick':v.update(ok=True,pass_dir='/pass',idle=False)"""
+if a=='persist_factory_tick':v.update(ok=True,pass_dir='/pass',idle=False)
+if a=='classify_leftover_remaining':v.update(route='keep')
+if a=='merge_leftover_remaining':v.update(written=False,route='keep')"""
     )
     result = run_graph(tmp_path, body, "factory-begin-ready", path_id="factory_begin")
     status = {k: v["status"] for k, v in result["effector_results"].items()}
@@ -107,7 +111,9 @@ if a=='seed_factory_occupancy':v['working']={}
 if a=='attach_factory_stuck':v.update(begin={},working={})
 if a=='persist_factory_begin_state':v['pass_dir']='/pass'
 if a=='persist_factory_working_state':v['pass_dir']='/pass'
-if a=='persist_factory_tick':v.update(ok=True,pass_dir='/pass',idle=False,planned=[])"""
+if a=='persist_factory_tick':v.update(ok=True,pass_dir='/pass',idle=False,planned=[])
+if a=='classify_leftover_remaining':v.update(route='keep')
+if a=='merge_leftover_remaining':v.update(written=False,route='keep')"""
     )
     result = run_graph(tmp_path, body, "factory-begin-empty", path_id="factory_begin")
     status = {k: v["status"] for k, v in result["effector_results"].items()}

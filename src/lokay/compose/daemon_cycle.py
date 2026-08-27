@@ -14,7 +14,23 @@ from lokay.envelope import err, mill_glance
 from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
+from lokay.pass_receipt import read_pass_receipt
+from lokay.proc.classify_leftover_remaining import remaining_from_receipt
+from lokay.proc.merge_leftover_remaining import merge_remaining
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working
+
+
+def ceiling_remaining(state_dir: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """Merge last-pass remaining with inflight working. Never replace with empty."""
+    last_pass = remaining_from_receipt(
+        read_pass_receipt(path=state_dir / "last-pass.json")
+    )
+    inflight = remaining_from_inflight_working(state_dir)
+    if inflight is not None:
+        return merge_remaining(last_pass, inflight), "inflight_working"
+    if last_pass:
+        return last_pass, None
+    return None, None
 
 
 def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -97,10 +113,11 @@ def compose_daemon_cycle(
             receipt = load_config(config_path).state_path.parent / "last-pass.json"
         except (OSError, ValueError, FileNotFoundError):
             receipt = Path.home() / ".lokay" / "last-pass.json"
-        inflight = remaining_from_inflight_working(receipt.parent)
-        if inflight is not None:
-            payload["remaining"] = inflight
-            payload["remaining_source"] = "inflight_working"
+        remaining, remaining_source = ceiling_remaining(receipt.parent)
+        if remaining is not None:
+            payload["remaining"] = remaining
+            if remaining_source:
+                payload["remaining_source"] = remaining_source
         try:
             receipt.parent.mkdir(parents=True, exist_ok=True)
             temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
