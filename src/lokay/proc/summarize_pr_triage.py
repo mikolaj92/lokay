@@ -9,10 +9,20 @@ def summarize(
     manual: dict,
     merge: dict,
     close: dict,
+    outcome: dict | None = None,
 ) -> dict:
     decision = dict(review.get("decision") or {})
     verdict = str(decision.get("verdict") or "")
     result = {"review": decision}
+    selected = dict(outcome or {})
+    if selected.get("route") == "wait" or selected.get("waiting"):
+        result.update(
+            skipped=True,
+            reason=str(selected.get("reason") or "checks_pending"),
+            waiting=True,
+            repairable=False,
+        )
+        return {"ok": True, "result": result}
     if repair and repair.get("reason") != "condition_not_met":
         result.update(
             skipped=True,

@@ -1164,6 +1164,8 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> InspectPullRequest
     InspectPullRequest --> ConflictRecovery: konflikt
+    InspectPullRequest --> WaitChecks: pending / offline
+    InspectPullRequest --> RepairPullRequest: czerwone CI
     InspectPullRequest --> HumanTerminal: terminal ręczny
     InspectPullRequest --> CollectReviewEvidence: gotowy do recenzji
     CollectReviewEvidence --> ResolveShaReview
@@ -1192,13 +1194,14 @@ stateDiagram-v2
     ReviewVerdict --> LocalMergeGate: APPROVE
     ReviewVerdict --> RepairPullRequest: REQUEST_CHANGES
     ReviewVerdict --> HumanTerminal: NEEDS_HUMAN
-    RepairPullRequest --> CollectReviewEvidence: nowy SHA
     LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
     LocalMergeGate --> RepairPullRequest: test lokalny nie przechodzi
     MergePullRequest --> CloseIssue
     CloseIssue --> Delivered
+    RepairPullRequest --> [*]: nowy SHA, recenzja w następnym passie
     ConflictRecovery --> [*]
     HumanTerminal --> [*]
+    WaitChecks --> [*]
     Delivered --> [*]
 ```
 
@@ -1286,7 +1289,9 @@ kontraktu. Aktualny audyt:
 | Fragment | Stan obecny |
 | --- | --- |
 | `approve → lokalne testy → merge` | zaimplementowane w Fali |
-| `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane z zamkniętym wynikiem agenta, jedną rundą dowodu i jedną naprawą testów |
+| `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane z zamkniętym wynikiem agenta, jedną rundą dowodu i jedną naprawą testów; recenzja wraca w następnym passie |
+| `czerwone CI / czerwony test lokalny → pr_repair` | zaimplementowane: `pr_repair` zostaje osobną NODE-Falą, nie jest włączany w `pr_triage` |
+| `pending / offline → czekanie` | zaimplementowane w Fali; pass nie pada |
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |

@@ -302,19 +302,24 @@ pr_checks
 
 ```text
 pr_checks
-  └─→ pr_review    ← structured harness review via run_agent (fail closed)
-        └─→ worktree_add   ← PR branch tip (no reset onto main; no coding agent)
-              └─→ test_local   ← local pytest; skip if no suite; red fails closed
-                    └─→ pr_merge     ← skipped when checks not mergeable / review not approve / merge disabled
-                          └─→ stage_clear   ← clear issue ledger labels after merge
-                                └─→ close_issue   ← issue# from ai/fix/N-* branch when known
+  └─→ classify_pr_triage_checks   ← wait | repair | review
+        ├─ wait     → summarize (pending / offline; do not fail the pass)
+        ├─ repair   → pr_repair NODE child (red CI; do not inline)
+        └─ review   → collect evidence → publish verdict
+              ├─ request_changes / secrets-human → pr_repair NODE or terminal
+              └─ approve → worktree_add → test_local (record_red)
+                    └─→ select_pr_triage_outcome
+                          ├─ merge  → pr_merge → stage_clear → close_issue
+                          └─ repair → pr_repair NODE (local suite red)
 ```
 
 `pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
 Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_ENABLED`,
 approve + green checks + local tests → `pr_merge` + `close_issue` in one path; pending
 **or transient GitHub 429/5xx while reading checks** → non-green waiting; confirmed
-red → repair; secrets / `needs_human` / escalated `ai:needs-review` never merge.
+red CI or a recorded-red local suite → `pr_repair` NODE child (not inlined);
+secrets / `needs_human` / escalated `ai:needs-review` never merge.
+A later `prs` pass re-reviews the new SHA.
 Soft documentation nits must not route to `ai:needs-review`.
 `pr_review` does not load `.lokay/approach.md` or ask the reviewer to compare
 the diff to the builder plan. The plan stays builder evidence only.

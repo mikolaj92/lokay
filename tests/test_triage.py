@@ -255,6 +255,7 @@ def test_pr_triage_path_in_package():
     node_ids = [n["id"] for n in path["nodes"]]
     assert node_ids == [
         "pr_checks",
+        "classify_pr_triage_checks",
         "collect_pr_review_evidence",
         "resolve_sha_review",
         "pr_review_agent",
@@ -273,17 +274,24 @@ def test_pr_triage_path_in_package():
         "finalize_pr_review",
         "publish_pr_review",
         "review_repair_gate",
-        "pr_repair_subflow",
         "review_repair_manual",
         "review_manual",
         "worktree_add",
         "test_local",
+        "select_pr_triage_outcome",
+        "pr_repair_subflow",
         "pr_merge",
         "stage_clear",
         "close_issue",
         "summarize_pr_triage",
     ]
     assert "run_agent" not in node_ids
+    assert "localize" not in node_ids
+    assert next(n for n in path["nodes"] if n["id"] == "pr_repair_subflow")["when"] == {
+        "upstream": "select_pr_triage_outcome",
+        "path": "route",
+        "equals": "repair",
+    }
     collect = next(n for n in path["nodes"] if n["id"] == "collect_pr_review_evidence")
     assert "pr_checks" in collect["conduction"]
     retry = next(n for n in path["nodes"] if n["id"] == "pr_review_retry_agent")

@@ -40,6 +40,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-test-local` | local pytest gate (skip if no suite; fail-closed if red) |
 | `lokay-push` | push (never force) |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | PR lifecycle |
+| `lokay-classify-pr-triage-checks` | one PR checks row → wait \| repair \| review |
+| `lokay-select-pr-triage-outcome` | reduce checks + review + local test → wait \| repair \| merge |
 | `lokay-pr-route` | fail-closed closeout route: wait \| repair \| merge \| skip |
 | `lokay-repos` | list managed repos |
 | `lokay-factory-begin` | preflight + open pass workspace |
