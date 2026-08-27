@@ -125,11 +125,7 @@ def handle_factory(
     if atom == "factory_pass_terminal":
         from lokay.proc.factory_pass_terminal import terminal
 
-        return terminal(
-            up.get("classify_factory_idle") or {},
-            up.get("record_pass") or {},
-            up.get("record_factory_idle") or {},
-        )
+        return terminal(up.get("record_pass") or {})
 
     if atom == "host_ff":
         argv = [*cfg, *live]
