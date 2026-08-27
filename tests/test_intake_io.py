@@ -193,7 +193,82 @@ def test_apply_intake_close_mutates():
     joined = [" ".join(c) for c in runner.calls]
     assert any("--remove-label ai:ready" in j for j in joined)
     assert any("issue comment" in j for j in joined)
-    assert any("issue close" in j for j in joined)
+    assert not any("issue close" in j for j in joined)
+
+
+def _close_decision(reason: str) -> IntakeDecision:
+    return IntakeDecision(
+        decision="close",
+        reason=reason,
+        close=True,
+        comment=f"Closed (intake): {reason}.",
+    )
+
+
+def test_apply_intake_close_open_linked_pr_merged_does_not_call_close_issue(
+    monkeypatch,
+) -> None:
+    """reviewkit#205 shape: guessed linked_pr_merged must not close OPEN work."""
+    closes: list[tuple] = []
+    monkeypatch.setattr(
+        "lokay.intake_io.close_issue",
+        lambda *a, **k: closes.append((a, k)),
+    )
+    issue = _issue(state="OPEN", number=205, labels=["ai:ready"])
+    decision = _close_decision("linked_pr_merged")
+    runner = _FakeRunner()
+    assert apply_intake(runner, Config(), "a/b", 205, issue, decision, live=True) is True
+    assert closes == []
+    joined = [" ".join(c) for c in runner.calls]
+    assert any("issue comment" in j for j in joined)
+    assert not any("issue close" in j for j in joined)
+
+
+@pytest.mark.parametrize(
+    "reason",
+    ("obsolete_argus_flow_assumption", "obsolete_guess"),
+)
+def test_apply_intake_close_open_obsolete_does_not_call_close_issue(
+    monkeypatch, reason: str
+) -> None:
+    closes: list[tuple] = []
+    monkeypatch.setattr(
+        "lokay.intake_io.close_issue",
+        lambda *a, **k: closes.append((a, k)),
+    )
+    issue = _issue(state="OPEN")
+    decision = _close_decision(reason)
+    runner = _FakeRunner()
+    assert apply_intake(runner, Config(), "a/b", 12, issue, decision, live=True) is True
+    assert closes == []
+    joined = [" ".join(c) for c in runner.calls]
+    assert not any("issue close" in j for j in joined)
+
+
+def test_apply_intake_close_already_closed_may_close(monkeypatch) -> None:
+    closes: list[tuple] = []
+    monkeypatch.setattr(
+        "lokay.intake_io.close_issue",
+        lambda *a, **k: closes.append((a, k)),
+    )
+    issue = _issue(state="CLOSED")
+    decision = _close_decision("issue_already_closed")
+    runner = _FakeRunner()
+    assert apply_intake(runner, Config(), "a/b", 12, issue, decision, live=True) is True
+    assert len(closes) == 1
+
+
+def test_apply_intake_close_missing_state_is_treated_as_open(monkeypatch) -> None:
+    closes: list[tuple] = []
+    monkeypatch.setattr(
+        "lokay.intake_io.close_issue",
+        lambda *a, **k: closes.append((a, k)),
+    )
+    issue = _issue(state="")
+    decision = _close_decision("linked_pr_merged")
+    runner = _FakeRunner()
+    assert apply_intake(runner, Config(), "a/b", 12, issue, decision, live=True) is True
+    assert closes == []
 
 
 class _PagedCoveringRunner:
