@@ -351,7 +351,10 @@ def handle_coding_boundary(
             if "test_local_execution" in up
             else "test_local"
         )
-        return select(up.get(source) or {})
+        applicable = True
+        if atom == "select_local_test":
+            applicable = (up.get("coding_execution") or {}).get("route") == "implemented"
+        return select(up.get(source) or {}, applicable=applicable)
     if atom == "finalize_local_tests":
         from lokay.proc.finalize_local_tests import finalize
 
@@ -360,5 +363,6 @@ def handle_coding_boundary(
             up.get("select_local_test_recheck")
             or up.get("local_repair_execution")
             or {},
+            applicable=(up.get("coding_execution") or {}).get("route") == "implemented",
         )
     raise AssertionError(atom)

@@ -1,7 +1,9 @@
 """Invoke the authored issue-to-PR delivery Fala after the open-issue gate."""
 
 from __future__ import annotations
+
 from lokay.graph_run import run_path
+from lokay.proc.classify_issue_to_pr_subflow import classify
 
 
 def invoke(
@@ -12,14 +14,21 @@ def invoke(
     live: bool,
     incident_fingerprint: str = "",
 ) -> dict:
-    return run_path(
-        path_id="issue_to_pr_delivery",
-        repo=repo,
-        issue=issue,
-        config_path=config_path,
-        live=live,
-        extra_inputs={
-            "incident_fingerprint": incident_fingerprint,
-            "keep_issue_open": bool(incident_fingerprint),
-        },
-    )
+    """Run delivery. Throw / empty / not-ok is a classified route."""
+    try:
+        out = run_path(
+            path_id="issue_to_pr_delivery",
+            repo=repo,
+            issue=issue,
+            config_path=config_path,
+            live=live,
+            extra_inputs={
+                "incident_fingerprint": incident_fingerprint,
+                "keep_issue_open": bool(incident_fingerprint),
+            },
+        )
+    except BaseException as exc:
+        if isinstance(exc, KeyboardInterrupt):
+            raise
+        return classify(error=exc)
+    return classify(out)

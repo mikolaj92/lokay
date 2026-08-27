@@ -1104,6 +1104,7 @@ stateDiagram-v2
     RebaseOntoMain --> LocalTest
     LocalTest --> VerifyPublishDiff: PASS
     LocalTest --> LocalRepair: FAIL
+    LocalTest --> DeliveryResult: skip
     LocalRepair --> VerifyPublishDiff: PASS
     LocalRepair --> RepairTerminal: FAIL / human
     VerifyPublishDiff --> PushBranch
@@ -1119,7 +1120,10 @@ stateDiagram-v2
 
 Rodzic `issue_to_pr_delivery` nie trzyma gniazda kodu ani naprawy testów.
 `plan_issue`, `localize`, `test_local_execution` i `pr_create` zostają osobnymi
-węzłami (każde jest własną Falą). Dwa wyjęte dzieci:
+węzłami (każde jest własną Falą). `select_local_test` zawsze zapisuje
+`skip` / `pass` / `fail`. Pominięty test jest missem dla
+`local_repair_execution`, nie `process.failed`. `issue_to_pr_subflow` zawsze
+zapisuje route (`no_effect` albo fail-closed). Dwa wyjęte dzieci:
 
 ### Wynik kodowania — `coding_execution`
 

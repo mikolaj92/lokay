@@ -239,6 +239,7 @@ get_issue
                                       └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
                                             └─→ test_local_execution   ← grandchild Fala; skip if no suite
                                             ├─ (red, recorded) → local_repair_execution   ← child Fala: K=1 patch + recheck
+                                            ├─ (select_local_test skip) → miss repair; delivery still writes a route
                                             └─→ assert_real_diff ← refuse plan/localize-only diffs
                                                   └─→ push            ← only after green / honest skip
                                                         └─→ pr_create   ← grandchild Fala; only after successful push
