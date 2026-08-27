@@ -16,6 +16,8 @@ def _remaining(receipt: dict[str, Any]) -> dict[str, Any]:
 
 
 def _merged(receipt: dict[str, Any]) -> bool:
+    if str(receipt.get("outcome") or "") == "merge":
+        return True
     if receipt.get("merged") is True:
         return True
     merged = receipt.get("merged_this_pass")
@@ -38,6 +40,8 @@ def _merged(receipt: dict[str, Any]) -> bool:
 
 
 def _new_pr(receipt: dict[str, Any]) -> bool:
+    if str(receipt.get("outcome") or "") == "new_pr":
+        return True
     if receipt.get("new_pr") is True:
         return True
     rem = _remaining(receipt)

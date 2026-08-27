@@ -34,6 +34,18 @@ def test_moving_leaf_answers_only_new_pr_or_merge():
     assert moved_forward(_receipt(health="stall")) is False
 
 
+def test_record_pass_outcome_receipt_is_new_pr_or_merge():
+    assert classify_moving(_receipt(outcome="new_pr"))["moved_forward"] is True
+    assert classify_moving(_receipt(outcome="merge"))["merged"] is True
+    assert classify_moving(_receipt(outcome="none"))["moved_forward"] is False
+    overflow = _receipt(
+        outcome="none", leftover_overflow=True, remaining={"leftover_overflow": True}
+    )
+    assert leftover_skip_signal(overflow) is True
+    assert classify(overflow)["route"] == "factory"
+    assert classify(overflow)["reason"] == "leftover_skip"
+
+
 def test_new_pr_is_moved_forward():
     out = classify(_receipt(new_pr=True, health="progress", ok=True))
     assert out["route"] == "factory" and out["reason"] == "moved_forward"

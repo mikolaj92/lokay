@@ -19,7 +19,10 @@ _LEFTOVER_MARKERS = (
 def leftover_skip_signal(value: Any) -> bool:
     """True when leftover overflow / leftover skip is stamped anywhere."""
     if isinstance(value, dict):
-        if value.get("leftover_skip") is True:
+        if value.get("leftover_skip") is True or value.get("leftover_overflow") is True:
+            return True
+        rem = value.get("remaining")
+        if isinstance(rem, dict) and rem.get("leftover_overflow") is True:
             return True
         reason = str(value.get("reason") or "")
         if reason == "leftover_overflow" or (
