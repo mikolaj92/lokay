@@ -12,6 +12,8 @@ def test_triage_implementable_means_do():
         "route": "do",
         "repo": "o/r",
         "issue": 2,
+        "leftover": 0,
+        "leftover_issues": [],
     }
 
 
@@ -84,4 +86,5 @@ def test_leftover_does_not_become_a_second_implement():
     assert out["ok"] is True
     assert out["route"] == "do"
     assert out["issue"] == 2
-    assert "leftover" not in out
+    assert out["leftover"] == 4
+    assert out["leftover_issues"] == []

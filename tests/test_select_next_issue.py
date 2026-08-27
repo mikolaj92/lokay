@@ -85,3 +85,54 @@ def test_row_cannot_overwrite_route():
     assert out["ok"] is True
     assert out["route"] == "issue"
     assert out["issue"] == 1
+
+
+def test_first_skip_then_second_listed_is_selected():
+    listed = _listed(
+        {"repo": "mikolaj92/lokay", "issue": 806, "title": "oil"},
+        {"repo": "mikolaj92/reviewkit", "issue": 205, "title": "next"},
+    )
+    first = select(listed)
+    assert first["issue"] == 806
+    from lokay.proc.select_issue_do import select as select_do
+
+    skipped = select_do(first, {"route": "failed"}, listed)
+    assert skipped["ok"] is True
+    assert skipped["route"] == "skip"
+    assert skipped["reason"] == "triage_not_done"
+    assert skipped["leftover"] == 1
+    assert skipped["leftover_issues"][0]["issue"] == 205
+    second = select(listed, last=skipped)
+    assert second["route"] == "issue"
+    assert second["issue"] == 205
+    assert second["leftover"] == 0
+
+
+def test_leftover_zero_only_when_list_is_exhausted():
+    listed = _listed(
+        {"repo": "o/r", "issue": 1},
+        {"repo": "o/r", "issue": 2},
+        {"repo": "o/r", "issue": 3},
+    )
+    first = select(listed)
+    assert first["leftover"] == 2
+    from lokay.proc.select_issue_do import select as select_do
+
+    skip1 = select_do(first, {"route": "failed"}, listed)
+    assert skip1["leftover"] == 2
+    second = select(listed, last=skip1)
+    assert second["issue"] == 2
+    assert second["leftover"] == 1
+    skip2 = select_do(second, {"route": "failed"}, listed)
+    assert skip2["leftover"] == 1
+    third = select(listed, last=skip2)
+    assert third["issue"] == 3
+    assert third["leftover"] == 0
+
+
+def test_parked_human_stop_already_excluded_by_list_facts():
+    listed = _listed({"repo": "o/r", "issue": 9, "title": "open", "labels": []})
+    out = select(listed)
+    assert out["route"] == "issue"
+    assert out["issue"] == 9
+    assert out["leftover"] == 0
