@@ -10,13 +10,6 @@ def reduce_state(*, prepared: dict, merged_clear: dict, results: list[dict]) -> 
             live.append(repo)
         if row.get("route") == "closed" and row.get("cleared"):
             cleared.append(dict(row.get("receipt") or {}))
-        if (
-            row.get("route") == "closed"
-            and not row.get("cleared")
-            and repo
-            and repo not in live
-        ):
-            live.append(repo)
     merged = list(prepared.get("merged") or [])
     return {
         "ok": True,

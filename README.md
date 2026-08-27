@@ -883,10 +883,11 @@ stateDiagram-v2
 Pod-Fala ma cztery kroki: przygotowanie receiptów i katalogu, jeden atom
 katalogu, który w procesie czyści martwe receipty, odczytuje żywe issue,
 terminuje zamknięte workery i odświeża snapshoty PR, persist oraz summarize.
-Nie ma 30-slotowego rozwinięcia Fali. Niepewny odczyt issue zachowuje
-zajętość fail-closed. Nieczytelny receipt nie zajmuje całego katalogu, ale
-pozostaje jawnym faktem diagnostycznym. Overflow receiptów lub repozytoriów
-jest fail-closed.
+Nie ma 30-slotowego rozwinięcia Fali. Żywy pid przy zamkniętym zgłoszeniu
+nie zajmuje repo — ta sama reguła co `repo_mutex._issue_is_closed`.
+Niepewny odczyt issue zachowuje zajętość fail-closed. Nieczytelny receipt
+nie zajmuje całego katalogu, ale pozostaje jawnym faktem diagnostycznym.
+Overflow receiptów lub repozytoriów jest fail-closed.
 
 ### Wybór repozytorium do implementacji — `select_implement`
 
