@@ -1098,6 +1098,7 @@ stateDiagram-v2
     PlanIssue --> Localize
     Localize --> CodingExecution
     CodingExecution --> HumanTerminal: human
+    CodingExecution --> HumanTerminal: empty
     CodingExecution --> VerifyImplementationDiff: implemented
     VerifyImplementationDiff --> CommitImplementation
     CommitImplementation --> RebaseOntoMain
@@ -1119,7 +1120,10 @@ stateDiagram-v2
 
 Rodzic `issue_to_pr_delivery` nie trzyma gniazda kodu ani naprawy testów.
 `plan_issue`, `localize`, `test_local_execution` i `pr_create` zostają osobnymi
-węzłami (każde jest własną Falą). Dwa wyjęte dzieci:
+węzłami (każde jest własną Falą). Dwa wyjęte dzieci. Każde dziecko ma własny
+dziennik Fali (nie `~/.lokay/fala/state.sqlite`). Pusty lub padnięty
+`coding_execution` jest trasą `empty`, nie `process.failed` — rodzic nadal
+liczy `when` (relokalizacja albo skip).
 
 ### Wynik kodowania — `coding_execution`
 

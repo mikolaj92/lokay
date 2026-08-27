@@ -11,8 +11,8 @@ id = "lokay_atom"
 title = "Run one Lokay atom via Fala organ"
 
 # Parent factory Fala. It owns the top-level pass and invokes child Fala paths
-# through the factory_tick subprocess boundary. Parent and children use separate
-# journals (factory/ versus ~/.lokay/fala/state.sqlite).
+# through the factory_tick subprocess boundary. One Fala, one journal. Isolated
+# children (i2pr, coding) do not share the host sqlite.
 [[correlation_paths]]
 id = "daemon_cycle"
 title = "Lokay daemon cycle"

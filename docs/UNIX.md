@@ -34,6 +34,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-worktree-add` | git worktree |
 | `lokay-plan-issue` | write `.lokay/approach.md` before coding (deterministic evidence) |
 | `lokay-localize` | edit-path list before coding (agent proposal + tree validation; fail-closed if empty) |
+| `lokay-child-fala-journal` | pick one isolated journal directory for one child Fala |
+| `lokay-classify-coding-execution` | classify a nested coding child as a parent route (`implemented` / `human` / `empty`) |
 | `lokay-run-agent` | **coding harness slot** (binary + args from config only) |
 | `lokay-commit-all` | commit if dirty |
 | `lokay-assert-real-diff` | refuse plan/localize-only diffs (not progress; no pr_create) |

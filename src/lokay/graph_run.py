@@ -130,22 +130,10 @@ def run_path(
 
     if db_path:
         work = Path(db_path)
-    elif (
-        path_id in {"issue_to_pr", "issue_to_pr_delivery", "issue_split"}
-        and issue is not None
-        and "/" in str(repo)
-    ):
-        owner, name = str(repo).split("/", 1)
-        family = {
-            "issue_to_pr": "i2pr",
-            "issue_to_pr_delivery": "i2pr-delivery",
-            "issue_split": "issue-split",
-        }[path_id]
-        work = (
-            Path.home() / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
-        )
     else:
-        work = Path.home() / ".lokay" / "fala"
+        from lokay.proc.child_fala_journal import journal_dir
+
+        work = journal_dir(path_id=path_id, repo=str(repo), issue=issue)
     work.mkdir(parents=True, exist_ok=True)
     pkg_runtime = work / "lokay.fala-package.toml"
     project = _project_root()

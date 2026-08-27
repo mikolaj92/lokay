@@ -83,6 +83,38 @@ def test_slice_package_keeps_one_path():
     assert 'id = "issue_to_pr"' not in sliced
 
 
+def test_overlapping_coding_execution_uses_isolated_journals(tmp_path, monkeypatch):
+    from lokay import graph_run
+
+    home = tmp_path / "home"
+    captured: list = []
+
+    def fake_host(**kwargs):
+        captured.append(kwargs["db_path"])
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr(
+        "lokay.proc.child_fala_journal.Path.home",
+        lambda *_args, **_kwargs: home,
+    )
+    monkeypatch.setattr("fala.host_run_package", fake_host)
+    package = graph_run.find_default_package()
+    for issue in (4999, 4996):
+        graph_run.run_path(
+            path_id="coding_execution",
+            repo="mikolaj92/Temida",
+            issue=issue,
+            live=False,
+            package_path=package,
+        )
+    assert len(captured) == 2
+    assert captured[0] != captured[1]
+    shared = home / ".lokay" / "fala" / "state.sqlite"
+    assert captured[0] != shared and captured[1] != shared
+    assert "coding" in str(captured[0]) and "4999" in str(captured[0])
+    assert "coding" in str(captured[1]) and "4996" in str(captured[1])
+
+
 def test_slice_package_unknown_path():
     from lokay.graph_run import _slice_package_to_path
 

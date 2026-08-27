@@ -779,6 +779,19 @@ def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
         "path": "route",
         "equals": "publish",
     }
+    assert by_id["relocalize_off_goal"]["when"] == {
+        "upstream": "coding_execution",
+        "path": "route",
+        "equals": "implemented",
+    }
+
+
+def test_issue_to_pr_mermaid_classifies_empty_coding():
+    readme = (
+        Path(__file__).resolve().parents[1] / "README.md"
+    ).read_text(encoding="utf-8")
+    assert "CodingExecution --> HumanTerminal: empty" in readme
+    assert "CodingExecution --> VerifyImplementationDiff: implemented" in readme
 
 
 def test_run_agent_timeouts_match_pi_budget():

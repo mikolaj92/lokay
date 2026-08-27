@@ -1,6 +1,7 @@
 """Invoke the authored coding-execution Fala."""
 
 from lokay.graph_run import run_path
+from lokay.proc.classify_coding_execution import classify
 
 
 def run(
@@ -18,12 +19,4 @@ def run(
         max_ticks=64,
         extra_inputs=extra_inputs,
     )
-    if not out.get("ok"):
-        return out
-    return {
-        "ok": True,
-        "route": out.get("route") or "human",
-        "decision": dict(out.get("decision") or {}),
-        "evidence_kind": str(out.get("evidence_kind") or "none"),
-        "reason": out.get("reason"),
-    }
+    return classify(out)

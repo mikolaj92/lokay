@@ -158,8 +158,9 @@ eat the factory. No leaf has `when`. Empty surveys are not idle.
 
 The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process
-mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Child paths:
-`~/.lokay/fala/state.sqlite`. Python `compose/*` may validate CLI contracts and
+mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. One Fala, one
+journal. Isolated children (`issue_to_pr`, `coding_execution`) do not share
+the host sqlite. Python `compose/*` may validate CLI contracts and
 call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
@@ -271,7 +272,10 @@ get_issue
 Delivery is not a god path. Grandchildren that already have their own Fala
 (`plan_issue`, `localize`, `test_local_execution`, `pr_create`) stay separate
 nodes. The two extracted nests are `coding_execution` and
-`local_repair_execution`.
+`local_repair_execution`. Each child Fala has its own journal. Overlapping
+`coding_execution` runs must not share `~/.lokay/fala/state.sqlite`. A
+failed or empty coding child is route `empty` (parent `when` can skip
+`relocalize_off_goal`); it must not leave `process.failed`.
 
 `plan_issue` (`lokay-plan-issue`) writes `.lokay/approach.md` in the worktree
 **before** `run_agent`: goal, files likely touched, test plan, non-goals.
@@ -439,8 +443,9 @@ uv run lokay-run-path --config config.yaml --path issue_to_pr \
   --repo mikolaj92/lokay --issue 1 --live
 ```
 
-Journal: `~/.lokay/fala/state.sqlite`  
-Materialized package: `~/.lokay/fala/lokay.fala-package.toml`  
+Default journal: `~/.lokay/fala/state.sqlite`  
+Isolated children: `~/.lokay/fala/{i2pr,i2pr-delivery,issue-split,coding}/<owner>__<name>__<issue>/state.sqlite`  
+Materialized package: next to that journal as `lokay.fala-package.toml`  
 (`uv run --project <checkout>` filled in for every organ — never bare `python3`)
 
 ## Bridge
