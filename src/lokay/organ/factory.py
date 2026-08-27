@@ -299,10 +299,8 @@ def handle_factory(
     if atom == "reap_stale_worktrees":
         from lokay.proc.reap_stale_worktrees_subflow import run
 
-        pass_dir = str(up.get("factory_begin", {}).get("pass_dir") or "")
-        assert pass_dir
         return run(
-            pass_dir=pass_dir,
+            pass_dir=str(up.get("factory_begin", {}).get("pass_dir") or ""),
             config_path=str(inputs.get("config_path") or "") or None,
             live=bool(inputs.get("live")),
         )

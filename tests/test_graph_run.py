@@ -40,6 +40,69 @@ def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys)
     assert result["fala"]["last"] == dumped["last"]
 
 
+def test_factory_pass_cleanup_process_failed_still_opens_a_pr():
+    """Leftover work-copy process.failed is a classified route. Issues can PR."""
+    from lokay.graph_run import normalize_path_result
+
+    out = normalize_path_result(
+        {
+            "ok": False,
+            "path_id": "factory_pass",
+            "fala": {
+                "run_status": "failed",
+                "effector_results": {
+                    "factory_begin": {
+                        "status": "succeeded",
+                        "output": {"values": {"ok": True, "pass_dir": "/pass"}},
+                    },
+                    "prs": {
+                        "status": "succeeded",
+                        "output": {"values": {"ok": True}},
+                    },
+                    "reap_stale_worktrees": {
+                        "status": "failed",
+                        "error": "cleanup process.failed",
+                        "output": {"values": {}},
+                    },
+                    "issues": {
+                        "status": "succeeded",
+                        "output": {
+                            "values": {
+                                "ok": True,
+                                "route": "do",
+                                "launched": "pr",
+                                "result": {"launched": "pr", "leftover": 1},
+                            }
+                        },
+                    },
+                    "record_pass": {
+                        "status": "succeeded",
+                        "output": {
+                            "values": {
+                                "ok": True,
+                                "result": {"outcome": "new_pr", "ok": True},
+                            }
+                        },
+                    },
+                    "factory_pass_terminal": {
+                        "status": "succeeded",
+                        "output": {
+                            "values": {
+                                "ok": True,
+                                "result": {"outcome": "new_pr", "ok": True},
+                            }
+                        },
+                    },
+                },
+            },
+        }
+    )
+    assert out["ok"] is True
+    assert out["outcome"] == "new_pr"
+    assert out["terminal"]["reap_stale_worktrees"]["route"] == "failed"
+    assert out["terminal"]["issues"]["launched"] == "pr"
+
+
 def test_normalize_prefers_authored_terminal_result():
     result = {
         "ok": True,

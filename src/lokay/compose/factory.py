@@ -1,11 +1,9 @@
 """Parent Fala composition for one complete Lokay factory pass.
 
-The parent path ``factory_pass`` owns pass order (idle classify → host-ff →
-begin → select → queue_conflict → implement → health → receipt; surveys /
-closeout / occupancy / leftover reaps stay as housecleaning when
-``select.route == none`` and do not run in a selected pass).
-Python only fail-closes offline, then invokes ``graph_run.run_path``. Idle
-TTL is the first authored atom.
+The parent path ``factory_pass`` owns pass order (begin → PRs → issues →
+receipt). Leftover work-copy cleanup is a sibling child; a failed cleanup
+is a classified route and does not gate PRs or issue-to-PR.
+Python only fail-closes offline, then invokes ``graph_run.run_path``.
 """
 
 from __future__ import annotations

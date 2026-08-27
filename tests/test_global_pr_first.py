@@ -7,10 +7,11 @@ def test_factory_authors_pr_closeout_beside_implementation_not_as_gate():
     path = next(p for p in describe_package()["paths"] if p["id"] == "factory_pass")
     ids = [n["id"] for n in path["nodes"]]
     conduction = {n["id"]: n["conduction"] for n in path["nodes"]}
-    assert "closeout_prs" in ids
-    assert "closeout_prs" not in conduction["select_implement"]
-    assert ids.index("select_implement") < ids.index("dispatch_implement")
-    assert ids.index("select_implement") < ids.index("closeout_prs")
+    assert "prs" in ids
+    assert "issues" in ids
+    assert ids.index("prs") < ids.index("issues")
+    assert "reap_stale_worktrees" not in conduction["prs"]
+    assert "reap_stale_worktrees" not in conduction["issues"]
 
 
 def test_tick_is_only_a_factory_fala_facade():

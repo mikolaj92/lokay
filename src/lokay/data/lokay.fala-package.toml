@@ -72,7 +72,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "factory_pass"
 title = "Lokay factory pass"
-description = "Parent conducts children: open, PRs, clean, issues. Each child is its own Fala. Receipt."
+description = "Parent conducts children: open, PRs, issues, receipt. Clean is a sibling child. Failed clean is a classified route, not process.failed."
 
 [[correlation_paths.effectors]]
 id = "factory_begin"
@@ -92,7 +92,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "reap_stale_worktrees"
 capability = "lokay_atom"
-conduction = ["prs"]
+conduction = ["factory_begin"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "reap_stale_worktrees" }
 retry_policy = "none"
@@ -100,7 +100,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "issues"
 capability = "lokay_atom"
-conduction = ["factory_begin", "reap_stale_worktrees"]
+conduction = ["factory_begin", "prs"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "issues" }
 retry_policy = "none"

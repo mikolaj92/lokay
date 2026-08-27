@@ -79,32 +79,13 @@ wymieniają te same ścieżki.
 stateDiagram-v2
     [*] --> Heartbeat
     Heartbeat --> FactoryPass
-    FactoryPass --> ClassifyFactoryIdle
-    ClassifyFactoryIdle --> RecordFactoryIdle: świeży pusty stempel
-    ClassifyFactoryIdle --> HostFF: brak stempla / praca / sonda
-    HostFF --> FactoryBeginHostGate
-    FactoryBeginHostGate --> FactoryBegin
-    FactoryBegin --> SelectImplement
-    SelectImplement --> QueueConflict: wybrano kandydata
-    SelectImplement --> ComputeHealth: brak kandydata
-    SelectImplement --> SurveyPrs: brak kandydata
-    SelectImplement --> ReapStaleWorktrees: brak kandydata
-    QueueConflict --> DispatchImplement
-    DispatchImplement --> ComputeHealth
-    SurveyPrs --> SurveyInbox
-    SurveyInbox --> SurveyReady
-    SurveyReady --> ReadyHygiene
-    ReadyHygiene --> PlanPass
-    PlanPass --> DispatchTriage
-    DispatchTriage --> ResolveConflicts
-    ResolveConflicts --> CloseoutPrs
-    CloseoutPrs --> ReapStaleImplementing
-    ReapStaleImplementing --> ReapOverBudget
-    ReapOverBudget --> RefreshOccupancy
-    ComputeHealth --> CompactState
-    CompactState --> RecordPass
-    RecordPass --> FactoryPassTerminal: lane product / oil / idle
-    RecordFactoryIdle --> FactoryPassTerminal: lane idle
+    FactoryPass --> FactoryBegin
+    FactoryBegin --> Prs
+    FactoryBegin --> ReapStaleWorktrees
+    Prs --> Issues
+    Issues --> RecordPass
+    RecordPass --> FactoryPassTerminal
+    ReapStaleWorktrees --> FactoryPassTerminal: cleaned / failed classified
     FactoryPassTerminal --> LastPassMoving
     LastPassMoving --> SelectRepairRoute
     SelectRepairRoute --> [*]: new PR / merge / leftover skip / empty survey / stale
@@ -990,11 +971,10 @@ rozwinięcia Fali (14 efektorów). Overflow katalogu pomija reap (`skip`)
 i nie kończy passu fail-closed — nie blokuje PR-ów ani issue. Atom
 katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP (live i2pr / occupancy /
 `pr_survey_failed` / covering PR / dirty unpublished / nieczytelny git).
-W `factory_pass` ten reap jest po `dispatch_implement`, żeby klasyfikacja
-worktree nie zjadała 180s sufitu przed implementacją. `compute_health` /
-`record_pass` nie czekają na ten reap: paragon jest po dispatchu. Select
-nie czeka na survey / closeout / occupancy — higiena zostaje w ścieżce
-obok pracy, nie przed jedynym cennym zlewem.
+W `factory_pass` ten reap jest osobnym dzieckiem od `factory_begin`.
+Rzuca / puste / `process.failed` to sklasyfikowany `route=failed`, nie
+abort passu. `prs` i `issues` nie czekają na sukces sprzątania. `record_pass`
+też nie. Leftover work copies nie zjadają issue-to-PR.
 
 ### Otwarte issue do PR — `issues`
 
@@ -1319,7 +1299,7 @@ kontraktu. Aktualny audyt:
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then PRs/issues |
-| `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `FactoryPass` | `factory_pass` | open, PRs, issues, receipt; leftover work-copy cleanup is a sibling child |
 | `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
 | `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
