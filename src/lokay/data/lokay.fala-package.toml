@@ -306,7 +306,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_to_pr_delivery"
 title = "Issue to PR delivery"
-description = "Thin conductor: branch, grandchild Falas, coding child, local test, repair child, PR. finalize_local_tests is the publish verdict. coding_execution failed is a classified route; when-gated siblings skip."
+description = "Thin conductor: branch, grandchild Falas, coding child, local test, repair child, PR. finalize_local_tests is the publish verdict. coding_execution failed is a classified route. select_local_test always emits skip/pass/fail so local_repair when is a real miss, not process.failed."
 
 [[correlation_paths.effectors]]
 id = "get_issue"
@@ -439,7 +439,6 @@ retry_policy = "none"
 id = "select_local_test"
 capability = "lokay_atom"
 conduction = ["test_local_execution", "coding_execution"]
-when = { upstream = "coding_execution", path = "route", equals = "implemented" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_local_test" }
 retry_policy = "none"
@@ -457,7 +456,6 @@ retry_policy = "none"
 id = "finalize_local_tests"
 capability = "lokay_atom"
 conduction = ["select_local_test", "local_repair_execution", "coding_execution"]
-when = { upstream = "coding_execution", path = "route", equals = "implemented" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "finalize_local_tests" }
 retry_policy = "none"

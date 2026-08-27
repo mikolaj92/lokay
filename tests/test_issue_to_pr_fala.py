@@ -86,12 +86,16 @@ def test_human_coding_skips_publish():
         {
             "resolve_implementation_issue": {"route": "open"},
             "coding_execution": {"route": "human"},
+            "select_local_test": {"route": "skip"},
+            "finalize_local_tests": {"route": "not_applicable"},
         },
     )
     assert st["test_local_execution"] == "skipped"
+    assert st["select_local_test"] == "succeeded"
     assert st["local_repair_execution"] == "skipped"
     assert st["push"] == "skipped"
     assert st["pr_create"] == "skipped"
+    assert st["summarize_issue_delivery"] == "succeeded"
 
 
 def test_failed_coding_skips_relocalize_and_publish():
@@ -100,14 +104,36 @@ def test_failed_coding_skips_relocalize_and_publish():
         {
             "resolve_implementation_issue": {"route": "open"},
             "coding_execution": {"route": "failed"},
+            "select_local_test": {"route": "skip"},
+            "finalize_local_tests": {"route": "not_applicable"},
         },
     )
     assert st["coding_execution"] == "succeeded"
     assert st["relocalize_off_goal"] == "skipped"
     assert st["assert_implementation_diff"] == "skipped"
     assert st["test_local_execution"] == "skipped"
+    assert st["select_local_test"] == "succeeded"
+    assert st["local_repair_execution"] == "skipped"
     assert st["push"] == "skipped"
     assert st["pr_create"] == "skipped"
+    assert st["summarize_issue_delivery"] == "succeeded"
+
+
+def test_skipped_select_local_test_is_a_miss_for_repair():
+    """select_local_test always runs. skip is a real when miss, not a parent fail."""
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "coding_execution": {"route": "failed"},
+            "select_local_test": {"route": "skip"},
+            "finalize_local_tests": {"route": "not_applicable"},
+        },
+    )
+    assert st["select_local_test"] == "succeeded"
+    assert st["local_repair_execution"] == "skipped"
+    assert st["coding_repair_terminal"] == "skipped"
+    assert st["assert_real_diff"] == "skipped"
     assert st["summarize_issue_delivery"] == "succeeded"
 
 
@@ -248,13 +274,21 @@ def test_native_failed_coding_skips_relocalize(tmp_path):
     body = base_effector(
         """if a=='resolve_implementation_issue':v['route']='open'
 if a=='coding_execution':v.update(route='failed')
-if a=='relocalize_off_goal':Path(%r).write_text(a)"""
-        % str(reloc)
+if a=='select_local_test':v['route']='skip'
+if a=='finalize_local_tests':v['route']='not_applicable'
+if a=='relocalize_off_goal':Path(%r).write_text(a)
+if a=='local_repair_execution':Path(%r).write_text(a)"""
+        % (str(reloc), str(tmp_path / "repair"))
     )
     result = run_graph(tmp_path, body, "coding-failed", path_id="issue_to_pr_delivery")
     st = {k: x["status"] for k, x in result["effector_results"].items()}
     assert st["coding_execution"] == "succeeded"
     assert st["relocalize_off_goal"] == "skipped"
+    assert st["select_local_test"] == "succeeded"
+    assert st["local_repair_execution"] == "skipped"
     assert st["pr_create"] == "skipped"
+    assert st["summarize_issue_delivery"] == "succeeded"
     assert not reloc.exists()
+    assert not (tmp_path / "repair").exists()
     assert "adapter_failed" not in str(result.get("error") or "")
+    assert "condition_source_not_succeeded" not in str(result.get("error") or "")

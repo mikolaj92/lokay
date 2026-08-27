@@ -67,6 +67,8 @@ def test_physical_tests_route_once_to_repair():
     assert red["route"] == "fail" and green["route"] == "pass"
     assert finalize_tests(red, green)["route"] == "publish"
     assert finalize_tests(red, red)["route"] == "repair_terminal"
+    assert finalize_tests(red, red, applicable=False)["route"] == "not_applicable"
+    assert select_test({}, applicable=False)["route"] == "not_applicable"
 
 
 def test_repair_requires_valid_implemented_result():

@@ -91,6 +91,52 @@ def test_skip_then_next_row_same_budget(monkeypatch):
     assert out["route"] == "idle"
 
 
+def test_coding_not_implemented_row_does_not_abort_catalog(monkeypatch):
+    """A row whose coding is not implemented still finishes; the loop continues."""
+    from lokay.proc.classify_issue_to_pr_subflow import classify
+
+    calls = []
+
+    def fake_row(*, listed, last, config_path, live, pass_dir):
+        calls.append(dict(last or {}))
+        if not last:
+            child = classify(error=RuntimeError("condition_source_not_succeeded"))
+            return {
+                "ok": True,
+                "result": {
+                    **child,
+                    "route": child["route"],
+                    "leftover": 1,
+                    "leftover_issues": [{"repo": "o/r", "issue": 3}],
+                },
+            }
+        return {
+            "ok": True,
+            "result": {
+                "route": "do",
+                "repo": "o/r",
+                "issue": 3,
+                "launched": "started",
+                "leftover": 0,
+                "leftover_issues": [],
+            },
+        }
+
+    monkeypatch.setattr(run_issue_rows, "one_row", fake_row)
+    out = run_issue_rows.run(
+        listed={"issues": [{"repo": "o/r", "issue": 2}, {"repo": "o/r", "issue": 3}]},
+        config_path=None,
+        live=True,
+        pass_dir="/pass",
+        budget=2,
+    )
+    assert len(calls) == 2
+    assert calls[0] == {}
+    assert out["result"]["rows"] == 2
+    assert out["result"]["launched"] == "started"
+    assert out["route"] == "idle"
+
+
 def test_cap_does_not_start_a_second_tick(monkeypatch):
     def fake_row(*, listed, last, config_path, live, pass_dir):
         return {
