@@ -253,7 +253,12 @@ def handle_issue_triage(
         from lokay.proc.apply_issue_close import apply
 
         return apply(
-            runner=runner(), repo=repo, issue=number, decision=decision, live=mutate
+            runner=runner(),
+            repo=repo,
+            issue=number,
+            decision=decision,
+            live=mutate,
+            issue_data=issue,
         )
     if atom == "apply_issue_manual":
         from lokay.proc.apply_issue_manual import apply
