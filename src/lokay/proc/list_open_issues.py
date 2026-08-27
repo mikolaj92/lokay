@@ -1,4 +1,4 @@
-"""List open catalog issues from GitHub. One job: list facts."""
+"""List open catalog issues from GitHub. Two small functions: facts, then envelope."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from lokay.gh_rate import survey_list_cap
 from lokay.proc._common import load_cfg, runner
 
 
-def run(*, config_path: str | None, live: bool) -> dict:
+def facts(*, config_path: str | None, live: bool) -> dict:
+    """Live GitHub open-issue rows. No skip/route — overflow is a fact."""
     cfg = load_cfg(argparse.Namespace(config=config_path))
     git = runner()
     rows: list[dict] = []
@@ -28,9 +29,8 @@ def run(*, config_path: str | None, live: bool) -> dict:
                     "labels": list(issue.labels or []),
                 }
             )
-    return {
-        "ok": True,
-        "issues": rows,
-        "count": len(rows),
-        "overflow": overflow,
-    }
+    return {"issues": rows, "count": len(rows), "overflow": overflow}
+
+
+def run(*, config_path: str | None, live: bool) -> dict:
+    return {"ok": True, **facts(config_path=config_path, live=live)}
