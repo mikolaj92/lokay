@@ -232,6 +232,9 @@ def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd
     )
+    monkeypatch.setattr(
+        "lokay.proc.repo_mutex._issue_is_closed", lambda *_args, **_kwargs: False
+    )
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "mikolaj92__Fala-164.json").write_text(
@@ -283,6 +286,9 @@ def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         "lokay.proc.issue_delivery_process._pid_command", _issue_to_pr_cmd
+    )
+    monkeypatch.setattr(
+        "lokay.proc.repo_mutex._issue_is_closed", lambda *_args, **_kwargs: False
     )
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
@@ -384,6 +390,9 @@ def test_compute_health_by_repo_contains_only_survey_scope(tmp_path, monkeypatch
 def test_live_receipt_with_unreadable_command_stays_occupied(tmp_path, monkeypatch):
     """A live PID with an unavailable ps command is not proof that its child died."""
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "lokay.proc.repo_mutex._issue_is_closed", lambda *_args, **_kwargs: False
+    )
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
     (cycle / "owner__repo-9.json").write_text(
@@ -415,6 +424,9 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
     import lokay.proc.detach_issue_to_pr as detach_mod
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "lokay.proc.repo_mutex._issue_is_closed", lambda *_args, **_kwargs: False
+    )
     seen = {}
 
     class FakePopen:

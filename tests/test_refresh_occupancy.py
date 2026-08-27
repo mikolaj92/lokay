@@ -141,7 +141,9 @@ def test_refresh_occupancy_uses_worker_liveness(
     monkeypatch.setattr(
         "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts",
         lambda: detach_issue_to_pr.live_issue_to_pr_receipts(
-            cycle, pid_alive=lambda _pid: pid_alive
+            cycle,
+            pid_alive=lambda _pid: pid_alive,
+            issue_closed=lambda *_args, **_kwargs: False,
         ),
     )
     monkeypatch.setattr(

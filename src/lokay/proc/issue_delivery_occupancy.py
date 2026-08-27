@@ -16,6 +16,7 @@ from lokay.proc.issue_delivery_receipts import (
     _starting_receipt_state,
     issue_to_pr_receipt_path,
 )
+from lokay.proc import repo_mutex
 
 
 def _is_cycle_start_metric(data: dict[str, Any], path: Path | None) -> bool:
@@ -126,12 +127,14 @@ def live_issue_to_pr_receipts(
     cycle_dir: Path | None = None,
     *,
     pid_alive=None,
+    issue_closed=None,
 ) -> list[dict[str, Any]]:
     """Live or launching receipts that must keep a repo occupied."""
     root = (
         Path(cycle_dir) if cycle_dir is not None else Path.home() / ".lokay" / "cycle"
     )
     check = pid_alive or is_live_issue_to_pr_pid
+    closed = issue_closed or repo_mutex._issue_is_closed
     if not root.is_dir():
         return []
     live: list[dict[str, Any]] = []
@@ -162,8 +165,14 @@ def live_issue_to_pr_receipts(
             issue = int(data["issue"])
         except (TypeError, ValueError):
             continue
-        if check(pid) or coding_live_for_issue(issue):
-            live.append(data)
+        if not (check(pid) or coding_live_for_issue(issue)):
+            continue
+        # Same closed-issue fact as repo_mutex: a live i2pr pid does not
+        # hold the repo once GitHub confirms CLOSED. Probe failure stays
+        # occupied (fail-closed), matching mutex inspection.
+        if closed(str(data["repo"]), issue):
+            continue
+        live.append(data)
     return live
 
 
