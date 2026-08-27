@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -124,7 +125,7 @@ def test_existing_localize_json_skips_semantic_agent(tmp_path: Path, monkeypatch
     loc_dir = tmp_path / ".lokay"
     loc_dir.mkdir()
     (loc_dir / "localize.json").write_text(
-        '{"paths":["src/a.py"],"source":"deterministic"}\n',
+        '{"paths":["src/a.py"],"source":"deterministic","issue":12}\n',
         encoding="utf-8",
     )
 
@@ -140,10 +141,50 @@ def test_existing_localize_json_skips_semantic_agent(tmp_path: Path, monkeypatch
         execute=True,
         worktree=tmp_path,
         seed_text="Change src/a.py",
+        issue=12,
     )
     assert "src/a.py" in loc.paths
+    assert loc.source == "existing"
     assert loc.semantic["source"] == "existing"
     assert loc.semantic["status"] == "completed"
+
+
+def test_leftover_333_existing_does_not_skip_semantic_for_865(tmp_path: Path):
+    leftover = {
+        "paths": [
+            "src/lokay/proc/factory_begin.py",
+            "tests/test_hot_repos.py",
+        ],
+        "source": "agent",
+        "worktree": (
+            "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/"
+            "ai__fix__333-factory_begin-cold-survey-musi-pokry-sko-1ddbe4a4"
+        ),
+    }
+    for rel in (*leftover["paths"], "src/lokay/localize.py"):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+    loc_dir = tmp_path / ".lokay"
+    loc_dir.mkdir()
+    (loc_dir / "localize.json").write_text(
+        json.dumps(leftover, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    loc = build_localization_with_agent(
+        runner=_FakeRunner('{"paths":["src/lokay/localize.py"]}'),
+        config=_cfg(),
+        execute=False,
+        worktree=tmp_path,
+        seed_text=(
+            "Issue #865 — leftover localize.json from main is not this sieve.\n"
+            "Touch `src/lokay/localize.py`.\n"
+        ),
+        issue=865,
+    )
+    assert loc.source != "existing"
+    assert "src/lokay/proc/factory_begin.py" not in loc.paths
+    assert "tests/test_hot_repos.py" not in loc.paths
 
 
 def test_localize_agent_keeps_existing_paths_and_drops_fantasy(tmp_path: Path):

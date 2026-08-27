@@ -10,6 +10,11 @@ def inspect(request: dict) -> dict:
     return {
         "ok": True,
         "worktree_exists": root.is_dir(),
-        "existing": list(load_existing_localize_paths(root if root.is_dir() else None)),
+        "existing": list(
+            load_existing_localize_paths(
+                root if root.is_dir() else None,
+                issue=request.get("issue"),
+            )
+        ),
         "tree": list(walk_repo_tree(root)) if root.is_dir() else [],
     }

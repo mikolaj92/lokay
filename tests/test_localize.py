@@ -11,6 +11,7 @@ from lokay.localize import (
     LOCALIZE_REL_PATH,
     build_localization,
     extract_seed_paths,
+    load_existing_localize_paths,
     select_paths,
     walk_repo_tree,
     write_localize_file,
@@ -455,3 +456,110 @@ def test_invalid_agent_json_exposes_exact_validator_error():
 
     out = validate({"route": "validate", "text": "not-json"})
     assert out["route"] == "invalid" and out["validator_error"]
+
+
+LEFTOVER_333 = {
+    "paths": [
+        "src/lokay/proc/factory_begin.py",
+        "hot.py",
+        "lokay/proc/factory_begin.py",
+        "tests/test_hot_repos.py",
+    ],
+    "source": "agent",
+    "worktree": (
+        "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/"
+        "ai__fix__333-factory_begin-cold-survey-musi-pokry-sko-1ddbe4a4"
+    ),
+}
+
+_LEFTOVER_PATHS = (
+    "src/lokay/proc/factory_begin.py",
+    "tests/test_hot_repos.py",
+)
+
+
+def _write_localize(root: Path, payload: dict) -> None:
+    loc = root / ".lokay"
+    loc.mkdir(parents=True, exist_ok=True)
+    (loc / "localize.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_leftover_333_localize_is_not_sieve_for_issue_865(tmp_path: Path):
+    for rel in (*_LEFTOVER_PATHS, "src/lokay/localize.py"):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+    _write_localize(tmp_path, LEFTOVER_333)
+    seed = (
+        "Issue #865 — leftover localize.json from main is not this ticket's sieve.\n"
+        "Touch `src/lokay/localize.py`.\n"
+    )
+    from lokay.proc.build_deterministic_localization import build
+    from lokay.proc.classify_localization_route import classify
+    from lokay.proc.inspect_existing_localization import inspect
+
+    request = {
+        "worktree": str(tmp_path),
+        "issue": 865,
+        "seed": seed,
+        "extras": [],
+        "max_paths": 40,
+        "explicit_issue_paths": [],
+        "has_file_hints": False,
+    }
+    assert load_existing_localize_paths(tmp_path, issue=865) == []
+    inspected = inspect(request)
+    assert inspected["existing"] == []
+    assert classify(request, inspected, agent_allowed=False)["route"] != "existing"
+    loc = build(request)
+    assert loc["source"] != "existing"
+    assert "src/lokay/proc/factory_begin.py" not in loc["paths"]
+    assert "tests/test_hot_repos.py" not in loc["paths"]
+    det = build_localization(worktree=tmp_path, seed_text=seed)
+    assert "src/lokay/proc/factory_begin.py" not in det.paths
+    assert "tests/test_hot_repos.py" not in det.paths
+
+
+def test_same_issue_localize_json_is_kept(tmp_path: Path):
+    target = "src/lokay/localize.py"
+    path = tmp_path / target
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("x\n", encoding="utf-8")
+    _write_localize(
+        tmp_path,
+        {
+            "paths": [target],
+            "source": "deterministic",
+            "issue": 865,
+            "worktree": str(tmp_path / "ai__fix__865-this-issue-sieve"),
+        },
+    )
+    from lokay.proc.build_explicit_localization import build
+    from lokay.proc.classify_localization_route import classify
+    from lokay.proc.inspect_existing_localization import inspect
+
+    request = {
+        "worktree": str(tmp_path),
+        "issue": 865,
+        "seed": "Issue #865 reuse this ticket's localize.json.",
+        "extras": [],
+        "max_paths": 40,
+        "explicit_issue_paths": [],
+        "has_file_hints": False,
+    }
+    assert load_existing_localize_paths(tmp_path, issue=865) == [target]
+    inspected = inspect(request)
+    assert inspected["existing"] == [target]
+    route = classify(request, inspected, agent_allowed=True)
+    assert route["route"] == "existing"
+    out = build(request, inspected, route)
+    assert out["source"] == "existing"
+    assert out["paths"] == [target]
+
+
+def test_localize_json_without_issue_id_is_not_sieve(tmp_path: Path):
+    _write_localize(tmp_path, {"paths": ["src/a.py"], "source": "deterministic"})
+    assert load_existing_localize_paths(tmp_path, issue=865) == []

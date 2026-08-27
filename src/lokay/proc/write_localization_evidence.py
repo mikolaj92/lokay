@@ -20,6 +20,7 @@ def write(request: dict, validated: dict, *, live: bool) -> dict:
         matched_tokens=tuple(validated.get("matched_tokens") or []),
         notes=tuple(validated.get("notes") or []),
         worktree=str(root),
+        issue=int(request.get("issue") or 0),
     )
     path = str(root / request["rel_path"])
     wrote = False
