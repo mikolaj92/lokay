@@ -1011,6 +1011,42 @@ worktree nie zjadała 180s sufitu przed implementacją. `compute_health` /
 nie czeka na survey / closeout / occupancy — higiena zostaje w ścieżce
 obok pracy, nie przed jedynym cennym zlewem.
 
+### Otwarte issue do PR — `issues`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ListOpenIssues
+    ListOpenIssues --> SelectNextIssue
+    SelectNextIssue --> IssuesRunTriage: jest issue
+    SelectNextIssue --> SelectIssueDo: pusta lista / leftover
+    IssuesRunTriage --> SelectIssueDo
+    SelectIssueDo --> IssuesLaunchPr: robić
+    SelectIssueDo --> SummarizeIssues: sito nie robić
+    IssuesLaunchPr --> SummarizeIssues
+    SummarizeIssues --> [*]
+```
+
+Dziecko `issues` jest węzłem Fali. Sześć krawędzi, nie jeden tłusty proces.
+Liście: `list_open_issues`, `select_next_issue`, `select_issue_do`,
+`summarize_issues`. Węzły-dzieci: `issues_run_triage` → Fala `issue_triage`,
+`issues_launch_pr` → Fala `issue_to_pr`. Ten PR tylko składa graf. Bez bramki
+`work:ready` / `ai:ready` i bez 30 slotów. Jeden implement na pass.
+
+### Otwarte PR — `prs`
+
+```mermaid
+stateDiagram-v2
+    [*] --> ListOpenPrs
+    ListOpenPrs --> SelectNextPr
+    SelectNextPr --> RunPrTriageSubflow: jest PR
+    SelectNextPr --> SummarizePrs: pusta lista
+    RunPrTriageSubflow --> SummarizePrs
+    SummarizePrs --> [*]
+```
+
+Dziecko `prs` jest osobną Falą. Rodzic go tylko woła. Ta zmiana nie przepisuje
+jego atomów.
+
 ### Triage issue — `issue_triage`
 
 ```mermaid
@@ -1264,6 +1300,8 @@ kontraktu. Aktualny audyt:
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
+| `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
+| `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
 | `FactoryBegin` | `factory_begin` | otwiera workspace passu przez jawny preflight, ledger i persist |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
 | `ReadySurvey` | `survey_ready` | listuje i klasyfikuje gotowe issue jednym atomem katalogu |

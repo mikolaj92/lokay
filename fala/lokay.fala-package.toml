@@ -128,7 +128,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issues"
 title = "Open issue to PR"
-description = "List open issues, sito one, code and PR if doing. No ready label gate."
+description = "NODE wiring: list, sito one, issue_triage child, do/skip, issue_to_pr child, receipt. No ready label gate."
 
 [[correlation_paths.effectors]]
 id = "list_open_issues"
@@ -174,7 +174,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "summarize_issues"
 capability = "lokay_atom"
-conduction = ["select_next_issue", "select_issue_do"]
+conduction = ["select_next_issue", "issues_run_triage", "select_issue_do", "issues_launch_pr"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_issues" }
 retry_policy = "none"

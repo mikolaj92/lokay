@@ -125,6 +125,7 @@ def _list_open_issues(
     label: str | None = None,
     kind: str,
     state: str = "open",
+    on_cap: str = "fail",
 ) -> list[dict]:
     """One full newest-first page. Hitting the cap is truncated, not idle."""
     if live:
@@ -145,7 +146,9 @@ def _list_open_issues(
     result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     if not live:
         return []
-    return parse_survey_list(result.stdout, kind=kind, repo=repo.name, cap=cap)
+    return parse_survey_list(
+        result.stdout, kind=kind, repo=repo.name, cap=cap, on_cap=on_cap
+    )
 
 
 def list_labeled_issues(
@@ -168,7 +171,14 @@ def list_labeled_issues(
     return [_issue_from_row(repo.name, row) for row in rows]
 
 
-def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live: bool) -> list[Issue]:
+def list_ready_issues(
+    runner: Runner,
+    config: Config,
+    repo: RepoConfig,
+    *,
+    live: bool,
+    on_cap: str = "fail",
+) -> list[Issue]:
     """Open catalog issues minus human stops. Mill labels are not a gate."""
     rows = _list_open_issues(
         runner,
@@ -177,6 +187,7 @@ def list_ready_issues(runner: Runner, config: Config, repo: RepoConfig, *, live:
         live=live,
         kind="ready-issue",
         state="open",
+        on_cap=on_cap,
         # Ready-list rate limit is not an empty queue.
     )
     issues: list[Issue] = []

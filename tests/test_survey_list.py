@@ -91,6 +91,14 @@ def test_parse_survey_list_refuses_a_full_newest_first_page():
         )
     with pytest.raises(RuntimeError, match="non-list"):
         parse_survey_list("{}", kind="ready-issue", repo="a/b", cap=10)
+    kept = parse_survey_list(
+        json.dumps([{"number": i} for i in range(10)]),
+        kind="ready-issue",
+        repo="a/b",
+        cap=10,
+        on_cap="keep",
+    )
+    assert [row["number"] for row in kept] == list(range(10))
 
 
 def test_list_ready_asks_for_full_page_and_keeps_oldest(tmp_path):

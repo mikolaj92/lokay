@@ -185,6 +185,23 @@ worktree; deterministic atoms alone commit and push directly to `main`. The
 other agent paths. A successful path always returns `restart_required`; product
 work never resumes in the stale daemon process.
 
+### `issues` (child: open issue → PR)
+
+Parent `factory_pass` invokes this child. Labels are not a gate.
+
+```text
+list_open_issues          LEAF  live GitHub open issues
+  → select_next_issue     LEAF  one issue, or none
+    → issues_run_triage   NODE  when route=issue → child Fala issue_triage
+      → select_issue_do   LEAF  do or skip
+        → issues_launch_pr NODE  when route=do → child Fala issue_to_pr
+          → summarize_issues LEAF  receipt (empty / sito skip still write)
+```
+
+The `issues` NODE owns this wiring only. It does not implement `issue_triage`
+or `issue_to_pr` internals and does not fatten list+sito+launch into one process.
+Atom ids stay unique versus `triage_dispatch` / `implementation_dispatch`.
+
 ### `issue_to_pr`
 
 Detached launch uses a durable `starting` receipt before `Popen`, then a

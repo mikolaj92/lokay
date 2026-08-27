@@ -1,4 +1,4 @@
-"""Fala bindings for the issues child: list, sito, kod i PR."""
+"""Fala bindings for the issues NODE: six wired atoms, no fat step."""
 
 from typing import Any
 
@@ -41,5 +41,6 @@ def handle_issues(
             up.get("select_next_issue") or {},
             up.get("select_issue_do") or {},
             up.get("issues_launch_pr") or {},
+            pass_dir=str(inputs.get("pass_dir") or ""),
         )
     return None
