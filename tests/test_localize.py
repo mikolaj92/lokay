@@ -12,6 +12,7 @@ from lokay.localize import (
     build_localization,
     extract_seed_paths,
     load_existing_localize_paths,
+    localize_belongs_to_issue,
     select_paths,
     walk_repo_tree,
     write_localize_file,
@@ -563,3 +564,21 @@ def test_same_issue_localize_json_is_kept(tmp_path: Path):
 def test_localize_json_without_issue_id_is_not_sieve(tmp_path: Path):
     _write_localize(tmp_path, {"paths": ["src/a.py"], "source": "deterministic"})
     assert load_existing_localize_paths(tmp_path, issue=865) == []
+    assert localize_belongs_to_issue(tmp_path, 865) is False
+
+
+def test_localize_belongs_to_issue_leftover_vs_this_issue_vs_unreadable(tmp_path: Path):
+    _write_localize(tmp_path, LEFTOVER_333)
+    assert localize_belongs_to_issue(tmp_path, 865) is False
+    _write_localize(
+        tmp_path,
+        {
+            "paths": ["src/lokay/localize.py"],
+            "source": "deterministic",
+            "issue": 865,
+        },
+    )
+    assert localize_belongs_to_issue(tmp_path, 865) is True
+    (tmp_path / LOCALIZE_REL_PATH).write_text("{not-json", encoding="utf-8")
+    assert localize_belongs_to_issue(tmp_path, 865) is None
+    assert localize_belongs_to_issue(None, 865) is None

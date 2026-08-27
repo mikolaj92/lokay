@@ -3,8 +3,22 @@
 from __future__ import annotations
 from pathlib import Path
 from lokay.git_worktree import leftover_status, remote_heads
+from lokay.localize import localize_belongs_to_issue
 from lokay.proc._common import runner
 from lokay.proc.reap_stale_worktrees import _issue_is_closed
+
+
+def _foreign_leftover_localize(row: dict) -> bool:
+    """Readable leftover sito that is not this issue. Unknown is not foreign."""
+    path = row.get("path")
+    issue = row.get("issue")
+    if not path or issue is None:
+        return False
+    try:
+        number = int(issue)
+    except (TypeError, ValueError):
+        return False
+    return localize_belongs_to_issue(Path(str(path)), number) is False
 
 
 def classify(candidate: dict, *, live: bool) -> dict:
@@ -12,6 +26,12 @@ def classify(candidate: dict, *, live: bool) -> dict:
         return {"ok": True, "route": "absent", "row": candidate}
     row = dict(candidate)
     protected = str(row.pop("protected", "") or "")
+    if _foreign_leftover_localize(row):
+        return {
+            "ok": True,
+            "route": "remove",
+            "row": {**row, "reason": "foreign_localize"},
+        }
     if protected:
         return {
             "ok": True,

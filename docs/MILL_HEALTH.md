@@ -80,7 +80,8 @@ cannot resume (merged / closed CONFLICTING / unpublished-behind-main) and
 `reap_stale_worktrees` drops leftover `~/.lokay/worktrees` corners that
 cannot resume (merged / closed CONFLICTING / unpublished-behind-main) and
 KEEPS a live i2pr (receipts or occupancy), a repo whose PR survey failed,
-an open covering PR, or a dirty unpublished leftover. A live receipt with an
+an open covering PR, or a dirty unpublished leftover. Foreign leftover
+localize is REMOVE and does not occupy a live i2pr receipt. A live receipt with an
 unreadable process command stays live; a failed `ps` mutex survey refuses all
 new launches. Failed `list_prs`, local process uncertainty, and unreadable
 lifecycle receipt state are unknown, not idle: unreadable receipts prevent

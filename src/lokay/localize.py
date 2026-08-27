@@ -1008,6 +1008,36 @@ def load_existing_localize_paths(
     return list(dict.fromkeys(out))
 
 
+def localize_belongs_to_issue(
+    worktree: Path | None,
+    issue: int | None,
+    *,
+    rel_path: str = LOCALIZE_REL_PATH,
+) -> bool | None:
+    """Whether localize.json is this issue's sieve.
+
+    ``True``: payload belongs to this issue (``load_existing_localize_paths``
+    would accept it, including empty paths).
+    ``False``: readable leftover — other issue, missing id, or inherited #333.
+    ``None``: missing worktree or unreadable file (fail-closed).
+    """
+    current = _positive_issue(issue)
+    if worktree is None or current is None:
+        return None
+    path = Path(worktree) / rel_path
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict):
+        return None
+    owned = issue_from_localize_payload(raw)
+    if owned is None or owned != current:
+        return False
+    load_existing_localize_paths(Path(worktree), rel_path=rel_path, issue=current)
+    return True
+
+
 def write_localize_file(
     worktree: Path,
     localization: Localization,

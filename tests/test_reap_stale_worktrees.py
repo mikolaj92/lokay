@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from lokay.proc.classify_stale_worktree_candidate import classify
 from lokay.proc.keep_stale_worktree_candidate import apply as keep
@@ -48,6 +49,121 @@ def test_protected_candidate_is_kept_without_git():
         {"present": True, "repo": "a/b", "protected": "covering_pr"}, live=True
     )
     assert out["route"] == "keep" and out["row"]["reason"] == "covering_pr"
+
+
+LEFTOVER_333 = {
+    "paths": [
+        "src/lokay/proc/factory_begin.py",
+        "hot.py",
+        "lokay/proc/factory_begin.py",
+        "tests/test_hot_repos.py",
+    ],
+    "source": "agent",
+    "worktree": (
+        "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/"
+        "ai__fix__333-factory_begin-cold-survey-musi-pokry-sko-1ddbe4a4"
+    ),
+}
+
+
+def _write_localize(root: Path, payload: dict) -> Path:
+    loc = root / ".lokay"
+    loc.mkdir(parents=True, exist_ok=True)
+    path = loc / "localize.json"
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+def test_leftover_333_removes_even_when_live_and_dirty(tmp_path):
+    """Foreign leftover sito beats live_issue_to_pr / dirty KEEP."""
+    wt = _write_localize(tmp_path / "ai__fix__865-plugin", LEFTOVER_333)
+    out = classify(
+        {
+            "present": True,
+            "repo": "mikolaj92/lokay",
+            "clone": str(tmp_path / "clone"),
+            "path": str(wt),
+            "branch": "ai/fix/865-plugin",
+            "issue": 865,
+            "protected": "live_issue_to_pr",
+        },
+        live=True,
+    )
+    assert out["route"] == "remove"
+    assert out["row"]["reason"] == "foreign_localize"
+
+
+def test_leftover_333_beats_unpublished_or_dirty_keep(tmp_path, monkeypatch):
+    wt = _write_localize(tmp_path / "ai__fix__865-plugin", LEFTOVER_333)
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("leftover_status must not KEEP leftover sito")
+
+    monkeypatch.setattr(
+        "lokay.proc.classify_stale_worktree_candidate.leftover_status", boom
+    )
+    out = classify(
+        {
+            "present": True,
+            "repo": "mikolaj92/lokay",
+            "clone": str(tmp_path / "clone"),
+            "path": str(wt),
+            "branch": "ai/fix/865-plugin",
+            "issue": 865,
+            "protected": "",
+        },
+        live=True,
+    )
+    assert out["route"] == "remove"
+    assert out["row"]["reason"] == "foreign_localize"
+
+
+def test_this_issue_localize_still_keeps_live_protection(tmp_path):
+    wt = _write_localize(
+        tmp_path / "ai__fix__865-plugin",
+        {
+            "paths": ["src/lokay/localize.py"],
+            "source": "deterministic",
+            "issue": 865,
+            "worktree": str(tmp_path / "ai__fix__865-plugin"),
+        },
+    )
+    out = classify(
+        {
+            "present": True,
+            "repo": "mikolaj92/lokay",
+            "clone": str(tmp_path / "clone"),
+            "path": str(wt),
+            "branch": "ai/fix/865-plugin",
+            "issue": 865,
+            "protected": "live_issue_to_pr",
+        },
+        live=True,
+    )
+    assert out["route"] == "keep"
+    assert out["row"]["reason"] == "live_issue_to_pr"
+
+
+def test_unreadable_localize_does_not_force_remove(tmp_path):
+    wt = tmp_path / "ai__fix__865-plugin"
+    loc = wt / ".lokay"
+    loc.mkdir(parents=True)
+    (loc / "localize.json").write_text("{not-json", encoding="utf-8")
+    out = classify(
+        {
+            "present": True,
+            "repo": "mikolaj92/lokay",
+            "path": str(wt),
+            "issue": 865,
+            "protected": "live_issue_to_pr",
+        },
+        live=True,
+    )
+    assert out["route"] == "keep"
+    assert out["row"]["reason"] == "live_issue_to_pr"
 
 
 def test_dry_run_candidate_is_kept():
