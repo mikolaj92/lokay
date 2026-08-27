@@ -152,6 +152,32 @@ def test_issues_skip_leftover_stays_on_remaining(tmp_path: Path) -> None:
     assert receipt["remaining"]["inbox"] == 3
 
 
+def test_issues_triage_failed_leftover_12_stays_on_receipt(tmp_path: Path) -> None:
+    leftover_issues = [{"repo": "o/r", "issue": n} for n in range(2, 14)]
+    out = run_record_pass(
+        pass_dir=str(_begin(tmp_path)),
+        issues={
+            "result": {
+                "route": "skip",
+                "reason": "triage_not_done",
+                "repo": "o/r",
+                "issue": 1,
+                "leftover": 12,
+                "leftover_issues": leftover_issues,
+            }
+        },
+    )
+    rem = out["result"]["remaining"]
+    assert rem["leftover"] == 12
+    assert rem["leftover_issues"] == leftover_issues
+    assert out["result"]["idle"] is False
+    assert out["result"]["health"] == "waiting"
+    receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
+    assert receipt is not None
+    assert receipt["remaining"]["leftover"] == 12
+    assert receipt["idle"] is False
+
+
 def test_writes_none_receipt_when_tick_missing(tmp_path: Path) -> None:
     out = run_record_pass(pass_dir=str(_begin(tmp_path)))
     assert out["ok"] is True
