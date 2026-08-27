@@ -193,7 +193,68 @@ def test_apply_intake_close_mutates():
     joined = [" ".join(c) for c in runner.calls]
     assert any("--remove-label ai:ready" in j for j in joined)
     assert any("issue comment" in j for j in joined)
-    assert any("issue close" in j for j in joined)
+    assert not any("issue close" in j for j in joined)
+
+
+def _close_calls(monkeypatch) -> list[tuple]:
+    closes: list[tuple] = []
+    monkeypatch.setattr(
+        "lokay.intake_io.close_issue",
+        lambda *a, **k: closes.append((a, k)),
+    )
+    return closes
+
+
+def test_apply_intake_close_open_linked_pr_merged_does_not_close(monkeypatch):
+    """reviewkit#205 shape: guessed linked_pr_merged must not close OPEN."""
+    cfg = Config()
+    issue = _issue(state="OPEN")
+    decision = IntakeDecision(
+        decision="close",
+        reason="linked_pr_merged",
+        close=True,
+        comment="Closed (intake): linked PR(s) merged.",
+    )
+    closes = _close_calls(monkeypatch)
+    runner = _FakeRunner()
+    assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
+    joined = [" ".join(c) for c in runner.calls]
+    assert any("issue comment" in j for j in joined)
+    assert closes == []
+    assert not any("issue close" in j for j in joined)
+
+
+def test_apply_intake_close_open_obsolete_does_not_close(monkeypatch):
+    """Temida#4995 shape: obsolete_* guess must not close OPEN."""
+    cfg = Config()
+    issue = _issue(state="OPEN")
+    decision = IntakeDecision(
+        decision="close",
+        reason="obsolete_argus_flow_assumption",
+        close=True,
+        comment="Closed (intake): obsolete.",
+    )
+    closes = _close_calls(monkeypatch)
+    runner = _FakeRunner()
+    assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
+    assert closes == []
+    assert not any("issue close" in " ".join(c) for c in runner.calls)
+
+
+def test_apply_intake_close_already_closed_may_still_close(monkeypatch):
+    """Already-closed is the only exception, same as apply_issue_close."""
+    cfg = Config()
+    issue = _issue(state="CLOSED", labels=[])
+    decision = IntakeDecision(
+        decision="close",
+        reason="issue_already_closed",
+        close=True,
+        comment="Closed (intake): already closed upstream.",
+    )
+    closes = _close_calls(monkeypatch)
+    runner = _FakeRunner()
+    assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
+    assert len(closes) == 1
 
 
 class _PagedCoveringRunner:
