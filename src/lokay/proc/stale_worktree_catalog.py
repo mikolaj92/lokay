@@ -1,13 +1,29 @@
-"""Classify and keep/remove the stale-worktree catalog in one atom (no 4-slot unroll)."""
+"""Apply keep/remove for the stale-worktree catalog (no leftover labels)."""
 
 from __future__ import annotations
 
 SLOTS = 4
 
 
-def _one_slot(
+def overflow_skip(present: list[dict]) -> dict | None:
+    """One job: skip when the inventory exceeds authored slots."""
+    if len(present) <= SLOTS:
+        return None
+    return {
+        "ok": True,
+        "route": "skip",
+        "skipped": True,
+        "reason": "stale_worktree_overflow",
+        "count": len(present),
+        "slot_count": SLOTS,
+        "effects": [],
+    }
+
+
+def apply_slot(
     collected: dict, *, slot: int, config_path: str | None, live: bool
 ) -> dict:
+    """One job: classify one slot, then keep or remove that worktree."""
     from lokay.proc.classify_stale_worktree_candidate import classify
     from lokay.proc.keep_stale_worktree_candidate import apply as keep
     from lokay.proc.remove_stale_worktree_candidate import apply as remove
@@ -29,15 +45,11 @@ def run(collected: dict, *, config_path: str | None, live: bool) -> dict:
         for row in list(collected.get("candidates") or [])
         if isinstance(row, dict) and row.get("present")
     ]
-    if len(present) > SLOTS:
-        return {
-            "ok": False,
-            "error": "stale worktree catalog exceeds authored slots",
-            "count": len(present),
-            "slot_count": SLOTS,
-        }
+    skipped = overflow_skip(present)
+    if skipped is not None:
+        return skipped
     effects = [
-        _one_slot(collected, slot=slot, config_path=config_path, live=live)
+        apply_slot(collected, slot=slot, config_path=config_path, live=live)
         for slot in range(1, SLOTS + 1)
     ]
     failed = next((row for row in effects if not row.get("ok", True)), None)

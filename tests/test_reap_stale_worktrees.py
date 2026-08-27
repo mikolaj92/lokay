@@ -4,6 +4,41 @@ from lokay.proc.keep_stale_worktree_candidate import apply as keep
 from lokay.proc.resolve_existing_delivery import resolve
 
 
+def test_collect_protection_is_its_own_function():
+    from lokay.proc.collect_stale_worktree_candidates import protection
+
+    empty = dict(
+        repo="a/b",
+        branch="ai/fix/1",
+        issue=1,
+        receipt_unknown=False,
+        live_repos=set(),
+        survey_failed=set(),
+        covered={},
+        heads={},
+    )
+    assert protection(**empty) == ""
+    assert protection(**{**empty, "receipt_unknown": True}) == "receipt_state_unknown"
+    assert protection(**{**empty, "live_repos": {"a/b"}}) == "live_issue_to_pr"
+    assert protection(**{**empty, "survey_failed": {"a/b"}}) == "pr_survey_failed"
+    assert (
+        protection(**{**empty, "covered": {"a/b": {1}}}) == "covering_pr"
+    )
+
+
+def test_bound_slots_defers_overflow_without_failing():
+    from lokay.proc.collect_stale_worktree_candidates import SLOTS, bound_slots
+
+    rows = [
+        {"repo": "a/b", "issue": i, "branch": f"ai/fix/{i}", "present": True}
+        for i in range(1, SLOTS + 3)
+    ]
+    out = bound_slots(rows, pass_dir="/tmp/p", receipt_safe=True)
+    assert out["ok"] is True
+    assert len(out["candidates"]) == SLOTS
+    assert len(out["deferred"]) == 2
+
+
 def test_absent_candidate_is_explicit():
     assert classify({"present": False}, live=True)["route"] == "absent"
 
@@ -42,7 +77,29 @@ def test_stale_worktree_catalog_fail_closed_when_collect_failed():
     assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
-def test_stale_worktree_catalog_overflow_is_fail_closed():
+def test_overflow_skip_is_its_own_function():
+    from lokay.proc.stale_worktree_catalog import SLOTS, overflow_skip
+
+    assert overflow_skip([{"present": True}] * SLOTS) is None
+    out = overflow_skip([{"present": True}] * (SLOTS + 1))
+    assert out["ok"] is True and out["route"] == "skip"
+    assert "leftover" not in out["reason"]
+
+
+def test_skip_result_does_not_persist_or_park_labels():
+    from lokay.proc.summarize_stale_worktree_reap import skip_result
+
+    out = skip_result(
+        pass_dir="/tmp/unused",
+        collected={"ok": True, "receipt_safe": True, "deferred": []},
+        catalog={"route": "skip", "skipped": True, "reason": "stale_worktree_overflow"},
+        live=True,
+    )
+    assert out["ok"] is True and out["result"]["skipped"] is True
+    assert "leftover" not in str(out["result"]["reason"])
+
+
+def test_stale_worktree_catalog_overflow_skips_not_fail():
     from lokay.proc.stale_worktree_catalog import SLOTS, run
 
     out = run(
@@ -53,7 +110,35 @@ def test_stale_worktree_catalog_overflow_is_fail_closed():
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+    assert out["ok"] is True
+    assert out["route"] == "skip"
+    assert out["skipped"] is True
+    assert out["reason"] == "stale_worktree_overflow"
+    assert out["count"] == SLOTS + 1
+    assert out["effects"] == []
+
+
+def test_stale_worktree_summarize_overflow_skip_does_not_block():
+    from lokay.proc.summarize_stale_worktree_reap import summarize
+
+    out = summarize(
+        pass_dir="/tmp/unused",
+        collected={"ok": True, "receipt_safe": True, "deferred": []},
+        catalog={
+            "ok": True,
+            "route": "skip",
+            "skipped": True,
+            "reason": "stale_worktree_overflow",
+            "count": 5,
+            "slot_count": 4,
+            "effects": [],
+        },
+        live=True,
+    )
+    assert out["ok"] is True
+    assert out["result"]["skipped"] is True
+    assert out["result"]["reason"] == "stale_worktree_overflow"
+    assert out["result"]["reaped_count"] == 0
 
 
 def test_stale_worktree_catalog_keep_and_remove(monkeypatch):

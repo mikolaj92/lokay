@@ -327,6 +327,8 @@ def test_stale_worktree_reap_path_is_a_handful_of_effectors():
         node["id"].startswith("classify_stale_worktree_")
         or node["id"].startswith("keep_stale_worktree_")
         or node["id"].startswith("remove_stale_worktree_")
+        or node["id"].startswith("prepare_leftover_")
+        or node["id"].startswith("leftover_")
         or node["id"].endswith("_1")
         or node["id"].endswith("_4")
         for node in path["nodes"]

@@ -27,11 +27,10 @@ def handle_stale_worktree(
     if atom == "summarize_stale_worktree_reap":
         from lokay.proc.summarize_stale_worktree_reap import summarize
 
-        catalog = up.get("stale_worktree_catalog") or {}
         return summarize(
             pass_dir=pass_dir,
             collected=up.get("collect_stale_worktree_candidates") or {},
-            effects=list(catalog.get("effects") or []),
+            catalog=up.get("stale_worktree_catalog") or {},
             live=live,
         )
     return None

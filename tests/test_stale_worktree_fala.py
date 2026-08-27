@@ -40,3 +40,27 @@ if a=='summarize_stale_worktree_reap':v['result']={'kept_count':0,'reaped_count'
     assert statuses["stale_worktree_catalog"]["status"] == "succeeded"
     assert statuses["summarize_stale_worktree_reap"]["status"] == "succeeded"
     assert result.get("ticks_used", 16) < 64
+
+
+def test_stale_worktree_reap_overflow_skip_succeeds(tmp_path):
+    body = base_effector(
+        """if a=='collect_stale_worktree_candidates':v.update(receipt_safe=True,deferred=[])
+if a=='stale_worktree_catalog':v.update(skipped=True,route='skip',reason='stale_worktree_overflow',effects=[])
+if a=='summarize_stale_worktree_reap':v['result']={'skipped':True,'reason':'stale_worktree_overflow','reaped_count':0}"""
+    )
+    result = run_graph(tmp_path, body, "stale-overflow", path_id="stale_worktree_reap")
+    statuses = result["effector_results"]
+    assert list(statuses) == [
+        "collect_stale_worktree_candidates",
+        "stale_worktree_catalog",
+        "summarize_stale_worktree_reap",
+    ]
+    assert all(row["status"] == "succeeded" for row in statuses.values())
+    assert not any(
+        name.startswith("prepare_leftover_")
+        or name.startswith("leftover_")
+        or name.startswith("classify_stale_worktree_")
+        or name.startswith("keep_stale_worktree_")
+        or name.startswith("remove_stale_worktree_")
+        for name in statuses
+    )

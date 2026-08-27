@@ -996,16 +996,20 @@ stateDiagram-v2
     ReapResult --> [*]
 ```
 
-Pod-Fala ma trzy kroki: bounded inventory, jeden atom katalogu, który w
-procesie klasyfikuje i stosuje `keep` / `remove`, oraz summarize. Nie ma
-4-slotowego rozwinięcia Fali (14 efektorów). Overflow katalogu jest
-fail-closed. Atom katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP
-(live i2pr / occupancy / `pr_survey_failed` / covering PR / dirty unpublished /
-nieczytelny git). W `factory_pass` ten reap jest po `dispatch_implement`,
-żeby klasyfikacja leftoverów nie zjadała 180s sufitu przed implementacją.
-`compute_health` / `record_pass` nie czekają na ten reap: paragon jest po
-dispatchu. Select nie czeka na survey / closeout / occupancy — higiena
-zostaje w ścieżce obok pracy, nie przed jedynym cennym zlewem.
+Pod-Fala ma trzy liście: `collect` → `catalog` → `summarize`. Każdy
+liść składa dwa małe kroki: collect to `protection` albo `bound_slots`;
+catalog to `overflow_skip` albo `apply_slot`; summarize to `skip_result`
+albo `persist_result`. Nie ma `leftover_closeout` w tym grafie. Nie ma
+jednego tłustego reapa, który parkuje leftover labels. Nie ma 4-slotowego
+rozwinięcia Fali (14 efektorów). Overflow katalogu pomija reap (`skip`)
+i nie kończy passu fail-closed — nie blokuje PR-ów ani issue. Atom
+katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP (live i2pr / occupancy /
+`pr_survey_failed` / covering PR / dirty unpublished / nieczytelny git).
+W `factory_pass` ten reap jest po `dispatch_implement`, żeby klasyfikacja
+worktree nie zjadała 180s sufitu przed implementacją. `compute_health` /
+`record_pass` nie czekają na ten reap: paragon jest po dispatchu. Select
+nie czeka na survey / closeout / occupancy — higiena zostaje w ścieżce
+obok pracy, nie przed jedynym cennym zlewem.
 
 ### Triage issue — `issue_triage`
 

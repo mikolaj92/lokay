@@ -1,4 +1,4 @@
-"""Collect a bounded, deterministic inventory for the stale-worktree subflow."""
+"""Collect a bounded inventory for the stale-worktree child (worktrees only)."""
 
 from __future__ import annotations
 from lokay.passkit.hot import survey_scope
@@ -16,13 +16,60 @@ import argparse
 SLOTS = 4
 
 
+def protection(
+    *,
+    repo: str,
+    branch: str,
+    issue: int | None,
+    receipt_unknown: bool,
+    live_repos: set[str],
+    survey_failed: set[str],
+    covered: dict[str, set[int]],
+    heads: dict[str, set[str]],
+) -> str:
+    """One job: KEEP reason for a live/unknown/covering corner, else empty."""
+    if receipt_unknown:
+        return "receipt_state_unknown"
+    if repo in live_repos:
+        return "live_issue_to_pr"
+    if repo in survey_failed:
+        return "pr_survey_failed"
+    if issue in covered.get(repo, set()) or branch in heads.get(repo, set()):
+        return "covering_pr"
+    return ""
+
+
+def bound_slots(
+    rows: list[dict], *, pass_dir: str, receipt_safe: bool
+) -> dict:
+    """One job: sort, keep four authored slots, defer the rest."""
+    rows = sorted(
+        rows,
+        key=lambda row: (
+            row["repo"],
+            row["issue"] is None,
+            row["issue"] or 0,
+            row["branch"],
+        ),
+    )
+    slots = rows[:SLOTS]
+    slots.extend({"present": False, "slot": i + 1} for i in range(len(slots), SLOTS))
+    return {
+        "ok": True,
+        "pass_dir": pass_dir,
+        "receipt_safe": receipt_safe,
+        "candidates": slots,
+        "deferred": rows[SLOTS:],
+        **{f"candidate_{i + 1}": row for i, row in enumerate(slots)},
+    }
+
+
 def collect(*, pass_dir: str, config_path: str | None) -> dict:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     begin, working = load_begin_working(pass_dir)
     scope = survey_scope(begin)
     receipt_unknown = has_unreadable_issue_to_pr_receipts()
-    live_rows = live_issue_to_pr_receipts()
-    live_keys = _live_keys(live_rows)
+    live_keys = _live_keys(live_issue_to_pr_receipts())
     live_repos = _names(working, "live_issue_to_pr_repos") | {
         repo for repo, _ in live_keys
     }
@@ -33,6 +80,7 @@ def collect(*, pass_dir: str, config_path: str | None) -> dict:
         if scope is not None and repo.name not in scope:
             continue
         for path, branch in iter_worktrees(cfg, repo):
+            issue = issue_number_from_branch(branch, branch_prefix=cfg.branch_prefix)
             rows.append(
                 {
                     "present": True,
@@ -40,49 +88,19 @@ def collect(*, pass_dir: str, config_path: str | None) -> dict:
                     "clone": str(repo.clone_path),
                     "path": str(path),
                     "branch": branch,
-                    "issue": issue_number_from_branch(
-                        branch, branch_prefix=cfg.branch_prefix
-                    ),
-                    "protected": (
-                        "receipt_state_unknown"
-                        if has_unreadable_issue_to_pr_receipts()
-                        else (
-                            "live_issue_to_pr"
-                            if repo.name in live_repos
-                            else (
-                                "pr_survey_failed"
-                                if repo.name in survey_failed
-                                else (
-                                    "covering_pr"
-                                    if (
-                                        issue_number_from_branch(
-                                            branch, branch_prefix=cfg.branch_prefix
-                                        )
-                                        in covered.get(repo.name, set())
-                                        or branch in heads.get(repo.name, set())
-                                    )
-                                    else ""
-                                )
-                            )
-                        )
+                    "issue": issue,
+                    "protected": protection(
+                        repo=repo.name,
+                        branch=branch,
+                        issue=issue,
+                        receipt_unknown=receipt_unknown,
+                        live_repos=live_repos,
+                        survey_failed=survey_failed,
+                        covered=covered,
+                        heads=heads,
                     ),
                 }
             )
-    rows.sort(
-        key=lambda row: (
-            row["repo"],
-            row["issue"] is None,
-            row["issue"] or 0,
-            row["branch"],
-        )
+    return bound_slots(
+        rows, pass_dir=pass_dir, receipt_safe=not receipt_unknown
     )
-    slots = rows[:SLOTS]
-    slots.extend({"present": False, "slot": i + 1} for i in range(len(slots), SLOTS))
-    return {
-        "ok": True,
-        "pass_dir": pass_dir,
-        "receipt_safe": not receipt_unknown,
-        "candidates": slots,
-        "deferred": rows[SLOTS:],
-        **{f"candidate_{i+1}": row for i, row in enumerate(slots)},
-    }
