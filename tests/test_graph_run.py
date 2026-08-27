@@ -103,6 +103,73 @@ def test_factory_pass_cleanup_process_failed_still_opens_a_pr():
     assert out["terminal"]["issues"]["launched"] == "pr"
 
 
+def test_factory_pass_prefixed_reap_adapter_failed_still_opens_a_pr():
+    """Sibling reap adapter_failed must not fail the factory_pass parent."""
+    from lokay.graph_run import normalize_path_result
+
+    out = normalize_path_result(
+        {
+            "ok": False,
+            "error": "adapter_failed",
+            "path_id": "factory_pass",
+            "fala": {
+                "run_status": "failed",
+                "error": "adapter_failed",
+                "effector_results": {
+                    "factory_begin": {
+                        "status": "succeeded",
+                        "output": {"values": {"ok": True, "pass_dir": "/pass"}},
+                    },
+                    "prs": {
+                        "status": "succeeded",
+                        "output": {"values": {"ok": True}},
+                    },
+                    "run-abc:reap_stale_worktrees": {
+                        "id": "run-abc:reap_stale_worktrees",
+                        "status": "failed",
+                        "error": "adapter_failed",
+                        "output": {"values": {}},
+                    },
+                    "issues": {
+                        "status": "succeeded",
+                        "output": {
+                            "values": {
+                                "ok": True,
+                                "route": "do",
+                                "launched": "pr",
+                                "result": {"launched": "pr", "leftover": 3},
+                            }
+                        },
+                    },
+                    "record_pass": {
+                        "status": "succeeded",
+                        "output": {
+                            "values": {
+                                "ok": True,
+                                "result": {"outcome": "new_pr", "ok": True},
+                            }
+                        },
+                    },
+                    "factory_pass_terminal": {
+                        "status": "succeeded",
+                        "output": {
+                            "values": {
+                                "ok": True,
+                                "result": {"outcome": "new_pr", "ok": True},
+                            }
+                        },
+                    },
+                },
+            },
+        }
+    )
+    assert out["ok"] is True
+    assert out["outcome"] == "new_pr"
+    assert "adapter_failed" not in str(out.get("error") or "")
+    assert out["terminal"]["reap_stale_worktrees"]["route"] == "failed"
+    assert out["terminal"]["issues"]["launched"] == "pr"
+
+
 def test_normalize_prefers_authored_terminal_result():
     result = {
         "ok": True,

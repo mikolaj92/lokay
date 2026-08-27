@@ -378,9 +378,12 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     failed: list[dict[str, Any]] = []
     for keyed_id, process in entries:
         process_id = str(process.get("id") or "")
-        effector_id = keyed_id or str(
-            process.get("effector_id") or process_id.rsplit(":", 1)[-1]
+        raw_id = str(
+            process.get("effector_id")
+            or (process_id.rsplit(":", 1)[-1] if process_id else "")
+            or keyed_id
         )
+        effector_id = raw_id.rsplit(":", 1)[-1]
         payload = _process_payload(process)
         item = {"step": effector_id, "status": process.get("status"), **payload}
         error = process.get("error")
@@ -392,7 +395,7 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         if status in {"failed", "cancelled", "canceled", "timed_out", "error"}:
             if (
                 str(result.get("path_id") or "") == "factory_pass"
-                and effector_id == "reap_stale_worktrees"
+                and effector_id.endswith("reap_stale_worktrees")
             ):
                 item["ok"] = True
                 item["route"] = str(item.get("route") or "failed")
@@ -407,7 +410,7 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     cleanup_only = (
         str(result.get("path_id") or "") == "factory_pass"
         and not failed
-        and any(item.get("step") == "reap_stale_worktrees" for item in steps)
+        and any(str(item.get("step") or "").endswith("reap_stale_worktrees") for item in steps)
         and str((terminal.get("reap_stale_worktrees") or {}).get("route") or "")
         == "failed"
     )
@@ -429,6 +432,9 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
         return out
 
     out["ok"] = True
+    if cleanup_only:
+        out.pop("error", None)
+        out.pop("reason", None)
     authored_results = [
         item.get("result")
         for item in terminal.values()

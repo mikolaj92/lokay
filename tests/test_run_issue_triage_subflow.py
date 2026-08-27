@@ -42,9 +42,9 @@ def test_failed_leftover_walk_same_pass_keeps_count_12():
     do = select_do(picked, triage, listed)
     assert do["route"] == "skip"
     assert do["reason"] == "triage_not_done"
-    assert do["leftover"] == 12
-    assert do["leftover_issues"][0]["issue"] == 2
+    assert do["leftover"] == 13
+    assert do["leftover_issues"][0]["issue"] == 1
     receipt = envelope(picked, do, {})
-    assert receipt["result"]["leftover"] == 12
-    assert len(receipt["result"]["leftover_issues"]) == 12
+    assert receipt["result"]["leftover"] == 13
+    assert len(receipt["result"]["leftover_issues"]) == 13
     assert receipt["result"]["route"] == "skip"

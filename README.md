@@ -985,8 +985,8 @@ stateDiagram-v2
     SelectNextIssue --> IssuesRunTriage: jest issue
     SelectNextIssue --> SelectIssueDo: pusta lista / leftover
     IssuesRunTriage --> SelectIssueDo
-    SelectIssueDo --> IssuesLaunchPr: robić
-    SelectIssueDo --> SummarizeIssues: sito nie robić
+    SelectIssueDo --> IssuesLaunchPr: robić / leftover ready
+    SelectIssueDo --> SummarizeIssues: authored skip
     IssuesLaunchPr --> SummarizeIssues
     SummarizeIssues --> [*]
 ```
@@ -994,11 +994,13 @@ stateDiagram-v2
 Dziecko `issues` jest węzłem Fali. Sześć krawędzi, nie jeden tłusty proces.
 Liście: `list_open_issues`, `select_next_issue`, `select_issue_do`,
 `summarize_issues`. Węzły-dzieci: `issues_run_triage` → Fala `issue_triage`,
-`issues_launch_pr` → Fala `issue_to_pr`. Po `select_issue_do` skip leftover
-zostaje kolejką: następny pick to następny wiersz, nie `rows[0]` w kółko.
-`leftover` jest na kwicie i na last-pass remaining. `leftover=0` tylko gdy
-lista się wyczerpała. Bez bramki `work:ready` / `ai:ready` i bez 30 slotów.
-Jeden implement na pass.
+`issues_launch_pr` → Fala `issue_to_pr`. Leftover jest zjadane tylko przy
+authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
+adapter fail / `sito_nie_robic` zostawia wiersz; pierwszy leftover remain
+pickiem. Ready leftover w tym passie idzie do issue-to-PR. Oil lokay nie
+zajmuje product slotu. `leftover` jest na kwicie i na last-pass remaining.
+`leftover=0` tylko gdy lista się wyczerpała. Bez 30 slotów. Jeden implement
+na pass.
 
 ### Otwarte PR — `prs`
 
