@@ -100,7 +100,6 @@ _MUTATING_ATOMS = frozenset(
         "apply_issue_ready",
         "apply_issue_close",
         "apply_issue_manual",
-        "issue_split_subflow",
         "create_issue_split_child_1",
         "create_issue_split_child_2",
         "create_issue_split_child_3",

@@ -252,37 +252,31 @@ against the tree, keeps extra/seed paths, and fails closed on an empty list.
 Invalid JSON / timeout falls back to the deterministic scorer. Not an
 embedding service and not a second planner.
 
-### `issue_triage` (inbox → labels / split)
+### `issue_triage` (sito of parent `issues`)
+
+Child of `issues`. Sito only: **robić / nie / zamknąć / człowiek**.
+Not implement. `issue_split` is a later child Fala, not an exit here.
 
 ```text
 get_issue
-  └─→ triage_issue   ← pure rules → ready | split | rare needs-feedback | OOS close
-        └─→ intake_issue  ← deterministic intake → CLOSE | READY | SPLIT | NEEDS_HUMAN
-              └─→ issue_split  ← when SPLIT: create bounded children (gh + rules)
+  → resolve_issue_candidate
+    → collect linked/covering PRs
+      → resolve_issue_hard_facts
+        ├─→ terminal sito (close / skip / blocked)
+        └─→ issue_triage_agent → validate → one retry → one evidence round
+              → finalize
+                ├─→ apply_issue_ready     robić
+                ├─→ apply_issue_skip      nie
+                ├─→ apply_issue_blocked   nie (preflight incident leaf)
+                ├─→ apply_issue_close     zamknąć
+                └─→ apply_issue_manual    człowiek
 ```
 
-**Minimize human in the loop:** CLOSE / SPLIT / READY+implement are the exits.
-`NEEDS_HUMAN` / `ai:needs-feedback` is residual after rules fail closed — not the
-default for oversized work.
-
-`ai:ready` is an **outcome** of triage **plus intake**, not the start of the universe.
-Hard facts stay deterministic (still-open, superseded/merged PR, duplicate AI PR
-for the same issue). Semantic remainder — shape, already-satisfied, size/SPLIT,
-essence — is one structured executor call; invalid JSON / timeout falls back to
-the previous regex/heuristic frame. CLOSE posts a short actionable receipt (and
-drops `ai:ready`). SPLIT queues `issue_split`, which creates bounded child
-issues, labels the parent `ai:tracker`, and closes the parent as a tracker —
-parent is never left `ai:ready`. Children re-enter inbox/intake on later passes.
-NEEDS_HUMAN applies `ai:needs-feedback` only when split is impossible or evidence
-is inconclusive. Per-repo PR-first: triage/intake/split mutations skip a repo
-that still has actionable open AI PRs (or a failed PR survey for that repo);
-other clean repos continue. Intake still runs inside `issue_triage` whenever
-triage is allowed; the mill also runs `queue_conflict` (queue hygiene — not a
-parallel scheduler; covering-PR matches stay deterministic, the rest may ask
-the executor once) then re-runs `intake_issue` with `--require-ready` before
-every `issue_to_pr`. **Serial by design:** default
-`limits.max_issue_to_pr_per_pass` is **1** (ticket after ticket). K is an
-optional pass budget, not concurrent worktrees/Pi/tmux.
+Hard facts stay deterministic (still-open, superseded/merged PR, duplicate AI PR).
+Semantic remainder is one structured executor call; invalid JSON gets one retry;
+a second evidence request is człowiek. CLOSE posts a short receipt.
+Oversized / multi-epic work is człowiek until `issue_split` has its own agent.
+Parent `issues` launches `issue_to_pr` only after robić.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 

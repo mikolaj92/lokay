@@ -28,9 +28,10 @@ if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'ready'}
 if a=='apply_issue_ready':Path(%r).write_text('ran')
-if a in {'apply_issue_close','apply_issue_blocked','apply_issue_manual'}:Path(%r).write_text(a)"""%(str(ready),str(wrong)))
+if a in {'apply_issue_close','apply_issue_blocked','apply_issue_manual','apply_issue_skip'}:Path(%r).write_text(a)"""%(str(ready),str(wrong)))
     result=run_graph(tmp_path,body,"ready"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
-    assert statuses['apply_issue_ready']=='succeeded' and statuses['apply_issue_close']=='skipped' and statuses['apply_issue_blocked']=='skipped' and statuses['issue_split_subflow']=='skipped'
+    assert statuses['apply_issue_ready']=='succeeded' and statuses['apply_issue_close']=='skipped' and statuses['apply_issue_blocked']=='skipped' and statuses['apply_issue_skip']=='skipped'
+    assert 'issue_split_subflow' not in statuses
     assert ready.exists() and not wrong.exists()
 
 def test_invalid_json_runs_exactly_one_retry_then_close(tmp_path):
@@ -101,7 +102,23 @@ if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'blocked','reason':'preflight_incident'}
 if a=='apply_issue_blocked':Path(%r).write_text('ran')
-if a in {'apply_issue_ready','apply_issue_close','apply_issue_manual','issue_split_subflow'}:Path(%r).write_text(a)"""%(str(blocked),str(wrong)))
+if a in {'apply_issue_ready','apply_issue_close','apply_issue_manual','apply_issue_skip'}:Path(%r).write_text(a)"""%(str(blocked),str(wrong)))
     result=run_graph(tmp_path,body,"blocked"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
-    assert statuses['apply_issue_blocked']=='succeeded' and statuses['apply_issue_ready']=='skipped'
+    assert statuses['apply_issue_blocked']=='succeeded' and statuses['apply_issue_ready']=='skipped' and statuses['apply_issue_skip']=='skipped'
     assert blocked.exists() and not wrong.exists()
+
+
+def test_skip_runs_only_skip_effect(tmp_path):
+    skip=tmp_path/"skip"; wrong=tmp_path/"wrong"
+    body=base_effector("""if a=='resolve_issue_candidate':v['route']='skip'
+if a=='resolve_issue_hard_facts':v.update(route='terminal',decision={'verdict':'skip','reason':'already_decided'})
+if a=='validate_issue_triage':v['route']='not_applicable'
+if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decision={'verdict':'skip','reason':'already_decided'})
+if a=='verify_issue_evidence':v['route']='not_applicable'
+if a=='select_issue_evidence':v['route']='not_applicable'
+if a=='finalize_issue_triage':v['decision']={'verdict':'skip','reason':'already_decided'}
+if a=='apply_issue_skip':Path(%r).write_text('ran')
+if a in {'apply_issue_ready','apply_issue_close','apply_issue_blocked','apply_issue_manual'}:Path(%r).write_text(a)"""%(str(skip),str(wrong)))
+    result=run_graph(tmp_path,body,"skip"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
+    assert statuses['apply_issue_skip']=='succeeded' and statuses['apply_issue_ready']=='skipped'
+    assert skip.exists() and not wrong.exists()

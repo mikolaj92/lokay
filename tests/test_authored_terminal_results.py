@@ -7,9 +7,9 @@ def test_issue_triage_terminal_is_authoritative():
     out = issue_triage(
         final={"decision": {"verdict": "ready", "reason": "ready"}},
         ready={"applied": True},
+        skip={},
         blocked={},
         close={},
-        split={},
         manual={},
     )["result"]
     assert out["applied"] and out["implementable"] and not out["skipped"]

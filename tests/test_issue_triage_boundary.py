@@ -1,5 +1,6 @@
 """Closed issue-triage state boundary."""
 from lokay.issue_triage_boundary import resolve_candidate, resolve_hard_facts, select_evidence, select_initial, validate_output
+from lokay.proc.apply_issue_skip import apply as apply_skip
 
 def issue(**extra):
     value={"repo":"a/b","number":7,"title":"Implement useful feature","body":"A sufficiently detailed body with clear acceptance criteria.","labels":[],"assignees":["mikolaj92"],"url":"u","state":"OPEN","author":"mikolaj92"}; value.update(extra); return value
@@ -31,6 +32,16 @@ def test_evidence_request_routes_directly_and_second_request_is_terminal():
     again=validate_output('{"verdict":"needs_evidence","evidence_kind":"repo_shape","evidence":[]}')
     final=select_evidence(selected,again)
     assert final["decision"] == {"verdict":"needs_human","reason":"issue_evidence_exhausted"}
+
+
+def test_agent_split_is_not_a_sito_verdict():
+    out=validate_output('{"verdict":"split","reason":"too_large"}')
+    assert out["route"] == "retry" and "verdict" in out["validation_error"]
+
+
+def test_skip_leaf_records_nie_without_mutation():
+    out=apply_skip(decision={"verdict":"skip","reason":"already_decided"})
+    assert out == {"ok":True,"applied":False,"skipped":True,"verdict":"skip","reason":"already_decided"}
 
 
 def test_preflight_hard_fact_stays_blocked_without_agent_or_manual_rewrite():
