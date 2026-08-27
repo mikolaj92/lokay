@@ -14,6 +14,9 @@ def classify(triage_run: dict) -> dict:
         blob = {}
     result = blob.get("result") if isinstance(blob.get("result"), dict) else {}
     decision = blob.get("decision") if isinstance(blob.get("decision"), dict) else {}
+    if not decision:
+        nested = result.get("decision")
+        decision = nested if isinstance(nested, dict) else {}
     implementable = (
         blob.get("implementable") is True
         or result.get("implementable") is True
