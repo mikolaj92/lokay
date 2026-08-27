@@ -76,7 +76,7 @@ def test_labels_are_not_a_gate():
     assert select(unlabeled, ready)["route"] == "do"
     assert select(labeled, ready)["route"] == "do"
     assert select(unlabeled, closed)["route"] == "skip"
-    assert select(labeled, closed)["route"] == "skip"
+    assert select(labeled, closed)["route"] == "do"
 
 
 def test_leftover_does_not_become_a_second_implement():
@@ -88,3 +88,41 @@ def test_leftover_does_not_become_a_second_implement():
     assert out["issue"] == 2
     assert out["leftover"] == 4
     assert out["leftover_issues"] == []
+
+
+def test_ready_leftover_sito_miss_is_do():
+    picked = {
+        **PICKED,
+        "repo": "Temida/Temida",
+        "issue": 5001,
+        "labels": ["ai:ready", "work:ready"],
+        "leftover": 2,
+        "leftover_issues": [
+            {"repo": "Temida/Temida", "issue": 4999, "labels": ["ai:ready", "work:ready"]},
+            {"repo": "Temida/Temida", "issue": 4997, "labels": ["ai:ready", "work:ready"]},
+        ],
+    }
+    listed = {
+        "issues": [
+            {
+                "repo": "Temida/Temida",
+                "issue": 5001,
+                "labels": ["ai:ready", "work:ready"],
+            },
+            {
+                "repo": "Temida/Temida",
+                "issue": 4999,
+                "labels": ["ai:ready", "work:ready"],
+            },
+            {
+                "repo": "Temida/Temida",
+                "issue": 4997,
+                "labels": ["ai:ready", "work:ready"],
+            },
+        ]
+    }
+    out = select(picked, {"route": "not_ready", "reason": "triage_not_done"}, listed)
+    assert out["route"] == "do"
+    assert out["issue"] == 5001
+    assert out["leftover"] == 3
+    assert out["leftover_issues"][0]["issue"] == 5001

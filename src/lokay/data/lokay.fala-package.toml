@@ -72,7 +72,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "factory_pass"
 title = "Lokay factory pass"
-description = "Parent conducts children: open, PRs, issues, receipt. Clean is a sibling child. Failed clean is a classified route, not process.failed."
+description = "Parent conducts children: open, PRs, issues, receipt. Clean is a sibling child. Failed clean is a classified route, not process.failed. Parent does not become adapter_failed."
 
 [[correlation_paths.effectors]]
 id = "factory_begin"
@@ -124,7 +124,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issues"
 title = "Open issue to PR"
-description = "NODE wiring: list, sito one, issue_triage child, do/skip, issue_to_pr child, receipt. No ready label gate."
+description = "NODE wiring: list, sito one, issue_triage child, do/skip, issue_to_pr child, receipt. Leftover consume only on authored skip. Ready leftover goes to issue-to-PR. Oil is not the product slot."
 
 [[correlation_paths.effectors]]
 id = "list_open_issues"
