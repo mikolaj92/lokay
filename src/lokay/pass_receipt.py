@@ -92,6 +92,61 @@ def _should_skip_clobber(target: Path, receipt: dict[str, Any]) -> bool:
     return bool(existing) and existing_is_product(existing)
 
 
+def _receipt_new_pr(tick: dict[str, Any]) -> bool:
+    if tick.get("new_pr") is True:
+        return True
+    remaining = tick.get("remaining") if isinstance(tick.get("remaining"), dict) else {}
+    if remaining.get("new_pr") or remaining.get("pr_created"):
+        return True
+    for action in list(tick.get("actions") or []):
+        if not isinstance(action, dict):
+            continue
+        step = str(action.get("step") or "")
+        if step == "pr_create":
+            return True
+        if step == "issue_to_pr" and (
+            action.get("pr") or action.get("pr_number") or action.get("url")
+        ):
+            return True
+    return False
+
+
+def _receipt_merged(tick: dict[str, Any]) -> bool:
+    if tick.get("merged") is True:
+        return True
+    merged = tick.get("merged_this_pass")
+    if merged is True or (isinstance(merged, list) and merged):
+        return True
+    remaining = tick.get("remaining") if isinstance(tick.get("remaining"), dict) else {}
+    nested = remaining.get("merged_this_pass")
+    if nested is True or (isinstance(nested, list) and nested):
+        return True
+    for action in list(tick.get("actions") or []):
+        if not isinstance(action, dict):
+            continue
+        if action.get("merged") is True:
+            return True
+        if str(action.get("step") or "") == "pr_merge" and action.get("merged"):
+            return True
+    return False
+
+
+def _receipt_leftover_skip(tick: dict[str, Any]) -> bool:
+    if tick.get("leftover_skip") is True:
+        return True
+    if str(tick.get("reason") or "") == "leftover_overflow":
+        return True
+    leftover = tick.get("leftover_closeout")
+    if isinstance(leftover, dict) and (
+        leftover.get("leftover_skip")
+        or leftover.get("reason") == "leftover_overflow"
+        or (leftover.get("skipped") and "leftover" in str(leftover.get("reason") or ""))
+    ):
+        return True
+    blob = str(tick.get("error") or "").lower()
+    return "leftover_overflow" in blob or "leftover closeout catalog exceeds" in blob
+
+
 def build_pass_receipt(
     *,
     tick: dict[str, Any],
@@ -155,6 +210,10 @@ def build_pass_receipt(
         "error": tick.get("error"),
         "note": tick.get("note"),
         "lane": str(tick.get("lane") or "idle"),
+        "new_pr": _receipt_new_pr(tick),
+        "merged": _receipt_merged(tick),
+        "leftover_skip": _receipt_leftover_skip(tick),
+        "reason": tick.get("reason"),
     }
 
 

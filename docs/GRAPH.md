@@ -10,17 +10,21 @@ which jobs run after which.
 ### `daemon_cycle` (top-level parent)
 
 ```text
-recovery_begin
-  → recovery_mill
-    → recovery_observe
-      → recovery_record (persistent 4-of-5 quorum)
-        → recovery_incident (skipped until quorum)
-          → recovery_run_self_repair (self_repair child Fala)
+last_pass_moving
+  → select_repair_route
+    → recovery_incident (when last receipt did not move: no new PR and no merge)
+      → recovery_run_self_repair (self_repair child Fala; skipped otherwise)
+  → recovery_mill (always: factory PRs / issues; leftover skip never starts repair)
 ```
 
-The daemon owns only the singleton lock, health lease and initial carrier
-preflight. Fala owns product/recovery order. Every node above is a separate
-`lokay-recovery-*` Unix process returning one JSON envelope. A product run that
+The moving gate is one leaf. Repair is its own child graph. `recovery_mill`
+is factory only — it does not classify, repair, or activate. Moving
+forward is only a new PR or a merge on the last receipt. Leftover skip,
+empty survey, and a stale receipt do not count as “not moving” and do not
+start recovery. After one repair the graph always returns to PRs /
+issues. The daemon owns only the singleton lock, health lease and initial
+carrier preflight. Fala owns product/recovery order. Every node above is a
+separate Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
 Idle TTL lives in `factory_pass` as `classify_factory_idle`. Compose and the
 LaunchAgent shell cannot decide that a tick does not run. A fresh empty-survey
@@ -52,19 +56,15 @@ Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
 durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not
 inherit that cwd or they emit empty `adapter_failed` and starve the mill.
 
-**Quorum law (narrow recovery):** `recovery_observe` / `recovery_record` mint and
-confirm fingerprints only for true product-mill / carrier-class failures
-(`stall`, `survey_error`, `plateau`, `budget_exhausted`, hard pass failures).
-Empty `adapter_failed` / `subprocess adapter failed` with no product detail is
-plumbing, not a confirmed stall — it must not fill the 4-of-5 quorum.
-Mill envelopes (and their run-tail events) with `waiting`, `repairing`, `idle`,
-`progress`, `offline`, or `overlap` never confirm a stall — so review limbo,
-pending CI, and `ai:needs-review` parked PRs cannot steal cycles into
-`recovery_run_self_repair`. merge_policy `waiting` / `repair` / `needs_review`
-reasons (and nested `pr_merge` soft skips) are never stall evidence either —
-trusted auto-merge decisions stay product-side. Soft rows dilute the 4-of-5
-window; they do not fill it. `recovery_incident` is skipped until quorum;
-incidents reuse the preflight cooldown ledger (`github.incident_cooldown_hours`).
+**Repair gate (two small processes):** `last_pass_moving` answers only
+whether the last receipt published a new PR or merged. `select_repair_route`
+composes that leaf with leftover skip (`leftover_overflow`, 200>30), empty
+survey, stale / missing receipt, occupied / in-flight `issue_to_pr`, and
+soft mill health (`waiting`, `repairing`, `idle`, `progress`, `offline`,
+`overlap`). Those exclusions route `factory` and never start
+`recovery_run_self_repair`. `recovery_incident` runs only when the last
+receipt did not move; incidents reuse the preflight cooldown ledger
+(`github.incident_cooldown_hours`). Activate stays a `self_repair_*` leaf.
 
 ### `factory_pass` (parent)
 
@@ -162,22 +162,30 @@ Atom ids are unique.
 ### `self_repair` (emergency only)
 
 ```text
-self_repair_prepare (detached exact origin/main)
-  → self_repair_run_agent
-    → self_repair_validate (full local suite)
-      → self_repair_commit
-        → self_repair_push_main (fast-forward only, exact unchanged base)
-          → self_repair_activate (exact commit)
-            → self_repair_preflight (fresh process)
-              → self_repair_close
+self_repair_prepare          child Fala: detached exact origin/main
+  → self_repair_run_agent    leaf: coding slot in that worktree
+    → self_repair_commit     leaf: commit_all
+      → self_repair_validate child Fala: identity + suite + diff
+        → self_repair_push_main   leaf: fast-forward only, exact unchanged base
+          → self_repair_activate  child Fala: exact commit
+            → self_repair_preflight  leaf: fresh process
+              → self_repair_close    leaf: close the incident
 ```
+
+Each `self_repair_*` step is its own leaf or child Fala. The moving-forward
+gate (`last_pass_moving`) is a leaf outside this graph. Activate is not
+inside `recovery_mill`. This path does not classify last-pass progress and
+does not run the factory.
 
 Entered only from:
 
 1. **Daemon preflight lane** — Lokay unhealthy, minimal carrier healthy (not
    overlap / not carrier-down); or
-2. **`daemon_cycle` stall quorum** — confirmed 4-of-5 hard product-mill failure
-   after `recovery_incident` (never from waiting/repairing/review limbo).
+2. **`daemon_cycle` last-pass gate** — `last_pass_moving` is one leaf (new
+   PR or merge). `select_repair_route` composes leftover skip, empty
+   survey, and a stale receipt so they never enter. After the child
+   finishes, `recovery_mill` always runs the factory (PRs / issues).
+   Repair never loops as the mill. Activate is `self_repair_activate`.
 
 It never creates a branch or PR. The coding agent can edit only the detached
 worktree; deterministic atoms alone commit and push directly to `main`. The

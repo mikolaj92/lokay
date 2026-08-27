@@ -93,6 +93,28 @@ def test_last_budget_slot_is_terminal():
     assert out["route"] == "terminal" and out["payload"]["passes"] == 1
 
 
+def test_leftover_overflow_skip_does_not_count_as_progress():
+    out = evaluate(
+        _prepared(budget=1),
+        {"slot": 1},
+        _tick(progress=0, remaining={"ready": 1}),
+        {
+            "ok": True,
+            "skipped": True,
+            "leftover_skip": True,
+            "reason": "leftover_overflow",
+            "count": 200,
+            "slot_count": 30,
+        },
+        {},
+    )
+    assert (
+        out["payload"]["progress"] == 0
+        and out["payload"]["leftover_skip"] is True
+        and out["payload"]["reason"] == "leftover_overflow"
+    )
+
+
 def test_leftover_closeout_counts_progress():
     out = evaluate(
         _prepared(budget=1),

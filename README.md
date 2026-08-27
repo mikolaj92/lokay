@@ -105,9 +105,12 @@ stateDiagram-v2
     CompactState --> RecordPass
     RecordPass --> FactoryPassTerminal: lane product / oil / idle
     RecordFactoryIdle --> FactoryPassTerminal: lane idle
-    FactoryPassTerminal --> [*]
-    FactoryPassTerminal --> Recovery: potwierdzona awaria nośnika
-    Recovery --> Heartbeat: zweryfikowany fast-forward
+    FactoryPassTerminal --> LastPassMoving
+    LastPassMoving --> SelectRepairRoute
+    SelectRepairRoute --> [*]: new PR / merge / leftover skip / empty survey / stale
+    SelectRepairRoute --> SelfRepair: last receipt did not move
+    SelfRepair --> CloseoutPrs
+    SelfRepair --> DispatchImplement
 ```
 
 ### Otwarcie workspace passu — `factory_begin`
@@ -1245,32 +1248,35 @@ stateDiagram-v2
 
 ### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
 
+Repair is a side child. It never replaces the factory mill. The moving
+gate is one leaf (`last_pass_moving`: new PR or merge only). A second
+leaf (`select_repair_route`) composes leftover skip, empty survey, stale
+receipt, occupied, and soft health. Repair is the `self_repair` child
+graph — activate stays a leaf inside that child, not inside
+`recovery_mill`. After one repair the graph always returns to PRs /
+issues.
+
 ```mermaid
 stateDiagram-v2
-    [*] --> BeginObservation
-    BeginObservation --> RunFactoryPass
-    RunFactoryPass --> ClassifyRecoveryScope
-    ClassifyRecoveryScope --> RecordEvidence: jawny carrier / source-integrity failure
-    ClassifyRecoveryScope --> RecordNoIncident: issue / PR / worktree / test-local failure
-    RecordNoIncident --> [*]
-    RecordEvidence --> [*]: healthy / progress / waiting / idle
-    RecordEvidence --> ConfirmIncident: powtarzalna awaria nośnika
-    ConfirmIncident --> PrepareRecovery
-    PrepareRecovery --> RecoveryAgent
-    RecoveryAgent --> ValidateRecoveryResult
-    ValidateRecoveryResult --> RecoveryAgent: invalid JSON + informacja zwrotna
-    ValidateRecoveryResult --> RecoveryEvidence: NEEDS_EVIDENCE
-    RecoveryEvidence --> RecoveryAgent
-    ValidateRecoveryResult --> ValidatePatch: FIXED
-    ValidateRecoveryResult --> HumanTerminal: NEEDS_HUMAN
-    ValidatePatch --> CommitRecovery
-    CommitRecovery --> PushMainFastForward
-    PushMainFastForward --> ActivateRelease
-    ActivateRelease --> PreflightRelease
-    PreflightRelease --> CloseIncident: PASS
-    PreflightRelease --> ConfirmIncident: FAIL
-    CloseIncident --> [*]
-    HumanTerminal --> [*]
+    [*] --> LastPassMoving
+    LastPassMoving --> SelectRepairRoute
+    SelectRepairRoute --> RunFactoryPass: new PR / merge
+    SelectRepairRoute --> RunFactoryPass: leftover skip / empty survey / stale
+    SelectRepairRoute --> SelfRepair: last receipt did not move
+    SelfRepair --> RunFactoryPass
+    RunFactoryPass --> CloseoutPrs
+    RunFactoryPass --> DispatchImplement
+    CloseoutPrs --> [*]
+    DispatchImplement --> [*]
+    SelfRepair --> SelfRepairPrepare
+    SelfRepairPrepare --> SelfRepairRunAgent
+    SelfRepairRunAgent --> SelfRepairCommit
+    SelfRepairCommit --> SelfRepairValidate
+    SelfRepairValidate --> SelfRepairPushMain
+    SelfRepairPushMain --> SelfRepairActivate
+    SelfRepairActivate --> SelfRepairPreflight
+    SelfRepairPreflight --> SelfRepairClose
+    SelfRepairClose --> RunFactoryPass
 ```
 
 ### Zgodność diagramu z implementacją
@@ -1296,7 +1302,7 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | uruchamia przebieg i ewentualne odzyskanie |
+| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then PRs/issues |
 | `FactoryPass` | `factory_pass` | wybiera jedną następną pracę w pełnym katalogu |
 | `Issues` | `issues` | lista otwartych z GitHuba, sito jednego, jeden issue_to_pr albo skip |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
@@ -1345,7 +1351,7 @@ kontraktu. Aktualny audyt:
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | otwarty i oznaczony PR dla issue |
 | `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
 | `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
-| `SelfRepair` | `self_repair` | zweryfikowany fast-forward Lokaya |
+| `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and mill stay outside |
 
 ### Reguły przejść
 

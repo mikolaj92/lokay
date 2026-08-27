@@ -472,13 +472,9 @@ def test_soft_waiting_rows_cannot_fill_quorum(tmp_path):
 
 
 def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_path):
-    """Mill envelopes with soft health must skip recovery_run_self_repair."""
-    state = tmp_path / "state.jsonl"
-    state.write_text(
-        json.dumps({"kind": "pr_repair", "ok": False, "error": "same repair fail"})
-        + "\n",
-        encoding="utf-8",
-    )
+    """Soft last-pass health must skip recovery_run_self_repair."""
+    from lokay.proc.classify_last_pass_progress import classify
+
     repair_calls: list[object] = []
 
     def forbid_repair(*_a, **_k):
@@ -494,46 +490,39 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
     monkeypatch.setattr(
         "lokay.proc.recovery_incident.main",
         lambda *_a, **_k: (_ for _ in ()).throw(
-            AssertionError("recovery_incident must not run without quorum")
+            AssertionError("recovery_incident must not run for soft last-pass health")
         ),
     )
 
     for health in ("waiting", "repairing"):
-        # Drain any prior soft history between scenarios.
-        history = history_path_for(state)
-        if history.exists():
-            history.unlink()
-        for _ in range(5):
-            observation = observe_run(
-                state_path=state,
-                state_offset=0,
-                mill={"ok": True, "health": health, "progress": 0},
-            )
-            assert observation["fingerprint"] is None
-            recorded = fala_handle(
-                "recovery_record",
-                {},
-                {
-                    "recovery_begin": {"state_path": str(state)},
-                    "recovery_observe": {"observation": observation},
-                },
-            )
-            assert recorded["ok"] is True
-            assert recorded["confirmed"] is not True
-            incident = fala_handle(
-                "recovery_incident",
-                {},
-                {"recovery_record": recorded},
-            )
-            assert incident.get("skipped") is True
-            assert incident.get("reason") == "stall_quorum_not_met"
-            repair = fala_handle(
-                "recovery_run_self_repair",
-                {"config_path": str(tmp_path / "unused.yaml")},
-                {"recovery_incident": incident},
-            )
-            assert repair.get("skipped") is True
-            assert repair_calls == []
+        classified = classify(
+            {
+                "kind": "pass_receipt",
+                "ts": "2026-08-26T00:00:00Z",
+                "ok": True,
+                "health": health,
+                "progress": 0,
+                "remaining": {"ready": 0, "open_ai_prs": 1},
+            }
+        )
+        assert classified["route"] == "factory"
+        incident = fala_handle(
+            "recovery_incident",
+            {},
+            {"select_repair_route": classified},
+        )
+        assert incident.get("skipped") is True
+        assert incident.get("reason") == health
+        repair = fala_handle(
+            "recovery_run_self_repair",
+            {"config_path": str(tmp_path / "unused.yaml")},
+            {
+                "select_repair_route": classified,
+                "recovery_incident": incident,
+            },
+        )
+        assert repair.get("skipped") is True
+        assert repair_calls == []
 
 
 def test_parked_needs_review_waiting_mill_never_fingerprints(tmp_path):

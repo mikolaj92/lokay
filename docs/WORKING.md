@@ -254,10 +254,11 @@ Product mill time wins over emergency recovery.
 1. **Preflight lane** — daemon preflight proves Lokay unhealthy while the
    minimal carrier remains healthy (not overlap, not carrier-down). A
    transient GitHub 503 on `/user` is not a missing token. Or
-2. **Product-stall quorum** — `daemon_cycle` observes a true product-mill /
-   carrier-class failure fingerprint in **4 of the last 5** runs
-   (`recovery-history.json`), then files one deduplicated incident and enters
-   the `self_repair` child Fala.
+2. **Last-pass gate** — `last_pass_moving` is one leaf (new PR or merge
+   only). `select_repair_route` composes leftover skip / empty survey /
+   stale receipt so they never start repair. Only then does `daemon_cycle`
+   file one deduplicated incident and enter the `self_repair` child Fala.
+   `recovery_mill` is factory only; activate stays `self_repair_activate`.
 
 **Never mint a systemic stall fingerprint / never fill the 4-of-5 quorum for:**
 

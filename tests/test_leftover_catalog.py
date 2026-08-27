@@ -13,6 +13,7 @@ def test_too_many_repos_skip_not_fail():
     assert out["ok"] is True
     assert out["route"] == "skip"
     assert out["reason"] == "leftover_overflow"
+    assert out["leftover_skip"] is True
     assert out["count"] == 40
 
 
@@ -28,4 +29,5 @@ def test_too_many_candidates_skip_not_fail():
     assert out["ok"] is True
     assert out["skipped"] is True
     assert out["reason"] == "leftover_overflow"
+    assert out["leftover_skip"] is True
     assert out["candidates"] == []

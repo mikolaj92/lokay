@@ -15,6 +15,7 @@ def reduce_candidates(prepared: dict, rows: list[dict], *, slot_count: int) -> d
             "ok": True,
             "route": "skip",
             "skipped": True,
+            "leftover_skip": True,
             "reason": "leftover_overflow",
             "count": len(unique),
             "slot_count": slot_count,
