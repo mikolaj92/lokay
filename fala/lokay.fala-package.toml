@@ -182,7 +182,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "prs"
 title = "Open PR review and merge"
-description = "List open PRs, review or merge one. Own Fala."
+description = "LEAF list, LEAF select, NODE slot run_pr_triage_subflow → pr_triage, LEAF summarize. Empty skips."
 
 [[correlation_paths.effectors]]
 id = "list_open_prs"

@@ -142,6 +142,23 @@ call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
 
+### `prs` (open PR review / repair / merge)
+
+NODE for this child only. Four authored nodes. Not the `closeout_prs`
+stamp catalog. Not leftover overflow. Do not implement `pr_triage` /
+`pr_repair` internals here.
+
+```text
+list_open_prs              LEAF  live GitHub mill PRs (two small functions)
+  → select_next_pr         LEAF  one PR
+    ├─→ run_pr_triage_subflow   NODE slot → child Fala `pr_triage` (owns pr_repair)
+    └─→ summarize_prs      LEAF  empty list skips the child and does not fail
+```
+
+Named child slot: `run_pr_triage_subflow` / `pr_triage`. A separate NODE
+agent owns that subgraph. This path only launches it. One PR per pass.
+Atom ids are unique.
+
 ### `self_repair` (emergency only)
 
 ```text

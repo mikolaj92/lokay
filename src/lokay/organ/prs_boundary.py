@@ -1,4 +1,4 @@
-"""Fala bindings for the PRs child: list, recenzja, merge."""
+"""Fala bindings for the prs NODE: two leaves, one child slot, one receipt."""
 
 from typing import Any
 
