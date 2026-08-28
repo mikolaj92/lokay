@@ -81,8 +81,6 @@ def reduce_state(*, prepared: dict, results: list[dict], working: dict) -> dict:
             actions.append({"step": step, "repo": repo, "reason": reason})
     if product_eligible:
         clean = [product_eligible[0]]
-    elif product_queue:
-        clean = []
     elif oil_eligible:
         clean = [oil_eligible[0]]
     else:
