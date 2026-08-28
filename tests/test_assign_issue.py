@@ -23,6 +23,9 @@ def test_assign_issue_still_assigns_lokay(
         assign_issue, "mutations_allowed", lambda *, live_flag, cfg: live_flag
     )
     monkeypatch.setattr(assign_issue, "runner", lambda: sentinel_runner)
+    monkeypatch.setattr(
+        assign_issue, "get_issue", lambda *_a, **_k: SimpleNamespace(assignees=[])
+    )
 
     def fake_assign_issue(
         issue_runner: object,
@@ -51,3 +54,67 @@ def test_assign_issue_still_assigns_lokay(
         "issue": 465,
         "assignee": "mill-bot",
     }
+
+
+def test_assign_issue_refuses_foreign_owned(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = SimpleNamespace(assignee="mikolaj92")
+    seen: list[object] = []
+
+    monkeypatch.setattr(assign_issue, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(
+        assign_issue, "mutations_allowed", lambda *, live_flag, cfg: live_flag
+    )
+    monkeypatch.setattr(assign_issue, "runner", lambda: object())
+    monkeypatch.setattr(
+        assign_issue,
+        "get_issue",
+        lambda *_a, **_k: SimpleNamespace(assignees=["PSyron"]),
+    )
+    monkeypatch.setattr(
+        assign_issue, "assign_issue", lambda *_a, **_k: seen.append("assigned")
+    )
+
+    assert (
+        assign_issue.main(
+            ["--repo", "Temida/Temida", "--issue", "5072", "--live"]
+        )
+        != 0
+    )
+    assert seen == []
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error"] == "foreign_assignee"
+    assert payload["applied"] is False
+    assert payload["assignees"] == ["PSyron"]
+
+
+def test_assign_issue_refuses_pawel_beside_lokaj(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    cfg = SimpleNamespace(assignee="mikolaj92")
+    seen: list[object] = []
+
+    monkeypatch.setattr(assign_issue, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(
+        assign_issue, "mutations_allowed", lambda *, live_flag, cfg: live_flag
+    )
+    monkeypatch.setattr(assign_issue, "runner", lambda: object())
+    monkeypatch.setattr(
+        assign_issue,
+        "get_issue",
+        lambda *_a, **_k: SimpleNamespace(assignees=["PSyron", "mikolaj92"]),
+    )
+    monkeypatch.setattr(
+        assign_issue, "assign_issue", lambda *_a, **_k: seen.append("assigned")
+    )
+
+    assert (
+        assign_issue.main(["--repo", "Temida/Temida", "--issue", "5072", "--live"])
+        != 0
+    )
+    assert seen == []
+    assert json.loads(capsys.readouterr().out)["error"] == "foreign_assignee"

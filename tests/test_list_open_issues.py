@@ -25,7 +25,12 @@ def _patch_list(monkeypatch, listed, *, cap=None):
 def test_facts_are_not_a_skip_route(monkeypatch):
     _patch_list(monkeypatch, [])
     out = facts(config_path=None, live=True)
-    assert out == {"issues": [], "count": 0, "overflow": False}
+    assert out == {
+        "issues": [],
+        "count": 0,
+        "overflow": False,
+        "assignee": "mikolaj92",
+    }
     assert "route" not in out
     assert "ok" not in out
 
@@ -33,7 +38,13 @@ def test_facts_are_not_a_skip_route(monkeypatch):
 def test_run_wraps_facts_as_ok_envelope(monkeypatch):
     _patch_list(monkeypatch, [])
     out = run(config_path=None, live=True)
-    assert out == {"ok": True, "issues": [], "count": 0, "overflow": False}
+    assert out == {
+        "ok": True,
+        "issues": [],
+        "count": 0,
+        "overflow": False,
+        "assignee": "mikolaj92",
+    }
     assert "route" not in out
     assert "skipped" not in out
 
@@ -49,9 +60,25 @@ def test_labels_are_not_a_gate(monkeypatch):
         "issue": 4,
         "title": "x",
         "labels": ["bug"],
+        "assignees": [],
     }
+    assert out["assignee"] == "mikolaj92"
     assert "work:ready" not in out["issues"][0]["labels"]
     assert "ai:ready" not in out["issues"][0]["labels"]
+
+
+def test_facts_carry_assignees_and_mill(monkeypatch):
+    issue = SimpleNamespace(
+        repo="Temida/Temida",
+        number=5072,
+        title="x",
+        labels=[],
+        assignees=["PSyron"],
+    )
+    _patch_list(monkeypatch, [issue])
+    out = run(config_path=None, live=True)
+    assert out["issues"][0]["assignees"] == ["PSyron"]
+    assert out["assignee"] == "mikolaj92"
 
 
 def test_overflow_keeps_page_and_does_not_fail(monkeypatch):

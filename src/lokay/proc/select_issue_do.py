@@ -26,7 +26,7 @@ def leftover_of(
             seed.append(
                 {
                     key: picked[key]
-                    for key in ("repo", "issue", "title", "labels")
+                    for key in ("repo", "issue", "title", "labels", "assignees")
                     if key in picked
                 }
             )

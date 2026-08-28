@@ -1,5 +1,6 @@
 """Authored leftover walk. Consume only on authored skip; else keep the row."""
 
+from lokay.proc.classify_issue_assignee import mill_of, takeable
 from lokay.proc.pass_lane import is_oil_repo, self_repo
 
 CONSUME = frozenset(
@@ -80,9 +81,19 @@ def product_first(rows: list[dict] | None, *, self_id: str = "") -> list[dict]:
     return product or listed
 
 
-def queue(listed_rows: list | None, last: dict | None) -> list[dict]:
-    """Leftover listed issues stay the queue. Oil yields to live product."""
+def ownable(rows: list[dict] | None, mill: str) -> list[dict]:
+    """Drop rows that already have someone other than the mill."""
+    return [row for row in list(rows or []) if takeable(row, mill)]
+
+
+def queue(listed_rows: list | None, last: dict | None, *, mill: str = "") -> list[dict]:
+    """Leftover listed issues stay the queue. Oil yields to live product.
+
+    Foreign-owned rows (anyone besides the mill) are not the consumption
+    queue. They stay on the listed page; selection walks past them.
+    """
     last = last if isinstance(last, dict) else {}
+    mill_login = mill or mill_of(last)
     leftover = [
         row for row in list(last.get("leftover_issues") or []) if isinstance(row, dict)
     ]
@@ -91,7 +102,6 @@ def queue(listed_rows: list | None, last: dict | None) -> list[dict]:
     if leftover:
         kept = [live[key] for row in leftover if (key := identity(row)) in live]
         product = product_first(kept)
-        if product:
-            return product
-        return product_first(live_rows) or kept
-    return product_first(after(listed_rows, last) or live_rows)
+        candidates = product if product else (product_first(live_rows) or kept)
+        return ownable(candidates, mill_login)
+    return ownable(product_first(after(listed_rows, last) or live_rows), mill_login)

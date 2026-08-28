@@ -198,8 +198,10 @@ next listed row is the next `issue_row`. Leftover is consumed only on an
 authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
 adapter fail / `sito_nie_robic` keep the row; a leftover row that is still
 open and ready becomes `route=do` and goes to issue-to-PR in that pass. Lokay
-oil is not the product slot while product leftover remains. `leftover=0` only
-when the list is exhausted.
+oil is not the product slot while product leftover remains. A row whose
+assignees include anyone other than the configured mill is not takeable —
+selection walks past it and `assign_issue` does not add the mill beside them.
+`leftover=0` only when the takeable list is exhausted.
 
 ### `issue_row` (one catalog question, one issue_to_pr)
 
@@ -211,9 +213,12 @@ select_next_issue         LEAF  is there a row? leftover walk, then one issue
         → summarize_issue_row LEAF  one-row receipt
 ```
 
-`select_next_issue` only answers whether a row remains. It does not hide the
-loop. Parked / human-stop rows are already excluded by `list_ready_issues`.
-Atom ids stay unique versus `triage_dispatch` / `implementation_dispatch`.
+`select_next_issue` only answers whether a takeable row remains. It does not
+hide the loop. Empty assignees, or only the configured mill, may be taken.
+Anyone else on the assignee list (alone or beside the mill) is foreign and
+is skipped. Parked / human-stop rows are already excluded by
+`list_ready_issues`. Atom ids stay unique versus `triage_dispatch` /
+`implementation_dispatch`.
 
 ### `issue_to_pr`
 

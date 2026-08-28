@@ -27,9 +27,15 @@ def facts(*, config_path: str | None, live: bool) -> dict:
                     "issue": int(issue.number),
                     "title": issue.title,
                     "labels": list(issue.labels or []),
+                    "assignees": list(getattr(issue, "assignees", None) or []),
                 }
             )
-    return {"issues": rows, "count": len(rows), "overflow": overflow}
+    return {
+        "issues": rows,
+        "count": len(rows),
+        "overflow": overflow,
+        "assignee": str(getattr(cfg, "assignee", "") or "mikolaj92"),
+    }
 
 
 def run(*, config_path: str | None, live: bool) -> dict:

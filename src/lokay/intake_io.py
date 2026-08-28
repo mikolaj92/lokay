@@ -16,6 +16,7 @@ from lokay.gh_issues import (
 )
 from lokay.intake import IntakeDecision
 from lokay.models import Issue
+from lokay.proc.classify_issue_assignee import takeable
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import issue_number_from_branch
 
@@ -213,7 +214,12 @@ def apply_intake(
         if to_add:
             add_issue_labels(runner, repo, issue_number, to_add, live=True)
             applied = True
-        if cfg.assignee and cfg.assignee not in (issue.assignees or []):
+        assignees = list(issue.assignees or [])
+        if (
+            cfg.assignee
+            and takeable({"assignees": assignees}, cfg.assignee)
+            and cfg.assignee not in assignees
+        ):
             assign_issue(runner, cfg, repo, issue_number, live=True)
             applied = True
         return applied
