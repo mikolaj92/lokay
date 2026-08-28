@@ -59,6 +59,35 @@ def _pass(
     return str(pass_dir)
 
 
+
+def _write_this_issue_worktree(tmp_path: Path, *, issue: int) -> Path:
+    """One worktree + localize owned by *issue* (occupancy after #891)."""
+    wt = (
+        tmp_path
+        / ".lokay"
+        / "worktrees"
+        / "mikolaj92__lokay"
+        / f"ai__fix__{issue}-open-work"
+    )
+    loc = wt / ".lokay"
+    loc.mkdir(parents=True)
+    (loc / "localize.json").write_text(
+        json.dumps(
+            {
+                "paths": ["src/lokay/localize.py"],
+                "source": "deterministic",
+                "issue": issue,
+                "worktree": str(wt),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return wt
+
+
 def _write_live_receipt(tmp_path: Path, *, issue: int = 857) -> Path:
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
@@ -91,6 +120,7 @@ def test_live_pid_open_issue_still_occupies(tmp_path, monkeypatch):
         lambda _issue: False,
     )
     _write_live_receipt(tmp_path, issue=861)
+    _write_this_issue_worktree(tmp_path, issue=861)
     live = live_issue_to_pr_receipts(
         pid_alive=lambda _pid: True,
         issue_closed=lambda *_args, **_kwargs: False,
@@ -112,6 +142,7 @@ def test_closed_probe_failure_keeps_occupancy(tmp_path, monkeypatch):
         )(),
     )
     _write_live_receipt(tmp_path)
+    _write_this_issue_worktree(tmp_path, issue=857)
     live = live_issue_to_pr_receipts(pid_alive=lambda _pid: True)
     assert [row["issue"] for row in live] == [857]
 
@@ -211,6 +242,7 @@ def test_seed_occupies_when_live_pid_issue_is_open(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(repo_mutex, "_issue_is_closed", lambda _repo, _issue: False)
     _write_live_receipt(tmp_path, issue=861)
+    _write_this_issue_worktree(tmp_path, issue=861)
     seeded = seed_occupancy(
         {"working": {"ready_by_repo": {}, "occupied_repos": []}}
     )
