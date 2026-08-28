@@ -187,9 +187,26 @@ def live_issue_to_pr_receipts(
         # A reservation remains occupancy until its matching PID receipt is
         # published. Pipe-gated reservations whose launcher died before
         # activation are inert and can be recovered by the next dispatcher.
+        # Starting with zero worktree is a ghost start, not occupancy (#899).
+        # Same lookup as live pid (#891): zero frees; several stay fail-closed.
         if data.get("starting") is True:
-            if _starting_receipt_state(data) != "orphaned":
-                live.append(data)
+            if _starting_receipt_state(data) == "orphaned":
+                continue
+            try:
+                issue = int(data["issue"])
+            except (TypeError, ValueError):
+                continue
+            if worktree_for is None:
+                matches = _worktree_paths_for_live_receipt(str(data["repo"]), issue)
+                if len(matches) == 0:
+                    continue
+                wt_path = matches[0] if len(matches) == 1 else None
+            else:
+                wt_path = worktree(str(data["repo"]), issue)
+            belongs = localize_belongs_to_issue(wt_path, issue)
+            if belongs is False:
+                continue
+            live.append(data)
             continue
         if "pid" not in data:
             continue
