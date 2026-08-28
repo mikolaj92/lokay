@@ -37,16 +37,18 @@ def test_pr_triage_approve_terminal_is_authoritative():
     assert out["merged"] is True and out["closed_issue"] == 7
 
 
-def test_pr_triage_request_changes_preserves_subflow_result():
+def test_pr_triage_request_changes_leaves_repair_verdict():
     out = pr_triage(
         review={"decision": {"verdict": "request_changes"}},
-        repair={"ok": True, "repaired": True},
+        repair={},
         repair_manual={},
         manual={},
         merge={},
         close={},
+        outcome={"route": "repair", "reason": "review_requested_changes"},
     )["result"]
-    assert out["skipped"] and out["repaired"]
+    assert out["skipped"] and out["repairable"] is True
+    assert "repaired" not in out
 
 
 def test_pr_triage_wait_terminal_does_not_fail():

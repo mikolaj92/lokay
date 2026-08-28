@@ -1,4 +1,4 @@
-"""Fala bindings for the prs NODE: two leaves, one child slot, one receipt."""
+"""Fala bindings for the prs parent: sieve, optional repair, receipt."""
 
 from typing import Any
 
@@ -23,11 +23,27 @@ def handle_prs(
         from lokay.proc.run_pr_triage_subflow import run
 
         return run(up.get("select_next_pr") or {}, config_path=config, live=live)
+    if atom == "select_pr_repair":
+        from lokay.config import load_config
+        from lokay.proc.select_pr_repair import select
+
+        cfg = load_config(config)
+        return select(
+            up.get("select_next_pr") or {},
+            up.get("run_pr_triage_subflow") or {},
+            enabled=bool(cfg.executor_enabled and cfg.max_repairs_per_tick > 0),
+        )
+    if atom == "run_pr_repair_subflow":
+        from lokay.proc.run_parent_pr_repair_subflow import run
+
+        return run(up.get("select_pr_repair") or {}, config_path=config, live=live)
     if atom == "summarize_prs":
         from lokay.proc.summarize_prs import summarize
 
         return summarize(
             up.get("select_next_pr") or {},
             up.get("run_pr_triage_subflow") or {},
+            up.get("select_pr_repair") or {},
+            up.get("run_pr_repair_subflow") or {},
         )
     return None

@@ -11,9 +11,24 @@ OWNED = frozenset({
 })
 
 
+def _sieve_not_review(up: dict[str, dict[str, Any]]) -> bool:
+    return str((up.get("classify_pr_triage_checks") or {}).get("route") or "") in {
+        "repair",
+        "wait",
+    }
+
+
 def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]], ctx: dict[str, Any]) -> dict[str, Any] | None:
     if atom not in OWNED:
         return None
+    if atom != "collect_pr_review_evidence" and _sieve_not_review(up):
+        return {
+            "ok": True,
+            "route": "not_applicable",
+            "reason": "pr_triage_not_review",
+            "evidence_kind": "none",
+            "decision": {"verdict": "not_applicable"},
+        }
     repo, pr = str(ctx["repo"]), int(ctx["pr_number"])
     branch, live = str(ctx["branch"]), bool(ctx["live"])
     config = str(inputs.get("config_path") or "") or None
@@ -28,6 +43,8 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
             return {"ok":True,"route":"policy","decision":{"verdict":"approve"},"merge_ok":True,"request_changes_count":0}
         return resolve_sha_review(evidence)
     if atom == "pr_review_agent":
+        if str((up.get("resolve_sha_review") or {}).get("route") or "") != "agent":
+            return {"ok": True, "route": "not_applicable", "reason": "review_agent_not_selected"}
         from lokay.proc.run_pr_review_agent import run_review_agent
         return run_review_agent(config_path=config,repo=repo,pr=pr,evidence=evidence,live=live)
     if atom == "pr_review_retry_agent":
