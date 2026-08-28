@@ -147,13 +147,43 @@ def test_live_pid_this_issue_localize_still_occupies(tmp_path, monkeypatch):
     assert [row["issue"] for row in live] == [865]
 
 
-def test_unknown_worktree_path_keeps_occupancy(tmp_path, monkeypatch):
+def test_zero_worktree_does_not_occupy(tmp_path, monkeypatch):
+    """Live pid with no worktree for this issue frees the repo (#891)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(
         "lokay.proc.issue_delivery_occupancy.coding_live_for_issue",
         lambda _issue: False,
     )
     _write_live_receipt(tmp_path, issue=865)
+    live = live_issue_to_pr_receipts(
+        pid_alive=lambda _pid: True,
+        issue_closed=lambda *_args, **_kwargs: False,
+    )
+    assert live == []
+
+
+def test_several_worktrees_keep_occupancy(tmp_path, monkeypatch):
+    """Ambiguous worktree match stays fail-closed occupied."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_occupancy.coding_live_for_issue",
+        lambda _issue: False,
+    )
+    _write_live_receipt(tmp_path, issue=865)
+    _write_worktree_localize(tmp_path, issue=865, payload=LEFTOVER_333)
+    # Second corner for the same issue number (ambiguous).
+    wt2 = (
+        tmp_path
+        / ".lokay"
+        / "worktrees"
+        / "mikolaj92__lokay"
+        / f"ai__fix__{865}-second-corner"
+    )
+    (wt2 / ".lokay").mkdir(parents=True)
+    (wt2 / ".lokay" / "localize.json").write_text(
+        json.dumps(LEFTOVER_333, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     live = live_issue_to_pr_receipts(
         pid_alive=lambda _pid: True,
         issue_closed=lambda *_args, **_kwargs: False,
@@ -192,6 +222,37 @@ def test_missing_issue_id_does_not_occupy(tmp_path, monkeypatch):
         issue_closed=lambda *_args, **_kwargs: False,
     )
     assert live == []
+
+
+def test_seed_and_select_start_next_when_live_pid_has_zero_worktree(
+    tmp_path, monkeypatch
+):
+    """factory_begin occupancy + select_implement: zero worktree does not freeze 865."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_occupancy.coding_live_for_issue",
+        lambda _issue: False,
+    )
+    monkeypatch.setattr(
+        "lokay.proc.issue_delivery_occupancy.is_live_issue_to_pr_pid",
+        lambda _pid: True,
+    )
+    monkeypatch.setattr(repo_mutex, "_issue_is_closed", lambda _repo, _issue: False)
+    _write_live_receipt(tmp_path, issue=865)
+    seeded = seed_occupancy(
+        {
+            "working": {
+                "ready_by_repo": {
+                    "mikolaj92/lokay": [{"number": 865, "title": "plugin"}]
+                },
+                "occupied_repos": [],
+                "live_issue_to_pr_repos": [],
+            }
+        }
+    )
+    working = seeded["working"]
+    assert working["occupied_repos"] == []
+    assert working["live_issue_to_pr_repos"] == []
 
 
 def test_seed_and_select_start_next_when_live_pid_has_leftover_localize(

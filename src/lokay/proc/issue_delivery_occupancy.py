@@ -124,12 +124,11 @@ def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:
     return False
 
 
-def _worktree_for_live_receipt(repo: str, issue: int) -> Path | None:
-    """Worktree for this receipt, same lookup classify uses.
+def _worktree_paths_for_live_receipt(repo: str, issue: int) -> list[Path]:
+    """Worktree paths for this receipt issue, same lookup classify uses.
 
-    Receipts are ``{repo, issue, pid}``. Path comes from
-    ``iter_worktrees`` + ``issue_number_from_branch``. Zero or several
-    matches is unknown (fail-closed occupy).
+    Receipts are ``{repo, issue, pid}``. Paths come from
+    ``iter_worktrees`` + ``issue_number_from_branch``.
     """
     from lokay.config import Config, RepoConfig
     from lokay.git_worktree import iter_worktrees
@@ -137,17 +136,26 @@ def _worktree_for_live_receipt(repo: str, issue: int) -> Path | None:
 
     cfg = Config()
     repo_cfg = RepoConfig(name=str(repo), clone_path=Path("."))
-    found: Path | None = None
+    found: list[Path] = []
     for path, branch in iter_worktrees(cfg, repo_cfg):
         numbered = issue_number_from_branch(
             branch, branch_prefix=cfg.branch_prefix
         )
-        if numbered != issue:
-            continue
-        if found is not None:
-            return None
-        found = path
+        if numbered == issue:
+            found.append(path)
     return found
+
+
+def _worktree_for_live_receipt(repo: str, issue: int) -> Path | None:
+    """Single worktree for this receipt, or ``None`` if zero or several.
+
+    Zero matches means no live workspace (caller frees occupancy).
+    Several matches stay unknown (fail-closed occupy).
+    """
+    found = _worktree_paths_for_live_receipt(repo, issue)
+    if len(found) == 1:
+        return found[0]
+    return None
 
 
 def live_issue_to_pr_receipts(
@@ -202,8 +210,16 @@ def live_issue_to_pr_receipts(
         if closed(str(data["repo"]), issue):
             continue
         # Sibling of CLOSED: leftover / foreign localize.json does not
-        # occupy. Unreadable file or unknown worktree path stays occupied.
-        belongs = localize_belongs_to_issue(worktree(str(data["repo"]), issue), issue)
+        # occupy. Zero worktrees for this issue also frees the slot (#891).
+        # Unreadable localize or several matching worktrees stay occupied.
+        if worktree_for is None:
+            matches = _worktree_paths_for_live_receipt(str(data["repo"]), issue)
+            if len(matches) == 0:
+                continue
+            wt_path = matches[0] if len(matches) == 1 else None
+        else:
+            wt_path = worktree(str(data["repo"]), issue)
+        belongs = localize_belongs_to_issue(wt_path, issue)
         if belongs is False:
             continue
         live.append(data)
