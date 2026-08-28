@@ -120,7 +120,8 @@ def test_prepare_and_slot_are_bounded(tmp_path):
     )
 
 
-def test_oil_is_ineligible_when_product_queue(tmp_path):
+def test_oil_stays_eligible_when_product_queue(tmp_path):
+    """Product preference is reduce's job; inspect must not hard-skip oil."""
     from lokay.proc.inspect_implementation_eligibility import inspect
     from lokay.proc.prepare_implementation_selection import prepare
 
@@ -161,8 +162,9 @@ def test_oil_is_ineligible_when_product_queue(tmp_path):
         prepared=prepared,
         selected={"repo": "a/product", "slot": 2},
     )
-    assert oil["route"] == "ineligible" and oil["reason"] == "product_lane"
+    assert oil["route"] == "eligible"
     assert product["route"] == "eligible"
+    assert prepared["product_queue"] is True
 
 
 def test_eligibility_is_closed_physical_gate(tmp_path):
@@ -339,7 +341,8 @@ def test_inbox_only_unlabeled_eligibility_does_not_require_work_ready(tmp_path):
     assert prepared["product_queue"] is True
 
 
-def test_reduce_does_not_fall_through_to_oil_when_product_queue():
+def test_reduce_falls_through_to_oil_when_product_queue_but_none_eligible():
+    """product_queue without eligible product must not leave clean empty (#883)."""
     from lokay.proc.reduce_implementation_selection import reduce_state
 
     out = reduce_state(
@@ -362,4 +365,5 @@ def test_reduce_does_not_fall_through_to_oil_when_product_queue():
             },
         },
     )
-    assert out["clean_repos"] == [] and out["lane"] == "product"
+    assert out["clean_repos"] == [_self()] and out["lane"] == "oil"
+    assert out["product_queue"] is True
