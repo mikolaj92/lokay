@@ -33,8 +33,14 @@ class _GhRunner:
 
     def run(self, spec: CommandSpec, *, live: bool) -> CommandResult:
         self.calls.append(tuple(spec.argv))
+        stdout = self.stdout
+        if "view" in spec.argv:
+            stdout = (
+                '{"number":164,"title":"x","body":"","labels":[],'
+                '"assignees":[],"url":"u","state":"OPEN"}'
+            )
         return CommandResult(
-            spec=spec, executed=live, returncode=self.returncode, stdout=self.stdout
+            spec=spec, executed=live, returncode=self.returncode, stdout=stdout
         )
 
     def run_checked(self, spec: CommandSpec, *, live: bool) -> CommandResult:

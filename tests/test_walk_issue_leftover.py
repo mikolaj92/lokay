@@ -82,6 +82,16 @@ def test_oil_yields_to_product_in_queue():
     assert product_first(listed)[0]["issue"] == 5001
 
 
+def test_queue_drops_foreign_assignee():
+    listed = [
+        {"repo": "Temida/Temida", "issue": 1, "assignees": []},
+        {"repo": "Temida/Temida", "issue": 2, "assignees": ["mikolaj92"]},
+        {"repo": "Temida/Temida", "issue": 3, "assignees": ["PSyron"]},
+    ]
+    out = queue(listed, None, mill="mikolaj92")
+    assert [row["issue"] for row in out] == [1, 2]
+
+
 def test_consumes_only_authored_skip():
     assert consumes("needs_human")
     assert consumes("blocked")

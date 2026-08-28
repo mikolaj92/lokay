@@ -163,3 +163,54 @@ def test_parked_human_stop_already_excluded_by_list_facts():
     assert out["route"] == "issue"
     assert out["issue"] == 9
     assert out["leftover"] == 0
+
+
+def test_takes_empty_and_lokaj_skips_pawel():
+    listed = _listed(
+        {
+            "repo": "Temida/Temida",
+            "issue": 1,
+            "title": "empty",
+            "assignees": [],
+        },
+        {
+            "repo": "Temida/Temida",
+            "issue": 2,
+            "title": "lokaj",
+            "assignees": ["mikolaj92"],
+        },
+        {
+            "repo": "Temida/Temida",
+            "issue": 3,
+            "title": "pawel",
+            "assignees": ["PSyron"],
+        },
+    )
+    first = select(listed)
+    assert first["route"] == "issue"
+    assert first["issue"] == 1
+    assert [row["issue"] for row in first["leftover_issues"]] == [2]
+    second = select(listed, last=first)
+    assert second["route"] == "issue"
+    assert second["issue"] == 2
+    assert second["leftover"] == 0
+    assert second["leftover_issues"] == []
+    third = select(listed, last=second)
+    assert third["ok"] is True
+    assert third["route"] == "none"
+    assert third.get("issue") != 3
+
+
+def test_skips_pawel_beside_lokaj():
+    listed = _listed(
+        {
+            "repo": "Temida/Temida",
+            "issue": 5072,
+            "title": "shared",
+            "assignees": ["PSyron", "mikolaj92"],
+        }
+    )
+    out = select(listed)
+    assert out["ok"] is True
+    assert out["route"] == "none"
+    assert out["reason"] == "foreign_assignee"

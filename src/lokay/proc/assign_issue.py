@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import assign_issue
+from lokay.gh_issues import assign_issue, get_issue
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
-
+from lokay.proc.classify_issue_assignee import takeable
 
 
 
@@ -19,8 +19,24 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
+    git = runner()
+    current: list[str] | None = None
+    if live:
+        issue = get_issue(git, cfg, args.repo, args.issue, live=True)
+        current = list(issue.assignees) if issue else []
+        if not takeable({"assignees": current}, cfg.assignee):
+            return emit_exit(
+                err(
+                    "foreign_assignee",
+                    repo=args.repo,
+                    issue=args.issue,
+                    assignee=cfg.assignee,
+                    assignees=current,
+                    applied=False,
+                )
+            )
     try:
-        assign_issue(runner(), cfg, args.repo, args.issue, live=live)
+        assign_issue(git, cfg, args.repo, args.issue, live=live)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(

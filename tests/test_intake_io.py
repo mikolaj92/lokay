@@ -128,6 +128,17 @@ def test_apply_intake_skip_and_dry():
     assert runner.calls == []
 
 
+def test_apply_intake_ready_does_not_add_lokaj_beside_pawel():
+    cfg = Config(assignee="mikolaj92", ready_label="ai:ready")
+    issue = _issue(labels=[], assignees=["PSyron"])
+    decision = IntakeDecision(decision="ready", reason="intake_ok")
+    runner = _FakeRunner()
+    assert apply_intake(runner, cfg, "Temida/Temida", 5072, issue, decision, live=True) is True
+    joined = [" ".join(c) for c in runner.calls]
+    assert any("--add-label" in j for j in joined)
+    assert not any("--add-assignee" in j for j in joined)
+
+
 def test_apply_intake_ready_adds_label_and_assignee():
     cfg = Config(assignee="mikolaj92", ready_label="ai:ready")
     issue = _issue(labels=[], assignees=[])

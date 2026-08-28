@@ -1002,7 +1002,7 @@ pusta albo budżet. Nie rozwija 1..8. Tick daemona nie jest tą pętlą. Atom
 nie chowa "next". Leftover jest zjadane tylko przy authored skip
 (`needs_human`, `blocked`, already-closed). `triage_not_done` / adapter fail /
 `sito_nie_robic` zostawia wiersz; ready leftover idzie do issue-to-PR.
-Oil lokay nie zajmuje product slotu.
+Oil lokay nie zajmuje product slotu. Cudzy assignee nie jest zadaniem lokaja.
 
 ### Jeden wiersz katalogu — `issue_row`
 
@@ -1019,10 +1019,12 @@ stateDiagram-v2
 ```
 
 Jedno pytanie, jeden `issue_to_pr`. `select_next_issue` tylko odpowiada czy
-jest wiersz. Authored skip zjada leftover; sito miss zostawia wiersz.
-Rodzic wraca krawędzią dziecka (`run_issue_rows` aż jałowe). `leftover=0`
-tylko gdy lista się wyczerpała. Bez bramki `work:ready` / `ai:ready` i bez
-30 slotów.
+jest wiersz. Puste przypisanie albo sam lokaj (konfigurowany assignee) wolno
+wziąć. Ktokolwiek inny na przypisaniu — sam albo obok lokaja — to cudze:
+sito wyboru pomija, `assign_issue` nie dopisuje lokaja. Authored skip zjada
+leftover; sito miss zostawia wiersz. Rodzic wraca krawędzią dziecka
+(`run_issue_rows` aż jałowe). `leftover=0` tylko gdy lista do wzięcia się
+wyczerpała. Bez bramki `work:ready` / `ai:ready` i bez 30 slotów.
 
 ### Otwarte PR — `prs`
 
