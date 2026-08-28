@@ -133,19 +133,22 @@ the ledger for step order.
 
 ### `prs` (open PR review / repair / merge)
 
-NODE for this child only. Four authored nodes. Not the `closeout_prs`
-stamp catalog. Not leftover overflow. Do not implement `pr_triage` /
-`pr_repair` internals here.
+NODE parent for the PR departments. Six authored nodes. Not the `closeout_prs`
+stamp catalog. Not leftover overflow. The parent orders the sieve before the
+optional repair; it does not implement either child body.
 
 ```text
 list_open_prs              LEAF  live GitHub mill PRs (two small functions)
   → select_next_pr         LEAF  one PR
-    ├─→ run_pr_triage_subflow   NODE slot → child Fala `pr_triage` (owns pr_repair)
-    └─→ summarize_prs      LEAF  empty list skips the child and does not fail
+    └─→ run_pr_triage_subflow   NODE slot → child Fala `pr_triage` (sieve only)
+          → select_pr_repair    LEAF  consume verdict + department switch
+            ├─→ run_pr_repair_subflow NODE slot → child Fala `pr_repair`
+            └─→ summarize_prs  LEAF  empty / merged / waiting / repair disabled
 ```
 
-Named child slot: `run_pr_triage_subflow` / `pr_triage`. A separate NODE
-agent owns that subgraph. This path only launches it. One PR per pass.
+Named child slots are `run_pr_triage_subflow` / `pr_triage` and
+`run_pr_repair_subflow` / `pr_repair`. The latter can run only after the former
+returns a repair verdict and the repair department is enabled. One PR per pass.
 Atom ids are unique.
 
 ### `self_repair` (emergency only)
@@ -320,26 +323,30 @@ pr_checks
                                             └─→ push   ← published tip; never rebase (force-push forbidden)
 ```
 
-### `pr_triage` (merge policy → close issue)
+### `pr_triage` (sieve / merge policy → close issue)
 
 ```text
 pr_checks
   └─→ classify_pr_triage_checks   ← wait | repair | review
         ├─ wait     → summarize (pending / offline; do not fail the pass)
-        ├─ repair   → pr_repair NODE child (red CI; do not inline)
+        ├─ repair   → summarize repair verdict (red CI; no executor)
         └─ review   → collect evidence → publish verdict
-              ├─ request_changes / secrets-human → pr_repair NODE or terminal
+              ├─ request_changes → summarize repair verdict
+              ├─ secrets-human   → terminal
               └─ approve → worktree_add → test_local (record_red)
                     └─→ select_pr_triage_outcome
                           ├─ merge  → pr_merge → stage_clear → close_issue
-                          └─ repair → pr_repair NODE (local suite red)
+                          └─ repair → summarize repair verdict (local suite red)
 ```
 
-`pr_review` is fail-closed: invalid JSON, `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
+The parent `prs` path consumes that verdict and may invoke the separate
+`pr_repair` child. With repair disabled, feedback remains published and no code
+or branch mutation occurs. `pr_review` is fail-closed: invalid JSON,
+`request_changes`, `needs_human`, or `secrets=true` never auto-merges.
 Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_ENABLED`,
 approve + green checks + local tests → `pr_merge` + `close_issue` in one path; pending
 **or transient GitHub 429/5xx while reading checks** → non-green waiting; confirmed
-red CI or a recorded-red local suite → `pr_repair` NODE child (not inlined);
+red CI or a recorded-red local suite → repair verdict for the parent; the parent may invoke the separate `pr_repair` NODE child;
 secrets / `needs_human` / escalated `ai:needs-review` never merge.
 A later `prs` pass re-reviews the new SHA.
 Soft documentation nits must not route to `ai:needs-review`.

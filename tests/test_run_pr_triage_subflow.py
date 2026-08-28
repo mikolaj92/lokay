@@ -10,7 +10,7 @@ def test_launches_child_path_only(monkeypatch) -> None:
 
     def fake(**kwargs):
         seen.append(kwargs)
-        return {"ok": True, "result": {"merged": True}}
+        return {"ok": True, "merged": True}
 
     monkeypatch.setattr("lokay.proc.run_pr_triage_subflow.run_path", fake)
     out = run(
@@ -19,6 +19,8 @@ def test_launches_child_path_only(monkeypatch) -> None:
         live=False,
     )
     assert out["route"] == "completed"
+    assert out["triage"]["merged"] is True
+    assert out["triage"]["repairable"] is False
     assert seen == [
         {
             "path_id": "pr_triage",

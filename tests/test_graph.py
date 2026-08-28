@@ -964,7 +964,8 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
         "path": "route",
         "equals": "review",
     }
-    assert by_id["pr_repair_subflow"]["when"] == {
+    assert "pr_repair_subflow" not in by_id
+    assert by_id["pr_repair_verdict"]["when"] == {
         "upstream": "select_pr_triage_outcome",
         "path": "route",
         "equals": "repair",

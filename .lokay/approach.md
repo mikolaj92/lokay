@@ -1,22 +1,26 @@
 # Approach plan
 
-<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=333 -->
+<!-- lokay-approach source=deterministic repo=mikolaj92/lokay issue=897 -->
 
 Repository: `mikolaj92/lokay`  
-Issue: #333 — factory_begin: cold survey musi pokryć skonfigurowane K
+Issue: #897 — Dział: pr_repair (poprawka PR)
 
 ## Goal
 
-`pick_survey_repos` przy pustym last-pass: `lokay` + `extra_cold=2`. `max_issue_to_pr_per_pass` (K) bywa 3–4. Survey widzi za mało czystych repo → tick startuje mniej i2pr niż K.
+Dział: poprawka istniejącego PR. Tylko po werdykcie sita PR albo czerwonym teście. Nie pierwsze pisaninie.
 
 ## Files likely touched
 
-- `src/lokay/proc/factory_begin.py`
-- `hot.py`
+- `fala/lokay.fala-package.toml`
+- `src/lokay/proc/select_pr_repair.py`
+- `src/lokay/proc/run_parent_pr_repair_subflow.py`
+- `src/lokay/organ/prs_boundary.py`
+- `src/lokay/organ/pr_outcome.py`
+- `README.md`, `docs/GRAPH.md`
 
 ## Test plan
 
-- K=3, 4 czyste repo z work:ready, pusty last-pass → survey ≥3 repo / i2pr start ≤K ale nie ślepo 2.
+- `uv run pytest -q tests/test_select_pr_repair.py tests/test_prs_fala.py tests/test_pr_outcome_fala.py tests/test_triage.py tests/test_graph.py tests/test_readme_state_machine.py`
 
 ## Non-goals
 
@@ -27,3 +31,4 @@ Issue: #333 — factory_begin: cold survey musi pokryć skonfigurowane K
 - Trust intentional issue; this plan is evidence for later review, not a human gate.
 - Coding agent may refine details but should stay on the stated goal and non-goals.
 - Collector boundary: if implementation introduces unbounded collection, ship only a bounded collector patch that starts durably in the background after merge. The coding agent and mill must not populate data or wait for collection to finish.
+- No explicit file paths in issue; infer from repo inspection.

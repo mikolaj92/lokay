@@ -29,6 +29,7 @@ def test_request_changes_runs_repair_branch_not_merge(tmp_path):
         "if a=='classify_pr_triage_checks': v['route']='review'\n"
         "if a=='review_repair_gate': v['route']='repair'\n"
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
+        "if a=='pr_repair_verdict': v.update(route='repair',repairable=True)\n"
         "if a=='pr_merge': Path(" + repr(str(sentinel)) + ").write_text('ran')\n"
         "(Path(os.environ['FALA_EFFECTOR_OUTPUT_DIR'])/'result.json').write_text(json.dumps({'values':v}))\n",
         encoding="utf-8",
@@ -59,7 +60,8 @@ def test_request_changes_runs_repair_branch_not_merge(tmp_path):
     )
     result = json.loads(run.stdout.strip().splitlines()[-1])
     statuses = {key: value["status"] for key, value in result["effector_results"].items()}
-    assert statuses["pr_repair_subflow"] == "succeeded"
+    assert "pr_repair_subflow" not in statuses
+    assert statuses["pr_repair_verdict"] == "succeeded"
     assert statuses["pr_merge"] == "skipped"
     assert statuses["worktree_add"] == "skipped"
     assert not sentinel.exists()
@@ -107,7 +109,7 @@ def test_invalid_review_runs_one_retry_then_approve_branch(tmp_path):
     assert run.returncode == 0, run.stderr
     result=json.loads(run.stdout.strip().splitlines()[-1]); statuses={k:v["status"] for k,v in result["effector_results"].items()}
     assert statuses["pr_review_retry_agent"] == "succeeded"
-    assert statuses["pr_repair_subflow"] == "skipped"
+    assert "pr_repair_subflow" not in statuses
     assert statuses["pr_merge"] == "succeeded"
     assert retry_sentinel.exists() and merge_sentinel.exists()
 
@@ -129,7 +131,7 @@ def test_cached_sha_verdict_skips_both_review_agents(tmp_path):
         "if a=='classify_pr_triage_checks': v['route']='review'\n"
         "if a=='review_repair_gate': v['route']='repair'\n"
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
-        "if a=='pr_repair_subflow': Path("+repr(str(repair_sentinel))+").write_text('ran')\n"
+        "if a=='pr_repair_verdict': Path("+repr(str(repair_sentinel))+").write_text('ran')\n"
         "(Path(os.environ['FALA_EFFECTOR_OUTPUT_DIR'])/'result.json').write_text(json.dumps({'values':v}))\n",encoding='utf-8')
     package=tmp_path/'pkg.toml'; package.write_text((root/'fala/lokay.fala-package.toml').read_text().replace('PLACEHOLDER_PROJECT',str(root)))
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
@@ -139,7 +141,9 @@ def test_cached_sha_verdict_skips_both_review_agents(tmp_path):
     run=subprocess.run([sys.executable,'-c',script,str(tmp_path/'db.sqlite'),str(package),json.dumps(commands)],cwd=root,env=env,capture_output=True,text=True); assert run.returncode==0,run.stderr
     result=json.loads(run.stdout.strip().splitlines()[-1]); statuses={k:v['status'] for k,v in result['effector_results'].items()}
     assert statuses['pr_review_agent']=='skipped' and statuses['pr_review_retry_agent']=='skipped'
-    assert statuses['pr_repair_subflow']=='succeeded'; assert repair_sentinel.exists() and not agent_sentinel.exists()
+    assert 'pr_repair_subflow' not in statuses
+    assert statuses['pr_repair_verdict']=='succeeded'
+    assert repair_sentinel.exists() and not agent_sentinel.exists()
 
 
 def test_needs_evidence_runs_only_selected_collector_then_one_agent(tmp_path):
@@ -200,9 +204,15 @@ def test_red_checks_run_repair_node_not_review_or_merge(tmp_path):
         "v={'ok':True,'atom':a}\n"
         "if a=='classify_pr_triage_checks': v['route']='repair'\n"
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
+        "if a=='resolve_sha_review': v['route']='not_applicable'\n"
+        "if a=='validate_pr_review': v['route']='not_applicable'\n"
+        "if a=='select_pr_review': v.update(route='not_applicable',evidence_kind='none')\n"
+        "if a=='verify_review_evidence_sha': v['route']='not_applicable'\n"
+        "if a=='publish_pr_review': v['decision']={'verdict':'not_applicable'}\n"
+        "if a=='review_repair_gate': v['route']='not_applicable'\n"
         "if a=='collect_pr_review_evidence': Path(" + repr(str(review_sentinel)) + ").write_text('ran')\n"
         "if a=='pr_merge': Path(" + repr(str(merge_sentinel)) + ").write_text('ran')\n"
-        "if a=='pr_repair_subflow': Path(" + repr(str(repair_sentinel)) + ").write_text('ran')\n"
+        "if a=='pr_repair_verdict': Path(" + repr(str(repair_sentinel)) + ").write_text('ran')\n"
         "(Path(os.environ['FALA_EFFECTOR_OUTPUT_DIR'])/'result.json').write_text(json.dumps({'values':v}))\n",
         encoding="utf-8",
     )
@@ -241,7 +251,8 @@ def test_red_checks_run_repair_node_not_review_or_merge(tmp_path):
     assert run.returncode == 0, run.stderr
     result = json.loads(run.stdout.strip().splitlines()[-1])
     statuses = {key: value["status"] for key, value in result["effector_results"].items()}
-    assert statuses["pr_repair_subflow"] == "succeeded"
+    assert "pr_repair_subflow" not in statuses
+    assert statuses["pr_repair_verdict"] == "succeeded"
     assert statuses["collect_pr_review_evidence"] == "skipped"
     assert statuses["pr_merge"] == "skipped"
     assert repair_sentinel.exists()

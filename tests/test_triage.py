@@ -287,7 +287,7 @@ def test_pr_triage_path_in_package():
         "worktree_add",
         "test_local",
         "select_pr_triage_outcome",
-        "pr_repair_subflow",
+        "pr_repair_verdict",
         "pr_merge",
         "stage_clear",
         "close_issue",
@@ -295,11 +295,7 @@ def test_pr_triage_path_in_package():
     ]
     assert "run_agent" not in node_ids
     assert "localize" not in node_ids
-    assert next(n for n in path["nodes"] if n["id"] == "pr_repair_subflow")["when"] == {
-        "upstream": "select_pr_triage_outcome",
-        "path": "route",
-        "equals": "repair",
-    }
+    assert "pr_repair_subflow" not in node_ids
     collect = next(n for n in path["nodes"] if n["id"] == "collect_pr_review_evidence")
     assert "pr_checks" in collect["conduction"]
     retry = next(n for n in path["nodes"] if n["id"] == "pr_review_retry_agent")

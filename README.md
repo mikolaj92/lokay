@@ -696,14 +696,19 @@ stateDiagram-v2
     ListOpenPrs --> SelectNextPr
     SelectNextPr --> RunPrTriageSubflow: jest otwarty PR
     SelectNextPr --> SummarizePrs: pusta lista
-    RunPrTriageSubflow --> SummarizePrs
+    RunPrTriageSubflow --> SelectPrRepair
+    SelectPrRepair --> RunPrRepairSubflow: popraw + dział włączony
+    SelectPrRepair --> SummarizePrs: scalono / czekaj / feedback / dział wyłączony
+    RunPrRepairSubflow --> SummarizePrs
     SummarizePrs --> [*]
 ```
 
-NODE `prs` ma cztery węzły. `list_open_prs` i `select_next_pr` są liśćmi.
-`run_pr_triage_subflow` jest slotem dziecka: uruchamia pod-Falę `pr_triage`
-(w tym `pr_repair`). Internals recenzji i naprawy należą do osobnego agenta
-tego dziecka. `summarize_prs` jest liściem. Pusta lista pomija dziecko i nie
+NODE `prs` ma sześć węzłów. `list_open_prs`, `select_next_pr` i
+`select_pr_repair` są liśćmi. `run_pr_triage_subflow` uruchamia wyłącznie
+pod-Falę `pr_triage`, która orzeka: scal / feedback / popraw. Dopiero rodzic
+po werdykcie `popraw` może uruchomić osobny slot dziecka
+`run_pr_repair_subflow` → `pr_repair`; wyłączony dział zostawia feedback i nie
+dotyka gałęzi. `summarize_prs` jest liściem. Pusta lista pomija dzieci i nie
 psuje passu. Nie ma 30-slotowego katalogu ani leftover overflow.
 
 ### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
@@ -1187,7 +1192,7 @@ stateDiagram-v2
     [*] --> InspectPullRequest
     InspectPullRequest --> ConflictRecovery: konflikt
     InspectPullRequest --> WaitChecks: pending / offline
-    InspectPullRequest --> RepairPullRequest: czerwone CI
+    InspectPullRequest --> RepairVerdict: czerwone CI
     InspectPullRequest --> HumanTerminal: terminal ręczny
     InspectPullRequest --> CollectReviewEvidence: gotowy do recenzji
     CollectReviewEvidence --> ResolveShaReview
@@ -1214,13 +1219,13 @@ stateDiagram-v2
     ValidateEvidenceReview --> ReviewVerdict: wynik poprawny
     ValidateEvidenceReview --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
     ReviewVerdict --> LocalMergeGate: APPROVE
-    ReviewVerdict --> RepairPullRequest: REQUEST_CHANGES
+    ReviewVerdict --> RepairVerdict: REQUEST_CHANGES
     ReviewVerdict --> HumanTerminal: NEEDS_HUMAN
     LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
-    LocalMergeGate --> RepairPullRequest: test lokalny nie przechodzi
+    LocalMergeGate --> RepairVerdict: test lokalny nie przechodzi
     MergePullRequest --> CloseIssue
     CloseIssue --> Delivered
-    RepairPullRequest --> [*]: nowy SHA, recenzja w następnym passie
+    RepairVerdict --> [*]: rodzic może później uruchomić pr_repair
     ConflictRecovery --> [*]
     HumanTerminal --> [*]
     WaitChecks --> [*]
@@ -1314,8 +1319,8 @@ kontraktu. Aktualny audyt:
 | Fragment | Stan obecny |
 | --- | --- |
 | `approve → lokalne testy → merge` | zaimplementowane w Fali |
-| `request_changes → pr_repair → nowy SHA → recenzja` | zaimplementowane z zamkniętym wynikiem agenta, jedną rundą dowodu i jedną naprawą testów; recenzja wraca w następnym passie |
-| `czerwone CI / czerwony test lokalny → pr_repair` | zaimplementowane: `pr_repair` zostaje osobną NODE-Falą, nie jest włączany w `pr_triage` |
+| `request_changes → werdykt popraw → pr_repair → nowy SHA → recenzja` | zaimplementowane: `pr_triage` tylko orzeka, a rodzic `prs` przy włączonym dziale uruchamia osobną pod-Falę naprawy; recenzja wraca w następnym passie |
+| `czerwone CI / czerwony test lokalny → werdykt popraw` | zaimplementowane: `pr_triage` nie uruchamia executora; osobny dział `pr_repair` jest wywoływany przez rodzica |
 | `pending / offline → czekanie` | zaimplementowane w Fali; pass nie pada |
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
@@ -1364,22 +1369,22 @@ kontraktu. Aktualny audyt:
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
 | `LeftoverCloseout` | `leftover_closeout` | jeden atom katalogu: CLOSED ready labels |
-| `OpenPRs` | `prs` | lista żywych otwartych PR, recenzja/naprawa/merge jednego |
+| `OpenPRs` | `prs` | lista żywych otwartych PR; rodzic kolejno woła sito i opcjonalną naprawę jednego |
 | `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
 | `CloseoutPRs` | `closeout_prs` | jeden atom katalogu: PR-y przez pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
 | `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
-| `OpenPRs` | `prs` | lista otwartych PR, recenzja i merge jednego |
+| `OpenPRs` | `prs` | rodzic działów PR: sito, opcjonalna naprawa, receipt |
 | `TriageInbox` | `issue_triage` | sito: robić, nie, oznaczyć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
 | `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal; nested fire to classified failed |
 | `LocalRepairExecution` | `local_repair_execution` | jedna naprawa z logu testu i recheck |
-| `ReviewPullRequest` | `pr_triage` | merge, naprawa, dowody albo terminal ręczny |
-| `RepairPullRequest` | `pr_repair` | nowy SHA na istniejącym PR |
+| `ReviewPullRequest` | `pr_triage` | sito: merge, feedback „popraw”, dowody albo terminal ręczny; bez executora |
+| `RepairPullRequest` | `pr_repair` | osobny dział: nowy SHA na istniejącym PR po werdykcie sita lub czerwonym teście |
 | `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and mill stay outside |
 
 ### Reguły przejść

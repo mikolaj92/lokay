@@ -16,7 +16,7 @@ def handle_pr_outcome(
 
         return summarize(
             review=up.get("publish_pr_review") or {},
-            repair=up.get("pr_repair_subflow") or {},
+            repair=up.get("pr_repair_verdict") or {},
             repair_manual=up.get("review_repair_manual") or {},
             manual=up.get("review_manual") or {},
             merge=up.get("pr_merge") or {},
@@ -38,9 +38,29 @@ def handle_pr_outcome(
             up.get("test_local") or {},
         )
 
+    if atom == "pr_repair_verdict":
+        selected = up.get("select_pr_triage_outcome") or {}
+        review = up.get("publish_pr_review") or {}
+        return {
+            "ok": True,
+            "route": "repair",
+            "repairable": True,
+            "reason": str(selected.get("reason") or "pr_triage_requested_repair"),
+            "review": dict(review.get("decision") or {}),
+        }
+
     if atom == "review_repair_gate":
         from lokay.proc.review_repair_gate import route_review_repair
 
+        if str((up.get("classify_pr_triage_checks") or {}).get("route") or "") in {
+            "repair",
+            "wait",
+        }:
+            return {
+                "ok": True,
+                "route": "not_applicable",
+                "reason": "pr_triage_not_review",
+            }
         return route_review_repair(up.get("publish_pr_review") or {})
 
     if atom in {"review_manual", "review_repair_manual"}:
@@ -55,18 +75,5 @@ def handle_pr_outcome(
             else "review_needs_human"
         )
         return terminal_review(verdict=verdict, reason=reason)
-
-    if atom == "pr_repair_subflow":
-        from lokay.proc.pr_repair_subflow import run_pr_repair_subflow
-
-        review = up.get("publish_pr_review") or {}
-        return run_pr_repair_subflow(
-            config_path=str(inputs.get("config_path") or "") or None,
-            repo=str(ctx["repo"]),
-            pr=int(ctx["pr_number"]),
-            branch=str(ctx["branch"]),
-            review=dict(review),
-            live=bool(ctx["live"]),
-        )
 
     return None

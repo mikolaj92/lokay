@@ -23,7 +23,13 @@ def summarize(
             repairable=False,
         )
         return {"ok": True, "result": result}
-    if repair and repair.get("reason") != "condition_not_met":
+    if selected.get("route") == "repair":
+        result.update(
+            skipped=True,
+            reason=str(selected.get("reason") or "review_requested_changes"),
+            repairable=True,
+        )
+    elif repair and repair.get("reason") != "condition_not_met":
         result.update(
             skipped=True,
             reason=str(repair.get("reason") or "review_requested_changes"),
