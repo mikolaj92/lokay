@@ -30,6 +30,9 @@ repos:
   - name: mikolaj92/Posejdon
     clone_path: /Users/mikomac/Developer/OSS/Posejdon
     priority: 80
+  - name: mikolaj92/PlnFlr
+    clone_path: /Users/mikomac/Developer/OSS/PlnFlr
+    priority: 78
   - name: mikolaj92/anonimizator3000
     clone_path: /Users/mikomac/Developer/OSS/Anonimizator3000
     priority: 75
