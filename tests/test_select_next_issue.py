@@ -201,6 +201,27 @@ def test_takes_empty_and_lokaj_skips_pawel():
     assert third.get("issue") != 3
 
 
+def test_skips_leading_pawel_and_takes_empty():
+    listed = _listed(
+        {
+            "repo": "Temida/Temida",
+            "issue": 5072,
+            "title": "pawel",
+            "assignees": ["PSyron"],
+        },
+        {
+            "repo": "Temida/Temida",
+            "issue": 1,
+            "title": "empty",
+            "assignees": [],
+        },
+    )
+    out = select(listed)
+    assert out["route"] == "issue"
+    assert out["issue"] == 1
+    assert out["leftover"] == 0
+
+
 def test_skips_pawel_beside_lokaj():
     listed = _listed(
         {
