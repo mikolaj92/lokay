@@ -8,14 +8,22 @@ import pytest
 from lokay.proc import get_issue
 
 
-
-
 def test_get_issue_still_fetches_lokay(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     cfg = object()
-    issue = SimpleNamespace(to_dict=lambda: {"number": 459, "state": "OPEN"})
+    issue = SimpleNamespace(
+        repo="mikolaj92/lokay",
+        number=459,
+        title="",
+        body="",
+        labels=[],
+        assignees=[],
+        url="https://github.com/mikolaj92/lokay/issues/459",
+        state="OPEN",
+        author="",
+    )
     sentinel_runner = object()
     seen: list[tuple[object, object, str, int, bool]] = []
 
@@ -34,7 +42,7 @@ def test_get_issue_still_fetches_lokay(
         seen.append((issue_runner, loaded_cfg, repo, number, live))
         return issue
 
-    monkeypatch.setattr(get_issue, "get_issue", fake_get_issue)
+    monkeypatch.setattr("lokay.github_tasks.view_issue", fake_get_issue)
 
     assert (
         get_issue.main(
@@ -43,8 +51,8 @@ def test_get_issue_still_fetches_lokay(
         == 0
     )
     assert seen == [(sentinel_runner, cfg, "mikolaj92/lokay", 459, True)]
-    assert json.loads(capsys.readouterr().out) == {
-        "ok": True,
-        "offline": False,
-        "issue": {"number": 459, "state": "OPEN"},
-    }
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["offline"] is False
+    assert payload["issue"]["number"] == 459
+    assert payload["issue"]["state"] == "OPEN"

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 
-from lokay.gh_issues import list_ready_issues
 from lokay.gh_rate import survey_list_cap
 from lokay.proc._common import load_cfg, runner
+from lokay.github_tasks import issues_source
 
 
 def facts(*, config_path: str | None, live: bool) -> dict:
@@ -17,17 +17,19 @@ def facts(*, config_path: str | None, live: bool) -> dict:
     overflow = False
     cap = survey_list_cap()
     for repo in cfg.active_repos():
-        listed = list_ready_issues(git, cfg, repo, live=live, on_cap="keep")
+        listed = issues_source(
+            repo, runner=git, config=cfg, live=live, on_cap="keep"
+        ).list_open()
         if live and len(listed) >= cap:
             overflow = True
-        for issue in listed:
+        for task in listed:
             rows.append(
                 {
-                    "repo": issue.repo,
-                    "issue": int(issue.number),
-                    "title": issue.title,
-                    "labels": list(issue.labels or []),
-                    "assignees": list(getattr(issue, "assignees", None) or []),
+                    "repo": task.target,
+                    "issue": int(task.number),
+                    "title": task.title,
+                    "labels": list(task.labels or []),
+                    "assignees": list(task.assignees or []),
                 }
             )
     return {

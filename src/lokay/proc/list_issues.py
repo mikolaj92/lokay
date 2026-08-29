@@ -6,8 +6,8 @@ import argparse
 
 from lokay.config import RepoConfig
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import list_issues_with_label, list_ready_issues
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
+from lokay.github_tasks import issues_source, task_to_issue
 
 
 
@@ -24,13 +24,12 @@ def main(argv: list[str] | None = None) -> int:
     if repo is None:
         repo = RepoConfig(name=args.repo, clone_path=cfg.worktrees_root / "unused")
     try:
-        issue_runner = runner(cfg)
+        source = issues_source(repo, runner=runner(cfg), config=cfg, live=live)
         if args.label:
-            issues = list_issues_with_label(
-                issue_runner, cfg, repo, label=args.label, live=live
-            )
+            tasks = source.list_labeled(args.label)
         else:
-            issues = list_ready_issues(issue_runner, cfg, repo, live=live)
+            tasks = source.list_open()
+        issues = [task_to_issue(task) for task in tasks]
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc), repo=args.repo))
     return emit_exit(
