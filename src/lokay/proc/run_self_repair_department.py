@@ -1,7 +1,14 @@
-"""Parent slot for self_repair. Body stays in daemon_cycle (#893)."""
+"""Parent slot: child Fala self_repair_department (incident + existing self_repair)."""
 
-from lokay.envelope import ok
+from lokay.graph_run import run_path
 
 
-def run() -> dict:
-    return ok(route="run", department="self_repair", reason="parent_slot")
+def run(*, config_path: str | None = None) -> dict:
+    return run_path(
+        path_id="self_repair_department",
+        repo="__self_repair_department__",
+        config_path=config_path,
+        live=True,
+        require_healthy=False,
+        extra_inputs={"config_path": config_path or ""},
+    )

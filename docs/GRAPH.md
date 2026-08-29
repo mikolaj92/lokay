@@ -87,7 +87,7 @@ factory_begin
 | Atom | One job |
 | --- | --- |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
-| `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Body stays in `daemon_cycle`. |
+| `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Leftover skip is not a stall. Body is child Fala `self_repair_department` (incident + existing `self_repair`). Off never touches lokay main. |
 | `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Invokes existing `issues` child; launch is gated by the executor switch. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Independent of both sieves. If issue_triage already ran, this slot is already_conducted. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Invokes existing `prs` child. Must not start repair from inside the sieve. |
@@ -156,6 +156,20 @@ Named child slots are `run_pr_triage_subflow` / `pr_triage` and
 `run_pr_repair_subflow` / `pr_repair`. The latter can run only after the former
 returns a repair verdict and the repair department is enabled. One PR per pass.
 Atom ids are unique.
+
+### `self_repair_department` (factory body)
+
+Two small blocks. Parent `run_self_repair_department` invokes this child only
+when the last receipt did not publish a new PR or merge. Leftover skip never
+enters.
+
+```text
+open_self_repair_incident     LEAF  stall incident (did_not_move)
+  → invoke_self_repair        LEAF  existing self_repair child; skipped without incident
+```
+
+Off: parent select routes skip and the mill goes straight to issue sieve /
+executor / PRs. This graph never starts from leftover overflow.
 
 ### `self_repair` (emergency only)
 
