@@ -76,8 +76,12 @@ def select(
     moving: dict[str, Any],
     leftover: dict[str, Any],
     receipt: dict[str, Any] | None,
+    *,
+    enabled: bool = True,
 ) -> dict[str, Any]:
     """Route factory unless the last receipt did not move and is not excluded."""
+    if not enabled:
+        return _factory("self_repair_disabled")
     if leftover.get("leftover_skip") or leftover_skip_signal(receipt):
         return _factory("leftover_skip")
     if _stale_receipt(receipt):

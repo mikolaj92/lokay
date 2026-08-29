@@ -74,20 +74,26 @@ atoms via `run_path`.
 
 ```text
 factory_begin
-  → prs                      → child Fala: list / select / triage-or-merge
-    → issues                 → child Fala: list once, nest issue_row until idle or cap
-      → record_pass          → last-pass.json (new_pr | merge | none)
-        → factory_pass_terminal
+  → select_self_repair_department → run_self_repair_department   (when last pass did not move)
+  → select_issue_triage_department → run_issue_triage_department
+  → select_executor_department → run_executor_department
+  → select_pr_triage_department → run_pr_triage_department
+  → select_pr_repair_department → run_pr_repair_department     (when route=repair)
+  → record_pass          → last-pass.json (new_pr | merge | none)
+    → factory_pass_terminal
   → reap_stale_worktrees     → sibling child from factory_begin (leftover work copies)
 ```
 
 | Atom | One job |
 | --- | --- |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
-| `prs` | child Fala: list open mill PRs, select one, review or merge. Conducts from `factory_begin`. Does not wait on leftover work-copy cleanup. |
-| `issues` | child Fala: list open issues once, nest `issue_row` until leftover is empty or the implement budget is spent. Leftover consume only on authored skip; sito miss keeps the row. Ready leftover goes to issue-to-PR. Oil is not the product slot. Conducts from `factory_begin` and `prs`. Does not conduct from `reap_stale_worktrees`. A failed cleanup is not a gate. The parent does not unroll 1..8. |
-| `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct `prs`, `issues`, or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. |
-| `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin`, `prs`, and `issues`. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. |
+| `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Body stays in `daemon_cycle`. |
+| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Invokes existing `issues` child; launch is gated by the executor switch. |
+| `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Independent of both sieves. If issue_triage already ran, this slot is already_conducted. |
+| `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Invokes existing `prs` child. Must not start repair from inside the sieve. |
+| `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict. Keep #901 wiring inside `prs`. |
+| `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. |
+| `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
 | mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/` (including the child journal at that root) rotates at a 64 MiB ceiling; recovery stays on `state.jsonl`. Over-cap is fail-closed if the file cannot be cut |
 | leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. No 30-slot unroll. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
@@ -212,8 +218,9 @@ selection walks past it and `assign_issue` does not add the mill beside them.
 select_next_issue         LEAF  is there a row? leftover walk, then one issue
   → issues_run_triage     NODE  when route=issue → child Fala issue_triage
     → select_issue_do     LEAF  do or skip; leftover consume only on authored skip
-      → issues_launch_pr  NODE  when route=do → child Fala issue_to_pr
-        → summarize_issue_row LEAF  one-row receipt
+      → select_issue_executor LEAF  department switch; skip when executor is off
+        → issues_launch_pr  NODE  when route=do → child Fala issue_to_pr
+          → summarize_issue_row LEAF  one-row receipt
 ```
 
 `select_next_issue` only answers whether a takeable row remains. It does not

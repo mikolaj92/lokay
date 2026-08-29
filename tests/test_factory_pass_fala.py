@@ -7,9 +7,17 @@ from test_issue_triage_fala import base_effector
 
 CHILDREN = (
     "factory_begin",
-    "prs",
     "reap_stale_worktrees",
-    "issues",
+    "select_self_repair_department",
+    "run_self_repair_department",
+    "select_issue_triage_department",
+    "run_issue_triage_department",
+    "select_executor_department",
+    "run_executor_department",
+    "select_pr_triage_department",
+    "run_pr_triage_department",
+    "select_pr_repair_department",
+    "run_pr_repair_department",
     "record_pass",
     "factory_pass_terminal",
 )
@@ -28,6 +36,11 @@ def _body(receipt_mark: str) -> str:
     kids = " ".join(repr(name) for name in CHILDREN)
     return base_effector(
         f"""if a=='factory_begin':v.update(pass_dir='/pass')
+if a=='select_self_repair_department':v.update(route='skip',reason='last_pass_moved')
+if a=='select_issue_triage_department':v.update(route='run')
+if a=='select_executor_department':v.update(route='run')
+if a=='select_pr_triage_department':v.update(route='run')
+if a=='select_pr_repair_department':v.update(route='skip')
 if a=='record_pass':Path({receipt_mark!r}).write_text('receipt');v.update(result={{'ok':True,'health':'progress'}})
 if a=='factory_pass_terminal':v.update(result={{'ok':True,'health':'progress'}})
 if a in {{{kids}}}:v.update(ok=True)"""
@@ -44,7 +57,7 @@ def _require_fala_host():
         pytest.skip(f"fala host unavailable: {exc}")
 
 
-def test_parent_runs_prs_and_issues_children(tmp_path):
+def test_parent_runs_department_children(tmp_path):
     _require_fala_host()
     receipt = str(tmp_path / "receipt")
     result = run_graph(
@@ -70,7 +83,12 @@ def test_failed_cleanup_still_picks_the_next_issue(tmp_path):
     body = base_effector(
         f"""if a=='factory_begin':v.update(pass_dir='/pass')
 if a=='reap_stale_worktrees':raise RuntimeError('cleanup process.failed')
-if a=='issues':Path({picked!r}).write_text('pr');v.update(route='do',launched='pr',leftover=1,leftover_issues=[{{'repo':'Temida/Temida','issue':4996}}])
+if a=='select_self_repair_department':v.update(route='skip',reason='last_pass_moved')
+if a=='select_issue_triage_department':v.update(route='run')
+if a=='run_issue_triage_department':Path({picked!r}).write_text('pr');v.update(route='do',launched='pr',leftover=1,leftover_issues=[{{'repo':'Temida/Temida','issue':4996}}])
+if a=='select_executor_department':v.update(route='skip',reason='already_conducted')
+if a=='select_pr_triage_department':v.update(route='run')
+if a=='select_pr_repair_department':v.update(route='skip')
 if a=='record_pass':Path({receipt!r}).write_text('receipt');v.update(result={{'ok':True,'outcome':'new_pr'}})
 if a=='factory_pass_terminal':v.update(result={{'ok':True,'outcome':'new_pr'}})
 if a in {{{kids}}}:v.update(ok=True)"""
@@ -83,8 +101,8 @@ if a in {{{kids}}}:v.update(ok=True)"""
     )
     status = {name: row["status"] for name, row in result["effector_results"].items()}
     assert status["reap_stale_worktrees"] == "failed"
-    assert status["prs"] == "succeeded"
-    assert status["issues"] == "succeeded"
+    assert status["run_pr_triage_department"] == "succeeded"
+    assert status["run_issue_triage_department"] == "succeeded"
     assert status["record_pass"] == "succeeded"
     assert status["factory_pass_terminal"] == "succeeded"
     assert tmp_path.joinpath("picked").read_text() == "pr"

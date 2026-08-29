@@ -90,6 +90,13 @@ class Config:
     # Survey / gh budget: bounded 429 retries and optional inter-call pacing.
     gh_retry_max: int = 3
     gh_survey_pace_ms: int = 50
+    # Parent department switches (one Fala graph = one department). Independent
+    # of executor.enabled (harness). Disabling executor must not disable sieves.
+    department_self_repair: bool = True
+    department_issue_triage: bool = True
+    department_executor: bool = True
+    department_pr_triage: bool = True
+    department_pr_repair: bool = True
     config_path: Path | None = None
 
     @property
@@ -287,6 +294,16 @@ def apply_env_overrides(cfg: Config) -> Config:
     v = _env_truthy("LOKAY_REQUIRE_LLM_REVIEW")
     if v is not None:
         cfg.require_llm_review = v
+    for env_name, attr in (
+        ("LOKAY_DEPARTMENT_SELF_REPAIR", "department_self_repair"),
+        ("LOKAY_DEPARTMENT_ISSUE_TRIAGE", "department_issue_triage"),
+        ("LOKAY_DEPARTMENT_EXECUTOR", "department_executor"),
+        ("LOKAY_DEPARTMENT_PR_TRIAGE", "department_pr_triage"),
+        ("LOKAY_DEPARTMENT_PR_REPAIR", "department_pr_repair"),
+    ):
+        flag = _env_truthy(env_name)
+        if flag is not None:
+            setattr(cfg, attr, flag)
     return cfg
 
 
@@ -374,9 +391,48 @@ def load_config(path: str | Path | None = None) -> Config:
         incident_cooldown_hours=float(gh.get("incident_cooldown_hours", 12)),
         gh_retry_max=int(lim.get("gh_retry_max", 3)),
         gh_survey_pace_ms=int(lim.get("gh_survey_pace_ms", 50)),
+        department_self_repair=_yaml_bool(
+            (data.get("departments") or {}).get("self_repair", True),
+            True,
+            field="departments.self_repair",
+        ),
+        department_issue_triage=_yaml_bool(
+            (data.get("departments") or {}).get("issue_triage", True),
+            True,
+            field="departments.issue_triage",
+        ),
+        department_executor=_yaml_bool(
+            (data.get("departments") or {}).get("executor", True),
+            True,
+            field="departments.executor",
+        ),
+        department_pr_triage=_yaml_bool(
+            (data.get("departments") or {}).get("pr_triage", True),
+            True,
+            field="departments.pr_triage",
+        ),
+        department_pr_repair=_yaml_bool(
+            (data.get("departments") or {}).get("pr_repair", True),
+            True,
+            field="departments.pr_repair",
+        ),
         config_path=cfg_path,
     )
     return apply_env_overrides(cfg)
+
+
+DEPARTMENT_ATTR = {
+    "self_repair": "department_self_repair",
+    "issue_triage": "department_issue_triage",
+    "executor": "department_executor",
+    "pr_triage": "department_pr_triage",
+    "pr_repair": "department_pr_repair",
+}
+
+
+def department_enabled(cfg: Config, name: str) -> bool:
+    """On/off switch for one named parent department."""
+    return bool(getattr(cfg, DEPARTMENT_ATTR[name]))
 
 
 def starter_config_text(*, assignee: str = "mikolaj92", repo: str | None = None, clone: str | None = None) -> str:
