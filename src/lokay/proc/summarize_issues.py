@@ -1,4 +1,4 @@
-"""Receipt for one issues pass. Two small functions: envelope, then write."""
+"""Receipt envelope for one issue department row. Envelope, then write."""
 
 from lokay.proc.write_issues_receipt import write
 

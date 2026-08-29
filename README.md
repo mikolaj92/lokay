@@ -7,7 +7,7 @@ Lokay continuously mills work across configured GitHub repositories: select then
 1. Opens the pass and selects one implementable catalog row from the cheap prior catalog / live occupancy (`select_implement` after `factory_begin`).
 2. When `select_implement.route == selected`, runs the contradiction gate and detached `issue_to_pr` (`queue_conflict` → `dispatch_implement`), then health and the last-pass receipt. Surveys, triage, close-out, occupancy refresh, and leftover reaps do not run in that pass — they must not consume the short pass ceiling before start or the receipt.
     3. When no row is selected, housecleans: surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests; triages undecided issues through `issue_triage`; applies per-repo PR-first close-out (conflicts closed and re-readied, failed work enters `pr_repair`, approved mergeable work enters `pr_triage`); reaps leftover in-flight cache, over-budget plan-only, occupancy, and leftover worktrees.
-4. After a skip, the issues child returns to "is there a row?" on a visible edge. Two implementable rows in one budget do not wait for the next daemon tick. The parent does not unroll 1..8 slots.
+4. After a skip, the department nest returns to "is there a row?" on a visible edge. Two implementable rows in one budget do not wait for the next daemon tick. The parent does not unroll 1..8 slots.
 5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes. Never a second AI PR in the same repo. Serial by design (`limits.max_issue_to_pr_per_pass`, default **1**).
 
 The top-level Lokay runs the parent `factory_pass` Fala. Catalog surveys, planning, closeout, dispatch and recovery are authored paths or nested authored paths. Parent and child runs use separate journals.
@@ -695,27 +695,25 @@ manual/actionable są osobnymi procesami jednego repo. Repo-local reaction,
 katalogowa redukcja, persist i efekt TTL są rozdzielone. Failed listing
 pozostaje `probe_failed`; przekroczenie authored katalogu kończy się fail-closed.
 
-### Recenzja i merge PR-ów — `prs`
+### Recenzja i merge PR-ów — `pr_triage_department`
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ListOpenPrs
-    ListOpenPrs --> SelectNextPr
-    SelectNextPr --> RunPrTriageSubflow: jest otwarty PR
-    SelectNextPr --> SummarizePrs: pusta lista
-    RunPrTriageSubflow --> SelectPrRepair
-    SelectPrRepair --> RunPrRepairSubflow: popraw + dział włączony
-    SelectPrRepair --> SummarizePrs: scalono / czekaj / feedback / dział wyłączony
-    RunPrRepairSubflow --> SummarizePrs
-    SummarizePrs --> [*]
+    [*] --> ListPrSieve
+    ListPrSieve --> SelectPrSieve
+    SelectPrSieve --> RunPrSieve: jest otwarty PR
+    SelectPrSieve --> SelectPrTriageVerdict: pusta lista
+    RunPrSieve --> SelectPrTriageVerdict
+    SelectPrTriageVerdict --> SummarizePrTriageDepartment
+    SummarizePrTriageDepartment --> [*]
 ```
 
-NODE `prs` ma sześć węzłów. `list_open_prs`, `select_next_pr` i
-`select_pr_repair` są liśćmi. `run_pr_triage_subflow` uruchamia wyłącznie
-pod-Falę `pr_triage`, która orzeka: scal / feedback / popraw. Dopiero rodzic
-po werdykcie `popraw` może uruchomić osobny slot dziecka
-`run_pr_repair_subflow` → `pr_repair`; wyłączony dział zostawia feedback i nie
-dotyka gałęzi. `summarize_prs` jest liściem. Pusta lista pomija dzieci i nie
+Dział `pr_triage_department` ma pięć węzłów. `list_pr_sieve` i
+`select_pr_sieve` są liśćmi. `run_pr_sieve` uruchamia pod-Falę `pr_triage`,
+która orzeka: scal / feedback / popraw. Werdykt `popraw` jest wartością.
+Rodzic `factory_pass` po tym werdykcie może uruchomić osobny dział
+`pr_repair`; wyłączony dział zostawia feedback i nie dotyka gałęzi.
+`summarize_pr_triage_department` jest liściem. Pusta lista pomija dziecko i nie
 psuje passu. Nie ma 30-slotowego katalogu ani leftover overflow.
 
 ### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
@@ -996,66 +994,78 @@ Cudze leftover sito (`foreign_localize`) jest REMOVE i bije KEEP z
 `live_issue_to_pr` / `unpublished_or_dirty` / `uncommitted_real`.
 W `factory_pass` ten reap jest osobnym dzieckiem od `factory_begin`.
 Rzuca / puste / `process.failed` to sklasyfikowany `route=failed`, nie
-abort passu. `prs` i `issues` nie czekają na sukces sprzątania. `record_pass`
+abort passu. Działy nie czekają na sukces sprzątania. `record_pass`
 też nie. Leftover work copies nie zjadają issue-to-PR.
 
-### Otwarte issue do PR — `issues`
+### Triage issue — `issue_triage_department`
 
 ```mermaid
 stateDiagram-v2
     [*] --> ListOpenIssues
-    ListOpenIssues --> RunIssueRows
-    RunIssueRows --> SummarizeIssues
-    SummarizeIssues --> [*]
+    ListOpenIssues --> RunIssueSieveRows
+    RunIssueSieveRows --> SummarizeIssueTriageDepartment
+    SummarizeIssueTriageDepartment --> [*]
 ```
 
-Rodzic `issues` listuje raz i gnieździ jedno dziecko `issue_row` aż skrzynka
-pusta albo budżet. Nie rozwija 1..8. Tick daemona nie jest tą pętlą. Atom
-nie chowa "next". Leftover jest zjadane tylko przy authored skip
-(`needs_human`, `blocked`, already-closed). `triage_not_done` / adapter fail /
-`sito_nie_robic` zostawia wiersz; ready leftover idzie do issue-to-PR.
+Dział `issue_triage_department` listuje raz i gnieździ `issue_sieve_row` aż
+skrzynka pusta. Zero kodu. Zero PR. Nie rozwija 1..8. Tick daemona nie jest
+tą pętlą. Leftover jest zjadane tylko przy authored skip (`needs_human`,
+`blocked`, already-closed). `triage_not_done` / adapter fail zostawia wiersz.
 Oil lokay nie zajmuje product slotu. Cudzy assignee nie jest zadaniem lokaja.
 
-### Jeden wiersz katalogu — `issue_row`
+### Jeden wiersz triage — `issue_sieve_row`
 
 ```mermaid
 stateDiagram-v2
     [*] --> SelectNextIssue
     SelectNextIssue --> IssuesRunTriage: jest wiersz
-    SelectNextIssue --> SummarizeIssueRow: brak / strop
-    IssuesRunTriage --> SelectIssueDo
-    SelectIssueDo --> IssuesLaunchPr: robic / leftover ready
-    SelectIssueDo --> SummarizeIssueRow: authored skip
-    IssuesLaunchPr --> SummarizeIssueRow
-    SummarizeIssueRow --> [*]
+    SelectNextIssue --> SelectIssueSieve: brak / strop
+    IssuesRunTriage --> SelectIssueSieve
+    SelectIssueSieve --> RunIssueSieveSplit: split
+    SelectIssueSieve --> RunIssueSieveIntake: intake
+    SelectIssueSieve --> SummarizeIssueSieveRow
+    RunIssueSieveSplit --> SummarizeIssueSieveRow
+    RunIssueSieveIntake --> SummarizeIssueSieveRow
+    SummarizeIssueSieveRow --> [*]
 ```
 
-Jedno pytanie, jeden `issue_to_pr`. `select_next_issue` tylko odpowiada czy
-jest wiersz. Puste przypisanie albo sam lokaj (konfigurowany assignee) wolno
-wziąć. Ktokolwiek inny na przypisaniu — sam albo obok lokaja — to cudze:
-sito wyboru pomija, `assign_issue` nie dopisuje lokaja. Authored skip zjada
-leftover; sito miss zostawia wiersz. Rodzic wraca krawędzią dziecka
-(`run_issue_rows` aż jałowe). `leftover=0` tylko gdy lista do wzięcia się
-wyczerpała. Bez bramki `work:ready` / `ai:ready` i bez 30 slotów.
+Jedno pytanie, jeden werdykt triage. `select_next_issue` tylko odpowiada czy
+jest wiersz. Puste przypisanie albo sam lokaj wolno wziąć. Ktokolwiek inny
+na przypisaniu to cudze: wybór pomija, `assign_issue` nie dopisuje lokaja.
+Werdykt `do` nie otwiera gałęzi — to robi dział executor.
 
-### Otwarte PR — `prs`
+### Kod i PR — `executor_department`
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ListOpenPrs
-    ListOpenPrs --> SelectNextPr
-    SelectNextPr --> RunPrTriageSubflow: jest PR
-    SelectNextPr --> SummarizePrs: pusta lista
-    RunPrTriageSubflow --> SummarizePrs
-    SummarizePrs --> [*]
+    [*] --> ListOpenIssues
+    ListOpenIssues --> RunExecutorRows
+    RunExecutorRows --> SummarizeExecutorDepartment
+    SummarizeExecutorDepartment --> [*]
 ```
 
-Dziecko `prs` jest osobną Falą. Rodzic go tylko woła. Ta zmiana nie przepisuje
-jego atomów.
+Dział `executor_department` gnieździ `executor_row` aż pusto albo budżet.
+Nie jest triage. Nie scala.
+
+### Jeden wiersz executora — `executor_row`
+
+```mermaid
+stateDiagram-v2
+    [*] --> SelectNextIssue
+    SelectNextIssue --> SelectIssueDoRow
+    SelectIssueDoRow --> SelectIssueExecutor
+    SelectIssueExecutor --> IssuesLaunchPr: robic
+    SelectIssueExecutor --> SummarizeExecutorRow: skip
+    IssuesLaunchPr --> SummarizeExecutorRow
+    SummarizeExecutorRow --> [*]
+```
+
+Jedno pytanie, jeden `issue_to_pr`. Ready leftover staje się `do` bez triage
+w tym wierszu. Wyłączony dział nie spełnia `when` launch.
 
 ### Triage issue — `issue_triage`
 
-Dziecko rodzica `issues`. **Sito tylko:** robić / nie / oznaczyć / człowiek.
+Dziecko działu `issue_triage_department`. **Triage tylko:** robić / nie / oznaczyć / człowiek.
 Nie implementuje. Nie zamyka cudzego issue. Werdykt zamknąć oznacza
 oznaczenie (`ai:blocked`), nie `close_issue`. `issue_split` jest osobną
 pod-Falą na później.
@@ -1326,13 +1336,13 @@ kontraktu. Aktualny audyt:
 | Fragment | Stan obecny |
 | --- | --- |
 | `approve → lokalne testy → merge` | zaimplementowane w Fali |
-| `request_changes → werdykt popraw → pr_repair → nowy SHA → recenzja` | zaimplementowane: `pr_triage` tylko orzeka, a rodzic `prs` przy włączonym dziale uruchamia osobną pod-Falę naprawy; recenzja wraca w następnym passie |
+| `request_changes → werdykt popraw → pr_repair → nowy SHA → recenzja` | zaimplementowane: `pr_triage` tylko orzeka, a rodzic `factory_pass` przy włączonym dziale uruchamia osobną pod-Falę naprawy; recenzja wraca w następnym passie |
 | `czerwone CI / czerwony test lokalny → werdykt popraw` | zaimplementowane: `pr_triage` nie uruchamia executora; osobny dział `pr_repair` jest wywoływany przez rodzica |
 | `pending / offline → czekanie` | zaimplementowane w Fali; pass nie pada |
 | `needs_human → terminal` | zaimplementowane w Fali |
 | `needs_evidence → jeden kolektor z zamkniętego zbioru → ponów agenta raz` | zaimplementowane w Fali |
 | `invalid JSON → feedback walidatora → ponów agenta raz` | zaimplementowane w Fali |
-| `issue_triage` sito (robić / nie / oznaczyć / człowiek) | zaimplementowane w Fali; nie implementuje; nie zamyka cudzego issue; `issue_split` jest późniejszym dzieckiem |
+| `issue_triage` triage (robić / nie / oznaczyć / człowiek) | zaimplementowane w Fali; nie implementuje; nie zamyka cudzego issue; `issue_split` jest późniejszym dzieckiem |
 | `issue_to_pr` bez ukrytego drzewa Python | zaimplementowane jako gate Fali + pod-Fala `issue_to_pr_delivery` |
 | odzyskanie lokalnego work item bez globalnej awarii Lokaya | jawna allowlista carrier events/health; lokalny błąd nigdy nie wchodzi do globalnego quorum |
 
@@ -1340,11 +1350,14 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then PRs/issues |
+| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then departments |
 | `FactoryPass` | `factory_pass` | five named departments with on/off switches, then receipt; leftover work-copy cleanup is a sibling child |
-| `Issues` | `issues` | lista otwartych, gnieździ `issue_row` aż pusto albo budżet |
-| `IssueRow` | `issue_row` | jest wiersz? tak → jeden issue_to_pr; nie / strop → koniec |
-| `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |
+| `SelfRepairDepartment` | `self_repair_department` | stall incident, then existing self_repair child |
+| `IssueTriageDepartment` | `issue_triage_department` | list, nest triage rows, receipt. Marks and children. Zero ai/fix |
+| `IssueSieveRow` | `issue_sieve_row` | one issue: select, triage, optional split or intake. Never launch |
+| `ExecutorDepartment` | `executor_department` | list, nest executor rows, receipt. Code and PR. Not merge |
+| `ExecutorRow` | `executor_row` | ready issue becomes an open PR. No triage. No merge |
+| `PrTriageDepartment` | `pr_triage_department` | PR triage: list, checks, review, feedback, merge. Verdict only |
 | `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
 | `ReadySurvey` | `survey_ready` | listuje i klasyfikuje gotowe issue jednym atomem katalogu |
@@ -1376,14 +1389,10 @@ kontraktu. Aktualny audyt:
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
 | `LeftoverCloseout` | `leftover_closeout` | jeden atom katalogu: CLOSED ready labels |
-| `OpenPRs` | `prs` | lista żywych otwartych PR; rodzic kolejno woła sito i opcjonalną naprawę jednego |
-| `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
 | `CloseoutPRs` | `closeout_prs` | jeden atom katalogu: PR-y przez pod-Falę jednego PR |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
-| `OpenIssues` | `issues` | lista otwartych issue, sito, kod i PR |
-| `OpenPRs` | `prs` | rodzic działów PR: sito, opcjonalna naprawa, receipt |
 | `TriageInbox` | `issue_triage` | sito: robić, nie, oznaczyć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |

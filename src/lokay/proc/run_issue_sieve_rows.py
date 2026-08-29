@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from lokay.graph_run import run_path
 from lokay.proc.classify_issue_row import classify
-from lokay.proc.run_issue_rows import seed_queue
+from lokay.proc.seed_issue_queue import seed as seed_queue
 
 
 def run(

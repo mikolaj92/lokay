@@ -1,13 +1,15 @@
 """Two implementable rows in one budget do not require a second daemon tick."""
 
-from lokay.proc import run_issue_rows
+from lokay.proc import run_executor_rows
 
 
 def test_two_implementable_rows_one_budget_one_nest(monkeypatch):
     calls = []
 
-    def fake_row(*, listed, last, config_path, live, pass_dir):
-        calls.append({"last": dict(last or {}), "listed": listed})
+    def fake_path(*, path_id, extra_inputs, **_k):
+        assert path_id == "executor_row"
+        last = extra_inputs.get("last") or {}
+        calls.append({"last": dict(last), "listed": extra_inputs.get("listed")})
         if not last:
             return {
                 "ok": True,
@@ -32,8 +34,8 @@ def test_two_implementable_rows_one_budget_one_nest(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(run_issue_rows, "one_row", fake_row)
-    out = run_issue_rows.run(
+    monkeypatch.setattr("lokay.proc.run_executor_rows.run_path", fake_path)
+    out = run_executor_rows.run(
         listed={"issues": [{"repo": "o/r", "issue": 2}, {"repo": "o/r", "issue": 3}]},
         config_path=None,
         live=True,
@@ -52,8 +54,10 @@ def test_two_implementable_rows_one_budget_one_nest(monkeypatch):
 def test_skip_then_next_row_same_budget(monkeypatch):
     calls = []
 
-    def fake_row(*, listed, last, config_path, live, pass_dir):
-        calls.append(dict(last or {}))
+    def fake_path(*, path_id, extra_inputs, **_k):
+        assert path_id == "executor_row"
+        last = extra_inputs.get("last") or {}
+        calls.append(dict(last))
         if not last:
             return {
                 "ok": True,
@@ -77,8 +81,8 @@ def test_skip_then_next_row_same_budget(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(run_issue_rows, "one_row", fake_row)
-    out = run_issue_rows.run(
+    monkeypatch.setattr("lokay.proc.run_executor_rows.run_path", fake_path)
+    out = run_executor_rows.run(
         listed={"issues": [{"repo": "o/r", "issue": 2}, {"repo": "o/r", "issue": 3}]},
         config_path=None,
         live=True,
@@ -97,8 +101,10 @@ def test_coding_not_implemented_row_does_not_abort_catalog(monkeypatch):
 
     calls = []
 
-    def fake_row(*, listed, last, config_path, live, pass_dir):
-        calls.append(dict(last or {}))
+    def fake_path(*, path_id, extra_inputs, **_k):
+        assert path_id == "executor_row"
+        last = extra_inputs.get("last") or {}
+        calls.append(dict(last))
         if not last:
             child = classify(error=RuntimeError("condition_source_not_succeeded"))
             return {
@@ -122,8 +128,8 @@ def test_coding_not_implemented_row_does_not_abort_catalog(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(run_issue_rows, "one_row", fake_row)
-    out = run_issue_rows.run(
+    monkeypatch.setattr("lokay.proc.run_executor_rows.run_path", fake_path)
+    out = run_executor_rows.run(
         listed={"issues": [{"repo": "o/r", "issue": 2}, {"repo": "o/r", "issue": 3}]},
         config_path=None,
         live=True,
@@ -138,7 +144,8 @@ def test_coding_not_implemented_row_does_not_abort_catalog(monkeypatch):
 
 
 def test_cap_does_not_start_a_second_tick(monkeypatch):
-    def fake_row(*, listed, last, config_path, live, pass_dir):
+    def fake_path(*, path_id, extra_inputs, **_k):
+        assert path_id == "executor_row"
         return {
             "ok": True,
             "result": {
@@ -151,8 +158,8 @@ def test_cap_does_not_start_a_second_tick(monkeypatch):
             },
         }
 
-    monkeypatch.setattr(run_issue_rows, "one_row", fake_row)
-    out = run_issue_rows.run(
+    monkeypatch.setattr("lokay.proc.run_executor_rows.run_path", fake_path)
+    out = run_executor_rows.run(
         listed={"issues": [{"repo": "o/r", "issue": 2}, {"repo": "o/r", "issue": 3}]},
         config_path=None,
         live=True,

@@ -1,8 +1,8 @@
 """Parent Fala composition for one complete Lokay factory pass.
 
-The parent path ``factory_pass`` owns pass order (begin → PRs → issues →
+The parent path ``factory_pass`` owns pass order (begin → five departments →
 receipt). Leftover work-copy cleanup is a sibling child; a failed cleanup
-is a classified route and does not gate PRs or issue-to-PR.
+is a classified route and does not gate the departments.
 Python only fail-closes offline, then invokes ``graph_run.run_path``.
 """
 

@@ -1,4 +1,4 @@
-"""Persist the issues child receipt. One job: write."""
+"""Persist one issue-department receipt. One job: write."""
 
 from __future__ import annotations
 
