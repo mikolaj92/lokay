@@ -81,11 +81,18 @@ stateDiagram-v2
     [*] --> Heartbeat
     Heartbeat --> FactoryPass
     FactoryPass --> FactoryBegin
-    FactoryBegin --> Prs
     FactoryBegin --> ReapStaleWorktrees
-    Prs --> Issues
-    Issues --> Issues: leftover row
-    Issues --> RecordPass: empty / cap
+    FactoryBegin --> SelectSelfRepairDepartment
+    SelectSelfRepairDepartment --> RunSelfRepairDepartment
+    SelectSelfRepairDepartment --> SelectIssueTriageDepartment
+    SelectIssueTriageDepartment --> RunIssueTriageDepartment
+    SelectIssueTriageDepartment --> SelectExecutorDepartment
+    SelectExecutorDepartment --> RunExecutorDepartment
+    SelectExecutorDepartment --> SelectPrTriageDepartment
+    SelectPrTriageDepartment --> RunPrTriageDepartment
+    SelectPrTriageDepartment --> SelectPrRepairDepartment
+    SelectPrRepairDepartment --> RunPrRepairDepartment
+    SelectPrRepairDepartment --> RecordPass
     RecordPass --> FactoryPassTerminal
     ReapStaleWorktrees --> FactoryPassTerminal: cleaned / failed classified
     FactoryPassTerminal --> LastPassMoving
@@ -1334,7 +1341,7 @@ kontraktu. Aktualny audyt:
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
 | `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then PRs/issues |
-| `FactoryPass` | `factory_pass` | open, PRs, issues, receipt; leftover work-copy cleanup is a sibling child |
+| `FactoryPass` | `factory_pass` | five named departments with on/off switches, then receipt; leftover work-copy cleanup is a sibling child |
 | `Issues` | `issues` | lista otwartych, gnieździ `issue_row` aż pusto albo budżet |
 | `IssueRow` | `issue_row` | jest wiersz? tak → jeden issue_to_pr; nie / strop → koniec |
 | `OpenPRs` | `prs` | lista otwartych PR, recenzja albo merge |

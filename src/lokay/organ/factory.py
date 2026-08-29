@@ -351,8 +351,14 @@ def handle_factory(
         return record_pass.record(
             pass_dir=str(begin.get("pass_dir") or ""),
             begin=begin,
-            prs=up.get("prs") or {},
-            issues=up.get("issues") or {},
+            prs=up.get("run_pr_triage_department")
+            or up.get("run_pr_repair_department")
+            or up.get("prs")
+            or {},
+            issues=up.get("run_issue_triage_department")
+            or up.get("run_executor_department")
+            or up.get("issues")
+            or {},
             leftover=up.get("leftover_catalog") or up.get("leftover") or {},
         )
 

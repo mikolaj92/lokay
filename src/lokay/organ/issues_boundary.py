@@ -54,16 +54,28 @@ def handle_issues(
             up.get("issues_run_triage") or {},
             _listed_of(inputs, up),
         )
+    if atom == "select_issue_executor":
+        from lokay.config import department_enabled, load_config
+        from lokay.proc.select_issue_executor import select
+
+        cfg = load_config(config)
+        return select(
+            up.get("select_issue_do") or {},
+            enabled=department_enabled(cfg, "executor"),
+        )
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch
 
-        return launch(up.get("select_issue_do") or {}, config_path=config)
+        return launch(
+            up.get("select_issue_executor") or up.get("select_issue_do") or {},
+            config_path=config,
+        )
     if atom == "summarize_issue_row":
         from lokay.proc.summarize_issue_row import summarize
 
         return summarize(
             up.get("select_next_issue") or {},
-            up.get("select_issue_do") or {},
+            up.get("select_issue_executor") or up.get("select_issue_do") or {},
             up.get("issues_launch_pr") or {},
             pass_dir=pass_dir,
         )

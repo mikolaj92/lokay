@@ -30,6 +30,16 @@ github:
 #     priority: 50
 #     enabled: true
 
+# Parent departments (one Fala graph = one department). Each switch is
+# independent: LOKAY_DEPARTMENT_EXECUTOR=0 must not disable either sieve.
+# Env: LOKAY_DEPARTMENT_SELF_REPAIR / ISSUE_TRIAGE / EXECUTOR / PR_TRIAGE / PR_REPAIR
+departments:
+  self_repair: true
+  issue_triage: true
+  executor: true
+  pr_triage: true
+  pr_repair: true
+
 executor:
   enabled: false  # set true (or LOKAY_EXECUTOR_ENABLED=1) for live milling
   agent: pi                  # log label only

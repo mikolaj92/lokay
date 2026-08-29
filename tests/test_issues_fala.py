@@ -21,7 +21,11 @@ def _path_raw(path_id: str) -> dict:
 
 def simulate_issue_row(*, select_route: str, do_route: str = "skip") -> dict:
     """Apply authored conduction + when. Skipped upstream satisfies conduction."""
-    routes = {"select_next_issue": select_route, "select_issue_do": do_route}
+    routes = {
+        "select_next_issue": select_route,
+        "select_issue_do": do_route,
+        "select_issue_executor": do_route,
+    }
     status: dict[str, str] = {}
 
     def matches(when: dict) -> bool:
@@ -111,6 +115,7 @@ def test_empty_list_skips_implement_and_writes_receipt(tmp_path):
     body = base_effector(
         f"""if a=='select_next_issue':v.update(route='none',reason='empty')
 if a=='select_issue_do':v.update(route='skip',reason='no_issue')
+if a=='select_issue_executor':v.update(route='skip',reason='no_issue')
 if a=='summarize_issue_row':v['result']={{'route':'none'}};Path({str(receipt)!r}).write_text('receipt')"""
     )
     result = run_graph(tmp_path, body, "issue-row-empty", path_id="issue_row")
@@ -130,6 +135,7 @@ def test_sito_skip_does_not_launch_and_writes_receipt(tmp_path):
         f"""if a=='select_next_issue':v.update(route='issue',repo='o/r',issue=2)
 if a=='issues_run_triage':v.update(route='completed',triage={{'result':{{'implementable':False}}}})
 if a=='select_issue_do':v.update(route='skip',reason='sito_nie_robic')
+if a=='select_issue_executor':v.update(route='skip',reason='sito_nie_robic')
 if a=='issues_launch_pr':Path({str(tmp_path/'launched')!r}).write_text('launched')
 if a=='summarize_issue_row':v['result']={{'route':'skip'}};Path({str(receipt)!r}).write_text('receipt')"""
     )
@@ -151,6 +157,7 @@ def test_sito_do_launches_one_issue_to_pr_and_writes_receipt(tmp_path):
         f"""if a=='select_next_issue':v.update(route='issue',repo='o/r',issue=2,leftover=1)
 if a=='issues_run_triage':v.update(route='completed',triage={{'result':{{'implementable':True}}}})
 if a=='select_issue_do':v.update(route='do',repo='o/r',issue=2)
+if a=='select_issue_executor':v.update(route='do',repo='o/r',issue=2)
 if a=='issues_launch_pr':Path({str(launched)!r}).write_text('launched');v.update(route='started')
 if a=='summarize_issue_row':v['result']={{'route':'do','launched':'started'}};Path({str(receipt)!r}).write_text('receipt')"""
     )
