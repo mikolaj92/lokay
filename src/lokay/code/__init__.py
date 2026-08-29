@@ -25,6 +25,7 @@ __all__ = (
     "CodeError",
     "CodeSlot",
     "CodeTarget",
+    "AzureCode",
     "GithubCode",
     "MemoryCode",
     "PrBlock",
@@ -41,4 +42,8 @@ def __getattr__(name: str):
         from lokay.code.github import GithubCode
 
         return GithubCode
+    if name == "AzureCode":
+        from lokay.code.azure import AzureCode
+
+        return AzureCode
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

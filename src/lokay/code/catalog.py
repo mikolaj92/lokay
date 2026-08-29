@@ -2,14 +2,14 @@
 
 Row two-fields (issues + code) live in lokay.catalog.
 Lookup uses catalog.code.plugin. Unknown plugins fail at load.
-No Azure code plugin. No tasks.
+Known plugins: github, azure. No tasks.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Mapping
 
 from lokay.code.contract import CodeContract, CodeContractError, bind_code
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from lokay.config import Config
     from lokay.runner import Runner
 
-KNOWN_CODE_PLUGINS = frozenset({"github"})
+KNOWN_CODE_PLUGINS = frozenset({"github", "azure"})
 
 
 @dataclass(frozen=True)
@@ -93,11 +93,25 @@ def load_code(
     runner: Runner,
     config: Config,
     live: bool,
+    env: Mapping[str, str] | None = None,
+    transport: Any = None,
 ) -> CodeContract:
-    """Load the code plugin named by catalog.code.plugin."""
-    if slot.plugin != "github":
-        raise CodeContractError(f"unknown code plugin: {slot.plugin}")
-    from lokay.code.github import GithubCode
+    """Load the code plugin named by catalog.code.plugin. Does not read issues."""
+    if slot.plugin == "github":
+        from lokay.code.github import GithubCode
 
-    host = GithubCode.from_slot(slot, runner=runner, config=config, live=live)
+        host = GithubCode.from_slot(slot, runner=runner, config=config, live=live)
+    elif slot.plugin == "azure":
+        from lokay.code.azure import AzureCode
+
+        host = AzureCode.from_slot(
+            slot,
+            runner=runner,
+            config=config,
+            live=live,
+            env=env,
+            transport=transport,
+        )
+    else:
+        raise CodeContractError(f"unknown code plugin: {slot.plugin}")
     return bind_code(host.target, repo=host.repo, pr=host.pr)
