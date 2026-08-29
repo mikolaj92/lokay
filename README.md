@@ -1109,11 +1109,11 @@ stateDiagram-v2
     HumanTerminal --> [*]
 ```
 
-Sito nie rozcina issue, nie otwiera PR i nie zamyka cudzego issue. Rodzic
-`issues` woła `issue_to_pr` tylko po **robić**. Incydent preflight to **nie**
+Triage nie rozcina issue, nie otwiera PR i nie zamyka cudzego issue. Dział
+`executor` woła `issue_to_pr` tylko po **robić**. Incydent preflight to **nie**
 (liść `apply_issue_blocked` zostaje jednym zadaniem). Werdykt zamknąć idzie
 do `apply_issue_mark` (etykieta + komentarz). `issue_split` nie jest wyjściem
-tego sita. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
+tego triage. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
 
 ### Implementacja issue — `issue_to_pr`
 
@@ -1301,8 +1301,8 @@ gate is one leaf (`last_pass_moving`: new PR or merge only). A second
 leaf (`select_repair_route`) composes leftover skip, empty survey, stale
 receipt, occupied, and soft health. Repair is the `self_repair` child
 graph — activate stays a leaf inside that child, not inside
-`recovery_mill`. After one repair the graph always returns to PRs /
-issues.
+`recovery_mill`. After one repair the graph always returns to the five
+departments.
 
 ```mermaid
 stateDiagram-v2

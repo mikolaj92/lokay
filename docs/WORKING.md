@@ -286,10 +286,12 @@ See [`GRAPH.md`](GRAPH.md).
 Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
 - `factory_pass` is the parent Fala run used by the mill. It conducts
-  `factory_begin → prs → issues → record_pass → factory_pass_terminal`.
+  `factory_begin` plus five departments (`self_repair`, `issue_triage`,
+  `executor`, `pr_triage`, `pr_repair`) then `record_pass` →
+  `factory_pass_terminal`.
   `reap_stale_worktrees` is a sibling child from `factory_begin`. Failed
   leftover-work-copy cleanup is a classified route, not `process.failed`;
-  `issues` and `record_pass` do not wait on it.
+  departments and `record_pass` do not wait on it.
   One pass is oil XOR product (product wins). Last-pass receipt includes
   `lane: product | oil | idle`.
   `factory_begin` opens a pass workspace after a short host-alive probe.

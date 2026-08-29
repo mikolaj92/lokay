@@ -191,7 +191,7 @@ Entered only from:
 2. **`daemon_cycle` last-pass gate** — `last_pass_moving` is one leaf (new
    PR or merge). `select_repair_route` composes leftover skip, empty
    survey, and a stale receipt so they never enter. After the child
-   finishes, `recovery_mill` always runs the factory (PRs / issues).
+   finishes, `recovery_mill` always runs the factory (five departments).
    Repair never loops as the mill. Activate is `self_repair_activate`.
 
 It never creates a branch or PR. The coding agent can edit only the detached
@@ -371,8 +371,8 @@ pr_checks
                           └─ repair → summarize repair verdict (local suite red)
 ```
 
-The parent `prs` path consumes that verdict and may invoke the separate
-`pr_repair` child. With repair disabled, feedback remains published and no code
+The parent `factory_pass` consumes that verdict and may invoke the
+`pr_repair` department. With repair disabled, feedback remains published and no code
 or branch mutation occurs. `pr_review` is fail-closed: invalid JSON,
 `request_changes`, `needs_human`, or `secrets=true` never auto-merges.
 Trusted auto-merge (`lokay.merge_policy`): with `merge.enabled` / `LOKAY_MERGE_ENABLED`,
@@ -380,7 +380,7 @@ approve + green checks + local tests → `pr_merge` + `close_issue` in one path;
 **or transient GitHub 429/5xx while reading checks** → non-green waiting; confirmed
 red CI or a recorded-red local suite → repair verdict for the parent; the parent may invoke the separate `pr_repair` NODE child;
 secrets / `needs_human` / escalated `ai:needs-review` never merge.
-A later `prs` pass re-reviews the new SHA.
+A later `pr_triage` pass re-reviews the new SHA.
 Soft documentation nits must not route to `ai:needs-review`.
 `pr_review` does not load `.lokay/approach.md` or ask the reviewer to compare
 the diff to the builder plan. The plan stays builder evidence only.
