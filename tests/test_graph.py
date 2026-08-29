@@ -84,16 +84,21 @@ def test_factory_pass_has_no_unrolled_catalog_slots():
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [node["id"] for node in path["nodes"]]
     assert "run_issue_rows" not in ids
+    assert "issues" not in [row["id"] for row in desc["paths"]]
+    assert "prs" not in [row["id"] for row in desc["paths"]]
+    assert "issue_row" not in [row["id"] for row in desc["paths"]]
     assert "run_issue_triage_department" in ids
+    assert "run_executor_department" in ids
+    assert "run_pr_triage_department" in ids
     assert not any(
         name.startswith("run_product_factory_pass_") or name.endswith("_9")
         for name in ids
     )
-    issues = next(p for p in desc["paths"] if p["id"] == "issues")
-    assert [node["id"] for node in issues["nodes"]] == [
+    triage = next(row for row in desc["paths"] if row["id"] == "issue_triage_department")
+    assert [node["id"] for node in triage["nodes"]] == [
         "list_open_issues",
-        "run_issue_rows",
-        "summarize_issues",
+        "run_issue_sieve_rows",
+        "summarize_issue_triage_department",
     ]
 
 
@@ -315,20 +320,20 @@ def test_stale_worktree_reap_path_is_a_handful_of_effectors():
     )
 
 
-def test_issues_path_nests_issue_row_until_idle():
+def test_issue_triage_department_nests_sieve_rows():
     desc = describe_package()
-    path = next(p for p in desc["paths"] if p["id"] == "issues")
+    path = next(p for p in desc["paths"] if p["id"] == "issue_triage_department")
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
         "list_open_issues",
-        "run_issue_rows",
-        "summarize_issues",
+        "run_issue_sieve_rows",
+        "summarize_issue_triage_department",
     ]
     by_id = {node["id"]: node for node in path["nodes"]}
-    assert by_id["run_issue_rows"]["conduction"] == ["list_open_issues"]
-    assert by_id["summarize_issues"]["conduction"] == [
+    assert by_id["run_issue_sieve_rows"]["conduction"] == ["list_open_issues"]
+    assert by_id["summarize_issue_triage_department"]["conduction"] == [
         "list_open_issues",
-        "run_issue_rows",
+        "run_issue_sieve_rows",
     ]
     assert not any(
         node["id"].endswith("_1")
@@ -339,37 +344,26 @@ def test_issues_path_nests_issue_row_until_idle():
     )
 
 
-def test_issue_row_path_is_one_question_then_one_implement():
+def test_executor_row_is_one_question_then_one_implement():
     desc = describe_package()
-    path = next(p for p in desc["paths"] if p["id"] == "issue_row")
+    path = next(p for p in desc["paths"] if p["id"] == "executor_row")
     ids = [node["id"] for node in path["nodes"]]
     assert ids == [
         "select_next_issue",
-        "issues_run_triage",
-        "select_issue_do",
+        "select_issue_do_row",
         "select_issue_executor",
         "issues_launch_pr",
-        "summarize_issue_row",
+        "summarize_executor_row",
     ]
     by_id = {node["id"]: node for node in path["nodes"]}
-    assert by_id["issues_run_triage"]["when"] == {
-        "upstream": "select_next_issue",
-        "path": "route",
-        "equals": "issue",
-    }
-    assert by_id["select_issue_do"]["conduction"] == [
-        "select_next_issue",
-        "issues_run_triage",
-    ]
     assert by_id["issues_launch_pr"]["when"] == {
         "upstream": "select_issue_executor",
         "path": "route",
         "equals": "do",
     }
-    assert set(by_id["summarize_issue_row"]["conduction"]) == {
+    assert set(by_id["summarize_executor_row"]["conduction"]) == {
         "select_next_issue",
-        "issues_run_triage",
-        "select_issue_do",
+        "select_issue_do_row",
         "select_issue_executor",
         "issues_launch_pr",
     }
@@ -380,12 +374,18 @@ def test_issue_row_path_is_one_question_then_one_implement():
     )
 
 
-def test_issues_atoms_do_not_collide_with_dispatch_organs():
+def test_department_atoms_do_not_collide_with_dispatch_organs():
     desc = describe_package()
     by_path = {p["id"]: {n["id"] for n in p["nodes"]} for p in desc["paths"]}
-    issues = by_path["issues"] | by_path["issue_row"]
-    assert not issues.intersection(by_path["triage_dispatch"])
-    assert not issues.intersection(by_path["implementation_dispatch"])
+    departments = (
+        by_path["issue_triage_department"]
+        | by_path["issue_sieve_row"]
+        | by_path["executor_department"]
+        | by_path["executor_row"]
+        | by_path["pr_triage_department"]
+    )
+    assert not departments.intersection(by_path["triage_dispatch"])
+    assert not departments.intersection(by_path["implementation_dispatch"])
 
 
 def test_leftover_closeout_path_is_a_handful_of_effectors():

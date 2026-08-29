@@ -14,15 +14,15 @@ last_pass_moving
   → select_repair_route
     → recovery_incident (when last receipt did not move: no new PR and no merge)
       → recovery_run_self_repair (self_repair child Fala; skipped otherwise)
-  → recovery_mill (always: factory PRs / issues; leftover skip never starts repair)
+  → recovery_mill (always: factory departments; leftover skip never starts repair)
 ```
 
 The moving gate is one leaf. Repair is its own child graph. `recovery_mill`
 is factory only — it does not classify, repair, or activate. Moving
 forward is only a new PR or a merge on the last receipt. Leftover skip,
 empty survey, and a stale receipt do not count as “not moving” and do not
-start recovery. After one repair the graph always returns to PRs /
-issues. The daemon owns only the singleton lock, health lease and initial
+start recovery. After one repair the graph always returns to the five
+departments. The daemon owns only the singleton lock, health lease and initial
 carrier preflight. Fala owns product/recovery order. Every node above is a
 separate Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
@@ -152,26 +152,6 @@ list_pr_sieve
 
 A repair verdict is a value. The parent `pr_repair` department consumes it.
 
-### `prs` (open PR review / repair / merge)
-
-NODE parent for the PR departments. Six authored nodes. Not the `closeout_prs`
-stamp catalog. Not leftover overflow. The parent orders the sieve before the
-optional repair; it does not implement either child body.
-
-```text
-list_open_prs              LEAF  live GitHub mill PRs (two small functions)
-  → select_next_pr         LEAF  one PR
-    └─→ run_pr_triage_subflow   NODE slot → child Fala `pr_triage` (sieve only)
-          → select_pr_repair    LEAF  consume verdict + department switch
-            ├─→ run_pr_repair_subflow NODE slot → child Fala `pr_repair`
-            └─→ summarize_prs  LEAF  empty / merged / waiting / repair disabled
-```
-
-Named child slots are `run_pr_triage_subflow` / `pr_triage` and
-`run_pr_repair_subflow` / `pr_repair`. The latter can run only after the former
-returns a repair verdict and the repair department is enabled. One PR per pass.
-Atom ids are unique.
-
 ### `self_repair_department` (factory body)
 
 Two small blocks. Parent `run_self_repair_department` invokes this child only
@@ -183,8 +163,8 @@ open_self_repair_incident     LEAF  stall incident (did_not_move)
   → invoke_self_repair        LEAF  existing self_repair child; skipped without incident
 ```
 
-Off: parent select routes skip and the mill goes straight to issue sieve /
-executor / PRs. This graph never starts from leftover overflow.
+Off: parent select routes skip and the mill goes straight to issue triage /
+executor / PR triage. This graph never starts from leftover overflow.
 
 ### `self_repair` (emergency only)
 
@@ -243,46 +223,11 @@ select_next_issue
         → summarize_issue_sieve_row
 ```
 
-A "do" mark is not a branch. Executor is the next department.
-
-### `issues` (child: nest issue_row until idle)
-
-Parent `factory_pass` invokes this child. Labels are not a gate.
-
-```text
-list_open_issues          LEAF  live GitHub open issues (once)
-  → run_issue_rows        NODE  nest issue_row until leftover empty or budget spent
-    → summarize_issues    LEAF  receipt leftover + leftover_issues (skip does not wipe)
-```
-
-The catalog loop is this child nest, not a daemon tick and not eight copied
-slots. After an authored skip, `classify_issue_row` routes `continue` so the
-next listed row is the next `issue_row`. Leftover is consumed only on an
-authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
-adapter fail / `sito_nie_robic` keep the row; a leftover row that is still
-open and ready becomes `route=do` and goes to issue-to-PR in that pass. Lokay
-oil is not the product slot while product leftover remains. A row whose
-assignees include anyone other than the configured mill is not takeable —
-selection walks past it and `assign_issue` does not add the mill beside them.
+A "do" mark is not a branch. Executor is the next department. The catalog
+loop is this child nest, not a daemon tick and not eight copied slots.
+Leftover is consumed only on an authored skip (`needs_human`, `blocked`,
+already-closed). `triage_not_done` / adapter fail keep the row.
 `leftover=0` only when the takeable list is exhausted.
-
-### `issue_row` (one catalog question, one issue_to_pr)
-
-```text
-select_next_issue         LEAF  is there a row? leftover walk, then one issue
-  → issues_run_triage     NODE  when route=issue → child Fala issue_triage
-    → select_issue_do     LEAF  do or skip; leftover consume only on authored skip
-      → select_issue_executor LEAF  department switch; skip when executor is off
-        → issues_launch_pr  NODE  when route=do → child Fala issue_to_pr
-          → summarize_issue_row LEAF  one-row receipt
-```
-
-`select_next_issue` only answers whether a takeable row remains. It does not
-hide the loop. Empty assignees, or only the configured mill, may be taken.
-Anyone else on the assignee list (alone or beside the mill) is foreign and
-is skipped. Parked / human-stop rows are already excluded by
-`list_ready_issues`. Atom ids stay unique versus `triage_dispatch` /
-`implementation_dispatch`.
 
 ### `executor_department` (code and PR)
 
@@ -299,13 +244,16 @@ list_open_issues
 
 ```text
 select_next_issue
-  → select_issue_do_row       ready leftover becomes do (no sito)
+  → select_issue_do_row       ready leftover becomes do (no triage)
     → select_issue_executor   department switch
       → issues_launch_pr      when route=do → child Fala issue_to_pr
         → summarize_executor_row
 ```
 
-Off: the launch when is never satisfied. Zero new `ai/fix`.
+`select_next_issue` only answers whether a takeable row remains. Empty
+assignees, or only the configured mill, may be taken. Anyone else on the
+assignee list is foreign and is skipped. `assign_issue` does not add the
+mill beside them. Off: the launch when is never satisfied. Zero new `ai/fix`.
 
 ### `issue_to_pr`
 
@@ -364,10 +312,10 @@ against the tree, keeps extra/seed paths, and fails closed on an empty list.
 Invalid JSON / timeout falls back to the deterministic scorer. Not an
 embedding service and not a second planner.
 
-### `issue_triage` (sito of parent `issues`)
+### `issue_triage` (triage child of `issue_triage_department`)
 
-Child of `issues`. Sito only: **robić / nie / oznaczyć / człowiek**.
-Not implement. Sito must not close someone else's issue. Verdict `close`
+Child of `issue_triage_department`. Triage only: **robić / nie / oznaczyć / człowiek**.
+Not implement. Triage must not close someone else's issue. Verdict `close`
 parks (`apply_issue_mark`: `ai:blocked` + comment). `issue_split` is a later
 child Fala, not an exit here.
 
@@ -376,7 +324,7 @@ get_issue
   → resolve_issue_candidate
     → collect linked/covering PRs
       → resolve_issue_hard_facts
-        ├─→ terminal sito (close / skip / blocked)
+        ├─→ terminal triage (close / skip / blocked)
         └─→ issue_triage_agent → validate → one retry → one evidence round
               → finalize
                 ├─→ apply_issue_ready     robić
@@ -391,7 +339,7 @@ Semantic remainder is one structured executor call; invalid JSON gets one retry;
 a second evidence request is człowiek. A close verdict marks; it does not close
 GitHub. Own-work closeout after merge stays in `pr_triage` (`close_issue`).
 Oversized / multi-epic work is człowiek until `issue_split` has its own agent.
-Parent `issues` launches `issue_to_pr` only after robić.
+The executor department launches `issue_to_pr` only after a do mark.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 

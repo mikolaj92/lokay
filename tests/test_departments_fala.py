@@ -140,7 +140,7 @@ if a=='record_pass':v.update(result={'ok':True,'outcome':'none'})
 if a=='factory_pass_terminal':v.update(result={'ok':True,'outcome':'none'})
 if a=='reap_stale_worktrees':v.update(ok=True)"""
     )
-    result = run_graph(tmp_path, body, "dept-sito", path_id="factory_pass")
+    result = run_graph(tmp_path, body, "dept-triage", path_id="factory_pass")
     status = {name: row["status"] for name, row in result["effector_results"].items()}
     assert status["run_issue_triage_department"] == "succeeded"
     assert status["run_pr_triage_department"] == "succeeded"

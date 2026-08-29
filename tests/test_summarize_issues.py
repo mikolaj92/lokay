@@ -55,7 +55,7 @@ def test_summarize_writes_receipt_on_empty(tmp_path):
     assert out["result"]["receipt"] == str(tmp_path / "issues-receipt.json")
 
 
-def test_summarize_writes_receipt_on_sito_skip(tmp_path):
+def test_summarize_writes_receipt_on_triage_skip(tmp_path):
     out = summarize(
         {"route": "issue", "repo": "o/r", "issue": 2},
         {"route": "skip", "reason": "sito_nie_robic", "repo": "o/r", "issue": 2},

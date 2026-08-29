@@ -1,5 +1,5 @@
 from lokay.proc.select_next_pr import select
-from lokay.proc.summarize_prs import summarize
+from lokay.proc.summarize_pr_triage_department import summarize
 
 
 def test_empty_list_is_none() -> None:
@@ -47,7 +47,8 @@ def test_row_without_branch_is_skipped() -> None:
 
 def test_summarize_empty_skip() -> None:
     picked = {"ok": True, "route": "none", "reason": "no_open_pr"}
-    out = summarize(picked, {})
+    out = summarize(picked, {}, {"verdict": "none"})
     assert out["ok"] is True
-    assert out["result"]["route"] == "none"
-    assert out["result"]["reason"] == "no_open_pr"
+    assert out["department"] == "pr_triage"
+    assert out["route"] == "none"
+    assert out["repair_started"] is False

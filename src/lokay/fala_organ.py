@@ -42,7 +42,6 @@ from lokay.organ.issue_triage_department_boundary import handle_issue_triage_dep
 from lokay.organ.executor_department_boundary import handle_executor_department
 from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
 from lokay.organ.issues_boundary import handle_issues
-from lokay.organ.prs_boundary import handle_prs
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
 from lokay.organ.localize_boundary import handle_localize
@@ -188,7 +187,6 @@ def _handle(
         handle_implementation_dispatch,
         handle_implementation_selection,
         handle_issues,
-        handle_prs,
         handle_issue_triage,
         handle_pr_outcome,
         handle_lanes,
