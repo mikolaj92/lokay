@@ -1,7 +1,13 @@
-"""Parent slot: existing issues child (sito). Launch is gated inside issue_row."""
+"""Parent slot: sieve-only issue_triage_department. Zero code. Zero PR."""
 
-from lokay.proc.issues_subflow import run as run_issues
+from lokay.graph_run import run_path
 
 
 def run(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
-    return run_issues(pass_dir=pass_dir, config_path=config_path, live=live)
+    return run_path(
+        path_id="issue_triage_department",
+        repo="local/issue-triage-department",
+        config_path=config_path,
+        live=live,
+        extra_inputs={"pass_dir": pass_dir},
+    )

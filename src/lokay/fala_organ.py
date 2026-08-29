@@ -38,6 +38,7 @@ from lokay.organ.intake_check_boundary import handle_intake_check
 from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.issue_triage_boundary import handle_issue_triage
 from lokay.organ.departments_boundary import handle_departments
+from lokay.organ.issue_triage_department_boundary import handle_issue_triage_department
 from lokay.organ.issues_boundary import handle_issues
 from lokay.organ.prs_boundary import handle_prs
 from lokay.organ.lanes import handle_lanes
@@ -169,6 +170,7 @@ def _handle(
         handle_recovery,
         handle_factory,
         handle_departments,
+        handle_issue_triage_department,
         handle_self_repair,
         handle_stale_worktree,
         handle_survey_ready,
