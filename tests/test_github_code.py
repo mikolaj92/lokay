@@ -144,9 +144,9 @@ def test_catalog_code_field_loads_github_plugin(tmp_path: Path) -> None:
 def test_unknown_code_plugin_fails_at_load(tmp_path: Path) -> None:
     with pytest.raises(CodeContractError, match="unknown code plugin"):
         parse_code_slot(
-            {"code": {"plugin": "azure", "target": "org/project/repo"}},
-            default_name="org/project/repo",
-            default_clone=tmp_path / "azure",
+            {"code": {"plugin": "bitbucket", "target": "workspace/repo"}},
+            default_name="workspace/repo",
+            default_clone=tmp_path / "bitbucket",
         )
 
 
