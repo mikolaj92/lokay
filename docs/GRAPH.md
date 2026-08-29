@@ -88,7 +88,7 @@ factory_begin
 | --- | --- |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Leftover skip is not a stall. Body is child Fala `self_repair_department` (incident + existing `self_repair`). Off never touches lokay main. |
-| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Invokes existing `issues` child; launch is gated by the executor switch. |
+| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, intake. Zero `ai/fix`. Foreign assignee still skipped. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Independent of both sieves. If issue_triage already ran, this slot is already_conducted. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Invokes existing `prs` child. Must not start repair from inside the sieve. |
 | `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict. Keep #901 wiring inside `prs`. |
@@ -204,6 +204,31 @@ worktree; deterministic atoms alone commit and push directly to `main`. The
 `self_repair_run_agent` coding slot uses the same bounded 1800-second budget as
 other agent paths. A successful path always returns `restart_required`; product
 work never resumes in the stale daemon process.
+
+### `issue_triage_department` (sieve + split + intake)
+
+Two small blocks plus graph. Zero code. Zero PR. Parent
+`run_issue_triage_department` invokes this child. Foreign assignees stay
+skipped at `select_next_issue`.
+
+```text
+list_open_issues
+  → run_issue_sieve_rows      nest issue_sieve_row until leftover empty
+    → summarize_issue_triage_department   launched is always empty
+```
+
+`issue_sieve_row`:
+
+```text
+select_next_issue
+  → issues_run_triage         when route=issue
+    → select_issue_sieve      do / skip / park / human / split / intake
+      → run_issue_sieve_split   when route=split   (children only)
+      → run_issue_sieve_intake  when route=intake
+        → summarize_issue_sieve_row
+```
+
+A "do" mark is not a branch. Executor is the next department.
 
 ### `issues` (child: nest issue_row until idle)
 
