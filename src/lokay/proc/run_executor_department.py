@@ -1,7 +1,6 @@
-"""Parent slot: existing issues child when the sieve did not already conduct it."""
+"""Parent slot: executor_department. Code and PR. Not sieve. Not merge."""
 
-from lokay.envelope import ok
-from lokay.proc.issues_subflow import run as run_issues
+from lokay.graph_run import run_path
 
 
 def run(
@@ -9,8 +8,13 @@ def run(
     pass_dir: str,
     config_path: str | None,
     live: bool,
-    triage_ran: bool,
+    triage_ran: bool = False,
 ) -> dict:
-    if triage_ran:
-        return ok(route="already_conducted", department="executor")
-    return run_issues(pass_dir=pass_dir, config_path=config_path, live=live)
+    del triage_ran  # sieve is a sibling department; this slot always codes
+    return run_path(
+        path_id="executor_department",
+        repo="local/executor-department",
+        config_path=config_path,
+        live=live,
+        extra_inputs={"pass_dir": pass_dir},
+    )

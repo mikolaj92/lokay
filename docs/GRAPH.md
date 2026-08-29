@@ -89,7 +89,7 @@ factory_begin
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Leftover skip is not a stall. Body is child Fala `self_repair_department` (incident + existing `self_repair`). Off never touches lokay main. |
 | `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, intake. Zero `ai/fix`. Foreign assignee still skipped. |
-| `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Independent of both sieves. If issue_triage already ran, this slot is already_conducted. |
+| `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Invokes existing `prs` child. Must not start repair from inside the sieve. |
 | `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict. Keep #901 wiring inside `prs`. |
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. |
@@ -268,6 +268,29 @@ Anyone else on the assignee list (alone or beside the mill) is foreign and
 is skipped. Parked / human-stop rows are already excluded by
 `list_ready_issues`. Atom ids stay unique versus `triage_dispatch` /
 `implementation_dispatch`.
+
+### `executor_department` (code and PR)
+
+Two small blocks plus graph. Not issue sieve. Not PR sieve. Not merge.
+Parent `run_executor_department` invokes this child whenever the switch is on.
+
+```text
+list_open_issues
+  → run_executor_rows         nest executor_row until leftover empty or budget
+    → summarize_executor_department   merged is always false
+```
+
+`executor_row`:
+
+```text
+select_next_issue
+  → select_issue_do_row       ready leftover becomes do (no sito)
+    → select_issue_executor   department switch
+      → issues_launch_pr      when route=do → child Fala issue_to_pr
+        → summarize_executor_row
+```
+
+Off: the launch when is never satisfied. Zero new `ai/fix`.
 
 ### `issue_to_pr`
 
