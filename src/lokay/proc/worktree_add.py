@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 
+from lokay.code import load_code, slot_from_repo
+from lokay.code.github import InvalidBranchRef
 from lokay.envelope import emit_exit, err, ok
-from lokay.git_worktree import InvalidBranchRef, ensure_worktree
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
-
-
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,14 +28,9 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(f"repo not in config: {args.repo}"))
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
-        path = ensure_worktree(
-            runner(),
-            cfg,
-            repo,
-            args.branch,
-            live=live,
-            base=args.base,
-            reset_to_base=bool(args.reset_base),
+        contract = load_code(slot_from_repo(repo), runner=runner(), config=cfg, live=live)
+        path = contract.repo.worktree(
+            args.branch, base=args.base, reset_to_base=bool(args.reset_base)
         )
     except InvalidBranchRef as exc:
         return emit_exit(err(str(exc), reason=exc.reason))

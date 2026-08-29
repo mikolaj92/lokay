@@ -6,9 +6,8 @@ import json
 
 import pytest
 
+from lokay.code import github as github_code
 from lokay.proc import pr_close
-
-
 
 
 def test_lokay_repo_still_closes(
@@ -27,12 +26,13 @@ def test_lokay_repo_still_closes(
     )
     monkeypatch.setattr(pr_close, "runner", lambda: sentinel_runner)
     monkeypatch.setattr(
-        pr_close,
+        github_code,
         "close_pr",
         lambda close_runner, repo, pr, *, live, comment: calls.append(
             (close_runner, repo, pr, live, comment)
         ),
     )
+    monkeypatch.setattr(github_code, "view_pr", lambda *_a, **_k: {})
 
     assert (
         pr_close.main(

@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from lokay.code import github as github_code
 from lokay.gh_prs import pr_checks_report
 from lokay.proc import pr_checks
 from lokay.proc.pr_route import run_pr_route
@@ -29,7 +30,7 @@ def test_lokay_repo_still_checks(
         calls.append((check_runner, repo, pr, live))
         return {"status": "passed", "no_checks": False, "text": "all good"}
 
-    monkeypatch.setattr(pr_checks, "pr_checks_report", report)
+    monkeypatch.setattr(github_code, "pr_checks_report", report)
 
     assert pr_checks.main(["--repo", "mikolaj92/lokay", "--pr", "488"]) == 0
     assert calls == [(sentinel_runner, "mikolaj92/lokay", 488, True)]

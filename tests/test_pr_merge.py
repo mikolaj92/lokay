@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
+from lokay.code import github as github_code
 from lokay.proc import pr_merge
-
-
 
 
 def test_lokay_repo_still_merges_and_parks_issue(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    cfg = type("Cfg", (), {"merge_enabled": True})()
+    cfg = type("Cfg", (), {"merge_enabled": True, "repos": [], "worktrees_root": Path("/tmp")})()
     sentinel_runner = object()
     merge_calls: list[tuple[object, str, int, bool]] = []
     park_calls: list[tuple[object, list[str]]] = []
@@ -28,12 +28,13 @@ def test_lokay_repo_still_merges_and_parks_issue(
     )
     monkeypatch.setattr(pr_merge, "runner", lambda: sentinel_runner)
     monkeypatch.setattr(
-        pr_merge,
+        github_code,
         "merge_pr",
         lambda merge_runner, repo, pr, *, live: merge_calls.append(
             (merge_runner, repo, pr, live)
         ),
     )
+    monkeypatch.setattr(github_code, "view_pr", lambda *_a, **_k: {})
 
     def park(proc: object, argv: list[str]) -> dict[str, bool]:
         park_calls.append((proc, argv))

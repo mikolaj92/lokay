@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import argparse
 
+from lokay.code import load_code, slot_from_repo
+from lokay.config import RepoConfig
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_prs import close_pr
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
-
-
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,14 +23,22 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     cfg = load_cfg(args) if args.live else None
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
+    repo = None
+    if cfg is not None:
+        repos = list(getattr(cfg, "repos", None) or [])
+        repo = next((r for r in repos if getattr(r, "name", None) == args.repo), None)
+    if repo is None:
+        from pathlib import Path
+
+        from lokay.config import Config
+
+        if cfg is None:
+            cfg = Config()
+        root = getattr(cfg, "worktrees_root", None)
+        repo = RepoConfig(name=args.repo, clone_path=Path(root or "/tmp") / "unused")
     try:
-        close_pr(
-            runner(),
-            args.repo,
-            int(args.pr),
-            live=live,
-            comment=str(args.comment or ""),
-        )
+        contract = load_code(slot_from_repo(repo), runner=runner(), config=cfg, live=live)
+        contract.pr.close(int(args.pr), comment=str(args.comment or ""))  # type: ignore[call-arg]
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(

@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import argparse
 
+from lokay.code import load_code, slot_from_repo
+from lokay.config import RepoConfig
 from lokay.envelope import emit_exit, err, ok
-from lokay.gh_prs import pr_checks_report
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
-
-
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,14 +22,21 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     live = read_live(args)
     cfg = load_cfg(args)
+    repos = list(getattr(cfg, "repos", None) or [])
+    repo = next((r for r in repos if getattr(r, "name", None) == args.repo), None)
+    if repo is None:
+        from pathlib import Path
+
+        root = getattr(cfg, "worktrees_root", None)
+        repo = RepoConfig(name=args.repo, clone_path=Path(root or "/tmp") / "unused")
     try:
-        report = pr_checks_report(runner(), args.repo, args.pr, live=live)
+        contract = load_code(slot_from_repo(repo), runner=runner(), config=cfg, live=live)
+        checks = contract.pr.checks(args.pr)
+        report = contract.pr.last_checks_report  # type: ignore[attr-defined]
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
-    status = str(report.get("status") or "failed")
-    # Mergeable under strict CI policy only when passed.
+    status = str(checks.status or report.get("status") or "failed")
     green = status == "passed"
-    # Mergeable when no CI is required (repos without checks).
     merge_ok = green or (status == "none" and not cfg.require_checks)
     return emit_exit(
         ok(

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 
+from lokay.code import load_code, slot_from_repo
 from lokay.envelope import emit_exit, ok
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
-from lokay.runner import gh_spec
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -27,28 +27,12 @@ def main(argv: list[str] | None = None) -> int:
         if not live:
             planned.append(entry)
             continue
-        repo.clone_path.parent.mkdir(parents=True, exist_ok=True)
-        result = r.run(
-            gh_spec(
-                [
-                    "repo",
-                    "clone",
-                    repo.name,
-                    str(repo.clone_path),
-                ],
-                timeout_seconds=600,
-            ),
-            live=True,
-        )
-        if result.returncode == 0:
+        try:
+            contract = load_code(slot_from_repo(repo), runner=r, config=cfg, live=True)
+            contract.repo.clone()
             cloned.append(entry)
-        else:
-            failed.append(
-                {
-                    **entry,
-                    "stderr": (result.stderr or "")[-500:],
-                }
-            )
+        except Exception as exc:  # noqa: BLE001
+            failed.append({**entry, "stderr": str(exc)[-500:]})
 
     payload = ok(
         planned=not live,
