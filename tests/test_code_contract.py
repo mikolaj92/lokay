@@ -103,7 +103,7 @@ def test_pr_block_list_get_checks_comment_close(tmp_path: Path) -> None:
 def test_contract_modules_have_no_gh() -> None:
     root = Path(__file__).resolve().parents[1] / "src" / "lokay" / "code"
     banned = ("gh_prs", "gh_spec", "gh_json", "from lokay.gh", "import gh")
-    files = list(root.glob("*.py"))
+    files = [path for path in root.glob("*.py") if path.name != "github.py"]
     assert files
     for path in files:
         text = path.read_text(encoding="utf-8")

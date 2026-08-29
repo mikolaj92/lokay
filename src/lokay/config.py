@@ -20,6 +20,8 @@ class RepoConfig:
     priority: int = 10
     enabled: bool = True
     note: str = ""
+    code_plugin: str = "github"
+    code_target: str = ""
 
 
 @dataclass
@@ -154,18 +156,41 @@ def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
     return 1
 
 
+def _parse_code_field(raw: dict[str, Any], *, name: str, clone: Any) -> tuple[str, str, Any]:
+    """Catalog field `code`. Missing field is github and the row name."""
+    code = raw.get("code")
+    if code is None:
+        return "github", name, clone
+    if not isinstance(code, dict):
+        raise ValueError(f"repos[{name}].code must be a mapping")
+    plugin = str(code.get("plugin") or "github").strip()
+    if plugin != "github":
+        raise ValueError(f"unknown code plugin: {plugin!r}")
+    target = str(code.get("target") or name).strip()
+    if not target:
+        raise ValueError(f"repos[{name}].code.target must be non-empty")
+    if code.get("clone_path"):
+        clone = code["clone_path"]
+    return plugin, target, clone
+
+
 def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
     repos: list[RepoConfig] = []
     for raw in raw_list or []:
         if not isinstance(raw, dict):
             continue
+        name = str(raw["name"])
+        clone = raw["clone_path"]
+        plugin, target, clone = _parse_code_field(raw, name=name, clone=clone)
         repos.append(
             RepoConfig(
-                name=str(raw["name"]),
-                clone_path=_expand(raw["clone_path"]),
+                name=name,
+                clone_path=_expand(clone),
                 priority=int(raw.get("priority", 10)),
-                enabled=_yaml_bool(raw.get("enabled", True), True, field=f"repos[{raw.get('name')}].enabled"),
+                enabled=_yaml_bool(raw.get("enabled", True), True, field=f"repos[{name}].enabled"),
                 note=str(raw.get("note") or ""),
+                code_plugin=plugin,
+                code_target=target,
             )
         )
     return repos

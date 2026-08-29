@@ -3,68 +3,32 @@
 from __future__ import annotations
 
 import argparse
-import json
 
+from lokay.code import load_code, slot_from_repo
 from lokay.proc._common import load_cfg, runner
-from lokay.runner import gh_spec
 
 
-def _list_open(repos: list[str], *, live: bool) -> dict:
+def _list_open(cfg, repos, *, live: bool) -> dict:
     git = runner()
     rows: list[dict] = []
     for repo in repos:
-        result = git.run(
-            gh_spec(
-                [
-                    "pr",
-                    "list",
-                    "--repo",
-                    repo,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,title,headRefName,url",
-                    "--limit",
-                    "1000",
-                ],
-                timeout_seconds=60,
-            ),
-            live=live,
-        )
-        if not live:
-            continue
-        if result.returncode != 0:
-            text = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
-            return {
-                "ok": False,
-                "error": text or f"open PR list failed for {repo}",
-                "repo": repo,
-            }
         try:
-            payload = json.loads(result.stdout or "[]")
-        except json.JSONDecodeError as exc:
+            contract = load_code(slot_from_repo(repo), runner=git, config=cfg, live=live)
+            for change in contract.pr.list_open():
+                rows.append(
+                    {
+                        "repo": change.target.id,
+                        "pr": int(change.number),
+                        "title": str(change.title or ""),
+                        "branch": str(change.head or ""),
+                    }
+                )
+        except Exception as exc:  # noqa: BLE001
             return {
                 "ok": False,
-                "error": f"open PR list JSON failed for {repo}: {exc}",
-                "repo": repo,
+                "error": str(exc) or f"open PR list failed for {repo.name}",
+                "repo": repo.name,
             }
-        if not isinstance(payload, list):
-            return {
-                "ok": False,
-                "error": f"open PR list on {repo} returned non-list JSON",
-                "repo": repo,
-            }
-        for row in payload:
-            if not isinstance(row, dict):
-                continue
-            rows.append(
-                {
-                    "repo": repo,
-                    "pr": int(row["number"]),
-                    "title": str(row.get("title") or ""),
-                    "branch": str(row.get("headRefName") or ""),
-                }
-            )
     return {"ok": True, "prs": rows}
 
 
@@ -79,7 +43,7 @@ def _keep_mill(rows: list[dict], prefix: str) -> list[dict]:
 
 def run(*, config_path: str | None, live: bool) -> dict:
     cfg = load_cfg(argparse.Namespace(config=config_path))
-    listed = _list_open([repo.name for repo in cfg.active_repos()], live=live)
+    listed = _list_open(cfg, cfg.active_repos(), live=live)
     if listed.get("ok") is False:
         return listed
     kept = _keep_mill(list(listed.get("prs") or []), str(cfg.branch_prefix or "ai/fix"))

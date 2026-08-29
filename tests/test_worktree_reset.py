@@ -9,6 +9,7 @@ import pytest
 
 from lokay.config import Config, RepoConfig
 from lokay.git_worktree import InvalidBranchRef, assert_valid_branch_ref, ensure_worktree, leftover_status, remote_heads, remove_worktree
+from lokay.code import github as github_code
 from lokay.proc import worktree_add
 from lokay.runner import Runner
 
@@ -93,7 +94,7 @@ state:
     def boom(*_a, **_kw):
         raise InvalidBranchRef("ai/fix/7-foo-..-bar", "not a valid branch name")
 
-    monkeypatch.setattr(worktree_add, "ensure_worktree", boom)
+    monkeypatch.setattr(github_code, "ensure_worktree", boom)
     code = worktree_add.main(
         [
             "--config",

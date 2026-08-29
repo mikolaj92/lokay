@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from lokay.code import github as github_code
 from lokay.proc import worktree_add
 
 
@@ -51,7 +52,7 @@ def test_lokay_repo_still_creates_worktree(config_path, tmp_path, monkeypatch, c
         calls.append((args, kwargs))
         return expected
 
-    monkeypatch.setattr(worktree_add, "ensure_worktree", ensure)
+    monkeypatch.setattr(github_code, "ensure_worktree", ensure)
     monkeypatch.setattr(
         worktree_add,
         "mutations_allowed",

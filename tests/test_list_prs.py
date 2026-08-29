@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from lokay.code import github as github_code
 from lokay.proc import list_prs
 
 
@@ -18,15 +19,13 @@ def _cfg(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(repos=repos, worktrees_root=tmp_path, mode="live")
 
 
-
-
 def test_list_prs_still_lists_lokay(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     cfg = _cfg(tmp_path)
     sentinel_runner = object()
     seen: list[tuple[object, object, object, bool]] = []
-    pr = SimpleNamespace(to_dict=lambda: {"number": 453})
+    pr = SimpleNamespace(number=453, title="", body="", head_ref="ai/fix/453", to_dict=lambda: {"number": 453})
 
     monkeypatch.setattr(list_prs, "load_cfg", lambda _args: cfg)
     monkeypatch.setattr(list_prs, "read_live", lambda _args: True)
@@ -36,11 +35,15 @@ def test_list_prs_still_lists_lokay(
         seen.append((runner, loaded_cfg, repo, live))
         return [pr]
 
-    monkeypatch.setattr(list_prs, "list_open_ai_prs", fake_list)
+    monkeypatch.setattr(github_code, "list_open_ai_prs", fake_list)
 
     assert list_prs.main(["--repo", "mikolaj92/lokay", "--live"]) == 0
 
-    assert seen == [(sentinel_runner, cfg, cfg.repos[0], True)]
+    assert len(seen) == 1
+    assert seen[0][0] is sentinel_runner
+    assert seen[0][1] is cfg
+    assert seen[0][2].name == "mikolaj92/lokay"
+    assert seen[0][3] is True
     payload = json.loads(capsys.readouterr().out)
     assert payload["repo"] == "mikolaj92/lokay"
     assert payload["prs"] == [{"number": 453}]
