@@ -17,7 +17,7 @@ def _patch_list(monkeypatch, listed, *, cap=None):
         assert on_cap == "keep"
         return listed
 
-    monkeypatch.setattr("lokay.proc.list_open_issues.list_ready_issues", fake_ready)
+    monkeypatch.setattr("lokay.github_tasks.list_ready_issues", fake_ready)
     if cap is not None:
         monkeypatch.setattr("lokay.proc.list_open_issues.survey_list_cap", lambda: cap)
 
