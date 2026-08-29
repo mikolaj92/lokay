@@ -7,6 +7,14 @@ from typing import Any
 
 import yaml
 
+from lokay.catalog import (
+    CatalogBinding,
+    CatalogError,
+    DEFAULT_PLUGIN,
+    assert_known_plugins,
+    parse_catalog_row,
+)
+
 DEFAULT_CONFIG_CANDIDATES = (
     Path("config.yaml"),
     Path(os.path.expanduser("~/.lokay/config.yaml")),
@@ -20,8 +28,15 @@ class RepoConfig:
     priority: int = 10
     enabled: bool = True
     note: str = ""
-    code_plugin: str = "github"
-    code_target: str = ""
+    issues: CatalogBinding | None = None
+    code: CatalogBinding | None = None
+
+    def __post_init__(self) -> None:
+        # Parent still keys GitHub by name. Missing sides default to github + name.
+        if self.issues is None:
+            self.issues = CatalogBinding(DEFAULT_PLUGIN, self.name)
+        if self.code is None:
+            self.code = CatalogBinding(DEFAULT_PLUGIN, self.name)
 
 
 @dataclass
@@ -75,6 +90,13 @@ class Config:
     # Survey / gh budget: bounded 429 retries and optional inter-call pacing.
     gh_retry_max: int = 3
     gh_survey_pace_ms: int = 50
+    # Parent department switches (one Fala graph = one department). Independent
+    # of executor.enabled (harness). Disabling executor must not disable sieves.
+    department_self_repair: bool = True
+    department_issue_triage: bool = True
+    department_executor: bool = True
+    department_pr_triage: bool = True
+    department_pr_repair: bool = True
     config_path: Path | None = None
 
     @property
@@ -156,41 +178,26 @@ def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
     return 1
 
 
-def _parse_code_field(raw: dict[str, Any], *, name: str, clone: Any) -> tuple[str, str, Any]:
-    """Catalog field `code`. Missing field is github and the row name."""
-    code = raw.get("code")
-    if code is None:
-        return "github", name, clone
-    if not isinstance(code, dict):
-        raise ValueError(f"repos[{name}].code must be a mapping")
-    plugin = str(code.get("plugin") or "github").strip()
-    if plugin != "github":
-        raise ValueError(f"unknown code plugin: {plugin!r}")
-    target = str(code.get("target") or name).strip()
-    if not target:
-        raise ValueError(f"repos[{name}].code.target must be non-empty")
-    if code.get("clone_path"):
-        clone = code["clone_path"]
-    return plugin, target, clone
-
-
 def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
     repos: list[RepoConfig] = []
     for raw in raw_list or []:
         if not isinstance(raw, dict):
             continue
-        name = str(raw["name"])
-        clone = raw["clone_path"]
-        plugin, target, clone = _parse_code_field(raw, name=name, clone=clone)
+        row = parse_catalog_row(raw)
+        assert_known_plugins(row)
+        if not row.clone_path:
+            raise CatalogError(f"catalog row {row.name!r} needs clone_path")
         repos.append(
             RepoConfig(
-                name=name,
-                clone_path=_expand(clone),
+                name=row.name,
+                clone_path=_expand(row.clone_path),
                 priority=int(raw.get("priority", 10)),
-                enabled=_yaml_bool(raw.get("enabled", True), True, field=f"repos[{name}].enabled"),
+                enabled=_yaml_bool(
+                    raw.get("enabled", True), True, field=f"repos[{row.name}].enabled"
+                ),
                 note=str(raw.get("note") or ""),
-                code_plugin=plugin,
-                code_target=target,
+                issues=row.issues,
+                code=row.code,
             )
         )
     return repos
@@ -287,6 +294,16 @@ def apply_env_overrides(cfg: Config) -> Config:
     v = _env_truthy("LOKAY_REQUIRE_LLM_REVIEW")
     if v is not None:
         cfg.require_llm_review = v
+    for env_name, attr in (
+        ("LOKAY_DEPARTMENT_SELF_REPAIR", "department_self_repair"),
+        ("LOKAY_DEPARTMENT_ISSUE_TRIAGE", "department_issue_triage"),
+        ("LOKAY_DEPARTMENT_EXECUTOR", "department_executor"),
+        ("LOKAY_DEPARTMENT_PR_TRIAGE", "department_pr_triage"),
+        ("LOKAY_DEPARTMENT_PR_REPAIR", "department_pr_repair"),
+    ):
+        flag = _env_truthy(env_name)
+        if flag is not None:
+            setattr(cfg, attr, flag)
     return cfg
 
 
@@ -374,9 +391,48 @@ def load_config(path: str | Path | None = None) -> Config:
         incident_cooldown_hours=float(gh.get("incident_cooldown_hours", 12)),
         gh_retry_max=int(lim.get("gh_retry_max", 3)),
         gh_survey_pace_ms=int(lim.get("gh_survey_pace_ms", 50)),
+        department_self_repair=_yaml_bool(
+            (data.get("departments") or {}).get("self_repair", True),
+            True,
+            field="departments.self_repair",
+        ),
+        department_issue_triage=_yaml_bool(
+            (data.get("departments") or {}).get("issue_triage", True),
+            True,
+            field="departments.issue_triage",
+        ),
+        department_executor=_yaml_bool(
+            (data.get("departments") or {}).get("executor", True),
+            True,
+            field="departments.executor",
+        ),
+        department_pr_triage=_yaml_bool(
+            (data.get("departments") or {}).get("pr_triage", True),
+            True,
+            field="departments.pr_triage",
+        ),
+        department_pr_repair=_yaml_bool(
+            (data.get("departments") or {}).get("pr_repair", True),
+            True,
+            field="departments.pr_repair",
+        ),
         config_path=cfg_path,
     )
     return apply_env_overrides(cfg)
+
+
+DEPARTMENT_ATTR = {
+    "self_repair": "department_self_repair",
+    "issue_triage": "department_issue_triage",
+    "executor": "department_executor",
+    "pr_triage": "department_pr_triage",
+    "pr_repair": "department_pr_repair",
+}
+
+
+def department_enabled(cfg: Config, name: str) -> bool:
+    """On/off switch for one named parent department."""
+    return bool(getattr(cfg, DEPARTMENT_ATTR[name]))
 
 
 def starter_config_text(*, assignee: str = "mikolaj92", repo: str | None = None, clone: str | None = None) -> str:

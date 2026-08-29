@@ -3,15 +3,17 @@
 from lokay.graph_run import describe_package
 
 
-def test_factory_authors_pr_closeout_beside_implementation_not_as_gate():
+def test_factory_authors_departments_in_canon_order():
     path = next(p for p in describe_package()["paths"] if p["id"] == "factory_pass")
     ids = [n["id"] for n in path["nodes"]]
     conduction = {n["id"]: n["conduction"] for n in path["nodes"]}
-    assert "prs" in ids
-    assert "issues" in ids
-    assert ids.index("prs") < ids.index("issues")
-    assert "reap_stale_worktrees" not in conduction["prs"]
-    assert "reap_stale_worktrees" not in conduction["issues"]
+    assert "select_issue_triage_department" in ids
+    assert "select_executor_department" in ids
+    assert "select_pr_triage_department" in ids
+    assert ids.index("select_issue_triage_department") < ids.index("select_executor_department")
+    assert ids.index("select_executor_department") < ids.index("select_pr_triage_department")
+    assert "reap_stale_worktrees" not in conduction["select_pr_triage_department"]
+    assert "reap_stale_worktrees" not in conduction["select_issue_triage_department"]
 
 
 def test_tick_is_only_a_factory_fala_facade():

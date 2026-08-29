@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from lokay.config import Config
 from lokay.graph_run import describe_package
 from lokay.proc import apply_issue_close, apply_issue_mark
@@ -71,19 +73,33 @@ def test_apply_issue_close_refuses_obsolete_even_when_planned(monkeypatch):
 
 def test_apply_issue_mark_parks_without_closing(monkeypatch):
     calls: list[tuple] = []
-    monkeypatch.setattr(
-        apply_issue_mark,
-        "remove_issue_labels",
-        lambda *a, **k: calls.append(("remove", a[3])),
+    issue = SimpleNamespace(
+        repo="mikolaj92/Temida",
+        number=4995,
+        title="x",
+        body="",
+        labels=["ai:ready"],
+        assignees=[],
+        url="",
+        state="OPEN",
+        author="",
     )
+
+    def fake_remove(*a, **k):
+        labels = a[3]
+        calls.append(("remove", labels))
+        issue.labels = [label for label in issue.labels if label not in labels]
+
+    def fake_add(*a, **k):
+        labels = a[3]
+        calls.append(("add", labels))
+        issue.labels = list(issue.labels) + list(labels)
+
+    monkeypatch.setattr("lokay.github_tasks.view_issue", lambda *a, **k: issue)
+    monkeypatch.setattr("lokay.github_tasks.remove_issue_labels", fake_remove)
+    monkeypatch.setattr("lokay.github_tasks.add_issue_labels", fake_add)
     monkeypatch.setattr(
-        apply_issue_mark,
-        "add_issue_labels",
-        lambda *a, **k: calls.append(("add", a[3])),
-    )
-    monkeypatch.setattr(
-        apply_issue_mark,
-        "comment_issue",
+        "lokay.github_tasks.comment_issue",
         lambda *a, **k: calls.append(("comment", a[3])),
     )
     out = apply_issue_mark.apply(
@@ -109,6 +125,7 @@ def test_apply_issue_mark_parks_without_closing(monkeypatch):
         for item in calls
     )
     assert all(item[0] != "close" for item in calls)
+    assert issue.state == "OPEN"
 
 
 def test_still_open_live_refuses_without_comment_or_close(monkeypatch) -> None:

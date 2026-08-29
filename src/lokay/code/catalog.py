@@ -1,7 +1,8 @@
-"""Catalog field `code`: plugin + target + clone path.
+"""Load the catalog `code` field into a code plugin.
 
-Old rows (name + clone_path) are github and the same target.
-Unknown plugins fail at load. No Azure. No tasks.
+Row two-fields (issues + code) live in lokay.catalog.
+Lookup uses catalog.code.plugin. Unknown plugins fail at load.
+No Azure code plugin. No tasks.
 """
 
 from __future__ import annotations
@@ -63,20 +64,26 @@ def parse_code_slot(
 
 
 def slot_from_repo(repo: Any) -> CodeSlot:
-    """Code slot from a catalog row or RepoConfig. Old rows stay github."""
-    plugin = str(getattr(repo, "code_plugin", None) or "github").strip()
-    target = str(getattr(repo, "code_target", None) or getattr(repo, "name", "") or "").strip()
+    """Code slot from a catalog row. Lookup uses catalog.code.plugin."""
     raw_clone = getattr(repo, "clone_path", None)
     clone = Path(raw_clone) if raw_clone else Path("/tmp/lokay-code-unused")
+    name = str(getattr(repo, "name", "") or "").strip()
     code = getattr(repo, "code", None)
     if isinstance(code, CodeSlot):
         return code
     if isinstance(code, dict):
         return parse_code_slot(
-            {"code": code, "name": target},
-            default_name=target,
+            {"code": code, "name": name},
+            default_name=name,
             default_clone=clone,
         )
+    # CatalogBinding from lokay.catalog (#904 two-fields)
+    if code is not None and hasattr(code, "plugin") and hasattr(code, "target"):
+        plugin = str(getattr(code, "plugin", None) or "github").strip()
+        target = str(getattr(code, "target", None) or name).strip()
+        return CodeSlot(plugin=plugin, target=target, clone_path=clone)
+    plugin = str(getattr(repo, "code_plugin", None) or "github").strip()
+    target = str(getattr(repo, "code_target", None) or name).strip()
     return CodeSlot(plugin=plugin, target=target, clone_path=clone)
 
 
@@ -87,7 +94,7 @@ def load_code(
     config: Config,
     live: bool,
 ) -> CodeContract:
-    """Load the code plugin named by the catalog `code` field."""
+    """Load the code plugin named by catalog.code.plugin."""
     if slot.plugin != "github":
         raise CodeContractError(f"unknown code plugin: {slot.plugin}")
     from lokay.code.github import GithubCode

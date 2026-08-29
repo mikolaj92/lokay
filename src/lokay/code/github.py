@@ -37,12 +37,7 @@ def _need_name(name: str, *, what: str) -> str:
 
 
 def _repo_cfg(target: CodeTarget, clone_path: Path) -> RepoConfig:
-    return RepoConfig(
-        name=target.id,
-        clone_path=Path(clone_path),
-        code_plugin="github",
-        code_target=target.id,
-    )
+    return RepoConfig(name=target.id, clone_path=Path(clone_path))
 
 
 class GithubRepo:

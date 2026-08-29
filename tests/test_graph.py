@@ -12,9 +12,17 @@ from lokay.graph_run import (
 
 FACTORY_CHILDREN = (
     "factory_begin",
-    "prs",
     "reap_stale_worktrees",
-    "issues",
+    "select_self_repair_department",
+    "run_self_repair_department",
+    "select_issue_triage_department",
+    "run_issue_triage_department",
+    "select_executor_department",
+    "run_executor_department",
+    "select_pr_triage_department",
+    "run_pr_triage_department",
+    "select_pr_repair_department",
+    "run_pr_repair_department",
     "record_pass",
     "factory_pass_terminal",
 )
@@ -25,15 +33,28 @@ def _factory_pass_raw() -> dict:
     return next(p for p in pkg["correlation_paths"] if p["id"] == "factory_pass")
 
 
-def simulate_factory_pass(*, reap_status: str = "succeeded") -> dict:
+def simulate_factory_pass(*, reap_status: str = "succeeded", routes: dict | None = None) -> dict:
     """Apply authored conduction + when. Failed cleanup must not block product."""
     status: dict[str, str] = {}
+    routes = {
+        "select_self_repair_department": "skip",
+        "select_issue_triage_department": "run",
+        "select_executor_department": "run",
+        "select_pr_triage_department": "run",
+        "select_pr_repair_department": "skip",
+        **(routes or {}),
+    }
 
     def matches(when: dict) -> bool:
         if not when:
             return True
         upstream = str(when.get("upstream") or "")
-        return status.get(upstream) == "succeeded"
+        if status.get(upstream) != "succeeded":
+            return False
+        expected = when.get("equals")
+        if expected is None:
+            return True
+        return routes.get(upstream) == expected
 
     pending = list(_factory_pass_raw()["effectors"])
     progressed = True
@@ -63,7 +84,7 @@ def test_factory_pass_has_no_unrolled_catalog_slots():
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [node["id"] for node in path["nodes"]]
     assert "run_issue_rows" not in ids
-    assert "issues" in ids
+    assert "run_issue_triage_department" in ids
     assert not any(
         name.startswith("run_product_factory_pass_") or name.endswith("_9")
         for name in ids
@@ -83,16 +104,41 @@ def test_describe_parent_factory_graph():
     assert ids == list(FACTORY_CHILDREN)
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
     when = {node["id"]: node["when"] for node in path["nodes"]}
-    assert conduction["prs"] == ["factory_begin"]
     assert conduction["reap_stale_worktrees"] == ["factory_begin"]
-    assert conduction["issues"] == ["factory_begin", "prs"]
-    assert "reap_stale_worktrees" not in conduction["prs"]
-    assert "reap_stale_worktrees" not in conduction["issues"]
+    assert conduction["select_self_repair_department"] == ["factory_begin"]
+    assert conduction["select_issue_triage_department"] == [
+        "factory_begin",
+        "select_self_repair_department",
+    ]
+    assert conduction["select_executor_department"] == [
+        "factory_begin",
+        "select_issue_triage_department",
+    ]
+    assert conduction["select_pr_triage_department"] == [
+        "factory_begin",
+        "select_executor_department",
+    ]
+    assert conduction["select_pr_repair_department"] == [
+        "factory_begin",
+        "select_pr_triage_department",
+    ]
+    assert "reap_stale_worktrees" not in conduction["select_issue_triage_department"]
+    assert "reap_stale_worktrees" not in conduction["select_pr_triage_department"]
     assert "reap_stale_worktrees" not in conduction["record_pass"]
-    assert conduction["record_pass"] == ["factory_begin", "prs", "issues"]
+    assert conduction["record_pass"] == [
+        "factory_begin",
+        "select_self_repair_department",
+        "select_issue_triage_department",
+        "select_executor_department",
+        "select_pr_triage_department",
+        "select_pr_repair_department",
+    ]
     assert conduction["factory_pass_terminal"] == ["record_pass"]
-    for name in FACTORY_CHILDREN:
-        assert when[name] == {}, name
+    assert when["run_issue_triage_department"]["equals"] == "run"
+    assert when["run_executor_department"]["equals"] == "run"
+    assert when["run_pr_triage_department"]["equals"] == "run"
+    assert when["run_pr_repair_department"]["equals"] == "repair"
+    assert when["run_self_repair_department"]["equals"] == "run"
     # Mega factory_tick / survey_repos / dispatch_closeout must not hide policy.
     assert "factory_tick" not in ids
     assert "survey_repos" not in ids
@@ -301,6 +347,7 @@ def test_issue_row_path_is_one_question_then_one_implement():
         "select_next_issue",
         "issues_run_triage",
         "select_issue_do",
+        "select_issue_executor",
         "issues_launch_pr",
         "summarize_issue_row",
     ]
@@ -315,7 +362,7 @@ def test_issue_row_path_is_one_question_then_one_implement():
         "issues_run_triage",
     ]
     assert by_id["issues_launch_pr"]["when"] == {
-        "upstream": "select_issue_do",
+        "upstream": "select_issue_executor",
         "path": "route",
         "equals": "do",
     }
@@ -323,6 +370,7 @@ def test_issue_row_path_is_one_question_then_one_implement():
         "select_next_issue",
         "issues_run_triage",
         "select_issue_do",
+        "select_issue_executor",
         "issues_launch_pr",
     }
     collide = {"run_issue_triage_subflow", "launch_issue_to_pr"}
@@ -398,20 +446,20 @@ def test_factory_pass_issues_do_not_wait_on_cleanup():
             stack.extend(conduction.get(current, ()))
         return seen
 
-    assert "reap_stale_worktrees" not in closure("prs")
-    assert "reap_stale_worktrees" not in closure("issues")
+    assert "reap_stale_worktrees" not in closure("run_issue_triage_department")
+    assert "reap_stale_worktrees" not in closure("run_pr_triage_department")
     assert "reap_stale_worktrees" not in closure("record_pass")
     assert "reap_stale_worktrees" not in closure("factory_pass_terminal")
     assert "factory_begin" in conduction["reap_stale_worktrees"]
-    assert "prs" in conduction["issues"]
+    assert "select_issue_triage_department" in conduction["run_issue_triage_department"]
 
 
 def test_failed_cleanup_still_runs_issues_and_receipt():
     """process.failed leftover cleanup is not a gate to the next issue."""
     status = simulate_factory_pass(reap_status="failed")
     assert status["reap_stale_worktrees"] == "failed"
-    assert status["prs"] == "succeeded"
-    assert status["issues"] == "succeeded"
+    assert status["run_pr_triage_department"] == "succeeded"
+    assert status["run_issue_triage_department"] == "succeeded"
     assert status["record_pass"] == "succeeded"
     assert status["factory_pass_terminal"] == "succeeded"
 
@@ -467,7 +515,7 @@ def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):
     injected = captured["effector_inputs"]
     assert set(injected) == set(ids)
     assert all(injected[step].get("live") is True for step in ids)
-    assert injected["issues"]["live"] is True
+    assert injected["run_issue_triage_department"]["live"] is True
 
 
 def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):

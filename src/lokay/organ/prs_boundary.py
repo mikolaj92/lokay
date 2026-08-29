@@ -27,11 +27,15 @@ def handle_prs(
         from lokay.config import load_config
         from lokay.proc.select_pr_repair import select
 
+        from lokay.config import department_enabled
+
         cfg = load_config(config)
         return select(
             up.get("select_next_pr") or {},
             up.get("run_pr_triage_subflow") or {},
-            enabled=bool(cfg.executor_enabled and cfg.max_repairs_per_tick > 0),
+            enabled=bool(
+                department_enabled(cfg, "pr_repair") and cfg.max_repairs_per_tick > 0
+            ),
         )
     if atom == "run_pr_repair_subflow":
         from lokay.proc.run_parent_pr_repair_subflow import run

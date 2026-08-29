@@ -130,7 +130,8 @@ def handle_recovery(
         receipt = read_pass_receipt(state_path=loaded.state_path)
         moving = up.get("last_pass_moving") or classify_moving(receipt)
         leftover = up.get("leftover_skip") or leftover_classify(receipt)
-        return select(moving, leftover, receipt)
+        enabled = bool(getattr(loaded, "department_self_repair", True))
+        return select(moving, leftover, receipt, enabled=enabled)
 
     if atom == "recovery_begin":
         return _run_atom_main(recovery_begin.main, [*cfg, *live])

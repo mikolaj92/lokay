@@ -17,6 +17,7 @@ from lokay.code import (
     parse_code_slot,
     slot_from_repo,
 )
+from lokay.catalog import CatalogBinding
 from lokay.config import Config, RepoConfig
 from lokay.runner import CommandResult, CommandSpec
 
@@ -99,8 +100,7 @@ def _cfg(tmp_path: Path, *, plugin: str = "github", target: str = "mikolaj92/lok
             RepoConfig(
                 name="mikolaj92/lokay",
                 clone_path=clone,
-                code_plugin=plugin,
-                code_target=target,
+                code=CatalogBinding(plugin, target),
             )
         ],
     )
