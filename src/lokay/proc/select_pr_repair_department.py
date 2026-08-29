@@ -15,12 +15,15 @@ def select(
 ) -> dict[str, Any]:
     if not enabled:
         return ok(route="skip", reason="pr_repair_disabled")
-    if triage_ran:
-        return ok(route="skip", reason="already_conducted_in_pr_triage")
     triage = triage_run.get("triage")
     verdict = triage if isinstance(triage, Mapping) else {}
+    if str(triage_run.get("verdict") or "") == "repair":
+        verdict = {**verdict, "repairable": True}
     if not verdict.get("repairable"):
-        return ok(route="skip", reason="no_triage_verdict")
+        return ok(
+            route="skip",
+            reason="no_triage_verdict" if triage_ran else "no_triage_verdict",
+        )
     return ok(
         route="repair",
         reason=str(verdict.get("reason") or "pr_triage_requested_repair"),

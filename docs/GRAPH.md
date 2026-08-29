@@ -90,8 +90,8 @@ factory_begin
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Leftover skip is not a stall. Body is child Fala `self_repair_department` (incident + existing `self_repair`). Off never touches lokay main. |
 | `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, intake. Zero `ai/fix`. Foreign assignee still skipped. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
-| `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Invokes existing `prs` child. Must not start repair from inside the sieve. |
-| `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict. Keep #901 wiring inside `prs`. |
+| `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Child Fala `pr_triage_department`: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. |
+| `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict from the PR sieve. Not started from inside `pr_triage_department`. |
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
@@ -136,6 +136,21 @@ mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
 call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
+
+### `pr_triage_department` (PR sieve)
+
+Two small blocks plus graph. List, checks, review, feedback, merge-commit.
+Does not write product code. Does not call `pr_repair` from inside.
+
+```text
+list_pr_sieve
+  → select_pr_sieve
+    → run_pr_sieve                   when route=pr → child Fala pr_triage
+      → select_pr_triage_verdict     merge / feedback / repair
+        → summarize_pr_triage_department
+```
+
+A repair verdict is a value. The parent `pr_repair` department consumes it.
 
 ### `prs` (open PR review / repair / merge)
 
