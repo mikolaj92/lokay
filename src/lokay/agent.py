@@ -1,6 +1,8 @@
 """Agent slot — run a configured external coding harness.
 
 No stubs. No silent defaults. No per-vendor argv hardcoding in mill code.
+The slot writes an artifact and structured output. It does not persist a
+revision; that is a later graph atom after a ready verdict.
 
 Mill only knows:
   - executor.command  — binary on PATH

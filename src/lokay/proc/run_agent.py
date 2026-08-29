@@ -1,4 +1,7 @@
-"""Atomic: run configured coding harness in a worktree. Only non-deterministic step."""
+"""Atomic: run configured coding harness in a worktree. Only non-deterministic step.
+
+Timeout is ok plus structured state timeout. The slot does not persist a revision.
+"""
 
 from __future__ import annotations
 
@@ -60,8 +63,6 @@ def main(argv: list[str] | None = None) -> int:
         return emit_exit(err(str(exc), status="refused"))
 
     if result.get("timed_out"):
-        # Incomplete, not a graph hard-fail: commit leftover work and let
-        # repair_agent resume the same corner / session (K=1).
         payload = {**result, "status": "timeout", "reason": "timeout"}
         return emit_exit(ok(**payload))
     if result.get("status") == "failed":
