@@ -7,6 +7,14 @@ from typing import Any
 
 import yaml
 
+from lokay.catalog import (
+    CatalogBinding,
+    CatalogError,
+    DEFAULT_PLUGIN,
+    assert_known_plugins,
+    parse_catalog_row,
+)
+
 DEFAULT_CONFIG_CANDIDATES = (
     Path("config.yaml"),
     Path(os.path.expanduser("~/.lokay/config.yaml")),
@@ -20,6 +28,15 @@ class RepoConfig:
     priority: int = 10
     enabled: bool = True
     note: str = ""
+    issues: CatalogBinding | None = None
+    code: CatalogBinding | None = None
+
+    def __post_init__(self) -> None:
+        # Parent still keys GitHub by name. Missing sides default to github + name.
+        if self.issues is None:
+            self.issues = CatalogBinding(DEFAULT_PLUGIN, self.name)
+        if self.code is None:
+            self.code = CatalogBinding(DEFAULT_PLUGIN, self.name)
 
 
 @dataclass
@@ -159,13 +176,21 @@ def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
     for raw in raw_list or []:
         if not isinstance(raw, dict):
             continue
+        row = parse_catalog_row(raw)
+        assert_known_plugins(row)
+        if not row.clone_path:
+            raise CatalogError(f"catalog row {row.name!r} needs clone_path")
         repos.append(
             RepoConfig(
-                name=str(raw["name"]),
-                clone_path=_expand(raw["clone_path"]),
+                name=row.name,
+                clone_path=_expand(row.clone_path),
                 priority=int(raw.get("priority", 10)),
-                enabled=_yaml_bool(raw.get("enabled", True), True, field=f"repos[{raw.get('name')}].enabled"),
+                enabled=_yaml_bool(
+                    raw.get("enabled", True), True, field=f"repos[{row.name}].enabled"
+                ),
                 note=str(raw.get("note") or ""),
+                issues=row.issues,
+                code=row.code,
             )
         )
     return repos
