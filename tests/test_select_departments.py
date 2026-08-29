@@ -22,6 +22,13 @@ def test_self_repair_only_when_last_pass_did_not_move() -> None:
         "route": "skip",
         "reason": "self_repair_disabled",
     }
+    assert select_self_repair(
+        enabled=True, moved_forward=False, leftover_skip=True
+    ) == {
+        "ok": True,
+        "route": "skip",
+        "reason": "leftover_skip",
+    }
 
 
 def test_issue_triage_switch_does_not_mention_executor() -> None:

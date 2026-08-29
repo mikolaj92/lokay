@@ -1,4 +1,4 @@
-"""Fala bindings for factory_pass department switches (parent wiring only)."""
+"""Fala bindings for factory_pass department switches and department bodies."""
 
 from typing import Any
 
@@ -29,19 +29,30 @@ def handle_departments(
     if atom == "select_self_repair_department":
         from lokay.pass_receipt import read_pass_receipt
         from lokay.proc.last_pass_moving import classify as classify_moving
+        from lokay.proc.leftover_skip import classify as classify_leftover
         from lokay.proc.select_self_repair_department import select
 
         receipt = read_pass_receipt()
         moving = classify_moving(receipt)
+        leftover = classify_leftover(receipt)
         return select(
             enabled=_department_enabled(config, "self_repair"),
             moved_forward=bool(moving.get("moved_forward")),
             receipt_present=isinstance(receipt, dict) and bool(receipt),
+            leftover_skip=bool(leftover.get("leftover_skip")),
         )
     if atom == "run_self_repair_department":
         from lokay.proc.run_self_repair_department import run
 
-        return run()
+        return run(config_path=config)
+    if atom == "open_self_repair_incident":
+        from lokay.proc.open_self_repair_incident import run
+
+        return run(config_path=config)
+    if atom == "invoke_self_repair":
+        from lokay.proc.invoke_self_repair import run
+
+        return run(up.get("open_self_repair_incident") or {}, config_path=config)
     if atom == "select_issue_triage_department":
         from lokay.proc.select_issue_triage_department import select
 
