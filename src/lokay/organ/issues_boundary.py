@@ -60,7 +60,7 @@ def handle_issues(
 
         cfg = load_config(config)
         return select(
-            up.get("select_issue_do") or {},
+            up.get("select_issue_do_row") or up.get("select_issue_do") or {},
             enabled=department_enabled(cfg, "executor"),
         )
     if atom == "issues_launch_pr":

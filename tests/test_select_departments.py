@@ -55,8 +55,13 @@ def test_pr_triage_switch_does_not_start_repair() -> None:
     assert select_pr_repair({}, enabled=True, triage_ran=True) == {
         "ok": True,
         "route": "skip",
-        "reason": "already_conducted_in_pr_triage",
+        "reason": "no_triage_verdict",
     }
+    assert select_pr_repair(
+        {"triage": {"repairable": True}, "verdict": "repair", "repo": "o/r", "pr": 9},
+        enabled=True,
+        triage_ran=True,
+    )["route"] == "repair"
 
 
 def test_pr_repair_disabled_leaves_sieve() -> None:
