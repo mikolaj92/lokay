@@ -289,8 +289,9 @@ get_issue
                                   missing → summarize (no product). Never ok=false:
                                   a failed worktree still unblocks localize in Fala.
               └─→ plan_issue   ← when worktree route=ready; grandchild Fala plan_issue_execution
-                    └─→ localize     ← when worktree route=ready; grandchild Fala localize_execution
-                          └─→ coding_execution  ← when worktree route=ready; child Fala: run_agent + one JSON retry + one evidence round
+                    └─→ localize     ← when worktree route=ready; grandchild Fala localize_execution.
+                                       Never ok=false: empty/timeout is route=empty.
+                          └─→ coding_execution  ← when localize route=ready; child Fala: run_agent + one JSON retry + one evidence round
                                 └─→ commit_all
                                       └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
                                             └─→ test_local_execution   ← grandchild Fala; skip if no suite
@@ -364,8 +365,8 @@ pr_checks
   └─→ stage_repairing   ← no-op on labels: keep ai:ready
         └─→ worktree_add          ready → localize / run_agent
                                   missing → summarize (no product)
-              └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree
-                    └─→ run_agent   ← when worktree route=ready; repair prompt (only non-deterministic node)
+              └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
+                    └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
                           └─→ commit_all
                                 └─→ test_local   ← local pytest; skip if no suite
                                       └─→ assert_real_diff
@@ -428,7 +429,10 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   `.lokay/localize.json` paths skip the localize executor only when they
   belong to this issue number. Live mode may call the
   configured executor once for a JSON path list; Python validates and still
-  fails closed on missing/empty localize — the coding agent does not start.
+  refuses an empty path list. Localize never `ok=false` (Fala unblocks
+  children of failed). `route=ready` continues to coding; `route=empty`
+  (timeout, invalid JSON, no paths) skips coding. Parent localize budget
+  covers the child agents. Empty localize is not invalid-JSON retry.
   `plan_issue.files_likely` is passed as `--extra-path`. Weak token hits do not
   pad the list to 40; a long list is a hint in the prompt, not a cage.
   A tests-only inferred list is a cage: matching `test_foo.py` promotes

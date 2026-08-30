@@ -64,6 +64,31 @@ def _localize_conduction(
     return {**up, "localize": dict(loc) if isinstance(loc, dict) else {}}
 
 
+def localize_parent_route(out: dict[str, Any] | None) -> dict[str, Any]:
+    """Always ok=true. Fala unblocks children of failed, so empty/timeout is a route."""
+    blob = dict(out or {})
+    nested = blob.get("result") if isinstance(blob.get("result"), dict) else {}
+    raw = blob.get("paths")
+    if not isinstance(raw, list):
+        raw = nested.get("paths") if isinstance(nested.get("paths"), list) else []
+    paths = [str(item).strip() for item in raw if str(item or "").strip()]
+    if paths:
+        return {**blob, "ok": True, "route": "ready", "paths": paths}
+    reason = str(blob.get("reason") or nested.get("reason") or "")
+    error = str(blob.get("error") or nested.get("error") or "")
+    if "timed out" in error.lower() or reason in {"adapter_timeout", "timeout"}:
+        reason = "localize_timeout"
+    elif not reason:
+        reason = "localize_empty"
+    return {
+        "ok": True,
+        "route": "empty",
+        "reason": reason,
+        "paths": [],
+        "error": error or "localize produced no edit paths",
+    }
+
+
 def _localize_paths(up: dict[str, dict[str, Any]]) -> list[str]:
     """Paths from localize conduction; empty means fail-closed before agent."""
     raw = up.get("localize", {}).get("paths") or []

@@ -176,10 +176,19 @@ def handle_coding_boundary(
             "validate_evidence_coding": "evidence_coding_agent",
             "validate_repair_result": "repair_agent",
         }[atom]
+        source_blob = up.get(source) or {}
+        if str(source_blob.get("route") or "") == "empty" or str(
+            source_blob.get("reason") or ""
+        ) in {"localize_empty", "localize_missing", "localize_timeout"}:
+            return {
+                "ok": True,
+                "route": "empty",
+                "reason": str(source_blob.get("reason") or "localize_empty"),
+            }
         return validate(
             str(
-                (up.get(source) or {}).get("stdout")
-                or (up.get(source) or {}).get("stdout_tail")
+                source_blob.get("stdout")
+                or source_blob.get("stdout_tail")
                 or ""
             )
         )

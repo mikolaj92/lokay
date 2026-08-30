@@ -44,6 +44,14 @@ def test_second_invalid_fails_closed():
     assert out["route"] == "human" and out["decision"]["verdict"] == "needs_human"
 
 
+def test_empty_localize_is_failed_not_invalid_json_retry():
+    first = {"ok": True, "route": "empty", "reason": "localize_timeout"}
+    retry = validate_output(valid())
+    out = select_initial(first, retry)
+    assert out["route"] == "failed"
+    assert out["reason"] == "localize_timeout"
+
+
 def test_closed_evidence_round_can_implement():
     initial = select_initial(
         validate_output(valid("needs_evidence", "repo_structure")), {}
