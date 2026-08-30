@@ -251,6 +251,25 @@ def test_issue_journal_dir_isolates_test_local_execution(tmp_path):
     assert "186" in str(second)
 
 
+def test_pr_journal_dir_isolates_pr_triage(tmp_path):
+    from lokay.graph_run import pr_journal_dir, path_journal_dir, issue_journal_dir
+
+    first = pr_journal_dir("pr_triage", "mikolaj92/Fala", 187, home=tmp_path)
+    second = pr_journal_dir("pr_triage", "mikolaj92/Temida", 5195, home=tmp_path)
+    shared = path_journal_dir("pr_triage", home=tmp_path)
+    repair = pr_journal_dir("pr_repair", "mikolaj92/Fala", 187, home=tmp_path)
+    assert first is not None and second is not None
+    assert first != second
+    assert first.parent.name == "pr-triage"
+    assert repair.parent.name == "pr-repair"
+    assert first != shared
+    assert "187" in str(first)
+    assert "5195" in str(second)
+    assert issue_journal_dir("pr_triage", "mikolaj92/Fala", 186, home=tmp_path) is None
+    nested = path_journal_dir("pr_triage", "mikolaj92/Fala", pr=187, home=tmp_path)
+    assert nested == first
+
+
 def test_path_journal_dir_isolates_sliced_children(tmp_path):
     from lokay.graph_run import path_journal_dir, _slice_package_to_path, _materialize_package
 
