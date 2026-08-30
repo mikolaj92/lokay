@@ -563,7 +563,7 @@ stateDiagram-v2
     [*] --> PrepareLocalizationRequest
     PrepareLocalizationRequest --> InspectExistingLocalization
     InspectExistingLocalization --> ClassifyLocalizationRoute
-    ClassifyLocalizationRoute --> ValidateLocalizationPaths: existing tego zgłoszenia / jawne Files
+    ClassifyLocalizationRoute --> ValidateLocalizationPaths: existing w drzewie / jawne Files
     ClassifyLocalizationRoute --> BuildDeterministicLocalization: agent niedozwolony
     ClassifyLocalizationRoute --> BuildLocalizationAgentRequest: semantyka potrzebna
     BuildLocalizationAgentRequest --> RunLocalizationAgent
@@ -581,10 +581,11 @@ stateDiagram-v2
     LocalizationTerminal --> [*]
 ```
 
-Fala wybiera istniejący dowód tylko gdy należy do tego numeru zgłoszenia.
-Leftover z main, inne zgłoszenie w `worktree` albo brak numeru nie jest sitom —
-Fala idzie deterministycznie + semantycznie. Inaczej: jawne ścieżki issue,
-deterministyczny fallback albo jeden agent semantyczny. Agent zwraca zamknięty
+Fala wybiera istniejący dowód tylko gdy należy do tego numeru zgłoszenia
+i każda ścieżka istnieje w worktree. Leftover z main, inne zgłoszenie w
+`worktree`, brak numeru albo ścieżka-widmo (numer wersji, skasowany plik)
+nie jest sitem — Fala idzie deterministycznie + semantycznie. Inaczej:
+jawne ścieżki issue, deterministyczny fallback albo jeden agent semantyczny. Agent zwraca zamknięty
 JSON `paths + notes`.
 Błędny JSON dostaje dokładny feedback walidatora i najwyżej jeden retry.
 Python nie zamienia awarii agenta w ukrytą decyzję semantyczną: Fala jawnie

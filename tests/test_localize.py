@@ -524,6 +524,35 @@ def test_leftover_333_localize_is_not_sieve_for_issue_865(tmp_path: Path):
     assert "tests/test_hot_repos.py" not in det.paths
 
 
+def test_same_issue_missing_path_is_not_sieve(tmp_path: Path):
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples" / "subprocess_one.fala-package.toml").write_text("x\n")
+    _write_localize(
+        tmp_path,
+        {
+            "paths": ["0.7.28", "examples/subprocess_one.fala-package.toml"],
+            "source": "existing",
+            "issue": 186,
+        },
+    )
+    from lokay.proc.classify_localization_route import classify
+    from lokay.proc.inspect_existing_localization import inspect
+
+    request = {
+        "worktree": str(tmp_path),
+        "issue": 186,
+        "seed": "host_run_package rejects active process placeholder",
+        "extras": [],
+        "max_paths": 40,
+        "explicit_issue_paths": [],
+        "has_file_hints": False,
+    }
+    assert load_existing_localize_paths(tmp_path, issue=186) == []
+    inspected = inspect(request)
+    assert inspected["existing"] == []
+    assert classify(request, inspected, agent_allowed=True)["route"] != "existing"
+
+
 def test_same_issue_localize_json_is_kept(tmp_path: Path):
     target = "src/lokay/localize.py"
     path = tmp_path / target
