@@ -53,16 +53,6 @@ def run(prepared: dict, *, config_path: str | None, live: bool) -> dict:
     if not prepared.get("ok"):
         return dict(prepared)
     repos = list(prepared.get("repos") or [])
-    if len(repos) > REPO_SLOTS:
-        return {
-            "ok": True,
-            "route": "skip",
-            "skipped": True,
-            "leftover_skip": True,
-            "reason": "leftover_overflow",
-            "count": len(repos),
-            "slot_count": REPO_SLOTS,
-        }
     rows = []
     if prepared.get("route") != "skip":
         rows = [
@@ -70,22 +60,21 @@ def run(prepared: dict, *, config_path: str | None, live: bool) -> dict:
             for slot in range(1, len(repos) + 1)
         ]
     candidates = reduce_candidates(prepared, rows, slot_count=CANDIDATE_SLOTS)
-    if candidates.get("skipped") or candidates.get("route") == "skip":
-        return {
-            "ok": True,
-            "route": "skip",
-            "skipped": True,
-            "leftover_skip": candidates.get("reason") == "leftover_overflow",
-            "reason": candidates.get("reason") or "skip",
-            "count": candidates.get("count"),
-            "slot_count": candidates.get("slot_count"),
-        }
     if not candidates.get("ok"):
         return candidates
+    if prepared.get("route") == "skip" and not list(candidates.get("candidates") or []):
+        return reduce_state(prepared, candidates, [])
     cand_rows = []
     for slot in range(1, len(list(candidates.get("candidates") or [])) + 1):
         recorded = _one_candidate(candidates, slot=slot, config_path=config_path)
         if not recorded.get("ok"):
             return recorded
         cand_rows.append(recorded)
-    return reduce_state(prepared, candidates, cand_rows)
+    reduced = reduce_state(prepared, candidates, cand_rows)
+    if candidates.get("leftover_skip"):
+        reduced["leftover_skip"] = True
+        reduced["leftover_overflow"] = True
+        reduced["reason"] = candidates.get("reason") or "leftover_overflow"
+        reduced["count"] = candidates.get("count")
+        reduced["slot_count"] = candidates.get("slot_count")
+    return reduced

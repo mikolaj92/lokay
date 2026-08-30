@@ -13,13 +13,19 @@ def reduce_candidates(prepared: dict, rows: list[dict], *, slot_count: int) -> d
     if len(unique) > slot_count:
         return {
             "ok": True,
-            "route": "skip",
-            "skipped": True,
+            "route": "mutate" if prepared.get("route") == "probe" else "skip",
+            "skipped": False,
             "leftover_skip": True,
+            "leftover_overflow": True,
             "reason": "leftover_overflow",
             "count": len(unique),
             "slot_count": slot_count,
-            "candidates": [],
+            "candidates": unique[:slot_count],
+            "failed_repos": [
+                str(x.get("repo") or "") for x in rows if x.get("route") == "failed"
+            ],
+            "mutations_allowed": bool(prepared.get("mutations_allowed")),
+            "live": bool(prepared.get("live")),
         }
     failed = [str(x.get("repo") or "") for x in rows if x.get("route") == "failed"]
     return {

@@ -5371,7 +5371,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "leftover_closeout"
 title = "Leftover closed-ready closeout"
-description = "Prepare, one in-process catalog atom, stamp. No 30-slot unroll."
+description = "Prepare, one in-process catalog atom, stamp. No 30-slot unroll. Overflow parks the first authored handful."
 
 [[correlation_paths.effectors]]
 id = "prepare_leftover_closeout"

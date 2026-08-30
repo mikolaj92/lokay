@@ -39,11 +39,18 @@ def test_label_candidates_deduplicate_by_repo_issue():
     assert out["candidates"] == [{"repo": "o/r", "number": 7}]
 
 
-def test_candidate_overflow_fails_closed():
+def test_candidate_overflow_parks_first_handful():
     from lokay.proc.reduce_leftover_candidates import reduce_candidates
 
     rows = [{"candidates": [{"repo": "o/r", "number": i} for i in range(31)]}]
-    assert reduce_candidates({"route": "probe"}, rows, slot_count=30)["ok"] is False
+    out = reduce_candidates(
+        {"route": "probe", "mutations_allowed": True, "live": True},
+        rows,
+        slot_count=30,
+    )
+    assert out["ok"] is True
+    assert out["leftover_overflow"] is True
+    assert [c["number"] for c in out["candidates"]] == list(range(30))
 
 
 def test_rate_limit_probe_remains_failed():
@@ -102,15 +109,27 @@ def test_leftover_catalog_fail_closed_when_prepare_failed():
     assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
-def test_leftover_catalog_overflow_is_fail_closed():
+def test_leftover_catalog_repo_count_never_fail_closes(monkeypatch):
     from lokay.proc.leftover_catalog import REPO_SLOTS, run
 
+    monkeypatch.setattr(
+        "lokay.proc.list_leftover_closed_ready.fetch",
+        lambda selected, **kwargs: {**selected, "ok": True, "route": "listed", "numbers": []},
+    )
     out = run(
-        {"ok": True, "route": "probe", "repos": [f"o/r{i}" for i in range(REPO_SLOTS + 1)]},
+        {
+            "ok": True,
+            "route": "probe",
+            "repos": [f"o/r{i}" for i in range(REPO_SLOTS + 1)],
+            "labels": ["work:ready"],
+            "mutations_allowed": True,
+            "live": True,
+        },
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+    assert out["ok"] is True
+    assert out.get("leftover_skip") is not True
 
 
 def test_leftover_catalog_skip_does_not_list(monkeypatch):
@@ -190,8 +209,14 @@ def test_leftover_catalog_park_failure_fails_closed(monkeypatch):
     assert out["ok"] is False and out["error"] == "leftover park failed"
 
 
-def test_leftover_catalog_candidate_overflow_fails_closed(monkeypatch):
+def test_leftover_catalog_candidate_overflow_parks_first_handful(monkeypatch):
     from lokay.proc.leftover_catalog import CANDIDATE_SLOTS, run
+
+    parked = []
+
+    def park(selected, **kwargs):
+        parked.append(selected["number"])
+        return {**selected, "ok": True, "route": "removed"}
 
     monkeypatch.setattr(
         "lokay.proc.list_leftover_closed_ready.fetch",
@@ -202,6 +227,7 @@ def test_leftover_catalog_candidate_overflow_fails_closed(monkeypatch):
             "numbers": list(range(1, CANDIDATE_SLOTS + 2)),
         },
     )
+    monkeypatch.setattr("lokay.proc.park_leftover_candidate.park", park)
     out = run(
         {
             "ok": True,
@@ -214,7 +240,11 @@ def test_leftover_catalog_candidate_overflow_fails_closed(monkeypatch):
         config_path=None,
         live=True,
     )
-    assert out["ok"] is False and "exceed authored slots" in out["error"]
+    assert out["ok"] is True
+    assert out["leftover_skip"] is True
+    assert out["leftover_overflow"] is True
+    assert parked == list(range(1, CANDIDATE_SLOTS + 1))
+    assert out["leftover_closed"] == CANDIDATE_SLOTS
 
 
 def test_existing_delivery_closeout_is_explicit_fala_edge():
