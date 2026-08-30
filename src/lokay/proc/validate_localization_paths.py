@@ -10,12 +10,8 @@ def validate(
     extras = [_norm_rel(x) for x in request.get("extras") or [] if _norm_rel(x)]
     raw = [_norm_rel(x) for x in candidate.get("paths") or [] if _norm_rel(x)]
     source = str(candidate.get("source") or "deterministic")
-    if source == "agent":
-        accepted = [x for x in dict.fromkeys(raw) if x in tree]
-    else:
-        accepted = [
-            x for x in dict.fromkeys([*extras, *raw]) if x in tree or x in extras
-        ]
+    # Extra/seed tokens are not a cage: keep them only when they exist.
+    accepted = [x for x in dict.fromkeys([*extras, *raw]) if x in tree]
     return {
         "ok": True,
         "route": "write" if accepted else "terminal",

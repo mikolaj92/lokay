@@ -439,6 +439,35 @@ def test_explicit_localization_atom_builds_closed_candidate():
     assert out["paths"] == ["src/a.py"] and out["source"] == "bypass"
 
 
+def test_validate_localization_paths_drops_ghost_extras():
+    from lokay.proc.validate_localization_paths import validate
+
+    out = validate(
+        {"extras": ["0.7.28"]},
+        {"tree": ["python/tests/fixtures/subprocess_one.fala-package.toml"]},
+        {
+            "paths": ["0.7.28", "subprocess_one.fala-package.toml"],
+            "source": "existing",
+            "seed_paths": ["0.7.28"],
+            "notes": ["Existing localization evidence."],
+        },
+        {},
+    )
+    assert out["route"] == "terminal" and out["paths"] == [] and out["reason"] == "empty_paths"
+
+
+def test_validate_localization_paths_keeps_tree_hits():
+    from lokay.proc.validate_localization_paths import validate
+
+    out = validate(
+        {"extras": ["src/a.py", "0.7.28"]},
+        {"tree": ["src/a.py"]},
+        {"paths": ["src/a.py"], "source": "existing"},
+        {},
+    )
+    assert out["route"] == "write" and out["paths"] == ["src/a.py"]
+
+
 def test_empty_seed_route_is_terminal():
     from lokay.proc.classify_localization_route import classify
 

@@ -575,7 +575,7 @@ stateDiagram-v2
     ValidateLocalizationRetryJSON --> ValidateLocalizationPaths: poprawny JSON
     ValidateLocalizationRetryJSON --> LocalizationTerminal: drugi błędny JSON
     BuildDeterministicLocalization --> ValidateLocalizationPaths
-    ValidateLocalizationPaths --> WriteLocalizationEvidence: ścieżki niepuste
+    ValidateLocalizationPaths --> WriteLocalizationEvidence: ścieżki istnieją w drzewie
     ValidateLocalizationPaths --> LocalizationTerminal: pusty / odrzucony zakres
     WriteLocalizationEvidence --> LocalizationTerminal
     LocalizationTerminal --> [*]
@@ -589,9 +589,11 @@ jawne ścieżki issue, deterministyczny fallback albo jeden agent semantyczny. A
 JSON `paths + notes`.
 Błędny JSON dostaje dokładny feedback walidatora i najwyżej jeden retry.
 Python nie zamienia awarii agenta w ukrytą decyzję semantyczną: Fala jawnie
-prowadzi fallback albo terminal. Przygotowanie requestu, tree fact, agent call,
-walidacja JSON, walidacja fizycznych ścieżek, zapis i terminal są osobnymi
-procesami.
+prowadzi fallback albo terminal. Walidacja fizycznych ścieżek trzyma wyłącznie
+ścieżki obecne w worktree — extra/seed-widmo (numer wersji, skasowany plik)
+odpada. Pusty zakres idzie do terminala, nie do zapisu. Przygotowanie requestu,
+tree fact, agent call, walidacja JSON, walidacja fizycznych ścieżek, zapis i
+terminal są osobnymi procesami.
 
 ### Lokalne testy repozytorium — `test_local_execution`
 

@@ -25,8 +25,9 @@ timeout retry resumes it — unless a sibling already closed the issue
 1 (`No session found matching 'lokay-…'`), which leaves only
 `.lokay/approach.md` / `.lokay/localize.json` — a `plan_only` miss, not a PR.
 Same-issue `.lokay/localize.json` is a sieve only when every path exists
-in the worktree. A version string or vanished file is not a cage: discard
-and localize again. Empty localize (`route=empty`) skips `coding_execution`. It is not
+in the worktree. Validate also drops extra/seed tokens that are not in the
+tree. A version string or vanished file is not a cage: discard and
+localize again. Empty localize (`route=empty`) skips `coding_execution`. It is not
 `ok=false` and not an invalid-JSON coding retry. Parent localize timeout
 covers the child agents. `localize` must not cage the agent in `tests/` when the seed only names a
 test token (`gate` → `test_e2e_gates.py`): matching `test_foo.py` promotes
