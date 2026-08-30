@@ -1085,7 +1085,7 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
         }
 
 
-def test_test_local_cache_skips_when_inspect_is_terminal():
+def test_test_local_cache_always_runs():
     import tomllib
     from pathlib import Path
 
@@ -1096,9 +1096,10 @@ def test_test_local_cache_skips_when_inspect_is_terminal():
     )
     path = next(p for p in package["correlation_paths"] if p["id"] == "test_local_execution")
     by_id = {node["id"]: node for node in path["effectors"]}
-    assert by_id["read_test_green_cache"]["when"] == {
-        "upstream": "inspect_test_declaration",
+    assert "when" not in by_id["read_test_green_cache"]
+    assert by_id["run_declared_tests"]["when"] == {
+        "upstream": "read_test_green_cache",
         "path": "route",
-        "equals": "test",
+        "equals": "miss",
     }
     assert by_id["classify_test_terminal"]["conduction"]

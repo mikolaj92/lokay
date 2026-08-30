@@ -145,8 +145,11 @@ mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
 `i2pr-delivery/`, and `coding-execution/`. `test_local_execution` is the same
 class of nested child: per-issue under `test-local-execution/`. A shared
 `local/test` journal lets one live pytest hold `no_declared_test` skip for
-another repo, so PR triage never reaches `pr_merge`. Inspect `route=terminal`
-skips the cache atom. Every other child path uses its own journal under
+another repo, so PR triage never reaches `pr_merge`. Cache always runs and
+returns `route=terminal|hit|miss`. A Fala `when` on a skipped cache atom fails
+`run_declared_tests` (`condition_source_not_succeeded`), so inspect
+`no_declared_test` is a succeeded cache `route=terminal` and pytest skips
+because the route is not `miss`. Every other child path uses its own journal under
 `~/.lokay/fala/<path_id>/`. Native Fala materializes one sliced
 package next to that journal. Nested children must not overwrite
 `~/.lokay/fala/lokay.fala-package.toml` or share `~/.lokay/fala/state.sqlite`.
