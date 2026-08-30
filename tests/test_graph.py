@@ -126,6 +126,7 @@ def test_describe_parent_factory_graph():
     assert conduction["select_pr_repair_department"] == [
         "factory_begin",
         "select_pr_triage_department",
+        "run_pr_triage_department",
     ]
     assert "reap_stale_worktrees" not in conduction["select_issue_triage_department"]
     assert "reap_stale_worktrees" not in conduction["select_pr_triage_department"]

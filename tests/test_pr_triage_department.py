@@ -43,15 +43,59 @@ def test_receipt_never_starts_repair() -> None:
     assert out["repair_started"] is False
     assert out["verdict"] == "repair"
     assert out["department"] == "pr_triage"
+    assert out["result"]["verdict"] == "repair"
+    assert out["result"]["repair_started"] is False
+    assert "run_pr_repair" not in out["result"]
 
 
 def test_parent_repair_reads_the_verdict() -> None:
-    assert select_repair(
-        {"triage": {"repairable": True, "reason": "red_ci"}, "repo": "o/r", "pr": 9},
+    out = select_repair(
+        {
+            "triage": {
+                "repairable": True,
+                "reason": "red_ci",
+                "review": {"verdict": "request_changes"},
+            },
+            "repo": "o/r",
+            "pr": 9,
+            "branch": "ai/fix/9-x",
+        },
         enabled=True,
         triage_ran=True,
-    )["route"] == "repair"
+    )
+    assert out["route"] == "repair"
+    assert out["review"] == {"verdict": "request_changes"}
     assert select_repair({}, enabled=True, triage_ran=True)["reason"] == "no_triage_verdict"
+
+
+def test_parent_repair_reads_normalized_sieve_envelope() -> None:
+    lifted = {
+        "ok": True,
+        "engine": "fala",
+        "path_id": "pr_triage_department",
+        "verdict": "repair",
+        "triage": {"repairable": True, "reason": "red_ci"},
+        "repo": "o/r",
+        "pr": 9,
+        "branch": "ai/fix/9-x",
+        "repair_started": False,
+    }
+    out = select_repair(lifted, enabled=True, triage_ran=True)
+    assert out["route"] == "repair"
+    assert out["repo"] == "o/r" and out["pr"] == 9
+    assert out["branch"] == "ai/fix/9-x"
+
+
+def test_disabled_repair_does_not_touch_sieve_feedback() -> None:
+    receipt = summarize(
+        {"route": "pr", "repo": "o/r", "pr": 9, "branch": "ai/fix/9-x"},
+        {"route": "completed", "triage": {"repairable": True, "reason": "red_ci"}},
+        {"verdict": "repair", "repairable": True, "repo": "o/r", "pr": 9},
+    )
+    out = select_repair(receipt, enabled=False, triage_ran=True)
+    assert out["route"] == "skip"
+    assert out["reason"] == "pr_repair_disabled"
+    assert receipt["repair_started"] is False
 
 
 def test_department_graph_has_no_repair_child() -> None:

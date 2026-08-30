@@ -91,6 +91,7 @@ stateDiagram-v2
     SelectExecutorDepartment --> SelectPrTriageDepartment
     SelectPrTriageDepartment --> RunPrTriageDepartment
     SelectPrTriageDepartment --> SelectPrRepairDepartment
+    RunPrTriageDepartment --> SelectPrRepairDepartment
     SelectPrRepairDepartment --> RunPrRepairDepartment
     SelectPrRepairDepartment --> RecordPass
     RecordPass --> FactoryPassTerminal

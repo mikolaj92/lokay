@@ -52,3 +52,5 @@ def test_summarize_empty_skip() -> None:
     assert out["department"] == "pr_triage"
     assert out["route"] == "none"
     assert out["repair_started"] is False
+    assert out["result"]["verdict"] == "none"
+    assert out["result"]["repair_started"] is False

@@ -91,6 +91,12 @@ def test_five_departments_are_parent_children() -> None:
     assert ids.index(SELECT["pr_triage"]) < ids.index(SELECT["pr_repair"])
     assert "prs" not in ids
     assert "issues" not in ids
+    by_id = {str(node["id"]): node for node in _factory_path()["effectors"]}
+    assert by_id["select_pr_repair_department"]["conduction"] == [
+        "factory_begin",
+        "select_pr_triage_department",
+        "run_pr_triage_department",
+    ]
 
 
 def test_issue_triage_without_executor() -> None:
