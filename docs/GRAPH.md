@@ -321,9 +321,11 @@ compare-to-plan instruction.
 
 `localize` (`lokay-localize`) remains one job: a non-empty edit path list
 written to `.lokay/localize.json` before `run_agent`. If that file already
-has paths **for this issue**, skip the localize executor and start `run_agent`.
-A leftover inherited from main (other issue in `worktree`, missing issue id)
-is not a sieve — discard and run deterministic + semantic localize. Live mode asks the
+has paths **for this issue** and every path exists in the worktree, skip the
+localize executor and start `run_agent`. A leftover inherited from main
+(other issue in `worktree`, missing issue id) is not a sieve. A same-issue
+path list with a missing file or non-path token is also not a sieve —
+discard and run deterministic + semantic localize. Live mode asks the
 configured executor for a structured path proposal; Python still validates
 against the tree, keeps extra/seed paths, and fails closed on an empty list.
 Invalid JSON / timeout falls back to the deterministic scorer. Not an

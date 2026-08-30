@@ -980,7 +980,8 @@ def load_existing_localize_paths(
     """Non-empty paths already written for this issue, if any.
 
     A file inherited from main (other issue in ``worktree``, missing issue id,
-    or leftover from another ticket) is not a sieve.
+    or leftover from another ticket) is not a sieve. A same-issue list with a
+    missing file or non-path token is also not a sieve.
     """
     if worktree is None:
         return []
@@ -1005,7 +1006,15 @@ def load_existing_localize_paths(
         rel = _norm_rel(str(item or ""))
         if rel and ".." not in rel.split("/"):
             out.append(rel)
-    return list(dict.fromkeys(out))
+    unique = list(dict.fromkeys(out))
+    if not unique:
+        return []
+    root = Path(worktree)
+    # Same-issue evidence is a sieve only when every path exists.
+    # A version token or vanished file is leftover, not a cage.
+    if any(not (root / rel).exists() for rel in unique):
+        return []
+    return unique
 
 
 def localize_belongs_to_issue(
