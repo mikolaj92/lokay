@@ -94,6 +94,7 @@ retry_policy = "none"
 id = "factory_begin"
 capability = "lokay_atom"
 conduction = ["factory_begin_host_gate"]
+when = { upstream = "factory_begin_host_gate", path = "route", equals = "begin" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "factory_begin" }
 retry_policy = "none"
@@ -101,7 +102,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "reap_stale_worktrees"
 capability = "lokay_atom"
-conduction = ["factory_begin"]
+conduction = ["factory_begin_host_gate", "factory_begin"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "reap_stale_worktrees" }
 retry_policy = "none"
@@ -109,7 +110,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_self_repair_department"
 capability = "lokay_atom"
-conduction = ["factory_begin"]
+conduction = ["factory_begin_host_gate", "factory_begin"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_self_repair_department" }
 retry_policy = "none"
@@ -126,7 +127,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_issue_triage_department"
 capability = "lokay_atom"
-conduction = ["factory_begin", "select_self_repair_department"]
+conduction = ["factory_begin_host_gate", "factory_begin", "select_self_repair_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_issue_triage_department" }
 retry_policy = "none"
@@ -143,7 +144,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_executor_department"
 capability = "lokay_atom"
-conduction = ["factory_begin", "select_issue_triage_department"]
+conduction = ["factory_begin_host_gate", "factory_begin", "select_issue_triage_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_executor_department" }
 retry_policy = "none"
@@ -160,7 +161,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_pr_triage_department"
 capability = "lokay_atom"
-conduction = ["factory_begin", "select_executor_department"]
+conduction = ["factory_begin_host_gate", "factory_begin", "select_executor_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_pr_triage_department" }
 retry_policy = "none"
@@ -177,7 +178,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_pr_repair_department"
 capability = "lokay_atom"
-conduction = ["factory_begin", "select_pr_triage_department", "run_pr_triage_department"]
+conduction = ["factory_begin_host_gate", "factory_begin", "select_pr_triage_department", "run_pr_triage_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_pr_repair_department" }
 retry_policy = "none"
@@ -194,7 +195,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "record_pass"
 capability = "lokay_atom"
-conduction = ["factory_begin", "select_self_repair_department", "select_issue_triage_department", "select_executor_department", "select_pr_triage_department", "select_pr_repair_department"]
+conduction = ["factory_begin_host_gate", "factory_begin", "select_self_repair_department", "select_issue_triage_department", "select_executor_department", "select_pr_triage_department", "select_pr_repair_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "record_pass" }
 retry_policy = "none"

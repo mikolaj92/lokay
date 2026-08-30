@@ -205,7 +205,7 @@ restarts immediately; idle 0 waits the 60s StartInterval. Plist
 `StartInterval=60` and crash KeepAlive are host `--install` setup
 (`plutil`, not a per-tick rewrite). Missing plists stay missing. The
 LaunchAgent shell leases `mill.lock` and execs `lokay-daemon`; idle TTL
-and host-ff live in `factory_pass` (`host_ff` then `factory_begin_host_gate`, then begin). Same serial mill (K=1), same lock —
+and host-ff live in `factory_pass` (`host_ff` then `factory_begin_host_gate` begin|restart, then begin only on begin). Same serial mill (K=1), same lock —
 not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 

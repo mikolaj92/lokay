@@ -44,6 +44,7 @@ def _factory_path() -> dict:
 def simulate_departments(**routes: str) -> dict[str, str]:
     """Apply authored conduction + when. Default: sieves and executor on, repair off."""
     default = {
+        "factory_begin_host_gate": "begin",
         "select_self_repair_department": "skip",
         "select_issue_triage_department": "run",
         "select_executor_department": "run",
@@ -93,6 +94,7 @@ def test_five_departments_are_parent_children() -> None:
     assert "issues" not in ids
     by_id = {str(node["id"]): node for node in _factory_path()["effectors"]}
     assert by_id["select_pr_repair_department"]["conduction"] == [
+        "factory_begin_host_gate",
         "factory_begin",
         "select_pr_triage_department",
         "run_pr_triage_department",
@@ -134,7 +136,8 @@ def test_disabling_executor_does_not_disable_either_sieve() -> None:
 def test_issue_triage_without_executor_native(tmp_path) -> None:
     _require_fala_host()
     body = base_effector(
-        """if a=='factory_begin':v.update(pass_dir='/pass')
+        """if a=='factory_begin_host_gate':v.update(route='begin')
+if a=='factory_begin':v.update(pass_dir='/pass')
 if a=='select_self_repair_department':v.update(route='skip',reason='last_pass_moved')
 if a=='select_issue_triage_department':v.update(route='run')
 if a=='run_issue_triage_department':v.update(ok=True,department='issue_triage')

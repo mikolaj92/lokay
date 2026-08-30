@@ -128,11 +128,16 @@ def handle_factory(
         return terminal(up.get("record_pass") or {})
 
     if atom == "host_ff":
+        from lokay.git_host_ff import snapshot_process_head
+
         argv = [*cfg, *live]
         checkout = inputs.get("checkout") or os.environ.get("LOKAY_ROOT")
         if checkout:
             argv.extend(["--checkout", str(checkout)])
-        return _run_atom_main(host_ff.main, argv)
+        out = _run_atom_main(host_ff.main, argv)
+        if checkout and out.get("ok"):
+            snapshot_process_head(Path(str(checkout)), refresh=True)
+        return out
 
     if atom == "factory_begin_host_gate":
         from lokay.proc.gate_factory_begin_host import gate
@@ -328,7 +333,8 @@ def handle_factory(
 
     if atom == "record_pass":
         begin = up.get("factory_begin") or {}
-        return record_pass.record(
+        gate = up.get("factory_begin_host_gate") or {}
+        out = record_pass.record(
             pass_dir=str(begin.get("pass_dir") or ""),
             begin=begin,
             prs=up.get("run_pr_triage_department")
@@ -339,6 +345,23 @@ def handle_factory(
             or {},
             leftover=up.get("leftover_catalog") or up.get("leftover") or {},
         )
+        if str(gate.get("route") or "") == "restart":
+            result = dict(out.get("result") or {})
+            result.update(
+                health="host_updated",
+                reason="host_updated",
+                restart_required=True,
+                idle=False,
+            )
+            out = {
+                **out,
+                "health": "host_updated",
+                "reason": "host_updated",
+                "restart_required": True,
+                "result": result,
+                "tick": {**(out.get("tick") or {}), **result},
+            }
+        return out
 
     if atom == "compact_state":
         return _run_atom_main(compact_state.main, [*cfg])

@@ -37,7 +37,8 @@ LEAVES = (
 def _body(receipt_mark: str) -> str:
     kids = " ".join(repr(name) for name in CHILDREN)
     return base_effector(
-        f"""if a=='factory_begin':v.update(pass_dir='/pass')
+        f"""if a=='factory_begin_host_gate':v.update(route='begin')
+if a=='factory_begin':v.update(pass_dir='/pass')
 if a=='select_self_repair_department':v.update(route='skip',reason='last_pass_moved')
 if a=='select_issue_triage_department':v.update(route='run')
 if a=='select_executor_department':v.update(route='run')
@@ -85,7 +86,8 @@ def test_failed_cleanup_still_picks_the_next_issue(tmp_path):
     receipt = str(tmp_path / "receipt")
     kids = " ".join(repr(name) for name in CHILDREN if name != "reap_stale_worktrees")
     body = base_effector(
-        f"""if a=='factory_begin':v.update(pass_dir='/pass')
+        f"""if a=='factory_begin_host_gate':v.update(route='begin')
+if a=='factory_begin':v.update(pass_dir='/pass')
 if a=='reap_stale_worktrees':raise RuntimeError('cleanup process.failed')
 if a=='select_self_repair_department':v.update(route='skip',reason='last_pass_moved')
 if a=='select_issue_triage_department':v.update(route='run')

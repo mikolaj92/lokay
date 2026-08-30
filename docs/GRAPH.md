@@ -80,8 +80,9 @@ atoms via `run_path`.
 
 ```text
 host_ff
-  → factory_begin_host_gate
-    → factory_begin
+  → factory_begin_host_gate          begin → factory_begin / departments
+                                     restart → record_pass (host_updated, no product)
+    → factory_begin                  (when gate route=begin)
   → select_self_repair_department → run_self_repair_department   (when last pass did not move)
   → select_issue_triage_department → run_issue_triage_department
   → select_executor_department → run_executor_department
@@ -95,8 +96,8 @@ host_ff
 | Atom | One job |
 | --- | --- |
 | `host_ff` | Mill host checkout: fetch + ff-only onto origin/main. Clean product branch returns to main. Never `reset --hard`. Fail-closed when dirty or diverged. |
-| `factory_begin_host_gate` | Refuse the product pass when host-ff moved HEAD under this process. `health=host_updated` means restart, then begin. |
-| `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. Always writes `pass_dir` when the host probe routes `up`. Conducts from `factory_begin_host_gate`. No `when` / idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
+| `factory_begin_host_gate` | Succeeds with `route=begin` or `route=restart`. Restart means host-ff moved HEAD under this process. Never `ok=false`: a failed gate still unblocks product children in Fala. |
+| `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. `when` gate `route=begin`. Always writes `pass_dir` when the host probe routes `up`. No idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only when last receipt did not publish a new PR or merge. Leftover skip is not a stall. Body is child Fala `self_repair_department` (incident + existing `self_repair`). Off never touches lokay main. |
 | `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, intake. Zero `ai/fix`. Foreign assignee still skipped. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
