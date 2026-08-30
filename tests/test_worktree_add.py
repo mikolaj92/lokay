@@ -46,6 +46,7 @@ state:
 
 def test_lokay_repo_still_creates_worktree(config_path, tmp_path, monkeypatch, capsys):
     expected = tmp_path / "worktrees" / "lokay"
+    (tmp_path / "lokay").mkdir()
     calls = []
 
     def ensure(*args, **kwargs):
@@ -77,4 +78,24 @@ def test_lokay_repo_still_creates_worktree(config_path, tmp_path, monkeypatch, c
     assert calls[0][0][2].name == "mikolaj92/lokay"
     assert calls[0][1]["live"] is True
     assert payload["worktree"] == str(expected)
+    assert payload["route"] == "ready"
     assert "skipped" not in payload
+
+
+def test_missing_clone_is_classified_ready_route(config_path, capsys):
+    code = worktree_add.main(
+        [
+            "--config",
+            str(config_path),
+            "--repo",
+            "mikolaj92/Temida",
+            "--branch",
+            "ai/fix/5180-x",
+            "--live",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["ok"] is True
+    assert payload["route"] == "missing"
+    assert payload["reason"] == "clone_path_missing"

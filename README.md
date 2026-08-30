@@ -1130,7 +1130,8 @@ stateDiagram-v2
     RecheckDelivery --> NoEffect: wznowiona gałąź ma kod celu
     RecheckDelivery --> PrepareBranch: brak dostawy
     PrepareBranch --> PrepareWorktree
-    PrepareWorktree --> PlanIssue
+    PrepareWorktree --> PlanIssue: ready
+    PrepareWorktree --> DeliveryResult: missing
     PlanIssue --> Localize
     Localize --> CodingExecution
     CodingExecution --> HumanTerminal: human

@@ -690,6 +690,14 @@ def test_issue_to_pr_plan_issue_before_run_agent():
         by_id["coding_execution"]["conduction"]
     )
     assert "coding_execution" not in by_id["plan_issue"]["conduction"]
+    ready = {
+        "upstream": "worktree_add",
+        "path": "route",
+        "equals": "ready",
+    }
+    assert by_id["plan_issue"]["when"] == ready
+    assert by_id["localize"]["when"] == ready
+    assert by_id["coding_execution"]["when"] == ready
 
 
 def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():

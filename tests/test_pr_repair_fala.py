@@ -5,7 +5,8 @@ from test_issue_triage_fala import run_graph, base_effector
 
 
 def defaults():
-    return """if a=='select_evidence_repair':v['route']='not_applicable'
+    return """if a=='worktree_add':v.update(route='ready')
+if a=='select_evidence_repair':v['route']='not_applicable'
 if a=='select_repair_test_recheck':v['route']='not_applicable'"""
 
 

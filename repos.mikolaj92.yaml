@@ -3,99 +3,99 @@
 # Missing local clone = need to clone (uv run lokay-repos-clone-missing --live), not "disabled".
 
 owner: mikolaj92
-default_clone_root: /Users/mikomac/Developer/OSS
+default_clone_root: ~/Developer/OSS
 
 repos:
   - name: mikolaj92/lokay
-    clone_path: /Users/mikomac/Developer/OSS/lokay
+    clone_path: ~/Developer/OSS/lokay
     priority: 100
   - name: mikolaj92/Temida
-    clone_path: /Users/mikomac/Developer/OSS/Temida
+    clone_path: ~/Developer/OSS/Temida
     priority: 90
   - name: mikolaj92/msds-portal
-    clone_path: /Users/mikomac/Developer/msds-portal
+    clone_path: ~/Developer/msds-portal
     priority: 90
   - name: mikolaj92/Fala
-    clone_path: /Users/mikomac/Developer/OSS/Fala
+    clone_path: ~/Developer/OSS/Fala
     priority: 85
   - name: mikolaj92/reviewkit
-    clone_path: /Users/mikomac/Developer/OSS/reviewkit
+    clone_path: ~/Developer/OSS/reviewkit
     priority: 80
   - name: mikolaj92/heimdall
-    clone_path: /Users/mikomac/Developer/OSS/heimdall
+    clone_path: ~/Developer/OSS/heimdall
     priority: 80
   - name: mikolaj92/Docxtor
-    clone_path: /Users/mikomac/Developer/OSS/Docxtor
+    clone_path: ~/Developer/OSS/Docxtor
     priority: 80
   - name: mikolaj92/Posejdon
-    clone_path: /Users/mikomac/Developer/OSS/Posejdon
+    clone_path: ~/Developer/OSS/Posejdon
     priority: 80
   - name: mikolaj92/PlnFlr
-    clone_path: /Users/mikomac/Developer/OSS/PlnFlr
+    clone_path: ~/Developer/OSS/PlnFlr
     priority: 78
   - name: mikolaj92/anonimizator3000
-    clone_path: /Users/mikomac/Developer/OSS/Anonimizator3000
+    clone_path: ~/Developer/OSS/Anonimizator3000
     priority: 75
   - name: mikolaj92/emitype
-    clone_path: /Users/mikomac/Developer/OSS/emitype
+    clone_path: ~/Developer/OSS/emitype
     priority: 75
   - name: mikolaj92/wolnyrolnik
-    clone_path: /Users/mikomac/Developer/OSS/wolnyrolnik
+    clone_path: ~/Developer/OSS/wolnyrolnik
     priority: 70
   - name: mikolaj92/rnkstr
-    clone_path: /Users/mikomac/Developer/OSS/rnkstr
+    clone_path: ~/Developer/OSS/rnkstr
     priority: 70
   - name: mikolaj92/app-factory
-    clone_path: /Users/mikomac/Developer/OSS/app-factory
+    clone_path: ~/Developer/OSS/app-factory
     priority: 65
   - name: mikolaj92/basecoat-factory
-    clone_path: /Users/mikomac/Developer/OSS/basecoat-factory
+    clone_path: ~/Developer/OSS/basecoat-factory
     priority: 60
   - name: mikolaj92/my-usermanager
-    clone_path: /Users/mikomac/Developer/OSS/my-usermanager
+    clone_path: ~/Developer/OSS/my-usermanager
     priority: 55
   - name: mikolaj92/my-auth
-    clone_path: /Users/mikomac/Developer/OSS/my-auth
+    clone_path: ~/Developer/OSS/my-auth
     priority: 55
   - name: mikolaj92/datasource-kit
-    clone_path: /Users/mikomac/Developer/OSS/datasource-kit
+    clone_path: ~/Developer/OSS/datasource-kit
     priority: 50
   - name: mikolaj92/splot
-    clone_path: /Users/mikomac/Developer/OSS/Splot
+    clone_path: ~/Developer/OSS/Splot
     priority: 50
   - name: mikolaj92/takt
-    clone_path: /Users/mikomac/Developer/OSS/takt
+    clone_path: ~/Developer/OSS/takt
     priority: 50
   - name: mikolaj92/swift-openapi-dynamic
-    clone_path: /Users/mikomac/Developer/OSS/swift-openapi-dynamic
+    clone_path: ~/Developer/OSS/swift-openapi-dynamic
     priority: 45
   - name: mikolaj92/OpenAPITransportKit
-    clone_path: /Users/mikomac/Developer/OSS/swift-openapi-transport-kit
+    clone_path: ~/Developer/OSS/swift-openapi-transport-kit
     priority: 45
   - name: mikolaj92/sqlite.fire
-    clone_path: /Users/mikomac/Developer/OSS/sqlite.fire
+    clone_path: ~/Developer/OSS/sqlite.fire
     priority: 40
   - name: mikolaj92/ShowMeThePlayer
-    clone_path: /Users/mikomac/Developer/OSS/ShowMeThePlayer
+    clone_path: ~/Developer/OSS/ShowMeThePlayer
     priority: 40
   - name: mikolaj92/PunkRecords
-    clone_path: /Users/mikomac/Developer/OSS/PunkRecords
+    clone_path: ~/Developer/OSS/PunkRecords
     priority: 40
   - name: mikolaj92/punk-records
-    clone_path: /Users/mikomac/Developer/OSS/punk-records
+    clone_path: ~/Developer/OSS/punk-records
     priority: 35
   - name: mikolaj92/influenzer
-    clone_path: /Users/mikomac/Developer/OSS/influenzer
+    clone_path: ~/Developer/OSS/influenzer
     priority: 25
   - name: mikolaj92/VibeTLA
-    clone_path: /Users/mikomac/Developer/OSS/VibeTLA
+    clone_path: ~/Developer/OSS/VibeTLA
     priority: 20
   - name: mikolaj92/VibeFront
-    clone_path: /Users/mikomac/Developer/OSS/VibeFront
+    clone_path: ~/Developer/OSS/VibeFront
     priority: 20
   - name: mikolaj92/hermetic-alchemy
-    clone_path: /Users/mikomac/Developer/OSS/hermetic-alchemy
+    clone_path: ~/Developer/OSS/hermetic-alchemy
     priority: 20
   - name: mikolaj92/dotfiles
-    clone_path: /Users/mikomac/Developer/dotfiles
+    clone_path: ~/Developer/dotfiles
     priority: 15
