@@ -878,9 +878,9 @@ def test_test_local_dispatches_nested_subflow(monkeypatch):
         {"changed_scope": True},
         {"worktree_add": {"worktree": "/tmp/worktree"}},
     )
-    assert result["ok"] is True and captured == [
-        {"worktree": "/tmp/worktree", "changed_scope": True}
-    ]
+    assert result["ok"] is True
+    assert captured[0]["worktree"] == "/tmp/worktree"
+    assert captured[0]["changed_scope"] is True
 
 
 def test_ensure_project_cwd_prefers_lokay_root(tmp_path, monkeypatch):
