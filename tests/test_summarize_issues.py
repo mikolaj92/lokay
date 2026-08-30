@@ -126,3 +126,28 @@ def test_summarize_nest_writes_aggregated_receipt(tmp_path):
     assert out["result"]["rows"] == 2
     assert out["result"]["launched"] == "started"
     assert _receipt(tmp_path)["rows"] == 2
+
+
+def test_envelope_prefers_launch_leftover():
+    out = envelope(
+        {"route": "issue", "repo": "mikolaj92/Temida", "issue": 5191, "leftover": 4},
+        {
+            "route": "do",
+            "repo": "mikolaj92/Temida",
+            "issue": 5191,
+            "leftover": 4,
+            "leftover_issues": [
+                {"repo": "mikolaj92/Temida", "issue": 5191},
+                {"repo": "mikolaj92/Fala", "issue": 186},
+            ],
+        },
+        {
+            "route": "failed",
+            "leftover": 1,
+            "leftover_issues": [{"repo": "mikolaj92/Fala", "issue": 186}],
+        },
+    )
+    assert out["result"]["launched"] == "failed"
+    assert out["result"]["leftover"] == 1
+    assert [row["issue"] for row in out["result"]["leftover_issues"]] == [186]
+

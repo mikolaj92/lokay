@@ -267,7 +267,13 @@ select_next_issue
 `select_next_issue` only answers whether a takeable row remains. Empty
 assignees, or only the configured mill, may be taken. Anyone else on the
 assignee list is foreign and is skipped. `assign_issue` does not add the
-mill beside them. Off: the launch when is never satisfied. Zero new `ai/fix`.
+mill beside them. A live `issue_to_pr` receipt occupies its repo: that repo
+is not takeable. Leftover walks past it, same as a foreign assignee. A
+failed launch because the receipt is still live consumes that repo from
+leftover so the nest cannot spin the same ticket until the 180s pass
+ceiling. Off: the launch when is never satisfied. Zero new `ai/fix`.
+The parent still runs PR triage after executor; occupancy is queue
+hygiene, not a scheduler and not a reason to skip merge.
 
 ### `issue_to_pr`
 

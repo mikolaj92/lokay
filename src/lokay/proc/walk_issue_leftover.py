@@ -86,11 +86,27 @@ def ownable(rows: list[dict] | None, mill: str) -> list[dict]:
     return [row for row in list(rows or []) if takeable(row, mill)]
 
 
-def queue(listed_rows: list | None, last: dict | None, *, mill: str = "") -> list[dict]:
+def unoccupied(rows: list[dict] | None, occupied=None) -> list[dict]:
+    """Drop rows whose repo already has a live issue_to_pr receipt."""
+    blocked = {str(name) for name in list(occupied or []) if name}
+    listed = [dict(row) for row in list(rows or []) if isinstance(row, dict)]
+    if not blocked:
+        return listed
+    return [row for row in listed if str(row.get("repo") or "") not in blocked]
+
+
+def queue(
+    listed_rows: list | None,
+    last: dict | None,
+    *,
+    mill: str = "",
+    occupied=None,
+) -> list[dict]:
     """Leftover listed issues stay the queue. Oil yields to live product.
 
     Foreign-owned rows (anyone besides the mill) are not the consumption
     queue. They stay on the listed page; selection walks past them.
+    A live receipt occupies its repo the same way: leftover walks past it.
     """
     last = last if isinstance(last, dict) else {}
     mill_login = mill or mill_of(last)
@@ -103,5 +119,8 @@ def queue(listed_rows: list | None, last: dict | None, *, mill: str = "") -> lis
         kept = [live[key] for row in leftover if (key := identity(row)) in live]
         product = product_first(kept)
         candidates = product if product else (product_first(live_rows) or kept)
-        return ownable(candidates, mill_login)
-    return ownable(product_first(after(listed_rows, last) or live_rows), mill_login)
+        return unoccupied(ownable(candidates, mill_login), occupied)
+    return unoccupied(
+        ownable(product_first(after(listed_rows, last) or live_rows), mill_login),
+        occupied,
+    )

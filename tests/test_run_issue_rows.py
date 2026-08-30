@@ -169,3 +169,57 @@ def test_cap_does_not_start_a_second_tick(monkeypatch):
     assert out["result"]["rows"] == 1
     assert out["route"] == "cap"
     assert out["result"]["leftover"] == 1
+
+
+def test_occupied_repo_does_not_spin_the_nest(monkeypatch):
+    calls = []
+
+    def fake_path(*, path_id, extra_inputs, **_k):
+        assert path_id == "executor_row"
+        last = extra_inputs.get("last") or {}
+        calls.append(dict(last))
+        leftover = list(last.get("leftover_issues") or [])
+        if leftover and leftover[0].get("repo") == "mikolaj92/Temida":
+            raise AssertionError("occupied Temida must not remain the nest head")
+        if not last:
+            return {
+                "ok": True,
+                "result": {
+                    "route": "failed",
+                    "repo": "mikolaj92/Temida",
+                    "issue": 5191,
+                    "launched": "failed",
+                    "leftover": 1,
+                    "leftover_issues": [{"repo": "mikolaj92/Fala", "issue": 186}],
+                },
+            }
+        return {
+            "ok": True,
+            "result": {
+                "route": "do",
+                "repo": "mikolaj92/Fala",
+                "issue": 186,
+                "launched": "started",
+                "leftover": 0,
+                "leftover_issues": [],
+            },
+        }
+
+    monkeypatch.setattr("lokay.proc.run_executor_rows.run_path", fake_path)
+    out = run_executor_rows.run(
+        listed={
+            "issues": [
+                {"repo": "mikolaj92/Temida", "issue": 5191},
+                {"repo": "mikolaj92/Fala", "issue": 186},
+            ]
+        },
+        config_path=None,
+        live=True,
+        pass_dir="/pass",
+        budget=1,
+    )
+    assert len(calls) == 2
+    assert out["result"]["spent"] == 1
+    assert out["result"]["launched"] == "started"
+    assert out["route"] == "idle"
+

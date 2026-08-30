@@ -1069,7 +1069,10 @@ stateDiagram-v2
 ```
 
 Jedno pytanie, jeden `issue_to_pr`. Ready leftover staje się `do` bez triage
-w tym wierszu. Wyłączony dział nie spełnia `when` launch.
+w tym wierszu. Żywy receipt zajmuje całe repo: nie jest takeable, leftover
+idzie dalej. Nieudany launch nie nadpisuje `route` kandydata i zjada to
+repo z leftover, żeby nest nie kręcił 180s. Wyłączony dział nie spełnia
+`when` launch. Po executorze rodzic nadal robi PR triage.
 
 ### Triage issue — `issue_triage`
 
