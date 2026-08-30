@@ -80,7 +80,9 @@ wymieniają te same ścieżki.
 stateDiagram-v2
     [*] --> Heartbeat
     Heartbeat --> FactoryPass
-    FactoryPass --> FactoryBegin
+    FactoryPass --> HostFF
+    HostFF --> FactoryBeginHostGate
+    FactoryBeginHostGate --> FactoryBegin
     FactoryBegin --> ReapStaleWorktrees
     FactoryBegin --> SelectSelfRepairDepartment
     SelectSelfRepairDepartment --> RunSelfRepairDepartment

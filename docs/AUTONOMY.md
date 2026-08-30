@@ -14,7 +14,7 @@ machines are worthless. Bounded misses must free the slot.
 
 Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
 here is additive (tests / fixtures / docs / config profile). Fleet pass order
-lives in parent Fala ``factory_pass`` (`host_ff → factory_begin → select →
+lives in parent Fala ``factory_pass`` (`host_ff → factory_begin_host_gate → factory_begin → select →
 queue_conflict → implement → health → receipt`; surveys / closeout / occupancy
 / leftover reaps stay as housecleaning when `select.route == none` and do not
 run in a selected pass). Serial by design (default K=1).
