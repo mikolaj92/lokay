@@ -15,9 +15,13 @@ def select(
 ) -> dict[str, Any]:
     if not enabled:
         return ok(route="skip", reason="pr_repair_disabled")
-    triage = triage_run.get("triage")
+    payload = dict(triage_run or {})
+    nested = payload.get("result")
+    if isinstance(nested, Mapping):
+        payload = {**payload, **dict(nested)}
+    triage = payload.get("triage")
     verdict = triage if isinstance(triage, Mapping) else {}
-    if str(triage_run.get("verdict") or "") == "repair":
+    if str(payload.get("verdict") or "") == "repair":
         verdict = {**verdict, "repairable": True}
     if not verdict.get("repairable"):
         return ok(
@@ -27,7 +31,8 @@ def select(
     return ok(
         route="repair",
         reason=str(verdict.get("reason") or "pr_triage_requested_repair"),
-        repo=str(triage_run.get("repo") or ""),
-        pr=int(triage_run.get("pr") or 0),
-        branch=str(triage_run.get("branch") or ""),
+        repo=str(payload.get("repo") or ""),
+        pr=int(payload.get("pr") or 0),
+        branch=str(payload.get("branch") or ""),
+        review=dict(verdict.get("review") or payload.get("review") or {}),
     )
