@@ -7,7 +7,7 @@ def summarize(picked: dict, triage_run: dict, verdict: dict) -> dict:
     if not triage:
         blob = triage_run.get("triage") if isinstance(triage_run.get("triage"), dict) else {}
         triage = dict(blob)
-    return {
+    receipt = {
         "ok": True,
         "department": "pr_triage",
         "route": chosen.get("route") or triage_run.get("route") or picked.get("route") or "none",
@@ -24,3 +24,4 @@ def summarize(picked: dict, triage_run: dict, verdict: dict) -> dict:
         },
         "repair_started": False,
     }
+    return {**receipt, "result": dict(receipt)}

@@ -177,7 +177,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_pr_repair_department"
 capability = "lokay_atom"
-conduction = ["factory_begin", "select_pr_triage_department"]
+conduction = ["factory_begin", "select_pr_triage_department", "run_pr_triage_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_pr_repair_department" }
 retry_policy = "none"
