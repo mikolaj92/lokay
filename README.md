@@ -654,10 +654,11 @@ stateDiagram-v2
 
 Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, mutation policy), jeden
 atom katalogu, który w procesie listuje CLOSED ready labels, deduplikuje i
-parkowuje, i efekt stamp. Nie ma 30-slotowego rozwinięcia Fali. Overflow
-katalogu lub kandydatów kończy się fail-closed. Błąd sondy nie udaje pustego
-katalogu i nie zapisuje empty stamp. Nie ma agenta: stan CLOSED, etykiety i
-mutation policy są faktami mechanicznymi.
+parkowuje, i efekt stamp. Nie ma 30-slotowego rozwinięcia Fali. Mill repo
+count never fail-closes prepare. Candidate overflow parks the first authored
+handful and leftover-skips the rest; it does not fail the pass. Błąd sondy
+nie udaje pustego katalogu i nie zapisuje empty stamp. Nie ma agenta: stan
+CLOSED, etykiety i mutation policy są faktami mechanicznymi.
 
 ### Higiena gotowych issue — `ready_hygiene`
 

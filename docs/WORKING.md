@@ -316,7 +316,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   file cannot be cut.
   After each factory pass, leftover closeout parks leftover `work:ready` /
   `ai:ready` on GitHub-CLOSED mill issues. That is not a second hunt through
-  every mill PR; GitHub CLOSED is enough. After an empty leftover, skip
+  every mill PR; GitHub CLOSED is enough. Mill repo count never fail-closes
+  prepare. Candidate overflow parks the first authored handful and leftover-
+  skips the rest; it does not fail the pass. After an empty leftover, skip
   those GitHub lists for 300s so idle ticks do not pay them twice a minute.
   Fresh leftover skip does not require healthy. Fresh leftover-closeout
   skip is not applied. Leftover-closeout skip reports planned=not live.
