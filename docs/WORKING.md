@@ -304,9 +304,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   still reruns `_check`.
   Fala inherit_env is a whitelist: every atom, including nested `recovery_mill`,
   must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the mill.
-  Every live Fala sqlite under `~/.lokay/fala/` (including `state.sqlite`)
-  rotates when oversized (default 64 MiB) so idle ticks do not reopen a
-  multi-GB journal. The journal is a pass trace, not world history.
+  Every live Fala sqlite under `~/.lokay/fala/<path>/` rotates when oversized
+  (default 64 MiB) so idle ticks do not reopen a multi-GB journal. Nested
+  children never share the tree-root sqlite or overwrite a sibling sliced
+  package. The journal is a pass trace, not world history.
   Product recovery stays on `state.jsonl`. Over-cap is fail-closed if the
   file cannot be cut.
   After each factory pass, leftover closeout parks leftover `work:ready` /

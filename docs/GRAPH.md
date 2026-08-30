@@ -95,7 +95,7 @@ factory_begin
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
-| mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/` (including the child journal at that root) rotates at a 64 MiB ceiling; recovery stays on `state.jsonl`. Over-cap is fail-closed if the file cannot be cut |
+| mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` rotates at a 64 MiB ceiling; recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling sliced package. Over-cap is fail-closed if the file cannot be cut |
 | leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. No 30-slot unroll. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
@@ -131,8 +131,11 @@ The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process
 mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
 `coding_execution` children use per-issue journals under `i2pr/`,
-`i2pr-delivery/`, and `coding-execution/`. Other child paths:
-`~/.lokay/fala/state.sqlite`. Python `compose/*` may validate CLI contracts and
+`i2pr-delivery/`, and `coding-execution/`. Every other child path uses its own
+journal under `~/.lokay/fala/<path_id>/`. Native Fala materializes one sliced
+package next to that journal. Nested children must not overwrite
+`~/.lokay/fala/lokay.fala-package.toml` or share `~/.lokay/fala/state.sqlite`.
+Python `compose/*` may validate CLI contracts and
 call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
@@ -469,9 +472,10 @@ uv run lokay-run-path --config config.yaml --path issue_to_pr \
   --repo mikolaj92/lokay --issue 1 --live
 ```
 
-Journal: `~/.lokay/fala/state.sqlite`  
-Materialized package: `~/.lokay/fala/lokay.fala-package.toml`  
+Journal: `~/.lokay/fala/<path_id>/state.sqlite` (issue children under `i2pr/`, `i2pr-delivery/`, `issue-split/`, `coding-execution/`)  
+Materialized package: `~/.lokay/fala/<path_id>/lokay.fala-package.toml`  
 (`uv run --project <checkout>` filled in for every organ — never bare `python3`)
+One `run_path` never rewrites the shared `~/.lokay/fala/lokay.fala-package.toml`.
 
 ## Bridge
 

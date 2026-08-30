@@ -236,3 +236,86 @@ def test_issue_journal_dir_isolates_coding_execution(tmp_path):
     assert str(shared) not in {str(first), str(second)}
     assert issue_journal_dir("localize_execution", "Temida/Temida", 4999, home=tmp_path) is None
 
+
+def test_path_journal_dir_isolates_sliced_children(tmp_path):
+    from lokay.graph_run import path_journal_dir, _slice_package_to_path, _materialize_package
+
+    shared = tmp_path / ".lokay" / "fala"
+    status = path_journal_dir("status_snapshot", home=tmp_path)
+    executor = path_journal_dir("executor_row", home=tmp_path)
+    assert status == shared / "status_snapshot"
+    assert executor == shared / "executor_row"
+    assert status != executor
+    src = tmp_path / "pkg.toml"
+    src.write_text(
+        'version = "2"\n'
+        "[[correlation_paths]]\n"
+        'id = "status_snapshot"\n'
+        "[[correlation_paths]]\n"
+        'id = "executor_row"\n',
+        encoding="utf-8",
+    )
+    project = tmp_path / "checkout"
+    project.mkdir()
+    _materialize_package(src, status / "lokay.fala-package.toml", project=project, path_id="status_snapshot")
+    _materialize_package(src, executor / "lokay.fala-package.toml", project=project, path_id="executor_row")
+    status_pkg = (status / "lokay.fala-package.toml").read_text(encoding="utf-8")
+    executor_pkg = (executor / "lokay.fala-package.toml").read_text(encoding="utf-8")
+    assert 'id = "status_snapshot"' in status_pkg
+    assert 'id = "executor_row"' not in status_pkg
+    assert 'id = "executor_row"' in executor_pkg
+    assert 'id = "status_snapshot"' not in executor_pkg
+    assert not (shared / "lokay.fala-package.toml").exists()
+    assert path_journal_dir(
+        "coding_execution", "Temida/Temida", 4999, home=tmp_path
+    ).parent.name == "coding-execution"
+    sliced = _slice_package_to_path(src.read_text(encoding="utf-8"), "status_snapshot")
+    assert sliced.count("[[correlation_paths]]") == 1
+
+
+def test_shared_fala_root_db_path_is_remapped(tmp_path):
+    from lokay import graph_run
+
+    shared = tmp_path / ".lokay" / "fala"
+    work = graph_run.path_journal_dir("status_snapshot", home=tmp_path)
+    assert work != shared
+    assert graph_run._is_shared_fala_root(shared, home=tmp_path)
+    assert not graph_run._is_shared_fala_root(work, home=tmp_path)
+
+
+def test_run_path_does_not_clobber_shared_sliced_package(tmp_path, monkeypatch):
+    from lokay import graph_run
+
+    monkeypatch.setattr(graph_run.Path, "home", classmethod(lambda cls: tmp_path))
+    shared = tmp_path / ".lokay" / "fala"
+    shared.mkdir(parents=True)
+    marker = 'id = "full-catalog"\n'
+    (shared / "lokay.fala-package.toml").write_text(marker, encoding="utf-8")
+
+    def host(**kwargs):
+        return {
+            "ok": True,
+            "run_status": "completed",
+            "effector_results": {
+                "reduce_status_snapshot": {
+                    "status": "completed",
+                    "output": {"values": {"ok": True, "health": "idle"}},
+                }
+            },
+        }
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    result = graph_run.run_path(
+        path_id="status_snapshot",
+        repo="local/status",
+        package_path=graph_run.find_default_package(),
+        live=False,
+        require_healthy=False,
+    )
+    isolated = shared / "status_snapshot" / "lokay.fala-package.toml"
+    assert result["package"] == str(isolated)
+    assert (shared / "lokay.fala-package.toml").read_text(encoding="utf-8") == marker
+    sliced = isolated.read_text(encoding="utf-8")
+    assert 'id = "status_snapshot"' in sliced
+    assert 'id = "executor_row"' not in sliced
+

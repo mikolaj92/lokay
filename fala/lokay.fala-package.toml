@@ -12,8 +12,9 @@ title = "Run one Lokay atom via Fala organ"
 
 # Parent factory Fala. It owns the top-level pass and invokes child Fala paths
 # through the factory_tick subprocess boundary. Parent and children use separate
-# journals (factory/, i2pr/, i2pr-delivery/, coding-execution/ versus a shared
-# ~/.lokay/fala/state.sqlite). Overlapping issue-to-PR / coding_execution
+# journals (factory/, i2pr/, i2pr-delivery/, coding-execution/, and one directory
+# per other path_id). Nested children never share ~/.lokay/fala/state.sqlite or
+# overwrite a sibling sliced package. Overlapping issue-to-PR / coding_execution
 # children never share one host sqlite.
 [[correlation_paths]]
 id = "daemon_cycle"
