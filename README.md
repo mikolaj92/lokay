@@ -1434,7 +1434,7 @@ kontraktu. Aktualny audyt:
 | `uv run lokay-repos --config config.yaml` | List managed repositories |
 | `uv run lokay status --config config.yaml` | Readiness, health, K, per-repo work, human residuals (`--local` / `--human`) |
 | `~/.lokay/last-pass.json` | Compact pass receipt after each tick (LaunchAgent-friendly) |
-| `~/.lokay/fala/` | Fala pass journals (`state.sqlite` and nested). Hard 64 MiB ceiling; over-cap is rotated, fail-closed if the file cannot be cut |
+| `~/.lokay/fala/<path>/` | Fala pass journals (`state.sqlite` next to one sliced package). Hard 64 MiB ceiling; over-cap is rotated, fail-closed if the file cannot be cut. Nested children never share the tree-root sqlite |
 | `uv run lokay path --describe` | Inspect materialized workflow paths |
 | `uv run lokay mill --config config.yaml --live --max-passes 8` | Run a bounded live mill |
 | `src/lokay/proc/` | Unix atoms |

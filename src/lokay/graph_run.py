@@ -50,7 +50,7 @@ ROOT = _project_root()
 
 _PATH_TABLE = "[[correlation_paths]]"
 
-# Nested issue children must not share ~/.lokay/fala/state.sqlite.
+# Nested issue children must not share a host sqlite.
 _ISSUE_JOURNAL_FAMILIES = {
     "issue_to_pr": "i2pr",
     "issue_to_pr_delivery": "i2pr-delivery",
@@ -66,13 +66,47 @@ def issue_journal_dir(
     *,
     home: Path | None = None,
 ) -> Path | None:
-    """Per-issue journal for a nested issue child. None uses the shared host db."""
+    """Per-issue journal for a nested issue child. None is not a shared host db."""
     family = _ISSUE_JOURNAL_FAMILIES.get(path_id)
     if family is None or issue is None or "/" not in str(repo):
         return None
     owner, name = str(repo).split("/", 1)
     root = home if home is not None else Path.home()
     return root / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
+
+
+def path_journal_dir(
+    path_id: str,
+    repo: str = "",
+    issue: int | None = None,
+    *,
+    home: Path | None = None,
+) -> Path:
+    """One sliced Fala path owns one journal directory.
+
+    Native Fala materializes the sliced package next to ``state.sqlite``.
+    Nested children must not overwrite ``~/.lokay/fala/lokay.fala-package.toml``.
+    """
+    nested = issue_journal_dir(path_id, repo, issue, home=home)
+    if nested is not None:
+        return nested
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(path_id))
+    if not safe:
+        raise ValueError("empty Fala path_id")
+    root = home if home is not None else Path.home()
+    return root / ".lokay" / "fala" / safe
+
+
+def _shared_fala_root(*, home: Path | None = None) -> Path:
+    root = home if home is not None else Path.home()
+    return root / ".lokay" / "fala"
+
+
+def _is_shared_fala_root(work: Path, *, home: Path | None = None) -> bool:
+    try:
+        return work.resolve() == _shared_fala_root(home=home).resolve()
+    except OSError:
+        return False
 
 
 def _slice_package_to_path(text: str, path_id: str) -> str:
@@ -154,10 +188,10 @@ def run_path(
 
     if db_path:
         work = Path(db_path)
+        if _is_shared_fala_root(work):
+            work = path_journal_dir(path_id, repo, issue)
     else:
-        work = issue_journal_dir(path_id, repo, issue) or (
-            Path.home() / ".lokay" / "fala"
-        )
+        work = path_journal_dir(path_id, repo, issue)
     work.mkdir(parents=True, exist_ok=True)
     pkg_runtime = work / "lokay.fala-package.toml"
     project = _project_root()
