@@ -600,9 +600,8 @@ terminal są osobnymi procesami.
 ```mermaid
 stateDiagram-v2
     [*] --> InspectTestDeclaration
-    InspectTestDeclaration --> TestTerminal: brak deklaracji / invalid / brak worktree
-    InspectTestDeclaration --> ReadGreenTestCache: route=test
-    ReadGreenTestCache --> TestTerminal: exact cache hit
+    InspectTestDeclaration --> ReadGreenTestCache
+    ReadGreenTestCache --> TestTerminal: inspect terminal / exact cache hit
     ReadGreenTestCache --> RunDeclaredTests: cache miss
     RunDeclaredTests --> SelectTestOutcome
     SelectTestOutcome --> WriteGreenTestCache: green
