@@ -46,7 +46,13 @@ lists. An empty probe refreshes the stamp and exits idle inside Fala. Probe
 failure or remaining work hosts the rest of `factory_pass`. Missing stamp,
 occupied last-pass, or pytest always hosts. `scripts/lokay-mill-daemon.sh`
 is OS only: lock, exec `lokay-daemon`, logs, bootstrap incident if exec
-fails. It does not idle-skip, host-ff, or rewrite the LaunchAgent plist
+fails. It bounds the lock-owning `lokay-daemon` wait (default 180s) and
+signals only that session so nested Fala cannot hold `mill.lock` past the
+pass ceiling. Detached `issue_to_pr` sessions are not signalled. Inner
+`compose_daemon_cycle` SIGALRM is not the lock release: native
+`host_run_package` swallows it. The caretaker may write a small
+`last-pass.json` with `health=pass_ceiling` when it kills the lock owner.
+It does not idle-skip, host-ff, or rewrite the LaunchAgent plist
 on each tick. Plist `StartInterval=60` and crash KeepAlive
 (`SuccessfulExit=false`) are host `--install` setup. Busy lock is an OS
 lease and may skip exec. Host-ff runs only as the second `factory_pass`

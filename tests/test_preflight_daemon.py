@@ -29,6 +29,10 @@ def test_daemon_is_os_only():
     assert "mill_lock_busy" in script
     assert "lock_busy" in script
     assert "uv run lokay-daemon" in script
+    assert "LOKAY_PASS_CEILING_SECONDS" in script
+    assert "stop_lock_owner" in script
+    assert "start_new_session" in script
+    assert "pass_ceiling" in script
     assert "bootstrap_incident" in script
     assert "write_host_plist" in script
     assert "plutil" in script
@@ -527,3 +531,26 @@ def test_daemon_progress_despite_fala_ok_false_exits_zero(
     )
     assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 0
     assert "progress" in capsys.readouterr().out
+
+
+def test_os_pass_ceiling_kills_lock_owner_not_detached_worker(tmp_path):
+    """Caretaker SIGTERM is the mill.lock release. Nested Fala SIGALRM is not."""
+    import time
+
+    extra = {
+        "LOKAY_PASS_CEILING_SECONDS": "1",
+        "LOKAY_UV_DAEMON_GATE": str(tmp_path / "never-finish"),
+        "LOKAY_UV_DAEMON_MARKER": str(tmp_path / "daemon-started"),
+    }
+    started = time.monotonic()
+    completed = _run_daemon(tmp_path, extra_env=extra)
+    elapsed = time.monotonic() - started
+    assert elapsed < 8, elapsed
+    assert completed.returncode == 0, completed.stderr
+    receipt = json.loads((tmp_path / ".lokay" / "last-pass.json").read_text(encoding="utf-8"))
+    assert receipt["health"] == "pass_ceiling"
+    assert receipt["reason"] == "pass_ceiling"
+    latest = (tmp_path / ".lokay" / "logs" / "mill-latest.log").read_text(encoding="utf-8")
+    assert "pass_ceiling" in latest
+    assert (tmp_path / "daemon-started").exists()
+

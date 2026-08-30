@@ -299,7 +299,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   `lokay-daemon` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
   Host-ff lives only in Fala. The mill-daemon shell is OS only (lock, exec,
-  logs, bootstrap incident). Standalone `lokay-daemon` still probes. Healthy first host
+  logs, bootstrap incident, 180s lock-owner ceiling). Nested Fala SIGALRM
+  does not release `mill.lock`. Detached `issue_to_pr` survives the ceiling.
+  Standalone `lokay-daemon` still probes. Healthy first host
   check is not rerun (`gh api user` / ast.parse every lokay module). Repair
   still reruns `_check`.
   Fala inherit_env is a whitelist: every atom, including nested `recovery_mill`,
