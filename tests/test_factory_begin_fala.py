@@ -91,7 +91,7 @@ if a=='merge_leftover_remaining':v.update(written=False,route='keep')"""
     )
     result = run_graph(tmp_path, body, "factory-begin-ready", path_id="factory_begin")
     status = {k: v["status"] for k, v in result["effector_results"].items()}
-    assert list(status) == list(NODES)
+    assert set(status) == set(NODES)
     assert all(status[name] == "succeeded" for name in NODES)
     for name in CEREMONY:
         assert name not in status

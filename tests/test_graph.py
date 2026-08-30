@@ -11,6 +11,8 @@ from lokay.graph_run import (
 )
 
 FACTORY_CHILDREN = (
+    "host_ff",
+    "factory_begin_host_gate",
     "factory_begin",
     "reap_stale_worktrees",
     "select_self_repair_department",
@@ -109,6 +111,8 @@ def test_describe_parent_factory_graph():
     assert ids == list(FACTORY_CHILDREN)
     conduction = {node["id"]: node["conduction"] for node in path["nodes"]}
     when = {node["id"]: node["when"] for node in path["nodes"]}
+    assert conduction["factory_begin_host_gate"] == ["host_ff"]
+    assert conduction["factory_begin"] == ["factory_begin_host_gate"]
     assert conduction["reap_stale_worktrees"] == ["factory_begin"]
     assert conduction["select_self_repair_department"] == ["factory_begin"]
     assert conduction["select_issue_triage_department"] == [

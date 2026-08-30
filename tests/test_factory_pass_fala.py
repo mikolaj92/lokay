@@ -6,6 +6,8 @@ from test_implementation_selection_fala import run_graph
 from test_issue_triage_fala import base_effector
 
 CHILDREN = (
+    "host_ff",
+    "factory_begin_host_gate",
     "factory_begin",
     "reap_stale_worktrees",
     "select_self_repair_department",
@@ -67,8 +69,10 @@ def test_parent_runs_department_children(tmp_path):
         path_id="factory_pass",
     )
     status = {name: row["status"] for name, row in result["effector_results"].items()}
+    skipped = {"run_self_repair_department", "run_pr_repair_department"}
     for name in CHILDREN:
-        assert status[name] == "succeeded", name
+        expected = "skipped" if name in skipped else "succeeded"
+        assert status[name] == expected, name
     for name in LEAVES:
         assert name not in status, name
     assert tmp_path.joinpath("receipt").is_file()
