@@ -269,6 +269,25 @@ def test_missing_worktree_skips_coding_and_publish():
     assert st["summarize_issue_delivery"] == "succeeded"
 
 
+def test_empty_localize_skips_coding_and_publish():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "worktree_add": {"route": "ready"},
+            "localize": {"route": "empty"},
+            "select_local_test": {"route": "skip"},
+            "finalize_local_tests": {"route": "not_applicable"},
+        },
+    )
+    assert st["worktree_add"] == "succeeded"
+    assert st["plan_issue"] == "succeeded"
+    assert st["localize"] == "succeeded"
+    assert st["coding_execution"] == "skipped"
+    assert st["pr_create"] == "skipped"
+    assert st["summarize_issue_delivery"] == "succeeded"
+
+
 def test_native_valid_implementation_skips_repair_then_publishes(tmp_path):
     if not _fala_host_ready():
         pytest.skip("Fala Mojo process host is not available")

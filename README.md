@@ -1134,7 +1134,8 @@ stateDiagram-v2
     PrepareWorktree --> PlanIssue: ready
     PrepareWorktree --> DeliveryResult: missing
     PlanIssue --> Localize
-    Localize --> CodingExecution
+    Localize --> CodingExecution: ready
+    Localize --> DeliveryResult: empty
     CodingExecution --> HumanTerminal: human
     CodingExecution --> VerifyImplementationDiff: implemented
     CodingExecution --> DeliveryResult: failed
@@ -1172,6 +1173,7 @@ stateDiagram-v2
     CodingAgent --> ValidateCodingResult
     ValidateCodingResult --> SelectCodingResult: wynik poprawny
     ValidateCodingResult --> CodingRetryAgent: invalid JSON + informacja zwrotna
+    ValidateCodingResult --> CodingResult: empty localize
     CodingRetryAgent --> ValidateCodingRetry
     ValidateCodingRetry --> SelectCodingResult: wynik poprawny
     ValidateCodingRetry --> HumanTerminal: nadal invalid JSON

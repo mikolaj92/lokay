@@ -24,7 +24,9 @@ timeout retry resumes it — unless a sibling already closed the issue
 `--session` looks up an existing file and exits
 1 (`No session found matching 'lokay-…'`), which leaves only
 `.lokay/approach.md` / `.lokay/localize.json` — a `plan_only` miss, not a PR.
-`localize` must not cage the agent in `tests/` when the seed only names a
+Empty localize (`route=empty`) skips `coding_execution`. It is not
+`ok=false` and not an invalid-JSON coding retry. Parent localize timeout
+covers the child agents. `localize` must not cage the agent in `tests/` when the seed only names a
 test token (`gate` → `test_e2e_gates.py`): matching `test_foo.py` promotes
 `foo.py`, and a still-empty product set opens first-party imports from those
 tests. A tests-only scope is how #41/#26 go `plan_only`.

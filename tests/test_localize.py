@@ -582,3 +582,21 @@ def test_localize_belongs_to_issue_leftover_vs_this_issue_vs_unreadable(tmp_path
     (tmp_path / LOCALIZE_REL_PATH).write_text("{not-json", encoding="utf-8")
     assert localize_belongs_to_issue(tmp_path, 865) is None
     assert localize_belongs_to_issue(None, 865) is None
+
+
+def test_localize_parent_route_never_ok_false():
+    from lokay.organ.common import localize_parent_route
+
+    ready = localize_parent_route({"ok": True, "paths": ["src/a.py"]})
+    assert ready["ok"] is True and ready["route"] == "ready" and ready["paths"] == ["src/a.py"]
+    empty = localize_parent_route({"ok": False, "error": "localize produced no edit paths"})
+    assert empty["ok"] is True and empty["route"] == "empty"
+    timed = localize_parent_route(
+        {"ok": False, "error": "subprocess adapter timed out", "reason": "adapter_timeout"}
+    )
+    assert timed["ok"] is True and timed["route"] == "empty"
+    assert timed["reason"] == "localize_timeout"
+    nested = localize_parent_route(
+        {"ok": True, "result": {"ok": False, "paths": [], "reason": "invalid_json"}}
+    )
+    assert nested["ok"] is True and nested["route"] == "empty"

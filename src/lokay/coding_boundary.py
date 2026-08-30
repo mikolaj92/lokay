@@ -64,6 +64,14 @@ def validate_output(stdout: str) -> dict[str, Any]:
 def select_initial(
     first: Mapping[str, Any], retry: Mapping[str, Any]
 ) -> dict[str, Any]:
+    if first.get("route") == "empty":
+        return {
+            "ok": True,
+            "route": "failed",
+            "evidence_kind": "none",
+            "decision": {"verdict": "needs_human"},
+            "reason": str(first.get("reason") or "localize_empty"),
+        }
     candidate = retry if first.get("route") == "retry" else first
     if candidate.get("route") != "valid":
         return {

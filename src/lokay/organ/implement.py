@@ -107,20 +107,24 @@ def handle_implement(
             if repair_mode
             else ""
         )
-        return run(
-            config_path=str(inputs.get("config_path") or "") or None,
-            live=bool(inputs.get("live")),
-            extra_inputs={
-                "worktree": worktree,
-                "repo": repo,
-                "issue_raw": issue_raw,
-                "plan": up.get("plan_issue") or {},
-                "checks_text": checks_text,
-                "review": inputs.get("review") or {},
-                "extra_paths": list(inputs.get("extra_paths") or []),
-                "max_paths": int(inputs.get("max_paths") or 40),
-                "rel_path": str(inputs.get("rel_path") or ".lokay/localize.json"),
-            },
+        from lokay.organ.common import localize_parent_route
+
+        return localize_parent_route(
+            run(
+                config_path=str(inputs.get("config_path") or "") or None,
+                live=bool(inputs.get("live")),
+                extra_inputs={
+                    "worktree": worktree,
+                    "repo": repo,
+                    "issue_raw": issue_raw,
+                    "plan": up.get("plan_issue") or {},
+                    "checks_text": checks_text,
+                    "review": inputs.get("review") or {},
+                    "extra_paths": list(inputs.get("extra_paths") or []),
+                    "max_paths": int(inputs.get("max_paths") or 40),
+                    "rel_path": str(inputs.get("rel_path") or ".lokay/localize.json"),
+                },
+            )
         )
 
     if atom == "relocalize_off_goal":

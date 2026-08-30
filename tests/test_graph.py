@@ -697,7 +697,11 @@ def test_issue_to_pr_plan_issue_before_run_agent():
     }
     assert by_id["plan_issue"]["when"] == ready
     assert by_id["localize"]["when"] == ready
-    assert by_id["coding_execution"]["when"] == ready
+    assert by_id["coding_execution"]["when"] == {
+        "upstream": "localize",
+        "path": "route",
+        "equals": "ready",
+    }
 
 
 def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
@@ -795,6 +799,11 @@ def test_describe_includes_pr_repair():
     by_id = {node["id"]: node for node in path["nodes"]}
     assert "rebase_onto_base" not in by_id
     assert "commit_initial_repair" in by_id["test_local"]["conduction"]
+    assert by_id["run_agent"]["when"] == {
+        "upstream": "localize",
+        "path": "route",
+        "equals": "ready",
+    }
     assert by_id["pr_repair_retry_agent"]["when"]["equals"] == "retry"
     assert by_id["evidence_repair_agent"]["when"]["equals"] == "evidence"
     assert by_id["pr_test_repair_agent"]["when"]["equals"] == "fail"

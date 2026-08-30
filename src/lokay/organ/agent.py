@@ -78,14 +78,16 @@ def handle_agent(
         scoped = _localize_conduction(up, inputs)
         if "localize" not in scoped:
             return {
-                "ok": False,
+                "ok": True,
+                "route": "empty",
                 "error": "refusing run_agent: localize conduction missing",
                 "reason": "localize_missing",
             }
         paths = _localize_paths(scoped)
         if not paths:
             return {
-                "ok": False,
+                "ok": True,
+                "route": "empty",
                 "error": "refusing run_agent: localize produced no edit paths",
                 "reason": "localize_empty",
                 "localize": scoped.get("localize") or {},
