@@ -58,6 +58,10 @@ _ISSUE_JOURNAL_FAMILIES = {
     "coding_execution": "coding-execution",
     "test_local_execution": "test-local-execution",
 }
+_PR_JOURNAL_FAMILIES = {
+    "pr_triage": "pr-triage",
+    "pr_repair": "pr-repair",
+}
 
 
 def issue_journal_dir(
@@ -76,11 +80,28 @@ def issue_journal_dir(
     return root / ".lokay" / "fala" / family / f"{owner}__{name}__{int(issue)}"
 
 
+def pr_journal_dir(
+    path_id: str,
+    repo: str,
+    pr: int | None,
+    *,
+    home: Path | None = None,
+) -> Path | None:
+    """Per-PR journal for a nested PR child. None is not a shared host db."""
+    family = _PR_JOURNAL_FAMILIES.get(path_id)
+    if family is None or pr is None or "/" not in str(repo):
+        return None
+    owner, name = str(repo).split("/", 1)
+    root = home if home is not None else Path.home()
+    return root / ".lokay" / "fala" / family / f"{owner}__{name}__{int(pr)}"
+
+
 def path_journal_dir(
     path_id: str,
     repo: str = "",
     issue: int | None = None,
     *,
+    pr: int | None = None,
     home: Path | None = None,
 ) -> Path:
     """One sliced Fala path owns one journal directory.
@@ -88,7 +109,9 @@ def path_journal_dir(
     Native Fala materializes the sliced package next to ``state.sqlite``.
     Nested children must not overwrite ``~/.lokay/fala/lokay.fala-package.toml``.
     """
-    nested = issue_journal_dir(path_id, repo, issue, home=home)
+    nested = issue_journal_dir(path_id, repo, issue, home=home) or pr_journal_dir(
+        path_id, repo, pr, home=home
+    )
     if nested is not None:
         return nested
     safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(path_id))
@@ -190,9 +213,9 @@ def run_path(
     if db_path:
         work = Path(db_path)
         if _is_shared_fala_root(work):
-            work = path_journal_dir(path_id, repo, issue)
+            work = path_journal_dir(path_id, repo, issue, pr=pr)
     else:
-        work = path_journal_dir(path_id, repo, issue)
+        work = path_journal_dir(path_id, repo, issue, pr=pr)
     work.mkdir(parents=True, exist_ok=True)
     pkg_runtime = work / "lokay.fala-package.toml"
     project = _project_root()

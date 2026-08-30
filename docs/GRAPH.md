@@ -149,7 +149,9 @@ another repo, so PR triage never reaches `pr_merge`. Cache always runs and
 returns `route=terminal|hit|miss`. A Fala `when` on a skipped cache atom fails
 `run_declared_tests` (`condition_source_not_succeeded`), so inspect
 `no_declared_test` is a succeeded cache `route=terminal` and pytest skips
-because the route is not `miss`. Every other child path uses its own journal under
+because the route is not `miss`. `pr_triage` and `pr_repair` are nested PR
+children under `pr-triage/` and `pr-repair/`. A shared `pr_triage` journal
+lets one live review hold `pr_merge` for another repo. Every other child path uses its own journal under
 `~/.lokay/fala/<path_id>/`. Native Fala materializes one sliced
 package next to that journal. Nested children must not overwrite
 `~/.lokay/fala/lokay.fala-package.toml` or share `~/.lokay/fala/state.sqlite`.
@@ -507,7 +509,7 @@ uv run lokay-run-path --config config.yaml --path issue_to_pr \
   --repo mikolaj92/lokay --issue 1 --live
 ```
 
-Journal: `~/.lokay/fala/<path_id>/state.sqlite` (issue children under `i2pr/`, `i2pr-delivery/`, `issue-split/`, `coding-execution/`, `test-local-execution/`)  
+Journal: `~/.lokay/fala/<path_id>/state.sqlite` (issue children under `i2pr/`, `i2pr-delivery/`, `issue-split/`, `coding-execution/`, `test-local-execution/`; PR children under `pr-triage/`, `pr-repair/`)  
 Materialized package: `~/.lokay/fala/<path_id>/lokay.fala-package.toml`  
 (`uv run --project <checkout>` filled in for every organ — never bare `python3`)
 One `run_path` never rewrites the shared `~/.lokay/fala/lokay.fala-package.toml`.
