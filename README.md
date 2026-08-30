@@ -86,7 +86,7 @@ stateDiagram-v2
     FactoryBeginHostGate --> RecordPass: restart
     FactoryBegin --> ReapStaleWorktrees
     FactoryBegin --> SelectSelfRepairDepartment
-    SelectSelfRepairDepartment --> RunSelfRepairDepartment
+    SelectSelfRepairDepartment --> RunSelfRepairDepartment: did_not_move
     SelectSelfRepairDepartment --> SelectIssueTriageDepartment
     SelectIssueTriageDepartment --> RunIssueTriageDepartment
     SelectIssueTriageDepartment --> SelectExecutorDepartment

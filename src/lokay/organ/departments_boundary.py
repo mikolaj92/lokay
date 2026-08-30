@@ -53,6 +53,7 @@ def handle_departments(
             moved_forward=bool(moving.get("moved_forward")),
             receipt_present=isinstance(receipt, dict) and bool(receipt),
             leftover_skip=bool(leftover.get("leftover_skip")),
+            receipt=receipt if isinstance(receipt, dict) else None,
         )
     if atom == "run_self_repair_department":
         from lokay.proc.run_self_repair_department import run

@@ -293,7 +293,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   leftover-work-copy cleanup is a classified route, not `process.failed`;
   departments and `record_pass` do not wait on it.
   One pass is oil XOR product (product wins). Last-pass receipt includes
-  `lane: product | oil | idle`.
+  `lane: product | oil | idle`. The self_repair department skips on idle,
+  pass_ceiling, occupied, leftover skip, and empty survey; only a stall
+  (`did_not_move`) starts oil.
   `factory_begin` opens a pass workspace after a short host-alive probe.
   Empty survey snapshots do not idle or skip PRs and issues. Launchd does not exec
   `lokay-daemon` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
