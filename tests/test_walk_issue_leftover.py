@@ -99,3 +99,73 @@ def test_consumes_only_authored_skip():
     assert not consumes("triage_not_done")
     assert not consumes("sito_nie_robic")
     assert not consumes("adapter_failed")
+
+
+def test_occupied_repo_is_not_takeable():
+    from lokay.proc.walk_issue_leftover import unoccupied
+
+    rows = [
+        {"repo": "mikolaj92/Temida", "issue": 5191},
+        {"repo": "mikolaj92/Temida", "issue": 5190},
+        {"repo": "mikolaj92/Fala", "issue": 186},
+        {"repo": "mikolaj92/Posejdon", "issue": 46},
+    ]
+    out = unoccupied(rows, {"mikolaj92/Temida"})
+    assert [row["issue"] for row in out] == [186, 46]
+
+
+def test_occupied_repo_is_walked_like_a_foreign_assignee():
+    listed = {
+        "issues": [
+            {
+                "repo": "mikolaj92/Temida",
+                "issue": 5191,
+                "labels": ["ai:ready", "work:ready"],
+                "assignees": ["mikolaj92"],
+            },
+            {
+                "repo": "mikolaj92/Temida",
+                "issue": 5190,
+                "labels": ["ai:ready", "work:ready"],
+                "assignees": [],
+            },
+            {
+                "repo": "mikolaj92/Fala",
+                "issue": 186,
+                "labels": ["ai:ready", "work:ready"],
+                "assignees": ["mikolaj92"],
+            },
+        ],
+        "count": 3,
+        "overflow": False,
+    }
+    from lokay.proc.select_next_issue import select
+
+    picked = select(listed, occupied={"mikolaj92/Temida"})
+    assert picked["route"] == "issue"
+    assert picked["repo"] == "mikolaj92/Fala"
+    assert picked["issue"] == 186
+    assert picked["leftover"] == 0
+
+
+def test_all_occupied_is_none_not_a_spin():
+    listed = {
+        "issues": [
+            {
+                "repo": "mikolaj92/Temida",
+                "issue": 5191,
+                "labels": ["ai:ready"],
+                "assignees": [],
+            }
+        ],
+        "count": 1,
+        "overflow": False,
+    }
+    from lokay.proc.select_next_issue import select
+
+    picked = select(listed, occupied={"mikolaj92/Temida"})
+    assert picked["ok"] is True
+    assert picked["route"] == "none"
+    assert picked["reason"] == "occupied"
+    assert picked.get("leftover", 0) == 0
+

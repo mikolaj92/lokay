@@ -4,11 +4,22 @@ from lokay.proc.write_issues_receipt import write
 
 
 def envelope(picked: dict, do: dict, launched: dict) -> dict:
-    leftover_issues = list(do.get("leftover_issues") or picked.get("leftover_issues") or [])
-    leftover = do.get("leftover")
-    if leftover is None:
-        leftover = picked.get("leftover")
-    leftover = int(leftover or 0)
+    if "leftover_issues" in launched:
+        leftover_issues = [
+            dict(row)
+            for row in list(launched.get("leftover_issues") or [])
+            if isinstance(row, dict)
+        ]
+        leftover = launched.get("leftover")
+        leftover = int(leftover if leftover is not None else len(leftover_issues))
+    else:
+        leftover_issues = list(
+            do.get("leftover_issues") or picked.get("leftover_issues") or []
+        )
+        leftover = do.get("leftover")
+        if leftover is None:
+            leftover = picked.get("leftover")
+        leftover = int(leftover or 0)
     if leftover_issues:
         leftover = max(leftover, len(leftover_issues))
     return {
