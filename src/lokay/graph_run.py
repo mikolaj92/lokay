@@ -56,6 +56,7 @@ _ISSUE_JOURNAL_FAMILIES = {
     "issue_to_pr_delivery": "i2pr-delivery",
     "issue_split": "issue-split",
     "coding_execution": "coding-execution",
+    "test_local_execution": "test-local-execution",
 }
 
 

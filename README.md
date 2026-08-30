@@ -601,7 +601,7 @@ terminal są osobnymi procesami.
 stateDiagram-v2
     [*] --> InspectTestDeclaration
     InspectTestDeclaration --> TestTerminal: brak deklaracji / invalid / brak worktree
-    InspectTestDeclaration --> ReadGreenTestCache
+    InspectTestDeclaration --> ReadGreenTestCache: route=test
     ReadGreenTestCache --> TestTerminal: exact cache hit
     ReadGreenTestCache --> RunDeclaredTests: cache miss
     RunDeclaredTests --> SelectTestOutcome

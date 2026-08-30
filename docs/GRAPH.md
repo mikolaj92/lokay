@@ -142,8 +142,12 @@ The mill invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process
 mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
 `coding_execution` children use per-issue journals under `i2pr/`,
-`i2pr-delivery/`, and `coding-execution/`. Every other child path uses its own
-journal under `~/.lokay/fala/<path_id>/`. Native Fala materializes one sliced
+`i2pr-delivery/`, and `coding-execution/`. `test_local_execution` is the same
+class of nested child: per-issue under `test-local-execution/`. A shared
+`local/test` journal lets one live pytest hold `no_declared_test` skip for
+another repo, so PR triage never reaches `pr_merge`. Inspect `route=terminal`
+skips the cache atom. Every other child path uses its own journal under
+`~/.lokay/fala/<path_id>/`. Native Fala materializes one sliced
 package next to that journal. Nested children must not overwrite
 `~/.lokay/fala/lokay.fala-package.toml` or share `~/.lokay/fala/state.sqlite`.
 Python `compose/*` may validate CLI contracts and
@@ -500,7 +504,7 @@ uv run lokay-run-path --config config.yaml --path issue_to_pr \
   --repo mikolaj92/lokay --issue 1 --live
 ```
 
-Journal: `~/.lokay/fala/<path_id>/state.sqlite` (issue children under `i2pr/`, `i2pr-delivery/`, `issue-split/`, `coding-execution/`)  
+Journal: `~/.lokay/fala/<path_id>/state.sqlite` (issue children under `i2pr/`, `i2pr-delivery/`, `issue-split/`, `coding-execution/`, `test-local-execution/`)  
 Materialized package: `~/.lokay/fala/<path_id>/lokay.fala-package.toml`  
 (`uv run --project <checkout>` filled in for every organ — never bare `python3`)
 One `run_path` never rewrites the shared `~/.lokay/fala/lokay.fala-package.toml`.

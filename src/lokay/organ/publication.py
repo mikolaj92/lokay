@@ -113,7 +113,12 @@ def handle_publication(
             argv.append("--changed-scope")
         from lokay.proc.test_local_execution_subflow import run
 
-        out = run(worktree=worktree, changed_scope=bool(inputs.get("changed_scope")))
+        out = run(
+            worktree=worktree,
+            changed_scope=bool(inputs.get("changed_scope")),
+            repo=str(ctx.get("repo") or inputs.get("repo") or ""),
+            issue=ctx.get("issue_number") or inputs.get("issue"),
+        )
         if (
             inputs.get("record_red")
             and isinstance(out, dict)

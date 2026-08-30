@@ -1083,3 +1083,22 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
             "path": "route",
             "equals": "merge",
         }
+
+
+def test_test_local_cache_skips_when_inspect_is_terminal():
+    import tomllib
+    from pathlib import Path
+
+    package = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "fala/lokay.fala-package.toml").read_text(
+            encoding="utf-8"
+        )
+    )
+    path = next(p for p in package["correlation_paths"] if p["id"] == "test_local_execution")
+    by_id = {node["id"]: node for node in path["effectors"]}
+    assert by_id["read_test_green_cache"]["when"] == {
+        "upstream": "inspect_test_declaration",
+        "path": "route",
+        "equals": "test",
+    }
+    assert by_id["classify_test_terminal"]["conduction"]
