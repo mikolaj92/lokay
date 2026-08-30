@@ -285,10 +285,12 @@ get_issue
   ├─→ assign_issue
   ├─→ stage_implementing   ← no-op on labels: keep ai:ready, strip leftover cache
   └─→ make_branch
-        └─→ worktree_add
-              └─→ plan_issue   ← grandchild Fala plan_issue_execution
-                    └─→ localize     ← grandchild Fala localize_execution
-                          └─→ coding_execution  ← child Fala: run_agent + one JSON retry + one evidence round
+        └─→ worktree_add          ready → plan / localize / coding
+                                  missing → summarize (no product). Never ok=false:
+                                  a failed worktree still unblocks localize in Fala.
+              └─→ plan_issue   ← when worktree route=ready; grandchild Fala plan_issue_execution
+                    └─→ localize     ← when worktree route=ready; grandchild Fala localize_execution
+                          └─→ coding_execution  ← when worktree route=ready; child Fala: run_agent + one JSON retry + one evidence round
                                 └─→ commit_all
                                       └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
                                             └─→ test_local_execution   ← grandchild Fala; skip if no suite
@@ -360,9 +362,10 @@ The executor department launches `issue_to_pr` only after a do mark.
 ```text
 pr_checks
   └─→ stage_repairing   ← no-op on labels: keep ai:ready
-        └─→ worktree_add
-              └─→ localize    ← paths from checks/review seed + tree
-                    └─→ run_agent   ← repair prompt (only non-deterministic node)
+        └─→ worktree_add          ready → localize / run_agent
+                                  missing → summarize (no product)
+              └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree
+                    └─→ run_agent   ← when worktree route=ready; repair prompt (only non-deterministic node)
                           └─→ commit_all
                                 └─→ test_local   ← local pytest; skip if no suite
                                       └─→ assert_real_diff
@@ -421,7 +424,7 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the mill do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
 - **localize** proposes paths immediately before the coding slot (serial path:
-  `worktree_add → plan_issue → localize → coding_execution`). Existing
+  `worktree_add` `route=ready` → `plan_issue` → `localize` → `coding_execution`). Existing
   `.lokay/localize.json` paths skip the localize executor only when they
   belong to this issue number. Live mode may call the
   configured executor once for a JSON path list; Python validates and still

@@ -449,7 +449,7 @@ def starter_config_text(*, assignee: str = "mikolaj92", repo: str | None = None,
         )
         if "repos:\n  # - name:" in text:
             text = text.replace(
-                "repos:\n  # - name: mikolaj92/lokay\n  #   clone_path: /Users/mikomac/Developer/OSS/lokay\n  #   priority: 10\n",
+                "repos:\n  # - name: mikolaj92/lokay\n  #   clone_path: ~/Developer/OSS/lokay\n  #   priority: 10\n",
                 block,
             )
         else:
