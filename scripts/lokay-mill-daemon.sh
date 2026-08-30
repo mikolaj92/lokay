@@ -95,9 +95,132 @@ if mill_lock_busy; then
   exit 0
 fi
 
+CEILING="${LOKAY_PASS_CEILING_SECONDS:-180}"
+CEILING="${CEILING%.*}"
+case "${CEILING}" in
+  ''|*[!0-9]*) CEILING=180 ;;
+esac
+if [[ "${CEILING}" -lt 1 ]]; then
+  CEILING=1
+fi
+
+write_pass_ceiling_receipt() {
+  local receipt="${LOKAY_HOME}/last-pass.json"
+  local tmp="${receipt}.$$.$RANDOM.tmp"
+  python3 - "${receipt}" "${tmp}" "${CEILING}" <<'PY' 2>/dev/null || true
+import json, os, sys, time
+receipt, tmp, ceiling = sys.argv[1], sys.argv[2], sys.argv[3]
+payload = {
+    "ok": False,
+    "health": "pass_ceiling",
+    "reason": "pass_ceiling",
+    "pass_ceiling_seconds": float(ceiling),
+    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+}
+try:
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload) + "\n")
+    os.replace(tmp, receipt)
+except OSError:
+    try:
+        os.unlink(tmp)
+    except OSError:
+        pass
+PY
+}
+
+stop_lock_owner() {
+  # Signal the lock-owning uv/lokay-daemon tree in this session only.
+  # Detached issue_to_pr uses start_new_session and must survive.
+  local root_pid="$1"
+  python3 - "${root_pid}" <<'PY' 2>/dev/null || true
+import os, signal, subprocess, sys, time
+
+root = int(sys.argv[1])
+try:
+    self_sid = os.getsid(os.getpid())
+except OSError:
+    raise SystemExit(0)
+
+def children(pid: int) -> list[int]:
+    try:
+        out = subprocess.run(
+            ["pgrep", "-P", str(pid)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return []
+    return [int(line) for line in (out.stdout or "").split() if line.strip().isdigit()]
+
+def walk(pid: int, acc: list[int]) -> None:
+    for child in children(pid):
+        acc.append(child)
+        walk(child, acc)
+
+tree = [root]
+walk(root, tree)
+same_session = []
+for pid in tree:
+    try:
+        if os.getsid(pid) == self_sid:
+            same_session.append(pid)
+    except OSError:
+        continue
+
+def signal_tree(signum: int) -> None:
+    for pid in reversed(same_session):
+        try:
+            os.kill(pid, signum)
+        except OSError:
+            pass
+
+signal_tree(signal.SIGTERM)
+deadline = time.monotonic() + 5
+while time.monotonic() < deadline:
+    alive = False
+    for pid in same_session:
+        try:
+            os.kill(pid, 0)
+            alive = True
+            break
+        except OSError:
+            continue
+    if not alive:
+        break
+    time.sleep(0.05)
+else:
+    signal_tree(signal.SIGKILL)
+PY
+}
+
 set +e
-uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1
+uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1 &
+DAEMON_PID=$!
+(
+  sleep "${CEILING}"
+  if kill -0 "${DAEMON_PID}" 2>/dev/null; then
+    printf '%s\n' "${DAEMON_PID}" >"${LOKAY_HOME}/.pass-ceiling.${DAEMON_PID}"
+    stop_lock_owner "${DAEMON_PID}"
+  fi
+) &
+WATCHDOG_PID=$!
+wait "${DAEMON_PID}"
 MILL_RC=$?
+if kill -0 "${WATCHDOG_PID}" 2>/dev/null; then
+  pkill -P "${WATCHDOG_PID}" 2>/dev/null || true
+  kill "${WATCHDOG_PID}" 2>/dev/null || true
+  wait "${WATCHDOG_PID}" 2>/dev/null || true
+fi
+CEILING_MARK="${LOKAY_HOME}/.pass-ceiling.${DAEMON_PID}"
+if [[ -f "${CEILING_MARK}" ]]; then
+  rm -f "${CEILING_MARK}"
+  write_pass_ceiling_receipt
+  printf '%s\n' '{"ok":false,"health":"pass_ceiling","reason":"pass_ceiling"}' | tee -a "${LOG}" >"${LATEST}"
+  set -e
+  exit 0
+fi
 set -e
 cp "${LOG}" "${LATEST}" 2>/dev/null || true
 if [[ "${MILL_RC}" -ne 0 ]]; then
