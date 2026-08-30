@@ -29,6 +29,56 @@ def test_self_repair_only_when_last_pass_did_not_move() -> None:
         "route": "skip",
         "reason": "leftover_skip",
     }
+    stall = {
+        "kind": "pass_receipt",
+        "ts": "2026-08-30T00:00:00Z",
+        "ok": False,
+        "health": "stall",
+        "idle": False,
+        "progress": 0,
+        "remaining": {"inbox": 1, "ready": 1},
+        "error": "no product delivery",
+    }
+    assert select_self_repair(
+        enabled=True, moved_forward=False, receipt=stall
+    )["route"] == "run"
+    assert select_self_repair(
+        enabled=True,
+        moved_forward=False,
+        receipt={
+            **stall,
+            "health": "idle",
+            "idle": True,
+            "ok": True,
+            "error": "",
+            "remaining": {
+                "inbox": 0,
+                "ready": 0,
+                "open_ai_prs": 0,
+                "issue_to_pr_started": 0,
+                "survey_errors": 0,
+            },
+        },
+    ) == {"ok": True, "route": "skip", "reason": "empty_survey"}
+    assert select_self_repair(
+        enabled=True,
+        moved_forward=False,
+        receipt={**stall, "health": "idle", "idle": True, "ok": True, "error": ""},
+    ) == {"ok": True, "route": "skip", "reason": "idle"}
+    assert select_self_repair(
+        enabled=True,
+        moved_forward=False,
+        receipt={**stall, "health": "pass_ceiling", "ok": False, "error": ""},
+    ) == {"ok": True, "route": "skip", "reason": "pass_ceiling"}
+    assert select_self_repair(
+        enabled=True,
+        moved_forward=False,
+        receipt={
+            **stall,
+            "health": "stall",
+            "remaining": {"inbox": 0, "ready": 0, "issue_to_pr_started": 1},
+        },
+    ) == {"ok": True, "route": "skip", "reason": "occupied"}
 
 
 def test_issue_triage_switch_does_not_mention_executor() -> None:
