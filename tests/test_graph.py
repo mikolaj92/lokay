@@ -39,6 +39,7 @@ def simulate_factory_pass(*, reap_status: str = "succeeded", routes: dict | None
     """Apply authored conduction + when. Failed cleanup must not block product."""
     status: dict[str, str] = {}
     routes = {
+        "factory_begin_host_gate": "begin",
         "select_self_repair_department": "skip",
         "select_issue_triage_department": "run",
         "select_executor_department": "run",
@@ -113,21 +114,36 @@ def test_describe_parent_factory_graph():
     when = {node["id"]: node["when"] for node in path["nodes"]}
     assert conduction["factory_begin_host_gate"] == ["host_ff"]
     assert conduction["factory_begin"] == ["factory_begin_host_gate"]
-    assert conduction["reap_stale_worktrees"] == ["factory_begin"]
-    assert conduction["select_self_repair_department"] == ["factory_begin"]
+    assert when["factory_begin"] == {
+        "upstream": "factory_begin_host_gate",
+        "path": "route",
+        "equals": "begin",
+    }
+    assert conduction["reap_stale_worktrees"] == [
+        "factory_begin_host_gate",
+        "factory_begin",
+    ]
+    assert conduction["select_self_repair_department"] == [
+        "factory_begin_host_gate",
+        "factory_begin",
+    ]
     assert conduction["select_issue_triage_department"] == [
+        "factory_begin_host_gate",
         "factory_begin",
         "select_self_repair_department",
     ]
     assert conduction["select_executor_department"] == [
+        "factory_begin_host_gate",
         "factory_begin",
         "select_issue_triage_department",
     ]
     assert conduction["select_pr_triage_department"] == [
+        "factory_begin_host_gate",
         "factory_begin",
         "select_executor_department",
     ]
     assert conduction["select_pr_repair_department"] == [
+        "factory_begin_host_gate",
         "factory_begin",
         "select_pr_triage_department",
         "run_pr_triage_department",
@@ -136,6 +152,7 @@ def test_describe_parent_factory_graph():
     assert "reap_stale_worktrees" not in conduction["select_pr_triage_department"]
     assert "reap_stale_worktrees" not in conduction["record_pass"]
     assert conduction["record_pass"] == [
+        "factory_begin_host_gate",
         "factory_begin",
         "select_self_repair_department",
         "select_issue_triage_department",
@@ -465,6 +482,15 @@ def test_failed_cleanup_still_runs_issues_and_receipt():
     assert status["reap_stale_worktrees"] == "failed"
     assert status["run_pr_triage_department"] == "succeeded"
     assert status["run_issue_triage_department"] == "succeeded"
+    assert status["record_pass"] == "succeeded"
+    assert status["factory_pass_terminal"] == "succeeded"
+
+
+def test_factory_begin_skips_when_host_gate_restarts():
+    status = simulate_factory_pass(
+        routes={"factory_begin_host_gate": "restart"}
+    )
+    assert status["factory_begin"] == "skipped"
     assert status["record_pass"] == "succeeded"
     assert status["factory_pass_terminal"] == "succeeded"
 

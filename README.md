@@ -82,7 +82,8 @@ stateDiagram-v2
     Heartbeat --> FactoryPass
     FactoryPass --> HostFF
     HostFF --> FactoryBeginHostGate
-    FactoryBeginHostGate --> FactoryBegin
+    FactoryBeginHostGate --> FactoryBegin: begin
+    FactoryBeginHostGate --> RecordPass: restart
     FactoryBegin --> ReapStaleWorktrees
     FactoryBegin --> SelectSelfRepairDepartment
     SelectSelfRepairDepartment --> RunSelfRepairDepartment

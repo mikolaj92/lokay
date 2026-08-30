@@ -350,6 +350,7 @@ def test_snapshot_process_head_sets_once(monkeypatch, tmp_path: Path):
     assert snapshot_process_head(tmp_path) == "abc"
     monkeypatch.setattr("lokay.git_host_ff.checkout_head", lambda path: "def")
     assert snapshot_process_head(tmp_path) == "abc"
+    assert snapshot_process_head(tmp_path, refresh=True) == "def"
 
 
 def test_process_head_moved_when_env_differs(monkeypatch, tmp_path: Path):
@@ -372,7 +373,8 @@ def test_factory_begin_host_gate_refuses_in_cycle_update():
     out = gate(
         {"updated": True, "head": "a", "origin_main": "b"}, live=True, checkout=""
     )
-    assert out["ok"] is False and out["reason"] == "host_updated"
+    assert out["ok"] is True and out["route"] == "restart"
+    assert out["reason"] == "host_updated"
 
 
 def test_factory_begin_host_gate_continues_current():
@@ -397,3 +399,20 @@ def test_factory_pass_starts_with_begin_then_product_children():
         "factory_begin",
         "reap_stale_worktrees",
     ]
+
+
+def test_department_selects_skip_on_host_restart():
+    from lokay.organ.departments_boundary import handle_departments
+
+    up = {"factory_begin_host_gate": {"route": "restart"}}
+    ctx = {"cfg": [], "live": []}
+    for atom in (
+        "select_self_repair_department",
+        "select_issue_triage_department",
+        "select_executor_department",
+        "select_pr_triage_department",
+        "select_pr_repair_department",
+    ):
+        out = handle_departments(atom, {}, up, ctx)
+        assert out["route"] == "skip"
+        assert out["reason"] == "host_updated"

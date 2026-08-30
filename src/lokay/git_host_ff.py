@@ -58,10 +58,10 @@ def checkout_head(checkout: Path) -> str:
     return (out.stdout or "").strip()
 
 
-def snapshot_process_head(checkout: Path) -> str:
+def snapshot_process_head(checkout: Path, *, refresh: bool = False) -> str:
     """Remember the HEAD this mill process imported. Empty if already set or unread."""
     existing = os.environ.get(PROCESS_HEAD_ENV, "").strip()
-    if existing:
+    if existing and not refresh:
         return existing
     head = checkout_head(checkout)
     if head:

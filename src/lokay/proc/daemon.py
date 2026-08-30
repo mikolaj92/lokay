@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             root = os.environ.get("LOKAY_ROOT", "").strip()
             if root:
-                snapshot_process_head(Path(root))
+                snapshot_process_head(Path(root), refresh=True)
             health = run_preflight(args.config, remediate=True, issue_lease=True)
             from lokay.proc.daemon_entry_subflow import run
 
