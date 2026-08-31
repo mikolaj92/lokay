@@ -1015,10 +1015,13 @@ stateDiagram-v2
 ```
 
 Dział `issue_triage_department` listuje raz i gnieździ `issue_sieve_row` aż
-skrzynka pusta. Zero kodu. Zero PR. Nie rozwija 1..8. Tick daemona nie jest
-tą pętlą. Leftover jest zjadane tylko przy authored skip (`needs_human`,
-`blocked`, already-closed). `triage_not_done` / adapter fail zostawia wiersz.
-Oil lokay nie zajmuje product slotu. Cudzy assignee nie jest zadaniem lokaja.
+skrzynka pusta **albo wyczerpie `limits.max_triage_per_tick`**. Zero kodu.
+Zero PR. Nie rozwija 1..8. Tick daemona nie jest tą pętlą. Po osiągnięciu
+budżetu dział publikuje `route=cap` i zachowuje `leftover_issues`, więc rodzic
+przechodzi do executora, a następny pass kontynuuje sito. Leftover jest zjadane
+tylko przy authored skip (`needs_human`, `blocked`, already-closed).
+`triage_not_done` / adapter fail zostawia wiersz. Oil lokay nie zajmuje product
+slotu. Cudzy assignee nie jest zadaniem lokaja.
 
 ### Jeden wiersz triage — `issue_sieve_row`
 
