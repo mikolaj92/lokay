@@ -121,6 +121,30 @@ def test_review_prompt_sets_collector_execution_boundary():
     assert "wait for collection to finish" in prompt
 
 
+def test_review_prompt_is_product_goal_first_and_evidence_driven():
+    prompt = review_prompt(
+        repo="a/b",
+        pr_number=8,
+        title="Add profile avatars",
+        body="Users can select and save a profile avatar.",
+        head_ref="ai/fix/8-avatars",
+        diff_text="diff --git a/avatar.py b/avatar.py\n",
+        checks_text="tests passed",
+    )
+    assert "infer the user-visible product goal first" in prompt
+    assert "judge findings by their impact on that goal" in prompt
+    assert "Do not infer an external contract from field names" in prompt
+    assert "generated schemas" in prompt
+    assert "Decorative data" in prompt
+    assert "Critical-path data" in prompt
+    assert "loading, failure, and loaded" in prompt
+    assert "visual placeholder is not a valid domain value" in prompt
+    assert "fixture churn" in prompt
+    assert "observed defect" in prompt
+    assert "smallest sufficient fix" in prompt
+    assert "Do not request speculative architecture" in prompt
+
+
 def _prompt_with_plan_in_diff() -> str:
     diff = (
         "diff --git a/.lokay/approach.md b/.lokay/approach.md\n"
