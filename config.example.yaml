@@ -29,6 +29,7 @@ github:
 #     clone_path: /path/to/clone
 #     priority: 50
 #     enabled: true
+#     review_style: en+kofte  # optional Kofte register for published PR-review prose
 
 # Parent departments (one Fala graph = one department). Each switch is
 # independent: LOKAY_DEPARTMENT_EXECUTOR=0 must not disable either sieve.
@@ -91,3 +92,8 @@ merge:
   enabled: false
   require_checks: false
   require_llm_review: true
+
+# Kofte is optional and only styles public PR-review prose after the structured
+# verdict has been validated. Configure its LLM with KOFTE_LLM_BASE_URL,
+# KOFTE_LLM_MODEL and optional KOFTE_LLM_API_KEY. Without them, publication
+# deterministically falls back to the neutral review comment.

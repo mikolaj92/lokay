@@ -7,8 +7,8 @@ from lokay.review_boundary import validation_feedback_prompt
 
 def run(*, config_path: str | None, repo: str, pr: int, evidence: dict, feedback: dict, live: bool) -> dict:
     cfg=load_config(config_path)
-    prompt=review_prompt(repo=repo,pr_number=pr,title=str(evidence.get("title") or ""),body=str(evidence.get("body") or ""),head_ref=str(evidence.get("head") or ""),diff_text=str(evidence.get("diff") or ""),checks_text=str(evidence.get("checks_text") or ""))
-    prompt += "\n\n"+validation_feedback_prompt(str(feedback.get("validation_error") or "invalid output"),str(feedback.get("agent_stdout_tail") or ""))
+    validator_feedback=validation_feedback_prompt(str(feedback.get("validation_error") or "invalid output"),str(feedback.get("agent_stdout_tail") or ""))
+    prompt=review_prompt(repo=repo,pr_number=pr,title=str(evidence.get("title") or ""),body=str(evidence.get("body") or ""),head_ref=str(evidence.get("head") or ""),diff_text=str(evidence.get("diff") or ""),checks_text=str(evidence.get("checks_text") or ""),contract="pr_review_retry",extra_values={"validator_feedback":validator_feedback})
     return execute(cfg=cfg,repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),prompt=prompt,live=live)
 
 

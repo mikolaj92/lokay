@@ -15,7 +15,8 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
         return ok(repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),decision={"verdict":"needs_human"},merge_ok=False,reason=str(selected.get("reason") or "review_validation_exhausted"),applied=applied,execution={"source":"agent_retry_exhausted"})
     if route != "publish": return err(f"unknown selected review route: {route}")
     decision=decision_from_dict(dict(selected.get("decision") or {})); prior=int(selected.get("request_changes_count") or 0); limit=max(1,int(getattr(cfg,"max_request_changes_per_pr",2))); merge_ok,escalated=decide_review_merge(decision,prior,max_request_changes=limit)
-    publish_decision(runner(cfg),repo,pr,decision,head_sha=str(evidence.get("head_sha") or ""),merge_ok=merge_ok,escalated=escalated,mutate=mutate)
+    style_target = cfg.review_style_for(repo) if hasattr(cfg, "review_style_for") else ""
+    publish_decision(runner(cfg),repo,pr,decision,head_sha=str(evidence.get("head_sha") or ""),merge_ok=merge_ok,escalated=escalated,mutate=mutate,style_target=style_target)
     return ok(repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),decision=decision.to_dict(),merge_ok=merge_ok,escalated=escalated,applied=mutate,request_changes_count=prior+(1 if decision.verdict=="request_changes" else 0),execution={"source":"agent"})
 
 def main(argv=None):

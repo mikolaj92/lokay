@@ -79,7 +79,7 @@ wheels = [
 
 [[package]]
 name = "fala"
-version = "0.7.28"
+version = "0.7.26"
 source = { editable = "../Fala" }
 
 [package.metadata]
@@ -209,12 +209,21 @@ wheels = [
 ]
 
 [[package]]
+name = "kofte"
+version = "0.3.5"
+source = { git = "https://github.com/mikolaj92/Kofte.git?rev=cc5674bf6c8d06bdd0a541c7e613ab45398ccc35#cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[[package]]
 name = "lokay"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "app-factory", extra = ["platform"] },
     { name = "fala" },
+    { name = "kofte" },
     { name = "pyyaml" },
     { name = "uvicorn" },
 ]
@@ -235,6 +244,7 @@ requires-dist = [
     { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory.git?tag=v0.5.19" },
     { name = "fala", editable = "../Fala" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "kofte", git = "https://github.com/mikolaj92/Kofte.git?rev=cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "uvicorn", specifier = ">=0.32" },

@@ -131,18 +131,19 @@ def test_review_prompt_is_product_goal_first_and_evidence_driven():
         diff_text="diff --git a/avatar.py b/avatar.py\n",
         checks_text="tests passed",
     )
-    assert "infer the user-visible product goal first" in prompt
-    assert "judge findings by their impact on that goal" in prompt
+    assert "user-visible product goal" in prompt
+    assert "observable impact on that goal" in prompt
     assert "Do not infer an external contract from field names" in prompt
     assert "generated schemas" in prompt
-    assert "Decorative data" in prompt
-    assert "Critical-path data" in prompt
-    assert "loading, failure, and loaded" in prompt
-    assert "visual placeholder is not a valid domain value" in prompt
-    assert "fixture churn" in prompt
+    assert "core flow from decorative data" in prompt
+    assert "explicit states" in prompt
+    assert "visual placeholders or fallbacks" in prompt
+    assert "fixture-only churn" in prompt
     assert "observed defect" in prompt
     assert "smallest sufficient fix" in prompt
     assert "Do not request speculative architecture" in prompt
+    assert "tab bar" not in prompt.lower()
+    assert "reducer" not in prompt.lower()
 
 
 def _prompt_with_plan_in_diff() -> str:

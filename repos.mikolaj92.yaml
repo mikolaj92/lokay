@@ -9,6 +9,7 @@ repos:
   - name: mikolaj92/lokay
     clone_path: ~/Developer/OSS/lokay
     priority: 100
+    review_style: en+kofte
   - name: mikolaj92/Temida
     clone_path: ~/Developer/OSS/Temida
     priority: 90

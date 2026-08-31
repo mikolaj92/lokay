@@ -30,6 +30,7 @@ class RepoConfig:
     note: str = ""
     issues: CatalogBinding | None = None
     code: CatalogBinding | None = None
+    review_style: str = ""
 
     def __post_init__(self) -> None:
         # Parent still keys GitHub by name. Missing sides default to github + name.
@@ -107,6 +108,11 @@ class Config:
     def active_repos(self) -> list[RepoConfig]:
         """Enabled repos only (mill / tick iterate these)."""
         return [r for r in self.repos if r.enabled]
+
+    def review_style_for(self, repo: str) -> str:
+        return next(
+            (row.review_style for row in self.repos if row.name == repo), ""
+        )
 
     def validate(self) -> list[str]:
         errors: list[str] = []
@@ -198,6 +204,7 @@ def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
                 note=str(raw.get("note") or ""),
                 issues=row.issues,
                 code=row.code,
+                review_style=str(raw.get("review_style") or "").strip(),
             )
         )
     return repos

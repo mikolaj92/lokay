@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from lokay.models import Issue
 from lokay.safety import untrusted_issue_block
+from lokay.tool_contracts import render_contract
 
 SCHEMA = """{
   "verdict": "ready" | "close" | "needs_evidence" | "needs_human",
@@ -16,24 +17,17 @@ SCHEMA = """{
 
 def prompt(issue_data: dict, hard_facts: dict, additional: dict | None = None) -> str:
     issue = Issue.from_dict(issue_data)
-    text = f"""You are Lokay issue triage. Judge one intentional GitHub issue. Return ONLY one JSON object.
-
-Schema:
-{SCHEMA}
-
-Rules:
-1. Prefer ready (robić) for intentional operator or configured-assignee work.
-2. close (oznaczyć) only for clearly obsolete, superseded, wrong-shape, or foreign essence objections. The mill will mark/park; it will not close someone else's GitHub issue.
-3. Do not split. Oversized or multi-epic work is needs_human (człowiek).
-4. needs_evidence selects exactly one closed evidence_kind when one physical fact prevents a verdict.
-5. needs_human (człowiek) is residual and terminal. Do not implement.
-6. Do not edit files or mutate GitHub.
-
-Hard physical facts:
-{json.dumps(hard_facts,ensure_ascii=False,sort_keys=True)[:8000]}
-
-{untrusted_issue_block(issue.title,issue.body)}"""
+    evidence_round = ""
     if additional is not None:
-        text += "\n\nThis is the only evidence round. Do not return needs_evidence again.\nAdditional physical evidence:\n"
-        text += json.dumps(additional, ensure_ascii=False, sort_keys=True)[:12000]
-    return text
+        evidence_round = (
+            "This is the only evidence round. Do not return needs_evidence again.\n"
+            "Additional physical evidence:\n"
+            + json.dumps(additional, ensure_ascii=False, sort_keys=True)[:12000]
+        )
+    return render_contract(
+        "issue_triage",
+        schema=SCHEMA,
+        hard_facts=json.dumps(hard_facts, ensure_ascii=False, sort_keys=True)[:8000],
+        untrusted_issue=untrusted_issue_block(issue.title, issue.body),
+        evidence_round=evidence_round,
+    )

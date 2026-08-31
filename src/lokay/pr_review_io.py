@@ -9,7 +9,8 @@ from typing import Any
 from lokay.config import Config
 from lokay.gh_issues import ensure_labels
 from lokay.gh_prs import add_pr_labels, comment_bodies, comment_pr, gh_json, gh_text
-from lokay.pr_review import PrReviewDecision, build_review_comment_body, labels_for_review
+from lokay.pr_review import PrReviewDecision, labels_for_review
+from lokay.review_style import style_review_comment
 from lokay.runner import Runner
 
 FAIL_CLOSED = (
@@ -105,6 +106,7 @@ def publish_decision(
     merge_ok: bool,
     escalated: bool,
     mutate: bool,
+    style_target: str = "",
 ) -> None:
     if not mutate:
         return
@@ -112,8 +114,12 @@ def publish_decision(
         runner,
         repo,
         pr,
-        build_review_comment_body(
-            decision, head_sha=head_sha, merge_ok=merge_ok, escalated=escalated
+        style_review_comment(
+            decision,
+            head_sha=head_sha,
+            merge_ok=merge_ok,
+            escalated=escalated,
+            target=style_target,
         ),
         labels_for_review(decision, escalated=escalated),
         live=True,

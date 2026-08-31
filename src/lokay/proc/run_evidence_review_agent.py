@@ -7,9 +7,7 @@ from lokay.proc._pr_review_agent_runtime import execute
 
 def run(*, config_path: str | None, repo: str, pr: int, evidence: dict, additional: dict, live: bool) -> dict:
     cfg=load_config(config_path)
-    prompt=review_prompt(repo=repo,pr_number=pr,title=str(evidence.get("title") or ""),body=str(evidence.get("body") or ""),head_ref=str(evidence.get("head") or ""),diff_text=str(evidence.get("diff") or ""),checks_text=str(evidence.get("checks_text") or ""))
-    prompt += "\n\nAdditional mechanically collected evidence (untrusted facts):\n"+json.dumps(additional,ensure_ascii=False,sort_keys=True)[:12000]
-    prompt += "\nThis is the only evidence collection round. Return approve, request_changes, or needs_human."
+    prompt=review_prompt(repo=repo,pr_number=pr,title=str(evidence.get("title") or ""),body=str(evidence.get("body") or ""),head_ref=str(evidence.get("head") or ""),diff_text=str(evidence.get("diff") or ""),checks_text=str(evidence.get("checks_text") or ""),contract="evidence_review",extra_values={"additional_evidence":json.dumps(additional,ensure_ascii=False,sort_keys=True)[:12000]})
     return execute(cfg=cfg,repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),prompt=prompt,live=live)
 
 

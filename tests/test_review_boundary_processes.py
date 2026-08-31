@@ -42,6 +42,31 @@ def test_exhausted_invalid_review_publishes_terminal_not_approval(monkeypatch):
     assert out["merge_ok"] is False and applied == [True]
 
 
+def test_publish_styles_public_comment_after_structural_decision(monkeypatch):
+    cfg=SimpleNamespace(
+        max_request_changes_per_pr=2,
+        review_style_for=lambda repo: "en+kofte",
+    )
+    monkeypatch.setattr(publish_pr_review,"mutations_allowed",lambda **_:True)
+    monkeypatch.setattr(publish_pr_review,"runner",lambda *_:object())
+    published=[]
+    monkeypatch.setattr(
+        publish_pr_review,
+        "publish_decision",
+        lambda *_args,**kwargs: published.append(kwargs),
+    )
+    out=publish_pr_review.publish(
+        cfg=cfg,
+        repo="a/b",
+        pr=7,
+        evidence={"head_sha":"abc"},
+        selected={"route":"publish","decision":{"verdict":"approve","summary":"Ready."}},
+        live=True,
+    )
+    assert out["decision"]["verdict"] == "approve"
+    assert published[0]["style_target"] == "en+kofte"
+
+
 def test_evidence_agent_receives_only_selected_supplement(monkeypatch, tmp_path):
     cfg=SimpleNamespace(executor_enabled=True)
     monkeypatch.setattr("lokay.config.load_config",lambda _:cfg)
