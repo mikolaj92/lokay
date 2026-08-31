@@ -25,12 +25,14 @@ def launched_of(row: dict) -> bool:
     return str((result or {}).get("launched") or "") in _LAUNCHED
 
 
-def classify(row: dict, *, spent: int, budget: int) -> dict:
+def classify(
+    row: dict, *, spent: int, budget: int, bound_any: bool = False
+) -> dict:
     leftover, leftover_issues = leftover_of(row)
     if leftover <= 0:
         return {"ok": True, "route": IDLE, "leftover": 0, "leftover_issues": []}
     cap = max(0, int(budget))
-    if launched_of(row) and (cap == 0 or int(spent) >= cap):
+    if (launched_of(row) or bound_any) and (cap == 0 or int(spent) >= cap):
         return {
             "ok": True,
             "route": CAP,
