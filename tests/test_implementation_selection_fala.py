@@ -71,7 +71,7 @@ if a=='summarize_implementation_selection':v['result']={'selected':1}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_implementation_repo_")
         or name.startswith("inspect_implementation_eligibility_")

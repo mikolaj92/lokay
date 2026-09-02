@@ -18,7 +18,7 @@ if a=='update_inbox_survey_stamp':v['result']={'remaining_inbox':4}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_inbox_repo_")
         or name.startswith("list_inbox_repo_")

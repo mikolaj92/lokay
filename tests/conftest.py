@@ -36,3 +36,16 @@ def _isolate_live_issue_to_pr_receipts(monkeypatch: pytest.MonkeyPatch) -> None:
         "lokay.proc.reap_stale_worktrees.live_issue_to_pr_receipts",
         lambda *a, **k: [],
     )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_fala_dynamic_library_environment() -> None:
+    """Fala native loading must not poison child Python processes in later tests."""
+    keys = ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH")
+    before = {key: os.environ.get(key) for key in keys}
+    yield
+    for key, value in before.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value

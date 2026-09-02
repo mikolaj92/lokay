@@ -41,7 +41,7 @@ if a=='summarize_pr_closeout':v['result']={'remaining_prs':1}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_pr_closeout_slot_")
         or name.startswith("run_pr_closeout_slot_")

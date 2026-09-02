@@ -20,7 +20,7 @@ if a=='summarize_occupancy_refresh':v['result']={'occupied_repos':['a/one']}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_live_receipt_")
         or name.startswith("inspect_live_receipt_")

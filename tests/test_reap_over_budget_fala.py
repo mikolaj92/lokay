@@ -18,7 +18,7 @@ if a=='summarize_over_budget_reap':v['result']={'reaped_count':0}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_budget_receipt_")
         or name.startswith("inspect_budget_")

@@ -164,7 +164,7 @@ i zapisuje remaining, oraz efekt stamp. Nie ma 30-slotowego rozwinięcia Fali.
 `work:ready` / `ai:ready` nie są bramką. Overflow katalogu jest fail-closed.
 Conduction niesie kwit; remaining liczy się z wylistowanych wierszy w procesie.
 
-### Uruchomienie triage — `dispatch_triage`
+### Uruchomienie triage — `triage_dispatch`
 
 ```mermaid
 stateDiagram-v2
@@ -185,7 +185,7 @@ Pod-Fala uruchamia najwyżej jeden cel triage w jednym pass. Semantyczne drzewo
 `issue_triage` pozostaje osobną autorską pod-Falą; dispatcher tylko wybiera cel,
 sprawdza fizyczny ledger, uruchamia ją i zapisuje jej zamknięty wynik.
 
-### Uruchomienie implementacji — `dispatch_implement`
+### Uruchomienie implementacji — `implementation_dispatch`
 
 ```mermaid
 stateDiagram-v2
@@ -447,10 +447,14 @@ stateDiagram-v2
 
 Status nie uruchamia produktu, passa ani survey GitHub. Pod-Fala składa tylko
 read-only fakty konfiguracji, brakujących checkoutów, lease, opisu grafów,
-opcjonalnego preflightu i ostatniego trwałego receipt. `--full` oznacza pełny
-widok dostępnego snapshotu, a nie synchroniczny pass. Żaden node nie zapisuje
-receiptu, etykiety ani innego stanu domenowego. Dashboard i CLI czytają ten sam
-zamknięty wynik.
+opcjonalnego preflightu i ostatniego trwałego receipt. `lease_ok` opisuje
+wyłącznie zweryfikowaną capability odziedziczoną przez bieżący proces; bez tokena
+ma wartość `null` i powód `not_observed`. Niezależne `run_active` mówi, czy
+config-aware `mill.lock` jest aktualnie zajęty, a `run_lease_path` wskazuje tylko
+bezpiecznie rozpoznany aktywny per-run lease. `--full` oznacza pełny widok
+dostępnego snapshotu, a nie synchroniczny pass. Żaden node nie tworzy locka ani
+nie zapisuje receiptu, etykiety lub innego stanu domenowego. Dashboard i CLI
+czytają ten sam zamknięty wynik.
 
 ### Aktywacja dokładnej samonaprawy — `self_repair_activate_execution`
 
@@ -977,7 +981,7 @@ ponownie redukuje katalog i zapisuje następne implementowalne issue
 (`clean_repos`). Jedno zaparkowane product issue nie opróżnia slotu K=1,
 gdy w katalogu zostaje kolejny wiersz.
 
-### Higiena worktree — `reap_stale_worktrees`
+### Higiena worktree — `stale_worktree_reap`
 
 ```mermaid
 stateDiagram-v2

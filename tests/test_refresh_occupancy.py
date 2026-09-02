@@ -144,6 +144,7 @@ def test_refresh_occupancy_uses_worker_liveness(
             cycle,
             pid_alive=lambda _pid: pid_alive,
             issue_closed=lambda *_args, **_kwargs: False,
+            worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree",
         ),
     )
     monkeypatch.setattr(

@@ -9,6 +9,7 @@ def run_graph(tmp_path, body: str, run_id: str, path_id: str = "issue_triage"):
     path=next(x for x in tomllib.loads(package.read_text())["correlation_paths"] if x["id"]==path_id); commands={x["id"]:[sys.executable,str(effector)] for x in path["effectors"]}
     script="import fala,json,sys;print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id=sys.argv[5],run_id=sys.argv[4],command_overrides=json.loads(sys.argv[3]),max_ticks=64)))"
     env=os.environ.copy()
+    env.pop("DYLD_LIBRARY_PATH", None); env.pop("DYLD_FALLBACK_LIBRARY_PATH", None)
     for key in ("LOKAY_ROOT","LOKAY_PROCESS_HEAD","LOKAY_HOST_FF_FETCHED","LOKAY_HEALTH_LEASE","LOKAY_HEALTH_LEASE_PATH","LOKAY_DISABLE_HEALTH_LEASE_ISSUE","PYTHONPATH"):env.setdefault(key,"")
     run=subprocess.run([sys.executable,"-c",script,str(tmp_path/"db.sqlite"),str(package),json.dumps(commands),run_id,path_id],cwd=root,env=env,capture_output=True,text=True)
     assert run.returncode==0,run.stderr

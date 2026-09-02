@@ -283,7 +283,8 @@ def run_path(
 
     # Fala inherit_env is a whitelist. Nested factory_pass host_ff requires the
     # key even when mill-daemon did not set it (standalone lokay-daemon / tests).
-    os.environ.setdefault("LOKAY_HOST_FF_FETCHED", "")
+    for key in ("LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED"):
+        os.environ.setdefault(key, "")
 
     # Fala Mojo sources: FALA_HOME env, else sibling ../Fala only (no machine hardcodes).
     if not os.environ.get("FALA_HOME"):
@@ -293,6 +294,8 @@ def run_path(
                 break
 
     previous_issue_guard = os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE")
+    dynamic_library_keys = ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH")
+    dynamic_library_env = {key: os.environ.get(key) for key in dynamic_library_keys}
     if inherited_health_lease:
         os.environ["LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] = "1"
     try:
@@ -313,6 +316,11 @@ def run_path(
             os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
         else:
             os.environ["LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] = previous_issue_guard
+        for key, value in dynamic_library_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
     envelope = {
         "ok": (
             bool(result.get("ok"))

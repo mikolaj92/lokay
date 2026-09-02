@@ -26,8 +26,8 @@ def test_daemon_is_os_only():
     assert "uv run lokay-mill" not in script
     assert "preflight-bootstrap-incidents.log" in script
     assert 'export PYTHONPATH="${ROOT}/src' in script
-    assert "mill_lock_busy" in script
-    assert "lock_busy" in script
+    assert "mill_lock_busy" not in script
+    assert "LOKAY_MILL_LOCK" not in script
     assert "uv run lokay-daemon" in script
     assert "LOKAY_PASS_CEILING_SECONDS" in script
     assert "stop_lock_owner" in script
@@ -63,6 +63,7 @@ def _fake_uv(local_bin: Path) -> Path:
         "    ;;\n"
         "esac\n"
         'if [ "$LOKAY_UV_DAEMON_FAIL" = 1 ]; then echo fail >&2; exit 1; fi\n'
+        'if [ "$1" = run ] && [ "$2" = python ]; then shift 2; exec /usr/bin/python3 "$@"; fi\n'
         'if [ "$1" = run ] && [ "$2" = lokay-daemon ]; then\n'
         '  printf \'%s\\n\' "$(command -v pi)" "$PATH"\n'
         '  if [ -n "$LOKAY_UV_ENVELOPE" ]; then printf \'%s\\n\' "$LOKAY_UV_ENVELOPE"; else\n'
@@ -159,8 +160,9 @@ def test_busy_lock_skips_daemon(tmp_path):
     assert completed.returncode == 0, completed.stderr
     argv = tmp_path / "uv-argv.log"
     calls = argv.read_text(encoding="utf-8").splitlines() if argv.is_file() else []
-    assert all("lokay-daemon" not in line for line in calls)
-    assert "lock_busy" in completed.stdout
+    assert any("lokay-daemon" in line for line in calls)
+    # The shell no longer implements a second lock policy. The config-aware
+    # lokay-daemon owns the overlap decision.
 
 
 def test_missing_uv_writes_bootstrap_incident(tmp_path):
@@ -519,6 +521,24 @@ def test_daemon_cycle_short_pass_is_unchanged(monkeypatch, tmp_path):
     assert out.get("reason") != "pass_ceiling"
 
 
+def test_daemon_does_not_enter_product_graph_after_failed_preflight(
+    monkeypatch, tmp_path, capsys
+):
+    cfg = _write_cfg(tmp_path)
+    monkeypatch.setattr(daemon, "acquire_run_lock", lambda p: True)
+    failed = {"ok": False, "health": "preflight_failed", "gate_released": False}
+    monkeypatch.setattr(daemon, "run_preflight", lambda *a, **k: failed)
+    entered = []
+    monkeypatch.setattr(
+        "lokay.proc.daemon_entry_subflow.run",
+        lambda **k: entered.append(k) or {"ok": True},
+    )
+
+    assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 1
+    assert entered == []
+    assert "preflight_failed" in capsys.readouterr().out
+
+
 def test_daemon_progress_despite_fala_ok_false_exits_zero(
     monkeypatch, tmp_path, capsys
 ):
@@ -554,3 +574,14 @@ def test_os_pass_ceiling_kills_lock_owner_not_detached_worker(tmp_path):
     assert "pass_ceiling" in latest
     assert (tmp_path / "daemon-started").exists()
 
+
+
+def test_caretaker_delegates_singleton_lock_to_config_aware_daemon():
+    script = _script().read_text(encoding="utf-8")
+    assert "mill_lock_busy" not in script
+    assert "LOKAY_MILL_LOCK" not in script
+
+
+def test_caretaker_uses_uv_managed_python_only():
+    script = _script().read_text(encoding="utf-8")
+    assert "python3 -" not in script

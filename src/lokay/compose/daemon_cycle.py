@@ -15,7 +15,10 @@ from lokay.fala_journal import rotate_mill_fala_journals
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 from lokay.pass_receipt import read_pass_receipt
-from lokay.proc.classify_leftover_remaining import remaining_from_receipt
+from lokay.proc.classify_leftover_remaining import (
+    remaining_from_receipt,
+    remaining_has_inbox,
+)
 from lokay.proc.merge_leftover_remaining import merge_remaining
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working
 
@@ -28,7 +31,7 @@ def ceiling_remaining(state_dir: Path) -> tuple[dict[str, Any] | None, str | Non
     inflight = remaining_from_inflight_working(state_dir)
     if inflight is not None:
         return merge_remaining(last_pass, inflight), "inflight_working"
-    if last_pass:
+    if last_pass and remaining_has_inbox(last_pass):
         return last_pass, None
     return None, None
 

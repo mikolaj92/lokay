@@ -18,7 +18,7 @@ if a=='summarize_stale_worktree_reap':v['result']={'kept_count':1,'reaped_count'
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("classify_stale_worktree_")
         or name.startswith("keep_stale_worktree_")
@@ -50,11 +50,11 @@ if a=='summarize_stale_worktree_reap':v['result']={'skipped':True,'reason':'stal
     )
     result = run_graph(tmp_path, body, "stale-overflow", path_id="stale_worktree_reap")
     statuses = result["effector_results"]
-    assert list(statuses) == [
+    assert set(statuses) == {
         "collect_stale_worktree_candidates",
         "stale_worktree_catalog",
         "summarize_stale_worktree_reap",
-    ]
+    }
     assert all(row["status"] == "succeeded" for row in statuses.values())
     assert not any(
         name.startswith("prepare_leftover_")

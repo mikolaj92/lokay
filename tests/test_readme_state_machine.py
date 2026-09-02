@@ -31,3 +31,20 @@ def test_readme_state_machine_maps_every_fala_path():
 def test_repository_has_no_github_actions_workflows():
     workflows = ROOT / ".github" / "workflows"
     assert not workflows.exists() or not any(workflows.iterdir())
+
+
+def test_flow_headings_use_authored_fala_path_ids():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    package = tomllib.loads(
+        (ROOT / "fala/lokay.fala-package.toml").read_text(encoding="utf-8")
+    )
+    authored = {str(path["id"]) for path in package["correlation_paths"]}
+    headings = dict(
+        re.findall(r"^### ([^\n]+?) — `([a-z0-9_]+)`$", readme, re.MULTILINE)
+    )
+    for title in (
+        "Uruchomienie triage",
+        "Uruchomienie implementacji",
+        "Higiena worktree",
+    ):
+        assert headings[title] in authored

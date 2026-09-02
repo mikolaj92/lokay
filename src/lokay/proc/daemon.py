@@ -10,7 +10,12 @@ from lokay.config import load_config
 from lokay.envelope import emit_exit, err, process_exit_code
 from lokay.git_host_ff import snapshot_process_head
 from lokay.pass_receipt import read_pass_receipt
-from lokay.preflight import acquire_run_lock, revoke_health_lease, run_preflight
+from lokay.preflight import (
+    acquire_run_lock,
+    prune_stale_health_leases,
+    revoke_health_lease,
+    run_preflight,
+)
 
 
 def _mill_lock_path(config_path: str) -> Path:
@@ -30,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--outbox", required=True)
     args = parser.parse_args(argv)
     lock = _mill_lock_path(args.config)
+    prune_stale_health_leases(lock.parent)
     os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(
         lock.parent / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
     )
@@ -41,13 +47,16 @@ def main(argv: list[str] | None = None) -> int:
             if root:
                 snapshot_process_head(Path(root), refresh=True)
             health = run_preflight(args.config, remediate=True, issue_lease=True)
-            from lokay.proc.daemon_entry_subflow import run
+            if not health.get("ok"):
+                payload = health
+            else:
+                from lokay.proc.daemon_entry_subflow import run
 
-            payload = run(
-                config_path=args.config,
-                max_passes=args.max_passes,
-                preflight=health,
-            )
+                payload = run(
+                    config_path=args.config,
+                    max_passes=args.max_passes,
+                    preflight=health,
+                )
         finally:
             revoke_health_lease()
     # A held singleton is an expected launchd overlap, not a preflight

@@ -354,3 +354,52 @@ def test_run_path_does_not_clobber_shared_sliced_package(tmp_path, monkeypatch):
     assert 'id = "status_snapshot"' in sliced
     assert 'id = "executor_row"' not in sliced
 
+
+
+def test_run_path_supplies_project_root_for_fala_inherit_env(
+    monkeypatch, tmp_path
+):
+    import os
+    from lokay import graph_run
+
+    monkeypatch.delenv("LOKAY_ROOT", raising=False)
+    seen = {}
+
+    def host(**_kwargs):
+        seen["root"] = os.environ.get("LOKAY_ROOT")
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    graph_run.run_path(
+        path_id="status_snapshot",
+        repo="local/status",
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        require_healthy=False,
+    )
+
+    assert seen["root"] == str(graph_run._project_root())
+
+
+def test_run_path_restores_dynamic_library_environment(monkeypatch, tmp_path):
+    import os
+    from lokay import graph_run
+
+    monkeypatch.setenv("DYLD_LIBRARY_PATH", "/operator/lib")
+
+    def host(**_kwargs):
+        os.environ["DYLD_LIBRARY_PATH"] = "/fala/native"
+        os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = "/fala/fallback"
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    graph_run.run_path(
+        path_id="status_snapshot",
+        repo="local/status",
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        require_healthy=False,
+    )
+
+    assert os.environ["DYLD_LIBRARY_PATH"] == "/operator/lib"
+    assert "DYLD_FALLBACK_LIBRARY_PATH" not in os.environ

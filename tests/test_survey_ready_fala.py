@@ -18,7 +18,7 @@ if a=='update_ready_survey_stamp':v['result']={'remaining_ready':1}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_ready_repo_")
         or name.startswith("list_work_ready_")

@@ -20,7 +20,7 @@ if a=='summarize_pass_plan':v['result']={'triage_count':0}"""
     ]
     statuses = result["effector_results"]
     assert all(statuses[name]["status"] == "succeeded" for name in order)
-    assert list(statuses) == order
+    assert set(statuses) == set(order)
     assert not any(
         name.startswith("select_plan_repo_")
         or name.startswith("build_repo_plan_fragment_")

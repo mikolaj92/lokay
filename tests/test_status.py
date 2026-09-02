@@ -104,7 +104,13 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
         config,
         {"mill_ready": True, "blockers": [], "policy_notes": []},
         {"missing_clones": []},
-        {"lease_ok": True, "lease_reason": "ok"},
+        {
+            "lease_ok": None,
+            "lease_reason": "not_observed",
+            "run_active": True,
+            "run_observation_reason": "active_run",
+            "run_lease_path": "/state/health-lease-1-x",
+        },
         {"receipt": receipt},
         {"graphs": ["factory_pass"]},
         {"preflight": None},
@@ -115,6 +121,9 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
         and out["health"] == "repairing"
         and out["by_repo"][0]["repo"] == "a/b"
         and out["human_residuals"]["count"] == 2
+        and out["lease_ok"] is None
+        and out["run_active"] is True
+        and out["run_lease_path"] == "/state/health-lease-1-x"
     )
 
 
@@ -174,3 +183,104 @@ def test_mill_daemon_does_not_default_require_checks():
         "LOKAY_REQUIRE_CHECKS:-1" not in script
         and "export LOKAY_REQUIRE_CHECKS=" not in script
     )
+
+
+def test_status_discovers_active_per_run_lease_without_inherited_capability(
+    tmp_path, monkeypatch
+):
+    import fcntl
+    import json
+    import os
+    import time
+
+    from lokay.proc.read_status_lease import read
+
+    state = tmp_path / "state"
+    state.mkdir()
+    lock = state / "mill.lock"
+    held = lock.open("a+")
+    fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lease = state / "health-lease-123-deadbeef"
+    lease.write_text(
+        json.dumps(
+            {
+                "owner_pid": os.getpid(),
+                "lock_path": str(lock.absolute()),
+                "issued_at": int(time.time()),
+                "expires_at": int(time.time()) + 60,
+                "token_sha256": "0" * 64,
+            }
+        )
+    )
+    lease.chmod(0o600)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+
+    out = read({"state_path": str(state / "events.jsonl")})
+
+    assert out["lease_ok"] is None
+    assert out["lease_reason"] == "not_observed"
+    assert out["run_active"] is True
+    assert out["run_observation_reason"] == "active_run"
+    assert out["run_lease_path"] == str(lease)
+    held.close()
+
+
+def test_status_lease_observation_ignores_dangling_candidate(tmp_path, monkeypatch):
+    from lokay.proc.read_status_lease import read
+
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "health-lease-dead-link").symlink_to(state / "missing")
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+
+    out = read({"state_path": str(state / "events.jsonl")})
+
+    assert out["run_active"] is False
+    assert out["run_observation_reason"] == "inactive"
+
+
+def test_status_lease_observation_does_not_create_missing_lock(tmp_path, monkeypatch):
+    from lokay.proc.read_status_lease import read
+
+    state = tmp_path / "state"
+    state.mkdir()
+    lock = state / "mill.lock"
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+
+    out = read({"state_path": str(state / "events.jsonl")})
+
+    assert out["run_active"] is False
+    assert not lock.exists()
+
+
+def test_status_lease_observation_ignores_insecure_record(tmp_path, monkeypatch):
+    import fcntl
+    import json
+    import os
+    import time
+
+    from lokay.proc.read_status_lease import read
+
+    state = tmp_path / "state"
+    state.mkdir()
+    lock = state / "mill.lock"
+    held = lock.open("a+")
+    fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lease = state / "health-lease-1-insecure"
+    lease.write_text(json.dumps({
+        "owner_pid": os.getpid(),
+        "lock_path": str(lock.absolute()),
+        "expires_at": int(time.time()) + 60,
+        "token_sha256": "0" * 64,
+    }))
+    lease.chmod(0o644)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
+    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+
+    out = read({"state_path": str(state / "events.jsonl")})
+
+    assert out["run_active"] is False
+    held.close()

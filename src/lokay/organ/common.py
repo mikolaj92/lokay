@@ -22,14 +22,12 @@ from lokay.prompts import (
     timeout_resume_prompt,
 )
 
-
 def _request_blob(up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return dict(
         up.get("prepare_coding_request")
         or up.get("prepare_local_repair_request")
         or {}
     )
-
 
 def _worktree_path(
     up: dict[str, dict[str, Any]], inputs: dict[str, Any] | None = None
@@ -40,7 +38,6 @@ def _worktree_path(
         or (inputs or {}).get("worktree")
         or ""
     )
-
 
 def _issue_raw(
     up: dict[str, dict[str, Any]], inputs: dict[str, Any] | None = None
@@ -54,7 +51,6 @@ def _issue_raw(
     extra = (inputs or {}).get("issue_raw")
     return dict(extra) if isinstance(extra, dict) else {}
 
-
 def _localize_conduction(
     up: dict[str, dict[str, Any]], inputs: dict[str, Any] | None = None
 ) -> dict[str, dict[str, Any]]:
@@ -62,7 +58,6 @@ def _localize_conduction(
         return up
     loc = _request_blob(up).get("localize") or (inputs or {}).get("localize") or {}
     return {**up, "localize": dict(loc) if isinstance(loc, dict) else {}}
-
 
 def localize_parent_route(out: dict[str, Any] | None) -> dict[str, Any]:
     """Always ok=true. Fala unblocks children of failed, so empty/timeout is a route."""
@@ -88,7 +83,6 @@ def localize_parent_route(out: dict[str, Any] | None) -> dict[str, Any]:
         "error": error or "localize produced no edit paths",
     }
 
-
 def _localize_paths(up: dict[str, dict[str, Any]]) -> list[str]:
     """Paths from localize conduction; empty means fail-closed before agent."""
     raw = up.get("localize", {}).get("paths") or []
@@ -100,7 +94,6 @@ def _localize_paths(up: dict[str, dict[str, Any]]) -> list[str]:
         if rel:
             out.append(rel)
     return out
-
 
 def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Map upstream step id → its values dict."""
@@ -117,7 +110,6 @@ def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
             out[str(step_id)] = payload
     return out
 
-
 def _run_atom_main(module_main, argv: list[str]) -> dict[str, Any]:
     import contextlib
     import io
@@ -132,15 +124,12 @@ def _run_atom_main(module_main, argv: list[str]) -> dict[str, Any]:
     data["_exit"] = code
     return data
 
-
 def _cfg_flags(inputs: dict[str, Any]) -> list[str]:
     path = inputs.get("config_path") or inputs.get("config")
     return ["--config", str(path)] if path else []
 
-
 def _live_flags(inputs: dict[str, Any]) -> list[str]:
     return ["--live"] if inputs.get("live") else []
-
 
 def _test_local_ok(env: dict[str, Any] | None) -> bool:
     """Green suite, or an honest skip (no Python suite), counts as success.
@@ -157,7 +146,6 @@ def _test_local_ok(env: dict[str, Any] | None) -> bool:
     if env.get("skipped") or env.get("reason") == "no_python_test_suite":
         return True
     return env.get("ok") is True
-
 
 def _closed_issue_payload(raw: dict[str, Any] | None) -> dict[str, Any] | None:
     """Refuse envelope when a viewed issue is not OPEN. None means still open."""
@@ -176,7 +164,6 @@ def _closed_issue_payload(raw: dict[str, Any] | None) -> dict[str, Any] | None:
         "issue": number,
         "repo": repo,
     }
-
 
 def _issue_no_longer_open(
     up: dict[str, dict[str, Any]],
@@ -227,7 +214,6 @@ def _issue_no_longer_open(
     issue = viewed.get("issue")
     return _closed_issue_payload(issue if isinstance(issue, dict) else None)
 
-
 def _finalize_local_tests_ok(finalized: dict[str, Any] | None) -> bool:
     """Closed publish verdict from finalize_local_tests."""
     if not isinstance(finalized, dict) or not finalized:
@@ -235,7 +221,6 @@ def _finalize_local_tests_ok(finalized: dict[str, Any] | None) -> bool:
     if finalized.get("route") == "publish":
         return True
     return _test_local_ok(finalized)
-
 
 def _test_local_probe(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """First probe plus optional recheck. Missing probe is test_local_missing."""
@@ -278,7 +263,6 @@ def _test_local_probe(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
         }
     return None
 
-
 def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Fail-closed gate: push/pr_merge/pr_create need successful local tests.
 
@@ -301,7 +285,6 @@ def _require_test_local(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
         }
     return _test_local_probe(up)
 
-
 def _require_push(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Fail-closed gate: pr_create only after a successful push conduction.
 
@@ -322,7 +305,6 @@ def _require_push(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             "reason": "push_failed",
         }
     return None
-
 
 def _require_real_diff(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Fail-closed gate: push/pr_create need a real (non-plan-only) diff.
@@ -345,7 +327,6 @@ def _require_real_diff(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             "reason": str(env.get("reason") or "plan_only"),
         }
     return None
-
 
 def _resume_after_timeout(
     *,
@@ -409,5 +390,4 @@ def _resume_after_timeout(
             if isinstance(committed, dict):
                 out["committed"] = committed.get("committed")
     return out
-
 

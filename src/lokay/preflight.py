@@ -341,6 +341,53 @@ def issue_health_lease(
     os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(path.absolute())
 
 
+def prune_stale_health_leases(directory: Path) -> dict[str, int]:
+    """Remove owned regular per-run leases that are expired or have no owner."""
+    import stat
+    import time
+
+    removed = 0
+    kept = 0
+    now = int(time.time())
+    for path in directory.glob("health-lease-*-*"):
+        try:
+            info = path.lstat()
+            if path.is_symlink() or not stat.S_ISREG(info.st_mode):
+                kept += 1
+                continue
+            if hasattr(os, "getuid") and info.st_uid != os.getuid():
+                kept += 1
+                continue
+            record = json.loads(path.read_text(encoding="ascii"))
+            owner_pid = int(record["owner_pid"])
+            expired = int(record["expires_at"]) <= now
+            try:
+                os.kill(owner_pid, 0)
+                dead = False
+            except OSError:
+                dead = True
+            bound_lock = Path(str(record["lock_path"])).expanduser().absolute()
+            lock_held = False
+            if bound_lock.is_file():
+                probe = bound_lock.open("r")
+                try:
+                    try:
+                        fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+                    except BlockingIOError:
+                        lock_held = True
+                finally:
+                    probe.close()
+            if (expired or dead) and not lock_held:
+                path.unlink()
+                removed += 1
+            else:
+                kept += 1
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            kept += 1
+    return {"removed": removed, "kept": kept}
+
+
 def revoke_health_lease() -> None:
     path = _lease_path()
     token = os.environ.pop("LOKAY_HEALTH_LEASE", "")

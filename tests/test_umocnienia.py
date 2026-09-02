@@ -250,9 +250,8 @@ def test_live_receipts_keep_only_alive_pids(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     (cycle / "noise.json").write_text(json.dumps({"ok": True}), encoding="utf-8")
-    live = live_issue_to_pr_receipts()
-    assert len(live) == 1
-    assert live[0]["repo"] == "mikolaj92/Fala" and live[0]["issue"] == 164
+    # A live PID without its issue worktree is a ghost receipt, not occupancy.
+    assert live_issue_to_pr_receipts() == []
 
 
 def test_reaped_plan_only_receipt_is_not_occupancy(tmp_path, monkeypatch):
@@ -289,6 +288,12 @@ def test_compute_health_counts_live_receipts_as_started(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         "lokay.proc.repo_mutex._issue_is_closed", lambda *_args, **_kwargs: False
+    )
+    monkeypatch.setattr(
+        "lokay.proc.compute_health.live_issue_to_pr_receipts",
+        lambda: live_issue_to_pr_receipts(
+            worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree"
+        ),
     )
     cycle = tmp_path / ".lokay" / "cycle"
     cycle.mkdir(parents=True)
@@ -403,9 +408,9 @@ def test_live_receipt_with_unreadable_command_stays_occupied(tmp_path, monkeypat
         "lokay.proc.issue_delivery_process._pid_command", lambda _pid: ""
     )
 
-    assert live_issue_to_pr_receipts() == [
-        {"pid": os.getpid(), "repo": "mikolaj92/lokay", "issue": 9}
-    ]
+    assert live_issue_to_pr_receipts(
+        worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree"
+    ) == [{"pid": os.getpid(), "repo": "mikolaj92/lokay", "issue": 9}]
 
 
 def test_unreadable_pid_liveness_probe_stays_occupied(monkeypatch):
@@ -454,9 +459,10 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
     assert seen["during_spawn"]["launcher_pid"] == os.getpid()
     assert seen["pass_fds"] and len(seen["pass_fds"]) == 1
     assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
-    assert detach_mod.live_issue_to_pr_receipts(pid_alive=lambda _pid: True) == [
-        json.loads(Path(out["receipt"]).read_text())
-    ]
+    assert detach_mod.live_issue_to_pr_receipts(
+        pid_alive=lambda _pid: True,
+        worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree",
+    ) == [json.loads(Path(out["receipt"]).read_text())]
 
 
 def test_detach_refuses_to_spawn_without_durable_reservation(tmp_path, monkeypatch):
@@ -501,7 +507,9 @@ def test_starting_receipt_keeps_repo_occupied_without_pid(tmp_path, monkeypatch)
         encoding="utf-8",
     )
 
-    assert live_issue_to_pr_receipts() == [json.loads(path.read_text())]
+    assert live_issue_to_pr_receipts(
+        worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree"
+    ) == [json.loads(path.read_text())]
 
 
 def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch):
@@ -536,7 +544,9 @@ def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch
     assert out["ok"] is False
     assert out["reason"] == "receipt_unavailable"
     assert out["cleanup_confirmed"] is False
-    assert live_issue_to_pr_receipts()[0]["starting"] is True
+    assert live_issue_to_pr_receipts(
+        worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree"
+    )[0]["starting"] is True
 
 
 def test_unreadable_receipt_state_is_detected(tmp_path, monkeypatch):
@@ -739,7 +749,9 @@ def test_legacy_starting_receipt_remains_live_not_reclaimable(tmp_path, monkeypa
         encoding="utf-8",
     )
 
-    assert live_issue_to_pr_receipts() == [json.loads(path.read_text())]
+    assert live_issue_to_pr_receipts(
+        worktree_for=lambda _repo, _issue: tmp_path / "matching-worktree"
+    ) == [json.loads(path.read_text())]
     out = detach_mod.detach_issue_to_pr(
         repo="mikolaj92/lokay",
         issue=9,

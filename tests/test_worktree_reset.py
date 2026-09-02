@@ -89,6 +89,7 @@ state:
 """,
         encoding="utf-8",
     )
+    (tmp_path / "clone").mkdir()
     monkeypatch.setattr(worktree_add, "mutations_allowed", lambda **kw: True)
 
     def boom(*_a, **_kw):
@@ -107,8 +108,10 @@ state:
         ]
     )
     payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
-    assert code == 1
-    assert payload["ok"] is False
+    # The atom is a closed Fala classifier: failure is data, not process failure.
+    assert code == 0
+    assert payload["ok"] is True
+    assert payload["route"] == "missing"
     assert payload["reason"] == "invalid_branch_ref"
 
 

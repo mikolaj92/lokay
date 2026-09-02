@@ -10,24 +10,24 @@ from lokay import preflight
 from lokay.compose import tick
 
 
-@pytest.fixture(autouse=True)
-def _clear_health_lease_environment(request):
-    """Keep lease env hermetic across tests.
+_HOST_HEALTH_LEASE = Path.home() / ".lokay" / "health-lease"
 
-    ``issue_health_lease`` writes ``os.environ`` directly, and tests also use
-    ``monkeypatch.setenv`` for lease tokens. Clear before and after every test,
-    after monkeypatch teardown, so nothing leaks into later modules.
-    """
+
+@pytest.fixture(autouse=True)
+def _clear_health_lease_environment(tmp_path, monkeypatch):
+    """Keep lease files and environment hermetic across tests."""
     import os
 
-    def _clear() -> None:
-        os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
-        os.environ.pop("LOKAY_HEALTH_LEASE", None)
-        os.environ.pop("LOKAY_HEALTH_LEASE_PATH", None)
-
-    _clear()
-    # Run after function-scoped monkeypatch undos for this test.
-    request.addfinalizer(_clear)
+    for key in (
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
+        "LOKAY_HEALTH_LEASE",
+        "LOKAY_HEALTH_LEASE_PATH",
+    ):
+        os.environ.pop(key, None)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    yield
+    preflight.revoke_health_lease()
+    os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
 
 
 def _config(tmp_path: Path, *, min_free_gb: float = 0) -> Path:
@@ -931,6 +931,23 @@ def test_daemon_healthy_preflight_closes_resolved_incidents(tmp_path, monkeypatc
     assert result["ok"] is True
     assert called == ["mikolaj92/lokay"]
     assert result["resolved_incidents"]["closed"] == [178]
+
+
+def test_preflight_test_config_keeps_health_lease_out_of_host_home(
+    tmp_path, monkeypatch
+):
+    host_lease = _HOST_HEALTH_LEASE
+    before = host_lease.read_bytes() if host_lease.exists() else None
+    cfg = _config(tmp_path)
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    _host_ok(monkeypatch)
+
+    preflight.run_preflight(str(cfg), issue_lease=True)
+
+    assert os.environ["LOKAY_HEALTH_LEASE_PATH"].startswith(str(tmp_path))
+    after = host_lease.read_bytes() if host_lease.exists() else None
+    assert after == before
 
 
 def test_leftover_incident_oserror_is_not_applied(tmp_path, monkeypatch):
@@ -2105,3 +2122,96 @@ def test_unhealthy_preflight_still_reruns_host_checks(tmp_path, monkeypatch):
     result = preflight.run_preflight(str(cfg))
     assert result["ok"] is True, result
     assert calls["n"] == 2
+
+
+def test_prune_stale_health_leases_removes_only_dead_or_expired(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    import os
+    import time
+
+    state = tmp_path / "state"
+    state.mkdir()
+    lock = state / "mill.lock"
+    base = {
+        "token_sha256": hashlib.sha256(("a" * 64).encode("ascii")).hexdigest(),
+        "lock_path": str(lock),
+        "issued_at": int(time.time()) - 10,
+    }
+    active = state / "health-lease-1-active"
+    active.write_text(json.dumps({**base, "owner_pid": os.getpid(), "expires_at": int(time.time()) + 60}))
+    expired = state / "health-lease-2-expired"
+    expired.write_text(json.dumps({**base, "owner_pid": os.getpid(), "expires_at": int(time.time()) - 1}))
+    dead = state / "health-lease-3-dead"
+    dead.write_text(json.dumps({**base, "owner_pid": 999_999_999, "expires_at": int(time.time()) + 60}))
+    foreign = state / "health-lease-not-ours"
+    foreign.write_text("do not delete malformed files")
+    for path in (active, expired, dead, foreign):
+        path.chmod(0o600)
+
+    out = preflight.prune_stale_health_leases(state)
+
+    assert out == {"removed": 2, "kept": 2}
+    assert active.exists() and foreign.exists()
+    assert not expired.exists() and not dead.exists()
+
+
+def test_prune_stale_health_leases_keeps_record_while_bound_lock_is_held(
+    tmp_path,
+):
+    import fcntl
+    import hashlib
+    import json
+    import time
+
+    state = tmp_path / "state"
+    state.mkdir()
+    lock = state / "mill.lock"
+    held = lock.open("a+")
+    fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lease = state / "health-lease-dead-child-active-parent"
+    lease.write_text(json.dumps({
+        "token_sha256": hashlib.sha256(("a" * 64).encode("ascii")).hexdigest(),
+        "owner_pid": 999_999_999,
+        "lock_path": str(lock.absolute()),
+        "issued_at": int(time.time()) - 10,
+        "expires_at": int(time.time()) + 60,
+    }))
+    lease.chmod(0o600)
+
+    out = preflight.prune_stale_health_leases(state)
+
+    assert out == {"removed": 0, "kept": 1}
+    assert lease.exists()
+    held.close()
+
+
+def test_prune_stale_health_leases_keeps_old_same_pid_record_during_new_run_lock(
+    tmp_path,
+):
+    import fcntl
+    import hashlib
+    import json
+    import os
+    import time
+
+    state = tmp_path / "state"
+    state.mkdir()
+    lock = state / "mill.lock"
+    held = lock.open("a+")
+    fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    lease = state / "health-lease-old-same-pid"
+    lease.write_text(json.dumps({
+        "token_sha256": hashlib.sha256(("a" * 64).encode("ascii")).hexdigest(),
+        "owner_pid": os.getpid(),
+        "lock_path": str(lock.absolute()),
+        "issued_at": int(time.time()) - 10_000,
+        "expires_at": int(time.time()) - 1,
+    }))
+    lease.chmod(0o600)
+
+    out = preflight.prune_stale_health_leases(state)
+
+    assert out == {"removed": 0, "kept": 1}
+    assert lease.exists()
+    held.close()

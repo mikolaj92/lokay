@@ -23,28 +23,12 @@ OUTBOX="${LOKAY_HOME}/preflight-bootstrap-incidents.log"
 LOKAY_LAUNCHD_LABEL="${LOKAY_LAUNCHD_LABEL:-ai.mikolaj.lokay-mill}"
 LOKAY_LAUNCHD_START_INTERVAL=60
 LOKAY_LAUNCHD_PLIST="${LOKAY_LAUNCHD_PLIST:-${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist}"
-LOKAY_MILL_LOCK="${LOKAY_MILL_LOCK:-${LOKAY_HOME}/mill.lock}"
 
 bootstrap_incident() {
   if [[ -f "${OUTBOX}" ]] && [[ "$(wc -c < "${OUTBOX}")" -ge 65536 ]]; then
     : > "${OUTBOX}"
   fi
   printf '{"health":"preflight_failed","code":"%s"}\n' "$1" >> "${OUTBOX}"
-}
-
-mill_lock_busy() {
-  local lock="${LOKAY_MILL_LOCK}"
-  [[ -e "${lock}" ]] || return 1
-  python3 - "${lock}" <<'PY' 2>/dev/null || return 1
-import fcntl, sys
-path = sys.argv[1]
-try:
-    handle = open(path, "a+", encoding="utf-8")
-    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-except OSError:
-    raise SystemExit(0)
-raise SystemExit(1)
-PY
 }
 
 write_host_plist() {
@@ -90,12 +74,6 @@ LOG="${LOG_DIR}/mill-${STAMP}.log"
 LATEST="${LOG_DIR}/mill-latest.log"
 printf '%s\n' '{"ok":true,"health":"current","reason":"starting"}' | tee "${LOG}" >"${LATEST}"
 
-if mill_lock_busy; then
-  printf '%s\n' '{"ok":true,"health":"current","reason":"lock_busy"}' | tee "${LOG}" >"${LATEST}"
-  printf '%s\n' '{"ok":true,"health":"current","reason":"lock_busy"}'
-  exit 0
-fi
-
 CEILING="${LOKAY_PASS_CEILING_SECONDS:-180}"
 CEILING="${CEILING%.*}"
 case "${CEILING}" in
@@ -108,7 +86,7 @@ fi
 write_pass_ceiling_receipt() {
   local receipt="${LOKAY_HOME}/last-pass.json"
   local tmp="${receipt}.$$.$RANDOM.tmp"
-  python3 - "${receipt}" "${tmp}" "${CEILING}" <<'PY' 2>/dev/null || true
+  uv run python - "${receipt}" "${tmp}" "${CEILING}" <<'PY' 2>/dev/null || true
 import json, os, sys, time
 receipt, tmp, ceiling = sys.argv[1], sys.argv[2], sys.argv[3]
 payload = {
@@ -134,7 +112,7 @@ stop_lock_owner() {
   # Signal the lock-owning uv/lokay-daemon tree in this session only.
   # Detached issue_to_pr uses start_new_session and must survive.
   local root_pid="$1"
-  python3 - "${root_pid}" <<'PY' 2>/dev/null || true
+  uv run python - "${root_pid}" <<'PY' 2>/dev/null || true
 import os, signal, subprocess, sys, time
 
 root = int(sys.argv[1])

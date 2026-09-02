@@ -71,6 +71,7 @@ def test_valid_implementation_skips_repair_then_publishes():
         {
             "resolve_implementation_issue": {"route": "open"},
             "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
             "coding_execution": {"route": "implemented"},
             "select_local_test": {"route": "pass"},
             "finalize_local_tests": {"route": "publish"},
@@ -87,6 +88,7 @@ def test_human_coding_skips_publish():
         {
             "resolve_implementation_issue": {"route": "open"},
             "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
             "coding_execution": {"route": "human"},
             "select_local_test": {"route": "skip"},
             "finalize_local_tests": {"route": "not_applicable"},
@@ -106,6 +108,7 @@ def test_failed_coding_skips_relocalize_and_publish():
         {
             "resolve_implementation_issue": {"route": "open"},
             "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
             "coding_execution": {"route": "failed"},
             "select_local_test": {"route": "skip"},
             "finalize_local_tests": {"route": "not_applicable"},
@@ -129,6 +132,7 @@ def test_skipped_select_local_test_is_a_miss_for_repair():
         {
             "resolve_implementation_issue": {"route": "open"},
             "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
             "coding_execution": {"route": "failed"},
             "select_local_test": {"route": "skip"},
             "finalize_local_tests": {"route": "not_applicable"},
@@ -147,6 +151,7 @@ def test_red_test_runs_local_repair_then_terminal():
         {
             "resolve_implementation_issue": {"route": "open"},
             "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
             "coding_execution": {"route": "implemented"},
             "select_local_test": {"route": "fail"},
             "local_repair_execution": {"route": "terminal"},
@@ -296,6 +301,7 @@ def test_native_valid_implementation_skips_repair_then_publishes(tmp_path):
     body = base_effector(
         """if a=='resolve_implementation_issue':v['route']='open'
 if a=='worktree_add':v.update(route='ready')
+if a=='localize':v.update(route='ready',paths=['src/x.py'])
 if a=='coding_execution':v.update(route='implemented',decision={'verdict':'implemented'})
 if a=='test_local_execution':v.update(tested=True)
 if a=='select_local_test':v['route']='pass'
@@ -317,6 +323,7 @@ def test_native_failed_coding_skips_relocalize(tmp_path):
     body = base_effector(
         """if a=='resolve_implementation_issue':v['route']='open'
 if a=='worktree_add':v.update(route='ready')
+if a=='localize':v.update(route='ready',paths=['src/x.py'])
 if a=='coding_execution':v.update(route='failed')
 if a=='select_local_test':v['route']='skip'
 if a=='finalize_local_tests':v['route']='not_applicable'
