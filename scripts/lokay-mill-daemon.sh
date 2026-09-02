@@ -84,27 +84,10 @@ if [[ "${CEILING}" -lt 1 ]]; then
 fi
 
 write_pass_ceiling_receipt() {
-  local receipt="${LOKAY_HOME}/last-pass.json"
-  local tmp="${receipt}.$$.$RANDOM.tmp"
-  uv run python - "${receipt}" "${tmp}" "${CEILING}" <<'PY' 2>/dev/null || true
-import json, os, sys, time
-receipt, tmp, ceiling = sys.argv[1], sys.argv[2], sys.argv[3]
-payload = {
-    "ok": False,
-    "health": "pass_ceiling",
-    "reason": "pass_ceiling",
-    "pass_ceiling_seconds": float(ceiling),
-    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-}
-try:
-    with open(tmp, "w", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload) + "\n")
-    os.replace(tmp, receipt)
-except OSError:
-    try:
-        os.unlink(tmp)
-    except OSError:
-        pass
+  uv run python - "${CFG}" "${CEILING}" <<'PY' 2>/dev/null || true
+from lokay.proc.write_pass_ceiling_receipt import main
+import sys
+raise SystemExit(main(sys.argv[1:]))
 PY
 }
 
@@ -195,8 +178,11 @@ fi
 CEILING_MARK="${LOKAY_HOME}/.pass-ceiling.${DAEMON_PID}"
 if [[ -f "${CEILING_MARK}" ]]; then
   rm -f "${CEILING_MARK}"
-  write_pass_ceiling_receipt
-  printf '%s\n' '{"ok":false,"health":"pass_ceiling","reason":"pass_ceiling"}' | tee -a "${LOG}" >"${LATEST}"
+  envelope="$(write_pass_ceiling_receipt)"
+  if [[ -z "${envelope}" ]]; then
+    envelope='{"ok":false,"health":"pass_ceiling","reason":"pass_ceiling"}'
+  fi
+  printf '%s\n' "${envelope}" | tee -a "${LOG}" >"${LATEST}"
   set -e
   exit 0
 fi

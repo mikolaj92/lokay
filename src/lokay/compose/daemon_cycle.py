@@ -20,6 +20,7 @@ from lokay.proc.classify_leftover_remaining import (
     remaining_has_inbox,
 )
 from lokay.proc.merge_leftover_remaining import merge_remaining
+from lokay.proc.classify_pass_ceiling import classify as classify_pass_ceiling
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working
 
 
@@ -105,22 +106,18 @@ def compose_daemon_cycle(
 
         # Workers started by issue-to-PR are detached. Do not signal them when
         # releasing the daemon/launchd slot for the next tick.
-        payload = {
-            "ok": False,
-            "health": "pass_ceiling",
-            "reason": "pass_ceiling",
-            "pass_ceiling_seconds": ceiling,
-            "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        }
         try:
             receipt = load_config(config_path).state_path.parent / "last-pass.json"
         except (OSError, ValueError, FileNotFoundError):
             receipt = Path.home() / ".lokay" / "last-pass.json"
         remaining, remaining_source = ceiling_remaining(receipt.parent)
-        if remaining is not None:
-            payload["remaining"] = remaining
-            if remaining_source:
-                payload["remaining_source"] = remaining_source
+        payload = classify_pass_ceiling(
+            state_dir=receipt.parent,
+            elapsed_seconds=ceiling,
+            remaining=remaining,
+            remaining_source=remaining_source,
+        )
+        payload["pass_ceiling_seconds"] = ceiling
         try:
             receipt.parent.mkdir(parents=True, exist_ok=True)
             temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")

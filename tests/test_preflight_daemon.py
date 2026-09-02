@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,7 @@ def test_daemon_handles_missing_home_and_bounds_bootstrap_outbox():
 
 
 def _fake_uv(local_bin: Path) -> Path:
+    src_root = Path(__file__).resolve().parents[1] / "src"
     uv = local_bin / "uv"
     uv.write_text(
         "#!/bin/sh\n"
@@ -63,7 +65,7 @@ def _fake_uv(local_bin: Path) -> Path:
         "    ;;\n"
         "esac\n"
         'if [ "$LOKAY_UV_DAEMON_FAIL" = 1 ]; then echo fail >&2; exit 1; fi\n'
-        'if [ "$1" = run ] && [ "$2" = python ]; then shift 2; exec /usr/bin/python3 "$@"; fi\n'
+        f'if [ "$1" = run ] && [ "$2" = python ]; then shift 2; PYTHONPATH="{src_root}${{PYTHONPATH:+:$PYTHONPATH}}" exec "{sys.executable}" "$@"; fi\n'
         'if [ "$1" = run ] && [ "$2" = lokay-daemon ]; then\n'
         '  printf \'%s\\n\' "$(command -v pi)" "$PATH"\n'
         '  if [ -n "$LOKAY_UV_ENVELOPE" ]; then printf \'%s\\n\' "$LOKAY_UV_ENVELOPE"; else\n'
@@ -407,12 +409,14 @@ def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
     )
 
     assert out["ok"] is False
-    assert out["reason"] == "pass_ceiling"
+    assert out["health"] == "pass_ceiling"
+    assert out["reason"] == "ceiling_with_progress"
     assert out["remaining"]["inbox"] == 4
     assert out["remaining"]["ready"] == 1
     assert out["remaining_source"] == "inflight_working"
     persisted = json.loads(receipt.read_text())
-    assert persisted["reason"] == "pass_ceiling"
+    assert persisted["health"] == "pass_ceiling"
+    assert persisted["reason"] == "ceiling_with_progress"
     assert persisted["remaining"]["inbox"] == 4
     assert persisted["remaining"] != stale
 
@@ -462,10 +466,12 @@ def test_daemon_cycle_pass_ceiling_does_not_copy_stale_inbox_zero(
         pass_ceiling_seconds=0.02,
     )
 
-    assert out["reason"] == "pass_ceiling"
+    assert out["health"] == "pass_ceiling"
+    assert out["reason"] == "ceiling_stalled"
     assert "remaining" not in out
     persisted = json.loads(receipt.read_text())
-    assert persisted["reason"] == "pass_ceiling"
+    assert persisted["health"] == "pass_ceiling"
+    assert persisted["reason"] == "ceiling_stalled"
     assert "remaining" not in persisted
 
 
@@ -488,9 +494,9 @@ def test_daemon_cycle_native_exception_after_ceiling_writes_receipt(
         pass_ceiling_seconds=0.02,
     )
 
-    assert out["reason"] == "pass_ceiling"
+    assert out["health"] == "pass_ceiling"
     receipt = tmp_path / "lokay-state" / "last-pass.json"
-    assert json.loads(receipt.read_text())["reason"] == "pass_ceiling"
+    assert json.loads(receipt.read_text())["health"] == "pass_ceiling"
 
 
 def test_daemon_cycle_native_exception_before_ceiling_propagates(monkeypatch, tmp_path):
@@ -569,11 +575,97 @@ def test_os_pass_ceiling_kills_lock_owner_not_detached_worker(tmp_path):
     assert completed.returncode == 0, completed.stderr
     receipt = json.loads((tmp_path / ".lokay" / "last-pass.json").read_text(encoding="utf-8"))
     assert receipt["health"] == "pass_ceiling"
-    assert receipt["reason"] == "pass_ceiling"
+    assert receipt["reason"] in {
+        "pass_ceiling",
+        "ceiling_with_progress",
+        "ceiling_waiting_external",
+        "ceiling_stalled",
+    }
     latest = (tmp_path / ".lokay" / "logs" / "mill-latest.log").read_text(encoding="utf-8")
     assert "pass_ceiling" in latest
     assert (tmp_path / "daemon-started").exists()
 
+
+def test_pass_ceiling_classifies_progress_and_keeps_resume_context(monkeypatch, tmp_path):
+    """Ceiling is not one anonymous health code. Progress and resume stay visible."""
+    cfg = _write_cfg(tmp_path)
+    state = tmp_path / "lokay-state"
+    state.mkdir(exist_ok=True)
+    (state / "activity.json").write_text(
+        json.dumps(
+            {
+                "path": "executor_department",
+                "atom": "list_open_issues",
+                "work_id": "mikolaj92/reviewkit#308",
+                "repo": "mikolaj92/reviewkit",
+                "transitions": 43,
+                "last_progress_at": "2026-09-02T12:21:00Z",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (state / "state.jsonl").write_text(
+        json.dumps(
+            {
+                "kind": "issue_to_pr",
+                "repo": "mikolaj92/reviewkit",
+                "issue": 308,
+                "pr": 309,
+                "delivered": True,
+                "run_id": "lokay-5b2c7069f8a1",
+                "ts": "2026-09-02T12:21:43Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def wait_forever(**_kwargs):
+        import time
+
+        time.sleep(1)
+        return {"ok": True}
+
+    monkeypatch.setattr(daemon_cycle, "run_path", wait_forever)
+    out = daemon_cycle.compose_daemon_cycle(
+        config_path=cfg,
+        pass_ceiling_seconds=0.02,
+    )
+
+    assert out["health"] == "pass_ceiling"
+    assert out["reason"] == "ceiling_with_progress"
+    assert out["last_path"] == "executor_department"
+    assert out["last_atom"] == "list_open_issues"
+    assert out["work_id"] == "mikolaj92/reviewkit#308"
+    assert out["resume_from"] == "executor_department"
+    assert out["latest_delivery"]["pr"] == 309
+    receipt = json.loads((state / "last-pass.json").read_text())
+    assert receipt["reason"] == "ceiling_with_progress"
+    assert receipt["last_path"] == "executor_department"
+
+
+def test_shell_ceiling_receipt_uses_configured_state_path(tmp_path):
+    extra = {
+        "LOKAY_PASS_CEILING_SECONDS": "1",
+        "LOKAY_UV_DAEMON_GATE": str(tmp_path / "never-finish"),
+        "LOKAY_UV_DAEMON_MARKER": str(tmp_path / "daemon-started"),
+    }
+    repo = tmp_path / "repo"
+    extra["LOKAY_CONFIG"] = _write_cfg(repo)
+    extra["LOKAY_ROOT"] = str(repo)
+    completed = _run_daemon(tmp_path, extra_env=extra)
+    assert completed.returncode == 0, completed.stderr
+    custom = repo / "lokay-state" / "last-pass.json"
+    default_home = tmp_path / ".lokay" / "last-pass.json"
+    payload = json.loads(custom.read_text(encoding="utf-8"))
+    assert payload["health"] == "pass_ceiling"
+    assert payload["reason"] in {
+        "pass_ceiling",
+        "ceiling_with_progress",
+        "ceiling_waiting_external",
+        "ceiling_stalled",
+    }
+    assert not default_home.exists()
 
 
 def test_caretaker_delegates_singleton_lock_to_config_aware_daemon():

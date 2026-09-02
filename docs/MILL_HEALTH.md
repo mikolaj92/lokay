@@ -41,6 +41,19 @@ Cheap readiness without a multi-repo `gh` survey (uses `last_pass` when present)
 uv run lokay status --config config.yaml --local
 ```
 
+## Pass ceiling
+
+`health=pass_ceiling` still means the caretaker released the daemon slot.
+`reason` now classifies the stop:
+
+- `ceiling_with_progress` — the pass moved, or leftover remaining/delivery is known;
+- `ceiling_waiting_external` — work is waiting on checks/agent/GitHub;
+- `ceiling_stalled` — no progress, wait, or delivery evidence.
+
+The receipt is written next to the configured `state.path`, not an unconditional
+`~/.lokay/last-pass.json`. It keeps `last_path`, `last_atom`, `work_id`, and
+`resume_from` when `activity.json` is present.
+
 ## Durable work truth
 
 `lokay status --local` projects issue delivery from the append-only state log.
