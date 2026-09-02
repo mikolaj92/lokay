@@ -7,6 +7,7 @@ def reduce(
     clones: dict,
     lease: dict,
     receipt_fact: dict,
+    work_fact: dict,
     graphs: dict,
     preflight: dict,
 ) -> dict:
@@ -28,6 +29,7 @@ def reduce(
         notes.append(
             f"{len(missing)} missing clone(s) — implement blocked there; triage still runs"
         )
+    work_units = list(work_fact.get("work_units") or [])
     return {
         "ok": True,
         "snapshot": {
@@ -50,7 +52,8 @@ def reduce(
             "idle": None if receipt is None else receipt.get("idle"),
             "remaining": remaining,
             "survey_ok": None,
-            "work_units": None,
+            "work_units": work_units,
+            "latest_delivery": work_fact.get("latest_delivery"),
             "lease_ok": lease.get("lease_ok"),
             "lease_reason": lease.get("lease_reason"),
             "run_active": lease.get("run_active"),

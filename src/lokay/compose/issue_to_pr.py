@@ -44,6 +44,7 @@ def compose_issue_to_pr(
             "ok": False,
             "error": "refusing live compose while config mode is not live",
         }
+    work_id = f"{repo}#{int(issue_number)}"
     result = run_path(
         path_id="issue_to_pr",
         repo=repo,
@@ -54,9 +55,18 @@ def compose_issue_to_pr(
         extra_inputs={
             "incident_fingerprint": incident_fingerprint,
             "keep_issue_open": bool(incident_fingerprint),
+            "work_id": work_id,
         },
     )
-    result.update(kind="issue_to_pr", engine="fala", planned=not live)
+    result.update(
+        kind="issue_to_pr",
+        engine="fala",
+        planned=not live,
+        work_id=work_id,
+        work_state="planned" if not live else (
+            "delivered" if result.get("delivered") else "stopped"
+        ),
+    )
     try:
         if cfg is not None:
             append_event(cfg.state_path, result)

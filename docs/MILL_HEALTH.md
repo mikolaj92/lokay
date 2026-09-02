@@ -41,6 +41,15 @@ Cheap readiness without a multi-repo `gh` survey (uses `last_pass` when present)
 uv run lokay status --config config.yaml --local
 ```
 
+## Durable work truth
+
+`lokay status --local` projects issue delivery from the append-only state log.
+Each item has the stable identity `<owner>/<repo>#<issue>`. Delivery is
+monotonic: once a work unit has a PR/delivered event, a later stale
+`condition_not_met` observation cannot erase it. `work_units` is a bounded
+operational view; `latest_delivery` remains the newest durable delivery.
+Neither field performs a GitHub survey or changes product state.
+
 ## Pass receipt (LaunchAgent)
 
 After each `factory_pass` (`lokay-record-pass`), Lokay writes a small JSON receipt

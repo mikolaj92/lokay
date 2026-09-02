@@ -1171,3 +1171,40 @@ def test_harvest_idle_mill_stuck_skips_when_not_live(tmp_path: Path):
     harvest_idle_mill_stuck(config_path=str(tmp_path / "missing.yaml"), live=False)
     data = json.loads(stuck_path.read_text(encoding="utf-8"))
     assert "mikolaj92/Temida#4805" in data
+
+
+def test_later_condition_not_met_does_not_erase_prior_delivery(tmp_path: Path):
+    """Cross-pass truth is monotonic: a delivered PR wins over a later stale stop."""
+    state = tmp_path / "state.jsonl"
+    _event(state, repo="a/b", issue=308, ok=True)
+    rows = [json.loads(line) for line in state.read_text().splitlines()]
+    rows[0].update(delivered=True, pr=309, run_id="delivery-pass")
+    rows.append(
+        {
+            "kind": "issue_to_pr",
+            "repo": "a/b",
+            "issue": 308,
+            "ok": True,
+            "delivered": False,
+            "stopped": True,
+            "reason": "condition_not_met",
+            "run_id": "later-pass",
+        }
+    )
+    state.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    latest = child_harvest._index_issue_to_pr_events(state)[("a/b", 308)]
+
+    assert latest["delivered"] is True
+    assert latest["pr"] == 309
+    assert latest["run_id"] == "delivery-pass"
+
+
+def test_explicit_non_delivery_is_not_delivery_merely_because_envelope_is_ok():
+    event = {
+        "ok": True,
+        "delivered": False,
+        "stopped": True,
+        "reason": "condition_not_met",
+    }
+    assert child_harvest._event_delivered(event) is False

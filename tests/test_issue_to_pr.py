@@ -38,11 +38,17 @@ def test_lokay_repo_still_runs_issue_to_pr_path(
         "config_path": None,
         "live": False,
         "package_path": None,
-        "extra_inputs": {"incident_fingerprint": "", "keep_issue_open": False},
+        "extra_inputs": {
+            "incident_fingerprint": "",
+            "keep_issue_open": False,
+            "work_id": "mikolaj92/lokay#530",
+        },
     }]
     assert result == {
         "ok": True,
         "kind": "issue_to_pr",
         "engine": "fala",
         "planned": True,
+        "work_id": "mikolaj92/lokay#530",
+        "work_state": "planned",
     }

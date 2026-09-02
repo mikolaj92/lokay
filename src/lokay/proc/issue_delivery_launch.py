@@ -29,6 +29,7 @@ def detach_issue_to_pr(
     """
     repo_name = str(repo)
     issue_number = int(issue)
+    work_id = f"{repo_name}#{issue_number}"
 
     spawn = popen or subprocess.Popen
     argv = [sys.executable, "-u", "-m", "lokay.compose.issue_to_pr"]
@@ -65,6 +66,8 @@ def detach_issue_to_pr(
         "launcher_pid": os.getpid(),
         "repo": repo_name,
         "issue": issue_number,
+        "work_id": work_id,
+        "state": "starting",
         "log": str(log_path),
     }
     try:
@@ -167,6 +170,8 @@ def detach_issue_to_pr(
         "pid": int(proc.pid),
         "repo": repo_name,
         "issue": issue_number,
+        "work_id": work_id,
+        "state": "implementing",
         "log": str(log_path),
         "launch_id": launch_id,
     }

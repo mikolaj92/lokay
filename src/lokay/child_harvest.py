@@ -84,15 +84,21 @@ def _as_int(value: Any) -> int | None:
 
 
 def _event_delivered(event: dict[str, Any] | None) -> bool:
-    """ok=True / issue_closed / a PR is delivery, not a vanished crash."""
+    """Return durable delivery truth without treating a stopped ok envelope as work."""
     if not isinstance(event, dict) or not event:
         return False
-    if event.get("ok") is True:
+    if event.get("delivered") is False:
+        return False
+    if event.get("delivered") is True:
         return True
     reason = event.get("reason")
     if isinstance(reason, str) and reason in _DELIVERED_REASONS:
         return True
-    return _as_int(event.get("pr")) is not None
+    if _as_int(event.get("pr")) is not None:
+        return True
+    # Legacy terminal events did not carry ``delivered``. Retain their
+    # established meaning, but never let an explicit false use this fallback.
+    return event.get("ok") is True
 
 
 def _clear_stale_no_pr(stuck: dict[str, Any], repo: str, issue: int) -> None:
@@ -352,7 +358,11 @@ def _index_issue_to_pr_log(
                 continue
             seq += 1
             key = (repo, issue)
-            last[key] = ev
+            previous = last.get(key)
+            # Delivery is monotonic across daemon passes. A later stale stop
+            # can add history, but cannot replace earlier PR/merge evidence.
+            if previous is None or _event_delivered(ev) or not _event_delivered(previous):
+                last[key] = ev
             if ev.get("ok") is True:
                 classified: str | None = "ok"
             else:

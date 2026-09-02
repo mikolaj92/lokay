@@ -109,6 +109,8 @@ def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
     assert data["issue"] == 164 and data["log"].endswith(
         "issue-to-pr-mikolaj92__lokay-164.log"
     )
+    assert data["work_id"] == "mikolaj92/lokay#164"
+    assert data["state"] == "implementing"
     assert seen["session"] is True
     assert "lokay.compose.issue_to_pr" in seen["argv"]
 
@@ -454,6 +456,8 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
         "launcher_pid": os.getpid(),
         "repo": "mikolaj92/lokay",
         "issue": 9,
+        "work_id": "mikolaj92/lokay#9",
+        "state": "starting",
         "log": out["log"],
     }
     assert seen["during_spawn"]["launcher_pid"] == os.getpid()

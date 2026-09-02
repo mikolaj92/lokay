@@ -431,6 +431,7 @@ stateDiagram-v2
     ReadStatusConfig --> ReadStatusCloneFacts
     ReadStatusConfig --> ReadStatusLease
     ReadStatusConfig --> ReadStatusPassReceipt
+    ReadStatusConfig --> ReadStatusWorkUnits
     ReadStatusConfig --> DescribeStatusGraphs
     ReadStatusConfig --> RunStatusPreflight: jawne --preflight
     ReadStatusConfig --> RecordStatusPreflight: bez --preflight
@@ -439,6 +440,7 @@ stateDiagram-v2
     ReadStatusCloneFacts --> ReduceStatusSnapshot
     ReadStatusLease --> ReduceStatusSnapshot
     ReadStatusPassReceipt --> ReduceStatusSnapshot
+    ReadStatusWorkUnits --> ReduceStatusSnapshot
     DescribeStatusGraphs --> ReduceStatusSnapshot
     RecordStatusPreflight --> ReduceStatusSnapshot
     ReduceStatusSnapshot --> StatusSnapshotTerminal

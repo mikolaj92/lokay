@@ -112,6 +112,22 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
             "run_lease_path": "/state/health-lease-1-x",
         },
         {"receipt": receipt},
+        {
+            "work_units": [
+                {
+                    "work_id": "a/b#3",
+                    "state": "delivered",
+                    "delivered": True,
+                    "pr": 4,
+                }
+            ],
+            "latest_delivery": {
+                "work_id": "a/b#3",
+                "state": "delivered",
+                "delivered": True,
+                "pr": 4,
+            },
+        },
         {"graphs": ["factory_pass"]},
         {"preflight": None},
     )["snapshot"]
@@ -124,6 +140,8 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
         and out["lease_ok"] is None
         and out["run_active"] is True
         and out["run_lease_path"] == "/state/health-lease-1-x"
+        and out["work_units"][0]["work_id"] == "a/b#3"
+        and out["latest_delivery"]["pr"] == 4
     )
 
 

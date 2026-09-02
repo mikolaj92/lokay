@@ -34,6 +34,10 @@ def handle_status(
         from lokay.proc.read_status_pass_receipt import read
 
         return read(config)
+    if atom == "read_status_work_units":
+        from lokay.proc.read_status_work_units import read
+
+        return read(config)
     if atom == "describe_status_graphs":
         from lokay.proc.describe_status_graphs import describe
 
@@ -55,6 +59,7 @@ def handle_status(
             up.get("read_status_clone_facts") or {},
             up.get("read_status_lease") or {},
             up.get("read_status_pass_receipt") or {},
+            up.get("read_status_work_units") or {},
             up.get("describe_status_graphs") or {},
             up.get("record_status_preflight") or {},
         )
