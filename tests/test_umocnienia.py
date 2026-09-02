@@ -12,6 +12,7 @@ from lokay.passkit.health import evaluate_mill_stop
 from lokay.preflight import (
     acquire_run_lock,
     has_health_lease,
+    issue_health_lease,
     reconcile_incident_ledger,
     require_healthy,
 )
@@ -23,6 +24,15 @@ from lokay.proc.detach_issue_to_pr import (
 )
 from lokay.proc.find_published_self_repair import find as find_published_self_repair
 from lokay.recovery_history import observe_run, record_observation
+
+
+
+def _parent_capability(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lock = tmp_path / ".lokay" / "mill.lock"
+    assert acquire_run_lock(lock)
+    issue_health_lease(lock_path=lock)
+    return os.environ["LOKAY_HEALTH_LEASE"], os.environ["LOKAY_HEALTH_LEASE_PATH"]
 
 
 def test_missing_lease_file_with_inherited_token_allows_mutate(tmp_path, monkeypatch):
@@ -86,7 +96,7 @@ def test_published_self_repair_commit_reads_git_log(tmp_path):
 
 
 def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     seen = {}
 
     class FakePopen:
@@ -116,9 +126,7 @@ def test_detach_writes_receipt_and_log(tmp_path, monkeypatch):
 
 
 def test_detach_forwards_lease_path_for_fala_inherit(tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("LOKAY_HEALTH_LEASE", "d" * 64)
-    monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
+    parent_token, parent_path = _parent_capability(tmp_path, monkeypatch)
     seen = {}
 
     class FakePopen:
@@ -133,10 +141,11 @@ def test_detach_forwards_lease_path_for_fala_inherit(tmp_path, monkeypatch):
         popen=FakePopen,
     )
     env = seen["env"]
-    assert env.get("LOKAY_HEALTH_LEASE") == "d" * 64
-    assert env.get("LOKAY_HEALTH_LEASE_PATH") == str(
-        tmp_path / ".lokay" / "health-lease"
-    )
+    assert env.get("LOKAY_HEALTH_LEASE") != parent_token
+    assert env.get("LOKAY_HEALTH_LEASE_PATH") != parent_path
+    assert Path(env["LOKAY_HEALTH_LEASE_PATH"]).name.startswith("health-lease-work-")
+    assert env.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1"
+    assert os.environ["LOKAY_HEALTH_LEASE"] == parent_token
 
 
 def test_evaluate_mill_stop_host_updated_is_soft_stop():
@@ -430,7 +439,7 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
     """The pre-spawn receipt closes the next-pass reaper window."""
     import lokay.proc.detach_issue_to_pr as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     monkeypatch.setattr(
         "lokay.proc.repo_mutex._issue_is_closed", lambda *_args, **_kwargs: False
     )
@@ -475,7 +484,7 @@ def test_detach_refuses_to_spawn_without_durable_reservation(tmp_path, monkeypat
     """Receipt storage failure is not allowed to create an untracked child."""
     import lokay.proc.issue_delivery_launch as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     monkeypatch.setattr(
         detach_mod,
         "write_issue_to_pr_receipt",
@@ -522,7 +531,7 @@ def test_detach_keeps_reservation_when_final_receipt_fails(tmp_path, monkeypatch
     """If post-spawn publication fails, the child is killed and its KEEP remains."""
     import lokay.proc.issue_delivery_launch as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     original = detach_mod.write_issue_to_pr_receipt
     calls = 0
 
@@ -573,7 +582,7 @@ def test_detach_does_not_replace_an_existing_starting_reservation(
     """A second dispatch cannot steal the first launch's durable K=1 reservation."""
     import lokay.proc.detach_issue_to_pr as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(
@@ -605,7 +614,7 @@ def test_detach_replaces_a_dead_completed_receipt(tmp_path, monkeypatch):
     """Historical dead receipts do not permanently block a later attempt."""
     import lokay.proc.detach_issue_to_pr as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps({"pid": 999_999_999, "repo": "mikolaj92/lokay", "issue": 9}),
@@ -662,7 +671,7 @@ def test_detach_discards_its_reservation_only_after_confirmed_cleanup(
     """A failed final publication leaves no child or stale reservation after reaping."""
     import lokay.proc.issue_delivery_launch as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     original = detach_mod.write_issue_to_pr_receipt
     calls = 0
     seen = []
@@ -706,7 +715,7 @@ def test_dead_pipe_gated_starting_receipt_is_recoverable_without_live_worker(
     """
     import lokay.proc.detach_issue_to_pr as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     monkeypatch.setattr(detach_mod, "pid_is_alive", lambda _pid: False)
     path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
@@ -741,7 +750,7 @@ def test_legacy_starting_receipt_remains_live_not_reclaimable(tmp_path, monkeypa
     """Pre-barrier reservations lack proof that a hidden worker cannot exist."""
     import lokay.proc.detach_issue_to_pr as detach_mod
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     path = issue_to_pr_receipt_path("mikolaj92/lokay", 9)
     path.write_text(
         json.dumps(

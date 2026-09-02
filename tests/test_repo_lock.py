@@ -9,12 +9,20 @@ import sys
 import time
 from pathlib import Path
 
+from lokay.preflight import acquire_run_lock, issue_health_lease
 from lokay.proc.repo_lock import (
     acquire_repo_lock,
     inspect_repo_lock,
     repo_lock_dir,
     repo_lock_path,
 )
+
+
+def _parent_capability(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lock = tmp_path / ".lokay" / "mill.lock"
+    assert acquire_run_lock(lock)
+    issue_health_lease(lock_path=lock)
 
 
 def test_lock_identity_is_scoped_by_state_dir_and_repo(tmp_path):
@@ -142,7 +150,7 @@ def test_inspect_implementation_mutex_uses_flock_not_ps(tmp_path, monkeypatch):
 def test_detach_acquires_lock_before_spawn_and_hands_fd(tmp_path, monkeypatch):
     import lokay.proc.issue_delivery_launch as launch
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     seen = {}
 
     class FakePopen:
@@ -169,7 +177,7 @@ def test_second_detach_loses_the_held_repo_lock(tmp_path, monkeypatch):
     import lokay.proc.issue_delivery_launch as launch
     from lokay.proc.launch_issue_to_pr import launch as dispatch_launch
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     path = repo_lock_path(tmp_path / ".lokay", "mikolaj92/lokay")
     held = acquire_repo_lock(path)
     assert held is not None
@@ -197,7 +205,7 @@ def test_second_detach_loses_the_held_repo_lock(tmp_path, monkeypatch):
 def test_child_holds_inherited_lock_until_exit(tmp_path, monkeypatch):
     import lokay.proc.issue_delivery_launch as launch
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    _parent_capability(tmp_path, monkeypatch)
     child_script = tmp_path / "holder.py"
     child_script.write_text(
         "import os,time\n"

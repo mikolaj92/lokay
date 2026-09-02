@@ -296,16 +296,26 @@ def issue_health_lease(
         raise RuntimeError("unsafe health lease directory")
     path.parent.mkdir(parents=True, exist_ok=True)
     bound_lock = (lock_path or (Path.home() / ".lokay" / "mill.lock")).expanduser().absolute()
+    now = int(time.time())
     record = {
         "token_sha256": hashlib.sha256(token.encode("ascii")).hexdigest(),
         "owner_pid": os.getpid(),
         "lock_path": str(bound_lock),
-        "issued_at": int(time.time()),
+        "issued_at": now,
         # One factory pass may legitimately spend an hour in the real agent.
         # Owner liveness, the held mill lock, and explicit daemon revocation are
         # the primary lifetime bounds; this cap only limits abandoned records.
-        "expires_at": int(time.time()) + max(1, min(int(ttl_seconds), 7200)),
+        "expires_at": now + max(1, min(int(ttl_seconds), 7200)),
+        "heartbeat_at": now,
     }
+    work_id = os.environ.get("LOKAY_WORK_ID", "").strip()
+    if work_id:
+        record["kind"] = "delegated"
+        record["state"] = "active"
+        record["work_id"] = work_id
+        parent_ref = os.environ.get("LOKAY_HEALTH_LEASE_PARENT", "").strip()
+        if parent_ref:
+            record["parent_path"] = parent_ref
     # Publish through a same-directory exclusive regular temp. O_NOFOLLOW and
     # O_EXCL prevent symlink traversal; atomic replace closes the check/use gap.
     temp = path.with_name(f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp")
@@ -378,7 +388,8 @@ def prune_stale_health_leases(directory: Path) -> dict[str, int]:
                         lock_held = True
                 finally:
                     probe.close()
-            if (expired or dead) and not lock_held:
+            delegated = record.get("kind") == "delegated"
+            if (expired or dead) and (delegated or not lock_held):
                 path.unlink()
                 removed += 1
             else:
@@ -454,6 +465,10 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
         # Detached Fala children restore the inherited token into this process
         # and outlive the mill tick that held mill.lock. Owner-is-self is enough.
         if owner_pid == os.getpid():
+            lock_held = True
+        # A delegated work-unit token is independent of mill.lock. The worker
+        # keeps mutating after the daemon releases the singleton.
+        if record.get("kind") == "delegated" and len(token) == 64:
             lock_held = True
         if not owner_alive and not lock_held:
             return False, "lease_unavailable_ProcessLookupError"

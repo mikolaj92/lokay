@@ -65,6 +65,34 @@ def compose_issue_to_pr(
             "error": "refusing live compose while config mode is not live",
         }
     work_id = f"{repo}#{int(issue_number)}"
+    if live:
+        from lokay.preflight import health_lease_status
+        from lokay.proc.health_delegation import (
+            complete_delegated_lease,
+            heartbeat_delegated_lease,
+        )
+
+        if not os.environ.get("LOKAY_HEALTH_LEASE"):
+            return {"ok": False, "reason": "capability_missing"}
+        heartbeat_delegated_lease()
+        healthy, reason = health_lease_status()
+        if not healthy:
+            restorable = (
+                str(reason).startswith("lease_unavailable_FileNotFound")
+                or str(reason).startswith("lease_unavailable_ProcessLookup")
+                or str(reason) == "lock_not_held"
+            )
+            if restorable:
+                from lokay.preflight import issue_health_lease
+
+                try:
+                    issue_health_lease()
+                except RuntimeError:
+                    pass
+                heartbeat_delegated_lease()
+                healthy, reason = health_lease_status()
+        if not healthy:
+            return {"ok": False, "reason": "capability_invalid", "error": reason}
     result = run_path(
         path_id="issue_to_pr",
         repo=repo,
@@ -92,6 +120,11 @@ def compose_issue_to_pr(
             append_event(cfg.state_path, result)
     except Exception:
         pass
+    if live:
+        try:
+            complete_delegated_lease()
+        except Exception:
+            pass
     return result
 
 

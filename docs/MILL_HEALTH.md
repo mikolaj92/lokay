@@ -54,6 +54,15 @@ The receipt is written next to the configured `state.path`, not an unconditional
 `~/.lokay/last-pass.json`. It keeps `last_path`, `last_atom`, `work_id`, and
 `resume_from` when `activity.json` is present.
 
+## Health capability
+
+Only the mill-lock owner mints the parent run capability. A detached
+`issue_to_pr` worker receives a scoped delegated record
+(`health-lease-work-*`) and never mints a new parent token. Missing or
+invalid capability fails closed before product side effects. Heartbeat and
+completion update that work-unit record; process death lets prune expire it
+without touching the parent lease.
+
 ## Repository lock
 
 One coding slot per repository is an OS `fcntl.flock` next to configured

@@ -34,7 +34,13 @@ def test_no_activation_fd_preserves_direct_entry(monkeypatch):
     assert _await_detach_activation() is True
 
 
-def test_composer_delegates_closed_and_delivery_decisions_to_fala(monkeypatch):
+def test_composer_delegates_closed_and_delivery_decisions_to_fala(tmp_path, monkeypatch):
+    from lokay.preflight import acquire_run_lock, issue_health_lease
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    lock = tmp_path / ".lokay" / "mill.lock"
+    assert acquire_run_lock(lock)
+    issue_health_lease(lock_path=lock)
     monkeypatch.delenv("LOKAY_ISSUE_TO_PR_ACTIVATION_FD", raising=False)
     calls = []
     monkeypatch.setattr(
