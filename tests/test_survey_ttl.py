@@ -330,7 +330,7 @@ def test_live_daemon_cycle_always_hosts_authored_fala(monkeypatch, tmp_path):
     from lokay.compose import daemon_cycle as daemon_mod
 
     called = []
-    monkeypatch.setattr(daemon_mod, "rotate_mill_fala_journals", lambda: {"ok": True})
+    monkeypatch.setattr(daemon_mod, "maintain_mill_fala_journals", lambda: {"ok": True})
     monkeypatch.setattr(
         daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml"
     )

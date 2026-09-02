@@ -1,4 +1,4 @@
-"""Atomic: rotate oversized Fala sqlite journals under ~/.lokay/fala/."""
+"""Atomic: maintain oversized Fala sqlite journals under ~/.lokay/fala/."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.fala_journal import DEFAULT_MIN_BYTES, KEEP_ROTATED, rotate_mill_fala_journals
+from lokay.fala_journal import DEFAULT_MIN_BYTES, KEEP_ROTATED, maintain_mill_fala_journals
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep", type=int, default=KEEP_ROTATED)
     args = parser.parse_args(argv)
     try:
-        result = rotate_mill_fala_journals(
+        result = maintain_mill_fala_journals(
             home=Path(args.lokay_home) if args.lokay_home else None,
             min_bytes=max(0, int(args.min_bytes)),
             keep=max(0, int(args.keep)),
