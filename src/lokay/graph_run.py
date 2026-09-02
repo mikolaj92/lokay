@@ -274,6 +274,7 @@ def run_path(
     rid = run_id or f"lokay-{uuid.uuid4().hex[:12]}"
     # Ensure organ imports resolve from checkout when not fully installed
     root = _project_root()
+    os.environ.setdefault("LOKAY_ROOT", str(root))
     src = root / "src"
     if src.is_dir():
         prev = os.environ.get("PYTHONPATH", "")

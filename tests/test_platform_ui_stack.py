@@ -1,13 +1,13 @@
 """Platform UI stack (issue #12).
 
-Lokay is CLI-first. When auth/chrome UI appears it must use the full
-app-factory stack: product_shell + same-origin Basecoat/HTMX/Alpine.
-CLI-only (zero HTML, no auth routes) is compliant.
+Lokay is CLI-first with a local read-only status host. Its chrome uses
+app-factory product_shell plus same-origin Basecoat/HTMX/Alpine assets.
 """
 
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,11 +62,12 @@ HOST_STACK_FORK = re.compile(
     """
 )
 
-# Target COMPAT BOM documented for when UI is added (app-factory COMPAT.md).
+# Current immutable upstream COMPAT row. Only app-factory is installed because
+# the local status host has no identity routes.
 COMPAT_BOM = {
-    "app-factory": "v0.5.19",
-    "my-auth": "v0.3.23",
-    "my-usermanager": "v0.4.5",
+    "app-factory": "v0.6.16",
+    "my-auth": "v0.4.8",
+    "my-usermanager": "v0.5.11",
 }
 
 
@@ -98,9 +99,9 @@ def test_platform_ui_binding_doc_exists():
         "HTMX",
         "Alpine",
         "COMPAT",
-        "v0.5.19",
-        "v0.3.23",
-        "v0.4.5",
+        "v0.6.16",
+        "v0.4.8",
+        "v0.5.11",
         "Same-origin",
         "CDN",
     ):
@@ -108,13 +109,22 @@ def test_platform_ui_binding_doc_exists():
 
 
 def test_compat_bom_pins_documented():
-    """Pins documented vs app-factory COMPAT matrix (target when UI exists)."""
+    """Document the exact immutable COMPAT row used by the status host."""
     doc = (DOCS / "PLATFORM_UI.md").read_text(encoding="utf-8")
     for package, tag in COMPAT_BOM.items():
         assert package in doc, f"COMPAT pin package missing: {package}"
         assert tag in doc, f"COMPAT pin tag missing for {package}: {tag}"
     # Do not recommend floating main for production host auth packages.
     assert 'branch = "main"' not in doc or "Do not float" in doc or "not float" in doc.lower()
+
+
+def test_status_host_pins_current_app_factory_tag():
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    source = pyproject["tool"]["uv"]["sources"]["app-factory"]
+    assert source == {
+        "git": "https://github.com/mikolaj92/app-factory.git",
+        "tag": COMPAT_BOM["app-factory"],
+    }
 
 
 def test_no_cdn_for_core_stack_in_product_code():
@@ -177,7 +187,7 @@ def test_no_floating_main_auth_pins_if_declared():
     """If my-auth / my-usermanager / app-factory are declared, use tags not main."""
     pyproject = ROOT / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
-    # Today none are declared — still guard against branch=main pins if added.
+    # The status host declares app-factory; all platform pins must stay immutable.
     floating = re.compile(
         r"""(?ix)
         (?:app-factory|my-auth|my-usermanager)\s*=\s*\{[^}]*

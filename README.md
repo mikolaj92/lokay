@@ -26,7 +26,7 @@ There is no alternate Python fallback graph and no Hermes/Kanban execution ledge
 
 ## Quick start
 
-Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), authenticated GitHub CLI `gh`, and a local Fala checkout at `../Fala` as configured in `pyproject.toml`. Verification is local; Lokay does not use GitHub Actions.
+Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), and authenticated GitHub CLI `gh`. The Python Fala dependency is pinned to an immutable git tag; a Mojo source checkout is located separately through `FALA_HOME` (the daemon sets it explicitly) when graph execution needs the native toolchain. Verification is local; Lokay does not use GitHub Actions.
 
 ```bash
 uv sync
