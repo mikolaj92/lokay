@@ -263,6 +263,19 @@ def test_committed_live_config_requires_llm_review(monkeypatch):
     assert cfg.require_llm_review is True
 
 
+def test_committed_live_config_keeps_serial_issue_delivery_budget(monkeypatch):
+    """Production follows the documented one-ticket-at-a-time contract."""
+    from pathlib import Path
+
+    from lokay.config import load_config
+
+    for name in ("LOKAY_MAX_ISSUE_TO_PR_PER_PASS", "LOKAY_MAX_ISSUES_PER_TICK"):
+        monkeypatch.delenv(name, raising=False)
+    cfg = load_config(Path(__file__).resolve().parents[1] / "config.yaml")
+    assert cfg.max_issue_to_pr_per_pass == 1
+    assert cfg.max_issues_per_tick == 1
+
+
 def test_garbage_yaml_bool_fails_closed(tmp_path: Path, monkeypatch):
     for key in ("LOKAY_MODE", "LOKAY_EXECUTOR_ENABLED", "LOKAY_AGENT", "LOKAY_CONFIG"):
         monkeypatch.delenv(key, raising=False)
