@@ -521,8 +521,8 @@ def test_factory_pass_docs_match_package_atom_order():
     assert found[: len(ids)] == ids or all(atom in section for atom in ids)
 
 
-def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):
-    """Fala runs every factory_pass atom; missing live injection is planned-only."""
+def test_factory_pass_supplies_global_live_inputs(monkeypatch, tmp_path):
+    """Fala fans one global envelope onto factory_pass; Python does not expand it."""
     from lokay import graph_run
 
     captured = {}
@@ -543,10 +543,10 @@ def test_factory_pass_injects_every_graph_atom(monkeypatch, tmp_path):
         package_path=graph_run.find_default_package(),
         db_path=tmp_path,
     )
-    injected = captured["effector_inputs"]
-    assert set(injected) == set(ids)
-    assert all(injected[step].get("live") is True for step in ids)
-    assert injected["run_issue_triage_department"]["live"] is True
+    assert captured.get("effector_inputs") in (None, {})
+    assert captured["path_id"] == "factory_pass"
+    assert captured["inputs"]["live"] is True
+    assert captured["inputs"]["repo"] == "mikolaj92/lokay"
 
 
 def test_run_path_preserves_parent_health_token(monkeypatch, tmp_path):
@@ -956,15 +956,14 @@ def test_completed_effector_without_output_fails_closed():
     assert "without structured output" in out["error"]
 
 
-def test_run_path_scopes_inputs_to_authored_fala_path(tmp_path, monkeypatch):
+def test_run_path_passes_global_inputs_to_fala(tmp_path, monkeypatch):
     import lokay.graph_run as graph_run
     import tomllib
 
     package = Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml"
-    authored = {
-        path["id"]: {node["id"] for node in path["effectors"]}
-        for path in tomllib.loads(package.read_text())["correlation_paths"]
-    }
+    authored = [
+        path["id"] for path in tomllib.loads(package.read_text())["correlation_paths"]
+    ]
     captured = []
 
     def fake_host_run_package(**kwargs):
@@ -972,7 +971,7 @@ def test_run_path_scopes_inputs_to_authored_fala_path(tmp_path, monkeypatch):
         return {"ok": True, "run_status": "completed", "effector_results": {}}
 
     monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
-    for path_id, effectors in authored.items():
+    for path_id in authored:
         graph_run.run_path(
             path_id=path_id,
             repo="a/b",
@@ -983,7 +982,14 @@ def test_run_path_scopes_inputs_to_authored_fala_path(tmp_path, monkeypatch):
             package_path=str(package),
             db_path=str(tmp_path / path_id),
         )
-        assert set(captured[-1]["effector_inputs"]) == effectors
+        call = captured[-1]
+        assert call.get("effector_inputs") in (None, {})
+        assert call["path_id"] == path_id
+        assert call["inputs"]["repo"] == "a/b"
+        assert call["inputs"]["issue"] == 1
+        assert call["inputs"]["pr"] == 2
+        assert call["inputs"]["branch"] == "ai/fix/1-x"
+        assert call["inputs"]["live"] is False
 
 
 def test_factory_path_lifts_host_updated_from_failed_begin():

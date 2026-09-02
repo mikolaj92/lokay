@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 
 def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys):
@@ -201,29 +202,69 @@ def test_normalize_prefers_authored_terminal_result():
     out = normalize_path_result(result)
     assert out["ok"] is True and out["pr"] == 77 and out["branch"] == "ai/fix/7"
 
-def test_slice_package_keeps_one_path():
-    from lokay.graph_run import _slice_package_to_path, find_default_package
+def test_run_path_uses_global_inputs_not_per_effector(monkeypatch, tmp_path):
+    from lokay import graph_run
 
-    text = find_default_package().read_text(encoding="utf-8")
-    sliced = _slice_package_to_path(text, "factory_pass")
-    assert 'id = "factory_pass"' in sliced
-    assert sliced.count("[[correlation_paths]]") == 1
-    assert "[[capabilities]]" in sliced
-    # factory_pass has a thin reap_over_budget atom; the catalog path stays out
-    assert "select_budget_receipt_1" not in sliced
-    assert "prepare_over_budget_reap" not in sliced
-    assert 'id = "issue_to_pr"' not in sliced
+    captured = {}
+
+    def host(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    graph_run.run_path(
+        path_id="status_snapshot",
+        repo="owner/repo",
+        issue=7,
+        pr=9,
+        branch="ai/fix/7",
+        live=False,
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        require_healthy=False,
+        extra_inputs={"foo": "bar"},
+    )
+    assert captured.get("effector_inputs") in (None, {})
+    assert captured["path_id"] == "status_snapshot"
+    assert captured["inputs"]["repo"] == "owner/repo"
+    assert captured["inputs"]["issue"] == 7
+    assert captured["inputs"]["issue_number"] == 7
+    assert captured["inputs"]["pr"] == 9
+    assert captured["inputs"]["pr_number"] == 9
+    assert captured["inputs"]["branch"] == "ai/fix/7"
+    assert captured["inputs"]["live"] is False
+    assert captured["inputs"]["foo"] == "bar"
 
 
-def test_slice_package_unknown_path():
-    from lokay.graph_run import _slice_package_to_path
+def test_run_path_materializes_full_package_for_fala(monkeypatch, tmp_path):
+    from lokay import graph_run
 
-    try:
-        _slice_package_to_path('version = "2"\n[[correlation_paths]]\nid = "x"\n', "nope")
-    except ValueError as exc:
-        assert "unknown" in str(exc)
-    else:
-        raise AssertionError("expected ValueError")
+    monkeypatch.setattr(
+        "fala.host_run_package",
+        lambda **_kwargs: {
+            "ok": True,
+            "run_status": "completed",
+            "effector_results": {
+                "reduce_status_snapshot": {
+                    "status": "completed",
+                    "output": {"values": {"ok": True, "health": "idle"}},
+                }
+            },
+        },
+    )
+    result = graph_run.run_path(
+        path_id="status_snapshot",
+        repo="local/status",
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        require_healthy=False,
+    )
+    pkg = Path(result["package"]).read_text(encoding="utf-8")
+    assert pkg.count("[[correlation_paths]]") > 1
+    assert 'id = "status_snapshot"' in pkg
+    assert 'id = "factory_pass"' in pkg
+    assert 'id = "executor_row"' in pkg
+    assert "PLACEHOLDER_PROJECT" not in pkg
 
 
 def test_issue_journal_dir_isolates_coding_execution(tmp_path):
@@ -272,8 +313,8 @@ def test_pr_journal_dir_isolates_pr_triage(tmp_path):
     assert nested == first
 
 
-def test_path_journal_dir_isolates_sliced_children(tmp_path):
-    from lokay.graph_run import path_journal_dir, _slice_package_to_path, _materialize_package
+def test_path_journal_dir_isolates_child_packages(tmp_path):
+    from lokay.graph_run import path_journal_dir, _materialize_package
 
     shared = tmp_path / ".lokay" / "fala"
     status = path_journal_dir("status_snapshot", home=tmp_path)
@@ -287,25 +328,26 @@ def test_path_journal_dir_isolates_sliced_children(tmp_path):
         "[[correlation_paths]]\n"
         'id = "status_snapshot"\n'
         "[[correlation_paths]]\n"
-        'id = "executor_row"\n',
+        'id = "executor_row"\n'
+        'command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT"]\n',
         encoding="utf-8",
     )
     project = tmp_path / "checkout"
     project.mkdir()
-    _materialize_package(src, status / "lokay.fala-package.toml", project=project, path_id="status_snapshot")
-    _materialize_package(src, executor / "lokay.fala-package.toml", project=project, path_id="executor_row")
+    _materialize_package(src, status / "lokay.fala-package.toml", project=project)
+    _materialize_package(src, executor / "lokay.fala-package.toml", project=project)
     status_pkg = (status / "lokay.fala-package.toml").read_text(encoding="utf-8")
     executor_pkg = (executor / "lokay.fala-package.toml").read_text(encoding="utf-8")
     assert 'id = "status_snapshot"' in status_pkg
-    assert 'id = "executor_row"' not in status_pkg
+    assert 'id = "executor_row"' in status_pkg
+    assert 'id = "status_snapshot"' in executor_pkg
     assert 'id = "executor_row"' in executor_pkg
-    assert 'id = "status_snapshot"' not in executor_pkg
+    assert str(project.resolve()) in status_pkg
+    assert "PLACEHOLDER_PROJECT" not in status_pkg
     assert not (shared / "lokay.fala-package.toml").exists()
     assert path_journal_dir(
         "coding_execution", "Temida/Temida", 4999, home=tmp_path
     ).parent.name == "coding-execution"
-    sliced = _slice_package_to_path(src.read_text(encoding="utf-8"), "status_snapshot")
-    assert sliced.count("[[correlation_paths]]") == 1
 
 
 def test_shared_fala_root_db_path_is_remapped(tmp_path):
@@ -318,7 +360,7 @@ def test_shared_fala_root_db_path_is_remapped(tmp_path):
     assert not graph_run._is_shared_fala_root(work, home=tmp_path)
 
 
-def test_run_path_does_not_clobber_shared_sliced_package(tmp_path, monkeypatch):
+def test_run_path_does_not_clobber_shared_package(tmp_path, monkeypatch):
     from lokay import graph_run
 
     monkeypatch.setattr(graph_run.Path, "home", classmethod(lambda cls: tmp_path))
@@ -350,9 +392,10 @@ def test_run_path_does_not_clobber_shared_sliced_package(tmp_path, monkeypatch):
     isolated = shared / "status_snapshot" / "lokay.fala-package.toml"
     assert result["package"] == str(isolated)
     assert (shared / "lokay.fala-package.toml").read_text(encoding="utf-8") == marker
-    sliced = isolated.read_text(encoding="utf-8")
-    assert 'id = "status_snapshot"' in sliced
-    assert 'id = "executor_row"' not in sliced
+    materialized = isolated.read_text(encoding="utf-8")
+    assert 'id = "status_snapshot"' in materialized
+    assert 'id = "executor_row"' in materialized
+    assert materialized.count("[[correlation_paths]]") > 1
 
 
 

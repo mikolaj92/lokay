@@ -48,8 +48,6 @@ def find_default_package() -> Path:
 ROOT = _project_root()
 
 
-_PATH_TABLE = "[[correlation_paths]]"
-
 # Nested issue children must not share a host sqlite.
 _ISSUE_JOURNAL_FAMILIES = {
     "issue_to_pr": "i2pr",
@@ -104,10 +102,11 @@ def path_journal_dir(
     pr: int | None = None,
     home: Path | None = None,
 ) -> Path:
-    """One sliced Fala path owns one journal directory.
+    """One Fala path owns one journal directory.
 
-    Native Fala materializes the sliced package next to ``state.sqlite``.
-    Nested children must not overwrite ``~/.lokay/fala/lokay.fala-package.toml``.
+    Native Fala selects ``path_id`` from the materialized package next to
+    ``state.sqlite``. Nested children must not overwrite
+    ``~/.lokay/fala/lokay.fala-package.toml``.
     """
     nested = issue_journal_dir(path_id, repo, issue, home=home) or pr_journal_dir(
         path_id, repo, pr, home=home
@@ -133,38 +132,15 @@ def _is_shared_fala_root(work: Path, *, home: Path | None = None) -> bool:
         return False
 
 
-def _slice_package_to_path(text: str, path_id: str) -> str:
-    """Keep header + one correlation path. Native Fala loads the whole file."""
-    first = text.find(_PATH_TABLE)
-    if first < 0:
-        raise ValueError("package has no [[correlation_paths]]")
-    header = text[:first]
-    kept: list[str] = []
-    for chunk in text[first:].split(_PATH_TABLE):
-        if not chunk.strip():
-            continue
-        match = re.search(r'(?m)^id = "([^"]+)"', chunk)
-        if match and match.group(1) == path_id:
-            kept.append(_PATH_TABLE + chunk.rstrip() + "\n")
-    if not kept:
-        raise ValueError(f"unknown Fala correlation path: {path_id}")
-    return header + "".join(kept)
-
-
-def _materialize_package(
-    src: Path, dest: Path, *, project: Path, path_id: str | None = None
-) -> Path:
+def _materialize_package(src: Path, dest: Path, *, project: Path) -> Path:
     """Write package with absolute project path; organs always run via `uv run`.
 
     Canonical substitution only: PLACEHOLDER_PROJECT → checkout path.
     Package adapters hardcode `uv` (never bare python3 / PLACEHOLDER_PYTHON).
-    When path_id is set, drop every other correlation path so native Fala
-    does not allocate the whole 3k-effector catalog to run one job.
+    Fala selects the correlation path from this full package via ``path_id``.
     """
     text = src.read_text(encoding="utf-8")
     text = text.replace("PLACEHOLDER_PROJECT", str(project.resolve()))
-    if path_id:
-        text = _slice_package_to_path(text, path_id)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
     return dest
@@ -225,7 +201,7 @@ def run_path(
             if (cand / "pyproject.toml").is_file() and (cand / "fala").is_dir():
                 project = cand
                 break
-    _materialize_package(pkg_src, pkg_runtime, project=project, path_id=path_id)
+    _materialize_package(pkg_src, pkg_runtime, project=project)
     db = work / "state.sqlite"
 
     if os.environ.get("LOKAY_HEALTH_LEASE", "") != inherited_health_lease:
@@ -252,24 +228,14 @@ def run_path(
     if extra_inputs:
         base_input.update(extra_inputs)
 
-    # Instantiate inputs from the authored Fala path. Python does not duplicate the
-    # graph: it only supplies the same external envelope to each authored node.
+    # Fala selects path_id and fans global inputs onto authored effectors.
     import tomllib
 
     package = tomllib.loads(pkg_src.read_text(encoding="utf-8"))
-    path = next(
-        (
-            item
-            for item in package.get("correlation_paths", [])
-            if item.get("id") == path_id
-        ),
-        None,
-    )
-    if path is None:
+    if not any(
+        item.get("id") == path_id for item in package.get("correlation_paths", [])
+    ):
         raise ValueError(f"unknown Fala correlation path: {path_id}")
-    effector_inputs = {
-        str(step["id"]): dict(base_input) for step in path.get("effectors", [])
-    }
 
     rid = run_id or f"lokay-{uuid.uuid4().hex[:12]}"
     # Ensure organ imports resolve from checkout when not fully installed
@@ -307,7 +273,7 @@ def run_path(
                 package_path=pkg_runtime,
                 path_id=path_id,
                 run_id=rid,
-                effector_inputs=effector_inputs,
+                inputs=base_input,
                 max_ticks=max_ticks,
                 worker_id="lokay-graph",
             )
@@ -417,28 +383,9 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
                         entries = []
                         break
     else:
-        # Compatibility with hosts that embedded terminal output in processes.
-        # Fala's id/status-only process summaries are deliberately not accepted.
-        processes = fala.get("processes")
-        if isinstance(processes, list):
-            legacy = [
-                value
-                for value in processes
-                if isinstance(value, dict)
-                and ("output" in value or "output_json" in value)
-            ]
-            entries = [
-                (
-                    str(
-                        value.get("effector_id")
-                        or str(value.get("id") or "").rsplit(":", 1)[-1]
-                    ),
-                    value,
-                )
-                for value in legacy
-            ]
-        if not entries:
-            results_error = "Fala completed without terminal effector_results"
+        # Fala 0.7+ returns decoded terminal outputs in effector_results.
+        # id/status-only process summaries are not a result contract.
+        results_error = "Fala completed without terminal effector_results"
 
     terminal: dict[str, dict[str, Any]] = {}
     steps: list[dict[str, Any]] = []
