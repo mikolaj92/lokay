@@ -25,6 +25,7 @@ def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys)
         }
 
     monkeypatch.setattr("fala.host_run_package", noisy_host)
+    monkeypatch.delenv("LOKAY_ROOT", raising=False)
 
     result = graph_run.run_path(
         path_id="issue_triage",
@@ -35,6 +36,7 @@ def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys)
     )
 
     assert capsys.readouterr().out == ""
+    assert graph_run.os.environ["LOKAY_ROOT"] == str(graph_run._project_root())
     assert result["fala"]["terminal"] == dumped["terminal"]
     assert result["fala"]["steps"] == dumped["steps"]
     assert result["fala"]["last"] == dumped["last"]

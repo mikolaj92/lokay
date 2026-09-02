@@ -1,5 +1,6 @@
 """Fail-closed lock: checkout Fala and packaged wheel copy must not drift."""
 
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,5 +38,16 @@ def test_correlation_path_titles_and_descriptions_are_ascii():
             in_path = False
         if not in_path:
             continue
-        if stripped.startswith("title =") or stripped.startswith("description ="):
+        if stripped.startswith(("title =", "description =")):
             assert all(ord(ch) < 128 for ch in line), line
+
+
+def test_python_fala_dependency_uses_immutable_git_tag():
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    source = pyproject["tool"]["uv"]["sources"]["fala"]
+    assert source == {
+        "git": "https://github.com/mikolaj92/Fala.git",
+        "tag": "v0.7.31",
+    }
+    lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
+    assert 'editable = "../Fala"' not in lock

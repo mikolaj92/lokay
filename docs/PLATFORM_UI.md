@@ -1,11 +1,12 @@
 # Platform UI stack (binding)
 
-Lokay is a **CLI mill** (JSON envelopes on stdout). It has **no** hypermedia
-host, login, account, or admin surfaces today. If those appear later, this
-host must use the **full platform frontend stack** — not half-integrations or
-CDN forks.
+Lokay is a **CLI mill with a local read-only FastAPI status host**. The status
+host installs app-factory with `install_platform`, extends
+`app_factory/product_shell.html`, and serves the platform bundle from the
+same-origin `/static/platform` mount. It has no login, account, or admin
+surfaces, so my-auth and my-usermanager are intentionally not dependencies.
 
-## Stack (required when any auth/chrome UI exists)
+## Stack (required for the current status chrome)
 
 | Layer | Source | Rule |
 | --- | --- | --- |
@@ -55,40 +56,35 @@ are real dependencies: issue #14.
 
 ## Pins vs COMPAT matrix
 
-When (and only when) this host grows a FastAPI/hypermedia surface with auth,
-pin **immutable tags** aligned with the current app-factory
-[`COMPAT.md`](https://github.com/mikolaj92/app-factory/blob/main/COMPAT.md)
-row — prefer the latest platform BOM already adopted elsewhere:
+The status host pins the latest immutable app-factory generation from the
+upstream [`COMPAT.md`](https://github.com/mikolaj92/app-factory/blob/main/COMPAT.md)
+row. Authentication packages are shown only to keep any future identity work on
+one compatible row; they are not installed by Lokay today.
 
-| Package | Pin (tag) | Notes |
+| Package | Current COMPAT tag | Lokay usage |
 | --- | --- | --- |
-| **app-factory** | `v0.5.19` | `app-factory[platform]`; product_shell + `/static/platform` |
-| **my-auth** | `v0.3.23` | Passkey login/register UI |
-| **my-usermanager** | `v0.4.5` | Account/admin UI |
-
-Example (do not float `main`):
+| **app-factory** | `v0.6.16` | installed as `app-factory[platform]`; owns `product_shell` and `/static/platform` |
+| **my-auth** | `v0.4.8` | not installed; no authentication surface |
+| **my-usermanager** | `v0.5.11` | not installed; no account/admin surface |
 
 ```toml
 dependencies = ["app-factory[platform]"]
 [tool.uv.sources]
-app-factory = { git = "https://github.com/mikolaj92/app-factory", tag = "v0.5.19" }
-# my-auth / my-usermanager: same COMPAT row tags when auth is wired
+app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.16" }
 ```
 
-**Today:** lokay has **no** app-factory / my-auth / my-usermanager dependency.
-That is correct for a CLI-only mill. Pins above are the target BOM if UI is
-added; keep `uv.lock` aligned with tags (not `branch = "main"`) at that time.
+Do not use a local `path`, floating `main`, or mix generations. If identity is
+added later, adopt the complete immutable row through app-factory's identity
+composer rather than copying installer, session, or route glue into Lokay.
 
-## Smoke (when surfaces exist)
+## Smoke
 
-Login / account / admin (or equivalent) responses must:
+The status route must:
 
-1. Render through `product_shell` (e.g. `id="main-content"`, app shell chrome).
-2. Include same-origin `/static/platform/…` links/scripts for Basecoat, HTMX, Alpine.
-3. Contain **no** CDN markers for those core assets.
-
-CLI-only tree with **no** HTML and **no** auth routes is compliant: there is
-no chrome to fork and no CDN surface.
+1. Render through `product_shell` with `id="main-content"`.
+2. Include same-origin `/static/platform/…` assets for Basecoat, HTMX, and Alpine.
+3. Contain **no** CDN markers for the core stack.
+4. Keep login, account, and admin routes absent until identity is explicitly added.
 
 ## Anti-patterns
 
@@ -97,7 +93,7 @@ no chrome to fork and no CDN surface.
 | CDN for htmx / alpine / basecoat | Breaks same-origin platform contract |
 | Host-forked sidebar/header/theme boot | Diverges from product_shell |
 | React/SPA chrome | Hidden SPA; see `HTMX.md` |
-| Adding app-factory only to silence an audit without UI | Dead dependency; CLI mill stays CLI |
+| Adding identity packages without identity routes | Dead dependency; status-only host stays unauthenticated |
 
 ## Enforcement
 
