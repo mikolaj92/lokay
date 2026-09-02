@@ -2,7 +2,7 @@
 
 from typing import Any
 
-CATALOG_SLOTS = 30
+from lokay.execution_contracts import CATALOG_SLOT_COUNT as CATALOG_SLOTS
 
 
 def handle_ready_hygiene(

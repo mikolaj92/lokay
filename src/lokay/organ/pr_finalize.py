@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lokay.organ.common import _run_atom_main
+from lokay.atom_runtime import run_atom_main as _run_atom_main
 
 
 _PR_FINALIZE_ATOMS = frozenset({"list_prs", "pr_label"})
@@ -19,13 +19,13 @@ def handle_pr_finalize(
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
-
+    run = ctx.get("run_atom_main") or _run_atom_main
 
     from lokay.proc import list_prs, pr_label
 
     if atom == "list_prs":
         assert repo
-        return _run_atom_main(list_prs.main, [*cfg, "--repo", repo])
+        return run(list_prs.main, [*cfg, "--repo", repo])
 
     if atom == "pr_label":
         branch = str(up.get("make_branch", {}).get("branch") or "")
@@ -48,7 +48,7 @@ def handle_pr_finalize(
                 "reason": "pr_number_not_found",
                 "branch": branch,
             }
-        return _run_atom_main(
+        return run(
             pr_label.main,
             [*cfg, *live, "--repo", repo, "--pr", str(pr_number)],
         )

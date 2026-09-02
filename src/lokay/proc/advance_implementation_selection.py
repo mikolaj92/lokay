@@ -10,7 +10,7 @@ PARK_ROUTES = frozenset({"needs_human", "skip", "close"})
 
 
 def run(*, pass_dir: str, recorded: dict) -> dict:
-    from lokay.organ.implementation_selection_boundary import SLOT_COUNT
+    from lokay.execution_contracts import CATALOG_SLOT_COUNT as SLOT_COUNT
     from lokay.passkit import io as pass_io
     from lokay.proc.implementation_selection_catalog import run as catalog
     from lokay.proc.persist_implementation_selection import persist

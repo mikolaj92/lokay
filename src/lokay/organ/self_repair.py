@@ -30,9 +30,9 @@ def handle_self_repair(
     live = ctx["live"]
     issue_number = ctx["issue_number"]
 
-    import lokay.fala_organ as _fo
+    from lokay.atom_runtime import run_atom_main
 
-    _run_atom_main = _fo._run_atom_main
+    _run_atom_main = ctx.get("run_atom_main") or run_atom_main
     if atom == "summarize_self_repair":
         from lokay.proc.summarize_self_repair import summarize
 

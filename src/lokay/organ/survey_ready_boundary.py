@@ -2,7 +2,7 @@
 
 from typing import Any
 
-SLOT_COUNT = 30
+from lokay.execution_contracts import CATALOG_SLOT_COUNT as SLOT_COUNT
 
 
 def handle_survey_ready(

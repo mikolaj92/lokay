@@ -61,6 +61,7 @@ def test_self_repair_resume_candidate_skips_agent_and_commit_but_revalidates(
         "pr_number": None,
         "repair_mode": False,
         "branch": "",
+        "run_atom_main": fake_atom,
     }
 
     agent = handle_self_repair(
@@ -151,6 +152,7 @@ def test_self_repair_dirty_resume_skips_agent_but_runs_validation_and_commit(
         "pr_number": None,
         "repair_mode": False,
         "branch": "",
+        "run_atom_main": fake_atom,
     }
 
     agent = handle_self_repair(

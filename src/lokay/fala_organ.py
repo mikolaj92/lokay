@@ -11,7 +11,10 @@ from pathlib import Path
 from typing import Any
 
 from fala import sdk
-from lokay.git_commit import branch_ahead_of_upstream  # noqa: F401 — tests patch this
+from lokay.atom_runtime import (  # noqa: F401 — tests patch these names
+    branch_ahead_of_upstream,
+    run_atom_main as _run_atom_main,
+)
 from lokay.organ.agent import handle_agent
 from lokay.organ.child_harvest_boundary import handle_child_harvest
 from lokay.organ.coding_boundary import handle_coding_boundary
@@ -21,7 +24,6 @@ from lokay.organ.common import (  # noqa: F401
     _require_push,
     _require_real_diff,
     _require_test_local,
-    _run_atom_main,
     _test_local_ok,
 )
 from lokay.organ.conflict_resolution_boundary import handle_conflict_resolution
@@ -140,6 +142,8 @@ def _handle(
             or up.get("worktree_add", {}).get("branch")
             or ""
         ),
+        "run_atom_main": _run_atom_main,
+        "branch_ahead_of_upstream": branch_ahead_of_upstream,
     }
     issue_number = inputs.get("issue") or inputs.get("issue_number")
     if issue_number is None and "get_issue" in up:

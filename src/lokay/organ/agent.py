@@ -58,12 +58,11 @@ def handle_agent(
     repair_mode = ctx["repair_mode"]
     branch = ctx["branch"]
 
-    import lokay.fala_organ as _fo
+    from lokay.atom_runtime import run_atom_main
+    from lokay.git_commit import branch_ahead_of_upstream as _branch_ahead
 
-    _run_atom_main = _fo._run_atom_main
-    branch_ahead_of_upstream = getattr(_fo, "branch_ahead_of_upstream", None)
-    if branch_ahead_of_upstream is None:
-        from lokay.git_commit import branch_ahead_of_upstream
+    _run_atom_main = ctx.get("run_atom_main") or run_atom_main
+    branch_ahead_of_upstream = ctx.get("branch_ahead_of_upstream") or _branch_ahead
 
     if atom == "run_agent":
         worktree = _worktree_path(up, inputs)

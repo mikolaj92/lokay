@@ -30,9 +30,9 @@ def handle_lanes(
     pr_number = ctx["pr_number"]
     branch = ctx["branch"]
 
-    import lokay.fala_organ as _fo
+    from lokay.atom_runtime import run_atom_main
 
-    _run_atom_main = _fo._run_atom_main
+    _run_atom_main = ctx.get("run_atom_main") or run_atom_main
     if atom == "get_issue":
         assert repo and issue_number is not None
         return _run_atom_main(

@@ -111,18 +111,9 @@ def _conduction_values(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return out
 
 def _run_atom_main(module_main, argv: list[str]) -> dict[str, Any]:
-    import contextlib
-    import io
+    from lokay.atom_runtime import run_atom_main
 
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        code = module_main(argv)
-    lines = buf.getvalue().strip().splitlines()
-    if not lines:
-        return {"ok": False, "error": "empty atom stdout", "_exit": code}
-    data = json.loads(lines[-1])
-    data["_exit"] = code
-    return data
+    return run_atom_main(module_main, argv)
 
 def _cfg_flags(inputs: dict[str, Any]) -> list[str]:
     path = inputs.get("config_path") or inputs.get("config")
@@ -344,9 +335,9 @@ def _resume_after_timeout(
     get_issue_main=None,
 ) -> dict[str, Any]:
     """One continue pass on the same corner after executor timeout."""
-    import lokay.fala_organ as _fo
+    from lokay.atom_runtime import run_atom_main
 
-    run = getattr(_fo, "_run_atom_main", _run_atom_main)
+    run = run_atom_main
     refused = _issue_no_longer_open(
         {"get_issue": {"issue": issue_raw or {}}},
         cfg=cfg,
