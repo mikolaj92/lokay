@@ -22,10 +22,16 @@ def launch(candidate: dict, *, config_path: str | None) -> dict:
     leftover, leftover_issues = leftover_without_repo(
         candidate, str(candidate.get("repo") or "")
     )
+    if result.get("ok"):
+        route = "started"
+    elif result.get("reason") == "repo_lock_busy":
+        route = "busy"
+    else:
+        route = "failed"
     return {
         **dict(candidate),
         "ok": True,
-        "route": "started" if result.get("ok") else "failed",
+        "route": route,
         "launch": result,
         "leftover": leftover,
         "leftover_issues": leftover_issues,

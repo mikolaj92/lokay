@@ -15,7 +15,7 @@ if a=='verify_selected_issue_ready':v['route']='ready'
 if a=='select_ready_outcome':v['route']='ready'
 if a=='launch_issue_to_pr':v['route']='started';Path(%r).write_text('one')
 if a=='select_launch_route':v['route']='started'
-if a in {'keep_implementation_candidate','drop_stale_implementation_candidate','record_dispatch_failure','label_blocked_dispatch','park_plan_only_dispatch'}:Path(%r).write_text(a)
+if a in {'keep_implementation_candidate','keep_busy_launch','drop_stale_implementation_candidate','record_dispatch_failure','label_blocked_dispatch','park_plan_only_dispatch'}:Path(%r).write_text(a)
 if a=='record_dispatch_success':v['route']='receipt'
 if a=='select_dispatch_outcome':v.update(route='receipt',stuck_changed=True)
 if a=='select_blocked_dispatch':v['route']='done'
@@ -106,3 +106,25 @@ if a=='summarize_implementation_dispatch':v['result']={'started':0}"""
     )
     run_graph(tmp_path, body, "dispatch-stale", path_id="implementation_dispatch")
     assert drop.exists() and not launch.exists()
+
+
+def test_busy_launch_keeps_without_failure(tmp_path):
+    keep = tmp_path / "keep"
+    fail = tmp_path / "fail"
+    body = base_effector(
+        """if a=='select_implementation_candidate':v.update(route='candidate',repo='a/b',issue=1)
+if a=='inspect_implementation_mutex':v['route']='free'
+if a=='select_mutex_outcome':v['route']='free'
+if a=='verify_selected_issue_ready':v['route']='ready'
+if a=='select_ready_outcome':v['route']='ready'
+if a=='launch_issue_to_pr':v['route']='busy'
+if a=='select_launch_route':v['route']='busy'
+if a=='keep_busy_launch':Path(%r).write_text('keep')
+if a in {'record_dispatch_success','record_dispatch_failure'}:Path(%r).write_text(a)
+if a=='select_dispatch_outcome':v.update(route='done',stuck_changed=False)
+if a=='select_blocked_dispatch':v['route']='done'
+if a=='summarize_implementation_dispatch':v['result']={'started':0}"""
+        % (str(keep), str(fail))
+    )
+    run_graph(tmp_path, body, "dispatch-busy", path_id="implementation_dispatch")
+    assert keep.exists() and not fail.exists()

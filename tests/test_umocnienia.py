@@ -447,7 +447,9 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
         repo="mikolaj92/lokay", issue=9, config_path=None, popen=FakePopen
     )
 
-    assert seen["during_spawn"] == {
+    spawn_receipt = dict(seen["during_spawn"])
+    assert spawn_receipt.pop("repo_lock").endswith("mikolaj92__lokay.lock")
+    assert spawn_receipt == {
         "ok": True,
         "detached": False,
         "starting": True,
@@ -461,7 +463,7 @@ def test_detach_reserves_receipt_before_child_can_start(tmp_path, monkeypatch):
         "log": out["log"],
     }
     assert seen["during_spawn"]["launcher_pid"] == os.getpid()
-    assert seen["pass_fds"] and len(seen["pass_fds"]) == 1
+    assert seen["pass_fds"] and len(seen["pass_fds"]) == 2
     assert detach_mod.has_unreadable_issue_to_pr_receipts() is False
     assert detach_mod.live_issue_to_pr_receipts(
         pid_alive=lambda _pid: True,

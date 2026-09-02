@@ -128,6 +128,15 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
                 "pr": 4,
             },
         },
+        {
+            "repo_locks": [
+                {
+                    "repo": "a/b",
+                    "busy": True,
+                    "path": "/state/repo-locks/a__b.lock",
+                }
+            ]
+        },
         {"graphs": ["factory_pass"]},
         {"preflight": None},
     )["snapshot"]
@@ -142,6 +151,7 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
         and out["run_lease_path"] == "/state/health-lease-1-x"
         and out["work_units"][0]["work_id"] == "a/b#3"
         and out["latest_delivery"]["pr"] == 4
+        and out["repo_locks"][0]["repo"] == "a/b"
     )
 
 

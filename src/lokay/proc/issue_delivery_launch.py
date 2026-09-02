@@ -11,6 +11,16 @@ from lokay.proc.issue_delivery_receipts import (
     issue_to_pr_log_path,
     write_issue_to_pr_receipt,
 )
+from lokay.proc.repo_lock import acquire_repo_lock, repo_lock_dir, repo_lock_path
+
+
+def _close_lock(handle) -> None:
+    if handle is None:
+        return
+    try:
+        handle.close()
+    except OSError:
+        pass
 
 
 def detach_issue_to_pr(
@@ -20,16 +30,27 @@ def detach_issue_to_pr(
     config_path: str | None,
     popen=None,
 ) -> dict[str, Any]:
-    """Detach only after a durable receipt and child activation barrier.
+    """Detach only after a repo lock, durable receipt, and child activation barrier.
 
-    The child blocks on a private pipe before it can run Fala. If this parent
-    dies after ``Popen`` but before final publication, its write end closes and
-    the child exits without touching a worktree. That makes a later recovery
-    of the pre-spawn reservation safe rather than a second-worker race.
+    The child blocks on a private pipe before it can run Fala. The repo flock is
+    acquired here and inherited by the child for the complete coding slot. The
+    parent closes its copy after spawn so process death of the worker releases
+    the lock without PID guessing or unlinking the lock file.
     """
     repo_name = str(repo)
     issue_number = int(issue)
     work_id = f"{repo_name}#{issue_number}"
+    lock_path = repo_lock_path(repo_lock_dir(config_path).parent, repo_name)
+    lock_handle = acquire_repo_lock(lock_path)
+    if lock_handle is None:
+        return {
+            "ok": False,
+            "reason": "repo_lock_busy",
+            "error": f"repository lock is held: {lock_path}",
+            "repo": repo_name,
+            "issue": issue_number,
+            "repo_lock": str(lock_path),
+        }
 
     spawn = popen or subprocess.Popen
     argv = [sys.executable, "-u", "-m", "lokay.compose.issue_to_pr"]
@@ -69,10 +90,12 @@ def detach_issue_to_pr(
         "work_id": work_id,
         "state": "starting",
         "log": str(log_path),
+        "repo_lock": str(lock_path),
     }
     try:
         receipt_path = write_issue_to_pr_receipt(starting)
     except OSError as exc:
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "receipt_unavailable",
@@ -85,6 +108,7 @@ def detach_issue_to_pr(
         read_fd, write_fd = os.pipe()
     except OSError as exc:
         _discard_starting_receipt(receipt_path, launch_id)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "activation_unavailable",
@@ -93,12 +117,14 @@ def detach_issue_to_pr(
             "issue": issue_number,
         }
     env["LOKAY_ISSUE_TO_PR_ACTIVATION_FD"] = str(read_fd)
+    env["LOKAY_REPO_LOCK_FD"] = str(lock_handle.fileno())
     try:
         log_fh = log_path.open("ab")
     except OSError as exc:
         os.close(read_fd)
         os.close(write_fd)
         _discard_starting_receipt(receipt_path, launch_id)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "log_unavailable",
@@ -114,6 +140,7 @@ def detach_issue_to_pr(
         os.close(read_fd)
         os.close(write_fd)
         _discard_starting_receipt(receipt_path, launch_id)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "log_unavailable",
@@ -129,12 +156,13 @@ def detach_issue_to_pr(
             start_new_session=True,
             stdout=log_fh,
             stderr=subprocess.STDOUT,
-            pass_fds=(read_fd,),
+            pass_fds=(read_fd, lock_handle.fileno()),
         )
     except OSError as exc:
         os.close(read_fd)
         os.close(write_fd)
         _discard_starting_receipt(receipt_path, launch_id)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "spawn_failed",
@@ -152,6 +180,7 @@ def detach_issue_to_pr(
         terminated = _terminate_detached_process_group(proc)
         if terminated:
             _discard_starting_receipt(receipt_path, launch_id)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "log_unavailable",
@@ -174,6 +203,7 @@ def detach_issue_to_pr(
         "state": "implementing",
         "log": str(log_path),
         "launch_id": launch_id,
+        "repo_lock": str(lock_path),
     }
     try:
         receipt["receipt"] = str(write_issue_to_pr_receipt(receipt))
@@ -183,6 +213,7 @@ def detach_issue_to_pr(
         terminated = _terminate_detached_process_group(proc)
         if terminated:
             _discard_starting_receipt(receipt_path, launch_id)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "receipt_unavailable",
@@ -195,9 +226,8 @@ def detach_issue_to_pr(
     try:
         os.write(write_fd, b"1")
     except OSError as exc:
-        # The receipt is durable but a child that never read activation cannot
-        # work; terminate conservatively and leave its final historical receipt.
         terminated = _terminate_detached_process_group(proc)
+        _close_lock(lock_handle)
         return {
             "ok": False,
             "reason": "activation_unavailable",
@@ -210,4 +240,5 @@ def detach_issue_to_pr(
     finally:
         os.close(read_fd)
         os.close(write_fd)
+        _close_lock(lock_handle)
     return receipt

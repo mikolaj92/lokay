@@ -54,6 +54,15 @@ The receipt is written next to the configured `state.path`, not an unconditional
 `~/.lokay/last-pass.json`. It keeps `last_path`, `last_atom`, `work_id`, and
 `resume_from` when `activity.json` is present.
 
+## Repository lock
+
+One coding slot per repository is an OS `fcntl.flock` next to configured
+`state.path` (`repo-locks/{owner}__{name}.lock`). Inspect and status only
+probe the lock. Launch acquires it and the detached worker inherits the
+file descriptor for the complete slot. Process death releases the flock;
+the lock file is never unlinked. A busy lock at launch is queued, not a
+bounded dispatch failure.
+
 ## Durable work truth
 
 `lokay status --local` projects issue delivery from the append-only state log.

@@ -18,7 +18,7 @@ def handle_implementation_dispatch(
     if atom == "inspect_implementation_mutex":
         from lokay.proc.inspect_implementation_mutex import inspect
 
-        return inspect(up.get("select_implementation_candidate") or {})
+        return inspect(up.get("select_implementation_candidate") or {}, config_path=config)
     if atom == "select_mutex_outcome":
         from lokay.proc.select_mutex_outcome import select
 
@@ -53,6 +53,10 @@ def handle_implementation_dispatch(
         from lokay.proc.launch_issue_to_pr import launch
 
         return launch(up.get("select_ready_outcome") or {}, config_path=config)
+    if atom == "keep_busy_launch":
+        from lokay.proc.keep_busy_launch import apply
+
+        return apply(pass_dir=pass_dir, candidate=up.get("select_launch_route") or {})
     if atom == "select_launch_route":
         from lokay.proc.select_launch_route import select
 

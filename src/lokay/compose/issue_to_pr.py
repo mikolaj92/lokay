@@ -9,14 +9,34 @@ from lokay.proc._common import add_config_live
 from lokay.state import append_event
 
 
+_HELD_REPO_LOCK_FDS: list[int] = []
+
+
+def _retain_repo_lock() -> None:
+    """Keep the inherited flock open for this process lifetime. Never unlink."""
+    raw = os.environ.get("LOKAY_REPO_LOCK_FD")
+    if raw is None:
+        return
+    try:
+        fd = int(raw)
+    except ValueError:
+        return
+    if fd >= 0 and fd not in _HELD_REPO_LOCK_FDS:
+        _HELD_REPO_LOCK_FDS.append(fd)
+
+
 def _await_detach_activation() -> bool:
     raw = os.environ.get("LOKAY_ISSUE_TO_PR_ACTIVATION_FD")
     if raw is None:
+        _retain_repo_lock()
         return True
     fd = None
     try:
         fd = int(raw)
-        return fd >= 0 and os.read(fd, 1) == b"1"
+        ready = fd >= 0 and os.read(fd, 1) == b"1"
+        if ready:
+            _retain_repo_lock()
+        return ready
     except (OSError, ValueError):
         return False
     finally:

@@ -8,6 +8,7 @@ def reduce(
     lease: dict,
     receipt_fact: dict,
     work_fact: dict,
+    repo_locks: dict,
     graphs: dict,
     preflight: dict,
 ) -> dict:
@@ -54,6 +55,7 @@ def reduce(
             "survey_ok": None,
             "work_units": work_units,
             "latest_delivery": work_fact.get("latest_delivery"),
+            "repo_locks": list(repo_locks.get("repo_locks") or []),
             "lease_ok": lease.get("lease_ok"),
             "lease_reason": lease.get("lease_reason"),
             "run_active": lease.get("run_active"),

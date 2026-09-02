@@ -192,12 +192,14 @@ stateDiagram-v2
     [*] --> SelectImplementationCandidate
     SelectImplementationCandidate --> DispatchResult: brak kandydata / brak budżetu / dry-run
     SelectImplementationCandidate --> InspectRepositoryMutex: wybrano jedno repo i issue
-    InspectRepositoryMutex --> KeepCandidateQueued: mutex zajęty lub nieznany
-    InspectRepositoryMutex --> VerifyIssueReady: mutex wolny
+    InspectRepositoryMutex --> KeepCandidateQueued: lock zajęty lub nieznany
+    InspectRepositoryMutex --> VerifyIssueReady: lock wolny
     VerifyIssueReady --> DropStaleCandidate: issue nie jest już fizycznie open albo ma human stop
     VerifyIssueReady --> LaunchIssueToPullRequest: issue nadal gotowe
-    LaunchIssueToPullRequest --> RecordDispatchSuccess: worker uruchomiony
+    LaunchIssueToPullRequest --> KeepBusyLaunch: lock zajęty przy starcie
+    LaunchIssueToPullRequest --> RecordDispatchSuccess: worker uruchomiony z lockiem
     LaunchIssueToPullRequest --> RecordDispatchFailure: uruchomienie nieudane
+    KeepBusyLaunch --> DispatchResult
     RecordDispatchSuccess --> PersistStuckLedger
     RecordDispatchFailure --> PersistStuckLedger
     PersistStuckLedger --> LabelIssueBlocked: osiągnięto ograniczony próg awarii
@@ -215,6 +217,11 @@ stateDiagram-v2
 
 Pod-Fala wybiera najwyżej jeden ticket w jednym pass. `K` jest seryjnym budżetem
 kolejnych passów, nie pętlą ani równoległym schedulerem ukrytym w procesie.
+Mutex repozytorium to `fcntl.flock` przy skonfigurowanym `state.path`, trzymany
+przez cały detached slot. Inspect tylko obserwuje lock i nic nie mutuje.
+Acquire następuje w launch, a FD przechodzi do workera; śmierć procesu zwalnia
+lock bez zgadywania PID. Zajęty lock przy starcie wraca do kolejki, nie do
+bounded failure.
 Każdy węzeł wykonuje jeden odczyt faktu, jedną mutację albo jedną redukcję stanu.
 
 ### Odzyskanie konfliktującego PR — `resolve_conflicts`
@@ -432,6 +439,7 @@ stateDiagram-v2
     ReadStatusConfig --> ReadStatusLease
     ReadStatusConfig --> ReadStatusPassReceipt
     ReadStatusConfig --> ReadStatusWorkUnits
+    ReadStatusConfig --> ReadStatusRepoLocks
     ReadStatusConfig --> DescribeStatusGraphs
     ReadStatusConfig --> RunStatusPreflight: jawne --preflight
     ReadStatusConfig --> RecordStatusPreflight: bez --preflight
@@ -441,6 +449,7 @@ stateDiagram-v2
     ReadStatusLease --> ReduceStatusSnapshot
     ReadStatusPassReceipt --> ReduceStatusSnapshot
     ReadStatusWorkUnits --> ReduceStatusSnapshot
+    ReadStatusRepoLocks --> ReduceStatusSnapshot
     DescribeStatusGraphs --> ReduceStatusSnapshot
     RecordStatusPreflight --> ReduceStatusSnapshot
     ReduceStatusSnapshot --> StatusSnapshotTerminal
@@ -448,8 +457,8 @@ stateDiagram-v2
 ```
 
 Status nie uruchamia produktu, passa ani survey GitHub. Pod-Fala składa tylko
-read-only fakty konfiguracji, brakujących checkoutów, lease, opisu grafów,
-opcjonalnego preflightu i ostatniego trwałego receipt. `lease_ok` opisuje
+read-only fakty konfiguracji, brakujących checkoutów, lease, locków repo,
+opisu grafów, opcjonalnego preflightu i ostatniego trwałego receipt. `lease_ok` opisuje
 wyłącznie zweryfikowaną capability odziedziczoną przez bieżący proces; bez tokena
 ma wartość `null` i powód `not_observed`. Niezależne `run_active` mówi, czy
 config-aware `mill.lock` jest aktualnie zajęty, a `run_lease_path` wskazuje tylko
@@ -1404,7 +1413,7 @@ kontraktu. Aktualny audyt:
 | `PlanIssueExecution` | `plan_issue_execution` | prowadzi deterministic approach build, mutation gate, write i terminal |
 | `StageLabelExecution` | `stage_label_execution` | prowadzi fresh issue gate oraz osobne remove/add/comment efekty etapu |
 | `PRCreateExecution` | `pr_create_execution` | prowadzi duplicate/issue facts i pojedynczy fizyczny efekt publikacji PR |
-| `StatusSnapshot` | `status_snapshot` | składa read-only config, lease, grafy i ostatni pass receipt bez uruchamiania produktu |
+| `StatusSnapshot` | `status_snapshot` | składa read-only config, lease, locki repo, grafy i ostatni pass receipt bez uruchamiania produktu |
 | `SelfRepairActivateExecution` | `self_repair_activate_execution` | aktywuje dokładny recovery commit przez jawne fakty Git i efekty |
 | `AssertRealDiffExecution` | `assert_real_diff_execution` | składa fizyczny diff, scope issue/localize i zamknięty terminal |
 | `RelocalizeOffGoal` | `relocalize_off_goal` | prowadzi protected restore i jeden agentowy bounded scope expansion |

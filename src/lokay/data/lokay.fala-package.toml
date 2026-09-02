@@ -1721,6 +1721,14 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "record_dispatch_failure" }
 retry_policy = "none"
 [[correlation_paths.effectors]]
+id = "keep_busy_launch"
+capability = "lokay_atom"
+conduction = ["select_launch_route"]
+when = { upstream = "select_launch_route", path = "route", equals = "busy" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "keep_busy_launch" }
+retry_policy = "none"
+[[correlation_paths.effectors]]
 id = "select_dispatch_outcome"
 capability = "lokay_atom"
 conduction = ["record_dispatch_success", "record_dispatch_failure"]
@@ -1776,7 +1784,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "summarize_implementation_dispatch"
 capability = "lokay_atom"
-conduction = ["select_implementation_candidate", "inspect_implementation_mutex", "select_mutex_outcome", "keep_implementation_candidate", "verify_selected_issue_ready", "select_ready_outcome", "drop_stale_implementation_candidate", "launch_issue_to_pr", "select_launch_route", "record_dispatch_success", "record_dispatch_failure", "select_dispatch_outcome", "persist_dispatch_stuck", "label_blocked_dispatch", "persist_blocked_dispatch", "select_blocked_dispatch", "park_plan_only_dispatch", "write_dispatch_receipt"]
+conduction = ["select_implementation_candidate", "inspect_implementation_mutex", "select_mutex_outcome", "keep_implementation_candidate", "verify_selected_issue_ready", "select_ready_outcome", "drop_stale_implementation_candidate", "launch_issue_to_pr", "select_launch_route", "keep_busy_launch", "record_dispatch_success", "record_dispatch_failure", "select_dispatch_outcome", "persist_dispatch_stuck", "label_blocked_dispatch", "persist_blocked_dispatch", "select_blocked_dispatch", "park_plan_only_dispatch", "write_dispatch_receipt"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_implementation_dispatch" }
 retry_policy = "none"
@@ -5997,7 +6005,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "status_snapshot"
 title = "Read-only status snapshot"
-description = "Configuration, readiness, checkout existence, lease, last pass receipt, graph description, optional preflight, pure reduction, and terminal; no product pass or mutation."
+description = "Configuration, readiness, checkout existence, lease, repo locks, last pass receipt, graph description, optional preflight, pure reduction, and terminal; no product pass or mutation."
 
 [[correlation_paths.effectors]]
 id = "read_status_config"
@@ -6047,6 +6055,14 @@ config = { atom = "read_status_work_units" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
+id = "read_status_repo_locks"
+capability = "lokay_atom"
+conduction = ["read_status_config"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "read_status_repo_locks" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
 id = "describe_status_graphs"
 capability = "lokay_atom"
 conduction = ["read_status_config"]
@@ -6074,7 +6090,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "reduce_status_snapshot"
 capability = "lokay_atom"
-conduction = ["read_status_config", "classify_status_readiness", "read_status_clone_facts", "read_status_lease", "read_status_pass_receipt", "read_status_work_units", "describe_status_graphs", "record_status_preflight"]
+conduction = ["read_status_config", "classify_status_readiness", "read_status_clone_facts", "read_status_lease", "read_status_pass_receipt", "read_status_work_units", "read_status_repo_locks", "describe_status_graphs", "record_status_preflight"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "reduce_status_snapshot" }
 retry_policy = "none"

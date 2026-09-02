@@ -12,6 +12,7 @@ if a=='read_status_clone_facts':v['missing_clones']=[]
 if a=='read_status_lease':v.update(lease_ok=True,lease_reason='ok')
 if a=='read_status_pass_receipt':v['receipt']=None
 if a=='read_status_work_units':v['work_units']=[]
+if a=='read_status_repo_locks':v['repo_locks']=[]
 if a=='describe_status_graphs':v['graphs']=['factory_pass']
 if a=='run_status_preflight':v.update(route='record',preflight={{'ok':True}})
 if a=='record_status_preflight':v.update(route='record' if {preflight!s} else 'unused',preflight={{'ok':True}} if {preflight!s} else None)
