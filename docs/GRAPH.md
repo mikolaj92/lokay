@@ -14,11 +14,14 @@ last_pass_moving
   → select_repair_route
     → recovery_incident (when last receipt did not move: no new PR and no merge)
       → recovery_run_self_repair (self_repair child Fala; skipped otherwise)
-  → recovery_mill (always: factory departments; leftover skip never starts repair)
+  → recovery_mill (always: one factory_pass; leftover skip never starts repair)
 ```
 
 The moving gate is one leaf. Repair is its own child graph. `recovery_mill`
-is factory only — it does not classify, repair, or activate. Moving
+is one parent `factory_pass` — it does not classify, repair, activate, or
+host `product_entry` / `product_pass_budget`. LaunchAgent already re-invokes
+the mill; a 180s tick must not stack eight factory slots. `product_entry`
+stays the CLI multi-pass wrapper. Moving
 forward is only a new PR or a merge on the last receipt. Leftover skip,
 empty survey, and a stale receipt do not count as “not moving” and do not
 start recovery. After one repair the graph always returns to the five
@@ -181,10 +184,10 @@ prepare_pr_closeout
 
 `lokay-dispatch-closeout` is removed. `closeout_prs` is its own authored
 path. Parent `factory_pass` conducts five departments and does not hide
-closeout order in Python. `recovery_mill` is CLI wiring into one
-`product_entry` child, not a hidden multi-pass loop. `leftover_catalog`
-stays one in-process catalog atom: park CLOSED-ready labels, not AI-PR
-closeout order.
+closeout order in Python. `recovery_mill` hosts one `factory_pass`.
+`product_entry` / `product_pass_budget` remain CLI multi-pass wrappers,
+not the 180s heartbeat. `leftover_catalog` stays one in-process catalog
+atom: park CLOSED-ready labels, not AI-PR closeout order.
 
 ### `pr_triage_department` (PR sieve)
 
@@ -240,7 +243,7 @@ Entered only from:
 2. **`daemon_cycle` last-pass gate** — `last_pass_moving` is one leaf (new
    PR or merge). `select_repair_route` composes leftover skip, empty
    survey, and a stale receipt so they never enter. After the child
-   finishes, `recovery_mill` always runs the factory (five departments).
+   finishes, `recovery_mill` always hosts one `factory_pass`.
    Repair never loops as the mill. Activate is `self_repair_activate`.
 
 It never creates a branch or PR. The coding agent can edit only the detached
@@ -581,6 +584,8 @@ Do not put graph order in the coding harness. Do not reintroduce Hermes Kanban a
 
 **Runtime note:** Fala is the only workflow composer. Python composers validate the public command contract, invoke
 `lokay.graph_run.run_path`, and normalize Fala's terminal per-effector outputs.
-`compose_mill` repeats the parent `factory_pass`; it does not invoke child paths
-directly. Atomic `lokay-*` processes remain the execution
-boundary, but there is no runtime Python fallback graph or engine-selection flag.
+`compose_mill` is the CLI multi-pass wrapper (`product_entry` then
+`product_pass_budget`). The 180s LaunchAgent heartbeat does not use it:
+`recovery_mill` hosts one parent `factory_pass`. Atomic `lokay-*`
+processes remain the execution boundary, but there is no runtime Python
+fallback graph or engine-selection flag.

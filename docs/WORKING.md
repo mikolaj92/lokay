@@ -264,7 +264,7 @@ Product mill time wins over emergency recovery.
    only). `select_repair_route` composes leftover skip / empty survey /
    stale receipt so they never start repair. Only then does `daemon_cycle`
    file one deduplicated incident and enter the `self_repair` child Fala.
-   `recovery_mill` is factory only; activate stays `self_repair_activate`.
+   `recovery_mill` hosts one `factory_pass`; activate stays `self_repair_activate`.
 
 **Never mint a systemic stall fingerprint / never fill the 4-of-5 quorum for:**
 

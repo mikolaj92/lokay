@@ -213,7 +213,7 @@ def test_cli_surface_remains_wired():
     assert not (root / "src" / "lokay" / "proc" / "dispatch_closeout.py").exists()
 
 
-def test_recovery_mill_is_cli_wiring_not_a_hidden_loop():
+def test_recovery_mill_hosts_one_factory_pass_not_a_pass_budget():
     src = (
         Path(__file__).resolve().parents[1]
         / "src"
@@ -221,7 +221,8 @@ def test_recovery_mill_is_cli_wiring_not_a_hidden_loop():
         / "proc"
         / "recovery_mill.py"
     ).read_text(encoding="utf-8")
-    assert "compose_mill" in src
+    assert "compose_factory_pass" in src
+    assert "compose_mill" not in src
     assert "while " not in src
     mill = (
         Path(__file__).resolve().parents[1]

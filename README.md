@@ -326,8 +326,10 @@ Wrapper daemona posiada tylko nierozdzielną fizyczną capability: singleton loc
 unikalną ścieżkę health lease i jeden preflight, którego lease musi pozostać w
 środowisku rodzica. Następnie przekazuje zamknięty wynik preflight do Fali.
 Fala wybiera produkt, overlap, carrier terminal albo jedną pod-Falę
-self-repair. Pythonowy entrypoint nie wybiera już kolejności produktu i
-recovery. Zapis outboxu i kod procesu są mechanicznym raportowaniem terminala.
+self-repair. Produkt to `daemon_cycle` z jednym `factory_pass`, nie
+`product_pass_budget`. Pythonowy entrypoint nie wybiera już kolejności
+produktu i recovery. Zapis outboxu i kod procesu są mechanicznym
+raportowaniem terminala.
 
 ### Jeden mechaniczny intake check — `intake_check_execution`
 
@@ -1380,8 +1382,9 @@ gate is one leaf (`last_pass_moving`: new PR or merge only). A second
 leaf (`select_repair_route`) composes leftover skip, empty survey, stale
 receipt, occupied, and soft health. Repair is the `self_repair` child
 graph — activate stays a leaf inside that child, not inside
-`recovery_mill`. After one repair the graph always returns to the five
-departments.
+`recovery_mill`. After one repair the graph always returns to one
+`factory_pass`. LaunchAgent already re-invokes the mill; a 180s tick
+must not nest `product_entry` / `product_pass_budget`.
 
 ```mermaid
 stateDiagram-v2
@@ -1391,10 +1394,7 @@ stateDiagram-v2
     SelectRepairRoute --> RunFactoryPass: leftover skip / empty survey / stale
     SelectRepairRoute --> SelfRepair: last receipt did not move
     SelfRepair --> RunFactoryPass
-    RunFactoryPass --> CloseoutPrs
-    RunFactoryPass --> DispatchImplement
-    CloseoutPrs --> [*]
-    DispatchImplement --> [*]
+    RunFactoryPass --> [*]
     SelfRepair --> SelfRepairPrepare
     SelfRepairPrepare --> SelfRepairRunAgent
     SelfRepairRunAgent --> SelfRepairCommit
@@ -1429,7 +1429,7 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then departments |
+| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then one factory_pass |
 | `FactoryPass` | `factory_pass` | five named departments with on/off switches, then receipt; leftover work-copy cleanup is a sibling child |
 | `SelfRepairDepartment` | `self_repair_department` | stall incident, then existing self_repair child |
 | `IssueTriageDepartment` | `issue_triage_department` | list, nest triage rows, receipt. Marks and children. Zero ai/fix |

@@ -79,7 +79,10 @@ def test_recovery_mill_is_factory_only():
     source = (
         Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "recovery_mill.py"
     ).read_text(encoding="utf-8")
-    assert "compose_mill" in source
+    assert "compose_factory_pass" in source
+    assert "compose_mill" not in source
+    assert "product_entry" not in source
+    assert "product_pass_budget" not in source
     assert "self_repair" not in source
     assert "moved_forward" not in source
     assert "activate" not in source
