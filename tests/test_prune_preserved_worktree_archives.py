@@ -78,3 +78,28 @@ def test_prune_refuses_operator_mill_under_pytest(monkeypatch, tmp_path):
     assert out.get("skipped") is True
     assert out["reason"] == "pytest_refuses_operator_mill"
     assert old.exists()
+
+
+def test_prune_bounds_expired_archives_to_authored_slots(tmp_path):
+    from lokay.proc.stale_worktree_catalog import SLOTS
+
+    repo = tmp_path / "owner__repo"
+    repo.mkdir()
+    now = time.time()
+    archives = []
+    for index in range(SLOTS + 2):
+        archive = repo / f".{index}.lokay-preserved"
+        archive.mkdir()
+        os.utime(
+            archive,
+            (
+                now - PRESERVED_ARCHIVE_TTL_SECONDS - 10,
+                now - PRESERVED_ARCHIVE_TTL_SECONDS - 10,
+            ),
+        )
+        archives.append(archive)
+
+    assert len(list_expired_archives(tmp_path, now=now)) == SLOTS
+    out = prune(managed_root=tmp_path, live=True, now=now)
+    assert out["pruned_count"] == SLOTS
+    assert sum(path.exists() for path in archives) == 2

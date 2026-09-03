@@ -98,7 +98,7 @@ stateDiagram-v2
     SelectPrRepairDepartment --> RunPrRepairDepartment
     SelectPrRepairDepartment --> RecordPass
     RecordPass --> FactoryPassTerminal
-    ReapStaleWorktrees --> FactoryPassTerminal: cleaned / failed classified
+    ReapStaleWorktrees --> [*]: cleaned / failed classified sibling
     FactoryPassTerminal --> LastPassMoving
     LastPassMoving --> SelectRepairRoute
     SelectRepairRoute --> [*]: new PR / merge / leftover skip / empty survey / stale

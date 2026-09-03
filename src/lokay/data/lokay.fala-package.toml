@@ -100,14 +100,6 @@ config = { atom = "factory_begin" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
-id = "reap_stale_worktrees"
-capability = "lokay_atom"
-conduction = ["factory_begin_host_gate", "factory_begin"]
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "reap_stale_worktrees" }
-retry_policy = "none"
-
-[[correlation_paths.effectors]]
 id = "select_self_repair_department"
 capability = "lokay_atom"
 conduction = ["factory_begin_host_gate", "factory_begin"]
@@ -206,6 +198,14 @@ capability = "lokay_atom"
 conduction = ["record_pass"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "factory_pass_terminal" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "reap_stale_worktrees"
+capability = "lokay_atom"
+conduction = ["factory_begin_host_gate", "factory_begin"]
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "reap_stale_worktrees" }
 retry_policy = "none"
 
 [[correlation_paths]]

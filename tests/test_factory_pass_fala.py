@@ -9,7 +9,6 @@ CHILDREN = (
     "host_ff",
     "factory_begin_host_gate",
     "factory_begin",
-    "reap_stale_worktrees",
     "select_self_repair_department",
     "run_self_repair_department",
     "select_issue_triage_department",
@@ -22,6 +21,7 @@ CHILDREN = (
     "run_pr_repair_department",
     "record_pass",
     "factory_pass_terminal",
+    "reap_stale_worktrees",
 )
 
 LEAVES = (

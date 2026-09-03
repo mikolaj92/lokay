@@ -85,20 +85,24 @@ receipt did not move; incidents reuse the preflight cooldown ledger
 path conducts one-job atoms; child workflow Falas are started from dispatch
 atoms via `run_path`.
 
-```text
-host_ff
-  → factory_begin_host_gate          begin → factory_begin / departments
-                                     restart → record_pass (host_updated, no product)
-    → factory_begin                  (when gate route=begin)
-  → select_self_repair_department → run_self_repair_department   (when last pass is a stall; skip idle / pass_ceiling / occupied — product wins)
-  → select_issue_triage_department → run_issue_triage_department
-  → select_executor_department → run_executor_department
-  → select_pr_triage_department → run_pr_triage_department
-  → select_pr_repair_department → run_pr_repair_department     (when sieve verdict is repair)
-  → record_pass          → last-pass.json (new_pr | merge | none)
-    → factory_pass_terminal
-  → reap_stale_worktrees     → sibling child from factory_begin (leftover work copies)
+```mermaid
+flowchart TD
+    host_ff --> factory_begin_host_gate
+    factory_begin_host_gate -- begin --> factory_begin
+    factory_begin_host_gate -- restart --> record_pass
+    factory_begin --> select_self_repair_department --> run_self_repair_department
+    select_self_repair_department --> select_issue_triage_department --> run_issue_triage_department
+    select_issue_triage_department --> select_executor_department --> run_executor_department
+    select_executor_department --> select_pr_triage_department --> run_pr_triage_department
+    select_pr_triage_department --> select_pr_repair_department --> run_pr_repair_department
+    select_pr_repair_department --> record_pass --> factory_pass_terminal
+    factory_begin --> reap_stale_worktrees
 ```
+
+The authored listing order is the five departments, then `record_pass`, then
+`factory_pass_terminal`, then the sibling `reap_stale_worktrees`. Reap still
+conducts only from `factory_begin_host_gate` and `factory_begin`; its listing
+position must not turn it into a dependency of product or the terminal.
 
 | Atom | One job |
 | --- | --- |
@@ -110,7 +114,7 @@ host_ff
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Child Fala `pr_triage_department`: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. |
 | `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict from `run_pr_triage_department`. Conducts from the sieve run plus the PR-triage switch. Not started from inside `pr_triage_department`. Disabled skip leaves published feedback and does not touch the branch. |
-| `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots` (oldest first). Catalog composes `overflow_bound` or `apply_slot`. Summarize composes `persist_result` and `prune_preserved_worktree_archives` (TTL GC of `.lokay-preserved`). Overflow bounds one pass to authored slots; it never skips the whole catalog forever — a later pass continues the remainder. Classified REMOVE reclaims disk after registry detach (not archive-only). KEEP live i2pr is issue-scoped (repo+issue), not repo-scoped; also `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. Never unlink Fala sqlite/WAL. Do not raise the 180s ceiling. Tests use tmp dirs only. |
+| `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots` (oldest first). Catalog composes `overflow_bound` or `apply_slot`. Summarize composes `persist_result` and `prune_preserved_worktree_archives` (TTL GC of `.lokay-preserved`). Overflow bounds one pass to authored slots; a failed removal advances that candidate behind the oldest remainder, so it never pins the four slots forever. Archive TTL GC uses the same four-slot bound. A later pass continues the remainder. Classified REMOVE reclaims disk after registry detach (not archive-only). KEEP live i2pr is issue-scoped (repo+issue), not repo-scoped; also `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. Never unlink Fala sqlite/WAL. Do not raise the 180s ceiling. Tests use tmp dirs only. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. A this-tick idle/progress receipt is kept by `write_pass_ceiling_receipt`; the 180s watchdog does not erase it. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
 | mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` is maintained through `fala.maintain_journal` at a 64 MiB ceiling; heartbeat `created` leftovers are finalized then deleted through Fala APIs first, capped at eight rows per journal per tick. `daemon_entry` / `daemon_cycle` / `factory_pass` use a fresh wrapper sqlite per tick and prune old wrapper dirs; they do not reopen the shared mill journals. Each host file contains only the requested `path_id`, not all 946 effectors. Recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling materialized package. Over-cap is fail-closed if Fala cannot maintain the file |

@@ -397,6 +397,11 @@ def test_factory_pass_starts_with_begin_then_product_children():
         "host_ff",
         "factory_begin_host_gate",
         "factory_begin",
+        "select_self_repair_department",
+    ]
+    assert ids[-3:] == [
+        "record_pass",
+        "factory_pass_terminal",
         "reap_stale_worktrees",
     ]
 

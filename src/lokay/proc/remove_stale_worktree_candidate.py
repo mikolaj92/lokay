@@ -1,5 +1,6 @@
 """Remove one fully classified stale worktree, with a live-receipt recheck."""
 
+import os
 from pathlib import Path
 from lokay.git_worktree import remove_worktree
 from lokay.proc._common import load_cfg, mutations_allowed, runner
@@ -8,6 +9,15 @@ from lokay.proc.detach_issue_to_pr import (
     live_issue_to_pr_receipts,
 )
 import argparse
+
+
+def defer_failed_removal(path: Path) -> bool:
+    """Move one failed removal behind the older catalog remainder."""
+    try:
+        os.utime(path, None, follow_symlinks=False)
+    except OSError:
+        return False
+    return True
 
 
 def apply(classified: dict, *, config_path: str | None, live: bool) -> dict:
@@ -33,6 +43,7 @@ def apply(classified: dict, *, config_path: str | None, live: bool) -> dict:
         managed_root=cfg.worktrees_root,
     )
     if not out.get("ok"):
+        deferred = defer_failed_removal(Path(str(row["path"])))
         return {
             "ok": True,
             "applied": False,
@@ -41,6 +52,7 @@ def apply(classified: dict, *, config_path: str | None, live: bool) -> dict:
                 "kept": True,
                 "reason": "remove_failed",
                 "error": out.get("error"),
+                "deferred_after_failure": deferred,
             },
         }
     updated = {
