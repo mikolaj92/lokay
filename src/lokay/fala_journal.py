@@ -90,10 +90,19 @@ def _is_heartbeat_journal(db: Path) -> bool:
 
 
 def _skip_busy_or_corrupt(exc: BaseException) -> bool:
+    if isinstance(exc, AttributeError):
+        return True
     text = str(exc).lower()
     return any(
         token in text
-        for token in ("locked", "busy", "invalid status", "invalid run", "not a database")
+        for token in (
+            "locked",
+            "busy",
+            "invalid status",
+            "invalid run",
+            "not a database",
+            "has no attribute",
+        )
     )
 
 
@@ -128,6 +137,8 @@ def _reclaim_created_runs(db: Path) -> int:
                 reason="heartbeat_reclaim",
             )
             fala.delete_terminal_run(db, run_id)
+        except AttributeError:
+            return reclaimed
         except Exception as exc:
             if _skip_busy_or_corrupt(exc):
                 return reclaimed

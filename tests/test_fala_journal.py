@@ -341,3 +341,27 @@ def test_created_reclaim_is_capped_per_journal(tmp_path: Path, monkeypatch):
     assert heartbeat["reclaimed_created"] == 8
     assert calls == [f"lokay-old-{i}" for i in range(8)]
 
+
+def test_missing_native_finalize_stops_reclaim_after_one_try(tmp_path: Path, monkeypatch):
+    """Fala 0.7.31 has no native transition_run. Do not loop 822 AttributeErrors."""
+    home = tmp_path / "home"
+    db = _write_db(home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80)
+    calls: list[str] = []
+
+    def list_runs(_db_path, **_kwargs):
+        return [{"id": f"lokay-old-{i}", "status": "created"} for i in range(200)]
+
+    def finalize_run(_db_path, *, run_id, status, reason=None):
+        calls.append(run_id)
+        raise AttributeError("module 'fala._native' has no attribute 'transition_run'")
+
+    _capture_maintain(monkeypatch)
+    monkeypatch.setattr("fala.list_runs", list_runs)
+    monkeypatch.setattr("fala.finalize_run", finalize_run)
+    monkeypatch.setattr("fala.delete_terminal_run", lambda *_a, **_k: {"ok": True})
+
+    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    assert out["ok"] is True
+    assert db.exists()
+    assert calls == ["lokay-old-0"]
+
