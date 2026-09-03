@@ -232,9 +232,23 @@ skipped at `select_next_issue`.
 
 ```text
 list_open_issues
-  → run_issue_sieve_rows      nest issue_sieve_row until leftover empty
+  → run_issue_sieve_rows      child Fala issue_sieve_rows
     → summarize_issue_triage_department   launched is always empty
 ```
+
+`issue_sieve_rows`:
+
+```text
+prepare_issue_sieve
+  → select_issue_sieve_slot_N   run / empty
+    → run_issue_sieve_row_N     when route=run  (child issue_sieve_row)
+      → classify_issue_sieve_row_N   continue / idle / cap
+        → select_issue_sieve_result
+```
+
+Python does not loop. Fala owns the authored slots, budget, and resume
+cursor. Ceiling/restart continues from `pass_dir` without rescanning
+finished rows.
 
 `issue_sieve_row`:
 
@@ -248,10 +262,10 @@ select_next_issue
 ```
 
 A "do" mark is not a branch. Executor is the next department. The catalog
-loop is this child nest, not a daemon tick and not eight copied slots.
-Leftover is consumed only on an authored skip (`needs_human`, `blocked`,
-already-closed). `triage_not_done` / adapter fail keep the row.
-`leftover=0` only when the takeable list is exhausted.
+loop is the authored `issue_sieve_rows` child, not a daemon tick and not a
+Python `while`. Leftover is consumed only on an authored skip
+(`needs_human`, `blocked`, already-closed). `triage_not_done` / adapter
+fail keep the row. `leftover=0` only when the takeable list is exhausted.
 
 ### `executor_department` (code and PR)
 

@@ -1029,14 +1029,34 @@ stateDiagram-v2
     SummarizeIssueTriageDepartment --> [*]
 ```
 
-Dział `issue_triage_department` listuje raz i gnieździ `issue_sieve_row` aż
-skrzynka pusta **albo wyczerpie `limits.max_triage_per_tick`**. Zero kodu.
-Zero PR. Nie rozwija 1..8. Tick daemona nie jest tą pętlą. Po osiągnięciu
-budżetu dział publikuje `route=cap` i zachowuje `leftover_issues`, więc rodzic
-przechodzi do executora, a następny pass kontynuuje sito. Leftover jest zjadane
-tylko przy authored skip (`needs_human`, `blocked`, already-closed).
-`triage_not_done` / adapter fail zostawia wiersz. Oil lokay nie zajmuje product
-slotu. Cudzy assignee nie jest zadaniem lokaja.
+Dział `issue_triage_department` listuje raz i gnieździ pod-Falę
+`issue_sieve_rows`. Zero kodu. Zero PR. Python nie prowadzi pętli wierszy.
+Tick daemona nie jest tą pętlą.
+
+### Iteracja sita — `issue_sieve_rows`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareIssueSieve
+    PrepareIssueSieve --> SelectIssueSieveSlot
+    SelectIssueSieveSlot --> RunIssueSieveRow: run
+    SelectIssueSieveSlot --> SelectIssueSieveResult: empty / exhausted
+    RunIssueSieveRow --> ClassifyIssueSieveRow
+    ClassifyIssueSieveRow --> SelectIssueSieveSlot: continue i następny jawny slot
+    ClassifyIssueSieveRow --> SelectIssueSieveResult: idle
+    ClassifyIssueSieveRow --> SelectIssueSieveResult: cap
+    SelectIssueSieveResult --> IssueSieveRowsResult
+    IssueSieveRowsResult --> [*]
+```
+
+Fala rozwija jawne sloty `issue_sieve_row`. Każdy slot to jeden wiersz, jeden
+werdykt i trwały kursor w `pass_dir`. `PrepareIssueSieve` wznawia kursor bez
+ponownego skanowania skończonych wierszy. Budżet to `limits.max_triage_per_tick`,
+nie większy niż authored sloty. Po `cap` leftover zostaje, rodzic idzie do
+executora, a następny pass kontynuuje sito. Leftover jest zjadane tylko przy
+authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
+adapter fail zostawia wiersz. Oil lokay nie zajmuje product slotu. Cudzy
+assignee nie jest zadaniem lokaja.
 
 ### Jeden wiersz triage — `issue_sieve_row`
 
@@ -1385,6 +1405,7 @@ kontraktu. Aktualny audyt:
 | `FactoryPass` | `factory_pass` | five named departments with on/off switches, then receipt; leftover work-copy cleanup is a sibling child |
 | `SelfRepairDepartment` | `self_repair_department` | stall incident, then existing self_repair child |
 | `IssueTriageDepartment` | `issue_triage_department` | list, nest triage rows, receipt. Marks and children. Zero ai/fix |
+| `IssueSieveRows` | `issue_sieve_rows` | authored sieve slots, budget, and resume cursor. Never launch |
 | `IssueSieveRow` | `issue_sieve_row` | one issue: select, triage, optional split or intake. Never launch |
 | `ExecutorDepartment` | `executor_department` | list, nest executor rows, receipt. Code and PR. Not merge |
 | `ExecutorRow` | `executor_row` | ready issue becomes an open PR. No triage. No merge |

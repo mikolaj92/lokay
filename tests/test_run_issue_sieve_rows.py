@@ -6,30 +6,23 @@ def _listed(count: int) -> dict:
     return {"ok": True, "issues": issues, "count": count, "overflow": False}
 
 
-def _row_for(inputs: dict) -> dict:
-    listed = list(inputs["listed"]["issues"])
-    last = inputs.get("last") or {}
-    leftover = list(last.get("leftover_issues") or listed)
-    picked = leftover[0]
-    remaining = leftover[1:]
-    return {
-        "ok": True,
-        "result": {
-            **picked,
-            "route": "do",
-            "launched": None,
-            "leftover": len(remaining),
-            "leftover_issues": remaining,
-        },
-    }
-
-
-def test_large_sieve_stops_at_budget_and_preserves_leftover(monkeypatch):
+def test_sieve_nest_is_one_authored_child(monkeypatch):
     calls = []
 
     def fake_run_path(**kwargs):
         calls.append(kwargs)
-        return _row_for(kwargs["extra_inputs"])
+        return {
+            "ok": True,
+            "route": "cap",
+            "result": {
+                "route": "do",
+                "leftover": 7,
+                "leftover_issues": [{"repo": "o/r", "issue": n} for n in range(6, 13)],
+                "rows": 5,
+                "spent": 5,
+                "stop": "cap",
+            },
+        }
 
     monkeypatch.setattr("lokay.proc.run_issue_sieve_rows.run_path", fake_run_path)
     out = run(
@@ -40,23 +33,22 @@ def test_large_sieve_stops_at_budget_and_preserves_leftover(monkeypatch):
         budget=5,
         last={},
     )
-
+    assert len(calls) == 1
+    assert calls[0]["path_id"] == "issue_sieve_rows"
+    assert calls[0]["extra_inputs"]["budget"] == 5
     assert out["route"] == "cap"
-    assert out["result"]["stop"] == "cap"
-    assert out["result"]["rows"] == 5
-    assert out["result"]["spent"] == 5
-    assert out["result"]["budget"] == 5
     assert out["result"]["leftover"] == 7
-    assert [row["issue"] for row in out["result"]["leftover_issues"]] == list(
-        range(6, 13)
-    )
-    assert len(calls) == 5
+    assert out["launched"] is None
 
 
-def test_small_sieve_reaches_idle_before_budget(monkeypatch):
+def test_sieve_nest_lifts_idle_receipt(monkeypatch):
     monkeypatch.setattr(
         "lokay.proc.run_issue_sieve_rows.run_path",
-        lambda **kwargs: _row_for(kwargs["extra_inputs"]),
+        lambda **kwargs: {
+            "ok": True,
+            "route": "idle",
+            "result": {"leftover": 0, "leftover_issues": [], "rows": 2, "stop": "idle"},
+        },
     )
     out = run(
         listed=_listed(2),
@@ -67,6 +59,5 @@ def test_small_sieve_reaches_idle_before_budget(monkeypatch):
         last={},
     )
     assert out["route"] == "idle"
-    assert out["result"]["rows"] == 2
     assert out["result"]["leftover"] == 0
     assert out["result"]["leftover_issues"] == []
