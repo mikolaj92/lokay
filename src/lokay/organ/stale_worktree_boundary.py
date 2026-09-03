@@ -32,5 +32,6 @@ def handle_stale_worktree(
             collected=up.get("collect_stale_worktree_candidates") or {},
             catalog=up.get("stale_worktree_catalog") or {},
             live=live,
+            config_path=config,
         )
     return None

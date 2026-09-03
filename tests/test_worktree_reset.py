@@ -487,7 +487,7 @@ def test_remove_worktree_already_gone(tmp_path):
 
 
 
-def test_remove_worktree_archives_bytes_after_registry_prune(tmp_path):
+def test_remove_worktree_reclaims_bytes_after_registry_prune(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
     corner = tmp_path / "corner"
@@ -497,11 +497,11 @@ def test_remove_worktree_archives_bytes_after_registry_prune(tmp_path):
 
     out = remove_worktree(runner, clone, corner, managed_root=tmp_path)
 
-    archive = Path(out["preserved_path"])
     assert out["ok"] is True
     assert out["removed"] is True
+    assert out["reclaimed"] is True
     assert not corner.exists()
-    assert (archive / "tracked.txt").read_text(encoding="utf-8") == "preserve snapshot\n"
+    assert not (tmp_path / ".corner.lokay-preserved").exists()
     assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
 
@@ -517,12 +517,12 @@ def test_remove_worktree_uses_next_archive_name_without_overwriting_old_archive(
 
     out = remove_worktree(_ResetRunner(), clone, corner, managed_root=tmp_path)
 
-    archive = Path(out["preserved_path"])
     assert out["ok"] is True
     assert out["removed"] is True
-    assert archive == tmp_path / ".corner-2.lokay-preserved"
+    assert out["reclaimed"] is True
+    # Prior archive is untouched; this remove's archive is reclaimed.
     assert (old_archive / "valuable").read_text(encoding="utf-8") == "keep\n"
-    assert (archive / "snapshot.txt").read_text(encoding="utf-8") == "new snapshot\n"
+    assert not (tmp_path / ".corner-2.lokay-preserved").exists()
     assert not corner.exists()
 
 
@@ -855,7 +855,7 @@ def test_remove_registered_worktree_preserves_ignored_user_data(tmp_path):
     assert important.read_text(encoding="utf-8") == "do not delete\n"
 
 
-def test_remove_worktree_archives_uv_lock_only_dirt(tmp_path):
+def test_remove_worktree_reclaims_uv_lock_only_dirt(tmp_path):
     """uv.lock-only is not real uncommitted content."""
     import subprocess
 
@@ -889,15 +889,14 @@ def test_remove_worktree_archives_uv_lock_only_dirt(tmp_path):
         managed_root=managed,
     )
 
-    archive = Path(out["preserved_path"])
     assert out["ok"] is True
     assert out["removed"] is True
+    assert out["reclaimed"] is True
     assert not corner.exists()
-    assert (archive / "uv.lock").read_text(encoding="utf-8") == "new\n"
-    assert (archive / "src.py").read_text(encoding="utf-8") == "ok\n"
+    assert not corner.with_name(f".{corner.name}.lokay-preserved").exists()
 
 
-def test_remove_worktree_never_recursively_deletes_late_content(tmp_path):
+def test_remove_worktree_reclaims_after_late_content_during_prune(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
     managed = tmp_path / "managed"
@@ -934,8 +933,9 @@ def test_remove_worktree_never_recursively_deletes_late_content(tmp_path):
     )
 
     assert out["ok"] is True
-    archive = Path(out["preserved_path"])
-    assert (archive / "late.txt").read_text(encoding="utf-8") == "late work\n"
+    assert out["removed"] is True
+    assert out["reclaimed"] is True
+    assert not (managed / ".corner.lokay-preserved").exists()
     assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
 
 
@@ -979,7 +979,7 @@ def test_list_uncommitted_paths_fails_closed_on_warning_only_ignored_query(tmp_p
         list_uncommitted_paths(WarningIgnored(), tmp_path)
 
 
-def test_remove_worktree_native_late_ignored_file_is_archived(tmp_path):
+def test_remove_worktree_native_late_ignored_file_is_reclaimed(tmp_path):
     import subprocess
 
     clone = tmp_path / "clone"
@@ -1013,10 +1013,11 @@ def test_remove_worktree_native_late_ignored_file_is_archived(tmp_path):
 
     out = remove_worktree(Inject(), clone, corner, managed_root=managed)
 
-    archive = Path(out["preserved_path"])
     assert out["ok"] is True
+    assert out["removed"] is True
+    assert out["reclaimed"] is True
     assert not corner.exists()
-    assert (archive / "late.secret").read_text(encoding="utf-8") == "IRREPLACEABLE"
+    assert not corner.with_name(f".{corner.name}.lokay-preserved").exists()
     listed = subprocess.run(
         ["git", "worktree", "list", "--porcelain"],
         cwd=clone,

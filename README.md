@@ -1011,20 +1011,27 @@ stateDiagram-v2
 ```
 
 Pod-Fala ma trzy liście: `collect` → `catalog` → `summarize`. Każdy
-liść składa dwa małe kroki: collect to `protection` albo `bound_slots`;
-catalog to `overflow_skip` albo `apply_slot`; summarize to `skip_result`
-albo `persist_result`. Nie ma `leftover_closeout` w tym grafie. Nie ma
-jednego tłustego reapa, który parkuje leftover labels. Nie ma 4-slotowego
-rozwinięcia Fali (14 efektorów). Overflow katalogu pomija reap (`skip`)
-i nie kończy passu fail-closed — nie blokuje PR-ów ani issue. Atom
-katalogu zachowuje `CLASSIFY_CAP` i reguły KEEP (live i2pr / occupancy /
-`pr_survey_failed` / covering PR / dirty unpublished / nieczytelny git).
+liść składa małe kroki: collect to `protection` albo `bound_slots`;
+catalog to `overflow_bound` albo `apply_slot`; summarize to
+`persist_result` oraz `prune_preserved_worktree_archives`. Nie ma
+`leftover_closeout` w tym grafie. Nie ma jednego tłustego reapa, który
+parkuje leftover labels. Nie ma 4-slotowego rozwinięcia Fali
+(14 efektorów). Overflow **wiąże jeden pass** do authored slotów, ale
+**nie pomija całego katalogu na zawsze** — pass jest fail-closed na
+swoich slotach, a kolejny pass bierze remainder (najstarsze najpierw).
+Sklasyfikowane REMOVE **zwalnia dysk** (reclaim po odpięciu rejestru),
+nie tylko rename do `.lokay-preserved`. Stare archiwa `.lokay-preserved`
+przycina TTL GC; mill nie trzyma setek kopii Temidy. KEEP live i2pr jest
+**issue-scoped** (repo+issue), nie repo-scoped. KEEP nadal obejmuje
+`pr_survey_failed` / covering PR / dirty unpublished / nieczytelny git.
 Cudze leftover sito (`foreign_localize`) jest REMOVE i bije KEEP z
 `live_issue_to_pr` / `unpublished_or_dirty` / `uncommitted_real`.
-W `factory_pass` ten reap jest osobnym dzieckiem od `factory_begin`.
-Rzuca / puste / `process.failed` to sklasyfikowany `route=failed`, nie
-abort passu. Działy nie czekają na sukces sprzątania. `record_pass`
-też nie. Leftover work copies nie zjadają issue-to-PR.
+Nie `unlink` Fala sqlite/WAL. Nie podnosić sufitu 180s. Testy tylko na
+tmp — nie reapią operator mill. W `factory_pass` ten reap jest osobnym
+dzieckiem od `factory_begin`. Rzuca / puste / `process.failed` to
+sklasyfikowany `route=failed`, nie abort passu. Działy nie czekają na
+sukces sprzątania. `record_pass` też nie. Leftover work copies nie
+zjadają issue-to-PR.
 
 ### Triage issue — `issue_triage_department`
 
@@ -1473,7 +1480,7 @@ kontraktu. Aktualny audyt:
 | `CloseoutPRs` | `closeout_prs` | authored repo slots, one `closeout_pr` child per slot, persist |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
-| `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |
+| `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja, reclaim dysku, TTL GC archiwów `.lokay-preserved`; live i2pr issue-scoped |
 | `TriageInbox` | `issue_triage` | sito: robić, nie, oznaczyć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
