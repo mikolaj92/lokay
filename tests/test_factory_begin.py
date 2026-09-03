@@ -125,6 +125,98 @@ def test_begin_receipt_drops_nested_cart():
     assert "begin" not in out
 
 
+def test_begin_receipt_lifts_pass_dir_from_persist_tick(tmp_path):
+    """Nested Fala keeps pass_dir on persist_factory_tick; receipt must keep it."""
+    from lokay.proc.factory_begin_receipt import begin_receipt
+
+    pad = "z" * 50_000
+    pass_dir = str(tmp_path / "factory-pass-now")
+    out = begin_receipt(
+        {
+            "ok": True,
+            "live": True,
+            "atom": "factory_begin",
+            "fala": {"cart": pad},
+            "terminal": {
+                "persist_factory_tick": {
+                    "step": "persist_factory_tick",
+                    "status": "succeeded",
+                    "ok": True,
+                    "pass_dir": pass_dir,
+                    "stuck_path": str(tmp_path / "stuck.json"),
+                    "planned": [{"kind": "tick", "repos": ["a/b"]}],
+                    "live": True,
+                    "mode": "live",
+                    "offline": False,
+                    "issue_count": 0,
+                    "idle": False,
+                },
+                "merge_leftover_remaining": {
+                    "step": "merge_leftover_remaining",
+                    "status": "succeeded",
+                    "ok": True,
+                    "pass_dir": pass_dir,
+                    "written": False,
+                    "route": "keep",
+                },
+            },
+            "steps": [{"blob": pad}],
+            "stuck": {"issues": {"pad": pad}},
+        }
+    )
+    raw = json.dumps(out)
+    assert pad not in raw
+    assert "fala" not in out
+    assert "terminal" not in out
+    assert "steps" not in out
+    assert "stuck" not in out
+    assert "atom" not in out
+    assert out["ok"] is True
+    assert out["pass_dir"] == pass_dir
+    assert out["stuck_path"] == str(tmp_path / "stuck.json")
+    assert out["planned"] == [{"kind": "tick", "repos": ["a/b"]}]
+    assert out["live"] is True
+    assert out["idle"] is False
+
+
+def test_begin_receipt_prefers_top_level_over_nested(tmp_path):
+    from lokay.proc.factory_begin_receipt import begin_receipt
+
+    out = begin_receipt(
+        {
+            "ok": True,
+            "pass_dir": str(tmp_path / "top"),
+            "terminal": {
+                "persist_factory_tick": {
+                    "ok": True,
+                    "pass_dir": str(tmp_path / "nested"),
+                }
+            },
+        }
+    )
+    assert out["pass_dir"] == str(tmp_path / "top")
+
+
+def test_begin_receipt_lifts_from_merge_leftover_when_tick_missing(tmp_path):
+    from lokay.proc.factory_begin_receipt import begin_receipt
+
+    pass_dir = str(tmp_path / "from-merge")
+    out = begin_receipt(
+        {
+            "ok": True,
+            "terminal": {
+                "merge_leftover_remaining": {
+                    "ok": True,
+                    "pass_dir": pass_dir,
+                    "written": True,
+                    "route": "merge",
+                }
+            },
+        }
+    )
+    assert out["pass_dir"] == pass_dir
+
+
 def test_factory_begin_subflow_returns_small_receipt(monkeypatch, tmp_path):
     from lokay.proc.factory_begin_subflow import run
 

@@ -5,7 +5,12 @@ from lokay.proc.classify_stale_worktree_reap import classify
 
 
 def run(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
-    """Run the cleanup child. Throw / empty / not-ok is a classified route."""
+    """Run the cleanup child. Throw / empty / not-ok is a classified route.
+
+    Empty pass_dir is a classified miss — never open CWD begin.json.
+    """
+    if not str(pass_dir or "").strip():
+        return classify(error="empty pass_dir")
     try:
         out = run_path(
             path_id="stale_worktree_reap",
