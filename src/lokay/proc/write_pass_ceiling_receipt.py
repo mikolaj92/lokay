@@ -6,7 +6,9 @@ import json
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from lokay.config import load_config
 from lokay.pass_receipt import read_pass_receipt
@@ -15,12 +17,45 @@ from lokay.proc.classify_pass_ceiling import classify
 from lokay.proc.merge_leftover_remaining import merge_remaining
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working
 
+_KEEP_HEALTH = frozenset({"idle", "progress"})
+
+
+def _parse_receipt_ts(raw: Any) -> float | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def fresh_completed_receipt(
+    receipt_path: Path, *, ceiling_seconds: float, now: float | None = None
+) -> dict[str, Any] | None:
+    """Return a this-tick idle/progress receipt that the slot watchdog must keep."""
+    existing = read_pass_receipt(path=receipt_path)
+    if not existing:
+        return None
+    if str(existing.get("health") or "") not in _KEEP_HEALTH:
+        return None
+    stamped = _parse_receipt_ts(existing.get("ts"))
+    if stamped is None:
+        return None
+    age = (time.time() if now is None else now) - stamped
+    if age < 0.0 or age > float(ceiling_seconds):
+        return None
+    return existing
+
 
 def write(config_path: str, ceiling_seconds: float) -> dict:
     try:
         receipt = load_config(config_path).state_path.parent / "last-pass.json"
     except (OSError, ValueError, FileNotFoundError):
         receipt = Path.home() / ".lokay" / "last-pass.json"
+    kept = fresh_completed_receipt(receipt, ceiling_seconds=float(ceiling_seconds))
+    if kept is not None:
+        return kept
     last_pass = remaining_from_receipt(read_pass_receipt(path=receipt))
     since = time.time() - max(0.0, float(ceiling_seconds)) - 2.0
     inflight = remaining_from_inflight_working(receipt.parent, since=since)
