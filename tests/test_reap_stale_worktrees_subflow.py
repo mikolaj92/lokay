@@ -102,3 +102,46 @@ def test_cleanup_failure_does_not_mark_factory_adapter_failed(monkeypatch):
     assert out.get("status") != "failed"
     assert out.get("_exit", 0) == 0
     assert FIRE_STEP in str(out.get("error") or "")
+
+
+def test_empty_pass_dir_is_classified_without_cwd_begin(monkeypatch, tmp_path):
+    """Empty pass_dir is route=failed; never open CWD begin.json."""
+    called = {"run_path": False, "load": False}
+
+    def boom(**_kwargs):
+        called["run_path"] = True
+        raise AssertionError("run_path must not run with empty pass_dir")
+
+    def load_boom(pass_dir):
+        called["load"] = True
+        raise AssertionError(f"load_begin_working must not open {pass_dir!r}")
+
+    monkeypatch.setattr("lokay.proc.reap_stale_worktrees_subflow.run_path", boom)
+    monkeypatch.setattr(
+        "lokay.passkit.working.load_begin_working",
+        load_boom,
+    )
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "begin.json").write_text("{}", encoding="utf-8")
+    out = run(pass_dir="", config_path=None, live=False)
+    assert out["ok"] is True
+    assert out["route"] == "failed"
+    assert "empty pass_dir" in str(out["error"])
+    assert called["run_path"] is False
+    assert called["load"] is False
+
+
+def test_whitespace_pass_dir_is_classified_without_cwd_begin(monkeypatch, tmp_path):
+    called = {"run_path": False}
+
+    def boom(**_kwargs):
+        called["run_path"] = True
+        raise AssertionError("run_path must not run")
+
+    monkeypatch.setattr("lokay.proc.reap_stale_worktrees_subflow.run_path", boom)
+    monkeypatch.chdir(tmp_path)
+    out = run(pass_dir="   ", config_path=None, live=False)
+    assert out["ok"] is True
+    assert out["route"] == "failed"
+    assert called["run_path"] is False
+
