@@ -658,3 +658,25 @@ def test_localize_parent_route_never_ok_false():
         {"ok": True, "result": {"ok": False, "paths": [], "reason": "invalid_json"}}
     )
     assert nested["ok"] is True and nested["route"] == "empty"
+
+
+def test_select_localization_candidate_uses_fallback_when_agent_fails():
+    from lokay.proc.select_localization_candidate import select
+
+    out = select(
+        {"route": "agent"},
+        {"ok": True, "paths": []},
+        {
+            "ok": True,
+            "route": "candidate",
+            "paths": ["posejdon/pyproject.toml"],
+            "source": "deterministic",
+        },
+        {"route": "unused"},
+        {"route": "unused"},
+        {"ok": True, "route": "fallback", "status": "failed", "text": ""},
+        {},
+    )
+    assert out["ok"] is True
+    assert out["paths"] == ["posejdon/pyproject.toml"]
+    assert out["source"] == "deterministic"

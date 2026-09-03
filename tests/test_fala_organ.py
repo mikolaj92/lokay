@@ -905,3 +905,24 @@ def test_bundled_fala_manifest_is_ascii_safe():
     bundled = (root / "src" / "lokay" / "data" / "lokay.fala-package.toml").read_bytes()
     assert authored == bundled
     authored.decode("ascii")
+
+
+def test_organ_envelope_keeps_fallback_status_failed():
+    from lokay.fala_organ import organ_envelope
+
+    out = organ_envelope(
+        "run_localization_agent",
+        {"ok": True, "route": "fallback", "status": "failed", "text": ""},
+    )
+    assert out["ok"] is True
+    assert out["route"] == "fallback"
+    assert out["status"] == "failed"
+
+
+def test_organ_envelope_still_raises_on_not_ok():
+    from lokay.fala_organ import organ_envelope
+    import pytest
+
+    with pytest.raises(RuntimeError) as caught:
+        organ_envelope("run_agent", {"ok": False, "status": "failed", "error": "agent failed"})
+    assert "agent failed" in str(caught.value)

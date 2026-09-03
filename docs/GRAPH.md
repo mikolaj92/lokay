@@ -64,6 +64,8 @@ atom after idle classify routes `host`.
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
 durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not
 inherit that cwd or they emit empty `adapter_failed` and starve the mill.
+A classified `ok=true` organ row with agent transport `status=failed` is a
+fallback fact (`organ_envelope`), not `adapter_failed`.
 
 **Repair gate (two small processes):** `last_pass_moving` answers only
 whether the last receipt published a new PR or merged. `select_repair_route`

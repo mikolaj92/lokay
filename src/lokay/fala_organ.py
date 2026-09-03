@@ -251,6 +251,32 @@ def _ensure_project_cwd() -> None:
             return
 
 
+def organ_envelope(atom: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Keep classified ok=true facts, including agent transport status=failed.
+
+    Adapter failure is ok=false without a classified skip/route. A localize
+    fallback with status=failed is still a succeeded organ row.
+    """
+    skipped = bool(result.get("skipped"))
+    classified = str(result.get("route") or "")
+    ok_flag = bool(result.get("ok", False)) and result.get("_exit", 0) == 0
+    if not ok_flag and not skipped:
+        values = {
+            "ok": False,
+            "atom": atom,
+            **{k: v for k, v in result.items() if k != "_exit"},
+        }
+        raise RuntimeError(json.dumps(values, ensure_ascii=False)[:2000])
+    values = {
+        "ok": True,
+        "atom": atom,
+        **{k: v for k, v in result.items() if k != "_exit"},
+    }
+    if classified:
+        values["route"] = classified
+    return values
+
+
 def main() -> int:
     _ensure_project_cwd()
 
@@ -276,22 +302,7 @@ def main() -> int:
             up,
             process_id=str(manifest.get("process_id") or "") or None,
         )
-        ok_flag = bool(result.get("ok", False)) and result.get("_exit", 0) == 0
-        if result.get("status") == "failed":
-            ok_flag = False
-        if not ok_flag and not result.get("skipped"):
-            values = {
-                "ok": False,
-                "atom": atom,
-                **{k: v for k, v in result.items() if k != "_exit"},
-            }
-            raise RuntimeError(json.dumps(values, ensure_ascii=False)[:2000])
-        values = {
-            "ok": True,
-            "atom": atom,
-            **{k: v for k, v in result.items() if k != "_exit"},
-        }
-        return sdk.output(values=values)
+        return sdk.output(values=organ_envelope(atom, result))
 
     return sdk.run_manifest_effector(handler)
 
