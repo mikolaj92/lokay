@@ -121,10 +121,16 @@ _MUTATING_ATOMS = frozenset(
 
 
 def _handle(
-    atom: str, inputs: dict[str, Any], up: dict[str, dict[str, Any]]
+    atom: str,
+    inputs: dict[str, Any],
+    up: dict[str, dict[str, Any]],
+    *,
+    process_id: str | None = None,
 ) -> dict[str, Any]:
+    from lokay.activity import record_atom_start
     from lokay.organ.common import _cfg_flags, _live_flags
 
+    record_atom_start(atom=atom, inputs=inputs, process_id=process_id)
     ctx = {
         "cfg": _cfg_flags(inputs),
         "live": _live_flags(inputs),
@@ -264,7 +270,12 @@ def main() -> int:
                 continue
             inputs.setdefault(key, value)
         up = _conduction_values(manifest)
-        result = _handle(atom, inputs, up)
+        result = _handle(
+            atom,
+            inputs,
+            up,
+            process_id=str(manifest.get("process_id") or "") or None,
+        )
         ok_flag = bool(result.get("ok", False)) and result.get("_exit", 0) == 0
         if result.get("status") == "failed":
             ok_flag = False
