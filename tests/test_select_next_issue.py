@@ -67,6 +67,31 @@ def test_labels_are_not_a_gate():
     assert out["leftover"] == 1
 
 
+def test_ready_labels_are_route_ready():
+    both = select(
+        _listed(
+            {
+                "repo": "Temida/Temida",
+                "issue": 5623,
+                "title": "ready",
+                "labels": ["ai:ready", "work:ready"],
+            }
+        )
+    )
+    assert both["ok"] is True
+    assert both["route"] == "ready"
+    assert both["repo"] == "Temida/Temida"
+    assert both["issue"] == 5623
+    assert both["labels"] == ["ai:ready", "work:ready"]
+    assert both["leftover"] == 0
+    ai_only = select(_listed({"repo": "o/r", "issue": 1, "labels": ["ai:ready"]}))
+    assert ai_only["route"] == "ready"
+    work_only = select(_listed({"repo": "o/r", "issue": 2, "labels": ["work:ready"]}))
+    assert work_only["route"] == "ready"
+    unlabeled = select(_listed({"repo": "o/r", "issue": 3, "labels": []}))
+    assert unlabeled["route"] == "issue"
+
+
 def test_classified_skip_is_none_not_error():
     out = pick({"route": "skip", "reason": "overflow", "skipped": True})
     assert out["ok"] is True

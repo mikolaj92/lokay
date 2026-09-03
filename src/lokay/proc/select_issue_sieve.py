@@ -52,7 +52,19 @@ def select(
     listed: Mapping[str, Any] | None = None,
 ) -> dict:
     listed_map = dict(listed or {})
-    if str(picked.get("route") or "") != "issue":
+    picked_route = str(picked.get("route") or "")
+    if picked_route == "ready":
+        leftover, leftover_issues = leftover_of(dict(picked), listed_map, consume=True)
+        return ok(
+            route="do",
+            reason="already_ready",
+            verdict="ready",
+            repo=picked.get("repo"),
+            issue=picked.get("issue"),
+            leftover=leftover,
+            leftover_issues=leftover_issues,
+        )
+    if picked_route != "issue":
         leftover, leftover_issues = leftover_of(dict(picked), listed_map, consume=False)
         return ok(
             route="skip",

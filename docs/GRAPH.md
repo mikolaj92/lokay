@@ -291,19 +291,29 @@ finished rows.
 `issue_sieve_row`:
 
 ```text
-select_next_issue
+select_next_issue             route=ready when the row already has ai:ready
+                              or work:ready — skips issue triage
   → issues_run_triage         when route=issue
     → select_issue_sieve      do / skip / park / human / split / intake
+                              route=ready is do / already_ready without a
+                              triage envelope
       → run_issue_sieve_split   when route=split   (children only)
       → run_issue_sieve_intake  when route=intake
         → summarize_issue_sieve_row
 ```
 
-A "do" mark is not a branch. Executor is the next department. The catalog
-loop is the authored `issue_sieve_rows` child, not a daemon tick and not a
-Python `while`. Leftover is consumed only on an authored skip
+Already dual-label ready is `route=ready` from `select_next_issue`.
+`issues_run_triage` stays `when route=issue` only. Skipped issue triage still
+conducts: `select_issue_sieve` waits on `select_next_issue` and treats a
+skipped `issues_run_triage` as done (same skipped-upstream pattern as an
+empty pick). A "do" mark is not a branch. Executor is the next department.
+The catalog loop is the authored `issue_sieve_rows` child, not a daemon tick
+and not a Python `while`. Leftover is consumed only on an authored skip
 (`needs_human`, `blocked`, already-closed). `triage_not_done` / adapter
 fail keep the row. `leftover=0` only when the takeable list is exhausted.
+Sieve already-ready consumes the current row so the next slot can sito an
+unlabeled leftover. Executor `select_issue_do_row` keeps a ready leftover
+(`consume=False`) so the same ticket becomes do without issue triage.
 
 ### `executor_department` (code and PR)
 

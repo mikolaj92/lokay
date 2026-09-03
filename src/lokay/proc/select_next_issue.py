@@ -4,7 +4,7 @@ import os
 
 from lokay.proc.classify_issue_assignee import mill_of, takeable
 from lokay.proc.classify_open_issues import classify
-from lokay.proc.walk_issue_leftover import queue
+from lokay.proc.walk_issue_leftover import queue, row_is_ready
 
 
 def occupied_repos_of(occupied=None) -> set[str]:
@@ -33,12 +33,13 @@ def pick(classified: dict) -> dict:
     if not rows:
         return {"ok": True, "route": "none", "reason": "no_open_issue"}
     leftover = max(0, len(rows) - 1)
+    row = dict(rows[0])
     return {
-        **dict(rows[0]),
+        **row,
         "ok": True,
-        "route": "issue",
+        "route": "ready" if row_is_ready(row) else "issue",
         "leftover": leftover,
-        "leftover_issues": [dict(row) for row in rows[1:]],
+        "leftover_issues": [dict(item) for item in rows[1:]],
     }
 
 

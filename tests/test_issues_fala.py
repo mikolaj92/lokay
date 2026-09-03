@@ -117,6 +117,15 @@ def test_package_has_no_glued_issue_product() -> None:
     assert "executor_row" in ids
 
 
+def test_already_ready_sieve_row_skips_triage():
+    status = simulate_sieve_row(select_route="ready", sieve_route="do")
+    assert status["issues_run_triage"] == "skipped"
+    assert status["select_issue_sieve"] == "succeeded"
+    assert status["run_issue_sieve_split"] == "skipped"
+    assert status["run_issue_sieve_intake"] == "skipped"
+    assert status["summarize_issue_sieve_row"] == "succeeded"
+
+
 def test_empty_sieve_row_still_reaches_receipt():
     status = simulate_sieve_row(select_route="none", sieve_route="skip")
     assert status["issues_run_triage"] == "skipped"
