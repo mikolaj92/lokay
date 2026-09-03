@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
 import signal
-import time
 from typing import Any
 
-from lokay.config import load_config
 from lokay.envelope import err, mill_glance
 from lokay.fala_journal import maintain_mill_fala_journals, wrapper_journal_dir
 from lokay.graph_run import run_path
@@ -20,8 +16,8 @@ from lokay.proc.classify_leftover_remaining import (
     remaining_has_inbox,
 )
 from lokay.proc.merge_leftover_remaining import merge_remaining
-from lokay.proc.classify_pass_ceiling import classify as classify_pass_ceiling
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working
+from lokay.proc.write_pass_ceiling_receipt import write as write_pass_ceiling_receipt
 
 
 def ceiling_remaining(
@@ -74,7 +70,6 @@ def compose_daemon_cycle(
     pass_ceiling_seconds: float = 180,
 ) -> dict[str, Any]:
     ceiling = max(0.001, float(pass_ceiling_seconds))
-    started = time.time()
     previous_handler = signal.getsignal(signal.SIGALRM)
     ceiling_expired = False
 
@@ -112,29 +107,9 @@ def compose_daemon_cycle(
                 raise
 
         # Workers started by issue-to-PR are detached. Do not signal them when
-        # releasing the daemon/launchd slot for the next tick.
-        try:
-            receipt = load_config(config_path).state_path.parent / "last-pass.json"
-        except (OSError, ValueError, FileNotFoundError):
-            receipt = Path.home() / ".lokay" / "last-pass.json"
-        remaining, remaining_source = ceiling_remaining(
-            receipt.parent, since=started - 2.0
-        )
-        payload = classify_pass_ceiling(
-            state_dir=receipt.parent,
-            elapsed_seconds=ceiling,
-            remaining=remaining,
-            remaining_source=remaining_source,
-        )
-        payload["pass_ceiling_seconds"] = ceiling
-        try:
-            receipt.parent.mkdir(parents=True, exist_ok=True)
-            temporary = receipt.with_name(f".{receipt.name}.{os.getpid()}.tmp")
-            temporary.write_text(json.dumps(payload) + "\n", encoding="utf-8")
-            temporary.replace(receipt)
-        except OSError:
-            pass
-        return payload
+        # releasing the daemon/launchd slot for the next tick. Keep a this-tick
+        # idle/progress receipt; do not let SIGALRM erase record_pass.
+        return write_pass_ceiling_receipt(config_path, ceiling)
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)

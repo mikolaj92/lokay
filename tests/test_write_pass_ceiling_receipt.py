@@ -111,3 +111,49 @@ def test_write_replaces_stale_idle_with_ceiling(tmp_path: Path):
     assert out["health"] == "pass_ceiling"
     on_disk = json.loads((tmp_path / "last-pass.json").read_text(encoding="utf-8"))
     assert on_disk["health"] == "pass_ceiling"
+
+
+def test_compose_daemon_cycle_routes_ceiling_through_write_atom():
+    from pathlib import Path as P
+
+    src = (
+        P(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "compose"
+        / "daemon_cycle.py"
+    ).read_text(encoding="utf-8")
+    assert "write_pass_ceiling_receipt" in src
+    assert "classify_pass_ceiling" not in src
+    assert "temporary.write_text" not in src
+
+
+def test_compose_daemon_cycle_keeps_this_tick_idle(monkeypatch, tmp_path: Path):
+    from lokay.compose import daemon_cycle
+
+    cfg = _cfg(tmp_path)
+    idle = _write_receipt(tmp_path, health="idle", age_seconds=1)
+    seen = {}
+
+    def boom(**_kwargs):
+        import time
+
+        time.sleep(1)
+        return {"ok": True, "health": "idle"}
+
+    def keep(config_path, ceiling):
+        seen["config_path"] = config_path
+        seen["ceiling"] = ceiling
+        return json.loads((tmp_path / "last-pass.json").read_text(encoding="utf-8"))
+
+    monkeypatch.setattr(daemon_cycle, "run_path", boom)
+    monkeypatch.setattr(daemon_cycle, "maintain_mill_fala_journals", lambda: None)
+    monkeypatch.setattr(daemon_cycle, "write_pass_ceiling_receipt", keep)
+    out = daemon_cycle.compose_daemon_cycle(
+        config_path=cfg,
+        pass_ceiling_seconds=0.02,
+    )
+    assert seen["config_path"] == cfg
+    assert seen["ceiling"] == 0.02
+    assert out["health"] == "idle"
+    assert out["ts"] == idle["ts"]
