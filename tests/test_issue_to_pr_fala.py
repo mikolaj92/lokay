@@ -289,6 +289,7 @@ def test_empty_localize_skips_coding_and_publish():
     assert st["plan_issue"] == "succeeded"
     assert st["localize"] == "succeeded"
     assert st["coding_execution"] == "skipped"
+    assert st["relocalize_off_goal"] == "skipped"
     assert st["pr_create"] == "skipped"
     assert st["summarize_issue_delivery"] == "succeeded"
 
@@ -343,3 +344,32 @@ if a=='local_repair_execution':Path(%r).write_text(a)"""
     assert not (tmp_path / "repair").exists()
     assert "adapter_failed" not in str(result.get("error") or "")
     assert "condition_source_not_succeeded" not in str(result.get("error") or "")
+
+
+def test_native_empty_localize_skips_coding_and_relocalize(tmp_path):
+    """Empty localize skips coding; native when must skip relocalize, not throw."""
+    if not _fala_host_ready():
+        pytest.skip("Fala Mojo process host is not available")
+    reloc = tmp_path / "reloc"
+    body = base_effector(
+        """if a=='resolve_implementation_issue':v['route']='open'
+if a=='worktree_add':v.update(route='ready')
+if a=='localize':v.update(route='empty',paths=[])
+if a=='select_local_test':v['route']='skip'
+if a=='finalize_local_tests':v['route']='not_applicable'
+if a=='coding_execution':Path(%r).write_text(a)
+if a=='relocalize_off_goal':Path(%r).write_text(a)"""
+        % (str(tmp_path / "coding"), str(reloc))
+    )
+    result = run_graph(tmp_path, body, "localize-empty", path_id="issue_to_pr_delivery")
+    st = {k: x["status"] for k, x in result["effector_results"].items()}
+    assert st["localize"] == "succeeded"
+    assert st["coding_execution"] == "skipped"
+    assert st["relocalize_off_goal"] == "skipped"
+    assert st["pr_create"] == "skipped"
+    assert st["summarize_issue_delivery"] == "succeeded"
+    assert not (tmp_path / "coding").exists()
+    assert not reloc.exists()
+    assert "adapter_failed" not in str(result.get("error") or "")
+    assert "condition_source_not_succeeded" not in str(result.get("error") or "")
+
