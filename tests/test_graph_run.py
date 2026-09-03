@@ -236,7 +236,7 @@ def test_run_path_uses_global_inputs_not_per_effector(monkeypatch, tmp_path):
     assert captured["inputs"]["foo"] == "bar"
 
 
-def test_run_path_materializes_full_package_for_fala(monkeypatch, tmp_path):
+def test_run_path_materializes_requested_path_for_fala(monkeypatch, tmp_path):
     from lokay import graph_run
 
     monkeypatch.setattr(
@@ -260,10 +260,10 @@ def test_run_path_materializes_full_package_for_fala(monkeypatch, tmp_path):
         require_healthy=False,
     )
     pkg = Path(result["package"]).read_text(encoding="utf-8")
-    assert pkg.count("[[correlation_paths]]") > 1
+    assert pkg.count("[[correlation_paths]]") == 1
     assert 'id = "status_snapshot"' in pkg
-    assert 'id = "factory_pass"' in pkg
-    assert 'id = "executor_row"' in pkg
+    assert 'id = "factory_pass"' not in pkg
+    assert 'id = "executor_row"' not in pkg
     assert "PLACEHOLDER_PROJECT" not in pkg
 
 
@@ -334,15 +334,20 @@ def test_path_journal_dir_isolates_child_packages(tmp_path):
     )
     project = tmp_path / "checkout"
     project.mkdir()
-    _materialize_package(src, status / "lokay.fala-package.toml", project=project)
-    _materialize_package(src, executor / "lokay.fala-package.toml", project=project)
+    _materialize_package(
+        src, status / "lokay.fala-package.toml", project=project, path_id="status_snapshot"
+    )
+    _materialize_package(
+        src, executor / "lokay.fala-package.toml", project=project, path_id="executor_row"
+    )
     status_pkg = (status / "lokay.fala-package.toml").read_text(encoding="utf-8")
     executor_pkg = (executor / "lokay.fala-package.toml").read_text(encoding="utf-8")
     assert 'id = "status_snapshot"' in status_pkg
-    assert 'id = "executor_row"' in status_pkg
-    assert 'id = "status_snapshot"' in executor_pkg
+    assert 'id = "executor_row"' not in status_pkg
+    assert 'id = "status_snapshot"' not in executor_pkg
     assert 'id = "executor_row"' in executor_pkg
-    assert str(project.resolve()) in status_pkg
+    assert str(project.resolve()) in executor_pkg
+    assert "PLACEHOLDER_PROJECT" not in executor_pkg
     assert "PLACEHOLDER_PROJECT" not in status_pkg
     assert not (shared / "lokay.fala-package.toml").exists()
     assert path_journal_dir(
@@ -394,8 +399,8 @@ def test_run_path_does_not_clobber_shared_package(tmp_path, monkeypatch):
     assert (shared / "lokay.fala-package.toml").read_text(encoding="utf-8") == marker
     materialized = isolated.read_text(encoding="utf-8")
     assert 'id = "status_snapshot"' in materialized
-    assert 'id = "executor_row"' in materialized
-    assert materialized.count("[[correlation_paths]]") > 1
+    assert 'id = "executor_row"' not in materialized
+    assert materialized.count("[[correlation_paths]]") == 1
 
 
 

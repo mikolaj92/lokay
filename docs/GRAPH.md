@@ -109,7 +109,7 @@ host_ff
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots`. Catalog composes `overflow_skip` or `apply_slot`. Summarize composes `skip_result` or `persist_result`. Overflow skips. KEEP live i2pr / occupancy / `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
-| mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` is maintained through `fala.maintain_journal` at a 64 MiB ceiling; heartbeat `created` leftovers are finalized then deleted through Fala APIs first, capped at eight rows per journal per tick. `daemon_entry` / `daemon_cycle` use a fresh wrapper sqlite per tick and prune old wrapper dirs; they do not reopen the shared 59 MiB mill journals. Recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling materialized package. Over-cap is fail-closed if Fala cannot maintain the file |
+| mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` is maintained through `fala.maintain_journal` at a 64 MiB ceiling; heartbeat `created` leftovers are finalized then deleted through Fala APIs first, capped at eight rows per journal per tick. `daemon_entry` / `daemon_cycle` / `factory_pass` use a fresh wrapper sqlite per tick and prune old wrapper dirs; they do not reopen the shared mill journals. Each host file contains only the requested `path_id`, not all 946 effectors. Recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling materialized package. Over-cap is fail-closed if Fala cannot maintain the file |
 | mill activity | each live organ atom writes `activity.json` beside `state.jsonl` (`path`, `atom`, `work_id`, `transitions`). Ceiling receipts resume from that file. Status stays read-only. A missing file is `ceiling_stalled`, not a crash |
 | leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. No 30-slot unroll. Mill repo count never fail-closes prepare. Candidate overflow parks the first authored handful and leftover-skips the rest; it does not fail the pass. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
 
@@ -156,10 +156,11 @@ returns `route=terminal|hit|miss`. A Fala `when` on a skipped cache atom fails
 because the route is not `miss`. `pr_triage` and `pr_repair` are nested PR
 children under `pr-triage/` and `pr-repair/`. A shared `pr_triage` journal
 lets one live review hold `pr_merge` for another repo. Every other child path uses its own journal under
-`~/.lokay/fala/<path_id>/`. Native Fala materializes the full package
-next to that journal and selects the path via `path_id`. Nested children
-must not overwrite `~/.lokay/fala/lokay.fala-package.toml` or share
-`~/.lokay/fala/state.sqlite`.
+`~/.lokay/fala/<path_id>/`. Native Fala materializes only the requested
+`path_id` next to that journal. Nested children must not overwrite
+`~/.lokay/fala/lokay.fala-package.toml` or share
+`~/.lokay/fala/state.sqlite`. `factory_pass` uses a fresh wrapper sqlite
+per tick, same as `daemon_entry` / `daemon_cycle`.
 Python `compose/*` may validate CLI contracts and
 call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not

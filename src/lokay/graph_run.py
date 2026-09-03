@@ -132,14 +132,66 @@ def _is_shared_fala_root(work: Path, *, home: Path | None = None) -> bool:
         return False
 
 
-def _materialize_package(src: Path, dest: Path, *, project: Path) -> Path:
-    """Write package with absolute project path; organs always run via `uv run`.
+_PATH_HEADER = re.compile(r"(?m)^\[\[correlation_paths\]\]\s*$")
+_PATH_ID = re.compile(r'(?m)^id\s*=\s*"([^"]+)"')
+
+
+def _extract_runtime_tables(text: str) -> tuple[str, str]:
+    """Pull ``[runtime…]`` tables out of a TOML chunk.
+
+    Authored runtime currently sits inside ``self_repair``. A sliced host
+    still needs those tables even when that path is not selected.
+    """
+    kept: list[str] = []
+    runtime: list[str] = []
+    capturing = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            capturing = stripped == "[runtime]" or stripped.startswith("[runtime.")
+        if capturing:
+            runtime.append(line)
+        else:
+            kept.append(line)
+    return "".join(runtime), "".join(kept)
+
+
+def _slice_package_text(text: str, path_id: str) -> str:
+    """Keep header, runtime, and exactly one correlation path."""
+    parts = _PATH_HEADER.split(text)
+    if len(parts) < 2:
+        raise ValueError(f"unknown Fala correlation path: {path_id}")
+    header_runtime, header = _extract_runtime_tables(parts[0])
+    runtime_chunks = [header_runtime]
+    selected: str | None = None
+    for part in parts[1:]:
+        runtime_body, body = _extract_runtime_tables(part)
+        if runtime_body.strip():
+            runtime_chunks.append(runtime_body)
+        ident = _PATH_ID.search(body)
+        if ident and ident.group(1) == path_id:
+            selected = body
+    if selected is None:
+        raise ValueError(f"unknown Fala correlation path: {path_id}")
+    out = header.rstrip() + "\n\n[[correlation_paths]]\n" + selected.strip() + "\n"
+    runtime = "\n\n".join(chunk.strip() for chunk in runtime_chunks if chunk.strip())
+    if runtime:
+        out = out.rstrip() + "\n\n" + runtime + "\n"
+    return out
+
+
+def _materialize_package(
+    src: Path, dest: Path, *, project: Path, path_id: str | None = None
+) -> Path:
+    """Write the requested path with absolute project path.
 
     Canonical substitution only: PLACEHOLDER_PROJECT → checkout path.
     Package adapters hardcode `uv` (never bare python3 / PLACEHOLDER_PYTHON).
-    Fala selects the correlation path from this full package via ``path_id``.
+    The authored catalog stays whole; each host file contains one path.
     """
     text = src.read_text(encoding="utf-8")
+    if path_id:
+        text = _slice_package_text(text, path_id)
     text = text.replace("PLACEHOLDER_PROJECT", str(project.resolve()))
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")
@@ -201,7 +253,7 @@ def run_path(
             if (cand / "pyproject.toml").is_file() and (cand / "fala").is_dir():
                 project = cand
                 break
-    _materialize_package(pkg_src, pkg_runtime, project=project)
+    _materialize_package(pkg_src, pkg_runtime, project=project, path_id=path_id)
     db = work / "state.sqlite"
 
     if os.environ.get("LOKAY_HEALTH_LEASE", "") != inherited_health_lease:

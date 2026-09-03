@@ -24,6 +24,7 @@ _LIVE_JOURNAL = "state.sqlite"
 _WRAPPER_PREFIXES = {
     "daemon_entry": "daemon-entry",
     "daemon_cycle": "daemon-cycle",
+    "factory_pass": "factory-pass",
 }
 _HEARTBEAT_JOURNALS = frozenset(
     {

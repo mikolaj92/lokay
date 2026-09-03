@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, err
+from lokay.fala_journal import wrapper_journal_dir
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
 
@@ -49,9 +50,7 @@ def compose_factory_pass(
             "kind": "factory_pass",
             "engine": "fala",
         }
-    parent_db = (
-        Path(db_path) if db_path else Path.home() / ".lokay" / "fala" / "factory"
-    )
+    parent_db = Path(db_path) if db_path else wrapper_journal_dir("factory_pass")
     result = run_path(
         path_id="factory_pass",
         repo="__lokay_factory__",

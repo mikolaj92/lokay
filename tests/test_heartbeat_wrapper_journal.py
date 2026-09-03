@@ -66,7 +66,16 @@ def test_daemon_entry_and_cycle_use_wrapper_journals():
         / "compose"
         / "daemon_cycle.py"
     ).read_text(encoding="utf-8")
+    factory = (
+        P(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "compose"
+        / "factory.py"
+    ).read_text(encoding="utf-8")
     assert "wrapper_journal_dir" in entry
     assert 'Path.home() / ".lokay" / "fala" / "daemon-entry"' not in entry
     assert "wrapper_journal_dir" in cycle
     assert 'Path.home() / ".lokay" / "fala" / "daemon-cycle"' not in cycle
+    assert "wrapper_journal_dir" in factory
+    assert 'Path.home() / ".lokay" / "fala" / "factory"' not in factory
