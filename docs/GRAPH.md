@@ -274,9 +274,23 @@ Parent `run_executor_department` invokes this child whenever the switch is on.
 
 ```text
 list_open_issues
-  → run_executor_rows         nest executor_row until leftover empty or budget
+  → run_executor_rows         child Fala executor_rows
     → summarize_executor_department   merged is always false
 ```
+
+`executor_rows`:
+
+```text
+prepare_executor_rows
+  → select_executor_slot_N    run / empty
+    → run_executor_row_N      when route=run  (child executor_row)
+      → classify_executor_row_N   continue / idle / cap
+        → select_executor_result
+```
+
+Python does not loop. Fala owns the authored slots, serial launch budget,
+and resume cursor. Default `max_issue_to_pr_per_pass` is 1. Skip does not
+spend the budget. Ceiling/restart continues from `pass_dir`.
 
 `executor_row`:
 

@@ -1,11 +1,10 @@
-"""Nest executor_row until leftover empty or the implement budget is spent."""
+"""Nest the authored executor_rows child. No Python loop."""
 
 from __future__ import annotations
 
 import argparse
 
 from lokay.graph_run import run_path
-from lokay.proc.classify_issue_row import classify, launched_of
 from lokay.proc.seed_issue_queue import seed as seed_queue
 
 
@@ -29,45 +28,26 @@ def run(
 ) -> dict:
     last = seed_queue(last)
     cap = budget_of(config_path=config_path, live=live, budget=budget)
-    spent = 0
-    rows: list[dict] = []
-    result: dict = {"route": "none", "leftover": 0, "leftover_issues": []}
-    decision = {"ok": True, "route": "idle"}
-    while True:
-        row = run_path(
-            path_id="executor_row",
-            repo="local/executor-row",
-            config_path=config_path,
-            live=live,
-            extra_inputs={
-                "pass_dir": pass_dir,
-                "listed": listed,
-                "last": last,
-            },
-        )
-        rows.append(row)
-        if launched_of(row):
-            spent += 1
-        decision = classify(row, spent=spent, budget=cap)
-        inner = row.get("result") if isinstance(row.get("result"), dict) else row
-        result = dict(inner or {})
-        if decision.get("route") != "continue":
-            break
-        last = result
-    launched = "started" if any(launched_of(row) for row in rows) else result.get("launched")
+    out = run_path(
+        path_id="executor_rows",
+        repo="local/executor-rows",
+        config_path=config_path,
+        live=live,
+        extra_inputs={
+            "pass_dir": pass_dir,
+            "listed": listed,
+            "last": last,
+            "budget": cap,
+        },
+    )
+    inner = out.get("result") if isinstance(out.get("result"), dict) else out
+    result = dict(inner or {})
     return {
         "ok": True,
-        "route": str(decision.get("route") or "idle"),
+        "route": str(out.get("route") or result.get("stop") or "idle"),
         "department": "executor",
         "result": {
             **result,
-            "launched": launched,
-            "leftover": int(decision.get("leftover") or result.get("leftover") or 0),
-            "leftover_issues": list(
-                decision.get("leftover_issues") or result.get("leftover_issues") or []
-            ),
-            "rows": len(rows),
-            "spent": spent,
-            "stop": decision.get("route"),
+            "department": "executor",
         },
     }

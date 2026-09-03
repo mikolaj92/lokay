@@ -13,6 +13,11 @@ def _last_of(inputs: dict[str, Any]) -> dict[str, Any]:
     return last if isinstance(last, dict) else {}
 
 
+def _slot(atom: str) -> int:
+    suffix = atom.rsplit("_", 1)[-1]
+    return int(suffix) if suffix.isdigit() else 0
+
+
 def handle_executor_department(
     atom: str,
     inputs: dict[str, Any],
@@ -22,6 +27,68 @@ def handle_executor_department(
     config = str(inputs.get("config_path") or "") or None
     live = bool(inputs.get("live"))
     pass_dir = str(inputs.get("pass_dir") or "")
+    if atom == "prepare_executor_rows":
+        from lokay.execution_contracts import EXECUTOR_SLOT_COUNT
+        from lokay.proc.prepare_executor_rows import prepare
+
+        budget = inputs.get("budget")
+        if budget is None:
+            budget = inputs.get("issue_budget")
+        return prepare(
+            listed=_listed_of(inputs, up),
+            last=_last_of(inputs),
+            pass_dir=pass_dir,
+            config_path=config,
+            live=live,
+            budget=int(budget) if budget is not None else None,
+            slot_count=EXECUTOR_SLOT_COUNT,
+        )
+    slot = _slot(atom)
+    if atom.startswith("select_executor_slot_"):
+        from lokay.proc.select_executor_slot import select
+
+        return select(
+            up.get("prepare_executor_rows") or {},
+            up.get(f"classify_executor_row_{slot-1}") or {},
+            slot=slot,
+        )
+    if atom.startswith("run_executor_row_"):
+        from lokay.proc.run_executor_row import run
+
+        prepared = up.get("prepare_executor_rows") or {}
+        previous = up.get(f"classify_executor_row_{slot-1}") or {}
+        last = previous.get("result") if previous.get("result") else prepared.get("last")
+        return run(
+            listed=prepared.get("listed") or _listed_of(inputs, up),
+            last=last if isinstance(last, dict) else {},
+            pass_dir=str(prepared.get("pass_dir") or pass_dir),
+            config_path=str(prepared.get("config_path") or config or "") or None,
+            live=bool(prepared.get("live") if "live" in prepared else live),
+            slot=slot,
+        )
+    if atom.startswith("classify_executor_row_"):
+        from lokay.proc.classify_executor_row import classify
+
+        prepared = dict(up.get("prepare_executor_rows") or {})
+        previous = up.get(f"classify_executor_row_{slot-1}") or {}
+        if previous.get("spent") is not None:
+            prepared["spent"] = previous["spent"]
+        return classify(
+            up.get(f"select_executor_slot_{slot}") or {},
+            up.get(f"run_executor_row_{slot}") or {},
+            prepared=prepared,
+        )
+    if atom == "select_executor_result":
+        from lokay.execution_contracts import EXECUTOR_SLOT_COUNT
+        from lokay.proc.select_executor_result import select
+
+        return select(
+            up.get("prepare_executor_rows") or {},
+            [
+                up.get(f"classify_executor_row_{i}") or {}
+                for i in range(1, EXECUTOR_SLOT_COUNT + 1)
+            ],
+        )
     if atom == "select_issue_do_row":
         from lokay.proc.select_issue_do_row import pick, select
 

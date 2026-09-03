@@ -1089,8 +1089,31 @@ stateDiagram-v2
     SummarizeExecutorDepartment --> [*]
 ```
 
-Dział `executor_department` gnieździ `executor_row` aż pusto albo budżet.
-Nie jest triage. Nie scala.
+Dział `executor_department` listuje raz i gnieździ pod-Falę `executor_rows`.
+Nie jest triage. Nie scala. Python nie prowadzi pętli wierszy.
+
+### Iteracja executora — `executor_rows`
+
+```mermaid
+stateDiagram-v2
+    [*] --> PrepareExecutorRows
+    PrepareExecutorRows --> SelectExecutorSlot
+    SelectExecutorSlot --> RunExecutorRow: run
+    SelectExecutorSlot --> SelectExecutorResult: empty / exhausted
+    RunExecutorRow --> ClassifyExecutorRow
+    ClassifyExecutorRow --> SelectExecutorSlot: continue i następny jawny slot
+    ClassifyExecutorRow --> SelectExecutorResult: idle
+    ClassifyExecutorRow --> SelectExecutorResult: cap
+    SelectExecutorResult --> ExecutorRowsResult
+    ExecutorRowsResult --> [*]
+```
+
+Fala rozwija jawne sloty `executor_row`. Każdy slot to jeden wiersz i co
+najwyżej jeden `issue_to_pr`. Budżet to `limits.max_issue_to_pr_per_pass`,
+domyślnie 1, nigdy równoległe worktree. Skip nie zużywa budżetu. `Prepare`
+wznawia kursor w `pass_dir` bez ponownego skanowania skończonych wierszy.
+Po `cap` leftover zostaje na następny pass. Po executorze rodzic nadal robi
+PR triage.
 
 ### Jeden wiersz executora — `executor_row`
 
@@ -1408,6 +1431,7 @@ kontraktu. Aktualny audyt:
 | `IssueSieveRows` | `issue_sieve_rows` | authored sieve slots, budget, and resume cursor. Never launch |
 | `IssueSieveRow` | `issue_sieve_row` | one issue: select, triage, optional split or intake. Never launch |
 | `ExecutorDepartment` | `executor_department` | list, nest executor rows, receipt. Code and PR. Not merge |
+| `ExecutorRows` | `executor_rows` | authored executor slots, serial launch budget, and resume cursor |
 | `ExecutorRow` | `executor_row` | ready issue becomes an open PR. No triage. No merge |
 | `PrTriageDepartment` | `pr_triage_department` | PR triage: list, checks, review, feedback, merge. Verdict only |
 | `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
