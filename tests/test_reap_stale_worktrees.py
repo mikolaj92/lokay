@@ -304,3 +304,37 @@ def test_stale_worktree_catalog_keep_and_remove(monkeypatch):
     assert out["effects"][0]["row"]["kept"] is True
     assert out["effects"][1]["row"]["removed"] is True
     assert out["effects"][2]["route"] == "absent"
+
+
+def test_remove_failed_rows_yield_oldest_slots_to_remainder(tmp_path):
+    import os
+    import time
+
+    from lokay.proc.collect_stale_worktree_candidates import SLOTS, bound_slots
+    from lokay.proc.remove_stale_worktree_candidate import defer_failed_removal
+
+    now = time.time()
+    rows = []
+    for issue in range(1, SLOTS * 2 + 1):
+        path = tmp_path / str(issue)
+        path.mkdir()
+        os.utime(path, (now - 100 + issue, now - 100 + issue))
+        rows.append(
+            {
+                "repo": "a/b",
+                "issue": issue,
+                "branch": f"ai/fix/{issue}",
+                "path": str(path),
+                "present": True,
+            }
+        )
+
+    first = bound_slots(rows, pass_dir=str(tmp_path), receipt_safe=True)
+    assert [row["issue"] for row in first["candidates"]] == list(range(1, SLOTS + 1))
+    for row in first["candidates"]:
+        assert defer_failed_removal(Path(row["path"])) is True
+
+    second = bound_slots(rows, pass_dir=str(tmp_path), receipt_safe=True)
+    assert [row["issue"] for row in second["candidates"]] == list(
+        range(SLOTS + 1, SLOTS * 2 + 1)
+    )

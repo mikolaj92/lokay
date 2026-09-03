@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from lokay.git_worktree import _is_quarantine_name, reclaim_preserved_archive
+from lokay.proc.stale_worktree_catalog import SLOTS as ARCHIVE_GC_SLOTS
 
 # Disk crisis on Temida leftovers: one hour is enough for operator recovery.
 PRESERVED_ARCHIVE_TTL_SECONDS = 3600
@@ -60,7 +61,7 @@ def list_expired_archives(
             if age is None or age < limit:
                 continue
             found.append(child)
-    return found
+    return found[:ARCHIVE_GC_SLOTS]
 
 
 def prune(
