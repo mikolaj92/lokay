@@ -47,6 +47,16 @@ def select(picked: dict, triage_run: dict, listed: dict | None = None) -> dict:
         "leftover": leftover,
         "leftover_issues": leftover_issues,
     }
+    if picked.get("route") == "ready":
+        leftover, leftover_issues = leftover_of(picked, listed, consume=False)
+        return {
+            **base,
+            "leftover": leftover,
+            "leftover_issues": leftover_issues,
+            "route": "do",
+            "repo": repo,
+            "issue": issue,
+        }
     if picked.get("route") != "issue":
         return {**base, "route": "skip", "reason": "no_issue"}
     if sito.get("route") == "ready":

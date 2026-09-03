@@ -1077,7 +1077,8 @@ assignee nie jest zadaniem lokaja.
 ```mermaid
 stateDiagram-v2
     [*] --> SelectNextIssue
-    SelectNextIssue --> IssuesRunTriage: jest wiersz
+    SelectNextIssue --> IssuesRunTriage: issue
+    SelectNextIssue --> SelectIssueSieve: already ready
     SelectNextIssue --> SelectIssueSieve: brak / strop
     IssuesRunTriage --> SelectIssueSieve
     SelectIssueSieve --> RunIssueSieveSplit: split
@@ -1089,7 +1090,9 @@ stateDiagram-v2
 ```
 
 Jedno pytanie, jeden werdykt triage. `select_next_issue` tylko odpowiada czy
-jest wiersz. Puste przypisanie albo sam lokaj wolno wziąć. Ktokolwiek inny
+jest wiersz. Wiersz z `ai:ready` albo `work:ready` to `route=ready`: sito
+(`IssuesRunTriage`) się nie odpala, `SelectIssueSieve` od razu daje `do` /
+`already_ready`. Puste przypisanie albo sam lokaj wolno wziąć. Ktokolwiek inny
 na przypisaniu to cudze: wybór pomija, `assign_issue` nie dopisuje lokaja.
 Werdykt `do` nie otwiera gałęzi — to robi dział executor.
 

@@ -47,6 +47,22 @@ def test_not_implementable_skips_without_fail():
     assert out["reason"] == "sito_nie_robic"
 
 
+def test_ready_route_is_do_without_triage():
+    picked = {
+        "route": "ready",
+        "repo": "Temida/Temida",
+        "issue": 5623,
+        "labels": ["ai:ready", "work:ready"],
+    }
+    listed = {"issues": [picked, {"repo": "o/r", "issue": 4}]}
+    out = select(picked, {}, listed)
+    assert out["ok"] is True
+    assert out["route"] == "do"
+    assert out["issue"] == 5623
+    assert out["leftover"] == 2
+    assert out["leftover_issues"][0]["issue"] == 5623
+
+
 def test_missing_issue_skips_without_fail():
     out = select({"route": "none"}, {})
     assert out["ok"] is True

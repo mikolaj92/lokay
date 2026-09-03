@@ -52,6 +52,49 @@ def test_sieve_routes_do_skip_park_human_split_intake() -> None:
     )["route"] == "intake"
 
 
+def test_sieve_ready_route_is_do_without_triage() -> None:
+    listed = {
+        "issues": [
+            {
+                "repo": "Temida/Temida",
+                "issue": 5623,
+                "labels": ["ai:ready", "work:ready"],
+            },
+            {"repo": "o/r", "issue": 4, "labels": []},
+        ]
+    }
+    out = select(
+        {
+            "route": "ready",
+            "repo": "Temida/Temida",
+            "issue": 5623,
+            "labels": ["ai:ready", "work:ready"],
+        },
+        {},
+        listed,
+    )
+    assert out["ok"] is True
+    assert out["route"] == "do"
+    assert out["reason"] == "already_ready"
+    assert out["verdict"] == "ready"
+    assert out["repo"] == "Temida/Temida"
+    assert out["issue"] == 5623
+    assert "launched" not in out
+    assert out["leftover"] == 1
+    assert out["leftover_issues"][0]["issue"] == 4
+
+
+def test_issue_triage_agent_timeouts_fit_under_mill_ceiling() -> None:
+    by_id = {node["id"]: node for node in _path("issue_triage")["effectors"]}
+    for name in (
+        "issue_triage_agent",
+        "issue_triage_retry_agent",
+        "issue_evidence_agent",
+    ):
+        timeout = int(by_id[name]["adapter"]["timeout_seconds"])
+        assert timeout < 180, name
+
+
 def test_sieve_select_never_launches() -> None:
     out = select(
         {"route": "issue", "repo": "o/r", "issue": 3},

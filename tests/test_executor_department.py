@@ -18,6 +18,25 @@ def _path(path_id: str) -> dict:
     return next(row for row in package["correlation_paths"] if row["id"] == path_id)
 
 
+def test_pick_ready_labels_becomes_do_without_triage() -> None:
+    listed = {
+        "issues": [
+            {
+                "repo": "o/r",
+                "issue": 9,
+                "labels": ["ai:ready"],
+            }
+        ],
+        "count": 1,
+        "overflow": False,
+    }
+    picked = pick(listed, {})
+    assert picked["route"] == "ready"
+    out = select(picked, listed)
+    assert out["route"] == "do"
+    assert out["issue"] == 9
+
+
 def test_ready_row_becomes_do_without_triage() -> None:
     picked = {
         "route": "issue",

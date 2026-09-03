@@ -17,7 +17,7 @@ def test_sito_not_ready_keeps_three_ready_temida_and_does():
     listed = {"issues": leftover, "count": 3, "overflow": False}
     last = {"leftover": 3, "leftover_issues": leftover}
     picked = select(listed, last=last)
-    assert picked["route"] == "issue"
+    assert picked["route"] == "ready"
     assert picked["repo"] == "Temida/Temida"
     assert picked["issue"] == 5001
     assert picked["leftover"] == 2
@@ -142,7 +142,7 @@ def test_occupied_repo_is_walked_like_a_foreign_assignee():
     from lokay.proc.select_next_issue import select
 
     picked = select(listed, occupied={"mikolaj92/Temida"})
-    assert picked["route"] == "issue"
+    assert picked["route"] == "ready"
     assert picked["repo"] == "mikolaj92/Fala"
     assert picked["issue"] == 186
     assert picked["leftover"] == 0
