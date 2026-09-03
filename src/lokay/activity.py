@@ -56,6 +56,29 @@ def _path_id(process_id: str | None, inputs: dict[str, Any]) -> str | None:
     return raw or None
 
 
+def reset_activity(*, config_path: str | None = None) -> dict[str, Any] | None:
+    """Start a mill tick with a zero transition checkpoint. Never raises."""
+    payload_inputs = {"config_path": config_path or "", "live": True}
+    try:
+        state_dir = _state_dir(payload_inputs)
+        if state_dir is None:
+            return None
+        payload: dict[str, Any] = {
+            "transitions": 0,
+            "last_progress_at": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+        }
+        path = state_dir / ACTIVITY_NAME
+        state_dir.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        tmp.replace(path)
+        return payload
+    except OSError:
+        return None
+
+
 def record_atom_start(
     *,
     atom: str,

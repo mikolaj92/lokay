@@ -161,3 +161,48 @@ def test_live_status_snapshot_does_not_write_activity(tmp_path: Path):
         is None
     )
     assert not (tmp_path / "activity.json").exists()
+
+
+def test_reset_activity_starts_tick_at_zero(tmp_path: Path):
+    from lokay.activity import record_atom_start, reset_activity
+
+    cfg = _cfg(tmp_path)
+    record_atom_start(
+        atom="recovery_mill",
+        inputs={"config_path": cfg, "live": True, "repo": "__lokay_daemon__"},
+        process_id="daemon_cycle:recovery_mill",
+    )
+    record_atom_start(
+        atom="summarize_daemon_cycle",
+        inputs={"config_path": cfg, "live": True, "repo": "__lokay_daemon__"},
+        process_id="daemon_cycle:summarize_daemon_cycle",
+    )
+    payload = json.loads((tmp_path / "activity.json").read_text(encoding="utf-8"))
+    assert payload["transitions"] == 2
+
+    reset = reset_activity(config_path=cfg)
+    assert reset["transitions"] == 0
+    payload = json.loads((tmp_path / "activity.json").read_text(encoding="utf-8"))
+    assert payload["transitions"] == 0
+    assert "atom" not in payload
+
+    record_atom_start(
+        atom="classify_daemon_preflight",
+        inputs={"config_path": cfg, "live": True, "repo": "__lokay_daemon_entry__"},
+        process_id="daemon_entry:classify_daemon_preflight",
+    )
+    payload = json.loads((tmp_path / "activity.json").read_text(encoding="utf-8"))
+    assert payload["transitions"] == 1
+    assert payload["atom"] == "classify_daemon_preflight"
+
+
+def test_daemon_entry_resets_activity_before_host():
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "daemon_entry_subflow.py"
+    ).read_text(encoding="utf-8")
+    assert "reset_activity" in src
+    assert src.index("reset_activity") < src.index("run_path")

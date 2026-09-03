@@ -1,11 +1,13 @@
 """Invoke authored daemon-entry routing after the physical lock/preflight capability."""
 
+from lokay.activity import reset_activity
 from lokay.fala_journal import wrapper_journal_dir
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 
 
 def run(*, config_path: str, max_passes: int, preflight: dict) -> dict:
+    reset_activity(config_path=config_path)
     return run_path(
         path_id="daemon_entry",
         repo="__lokay_daemon_entry__",
