@@ -50,7 +50,7 @@ def classify(
         str(row.get("state") or "") in _WAITING or str(row.get("reason") or "") in _WAITING
         for row in pending
     )
-    if transitions > 0 or latest or remaining_source == "inflight_working":
+    if transitions > 0 or remaining_source == "inflight_working":
         reason = "ceiling_with_progress"
     elif waiting:
         reason = "ceiling_waiting_external"

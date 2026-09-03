@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from lokay.config import load_config
@@ -21,7 +22,8 @@ def write(config_path: str, ceiling_seconds: float) -> dict:
     except (OSError, ValueError, FileNotFoundError):
         receipt = Path.home() / ".lokay" / "last-pass.json"
     last_pass = remaining_from_receipt(read_pass_receipt(path=receipt))
-    inflight = remaining_from_inflight_working(receipt.parent)
+    since = time.time() - max(0.0, float(ceiling_seconds)) - 2.0
+    inflight = remaining_from_inflight_working(receipt.parent, since=since)
     if inflight is not None:
         remaining, remaining_source = merge_remaining(last_pass, inflight), "inflight_working"
     elif last_pass and remaining_has_inbox(last_pass):

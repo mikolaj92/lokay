@@ -57,14 +57,33 @@ def remaining_from_pass_dir(pass_dir: str | Path) -> dict[str, Any] | None:
     return remaining_from_working(working)
 
 
-def remaining_from_inflight_working(state_dir: Path) -> dict[str, Any] | None:
-    """Remaining from this cycle's working.json. Never last-pass."""
+def remaining_from_inflight_working(
+    state_dir: Path, *, since: float | None = None
+) -> dict[str, Any] | None:
+    """Remaining from this cycle's working.json. Never last-pass.
+
+    ``since`` (unix mtime) keeps only factory-pass dirs touched during this
+    tick. A leftover directory from an earlier cycle is resume context, not
+    inflight remaining.
+    """
     try:
         dirs = [path for path in state_dir.glob("factory-pass-*") if path.is_dir()]
     except OSError:
         return None
-    dirs.sort(key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+    scored: list[tuple[float, Path]] = []
     for path in dirs:
+        try:
+            stamp = path.stat().st_mtime
+            working = path / "working.json"
+            if working.is_file():
+                stamp = max(stamp, working.stat().st_mtime)
+        except OSError:
+            continue
+        if since is not None and stamp < since:
+            continue
+        scored.append((stamp, path))
+    scored.sort(key=lambda item: item[0], reverse=True)
+    for _, path in scored:
         remaining = remaining_from_pass_dir(path)
         if remaining is not None:
             return remaining

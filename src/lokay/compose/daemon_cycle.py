@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import signal
+import time
 from typing import Any
 
 from lokay.config import load_config
@@ -24,12 +24,18 @@ from lokay.proc.classify_pass_ceiling import classify as classify_pass_ceiling
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working
 
 
-def ceiling_remaining(state_dir: Path) -> tuple[dict[str, Any] | None, str | None]:
-    """Merge last-pass remaining with inflight working. Never replace with empty."""
+def ceiling_remaining(
+    state_dir: Path, *, since: float | None = None
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Merge last-pass remaining with inflight working. Never replace with empty.
+
+    ``since`` keeps only factory-pass dirs from this tick. A leftover directory
+    from an earlier cycle is resume context, not inflight remaining.
+    """
     last_pass = remaining_from_receipt(
         read_pass_receipt(path=state_dir / "last-pass.json")
     )
-    inflight = remaining_from_inflight_working(state_dir)
+    inflight = remaining_from_inflight_working(state_dir, since=since)
     if inflight is not None:
         return merge_remaining(last_pass, inflight), "inflight_working"
     if last_pass and remaining_has_inbox(last_pass):
@@ -68,6 +74,7 @@ def compose_daemon_cycle(
     pass_ceiling_seconds: float = 180,
 ) -> dict[str, Any]:
     ceiling = max(0.001, float(pass_ceiling_seconds))
+    started = time.time()
     previous_handler = signal.getsignal(signal.SIGALRM)
     ceiling_expired = False
 
@@ -110,7 +117,9 @@ def compose_daemon_cycle(
             receipt = load_config(config_path).state_path.parent / "last-pass.json"
         except (OSError, ValueError, FileNotFoundError):
             receipt = Path.home() / ".lokay" / "last-pass.json"
-        remaining, remaining_source = ceiling_remaining(receipt.parent)
+        remaining, remaining_source = ceiling_remaining(
+            receipt.parent, since=started - 2.0
+        )
         payload = classify_pass_ceiling(
             state_dir=receipt.parent,
             elapsed_seconds=ceiling,
