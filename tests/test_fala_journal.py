@@ -246,3 +246,70 @@ def test_docs_do_not_claim_rotate_only_covers_daemon_cycle_factory():
     assert "maintain_journal" in readme
     assert "cannot be cut" not in readme
     assert "maintain_journal" in working
+
+
+
+def test_created_zombie_runs_are_finalized_and_reclaimed(tmp_path: Path, monkeypatch):
+    """SIGKILL after upsert_run leaves status=created. Maintain must reclaim them."""
+    home = tmp_path / "home"
+    db = _write_db(home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80)
+    i2pr = _write_db(
+        home / ".lokay" / "fala" / "i2pr" / "mikolaj92__lokay__9" / "state.sqlite",
+        size=80,
+    )
+    calls: list[tuple[str, str]] = []
+
+    def list_runs(db_path, **_kwargs):
+        path = Path(db_path)
+        if path == db:
+            return [
+                {"id": "lokay-old-1", "status": "created"},
+                {"id": "lokay-old-2", "status": "created"},
+                {"id": "lokay-done", "status": "completed"},
+            ]
+        return [{"id": "lokay-live", "status": "created"}]
+
+    def finalize_run(db_path, *, run_id, status, reason=None):
+        calls.append(("finalize", run_id))
+        assert status == "timed_out"
+        assert Path(db_path) == db
+
+    def delete_terminal_run(db_path, run_id):
+        calls.append(("delete", run_id))
+        assert Path(db_path) == db
+        return {"ok": True}
+
+    maintain_calls = _capture_maintain(monkeypatch)
+    monkeypatch.setattr("fala.list_runs", list_runs)
+    monkeypatch.setattr("fala.finalize_run", finalize_run)
+    monkeypatch.setattr("fala.delete_terminal_run", delete_terminal_run)
+
+    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    assert out["ok"] is True
+    assert {Path(row["path"]) for row in out["maintained"]} == {db, i2pr}
+    heartbeat = next(row for row in out["maintained"] if Path(row["path"]) == db)
+    assert heartbeat["reclaimed_created"] == 2
+    assert calls == [
+        ("finalize", "lokay-old-1"),
+        ("delete", "lokay-old-1"),
+        ("finalize", "lokay-old-2"),
+        ("delete", "lokay-old-2"),
+    ]
+    assert {call["db_path"] for call in maintain_calls} == {db, i2pr}
+
+
+def test_invalid_status_journal_does_not_fail_the_mill(tmp_path: Path, monkeypatch):
+    """Corrupt process/run status must not abort heartbeat journal maintain."""
+    home = tmp_path / "home"
+    db = _write_db(home / ".lokay" / "fala" / "daemon-cycle" / "state.sqlite", size=80)
+
+    def boom(_db_path, **_kwargs):
+        raise RuntimeError("fala read: row has an invalid status")
+
+    monkeypatch.setattr("fala.list_runs", boom)
+    calls = _capture_maintain(monkeypatch)
+    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    assert out["ok"] is True
+    assert db.exists()
+    assert [Path(row["path"]) for row in out["maintained"]] == [db]
+    assert calls and calls[0]["db_path"] == db

@@ -315,7 +315,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the mill.
   Every live Fala sqlite under `~/.lokay/fala/<path>/` is maintained through
   `fala.maintain_journal` when oversized (default 64 MiB) so idle ticks do
-  not reopen a multi-GB journal. Nested children never share the tree-root
+  not reopen a multi-GB journal. Heartbeat journals also finalize and delete
+  `created` leftovers left by a 180s SIGKILL, through `finalize_run` then
+  `delete_terminal_run`. Detached issue-to-PR journals are not finalized. Nested children never share the tree-root
   sqlite or overwrite a sibling materialized package. The journal is a pass
   trace, not world history. Product recovery stays on `state.jsonl`.
   Over-cap is fail-closed if Fala cannot maintain the file.
