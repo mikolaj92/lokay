@@ -319,7 +319,9 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   `created` leftovers left by a 180s SIGKILL, through `finalize_run` then
   `delete_terminal_run`. Reclaim is capped at eight rows per heartbeat journal
   per tick, so old debris drains without consuming the next 180s product slot.
-  Detached issue-to-PR journals are not finalized. Nested children never share the tree-root
+  Detached issue-to-PR journals are not finalized. `daemon_entry` /
+  `daemon_cycle` open a fresh wrapper sqlite per tick and prune old wrapper
+  dirs; they do not reopen the shared mill journals. Nested children never share the tree-root
   sqlite or overwrite a sibling materialized package. The journal is a pass
   trace, not world history. Product recovery stays on `state.jsonl`.
   Over-cap is fail-closed if Fala cannot maintain the file.

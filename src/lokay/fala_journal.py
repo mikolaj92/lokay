@@ -11,13 +11,20 @@ see them.
 from __future__ import annotations
 
 import os
+import secrets
+import shutil
 from pathlib import Path
 from typing import Any
 
 DEFAULT_MIN_BYTES = 64 * 1024 * 1024
 KEEP_ROTATED = 1
 CREATED_RECLAIM_PER_JOURNAL = 8
+WRAPPER_KEEP = 2
 _LIVE_JOURNAL = "state.sqlite"
+_WRAPPER_PREFIXES = {
+    "daemon_entry": "daemon-entry",
+    "daemon_cycle": "daemon-cycle",
+}
 _HEARTBEAT_JOURNALS = frozenset(
     {
         "daemon-entry",
@@ -58,6 +65,49 @@ def maintain_mill_fala_journals(
 
 
 rotate_mill_fala_journals = maintain_mill_fala_journals
+
+
+def wrapper_journal_dir(path_id: str, *, home: Path | None = None) -> Path:
+    """Fresh sqlite for one heartbeat wrapper host. Not the shared mill journal.
+
+    ``daemon_entry`` / ``daemon_cycle`` are a pass trace. Reopening a 59 MiB
+    journal of killed ``created`` runs burns the 180s ceiling. Each tick gets
+    its own directory; older wrapper dirs are pruned. Detached issue-to-PR
+    journals are not in this family.
+    """
+    prefix = _WRAPPER_PREFIXES.get(str(path_id))
+    if not prefix:
+        raise ValueError(f"unknown heartbeat wrapper path: {path_id}")
+    root = (home or Path.home()) / ".lokay" / "fala"
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{prefix}-{os.getpid()}-{secrets.token_hex(6)}"
+    path.mkdir(parents=True, exist_ok=False)
+    _prune_wrapper_journals(root, prefix=prefix, keep_path=path, keep=WRAPPER_KEEP)
+    return path
+
+
+def _prune_wrapper_journals(
+    root: Path, *, prefix: str, keep_path: Path, keep: int
+) -> None:
+    retained = max(1, int(keep))
+    try:
+        dirs = [
+            path
+            for path in root.iterdir()
+            if path.is_dir() and path.name.startswith(f"{prefix}-")
+        ]
+    except OSError:
+        return
+    dirs.sort(key=lambda path: path.stat().st_mtime if path.exists() else 0, reverse=True)
+    kept = 0
+    for path in dirs:
+        if path.resolve() == keep_path.resolve():
+            kept += 1
+            continue
+        if kept < retained:
+            kept += 1
+            continue
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def _iter_live_journals(root: Path) -> list[Path]:

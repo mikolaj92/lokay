@@ -11,7 +11,7 @@ from typing import Any
 
 from lokay.config import load_config
 from lokay.envelope import err, mill_glance
-from lokay.fala_journal import maintain_mill_fala_journals
+from lokay.fala_journal import maintain_mill_fala_journals, wrapper_journal_dir
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 from lokay.pass_receipt import read_pass_receipt
@@ -98,7 +98,7 @@ def compose_daemon_cycle(
                     config_path=config_path,
                     live=True,
                     package_path=str(trusted_fala_manifest()),
-                    db_path=Path.home() / ".lokay" / "fala" / "daemon-cycle",
+                    db_path=wrapper_journal_dir("daemon_cycle"),
                     extra_inputs={"max_passes": max(1, int(max_passes))},
                 )
             )
