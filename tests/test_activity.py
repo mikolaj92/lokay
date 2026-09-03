@@ -33,7 +33,7 @@ def test_organ_writes_activity_before_atom(tmp_path: Path):
     cfg = _cfg(tmp_path)
     fala_organ._handle(
         "classify_daemon_preflight",
-        {"config_path": cfg, "preflight": {"ok": True}, "repo": "mikolaj92/reviewkit", "issue": 308},
+        {"config_path": cfg, "live": True, "preflight": {"ok": True}, "repo": "mikolaj92/reviewkit", "issue": 308},
         {},
     )
     payload = json.loads((tmp_path / "activity.json").read_text(encoding="utf-8"))
@@ -48,12 +48,12 @@ def test_organ_increments_transitions(tmp_path: Path):
     cfg = _cfg(tmp_path)
     fala_organ._handle(
         "classify_daemon_preflight",
-        {"config_path": cfg, "preflight": {"ok": True}},
+        {"config_path": cfg, "live": True, "preflight": {"ok": True}},
         {},
     )
     fala_organ._handle(
         "classify_daemon_preflight",
-        {"config_path": cfg, "preflight": {"ok": False, "operational_overlap": True}},
+        {"config_path": cfg, "live": True, "preflight": {"ok": False, "operational_overlap": True}},
         {},
     )
     payload = json.loads((tmp_path / "activity.json").read_text(encoding="utf-8"))
@@ -67,7 +67,7 @@ def test_process_id_fills_path(tmp_path: Path):
     cfg = _cfg(tmp_path)
     record_atom_start(
         atom="host_ff",
-        inputs={"config_path": cfg, "repo": "mikolaj92/lokay"},
+        inputs={"config_path": cfg, "live": True, "repo": "mikolaj92/lokay"},
         process_id="factory_pass:host_ff",
     )
     payload = json.loads((tmp_path / "activity.json").read_text(encoding="utf-8"))
@@ -98,7 +98,66 @@ def test_write_failure_does_not_raise(tmp_path: Path, monkeypatch):
     assert (
         activity.record_atom_start(
             atom="host_ff",
-            inputs={"config_path": cfg},
+            inputs={"config_path": cfg, "live": True},
         )
         is None
     )
+
+def test_status_snapshot_does_not_write_activity(tmp_path: Path):
+    cfg = _cfg(tmp_path)
+    fala_organ._handle(
+        "status_snapshot_terminal",
+        {"config_path": cfg, "live": False, "repo": "local/status"},
+        {},
+        process_id="status_snapshot:status_snapshot_terminal",
+    )
+    assert not (tmp_path / "activity.json").exists()
+
+
+def test_status_snapshot_does_not_replace_mill_activity(tmp_path: Path):
+    from lokay.activity import record_atom_start
+
+    cfg = _cfg(tmp_path)
+    activity = tmp_path / "activity.json"
+    activity.write_text(
+        '{"atom": "recovery_mill", "path": "daemon_cycle", "transitions": 9}\n',
+        encoding="utf-8",
+    )
+    assert (
+        record_atom_start(
+            atom="status_snapshot_terminal",
+            inputs={"config_path": cfg, "live": False, "repo": "local/status"},
+            process_id="status_snapshot:status_snapshot_terminal",
+        )
+        is None
+    )
+    payload = json.loads(activity.read_text(encoding="utf-8"))
+    assert payload["atom"] == "recovery_mill"
+    assert payload["path"] == "daemon_cycle"
+    assert payload["transitions"] == 9
+
+
+def test_dry_run_organ_does_not_write_activity(tmp_path: Path):
+    cfg = _cfg(tmp_path)
+    fala_organ._handle(
+        "classify_daemon_preflight",
+        {"config_path": cfg, "live": False, "preflight": {"ok": True}},
+        {},
+        process_id="daemon_entry:classify_daemon_preflight",
+    )
+    assert not (tmp_path / "activity.json").exists()
+
+
+def test_live_status_snapshot_does_not_write_activity(tmp_path: Path):
+    from lokay.activity import record_atom_start
+
+    cfg = _cfg(tmp_path)
+    assert (
+        record_atom_start(
+            atom="status_snapshot_terminal",
+            inputs={"config_path": cfg, "live": True, "repo": "local/status"},
+            process_id="status_snapshot:status_snapshot_terminal",
+        )
+        is None
+    )
+    assert not (tmp_path / "activity.json").exists()

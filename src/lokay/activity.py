@@ -62,9 +62,18 @@ def record_atom_start(
     inputs: dict[str, Any] | None = None,
     process_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Update activity.json for this atom. Never raises."""
+    """Update activity.json for a live mill atom. Never raises.
+
+    Status and other observation paths stay read-only. A dry-run organ
+    must not steal mill resume context.
+    """
     payload_inputs = inputs if isinstance(inputs, dict) else {}
     try:
+        path_id = _path_id(process_id, payload_inputs)
+        if path_id == "status_snapshot":
+            return None
+        if not payload_inputs.get("live"):
+            return None
         state_dir = _state_dir(payload_inputs)
         if state_dir is None:
             return None
