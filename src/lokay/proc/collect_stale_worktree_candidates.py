@@ -1,6 +1,7 @@
 """Collect a bounded inventory for the stale-worktree child (worktrees only)."""
 
 from __future__ import annotations
+from pathlib import Path
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.working import load_begin_working
 from lokay.git_worktree import iter_worktrees
@@ -22,15 +23,18 @@ def protection(
     branch: str,
     issue: int | None,
     receipt_unknown: bool,
-    live_repos: set[str],
+    live_keys: set[tuple[str, int]],
     survey_failed: set[str],
     covered: dict[str, set[int]],
     heads: dict[str, set[str]],
 ) -> str:
-    """One job: KEEP reason for a live/unknown/covering corner, else empty."""
+    """One job: KEEP reason for a live/unknown/covering corner, else empty.
+
+    Live i2pr KEEP is issue-scoped (repo+issue), never whole-repo.
+    """
     if receipt_unknown:
         return "receipt_state_unknown"
-    if repo in live_repos:
+    if issue is not None and (repo, issue) in live_keys:
         return "live_issue_to_pr"
     if repo in survey_failed:
         return "pr_survey_failed"
@@ -39,13 +43,21 @@ def protection(
     return ""
 
 
+def _row_mtime(row: dict) -> float:
+    try:
+        return Path(str(row["path"])).stat().st_mtime
+    except (OSError, KeyError, TypeError, ValueError):
+        return float("inf")
+
+
 def bound_slots(
     rows: list[dict], *, pass_dir: str, receipt_safe: bool
 ) -> dict:
-    """One job: sort, keep four authored slots, defer the rest."""
+    """One job: oldest-first authored slots; defer remainder for a later pass."""
     rows = sorted(
         rows,
         key=lambda row: (
+            _row_mtime(row),
             row["repo"],
             row["issue"] is None,
             row["issue"] or 0,
@@ -70,9 +82,7 @@ def collect(*, pass_dir: str, config_path: str | None) -> dict:
     scope = survey_scope(begin)
     receipt_unknown = has_unreadable_issue_to_pr_receipts()
     live_keys = _live_keys(live_issue_to_pr_receipts())
-    live_repos = _names(working, "live_issue_to_pr_repos") | {
-        repo for repo, _ in live_keys
-    }
+    # live_issue_to_pr_repos is advisory occupancy only — KEEP uses live_keys.
     survey_failed = _names(working, "pr_survey_failed")
     covered, heads = _covering(working, branch_prefix=cfg.branch_prefix)
     rows = []
@@ -94,7 +104,7 @@ def collect(*, pass_dir: str, config_path: str | None) -> dict:
                         branch=branch,
                         issue=issue,
                         receipt_unknown=receipt_unknown,
-                        live_repos=live_repos,
+                        live_keys=live_keys,
                         survey_failed=survey_failed,
                         covered=covered,
                         heads=heads,

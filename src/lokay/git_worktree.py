@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 from pathlib import Path
 
@@ -20,6 +21,65 @@ _QUARANTINE_SUFFIX = ".lokay-preserved"
 
 def _is_quarantine_name(name: str) -> bool:
     return name.startswith(".") and name.endswith(_QUARANTINE_SUFFIX)
+
+
+
+def reclaim_preserved_archive(archive: Path, *, managed_root: Path) -> dict[str, Any]:
+    """Free bytes for one `.lokay-preserved` archive under managed_root.
+
+    Lexical non-symlink child only. Never unlinks Fala sqlite/WAL. Returns
+    ``ok`` + ``reclaimed``; fail-closed leaves the archive in place.
+    """
+    if archive.is_symlink() or not _is_quarantine_name(archive.name):
+        return {
+            "ok": False,
+            "reclaimed": False,
+            "error": "refusing non-archive or symlink reclaim path",
+        }
+    try:
+        root_names = _absolute_posix_names(managed_root)
+        archive_names = _absolute_posix_names(archive)
+    except ValueError:
+        return {
+            "ok": False,
+            "reclaimed": False,
+            "error": "archive path is outside managed root",
+        }
+    if archive_names[: len(root_names)] != root_names or len(archive_names) <= len(
+        root_names
+    ):
+        return {
+            "ok": False,
+            "reclaimed": False,
+            "error": "archive path is outside managed root",
+        }
+    joined = "/".join(archive_names).lower()
+    if joined.endswith((".sqlite", ".sqlite-wal", ".sqlite-shm")) or "/fala/" in (
+        f"/{joined}/"
+    ):
+        return {
+            "ok": False,
+            "reclaimed": False,
+            "error": "refusing Fala sqlite/WAL path",
+        }
+    try:
+        if not archive.exists():
+            return {"ok": True, "reclaimed": False, "already_gone": True}
+        if archive.is_symlink() or not archive.is_dir():
+            return {
+                "ok": False,
+                "reclaimed": False,
+                "error": "refusing non-directory reclaim path",
+            }
+        shutil.rmtree(archive)
+    except OSError as exc:
+        return {
+            "ok": False,
+            "reclaimed": False,
+            "preserved_path": str(archive),
+            "error": f"cannot reclaim preserved archive: {exc}",
+        }
+    return {"ok": True, "reclaimed": True, "preserved_path": str(archive)}
 
 
 def _is_nested_clone(path: Path) -> bool:
@@ -243,12 +303,13 @@ def remove_worktree(
     *,
     managed_root: Path,
 ) -> dict[str, Any]:
-    """Drop a leftover worktree without deleting an unconfirmed path.
+    """Drop a leftover worktree and reclaim its disk after registry detach.
 
     The path must be a lexical non-symlink child of the managed root and
     registry-owned by this clone. Reinspect uncommitted content, then atomically
-    archive the whole tree before pruning only Git's administrative record.
-    Automated cleanup never recursively deletes archived worktree bytes.
+    archive the whole tree, prune Git's administrative record, and reclaim the
+    archive bytes. Failed prune / ownership checks leave the archive in place
+    for TTL GC. Never unlinks Fala sqlite/WAL.
     """
     if _is_quarantine_name(worktree.name):
         return {
@@ -499,11 +560,22 @@ def remove_worktree(
                     else "git still owns worktree after registry prune"
                 ),
             }
-        return {
+        reclaimed = reclaim_preserved_archive(archive, managed_root=managed_root)
+        if reclaimed.get("ok") and reclaimed.get("reclaimed"):
+            return {
+                "ok": True,
+                "removed": True,
+                "reclaimed": True,
+            }
+        payload = {
             "ok": True,
             "removed": True,
+            "reclaimed": False,
             "preserved_path": str(archive),
         }
+        if reclaimed.get("error"):
+            payload["reclaim_error"] = reclaimed.get("error")
+        return payload
     finally:
         if parent_fd != root_fd:
             os.close(parent_fd)

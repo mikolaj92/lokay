@@ -1,7 +1,7 @@
 """One job: drop leftover worktrees that cannot resume.
 
 After occupancy is known, a merged or closed-CONFLICTING corner still
-occupies disk (Mini: ~158G). KEEP a live i2pr (whole repo), a repo whose PR survey failed,
+occupies disk (Mini: ~158G). KEEP a live i2pr (issue-scoped), a repo whose PR survey failed,
 an open covering PR, or an unpublished timeout leftover. A ready
 published tip is stale — issue_to_pr RESETs from ``origin/main`` — unless it
 contains real uncommitted timeout work. REMOVE only fully classified clean
@@ -257,11 +257,11 @@ def _keep_reason(
     branch: str,
     issue: int | None,
     live: set[tuple[str, int]],
-    live_repos: set[str],
     covered: set[int],
     heads: set[str],
 ) -> str | None:
-    if repo in live_repos or (issue is not None and (repo, issue) in live):
+    """Live i2pr KEEP is issue-scoped (repo+issue), never whole-repo."""
+    if issue is not None and (repo, issue) in live:
         return "live_issue_to_pr"
     if issue is not None and issue in covered:
         return "covering_pr"

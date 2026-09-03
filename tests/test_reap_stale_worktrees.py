@@ -13,14 +13,16 @@ def test_collect_protection_is_its_own_function():
         branch="ai/fix/1",
         issue=1,
         receipt_unknown=False,
-        live_repos=set(),
+        live_keys=set(),
         survey_failed=set(),
         covered={},
         heads={},
     )
     assert protection(**empty) == ""
     assert protection(**{**empty, "receipt_unknown": True}) == "receipt_state_unknown"
-    assert protection(**{**empty, "live_repos": {"a/b"}}) == "live_issue_to_pr"
+    assert protection(**{**empty, "live_keys": {("a/b", 1)}}) == "live_issue_to_pr"
+    # Same repo, different issue is not KEEP (issue-scoped).
+    assert protection(**{**empty, "live_keys": {("a/b", 99)}}) == ""
     assert protection(**{**empty, "survey_failed": {"a/b"}}) == "pr_survey_failed"
     assert (
         protection(**{**empty, "covered": {"a/b": {1}}}) == "covering_pr"
@@ -193,68 +195,71 @@ def test_stale_worktree_catalog_fail_closed_when_collect_failed():
     assert out["ok"] is False and "exceeds authored slots" in out["error"]
 
 
-def test_overflow_skip_is_its_own_function():
-    from lokay.proc.stale_worktree_catalog import SLOTS, overflow_skip
+def test_overflow_bound_is_its_own_function():
+    from lokay.proc.stale_worktree_catalog import SLOTS, overflow_bound
 
-    assert overflow_skip([{"present": True}] * SLOTS) is None
-    out = overflow_skip([{"present": True}] * (SLOTS + 1))
-    assert out["ok"] is True and out["route"] == "skip"
-    assert "leftover" not in out["reason"]
+    assert len(overflow_bound([{"present": True}] * SLOTS)) == SLOTS
+    out = overflow_bound([{"present": True, "issue": i} for i in range(SLOTS + 3)])
+    assert len(out) == SLOTS
+    assert out[0]["issue"] == 0
 
 
-def test_skip_result_does_not_persist_or_park_labels():
-    from lokay.proc.summarize_stale_worktree_reap import skip_result
+def test_stale_worktree_catalog_overflow_bounds_not_skip(monkeypatch):
+    from lokay.proc import stale_worktree_catalog
 
-    out = skip_result(
-        pass_dir="/tmp/unused",
-        collected={"ok": True, "receipt_safe": True, "deferred": []},
-        catalog={"route": "skip", "skipped": True, "reason": "stale_worktree_overflow"},
-        live=True,
+    def classify(candidate, *, live):
+        return {"ok": True, "route": "absent", "row": dict(candidate)}
+
+    monkeypatch.setattr(
+        "lokay.proc.classify_stale_worktree_candidate.classify", classify
     )
-    assert out["ok"] is True and out["result"]["skipped"] is True
-    assert "leftover" not in str(out["result"]["reason"])
-
-
-def test_stale_worktree_catalog_overflow_skips_not_fail():
-    from lokay.proc.stale_worktree_catalog import SLOTS, run
-
-    out = run(
+    out = stale_worktree_catalog.run(
         {
             "ok": True,
-            "candidates": [{"present": True} for _ in range(SLOTS + 1)],
+            "candidates": [{"present": True, "issue": i} for i in range(5)],
         },
         config_path=None,
         live=True,
     )
     assert out["ok"] is True
-    assert out["route"] == "skip"
-    assert out["skipped"] is True
-    assert out["reason"] == "stale_worktree_overflow"
-    assert out["count"] == SLOTS + 1
-    assert out["effects"] == []
+    assert out.get("skipped") is not True
+    assert out["bounded"] is True
+    assert out["present_count"] == 5
+    assert len(out["effects"]) == stale_worktree_catalog.SLOTS
 
 
-def test_stale_worktree_summarize_overflow_skip_does_not_block():
+def test_stale_worktree_summarize_persists_bounded_pass(tmp_path, monkeypatch):
     from lokay.proc.summarize_stale_worktree_reap import summarize
 
+    monkeypatch.setattr(
+        "lokay.proc.summarize_stale_worktree_reap._archive_gc",
+        lambda **_k: {"ok": True, "pruned_count": 0},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.summarize_stale_worktree_reap.load_begin_working",
+        lambda _p: ({}, {"actions": []}),
+    )
+    monkeypatch.setattr(
+        "lokay.proc.summarize_stale_worktree_reap.save_begin_working",
+        lambda *_a, **_k: None,
+    )
     out = summarize(
-        pass_dir="/tmp/unused",
-        collected={"ok": True, "receipt_safe": True, "deferred": []},
+        pass_dir=str(tmp_path),
+        collected={"ok": True, "receipt_safe": True, "deferred": [{"present": True}]},
         catalog={
             "ok": True,
-            "route": "skip",
-            "skipped": True,
-            "reason": "stale_worktree_overflow",
-            "count": 5,
-            "slot_count": 4,
-            "effects": [],
+            "bounded": True,
+            "effects": [
+                {"ok": True, "row": {"kept": True, "reason": "planned"}},
+            ],
         },
-        live=True,
+        live=False,
+        config_path=None,
     )
     assert out["ok"] is True
-    assert out["result"]["skipped"] is True
-    assert out["result"]["reason"] == "stale_worktree_overflow"
+    assert out["result"]["bounded"] is True
     assert out["result"]["reaped_count"] == 0
+    assert out["result"]["archives"]["pruned_count"] == 0
 
 
 def test_stale_worktree_catalog_keep_and_remove(monkeypatch):

@@ -1,34 +1,31 @@
-"""Persist the stale-worktree child result, or lift a catalog skip."""
+"""Persist the stale-worktree child result and prune expired archives."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
 
 from lokay.passkit.working import load_begin_working, save_begin_working
+from lokay.proc._common import load_cfg
+from lokay.proc.prune_preserved_worktree_archives import prune
 
 
-def skip_result(*, pass_dir: str, collected: dict, catalog: dict, live: bool) -> dict | None:
-    """One job: lift catalog overflow skip so the child does not fail closed."""
-    if not (catalog.get("skipped") or catalog.get("route") == "skip"):
-        return None
-    return {
-        "ok": True,
-        "result": {
-            "pass_dir": pass_dir,
-            "planned": not live,
-            "kept": [],
-            "reaped": [],
-            "failed": [],
-            "kept_count": 0,
-            "reaped_count": 0,
-            "deferred": list(collected.get("deferred") or []),
-            "receipt_state_unknown": not bool(collected.get("receipt_safe", True)),
-            "skipped": True,
-            "reason": catalog.get("reason") or "skip",
-            "count": catalog.get("count"),
-            "slot_count": catalog.get("slot_count"),
-        },
-    }
+def _archive_gc(*, config_path: str | None, live: bool) -> dict:
+    """One job: TTL GC of `.lokay-preserved` under the configured worktrees root."""
+    cfg = load_cfg(argparse.Namespace(config=config_path))
+    root = Path(cfg.worktrees_root).expanduser()
+    return prune(managed_root=root, live=live)
 
 
-def persist_result(*, pass_dir: str, collected: dict, catalog: dict, live: bool) -> dict:
-    """One job: write keep/remove rows into the pass working ledger."""
+def persist_result(
+    *,
+    pass_dir: str,
+    collected: dict,
+    catalog: dict,
+    live: bool,
+    config_path: str | None = None,
+) -> dict:
+    """One job: write keep/remove rows into the pass working ledger, then TTL GC."""
     effects = list(catalog.get("effects") or [])
     rows = [dict(x.get("row") or {}) for x in effects if x.get("row")]
     kept = [x for x in rows if x.get("kept")]
@@ -46,6 +43,7 @@ def persist_result(*, pass_dir: str, collected: dict, catalog: dict, live: bool)
     )
     working["actions"] = actions
     save_begin_working(pass_dir, begin, working)
+    archives = _archive_gc(config_path=config_path, live=live)
     return {
         "ok": True,
         "result": {
@@ -58,18 +56,29 @@ def persist_result(*, pass_dir: str, collected: dict, catalog: dict, live: bool)
             "reaped_count": len(reaped),
             "deferred": list(collected.get("deferred") or []),
             "receipt_state_unknown": not bool(collected.get("receipt_safe", True)),
+            "bounded": bool(catalog.get("bounded")),
+            "archives": archives,
         },
     }
 
 
 def summarize(
-    *, pass_dir: str, collected: dict, catalog: dict, live: bool
+    *,
+    pass_dir: str,
+    collected: dict,
+    catalog: dict,
+    live: bool,
+    config_path: str | None = None,
 ) -> dict:
-    skipped = skip_result(
-        pass_dir=pass_dir, collected=collected, catalog=catalog, live=live
-    )
-    if skipped is not None:
-        return skipped
+    """Persist catalog effects (or empty) and always run archive TTL GC."""
+    if not collected.get("ok"):
+        return dict(collected)
+    if not catalog.get("ok", True) and not catalog.get("effects"):
+        return dict(catalog)
     return persist_result(
-        pass_dir=pass_dir, collected=collected, catalog=catalog, live=live
+        pass_dir=pass_dir,
+        collected=collected,
+        catalog=catalog,
+        live=live,
+        config_path=config_path,
     )

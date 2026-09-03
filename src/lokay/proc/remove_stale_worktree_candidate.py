@@ -43,4 +43,14 @@ def apply(classified: dict, *, config_path: str | None, live: bool) -> dict:
                 "error": out.get("error"),
             },
         }
-    return {"ok": True, "applied": True, "row": {**row, "kept": False, "removed": True}}
+    updated = {
+        **row,
+        "kept": False,
+        "removed": True,
+        "reclaimed": bool(out.get("reclaimed")),
+    }
+    if out.get("preserved_path"):
+        updated["preserved_path"] = out.get("preserved_path")
+    if out.get("reclaim_error"):
+        updated["reclaim_error"] = out.get("reclaim_error")
+    return {"ok": True, "applied": True, "row": updated}

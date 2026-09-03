@@ -42,11 +42,11 @@ if a=='summarize_stale_worktree_reap':v['result']={'kept_count':0,'reaped_count'
     assert result.get("ticks_used", 16) < 64
 
 
-def test_stale_worktree_reap_overflow_skip_succeeds(tmp_path):
+def test_stale_worktree_reap_overflow_bound_succeeds(tmp_path):
     body = base_effector(
-        """if a=='collect_stale_worktree_candidates':v.update(receipt_safe=True,deferred=[])
-if a=='stale_worktree_catalog':v.update(skipped=True,route='skip',reason='stale_worktree_overflow',effects=[])
-if a=='summarize_stale_worktree_reap':v['result']={'skipped':True,'reason':'stale_worktree_overflow','reaped_count':0}"""
+        """if a=='collect_stale_worktree_candidates':v.update(receipt_safe=True,deferred=[{'present':True}])
+if a=='stale_worktree_catalog':v.update(bounded=True,present_count=5,slot_count=4,effects=[{'applied':True,'row':{'removed':True,'reclaimed':True}}])
+if a=='summarize_stale_worktree_reap':v['result']={'bounded':True,'reaped_count':1,'archives':{'pruned_count':0}}"""
     )
     result = run_graph(tmp_path, body, "stale-overflow", path_id="stale_worktree_reap")
     statuses = result["effector_results"]
