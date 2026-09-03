@@ -57,7 +57,9 @@ pass ceiling. Detached `issue_to_pr` sessions are not signalled. Inner
 `last-pass.json` with `health=pass_ceiling` when it kills the lock owner.
 It does not idle-skip, host-ff, or rewrite the LaunchAgent plist
 on each tick. Plist `StartInterval=60` and crash KeepAlive
-(`SuccessfulExit=false`) are host `--install` setup. Busy lock is an OS
+(`SuccessfulExit=false`) are host `--install` setup. Classified
+`preflight_failed` exits 0 so KeepAlive waits the interval; it is a
+gate, not a crash. Busy lock is an OS
 lease and may skip exec. Host-ff runs only as the second `factory_pass`
 atom after idle classify routes `host`.
 

@@ -349,6 +349,16 @@ def test_process_exit_zero_at_pass_ceiling():
     assert process_exit_code({"ok": False}) == 1
 
 
+def test_process_exit_zero_on_preflight_failed():
+    assert process_exit_code({"ok": False, "health": "preflight_failed"}) == 0
+    assert (
+        process_exit_code(
+            {"ok": False, "health": "preflight_failed", "gate_released": False}
+        )
+        == 0
+    )
+
+
 def test_finalize_daemon_payload_lifts_progress_and_drops_fala():
     out = finalize_daemon_payload(
         {
@@ -540,7 +550,7 @@ def test_daemon_does_not_enter_product_graph_after_failed_preflight(
         lambda **k: entered.append(k) or {"ok": True},
     )
 
-    assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 1
+    assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 0
     assert entered == []
     assert "preflight_failed" in capsys.readouterr().out
 

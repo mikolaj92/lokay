@@ -92,7 +92,8 @@ def process_exit_code(
     if _productive(current):
         return 0
     if isinstance(payload, dict) and (
-        str(payload.get("health") or "") in {"host_updated", "pass_ceiling"}
+        str(payload.get("health") or "")
+        in {"host_updated", "pass_ceiling", "preflight_failed"}
         or str(payload.get("reason") or "") in {"host_updated", "pass_ceiling"}
     ):
         return 0

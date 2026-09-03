@@ -206,7 +206,8 @@ LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
 the mill turning; event wake (`lokay-wake` on a self-hosted `lokay-mill`
 runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
 complete. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
-restarts immediately; idle 0 waits the 60s StartInterval. Plist
+restarts immediately; idle 0 waits the 60s StartInterval. Classified
+`preflight_failed` is a gate and must exit 0 so the interval applies. Plist
 `StartInterval=60` and crash KeepAlive are host `--install` setup
 (`plutil`, not a per-tick rewrite). Missing plists stay missing. The
 LaunchAgent shell leases `mill.lock` and execs `lokay-daemon`; idle TTL
