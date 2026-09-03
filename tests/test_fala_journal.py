@@ -313,3 +313,31 @@ def test_invalid_status_journal_does_not_fail_the_mill(tmp_path: Path, monkeypat
     assert db.exists()
     assert [Path(row["path"]) for row in out["maintained"]] == [db]
     assert calls and calls[0]["db_path"] == db
+
+
+def test_created_reclaim_is_capped_per_journal(tmp_path: Path, monkeypatch):
+    """Hundreds of created leftovers drain across ticks, not in one 180s maintain."""
+    home = tmp_path / "home"
+    db = _write_db(home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80)
+    calls: list[str] = []
+
+    def list_runs(_db_path, **_kwargs):
+        return [{"id": f"lokay-old-{i}", "status": "created"} for i in range(200)]
+
+    def finalize_run(_db_path, *, run_id, status, reason=None):
+        calls.append(run_id)
+
+    def delete_terminal_run(_db_path, run_id):
+        return {"ok": True}
+
+    _capture_maintain(monkeypatch)
+    monkeypatch.setattr("fala.list_runs", list_runs)
+    monkeypatch.setattr("fala.finalize_run", finalize_run)
+    monkeypatch.setattr("fala.delete_terminal_run", delete_terminal_run)
+
+    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    assert out["ok"] is True
+    heartbeat = next(row for row in out["maintained"] if Path(row["path"]) == db)
+    assert heartbeat["reclaimed_created"] == 8
+    assert calls == [f"lokay-old-{i}" for i in range(8)]
+

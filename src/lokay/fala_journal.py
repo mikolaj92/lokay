@@ -16,6 +16,7 @@ from typing import Any
 
 DEFAULT_MIN_BYTES = 64 * 1024 * 1024
 KEEP_ROTATED = 1
+CREATED_RECLAIM_PER_JOURNAL = 8
 _LIVE_JOURNAL = "state.sqlite"
 _HEARTBEAT_JOURNALS = frozenset(
     {
@@ -110,6 +111,8 @@ def _reclaim_created_runs(db: Path) -> int:
         raise
     reclaimed = 0
     for run in runs:
+        if reclaimed >= CREATED_RECLAIM_PER_JOURNAL:
+            break
         if not isinstance(run, dict):
             continue
         if str(run.get("status") or "") != "created":
