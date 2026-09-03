@@ -79,8 +79,8 @@ wheels = [
 
 [[package]]
 name = "fala"
-version = "0.7.31"
-source = { git = "https://github.com/mikolaj92/Fala.git?tag=v0.7.31#475bfa6f958c4d67406d4e0c48c69d299a7d4ee5" }
+version = "0.7.32"
+source = { git = "https://github.com/mikolaj92/Fala.git?tag=v0.7.32#5ed7eca0ec616e0c79c92d5dce13e9624f40cb97" }
 
 [[package]]
 name = "fastapi"
@@ -238,7 +238,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory.git?tag=v0.6.16" },
-    { name = "fala", git = "https://github.com/mikolaj92/Fala.git?tag=v0.7.31" },
+    { name = "fala", git = "https://github.com/mikolaj92/Fala.git?tag=v0.7.32" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "kofte", git = "https://github.com/mikolaj92/Kofte.git?rev=cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
