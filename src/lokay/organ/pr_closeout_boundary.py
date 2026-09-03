@@ -1,4 +1,4 @@
-"""Fala bindings for one catalog PR-closeout atom and the one-PR path."""
+"""Fala bindings for authored PR-closeout slots and the one-PR path."""
 
 from typing import Any
 
@@ -14,23 +14,52 @@ def handle_pr_closeout(
     live = bool(inputs.get("live"))
     selected = dict(inputs.get("selected") or {})
     if atom == "prepare_pr_closeout":
-        from lokay.proc.closeout_catalog import SLOTS
+        from lokay.execution_contracts import CLOSEOUT_SLOT_COUNT
         from lokay.proc.prepare_pr_closeout import prepare
 
-        return prepare(pass_dir=pass_dir, slot_count=SLOTS)
-    if atom == "closeout_catalog":
-        from lokay.proc.closeout_catalog import run
+        return prepare(pass_dir=pass_dir, slot_count=CLOSEOUT_SLOT_COUNT)
+
+    def _slot(name: str) -> int:
+        suffix = name.rsplit("_", 1)[-1]
+        return int(suffix) if suffix.isdigit() else 0
+
+    slot = _slot(atom)
+    if atom.startswith("select_pr_closeout_slot_"):
+        from lokay.proc.select_pr_closeout_slot import select
+
+        previous = up.get(f"record_pr_closeout_slot_{slot-1}") or {}
+        return select(up.get("prepare_pr_closeout") or {}, previous, slot=slot)
+    if atom.startswith("run_pr_closeout_slot_"):
+        from lokay.proc.run_pr_closeout_slot import run
 
         return run(
-            up.get("prepare_pr_closeout") or {},
-            pass_dir=pass_dir,
+            up.get(f"select_pr_closeout_slot_{slot}") or {},
             config_path=config,
             live=live,
+        )
+    if atom.startswith("record_pr_closeout_slot_"):
+        from lokay.proc.record_pr_closeout_slot import record
+
+        return record(
+            up.get(f"select_pr_closeout_slot_{slot}") or {},
+            up.get(f"run_pr_closeout_slot_{slot}") or {},
+        )
+    if atom == "reduce_pr_closeout":
+        from lokay.execution_contracts import CLOSEOUT_SLOT_COUNT
+        from lokay.proc.reduce_pr_closeout_slots import reduce
+
+        return reduce(
+            prepared=up.get("prepare_pr_closeout") or {},
+            rows=[
+                up.get(f"record_pr_closeout_slot_{i}") or {}
+                for i in range(1, CLOSEOUT_SLOT_COUNT + 1)
+            ],
+            pass_dir=pass_dir,
         )
     if atom == "persist_pr_closeout":
         from lokay.proc.persist_pr_closeout import persist
 
-        return persist(pass_dir=pass_dir, reduced=up.get("closeout_catalog") or {})
+        return persist(pass_dir=pass_dir, reduced=up.get("reduce_pr_closeout") or {})
     if atom == "summarize_pr_closeout":
         from lokay.proc.summarize_pr_closeout import summarize
 

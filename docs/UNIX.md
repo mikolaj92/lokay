@@ -54,10 +54,9 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-dispatch-triage` | run planned inbox triage children |
 | `lokay-resolve-conflicts` | close CONFLICTING/DIRTY AI PRs + re-ready |
 | `lokay-closeout-pr` | one open AI PR: checks → route → triage/repair/ci-waiting |
-| `lokay-closeout-prs` | for-each remaining AI PRs via lokay-closeout-pr |
+| `lokay-closeout-prs` | authored Fala slots: one `closeout_pr` child per repo |
 | `lokay-refresh-occupancy` | re-list PRs after closeout; union just-merged + live i2pr |
 | `lokay-reap-stale-worktrees` | drop leftover worktrees that cannot resume |
-| `lokay-dispatch-closeout` | thin bridge: resolve_conflicts then closeout_prs |
 | `lokay-select-implement` | clean repos eligible for issue_to_pr (skip occupied) |
 | `lokay-rebase-onto-base` | fetch + rebase onto origin/main; conflict = fail closed |
 | `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement (covering PR deterministic; rest one agent call) |
@@ -69,6 +68,8 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-select-repair-route` | compose moving + leftover/empty/stale/occupied/soft → factory or repair |
 | `lokay-record-inflight-remaining` | rewrite last-pass remaining from this cycle's working.json |
 | `lokay-factory-pass` / `lokay-factory-tick` | parent Fala `factory_pass` (one mill) |
+
+`lokay-dispatch-closeout` is gone. It was a Python bridge of `resolve_conflicts` then `closeout_prs`. Those remain separate CLI programs and authored Fala paths.
 | `lokay-mill` / `lokay-status` | continuous factory |
 | `lokay-wake` | event wake: reason → `issue_triage` / `pr_triage` / bounded `factory_pass` |
 | `lokay status --human` | residual human mailbox (exception report; not a mill brake) |

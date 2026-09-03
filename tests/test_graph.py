@@ -432,24 +432,45 @@ def test_leftover_closeout_path_is_a_handful_of_effectors():
     )
 
 
-def test_closeout_prs_path_is_a_handful_of_effectors():
+def test_closeout_prs_mermaid_owns_authored_slots():
+    mermaid = (Path(__file__).resolve().parents[1] / "README.md").read_text(
+        encoding="utf-8"
+    )
+    section = mermaid.split("### Domknięcie PR-ów")[1].split("### ")[0]
+    for name in (
+        "PrepareCloseout",
+        "SelectCloseoutSlot",
+        "RunCloseoutPR",
+        "RecordCloseoutSlot",
+        "ReduceCloseout",
+        "PersistCloseout",
+        "SummarizeCloseout",
+    ):
+        assert name in section
+    assert "CloseoutCatalog" not in section
+
+
+def test_closeout_prs_owns_authored_repo_slots():
     path = next(p for p in describe_package()["paths"] if p["id"] == "closeout_prs")
     ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_pr_closeout",
-        "closeout_catalog",
-        "persist_pr_closeout",
-        "summarize_pr_closeout",
+    assert ids[0] == "prepare_pr_closeout"
+    assert ids[-2] == "persist_pr_closeout"
+    assert ids[-1] == "summarize_pr_closeout"
+    assert "closeout_catalog" not in ids
+    assert [f"select_pr_closeout_slot_{n}" for n in range(1, 31)] == [
+        node for node in ids if node.startswith("select_pr_closeout_slot_")
     ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("select_pr_closeout_slot_")
-        or node["id"].startswith("run_pr_closeout_slot_")
-        or node["id"].startswith("record_pr_closeout_slot_")
-        or node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
+    assert [f"run_pr_closeout_slot_{n}" for n in range(1, 31)] == [
+        node for node in ids if node.startswith("run_pr_closeout_slot_")
+    ]
+    by_id = {node["id"]: node for node in path["nodes"]}
+    assert by_id["run_pr_closeout_slot_1"]["when"] == {
+        "upstream": "select_pr_closeout_slot_1",
+        "path": "route",
+        "equals": "closeout",
+    }
+    assert by_id["reduce_pr_closeout"]["conduction"][-1] == "record_pr_closeout_slot_30"
+    assert by_id["persist_pr_closeout"]["conduction"] == ["reduce_pr_closeout"]
 
 
 def test_factory_pass_issues_do_not_wait_on_cleanup():

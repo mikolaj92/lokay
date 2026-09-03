@@ -6,6 +6,14 @@ from lokay.proc.pass_lane import is_oil_repo, product_candidates, self_repo
 def select(prepared: dict, previous: dict, *, slot: int) -> dict:
     repos = list(prepared.get("repos") or [])
     budget = int(previous.get("repair_budget", prepared.get("repair_budget") or 0))
+    if previous.get("route") == "failed":
+        return {
+            "ok": True,
+            "route": "empty",
+            "reason": "upstream_failed",
+            "slot": slot,
+            "repair_budget": budget,
+        }
     if slot < 1 or slot > len(repos):
         return {"ok": True, "route": "empty", "slot": slot, "repair_budget": budget}
     repo = str(repos[slot - 1])

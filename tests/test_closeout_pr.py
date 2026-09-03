@@ -71,67 +71,61 @@ def test_checks_route_repairs_once():
     )
 
 
-def test_closeout_prs_subflow_uses_handful_of_ticks():
+def test_closeout_prs_subflow_has_slot_budget():
     import inspect
     from lokay.proc.closeout_prs_subflow import run
 
     source = inspect.getsource(run)
-    assert "max_ticks=16" in source
-    assert "max_ticks=512" not in source
+    assert "max_ticks=512" in source
 
 
-def test_closeout_catalog_fail_closed_when_prepare_failed():
-    from lokay.proc.closeout_catalog import run
-
-    out = run(
-        {"ok": False, "error": "PR closeout catalog exceeds authored slots"},
-        pass_dir="unused",
-        config_path=None,
-        live=True,
+def test_closeout_catalog_python_does_not_nest_children():
+    root = Path(__file__).resolve().parents[1]
+    assert not (root / "src" / "lokay" / "proc" / "closeout_catalog.py").exists()
+    src = (root / "src" / "lokay" / "proc" / "run_pr_closeout_slot.py").read_text(
+        encoding="utf-8"
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
-
-
-def test_closeout_catalog_overflow_is_fail_closed():
-    from lokay.proc.closeout_catalog import SLOTS, run
-
-    out = run(
-        {"ok": True, "repos": [f"o/r{i}" for i in range(SLOTS + 1)]},
-        pass_dir="unused",
-        config_path=None,
-        live=True,
+    assert "for slot in range" not in src
+    assert "while " not in src
+    organ = (root / "src" / "lokay" / "organ" / "pr_closeout_boundary.py").read_text(
+        encoding="utf-8"
     )
-    assert out["ok"] is False and "exceeds authored slots" in out["error"]
+    assert "for slot in range" not in organ
 
 
-def test_closeout_catalog_nested_failure_fails_closed(tmp_path, monkeypatch):
-    from lokay.passkit import io as pass_io
-    from lokay.proc.closeout_catalog import run
+def test_nested_closeout_failure_is_recorded_failed(monkeypatch):
+    from lokay.proc.record_pr_closeout_slot import record
 
-    monkeypatch.setattr(
-        "lokay.proc.closeout_pr_subflow.run",
-        lambda **_k: {"ok": False, "error": "closeout subflow failed"},
+    out = record(
+        {"route": "closeout", "slot": 1, "repo": "o/r"},
+        {"ok": False, "error": "closeout subflow failed"},
     )
-    path = tmp_path / "pass"
-    path.mkdir()
-    pass_io.write_json(pass_io.begin_path(path), {"repos": ["o/r"]})
-    pass_io.write_json(
-        pass_io.working_path(path),
-        {"actions": [], "prs_by_repo": {"o/r": [{"number": 7}]}},
+    assert out["ok"] is True
+    assert out["route"] == "failed"
+    assert out["error"] == "closeout subflow failed"
+
+    wrapped = record(
+        {"route": "closeout", "slot": 1, "repo": "o/r"},
+        {"ok": True, "result": {"ok": False, "error": "closeout subflow failed"}},
     )
-    out = run(
-        {
-            "ok": True,
-            "repos": ["o/r"],
-            "prs_by_repo": {"o/r": [{"number": 7}]},
-            "repair_budget": 1,
-            "policy": {},
-        },
-        pass_dir=str(path),
-        config_path=None,
-        live=True,
+    assert wrapped["route"] == "failed"
+
+    from lokay.proc.run_pr_closeout_slot import run as run_slot
+
+    empty = run_slot({"route": "empty", "slot": 2}, config_path=None, live=False)
+    assert empty == {"ok": True, "route": "empty", "slot": 2}
+
+
+def test_reduce_failed_slot_fails_closed():
+    from lokay.proc.reduce_pr_closeout import reduce_state
+
+    out = reduce_state(
+        prepared={"repair_budget": 1},
+        rows=[{"repo": "o/r", "route": "failed", "error": "closeout subflow failed"}],
+        working={"actions": [], "prs_by_repo": {"o/r": [{"number": 7}]}},
     )
-    assert out["ok"] is False and out["error"] == "closeout subflow failed"
+    assert out["ok"] is False
+    assert out["failures"]
 
 
 def test_closeout_catalog_overflow_fails_closed(tmp_path):
@@ -166,6 +160,26 @@ def test_oil_closeout_empty_when_product_queue():
     assert product["route"] == "closeout" and product["repo"] == "a/product"
 
 
+def test_select_stops_after_nested_failure():
+    from lokay.proc.select_pr_closeout_slot import select
+
+    prepared = {
+        "repos": ["o/r", "a/b"],
+        "prs_by_repo": {
+            "o/r": [{"number": 1}],
+            "a/b": [{"number": 2}],
+        },
+        "repair_budget": 1,
+    }
+    out = select(
+        prepared,
+        {"ok": True, "route": "failed", "error": "closeout subflow failed", "repair_budget": 1},
+        slot=2,
+    )
+    assert out["route"] == "empty"
+    assert out["reason"] == "upstream_failed"
+
+
 def test_one_open_pr_invariant_fails_closed():
     from lokay.proc.select_pr_closeout_slot import select
 
@@ -195,3 +209,36 @@ def test_cli_surface_remains_wired():
     root = Path(__file__).resolve().parents[1]
     text = (root / "pyproject.toml").read_text()
     assert "lokay-closeout-pr" in text and "lokay-closeout-prs" in text
+    assert "lokay-dispatch-closeout" not in text
+    assert not (root / "src" / "lokay" / "proc" / "dispatch_closeout.py").exists()
+
+
+def test_recovery_mill_is_cli_wiring_not_a_hidden_loop():
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "proc"
+        / "recovery_mill.py"
+    ).read_text(encoding="utf-8")
+    assert "compose_mill" in src
+    assert "while " not in src
+    mill = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "lokay"
+        / "compose"
+        / "mill.py"
+    ).read_text(encoding="utf-8")
+    assert "product_entry_subflow" in mill
+    assert "while True" not in mill
+
+
+def test_leftover_catalog_stays_one_in_process_atom():
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "fala"
+        / "lokay.fala-package.toml"
+    ).read_text(encoding="utf-8")
+    assert 'id = "leftover_catalog"' in path
+    assert 'id = "closeout_catalog"' not in path

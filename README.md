@@ -743,18 +743,23 @@ psuje passu. Nie ma 30-slotowego katalogu ani leftover overflow.
 ```mermaid
 stateDiagram-v2
     [*] --> PrepareCloseout
-    PrepareCloseout --> CloseoutCatalog
-    CloseoutCatalog --> PersistCloseout
+    PrepareCloseout --> SelectCloseoutSlot
+    SelectCloseoutSlot --> RunCloseoutPR: closeout
+    SelectCloseoutSlot --> RecordCloseoutSlot: empty / needs_human
+    RunCloseoutPR --> RecordCloseoutSlot
+    RecordCloseoutSlot --> SelectCloseoutSlot: następny jawny slot
+    RecordCloseoutSlot --> ReduceCloseout: ostatni slot
+    ReduceCloseout --> PersistCloseout
     PersistCloseout --> SummarizeCloseout
     SummarizeCloseout --> CloseoutResult
     CloseoutResult --> [*]
 ```
 
-Rodzic ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
-w procesie wybiera najwyżej jeden AI PR na repo i uruchamia pod-Falę
-`closeout_pr`, persist oraz summarize. Nie ma 30-slotowego rozwinięcia Fali.
-Overflow katalogu i naruszenie inwariantu jednego otwartego AI PR na repo są
-fail-closed. Wspólny budżet napraw zostaje seryjny między repozytoriami.
+Fala rozwija jawne sloty repozytoriów. Każdy slot wybiera najwyżej jeden
+AI PR i gnieździ pod-Falę `closeout_pr`. Python nie prowadzi pętli i nie
+uruchamia dzieci. Overflow katalogu i naruszenie inwariantu jednego otwartego
+AI PR na repo są fail-closed. Wspólny budżet napraw zostaje seryjny między
+repozytoriami.
 
 ```mermaid
 stateDiagram-v2
@@ -1465,7 +1470,7 @@ kontraktu. Aktualny audyt:
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
 | `LeftoverCloseout` | `leftover_closeout` | jeden atom katalogu: CLOSED ready labels |
-| `CloseoutPRs` | `closeout_prs` | jeden atom katalogu: PR-y przez pod-Falę jednego PR |
+| `CloseoutPRs` | `closeout_prs` | authored repo slots, one `closeout_pr` child per slot, persist |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja i usuwanie bezpiecznie starych worktree |

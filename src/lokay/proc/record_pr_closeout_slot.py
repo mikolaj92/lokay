@@ -2,13 +2,18 @@
 
 
 def record(selected: dict, nested: dict) -> dict:
+    slot = selected.get("slot")
+    repo = selected.get("repo")
     if selected.get("route") != "closeout":
-        return selected
-    if not nested.get("ok"):
+        return {**selected, "ok": True}
+    inner = nested.get("result") if isinstance(nested.get("result"), dict) else nested
+    failed = inner if inner.get("ok") is False else nested if nested.get("ok") is False else None
+    if failed is not None:
         return {
             **selected,
+            "ok": True,
             "route": "failed",
-            "error": nested.get("error") or "closeout subflow failed",
+            "error": failed.get("error") or "closeout subflow failed",
         }
-    out = dict(nested.get("result") or nested)
-    return {**out, "slot": selected.get("slot"), "repo": selected.get("repo")}
+    out = dict(inner.get("result") or inner)
+    return {**out, "ok": True, "slot": slot, "repo": repo}

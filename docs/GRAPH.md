@@ -161,6 +161,31 @@ call `graph_run.run_path`; it must not re-implement fleet scheduling. Do not
 grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
 
+
+### `closeout_prs` (catalog AI PR closeout)
+
+Authored repository slots. Each slot selects at most one open AI PR and
+nests child Fala `closeout_pr`. Python does not loop and does not launch
+children. Overflow and multiple-open-AI-PR are fail-closed. Serial repair
+budget is carried across slots.
+
+```text
+prepare_pr_closeout
+  → select_pr_closeout_slot_N
+    → run_pr_closeout_slot_N     when route=closeout
+      → record_pr_closeout_slot_N
+        → reduce_pr_closeout
+          → persist_pr_closeout
+            → summarize_pr_closeout
+```
+
+`lokay-dispatch-closeout` is removed. `closeout_prs` is its own authored
+path. Parent `factory_pass` conducts five departments and does not hide
+closeout order in Python. `recovery_mill` is CLI wiring into one
+`product_entry` child, not a hidden multi-pass loop. `leftover_catalog`
+stays one in-process catalog atom: park CLOSED-ready labels, not AI-PR
+closeout order.
+
 ### `pr_triage_department` (PR sieve)
 
 Two small blocks plus graph. List, checks, review, feedback, merge-commit.
