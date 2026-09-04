@@ -1,4 +1,4 @@
-"""find_pr_fixing_issue on this mill paginates only mikolaj92/lokay."""
+"""find_pr_fixing_issue on this lokay paginates only mikolaj92/lokay."""
 
 from __future__ import annotations
 

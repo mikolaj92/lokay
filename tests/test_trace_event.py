@@ -1,4 +1,4 @@
-"""Hermetic tests for lokay-trace-event (one JSONL mill-step line)."""
+"""Hermetic tests for lokay-trace-event (one JSONL lokay-step line)."""
 
 from __future__ import annotations
 

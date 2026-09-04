@@ -13,7 +13,7 @@ from lokay.proc import daemon
 
 
 def _script() -> Path:
-    return Path(__file__).parents[1] / "scripts" / "lokay-mill-daemon.sh"
+    return Path(__file__).parents[1] / "scripts" / "lokay-service.sh"
 
 
 def test_daemon_is_os_only():
@@ -24,11 +24,11 @@ def test_daemon_is_os_only():
     assert "import plistlib" not in script
     assert "uv run lokay-host-ff" not in script
     assert "uv run lokay-repos" not in script
-    assert "uv run lokay-mill" not in script
+    assert "uv run lokay-work" not in script
     assert "preflight-bootstrap-incidents.log" in script
     assert 'export PYTHONPATH="${ROOT}/src' in script
-    assert "mill_lock_busy" not in script
-    assert "LOKAY_MILL_LOCK" not in script
+    assert "lokay_lock_busy" not in script
+    assert "LOKAY_LOCK" not in script
     assert "uv run lokay-daemon" in script
     assert "LOKAY_PASS_CEILING_SECONDS" in script
     assert "stop_lock_owner" in script
@@ -120,7 +120,7 @@ def test_daemon_always_execs_lokay_daemon(tmp_path):
     calls = (tmp_path / "uv-argv.log").read_text(encoding="utf-8").splitlines()
     assert any("lokay-daemon" in line for line in calls)
     assert all("lokay-host-ff" not in line for line in calls)
-    logs = list((tmp_path / ".lokay" / "logs").glob("mill-*.log"))
+    logs = list((tmp_path / ".lokay" / "logs").glob("lokay-*.log"))
     assert logs
     body = "\n".join(path.read_text(encoding="utf-8") for path in logs)
     assert "progress" in body
@@ -151,7 +151,7 @@ def test_busy_lock_skips_daemon(tmp_path):
 
     lokay = tmp_path / ".lokay"
     lokay.mkdir()
-    lock = lokay / "mill.lock"
+    lock = lokay / "lokay.lock"
     handle = lock.open("a+", encoding="utf-8")
     fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     try:
@@ -202,7 +202,7 @@ def test_latest_log_is_current_before_daemon_finishes(tmp_path):
 
     logs = tmp_path / ".lokay" / "logs"
     logs.mkdir(parents=True)
-    latest = logs / "mill-latest.log"
+    latest = logs / "lokay-latest.log"
     latest.write_text('{"health":"pass_ceiling"}\n', encoding="utf-8")
     marker = tmp_path / "daemon-started"
     gate = tmp_path / "daemon-finish"
@@ -323,7 +323,7 @@ def test_process_exit_zero_when_pass_did_work():
         process_exit_code({"ok": False, "remaining": {"issue_to_pr_started": 1}}) == 0
     )
     assert (
-        process_exit_code({"ok": False, "mill": {"health": "progress", "progress": 1}})
+        process_exit_code({"ok": False, "lokay": {"health": "progress", "progress": 1}})
         == 0
     )
     assert process_exit_code({"ok": False, "health": "stall"}) == 1
@@ -365,7 +365,7 @@ def test_finalize_daemon_payload_lifts_progress_and_drops_fala():
             "ok": False,
             "error": "soft recovery",
             "fala": {"host": "x" * 1000, "processes": []},
-            "mill": {
+            "lokay": {
                 "health": "progress",
                 "progress": 3,
                 "remaining": {"issue_to_pr_started": 1},
@@ -570,7 +570,7 @@ def test_daemon_progress_despite_fala_ok_false_exits_zero(
 
 
 def test_os_pass_ceiling_kills_lock_owner_not_detached_worker(tmp_path):
-    """Caretaker SIGTERM is the mill.lock release. Nested Fala SIGALRM is not."""
+    """Caretaker SIGTERM is the lokay.lock release. Nested Fala SIGALRM is not."""
     import time
 
     extra = {
@@ -591,7 +591,7 @@ def test_os_pass_ceiling_kills_lock_owner_not_detached_worker(tmp_path):
         "ceiling_waiting_external",
         "ceiling_stalled",
     }
-    latest = (tmp_path / ".lokay" / "logs" / "mill-latest.log").read_text(encoding="utf-8")
+    latest = (tmp_path / ".lokay" / "logs" / "lokay-latest.log").read_text(encoding="utf-8")
     assert "pass_ceiling" in latest
     assert (tmp_path / "daemon-started").exists()
 
@@ -680,8 +680,8 @@ def test_shell_ceiling_receipt_uses_configured_state_path(tmp_path):
 
 def test_caretaker_delegates_singleton_lock_to_config_aware_daemon():
     script = _script().read_text(encoding="utf-8")
-    assert "mill_lock_busy" not in script
-    assert "LOKAY_MILL_LOCK" not in script
+    assert "lokay_lock_busy" not in script
+    assert "LOKAY_LOCK" not in script
 
 
 def test_caretaker_uses_uv_managed_python_only():

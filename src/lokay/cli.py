@@ -6,7 +6,7 @@ import sys
 
 from lokay import __version__
 from lokay.compose.issue_to_pr import compose_issue_to_pr
-from lokay.compose.mill import compose_mill
+from lokay.compose.run import compose_run
 from lokay.compose.status import compose_status
 from lokay.compose.tick import compose_tick
 from lokay.config import load_config, starter_config_text
@@ -35,14 +35,14 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_validate(args: argparse.Namespace) -> int:
     cfg = load_config(args.config)
     errors = cfg.validate()
-    mill_repos = list(cfg.repos)
+    factory_repos = list(cfg.repos)
     _print(
         {
             "config": str(cfg.config_path),
             "mode": cfg.mode,
-            "repos": [repo.name for repo in mill_repos if repo.enabled],
-            "repos_disabled": [repo.name for repo in mill_repos if not repo.enabled],
-            "repos_total": len(mill_repos),
+            "repos": [repo.name for repo in factory_repos if repo.enabled],
+            "repos_disabled": [repo.name for repo in factory_repos if not repo.enabled],
+            "repos_total": len(factory_repos),
             "executor": cfg.agent_command,
             "executor_enabled": cfg.executor_enabled,
             "ok": not errors,
@@ -59,8 +59,8 @@ def cmd_tick(args: argparse.Namespace) -> int:
     return 0 if payload.get("ok") else 1
 
 
-def cmd_mill(args: argparse.Namespace) -> int:
-    payload = compose_mill(
+def cmd_work(args: argparse.Namespace) -> int:
+    payload = compose_run(
         config_path=args.config,
         live=bool(args.live),
         max_passes=int(args.max_passes),
@@ -138,16 +138,16 @@ def build_parser() -> argparse.ArgumentParser:
     add_config(val)
     val.set_defaults(func=cmd_validate)
 
-    t = sub.add_parser("tick", help="Composer: survey + optional live mill pass")
+    t = sub.add_parser("tick", help="Composer: survey + optional live lokay pass")
     add_config(t)
     t.add_argument("--live", action="store_true")
     t.set_defaults(func=cmd_tick)
 
-    m = sub.add_parser("mill", help="Composer: tick until idle or max passes")
+    m = sub.add_parser("work", help="Run passes until idle or max passes")
     add_config(m)
     m.add_argument("--live", action="store_true")
     m.add_argument("--max-passes", type=int, default=8)
-    m.set_defaults(func=cmd_mill)
+    m.set_defaults(func=cmd_work)
 
     st = sub.add_parser("status", help="DoD readiness + remaining work (read-only)")
     add_config(st)
@@ -167,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     st_mode.add_argument(
         "--human",
         action="store_true",
-        help="residual human mailbox (needs-feedback / needs-review); mill is not stuck",
+        help="residual human mailbox (needs-feedback / needs-review); lokay is not stuck",
     )
     st.add_argument(
         "--preflight",

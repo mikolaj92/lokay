@@ -248,11 +248,11 @@ class AzurePr:
             base_url=base_url,
         )
         self._listed: dict[int, Change] = {}
-        self._mill: list[dict[str, Any]] = []
+        self._lokay: list[dict[str, Any]] = []
 
-    def mill_dicts(self) -> list[dict[str, Any]]:
+    def lokay_dicts(self) -> list[dict[str, Any]]:
         """Envelope rows for today's list_prs atom."""
-        return [dict(row) for row in self._mill]
+        return [dict(row) for row in self._lokay]
 
     def _payload_change(
         self,
@@ -273,7 +273,7 @@ class AzurePr:
             checks_status=checks_status,
         )
 
-    def _mill_row(self, payload: dict[str, Any], change: Change) -> dict[str, Any]:
+    def _lokay_row(self, payload: dict[str, Any], change: Change) -> dict[str, Any]:
         created = payload.get("createdBy")
         author = ""
         if isinstance(created, dict):
@@ -329,7 +329,7 @@ class AzurePr:
         if status >= 400:
             self._client.raise_for(status, payload, action="list")
         rows: list[Change] = []
-        mill: list[dict[str, Any]] = []
+        lokay: list[dict[str, Any]] = []
         listed: dict[int, Change] = {}
         for raw in list((payload or {}).get("value") or []):
             if not isinstance(raw, dict):
@@ -339,9 +339,9 @@ class AzurePr:
                 continue
             listed[change.number] = change
             rows.append(change)
-            mill.append(self._mill_row(raw, change))
+            lokay.append(self._lokay_row(raw, change))
         self._listed = listed
-        self._mill = mill
+        self._lokay = lokay
         return rows
 
     def get(self, number: int) -> Change:

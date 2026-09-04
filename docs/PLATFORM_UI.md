@@ -1,6 +1,6 @@
 # Platform UI stack (binding)
 
-Lokay is a **CLI mill with a local read-only FastAPI status host**. The status
+Lokay is a **CLI lokay with a local read-only FastAPI status host**. The status
 host installs app-factory with `install_platform`, extends
 `app_factory/product_shell.html`, and serves the platform bundle from the
 same-origin `/static/platform` mount. It has no login, account, or admin

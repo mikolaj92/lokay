@@ -8,10 +8,10 @@ def test_product_entry_classifier_is_closed():
     assert classify({"ok": False})["route"] == "terminal"
 
 
-def test_compose_mill_routing_is_delegated_to_authored_entry():
+def test_compose_run_routing_is_delegated_to_authored_entry():
     import inspect
 
-    from lokay.compose.mill import _compose_mill
+    from lokay.compose.run import _compose_run
 
-    source = inspect.getsource(_compose_mill)
+    source = inspect.getsource(_compose_run)
     assert "preflight.get" not in source and "product_pass_budget_subflow" not in source

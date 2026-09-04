@@ -1,7 +1,7 @@
 # Audyt granic Python/Unix i spaghetti
 
-**Tryb:** tylko odczyt. **Repo:** `/Users/mini-m4-main/Developer/OSS/lokay`.  
-**Zakres:** `src/lokay/proc`, `compose`, `organ`, `graph_run`, `passkit`, `scripts`, `[project.scripts]`; w tym bieżąca naprawa health lease.  
+**Tryb:** tylko odczyt. **Repo:** `/Users/mini-m4-0/Developer/OSS/lokay`.
+**Zakres:** `src/lokay/proc`, `compose`, `organ`, `graph_run`, `passkit`, `scripts`, `[project.scripts]`; w tym bieżąca naprawa health lease.
 **Stan drzewa:** niezacommitowane zmiany w `src/lokay/preflight.py`, `src/lokay/proc/read_status_lease.py`, `tests/test_preflight.py`, `tests/test_status.py`, `uv.lock`.
 
 ## Podsumowanie
@@ -11,12 +11,12 @@ Znalazłem **8 potwierdzonych problemów**: 3 wysokie, 4 średnie i 1 niski. Naj
 ## Mapa odpowiedzialności
 
 - `fala/lokay.fala-package.toml`: kolejność produktu i recovery.
-- `src/lokay/compose/*`: wejścia ścieżek/top-level mill; zasadniczo walidacja CLI i uruchomienie Fala/subflow.
+- `src/lokay/compose/*`: wejścia ścieżek/top-level lokay; zasadniczo walidacja CLI i uruchomienie Fala/subflow.
 - `src/lokay/graph_run.py`: wybór/materializacja pakietu, izolacja journalu, uruchomienie hosta i normalizacja wyników.
 - `src/lokay/fala_organ.py` + `src/lokay/organ/*`: dispatcher/binding effectorów do atomów.
 - `src/lokay/proc/*`: atomy Unix i część domenowych reduktorów.
 - `src/lokay/passkit/*`: współdzielone IO/working/health/support passu.
-- `scripts/lokay-mill-daemon.sh`: OS caretaker LaunchAgent.
+- `scripts/lokay-service.sh`: OS caretaker LaunchAgent.
 - `[project.scripts]`: 108 publicznych CLI, głównie bezpośrednio do `proc`, wybrane wejścia do `compose`.
 
 # Potwierdzone problemy
@@ -44,9 +44,9 @@ Znalazłem **8 potwierdzonych problemów**: 3 wysokie, 4 średnie i 1 niski. Naj
 - **Dowód:** przy braku tokenu launcher produktu sam wywołuje `issue_health_lease()` (`issue_delivery_launch.py:47-53`). Issuer zapisuje lease bez uprzedniego dowodu, że caller posiada dokładny configured lock (`preflight.py:257-340`). Validator dodatkowo uznaje lock za held, gdy `owner_pid == os.getpid()` (`407-410`). Restore ponownie wywołuje ten sam ogólny issuer (`restore_factory_lease.py:6-10`).
 - **Naruszony kontrakt/granica:** daemon ma posiadać singleton lock, health lease i initial carrier preflight (`docs/GRAPH.md:25-27`); product delivery ma konsumować delegowaną capability, nie wydawać ją sobie.
 - **Konsekwencja:** standalone/fallback product process może stworzyć własny lease; owner-is-self osłabia dowód fizycznego locka. Granica „live mutation tylko po healthy preflight” jest słabsza niż opisany model.
-- **Najmniejsza poprawka:** mintowanie dopuścić tylko w wrapperze, który udowodni posiadanie dokładnego configured locka (`lokay-daemon`/direct mill). `issue_delivery_launch` ma fail-closed bez poprawnej odziedziczonej capability. Restore tylko dla tego samego tokenu i przy jawnym dowodzie delegacji; usunąć ogólne owner-is-self obejście.
+- **Najmniejsza poprawka:** mintowanie dopuścić tylko w wrapperze, który udowodni posiadanie dokładnego configured locka (`lokay-daemon`/direct lokay). `issue_delivery_launch` ma fail-closed bez poprawnej odziedziczonej capability. Restore tylko dla tego samego tokenu i przy jawnym dowodzie delegacji; usunąć ogólne owner-is-self obejście.
 
-## P4 — MEDIUM — atom nazwany read-only może utworzyć `mill.lock` i duplikuje walidację lease
+## P4 — MEDIUM — atom nazwany read-only może utworzyć `lokay.lock` i duplikuje walidację lease
 
 - **Pliki/linie:** `src/lokay/proc/read_status_lease.py:14-24,27-46`; istniejący validator: `src/lokay/preflight.py:360-434`; kontrakt statusu: `README.md:448-452`.
 - **Dowód:** `_lock_is_held()` otwiera `path.open("a+")` (`14-15`), co tworzy brakujący plik. Nowy kod powtarza część flock/liveness/schema z `health_lease_status`, ale z innymi kontrolami.
@@ -64,7 +64,7 @@ Znalazłem **8 potwierdzonych problemów**: 3 wysokie, 4 średnie i 1 niski. Naj
 
 ## P6 — MEDIUM — produktowy caretaker uruchamia bare `python3`
 
-- **Pliki/linie:** `scripts/lokay-mill-daemon.sh:35-47`, `108-130`, `133-196`, dokładnie wywołania w `38`, `111`, `137`.
+- **Pliki/linie:** `scripts/lokay-service.sh:35-47`, `108-130`, `133-196`, dokładnie wywołania w `38`, `111`, `137`.
 - **Dowód:** trzy heredoc-y używają `python3 -`. Skrypt jest produktowym wrapperem LaunchAgent (`README.md:1459`).
 - **Naruszony kontrakt/granica:** jawny hard ban: „No bare `python3` for product CLI — use `uv run`” (`AGENTS.md:59`); `docs/UNIX.md:20-21`.
 - **Konsekwencja:** caretaker omija przypięte środowisko. Brak/inny systemowy Python może błędnie rozpoznać lock (`38 ... || return 1`), cicho nie zapisać receipt (`111 ... || true`) albo nie zatrzymać ownera (`137 ... || true`).
@@ -73,9 +73,9 @@ Znalazłem **8 potwierdzonych problemów**: 3 wysokie, 4 średnie i 1 niski. Naj
 
 ## P7 — MEDIUM — wybór ścieżki per-run lease jest potrojony, a ogólny preflight może zostawić env po wyjątku
 
-- **Pliki/linie:** `src/lokay/proc/daemon.py:32-35,51-52`; `src/lokay/compose/mill.py:28-46,71-77`; niezacommitowane `src/lokay/preflight.py:1171-1177`.
-- **Dowód:** ścieżkę `LOKAY_HEALTH_LEASE_PATH` wybierają daemon, direct mill i teraz także ogólne `run_preflight`. Nowa gałąź ustawia env przed `issue_health_lease()` i nie cofa go, jeśli issuer rzuci; cleanup mają wrappery, nie funkcja ogólna.
-- **Naruszony kontrakt/granica:** lifecycle capability powinien mieć jednego właściciela; preflight nie powinien przejmować części ownership daemon/mill (`docs/GRAPH.md:25-27`).
+- **Pliki/linie:** `src/lokay/proc/daemon.py:32-35,51-52`; `src/lokay/compose/run.py:28-46,71-77`; niezacommitowane `src/lokay/preflight.py:1171-1177`.
+- **Dowód:** ścieżkę `LOKAY_HEALTH_LEASE_PATH` wybierają daemon, direct lokay i teraz także ogólne `run_preflight`. Nowa gałąź ustawia env przed `issue_health_lease()` i nie cofa go, jeśli issuer rzuci; cleanup mają wrappery, nie funkcja ogólna.
+- **Naruszony kontrakt/granica:** lifecycle capability powinien mieć jednego właściciela; preflight nie powinien przejmować części ownership daemon/lokay (`docs/GRAPH.md:25-27`).
 - **Konsekwencja:** po błędzie proces bibliotecznego callera może odziedziczyć martwą lokalizację lease; kolejne próby użyją złej ścieżki. Ownership preflight/lease jest niejawny.
 - **Najmniejsza poprawka:** ścieżkę wybiera wyłącznie wrapper lifecycle; przekazać ją jawnie do preflight/issuer. Alternatywnie atomowo ustawiać env i cofać je przy każdym nieudanym issue.
 

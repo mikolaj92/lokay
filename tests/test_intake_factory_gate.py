@@ -1,4 +1,4 @@
-"""Mill must not call issue_to_pr when intake rejects a ready issue."""
+"""Lokay must not call issue_to_pr when intake rejects a ready issue."""
 
 from __future__ import annotations
 

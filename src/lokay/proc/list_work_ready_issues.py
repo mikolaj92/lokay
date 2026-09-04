@@ -1,4 +1,4 @@
-"""List open catalog issues for one repository. Mill labels are not a gate."""
+"""List open catalog issues for one repository. Lokay labels are not a gate."""
 
 from lokay.passkit.support import run_proc
 from lokay.proc import list_issues

@@ -43,17 +43,17 @@ def test_recent_empty_stamp_skips_ready_catalog(tmp_path: Path) -> None:
     assert out["route"] == "skip" and out["repos"] == []
 
 
-def test_pytest_does_not_skip_github_surveys_using_the_mill_stamp(
+def test_pytest_does_not_skip_github_surveys_using_the_lokay_stamp(
     tmp_path: Path, monkeypatch
 ) -> None:
-    mill = tmp_path / ".lokay"
-    mill.mkdir()
-    stamp = mill / "factory-survey.stamp"
+    lokay = tmp_path / ".lokay"
+    lokay.mkdir()
+    stamp = lokay / "factory-survey.stamp"
     stamp.write_text("1", encoding="utf-8")
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv(
         "PYTEST_CURRENT_TEST",
-        "test_pytest_does_not_skip_github_surveys_using_the_mill_stamp",
+        "test_pytest_does_not_skip_github_surveys_using_the_lokay_stamp",
     )
     assert survey_ttl.survey_recently_empty(stamp) is False
     assert (
@@ -74,7 +74,7 @@ def test_pytest_does_not_skip_github_surveys_using_the_mill_stamp(
     src = (
         Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "survey_ttl.py"
     )
-    assert "Pytest must not skip GitHub surveys using the mill stamp." in src.read_text(
+    assert "Pytest must not skip GitHub surveys using the lokay stamp." in src.read_text(
         encoding="utf-8"
     )
 
@@ -243,7 +243,7 @@ def _gh_ok(stdout: str):
     return type("R", (), {"returncode": 0, "stdout": stdout, "stderr": ""})()
 
 
-def test_mill_survey_probe_empty_is_true() -> None:
+def test_lokay_survey_probe_empty_is_true() -> None:
     calls: list[str] = []
 
     def fake_run(argv, **_k):
@@ -251,25 +251,25 @@ def test_mill_survey_probe_empty_is_true() -> None:
         return _gh_ok("[]")
 
     assert (
-        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
+        survey_ttl.lokay_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
     )
     assert len(calls) == 2
     assert all("--label" not in call for call in calls)
 
 
-def test_mill_survey_probe_open_issue_is_false() -> None:
+def test_lokay_survey_probe_open_issue_is_false() -> None:
     def fake_run(argv, **_k):
         if "issue" in argv:
             return _gh_ok('[{"number": 12, "state": "OPEN", "labels": []}]')
         return _gh_ok("[]")
 
     assert (
-        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run)
+        survey_ttl.lokay_survey_still_empty(repo="mikolaj92/lokay", run=fake_run)
         is False
     )
 
 
-def test_mill_survey_probe_human_stops_are_empty() -> None:
+def test_lokay_survey_probe_human_stops_are_empty() -> None:
     def fake_run(argv, **_k):
         if "issue" in argv:
             return _gh_ok(
@@ -280,16 +280,16 @@ def test_mill_survey_probe_human_stops_are_empty() -> None:
         return _gh_ok("[]")
 
     assert (
-        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
+        survey_ttl.lokay_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is True
     )
 
 
-def test_mill_survey_probe_failure_is_none() -> None:
+def test_lokay_survey_probe_failure_is_none() -> None:
     def fake_run(argv, **_k):
         return type("R", (), {"returncode": 1, "stdout": "", "stderr": "boom"})()
 
     assert (
-        survey_ttl.mill_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is None
+        survey_ttl.lokay_survey_still_empty(repo="mikolaj92/lokay", run=fake_run) is None
     )
 
 
@@ -330,7 +330,7 @@ def test_live_daemon_cycle_always_hosts_authored_fala(monkeypatch, tmp_path):
     from lokay.compose import daemon_cycle as daemon_mod
 
     called = []
-    monkeypatch.setattr(daemon_mod, "maintain_mill_fala_journals", lambda: {"ok": True})
+    monkeypatch.setattr(daemon_mod, "maintain_lokay_fala_journals", lambda: {"ok": True})
     monkeypatch.setattr(
         daemon_mod, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml"
     )

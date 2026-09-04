@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from lokay.passkit import io as pass_io
-from lokay.passkit.health import evaluate_mill_stop
+from lokay.passkit.health import evaluate_lokay_stop
 from lokay.preflight import (
     acquire_run_lock,
     has_health_lease,
@@ -29,7 +29,7 @@ from lokay.recovery_history import observe_run, record_observation
 
 def _parent_capability(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    lock = tmp_path / ".lokay" / "mill.lock"
+    lock = tmp_path / ".lokay" / "lokay.lock"
     assert acquire_run_lock(lock)
     issue_health_lease(lock_path=lock)
     return os.environ["LOKAY_HEALTH_LEASE"], os.environ["LOKAY_HEALTH_LEASE_PATH"]
@@ -38,7 +38,7 @@ def _parent_capability(tmp_path, monkeypatch):
 def test_missing_lease_file_with_inherited_token_allows_mutate(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "b" * 64)
-    assert acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    assert acquire_run_lock(tmp_path / ".lokay" / "lokay.lock")
     assert has_health_lease() is False
     require_healthy("config.yaml")
     assert has_health_lease() is True
@@ -51,7 +51,7 @@ def test_lease_unavailable_is_not_stall_fingerprint(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={
+        lokay={
             "ok": False,
             "health": "stall",
             "error": "preflight failed; live mutation blocked (lease=lease_unavailable_FileNotFoundError)",
@@ -70,10 +70,10 @@ def test_plateau_does_not_confirm_stall(tmp_path):
         obs = observe_run(
             state_path=state,
             state_offset=0,
-            mill={
+            lokay={
                 "ok": False,
                 "health": "plateau",
-                "error": "mill plateau",
+                "error": "lokay plateau",
                 "progress": 8,
             },
         )
@@ -148,8 +148,8 @@ def test_detach_forwards_lease_path_for_fala_inherit(tmp_path, monkeypatch):
     assert os.environ["LOKAY_HEALTH_LEASE"] == parent_token
 
 
-def test_evaluate_mill_stop_host_updated_is_soft_stop():
-    decision = evaluate_mill_stop(
+def test_evaluate_lokay_stop_host_updated_is_soft_stop():
+    decision = evaluate_lokay_stop(
         {"ok": False, "health": "host_updated", "reason": "host_updated", "progress": 0}
     )
     assert decision["stop"] is True
@@ -163,7 +163,7 @@ def test_host_updated_is_not_stall_fingerprint(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={
+        lokay={
             "ok": False,
             "health": "host_updated",
             "reason": "host_updated",
@@ -174,8 +174,8 @@ def test_host_updated_is_not_stall_fingerprint(tmp_path):
     assert row["fingerprint"] is None
 
 
-def test_evaluate_mill_stop_plateau_is_not_progress_continue():
-    decision = evaluate_mill_stop({"ok": True, "health": "plateau", "progress": 4})
+def test_evaluate_lokay_stop_plateau_is_not_progress_continue():
+    decision = evaluate_lokay_stop({"ok": True, "health": "plateau", "progress": 4})
     assert decision["stop"] is True
     assert decision["health"] == "plateau"
 

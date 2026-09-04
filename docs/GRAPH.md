@@ -14,13 +14,13 @@ last_pass_moving
   → select_repair_route
     → recovery_incident (when last receipt did not move: no new PR and no merge)
       → recovery_run_self_repair (self_repair child Fala; skipped otherwise)
-  → recovery_mill (always: one factory_pass; leftover skip never starts repair)
+  → recovery_factory (always: one factory_pass; leftover skip never starts repair)
 ```
 
-The moving gate is one leaf. Repair is its own child graph. `recovery_mill`
+The moving gate is one leaf. Repair is its own child graph. `recovery_factory`
 is one parent `factory_pass` — it does not classify, repair, activate, or
 host `product_entry` / `product_pass_budget`. LaunchAgent already re-invokes
-the mill; a 180s tick must not stack eight factory slots. `product_entry`
+the lokay; a 180s tick must not stack eight factory slots. `product_entry`
 stays the CLI multi-pass wrapper. Moving
 forward is only a new PR or a merge on the last receipt. Leftover skip,
 empty survey, and a stale receipt do not count as “not moving” and do not
@@ -34,23 +34,23 @@ LaunchAgent shell cannot decide that a tick does not run. A fresh empty-survey
 stamp still hosts Fala and exits the authored idle route. Missing stamp hosts
 the rest of the pass. Leftover closeout remains the authored
 `leftover_closeout` path after a hosted product pass — not a bash skip.
-Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
-Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues.
-Harvest leftovers are not mill issues. Idle CLASSIFY_CAP reaps empty
-no-issue leftovers so harvest leftovers cannot freeze mill porcelain.
+Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve lokay issues.
+Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve lokay issues.
+Harvest leftovers are not lokay issues. Idle CLASSIFY_CAP reaps empty
+no-issue leftovers so harvest leftovers cannot freeze lokay porcelain.
 Idle KEEP-only leftovers still write the over-cap stamp.
 Idle worktree removal requires healthy. Classification and KEEP stamping do not. Hosted worktree removal also requires healthy; hosted KEEP classification does not.
 Idle over-cap skip outlives leftover-probe.
-Nested clones are not mill leftover
-worktrees. Mill worktrees keep a .git file.
+Nested clones are not lokay leftover
+worktrees. Lokay worktrees keep a .git file.
 `uv.lock`-only is not real uncommitted content. After the
-stamp expires, the authored idle atom cheap-probes mill PR and open-issue
+stamp expires, the authored idle atom cheap-probes lokay PR and open-issue
 lists. An empty probe refreshes the stamp and exits idle inside Fala. Probe
 failure or remaining work hosts the rest of `factory_pass`. Missing stamp,
-occupied last-pass, or pytest always hosts. `scripts/lokay-mill-daemon.sh`
+occupied last-pass, or pytest always hosts. `scripts/lokay-service.sh`
 is OS only: lock, exec `lokay-daemon`, logs, bootstrap incident if exec
 fails. It bounds the lock-owning `lokay-daemon` wait (default 180s) and
-signals only that session so nested Fala cannot hold `mill.lock` past the
+signals only that session so nested Fala cannot hold `lokay.lock` past the
 pass ceiling. Detached `issue_to_pr` sessions are not signalled. Inner
 `compose_daemon_cycle` SIGALRM is not the lock release: native
 `host_run_package` swallows it. The caretaker may write a small
@@ -65,7 +65,7 @@ atom after idle classify routes `host`.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
 durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not
-inherit that cwd or they emit empty `adapter_failed` and starve the mill.
+inherit that cwd or they emit empty `adapter_failed` and starve the lokay.
 A classified `ok=true` organ row with agent transport `status=failed` is a
 fallback fact (`organ_envelope`), not `adapter_failed`.
 
@@ -73,7 +73,7 @@ fallback fact (`organ_envelope`), not `adapter_failed`.
 whether the last receipt published a new PR or merged. `select_repair_route`
 composes that leaf with leftover skip (`leftover_overflow`, 200>30), empty
 survey, stale / missing receipt, occupied / in-flight `issue_to_pr`, and
-soft mill health (`waiting`, `repairing`, `idle`, `progress`, `offline`,
+soft lokay health (`waiting`, `repairing`, `idle`, `progress`, `offline`,
 `overlap`). Those exclusions route `factory` and never start
 `recovery_run_self_repair`. `recovery_incident` runs only when the last
 receipt did not move; incidents reuse the preflight cooldown ledger
@@ -106,7 +106,7 @@ position must not turn it into a dependency of product or the terminal.
 
 | Atom | One job |
 | --- | --- |
-| `host_ff` | Mill host checkout: fetch + ff-only onto origin/main. Clean product branch returns to main. Never `reset --hard`. Fail-closed when dirty or diverged. |
+| `host_ff` | Lokay host checkout: fetch + ff-only onto origin/main. Clean product branch returns to main. Never `reset --hard`. Fail-closed when dirty or diverged. |
 | `factory_begin_host_gate` | Succeeds with `route=begin` or `route=restart`. Restart means host-ff moved HEAD under this process. Never `ok=false`: a failed gate still unblocks product children in Fala. |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. `when` gate `route=begin`. Always writes `pass_dir` when the host probe routes `up`. No idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only on a confirmed stall (`did_not_move`). Same exclusions as `select_repair_route`: leftover skip, empty survey, occupied, idle, pass_ceiling, waiting. One pass is oil XOR product (product wins). Body is child Fala `self_repair_department`. Off never touches lokay main. |
@@ -117,16 +117,16 @@ position must not turn it into a dependency of product or the terminal.
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots` (oldest first). Catalog composes `overflow_bound` or `apply_slot`. Summarize composes `persist_result` and `prune_preserved_worktree_archives` (TTL GC of `.lokay-preserved`). Overflow bounds one pass to authored slots; a failed removal advances that candidate behind the oldest remainder, so it never pins the four slots forever. Archive TTL GC uses the same four-slot bound. A later pass continues the remainder. Classified REMOVE reclaims disk after registry detach (not archive-only). KEEP live i2pr is issue-scoped (repo+issue), not repo-scoped; also `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. Never unlink Fala sqlite/WAL. Do not raise the 180s ceiling. Tests use tmp dirs only. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. A this-tick idle/progress receipt is kept by `write_pass_ceiling_receipt`; the 180s watchdog does not erase it. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
-| mill Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` is maintained through `fala.maintain_journal` at a 64 MiB ceiling; heartbeat `created` leftovers are finalized then deleted through Fala APIs first, capped at eight rows per journal per tick. `daemon_entry` / `daemon_cycle` / `factory_pass` use a fresh wrapper sqlite per tick and prune old wrapper dirs; they do not reopen the shared mill journals. Each host file contains only the requested `path_id`, not all 946 effectors. Recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling materialized package. Over-cap is fail-closed if Fala cannot maintain the file |
-| mill activity | each live mill organ atom writes `activity.json` beside `state.jsonl` (`path`, `atom`, `work_id`, `transitions`). `daemon_entry` resets the checkpoint at the start of a tick so `transitions` do not accumulate across heartbeats. Ceiling receipts resume from that file. `status_snapshot` and `live=false` organs never write it. Status stays read-only. A missing file is `ceiling_stalled`, not a crash |
-| leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED mill issues. No 30-slot unroll. Mill repo count never fail-closes prepare. Candidate overflow parks the first authored handful and leftover-skips the rest; it does not fail the pass. Do not paginate every mill PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the mill stamp. |
+| lokay Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` is maintained through `fala.maintain_journal` at a 64 MiB ceiling; heartbeat `created` leftovers are finalized then deleted through Fala APIs first, capped at eight rows per journal per tick. `daemon_entry` / `daemon_cycle` / `factory_pass` use a fresh wrapper sqlite per tick and prune old wrapper dirs; they do not reopen the shared lokay journals. Each host file contains only the requested `path_id`, not all 946 effectors. Recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling materialized package. Over-cap is fail-closed if Fala cannot maintain the file |
+| lokay activity | each live lokay organ atom writes `activity.json` beside `state.jsonl` (`path`, `atom`, `work_id`, `transitions`). `daemon_entry` resets the checkpoint at the start of a tick so `transitions` do not accumulate across heartbeats. Ceiling receipts resume from that file. `status_snapshot` and `live=false` organs never write it. Status stays read-only. A missing file is `ceiling_stalled`, not a crash |
+| leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED lokay issues. No 30-slot unroll. Lokay repo count never fail-closes prepare. Candidate overflow parks the first authored handful and leftover-skips the rest; it does not fail the pass. Do not paginate every lokay PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the lokay stamp. |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in
 the pass spine. Intake `CLOSE` remains a sito verdict for clear obsolete /
 wrong-shape / superseded cases only — it marks (`ai:blocked`), it does not
 close GitHub. Never bias toward “distrust every ticket.” Goal:
-human writes issue → mill delivers.
+human writes issue → lokay delivers.
 
 ### `factory_begin` (child)
 
@@ -150,9 +150,9 @@ Unix process). `harvest_factory_children` already invokes child Fala
 `child_harvest` — it is not a leaf on this path, so harvest skip cannot
 eat the factory. No leaf has `when`. Empty surveys are not idle.
 
-The mill invokes this parent path (`compose_factory_pass` → `run_path`).
+The lokay invokes this parent path (`compose_factory_pass` → `run_path`).
 `lokay-factory-tick` is the same parent Fala path — not a second in-process
-mill. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
+lokay. Parent journal: `~/.lokay/fala/factory/state.sqlite`. Issue-to-PR and
 `coding_execution` children use per-issue journals under `i2pr/`,
 `i2pr-delivery/`, and `coding-execution/`. `test_local_execution` is the same
 class of nested child: per-issue under `test-local-execution/`. A shared
@@ -194,7 +194,7 @@ prepare_pr_closeout
 
 `lokay-dispatch-closeout` is removed. `closeout_prs` is its own authored
 path. Parent `factory_pass` conducts five departments and does not hide
-closeout order in Python. `recovery_mill` hosts one `factory_pass`.
+closeout order in Python. `recovery_factory` hosts one `factory_pass`.
 `product_entry` / `product_pass_budget` remain CLI multi-pass wrappers,
 not the 180s heartbeat. `leftover_catalog` stays one in-process catalog
 atom: park CLOSED-ready labels, not AI-PR closeout order.
@@ -225,7 +225,7 @@ open_self_repair_incident     LEAF  stall incident (did_not_move)
   → invoke_self_repair        LEAF  existing self_repair child; skipped without incident
 ```
 
-Off: parent select routes skip and the mill goes straight to issue triage /
+Off: parent select routes skip and the lokay goes straight to issue triage /
 executor / PR triage. This graph never starts from leftover overflow.
 
 ### `self_repair` (emergency only)
@@ -243,7 +243,7 @@ self_repair_prepare          child Fala: detached exact origin/main
 
 Each `self_repair_*` step is its own leaf or child Fala. The moving-forward
 gate (`last_pass_moving`) is a leaf outside this graph. Activate is not
-inside `recovery_mill`. This path does not classify last-pass progress and
+inside `recovery_factory`. This path does not classify last-pass progress and
 does not run the factory.
 
 Entered only from:
@@ -253,8 +253,8 @@ Entered only from:
 2. **`daemon_cycle` last-pass gate** — `last_pass_moving` is one leaf (new
    PR or merge). `select_repair_route` composes leftover skip, empty
    survey, and a stale receipt so they never enter. After the child
-   finishes, `recovery_mill` always hosts one `factory_pass`.
-   Repair never loops as the mill. Activate is `self_repair_activate`.
+   finishes, `recovery_factory` always hosts one `factory_pass`.
+   Repair never loops as the lokay. Activate is `self_repair_activate`.
 
 It never creates a branch or PR. The coding agent can edit only the detached
 worktree; deterministic atoms alone commit and push directly to `main`. The
@@ -351,9 +351,9 @@ select_next_issue
 ```
 
 `select_next_issue` only answers whether a takeable row remains. Empty
-assignees, or only the configured mill, may be taken. Anyone else on the
+assignees, or only the configured lokay, may be taken. Anyone else on the
 assignee list is foreign and is skipped. `assign_issue` does not add the
-mill beside them. A live `issue_to_pr` receipt occupies its repo: that repo
+lokay beside them. A live `issue_to_pr` receipt occupies its repo: that repo
 is not takeable. Leftover walks past it, same as a foreign assignee. A
 failed launch because the receipt is still live consumes that repo from
 leftover so the nest cannot spin the same ticket until the 180s pass
@@ -503,7 +503,7 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
 `resolve_conflicts` handles **merge conflicts**: `mergeable=CONFLICTING|DIRTY`
 → `lokay-pr-close` + re-label linked issue `ai:ready` so the next pass re-runs
-`issue_to_pr` from current main (one stuck conflict must not freeze the mill).
+`issue_to_pr` from current main (one stuck conflict must not freeze the lokay).
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts). `pr_create` additionally requires a successful `push`. `push` / `pr_create` also require `assert_real_diff`: a diff that is only `.lokay/approach.md` / `.lokay/localize.json` is not progress and never opens a PR.
@@ -516,9 +516,9 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   `tests/test_<changed-module>.py` tests. That changed scope must be green; an
   unknown or red ticket scope still fails closed. A green full or
   changed-scope recheck → push → pr_create. Recheck red / zero-diff / agent
-  fail → path fails closed (`local_repair_exhausted`); the mill marks that
+  fail → path fails closed (`local_repair_exhausted`); the lokay marks that
   seed stuck and takes the next one. There is no third repair attempt.
-- **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the mill do not populate collection data or wait for completion.
+- **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the lokay do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
 - **localize** proposes paths immediately before the coding slot (serial path:
   `worktree_add` `route=ready` → `plan_issue` → `localize` → `coding_execution`). Existing
@@ -548,12 +548,12 @@ Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
   Harvest does not bury that reason (the ticket is already done) and
   clears a stale `no_pr` stuck row. `clear_issue` marks `cleared` so
   `save_stuck` cannot restore a delivered corpse. GitHub CLOSED on the
-  mill repo (`mill_scope`) also drops leftover stuck rows after compact
+  lokay repo (`factory_scope`) also drops leftover stuck rows after compact
   dropped the journal event. Harvest then drops stuck rows outside the
-  mill catalog, including top-level Temida keys, so a mini mill cannot
+  lokay catalog, including top-level Temida keys, so a mini lokay cannot
   keep Temida/test corpses.
   `cycle_end` unlinks the start receipt after measuring. Harvest also
-  drops leftover start-only cycle files outside mill catalog or GitHub-CLOSED.
+  drops leftover start-only cycle files outside lokay catalog or GitHub-CLOSED.
 - **Published-tip retry** (`origin/<branch>` exists — including a closed
   CONFLICTING tip that matches HEAD) resets the corner from `origin/<base>`
   and deletes the stale remote tip. KEEP only unpublished ahead that already
@@ -604,8 +604,8 @@ Do not put graph order in the coding harness. Do not reintroduce Hermes Kanban a
 
 **Runtime note:** Fala is the only workflow composer. Python composers validate the public command contract, invoke
 `lokay.graph_run.run_path`, and normalize Fala's terminal per-effector outputs.
-`compose_mill` is the CLI multi-pass wrapper (`product_entry` then
+`compose_run` is the CLI multi-pass wrapper (`product_entry` then
 `product_pass_budget`). The 180s LaunchAgent heartbeat does not use it:
-`recovery_mill` hosts one parent `factory_pass`. Atomic `lokay-*`
+`recovery_factory` hosts one parent `factory_pass`. Atomic `lokay-*`
 processes remain the execution boundary, but there is no runtime Python
 fallback graph or engine-selection flag.

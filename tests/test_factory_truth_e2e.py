@@ -91,7 +91,7 @@ def _status(tmp_path: Path, receipt: dict, units: list[dict], latest: dict | Non
             "max_issue_to_pr_per_pass": 1,
             "repos": [{"name": REPO, "enabled": True, "clone_path": str(tmp_path / "reviewkit")}],
         },
-        {"mill_ready": True, "blockers": [], "policy_notes": []},
+        {"lokay_ready": True, "blockers": [], "policy_notes": []},
         {"missing_clones": []},
         {
             "lease_ok": None,

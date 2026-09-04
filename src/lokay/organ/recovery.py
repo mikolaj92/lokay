@@ -62,7 +62,7 @@ def handle_recovery(
         record_pass,
         recovery_begin,
         recovery_incident,
-        recovery_mill,
+        recovery_factory,
         recovery_observe,
         recovery_record,
         recovery_run_self_repair,
@@ -106,7 +106,7 @@ def handle_recovery(
         from lokay.proc.summarize_daemon_cycle import summarize
 
         return summarize(
-            mill_node=up.get("recovery_mill") or {},
+            lokay_node=up.get("recovery_factory") or {},
             repair=up.get("recovery_run_self_repair") or {},
         )
 
@@ -135,16 +135,16 @@ def handle_recovery(
     if atom == "recovery_begin":
         return _run_atom_main(recovery_begin.main, [*cfg, *live])
 
-    if atom == "recovery_mill":
+    if atom == "recovery_factory":
         return _run_atom_main(
-            recovery_mill.main,
+            recovery_factory.main,
             [*cfg, *live, "--max-passes", str(int(inputs.get("max_passes") or 8))],
         )
 
     if atom == "recovery_observe":
         begin = up.get("recovery_begin", {})
-        mill = up.get("recovery_mill", {}).get("mill")
-        assert begin.get("state_path") and mill is not None
+        lokay = up.get("recovery_factory", {}).get("lokay")
+        assert begin.get("state_path") and lokay is not None
         return _run_atom_main(
             recovery_observe.main,
             [
@@ -152,8 +152,8 @@ def handle_recovery(
                 str(begin["state_path"]),
                 "--state-offset",
                 str(begin.get("state_offset") or 0),
-                "--mill-json",
-                json.dumps(mill, ensure_ascii=False),
+                "--lokay-json",
+                json.dumps(lokay, ensure_ascii=False),
             ],
         )
 

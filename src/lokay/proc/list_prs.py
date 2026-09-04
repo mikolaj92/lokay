@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         contract = load_code(slot_from_repo(repo), runner=runner(cfg), config=cfg, live=live)
         contract.pr.list_open()
-        prs = contract.pr.mill_dicts()  # type: ignore[attr-defined]
+        prs = contract.pr.lokay_dicts()  # type: ignore[attr-defined]
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(

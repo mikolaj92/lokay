@@ -1,6 +1,6 @@
 """Classify one factory-pass candidate as product, oil, or idle.
 
-Oil is the canonical self mill (config ``incident_repo``, default
+Oil is the canonical self lokay (config ``incident_repo``, default
 ``mikolaj92/lokay``). Product is every other catalog repo. One pass is
 oil XOR product; product wins when any product open issue or product
 AI PR exists. ``work:ready`` / ``ai:ready`` are not admission gates.

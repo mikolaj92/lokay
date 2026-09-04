@@ -88,7 +88,7 @@ def test_queue_drops_foreign_assignee():
         {"repo": "Temida/Temida", "issue": 2, "assignees": ["mikolaj92"]},
         {"repo": "Temida/Temida", "issue": 3, "assignees": ["PSyron"]},
     ]
-    out = queue(listed, None, mill="mikolaj92")
+    out = queue(listed, None, lokay="mikolaj92")
     assert [row["issue"] for row in out] == [1, 2]
 
 

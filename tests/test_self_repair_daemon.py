@@ -46,7 +46,7 @@ def test_daemon_lock_uses_state_parent_not_home_default(monkeypatch, tmp_path):
     monkeypatch.setattr(daemon, "acquire_run_lock", capture)
     cfg = _write_cfg(tmp_path)
     assert daemon.main(["--config", cfg, "--outbox", str(tmp_path / "out")]) == 1
-    assert seen["lock"] == (tmp_path / "lokay-state" / "mill.lock").resolve()
+    assert seen["lock"] == (tmp_path / "lokay-state" / "lokay.lock").resolve()
 
 
 def test_daemon_lock_overlap_is_not_recorded_as_preflight_failure(

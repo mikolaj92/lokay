@@ -138,7 +138,7 @@ def test_catalog_row_loads_github_and_ignores_code_prs(monkeypatch: pytest.Monke
 def test_list_get_comment_mark_walks_gh_issues(monkeypatch: pytest.MonkeyPatch):
     rec = RecordedGh(
         [
-            _issue(12, title="first", body="do it", assignees=["mill"]),
+            _issue(12, title="first", body="do it", assignees=["lokay"]),
             _issue(15, title="second"),
             _issue(9, title="done", state="CLOSED"),
         ]
@@ -152,7 +152,7 @@ def test_list_get_comment_mark_walks_gh_issues(monkeypatch: pytest.MonkeyPatch):
     assert one.id == TaskId("github", "mikolaj92/lokay", 12)
     assert one.title == "first"
     assert one.body == "do it"
-    assert one.assignees == ["mill"]
+    assert one.assignees == ["lokay"]
     assert one.state == "OPEN"
 
     source.comment(one.id, "working")

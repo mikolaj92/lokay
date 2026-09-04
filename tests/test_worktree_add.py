@@ -1,4 +1,4 @@
-"""The mini mill creates worktrees only for its Lokay delivery lane."""
+"""The mini lokay creates worktrees only for its Lokay delivery lane."""
 
 import json
 
@@ -44,7 +44,7 @@ state:
 
 
 
-def test_lokay_repo_still_creates_worktree(config_path, tmp_path, monkeypatch, capsys):
+def test_factory_repo_still_creates_worktree(config_path, tmp_path, monkeypatch, capsys):
     expected = tmp_path / "worktrees" / "lokay"
     (tmp_path / "lokay").mkdir()
     calls = []

@@ -60,7 +60,7 @@ def soft_waiting_remaining(remaining: Mapping[str, Any]) -> int:
 def actionable_mergeable_green(
     remaining: Mapping[str, Any], *, merge_enabled: bool
 ) -> int:
-    """Green PRs the mill can merge this pass (excludes merge_disabled soft wait).
+    """Green PRs the lokay can merge this pass (excludes merge_disabled soft wait).
 
     When ``merge.enabled`` is false, green PRs are honest waiting — not stall
     actionable. Prefer an explicit ``merge_disabled`` remaining count; fall back

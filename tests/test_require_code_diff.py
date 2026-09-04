@@ -11,7 +11,7 @@ from pathlib import Path
 
 from lokay.proc.require_code_diff import evaluate_names, main, parse_names
 
-# Shape of mill PRs #100 / #104 / #105: approach + localize only.
+# Shape of lokay PRs #100 / #104 / #105: approach + localize only.
 PLAN_ONLY = ".lokay/approach.md\n.lokay/localize.json\n"
 
 
@@ -44,7 +44,7 @@ def test_evaluate_code_roots_pass():
     for path in (
         "src/lokay/proc/require_code_diff.py",
         "tests/test_require_code_diff.py",
-        "scripts/lokay-mill-daemon.sh",
+        "scripts/lokay-service.sh",
         "fala/lokay.fala-package.toml",
     ):
         out = evaluate_names([path])

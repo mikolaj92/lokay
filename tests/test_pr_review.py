@@ -117,7 +117,7 @@ def test_review_prompt_sets_collector_execution_boundary():
         checks_text="",
     )
     assert "Collector boundary" in prompt
-    assert "must not use Pi or the mill to populate data" in prompt
+    assert "must not use Pi or the lokay to populate data" in prompt
     assert "wait for collection to finish" in prompt
 
 

@@ -9,7 +9,7 @@ PACKAGED = ROOT / "src" / "lokay" / "data" / "lokay.fala-package.toml"
 
 
 def test_packaged_fala_is_byte_identical_to_checkout():
-    """Wheel/install mill must ship the same source graph as fala/.
+    """Wheel/install lokay must ship the same source graph as fala/.
 
     ``graph_run.find_default_package`` prefers checkout then packaged data.
     ``PLACEHOLDER_PROJECT`` is substituted at run time only — both files are
@@ -19,7 +19,7 @@ def test_packaged_fala_is_byte_identical_to_checkout():
     packaged = PACKAGED.read_bytes()
     assert authored == packaged, (
         "src/lokay/data/lokay.fala-package.toml drifted from "
-        "fala/lokay.fala-package.toml; copy the checkout graph so a wheel mill "
+        "fala/lokay.fala-package.toml; copy the checkout graph so a wheel lokay "
         "cannot run a stale Fala (missing gates)"
     )
     assert b"PLACEHOLDER_PROJECT" in authored
@@ -47,7 +47,7 @@ def test_python_fala_dependency_uses_immutable_git_tag():
     source = pyproject["tool"]["uv"]["sources"]["fala"]
     assert source == {
         "git": "https://github.com/mikolaj92/Fala.git",
-        "tag": "v0.7.32",
+        "tag": "v0.7.33",
     }
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
     assert 'editable = "../Fala"' not in lock

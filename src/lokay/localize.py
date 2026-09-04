@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from lokay.approach_plan import extract_paths
 
 LOCALIZE_REL_PATH = ".lokay/localize.json"
-# Worktree leftover names encode the mill issue: ai/fix/333-… or ai__fix__333-…
+# Worktree leftover names encode the lokay issue: ai/fix/333-… or ai__fix__333-…
 _WORKTREE_ISSUE_RE = re.compile(r"(?:ai(?:/|__)fix(?:/|__))(\d+)(?:-|$)")
 
 # Skip noise when walking the checkout.
@@ -187,7 +187,7 @@ _STOP_TOKENS = frozenset(
         "step",
         "node",
         "pass",
-        "mill",
+        "lokay",
         "tick",
         "live",
         "mode",
@@ -686,7 +686,7 @@ def _score_path(
     elif score > 0:
         # A product file with a real token hit must clear the inferred
         # floor alongside its tests. Otherwise `gate`/`scan` cages the
-        # agent in tests/ and the mill records plan_only.
+        # agent in tests/ and the lokay records plan_only.
         score += 12
     if rel.endswith((".py", ".mojo", ".toml", ".yaml", ".yml", ".sh")):
         score += 4

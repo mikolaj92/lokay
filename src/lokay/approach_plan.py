@@ -17,7 +17,7 @@ APPROACH_REL_PATH = ".lokay/approach.md"
 COLLECTOR_BOUNDARY_NOTE = (
     "Collector boundary: if implementation introduces unbounded collection, "
     "ship only a bounded collector patch that starts durably in the background "
-    "after merge. The coding agent and mill must not populate data or wait for "
+    "after merge. The coding agent and lokay must not populate data or wait for "
     "collection to finish."
 )
 

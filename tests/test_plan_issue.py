@@ -137,7 +137,7 @@ def test_review_prompt_stays_blind_when_approach_missing():
     )
     lowered = text.lower()
     assert "Collector boundary" in text
-    assert "must not use Pi or the mill to populate data" in text
+    assert "must not use Pi or the lokay to populate data" in text
     assert "approach.md" not in lowered
     assert "soft signal" not in lowered
     assert "compare the" not in lowered

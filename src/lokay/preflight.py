@@ -85,7 +85,7 @@ def _canonical_github_ssh(repo_name: str) -> str:
 
 
 def _github_git_transport(cfg: Any) -> tuple[bool, str]:
-    """Prove the mill checkout uses the authenticated SSH carrier."""
+    """Prove the lokay checkout uses the authenticated SSH carrier."""
     from lokay.preflight_checks import preflight_repos
 
     repos = preflight_repos(cfg)
@@ -117,12 +117,12 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
     from lokay.git_host_ff import caretaker_already_fetched
 
     if caretaker_already_fetched():
-        # mill-daemon already fetched origin/main this tick. Origin URL is
+        # lokay-daemon already fetched origin/main this tick. Origin URL is
         # still checked above; do not ls-remote the same checkout twice.
         return True, "ok"
     probe = next(repo for repo in repos if (repo.clone_path / ".git").exists())
     authenticated = False
-    # Keep the original 20-second bound, but do not stop the mill for a single
+    # Keep the original 20-second bound, but do not stop the lokay for a single
     # transient SSH/network failure.  Both attempts remain non-interactive and
     # must prove access to the canonical origin.
     for _attempt in range(2):
@@ -144,7 +144,7 @@ def _github_git_transport(cfg: Any) -> tuple[bool, str]:
 
 
 def _repair_github_git_transport(cfg: Any) -> bool:
-    """Replace the mill checkout's canonical HTTPS origin with its SSH form."""
+    """Replace the lokay checkout's canonical HTTPS origin with its SSH form."""
     from lokay.preflight_checks import preflight_repos
 
     changed = False
@@ -264,7 +264,7 @@ def issue_health_lease(
     disabled = os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE") == "1"
     # DISABLE blocks minting a new token. Restoring the same inherited token
     # when the file is gone is not a new capability — detached Fala children
-    # inherit DISABLE=1 from the mill and must still mutate after mill revoke.
+    # inherit DISABLE=1 from the lokay and must still mutate after lokay revoke.
     if disabled and not inherited:
         return
     if inherited:
@@ -295,7 +295,7 @@ def issue_health_lease(
     if not _safe_owned_path(path.parent):
         raise RuntimeError("unsafe health lease directory")
     path.parent.mkdir(parents=True, exist_ok=True)
-    bound_lock = (lock_path or (Path.home() / ".lokay" / "mill.lock")).expanduser().absolute()
+    bound_lock = (lock_path or (Path.home() / ".lokay" / "lokay.lock")).expanduser().absolute()
     now = int(time.time())
     record = {
         "token_sha256": hashlib.sha256(token.encode("ascii")).hexdigest(),
@@ -303,7 +303,7 @@ def issue_health_lease(
         "lock_path": str(bound_lock),
         "issued_at": now,
         # One factory pass may legitimately spend an hour in the real agent.
-        # Owner liveness, the held mill lock, and explicit daemon revocation are
+        # Owner liveness, the held lokay lock, and explicit daemon revocation are
         # the primary lifetime bounds; this cap only limits abandoned records.
         "expires_at": now + max(1, min(int(ttl_seconds), 7200)),
         "heartbeat_at": now,
@@ -448,7 +448,7 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
             owner_alive = False
         expected_lock = lock_path.expanduser().absolute() if lock_path is not None else None
         recorded_lock = record.get("lock_path")
-        legacy_lock = (Path.home() / ".lokay" / "mill.lock").absolute()
+        legacy_lock = (Path.home() / ".lokay" / "lokay.lock").absolute()
         # Leases issued by the pre-upgrade daemon implicitly used the HOME
         # lock. During activation, also prove that daemon still holds the exact
         # configured lock before allowing validation to run behind it.
@@ -463,10 +463,10 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
         if recorded_lock is None and bound_lock != legacy_lock:
             lock_held = lock_held and lock_is_held(legacy_lock, owner_pid)
         # Detached Fala children restore the inherited token into this process
-        # and outlive the mill tick that held mill.lock. Owner-is-self is enough.
+        # and outlive the lokay tick that held lokay.lock. Owner-is-self is enough.
         if owner_pid == os.getpid():
             lock_held = True
-        # A delegated work-unit token is independent of mill.lock. The worker
+        # A delegated work-unit token is independent of lokay.lock. The worker
         # keeps mutating after the daemon releases the singleton.
         if record.get("kind") == "delegated" and len(token) == 64:
             lock_held = True
@@ -543,7 +543,7 @@ def _check(
     # A missing managed checkout blocks worktree operations for that repository,
     # not GitHub-only triage or work in every other repository.  Status reports
     # the actionable clone inventory; global preflight must not deadlock the
-    # mill before `lokay-repos-clone-missing` can repair it.
+    # lokay before `lokay-repos-clone-missing` can repair it.
     findings.append(check_repository_catalog_clones(cfg=cfg))
 
     runtime_dirs = (cfg.state_path.parent, cfg.worktrees_root, Path(os.environ.get("LOKAY_LOG_DIR", str(Path.home() / ".lokay" / "logs"))))
@@ -571,7 +571,7 @@ def _check(
     )
     findings.append(check_executor_availability(cfg=cfg, repaired=repaired))
 
-    lock_path = (cfg.state_path.parent / "mill.lock").expanduser().absolute()
+    lock_path = (cfg.state_path.parent / "lokay.lock").expanduser().absolute()
     singleton_ok = inherited_singleton == lock_path or acquire_run_lock(lock_path)
     findings.append(_finding("singleton_overlap", singleton_ok, "ok" if singleton_ok else "contended"))
 
@@ -692,24 +692,24 @@ def _parse_issue_number(url: str) -> int | None:
 
 
 def incident_stamp_path(cfg: Any | None) -> Path | None:
-    """Stamp lives beside mill state. Missing path means always probe."""
+    """Stamp lives beside lokay state. Missing path means always probe."""
     path = getattr(cfg, "state_path", None) if cfg is not None else None
     if not path:
         return None
     return Path(path).expanduser().parent / INCIDENT_STAMP_NAME
 
 
-def mill_incident_stamp_path() -> Path:
-    """Operator mill leftover-incident stamp beside last-pass / state.jsonl."""
+def lokay_incident_stamp_path() -> Path:
+    """Operator lokay leftover-incident stamp beside last-pass / state.jsonl."""
     return Path.home() / ".lokay" / INCIDENT_STAMP_NAME
 
 
-def _is_operator_mill_incident_stamp(stamp: Path) -> bool:
-    mill = mill_incident_stamp_path()
+def _is_operator_lokay_incident_stamp(stamp: Path) -> bool:
+    lokay = lokay_incident_stamp_path()
     try:
-        return stamp.expanduser().resolve() == mill.resolve()
+        return stamp.expanduser().resolve() == lokay.resolve()
     except OSError:
-        return stamp.expanduser() == mill
+        return stamp.expanduser() == lokay
 
 
 def incident_recently_empty(
@@ -717,8 +717,8 @@ def incident_recently_empty(
 ) -> bool:
     if stamp is None:
         return False
-    # Pytest must not skip leftover-incident GitHub lists using the mill stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_incident_stamp(stamp):
+    # Pytest must not skip leftover-incident GitHub lists using the lokay stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_incident_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -748,7 +748,7 @@ def _clear_incident_stamp(stamp: Path | None) -> None:
 
 
 def _list_open_incidents(repo: str) -> list[dict[str, Any]] | None:
-    """Open issues for the mill repo. None means the GitHub probe failed."""
+    """Open issues for the lokay repo. None means the GitHub probe failed."""
     listed = subprocess.run(
         [
             "gh",
@@ -787,7 +787,7 @@ def _list_open_incidents(repo: str) -> list[dict[str, Any]] | None:
 
 
 def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, Any]:
-    """Close leftover preflight tickets after the mill is healthy."""
+    """Close leftover preflight tickets after the lokay is healthy."""
     name = str(repo or "").strip()
     if not name:
         # Leftover-incident empty name is not applied.
@@ -870,7 +870,7 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
                 "--repo",
                 name,
                 "--comment",
-                "Preflight recovered; mill is healthy.",
+                "Preflight recovered; lokay is healthy.",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -1141,7 +1141,7 @@ def run_preflight(
         expected_lock: Path | None = None
         if validate_inherited_lease:
             try:
-                expected_lock = load_config(config_path).state_path.parent / "mill.lock"
+                expected_lock = load_config(config_path).state_path.parent / "lokay.lock"
             except Exception:
                 expected_lock = None
         healthy, reason = (
@@ -1231,7 +1231,7 @@ def run_preflight(
     if operational_overlap:
         result["operational_overlap"] = True
     if checked["ok"] and issue_lease:
-        issue_health_lease(lock_path=cfg.state_path.parent / "mill.lock")
+        issue_health_lease(lock_path=cfg.state_path.parent / "lokay.lock")
         try:
             result["resolved_incidents"] = _close_resolved_incidents(
                 _incident_repo(cfg), cfg
@@ -1266,7 +1266,7 @@ def require_healthy(config_path: str | None) -> None:
     if healthy:
         return
     # Inherited token + missing file: restore the record (same token) so a live
-    # mill can keep mutating. Other rejected leases stay fail-closed.
+    # lokay can keep mutating. Other rejected leases stay fail-closed.
     restorable = (
         str(lease_reason).startswith("lease_unavailable_FileNotFound")
         or str(lease_reason).startswith("lease_unavailable_ProcessLookup")

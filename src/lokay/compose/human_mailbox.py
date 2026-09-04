@@ -1,7 +1,7 @@
-"""Residual human mailbox survey (exception reporting, not a mill brake).
+"""Residual human mailbox survey (exception reporting, not a lokay brake).
 
 Lists issues labeled needs-feedback and PRs labeled needs-review for the Lokay
-mini mill repository. Presence of these items does **not** mean the mill is stuck —
+mini lokay repository. Presence of these items does **not** mean the lokay is stuck —
 humans are a mailbox for rare residuals while other work continues.
 """
 
@@ -70,9 +70,9 @@ def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict
     return ok(
         kind="human_mailbox",
         config=str(cfg.config_path),
-        mill_blocked=False,
+        lokay_blocked=False,
         note=(
-            "Human queue is exception reporting only — mill continues other repos. "
+            "Human queue is exception reporting only — lokay continues other repos. "
             "NEEDS_HUMAN / ai:needs-feedback must stay rare."
         ),
         count=len(items),

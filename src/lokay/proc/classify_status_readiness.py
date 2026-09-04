@@ -20,7 +20,7 @@ def classify(config: dict) -> dict:
         )
     return {
         "ok": True,
-        "mill_ready": not blockers,
+        "lokay_ready": not blockers,
         "blockers": blockers,
         "policy_notes": notes,
     }

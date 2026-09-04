@@ -1,9 +1,9 @@
-"""Open catalog issue is the queue. Mill labels are not a gate."""
+"""Open catalog issue is the queue. Lokay labels are not a gate."""
 
 from pathlib import Path
 
 from lokay.proc.pass_lane import classify_pass_lane, product_candidates
-from lokay.proc.survey_ttl import mill_survey_still_empty
+from lokay.proc.survey_ttl import lokay_survey_still_empty
 from lokay.triage import is_human_stopped, is_open_work_issue
 
 
@@ -107,7 +107,7 @@ def test_idle_probe_unlabeled_product_issue_is_not_empty() -> None:
         return _gh_ok("[]")
 
     assert (
-        mill_survey_still_empty(repo="mikolaj92/Temida", run=fake_run) is False
+        lokay_survey_still_empty(repo="mikolaj92/Temida", run=fake_run) is False
     )
 
 
@@ -120,7 +120,7 @@ def test_idle_probe_only_human_stops_is_empty() -> None:
             )
         return _gh_ok("[]")
 
-    assert mill_survey_still_empty(repo="mikolaj92/Temida", run=fake_run) is True
+    assert lokay_survey_still_empty(repo="mikolaj92/Temida", run=fake_run) is True
 
 
 def test_list_work_ready_does_not_require_work_ready_label(monkeypatch) -> None:

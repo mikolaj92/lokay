@@ -163,7 +163,7 @@ def _holds_repo(command: str, repo: str) -> bool:
 def _mentions_repo(command: str, repo: str) -> bool:
     # Bare ``owner/name`` inside a quoted fixture/prompt is not a hold.
     # Live Pi/issue_to_pr mention a repo via worktree slug, GitHub URL,
-    # ``--repo``, or the mill ``Repository:`` line.
+    # ``--repo``, or the lokay ``Repository:`` line.
     owner, name = repo.split("/", 1)
     slash = f"{owner}/{name}"
     slug = f"{owner}__{name}"

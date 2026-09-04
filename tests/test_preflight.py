@@ -173,7 +173,7 @@ def test_validation_lease_is_bound_to_contended_custom_state_lock(
         tmp_path / "runtime" / "logs",
     ):
         path.mkdir(parents=True)
-    custom_lock = state_dir / "mill.lock"
+    custom_lock = state_dir / "lokay.lock"
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
@@ -201,7 +201,7 @@ def test_validation_lease_is_bound_to_contended_custom_state_lock(
     preflight.revoke_health_lease()
 
     # A lease for the legacy HOME lock must not bypass this config's lock.
-    home_lock = tmp_path / ".lokay" / "mill.lock"
+    home_lock = tmp_path / ".lokay" / "lokay.lock"
     assert preflight.acquire_run_lock(home_lock)
     preflight.issue_health_lease(lock_path=home_lock)
     mismatched = preflight.run_preflight(
@@ -226,8 +226,8 @@ def test_validation_accepts_old_schema_lease_from_running_daemon(tmp_path, monke
         tmp_path / "runtime" / "logs",
     ):
         path.mkdir(parents=True)
-    daemon_lock = tmp_path / ".lokay" / "mill.lock"
-    configured_lock = state_dir / "mill.lock"
+    daemon_lock = tmp_path / ".lokay" / "lokay.lock"
+    configured_lock = state_dir / "lokay.lock"
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
@@ -295,7 +295,7 @@ def test_github_incident_refuses_operational_inventory_failures(monkeypatch, fai
 
 
 def test_healthy_preflight_closes_open_incident_tickets(monkeypatch):
-    """Stale preflight issues must not stay open after the mill is healthy."""
+    """Stale preflight issues must not stay open after the lokay is healthy."""
     closed: list[list[str]] = []
 
     def fake_run(argv, *args, **kwargs):
@@ -312,7 +312,7 @@ def test_healthy_preflight_closes_open_incident_tickets(monkeypatch):
                         {
                             "number": 99,
                             "body": "ordinary product ticket",
-                            "title": "fix mill",
+                            "title": "fix lokay",
                         },
                     ]
                 ]
@@ -762,17 +762,17 @@ def test_leftover_incident_skip_reports_probe_failed(tmp_path, monkeypatch):
     )
 
 
-def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stamp(
+def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_lokay_stamp(
     tmp_path, monkeypatch
 ):
-    mill = tmp_path / ".lokay"
-    mill.mkdir()
-    stamp = mill / "preflight-incident-close.stamp"
+    lokay = tmp_path / ".lokay"
+    lokay.mkdir()
+    stamp = lokay / "preflight-incident-close.stamp"
     stamp.write_text("1", encoding="utf-8")
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv(
         "PYTEST_CURRENT_TEST",
-        "test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stamp",
+        "test_pytest_does_not_skip_leftover_incident_github_lists_using_the_lokay_stamp",
     )
     assert preflight.incident_recently_empty(stamp) is False
     listed: list[int] = []
@@ -789,7 +789,7 @@ def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stam
         raise AssertionError(argv)
 
     monkeypatch.setattr(preflight.subprocess, "run", fake_run)
-    cfg = SimpleNamespace(state_path=mill / "state.jsonl")
+    cfg = SimpleNamespace(state_path=lokay / "state.jsonl")
     out = preflight._close_resolved_incidents("mikolaj92/lokay", cfg)
     assert out.get("skipped") is not True
     assert listed == [1]
@@ -798,7 +798,7 @@ def test_pytest_does_not_skip_leftover_incident_github_lists_using_the_mill_stam
     assert preflight.incident_recently_empty(hermetic) is True
     src = Path(__file__).resolve().parents[1] / "src" / "lokay" / "preflight.py"
     assert (
-        "Pytest must not skip leftover-incident GitHub lists using the mill stamp."
+        "Pytest must not skip leftover-incident GitHub lists using the lokay stamp."
         in src.read_text(encoding="utf-8")
     )
 
@@ -1335,7 +1335,7 @@ def test_preflight_repairs_daemon_path_for_pi_in_local_bin(tmp_path, monkeypatch
 def test_preflight_repairs_service_path_for_mise_shimmed_executor(
     tmp_path, monkeypatch
 ):
-    """Issue #14: the mill daemon runs under a minimal launchd PATH while the
+    """Issue #14: the lokay daemon runs under a minimal launchd PATH while the
     executor (pi) lives in mise shims; preflight must expose it and release
     the gate with both incident findings healthy."""
     cfg = _config(tmp_path)
@@ -1563,7 +1563,7 @@ def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkey
     import subprocess, sys, os
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    lock = tmp_path / ".lokay" / "mill.lock"
+    lock = tmp_path / ".lokay" / "lokay.lock"
     assert preflight.acquire_run_lock(lock)
     preflight.issue_health_lease()
     code = "from lokay.preflight import require_healthy; require_healthy('missing-would-fail'); print('mutated')"
@@ -1619,18 +1619,18 @@ def test_rejected_inherited_lease_does_not_run_or_replace_preflight(
         ),
     )
 
-    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "lokay.lock")
     # Missing file + inherited token: restore the record, then mutate.
     preflight.require_healthy("config.yaml")
     assert preflight.has_health_lease() is True
     assert __import__("os").environ["LOKAY_HEALTH_LEASE"] == "a" * 64
 
 
-def test_restored_lease_owner_does_not_need_mill_lock(tmp_path, monkeypatch):
-    """Detached issue_to_pr outlives the mill lock; inherited token must still mutate."""
+def test_restored_lease_owner_does_not_need_lokay_lock(tmp_path, monkeypatch):
+    """Detached issue_to_pr outlives the lokay lock; inherited token must still mutate."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "c" * 64)
-    # No acquire_run_lock — mill tick already exited.
+    # No acquire_run_lock — lokay tick already exited.
     preflight.require_healthy("config.yaml")
     assert preflight.has_health_lease() is True
     assert (tmp_path / ".lokay" / "health-lease").is_file()
@@ -1684,7 +1684,7 @@ def test_nested_issue_guard_never_mints_lease(tmp_path, monkeypatch):
 
 
 def test_dead_owner_inherited_token_is_restored(tmp_path, monkeypatch):
-    """Mill pid in the lease record can be gone; same token must still push."""
+    """Lokay pid in the lease record can be gone; same token must still push."""
     import json
 
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -1699,7 +1699,7 @@ def test_dead_owner_inherited_token_is_restored(tmp_path, monkeypatch):
                 .sha256(("f" * 64).encode())
                 .hexdigest(),
                 "owner_pid": 999_999_999,
-                "lock_path": str(tmp_path / ".lokay" / "mill.lock"),
+                "lock_path": str(tmp_path / ".lokay" / "lokay.lock"),
                 "issued_at": 1,
                 "expires_at": 2_000_000_000,
             }
@@ -1712,7 +1712,7 @@ def test_dead_owner_inherited_token_is_restored(tmp_path, monkeypatch):
 
 
 def test_disable_still_restores_inherited_token_file(tmp_path, monkeypatch):
-    """Mill sets DISABLE=1 on the tree; detached children must rewrite a missing file."""
+    """Lokay sets DISABLE=1 on the tree; detached children must rewrite a missing file."""
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("LOKAY_HEALTH_LEASE", "e" * 64)
     monkeypatch.setenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "1")
@@ -1725,7 +1725,7 @@ def test_child_cannot_replace_parent_health_lease(tmp_path, monkeypatch):
     import json
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "lokay.lock")
     preflight.issue_health_lease()
     path = tmp_path / ".lokay" / "health-lease"
     record = json.loads(path.read_text())
@@ -1741,7 +1741,7 @@ def test_rejected_inherited_lease_cannot_be_replaced(tmp_path, monkeypatch):
     import time
 
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "mill.lock")
+    assert preflight.acquire_run_lock(tmp_path / ".lokay" / "lokay.lock")
     preflight.issue_health_lease()
     path = tmp_path / ".lokay" / "health-lease"
     record = json.loads(path.read_text())
@@ -1885,7 +1885,7 @@ def test_only_lock_owning_daemon_preflight_issues_lease(tmp_path, monkeypatch):
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     monkeypatch.setenv("HOME", str(tmp_path))
     _host_ok(monkeypatch)
-    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
+    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "lokay.lock")
     issued = []
     monkeypatch.setattr(
         preflight, "issue_health_lease", lambda **kwargs: issued.append(True)
@@ -1901,7 +1901,7 @@ def test_direct_preflight_does_not_issue_lease(tmp_path, monkeypatch):
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     monkeypatch.setenv("HOME", str(tmp_path))
     _host_ok(monkeypatch)
-    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "mill.lock")
+    assert preflight.acquire_run_lock(tmp_path / "runtime" / "state" / "lokay.lock")
     issued = []
     monkeypatch.setattr(
         preflight, "issue_health_lease", lambda **kwargs: issued.append(True)
@@ -2084,7 +2084,7 @@ def test_preflight_releases_gate_when_user_api_is_503(tmp_path, monkeypatch):
 
 
 def test_healthy_preflight_does_not_rerun_host_checks(tmp_path, monkeypatch):
-    """Idle mill already passed host checks; a second _check only re-hits GitHub."""
+    """Idle lokay already passed host checks; a second _check only re-hits GitHub."""
     cfg = _config(tmp_path)
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
@@ -2132,7 +2132,7 @@ def test_prune_stale_health_leases_removes_only_dead_or_expired(tmp_path, monkey
 
     state = tmp_path / "state"
     state.mkdir()
-    lock = state / "mill.lock"
+    lock = state / "lokay.lock"
     base = {
         "token_sha256": hashlib.sha256(("a" * 64).encode("ascii")).hexdigest(),
         "lock_path": str(lock),
@@ -2166,7 +2166,7 @@ def test_prune_stale_health_leases_keeps_record_while_bound_lock_is_held(
 
     state = tmp_path / "state"
     state.mkdir()
-    lock = state / "mill.lock"
+    lock = state / "lokay.lock"
     held = lock.open("a+")
     fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     lease = state / "health-lease-dead-child-active-parent"
@@ -2197,7 +2197,7 @@ def test_prune_stale_health_leases_keeps_old_same_pid_record_during_new_run_lock
 
     state = tmp_path / "state"
     state.mkdir()
-    lock = state / "mill.lock"
+    lock = state / "lokay.lock"
     held = lock.open("a+")
     fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     lease = state / "health-lease-old-same-pid"

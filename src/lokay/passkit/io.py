@@ -9,7 +9,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-# Live mill was leaving one factory-pass-* dir per 60s tick (~1k leftovers).
+# Live lokay was leaving one factory-pass-* dir per 60s tick (~1k leftovers).
 PASS_DIR_KEEP = 8
 
 

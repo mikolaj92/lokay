@@ -282,7 +282,7 @@ def test_live_waiting_when_review_limbo_only():
 
 
 def test_live_waiting_when_green_but_merge_disabled():
-    """Green + merge.enabled false is mill ok-stop waiting, not false stall."""
+    """Green + merge.enabled false is lokay ok-stop waiting, not false stall."""
     remaining = {
         "inbox": 0,
         "ready": 0,

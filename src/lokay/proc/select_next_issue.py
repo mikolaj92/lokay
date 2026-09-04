@@ -2,7 +2,7 @@
 
 import os
 
-from lokay.proc.classify_issue_assignee import mill_of, takeable
+from lokay.proc.classify_issue_assignee import lokay_of, takeable
 from lokay.proc.classify_open_issues import classify
 from lokay.proc.walk_issue_leftover import queue, row_is_ready
 
@@ -47,12 +47,12 @@ def select(listed: dict, last: dict | None = None, occupied=None) -> dict:
     classified = classify(listed)
     if classified.get("route") != "listed":
         return pick(classified)
-    mill = mill_of(listed, last)
+    lokay = lokay_of(listed, last)
     occupied_repos = occupied_repos_of(occupied)
-    rows = queue(classified.get("issues"), last, mill=mill, occupied=occupied_repos)
+    rows = queue(classified.get("issues"), last, lokay=lokay, occupied=occupied_repos)
     if not rows:
         listed_rows = list(classified.get("issues") or [])
-        takeable_rows = [row for row in listed_rows if takeable(row, mill)]
+        takeable_rows = [row for row in listed_rows if takeable(row, lokay)]
         if listed_rows and not takeable_rows:
             reason = "foreign_assignee"
         elif takeable_rows and occupied_repos and all(

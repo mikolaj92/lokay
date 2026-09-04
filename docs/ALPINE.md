@@ -1,6 +1,6 @@
 # Alpine boundaries (binding)
 
-Lokay is a **CLI mill** (JSON envelopes on stdout). If a hypermedia UI is
+Lokay is a **CLI lokay** (JSON envelopes on stdout). If a hypermedia UI is
 added later, Alpine may power **local presentation state only** — never an
 app-wide client store of server/domain data.
 

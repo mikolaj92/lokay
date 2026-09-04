@@ -5,7 +5,7 @@ list is empty or every path is under ``.lokay/`` (or otherwise has no code
 path). Exit 0 when at least one path is under ``src/``, ``tests/``,
 ``scripts/``, or ``fala/``.
 
-Mill contract: PRs #100/#104/#105 shipped plan-only (``.lokay/`` only).
+Lokay contract: PRs #100/#104/#105 shipped plan-only (``.lokay/`` only).
 """
 
 from __future__ import annotations

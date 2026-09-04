@@ -1,7 +1,7 @@
 # Audyt izolacji runtime/testów i kontraktów flow
 
-Data audytu: 2026-08-31  
-Zakres: health lease, `mill.lock`, dziedziczenie env, detached `issue_to_pr`, read-only status, preflight, daemon, fixtures testowe i artefakty `~/.lokay`.  
+Data audytu: 2026-08-31
+Zakres: health lease, `lokay.lock`, dziedziczenie env, detached `issue_to_pr`, read-only status, preflight, daemon, fixtures testowe i artefakty `~/.lokay`.
 Tryb: tylko odczyt kodu; jedynym utworzonym plikiem jest ten raport.
 
 ## Podstawa kontraktowa
@@ -12,7 +12,7 @@ Najważniejsze granice:
 
 - `README.md:318-320`: daemon ma posiadać jedną nierozdzielną capability: singleton lock, unikalną ścieżkę lease i jeden preflight.
 - `README.md:448-450`: status składa fakty read-only i nie uruchamia produktu.
-- `docs/GRAPH.md:47-54`: caretaker ma zwolnić właściwy `mill.lock` przy ceiling, nie sygnalizując detached `issue_to_pr`.
+- `docs/GRAPH.md:47-54`: caretaker ma zwolnić właściwy `lokay.lock` przy ceiling, nie sygnalizując detached `issue_to_pr`.
 - `docs/GRAPH.md:289-290`: detached launch publikuje trwałe `starting` przed `Popen` i używa bariery aktywacji.
 - `AGENTS.md:13-15`: maszyna stanów ma jawne skutki uboczne.
 - `docs/UNIX.md:14`: produkt nie powinien używać bare `python3`.
@@ -31,7 +31,7 @@ Zmiana w `preflight.py` poprawnie kieruje nowo wystawiany lease obok skonfigurow
 
 ## Potwierdzone problemy
 
-### P1 — HIGH — read-only status może utworzyć `mill.lock`
+### P1 — HIGH — read-only status może utworzyć `lokay.lock`
 
 **Pliki/linie:**
 
@@ -44,24 +44,24 @@ Zmiana w `preflight.py` poprawnie kieruje nowo wystawiany lease obok skonfigurow
 
 **Konsekwencja:** `lokay status` może pozostawić artefakt sugerujący istnienie runtime, zmienić diagnostykę i złamać narzędzia, które rozróżniają brak locka od wolnego locka.
 
-**Najmniejsza poprawka:** jeżeli lock nie istnieje, zwrócić `False`; jeśli istnieje, otworzyć go read-only (`os.open(..., O_RDONLY | O_NOFOLLOW)`), bez `O_CREAT`. Dodać test: aktywny-looking lease + brak `mill.lock` => status jest inactive i plik nadal nie istnieje.
+**Najmniejsza poprawka:** jeżeli lock nie istnieje, zwrócić `False`; jeśli istnieje, otworzyć go read-only (`os.open(..., O_RDONLY | O_NOFOLLOW)`), bez `O_CREAT`. Dodać test: aktywny-looking lease + brak `lokay.lock` => status jest inactive i plik nadal nie istnieje.
 
 ### P2 — HIGH — shell caretaker i daemon mogą używać różnych locków oraz różnych receiptów
 
 **Pliki/linie:**
 
-- `scripts/lokay-mill-daemon.sh:20-26` ustala `LOKAY_MILL_LOCK=~/.lokay/mill.lock` niezależnie od configu.
-- `scripts/lokay-mill-daemon.sh:35-47,93-97` robi early-return na tym locku.
+- `scripts/lokay-service.sh:20-26` ustala `LOKAY_LOCK=~/.lokay/lokay.lock` niezależnie od configu.
+- `scripts/lokay-service.sh:35-47,93-97` robi early-return na tym locku.
 - `src/lokay/proc/daemon.py:16-23,32-36` wylicza właściwy lock z `cfg.state_path.parent`.
-- `scripts/lokay-mill-daemon.sh:108-130` zapisuje ceiling receipt zawsze do `~/.lokay/last-pass.json`.
+- `scripts/lokay-service.sh:108-130` zapisuje ceiling receipt zawsze do `~/.lokay/last-pass.json`.
 - `src/lokay/proc/daemon.py:72-75` czyta receipt obok skonfigurowanego locka.
 - Kontrakt: `README.md:53-60,318-320`, `docs/GRAPH.md:47-54`.
 
-**Dowód:** dla legalnego configu ze `state.path=/tmp/x/state.jsonl` shell bada `~/.lokay/mill.lock`, a daemon blokuje `/tmp/x/mill.lock`. Jeśli pierwszy jest zajęty przez inny runtime, shell fałszywie kończy bez uruchomienia poprawnej instancji. Jeśli zadziała ceiling, receipt trafia do `~/.lokay`, podczas gdy status/daemon oczekują `/tmp/x/last-pass.json`.
+**Dowód:** dla legalnego configu ze `state.path=/tmp/x/state.jsonl` shell bada `~/.lokay/lokay.lock`, a daemon blokuje `/tmp/x/lokay.lock`. Jeśli pierwszy jest zajęty przez inny runtime, shell fałszywie kończy bez uruchomienia poprawnej instancji. Jeśli zadziała ceiling, receipt trafia do `~/.lokay`, podczas gdy status/daemon oczekują `/tmp/x/last-pass.json`.
 
 **Naruszona granica:** jedna fizyczna capability i jedno źródło prawdy wyprowadzone ze skonfigurowanego state dir.
 
-**Konsekwencja:** fałszywy overlap, pominięte ticki, niewidoczny `pass_ceiling`, rozjazd status/lease/receipt oraz możliwość równoległych runtime'ów przy ręcznie rozbieżnym `LOKAY_MILL_LOCK`.
+**Konsekwencja:** fałszywy overlap, pominięte ticki, niewidoczny `pass_ceiling`, rozjazd status/lease/receipt oraz możliwość równoległych runtime'ów przy ręcznie rozbieżnym `LOKAY_LOCK`.
 
 **Najmniejsza poprawka:** usunąć shellowy pre-lock (daemon już atomowo blokuje właściwą ścieżkę) albo wyliczyć state dir jednym produkcyjnym CLI opartym o `load_config`. Ceiling receipt zapisywać do tej samej ścieżki. Nie utrzymywać niezależnego override locka.
 
@@ -71,7 +71,7 @@ Zmiana w `preflight.py` poprawnie kieruje nowo wystawiany lease obok skonfigurow
 
 - `src/lokay/proc/daemon.py:33-35` tworzy unikalną nazwę per run.
 - `src/lokay/proc/daemon.py:51-52` sprząta tylko w Python `finally`.
-- `scripts/lokay-mill-daemon.sh:133-196,202-220` wysyła `SIGTERM`/`SIGKILL`; nie usuwa lease.
+- `scripts/lokay-service.sh:133-196,202-220` wysyła `SIGTERM`/`SIGKILL`; nie usuwa lease.
 - `src/lokay/proc/read_status_lease.py:30-45` skanuje wszystkie `health-lease-*-*`.
 
 **Dowód runtime (tylko odczyt):** w `~/.lokay` znaleziono 967 ścieżek pasujących do `health-lease*`, w tym setki wygasłych rekordów. Wiele nazw ma PID różny od `owner_pid`, co jest śladem historycznego przepisywania lease przez detached child. Shell po zabiciu procesu usuwa tylko `.pass-ceiling.<pid>` (`scripts/...:217-220`), nie lease. Standardowy `SIGTERM` nie gwarantuje wykonania Python `finally`.
@@ -108,7 +108,7 @@ Zmiana w `preflight.py` poprawnie kieruje nowo wystawiany lease obok skonfigurow
 - Nowy test `tests/test_preflight.py:932-947` porównuje wyłącznie jeden legacy plik.
 - Produkcyjne ścieżki poza configiem: `src/lokay/proc/issue_delivery_receipts.py:21-29` (`~/.lokay/logs`, `~/.lokay/cycle`).
 
-**Dowód:** suite nie ustawia globalnie testowego `HOME`/runtime root. Nowy test dowodzi tylko, że bajty `~/.lokay/health-lease` nie zmieniły się podczas jednego wywołania. Nie sprawdza, czy per-run lease został usunięty po teardown, czy nie powstały `cycle/`, logi, `mill.lock`, incydenty lub receipts. Lokalny dowód historycznego przecieku: obecny `~/.lokay/health-lease` zawiera `lock_path` wskazujący na `/private/.../pytest-.../test_preflight_test_config_kee0/runtime/state/mill.lock`. Traktuję go jako dowód, że testowy stan trafił do produkcyjnego HOME; nie przypisuję bez dodatkowego śladu konkretnego uruchomienia bieżącej wersji.
+**Dowód:** suite nie ustawia globalnie testowego `HOME`/runtime root. Nowy test dowodzi tylko, że bajty `~/.lokay/health-lease` nie zmieniły się podczas jednego wywołania. Nie sprawdza, czy per-run lease został usunięty po teardown, czy nie powstały `cycle/`, logi, `lokay.lock`, incydenty lub receipts. Lokalny dowód historycznego przecieku: obecny `~/.lokay/health-lease` zawiera `lock_path` wskazujący na `/private/.../pytest-.../test_preflight_test_config_kee0/runtime/state/lokay.lock`. Traktuję go jako dowód, że testowy stan trafił do produkcyjnego HOME; nie przypisuję bez dodatkowego śladu konkretnego uruchomienia bieżącej wersji.
 
 **Naruszona granica:** testy nie mogą czytać ani mutować aktywnego `~/.lokay`; fixture ma chronić całą granicę runtime, nie dwa wybrane call-site'y.
 
@@ -118,7 +118,7 @@ Zmiana w `preflight.py` poprawnie kieruje nowo wystawiany lease obok skonfigurow
 
 ### P6 — LOW — daemon shell łamie własny kontrakt „always uv”
 
-**Pliki/linie:** `scripts/lokay-mill-daemon.sh:38,111,137`; kontrakt `docs/UNIX.md:14` oraz `AGENTS.md:59`.
+**Pliki/linie:** `scripts/lokay-service.sh:38,111,137`; kontrakt `docs/UNIX.md:14` oraz `AGENTS.md:59`.
 
 **Dowód:** trzy produkcyjne fragmenty caretakingu uruchamiają bare `python3`, mimo twardej reguły użycia `uv run` dla product CLI.
 

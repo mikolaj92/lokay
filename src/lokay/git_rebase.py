@@ -1,4 +1,4 @@
-"""Fetch origin/<base> and rebase the mill corner onto it.
+"""Fetch origin/<base> and rebase the lokay corner onto it.
 
 Force-push is forbidden. A conflict is fail-closed: abort the rebase and
 refuse to publish. The next pass re-implements from current main.

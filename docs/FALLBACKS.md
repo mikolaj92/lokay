@@ -21,7 +21,7 @@ Related: issue #17 (graph_run placeholders), issue #18 (AI agent fail-closed),
 | `lokay-run-grok` | named alias | **Deleted** | Use `lokay-run-agent` only |
 | `LOKAY_USE_FALA` dual engine | runtime fallback | **Deleted** | Fala is always the composer |
 | `find_default_package` candidates | package discover | **Promote** | env → repo `fala/` → packaged `data/` |
-| `append_event` best-effort `except` | telemetry | **Promote** | State log must not abort mill; documented |
+| `append_event` best-effort `except` | telemetry | **Promote** | State log must not abort lokay; documented |
 | `FALA_HOME` + optional sibling `../Fala` source fallback | Mojo runtime lookup | **Keep** | Python package stays tag-pinned; native source lookup is separate and has no user-specific hardcode |
 | Dual `fala/` + `src/lokay/data/` package | packaging | **Promote** | Keep identical; hatch ships `data/` |
 

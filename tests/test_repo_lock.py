@@ -20,7 +20,7 @@ from lokay.proc.repo_lock import (
 
 def _parent_capability(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
-    lock = tmp_path / ".lokay" / "mill.lock"
+    lock = tmp_path / ".lokay" / "lokay.lock"
     assert acquire_run_lock(lock)
     issue_health_lease(lock_path=lock)
 
@@ -163,10 +163,10 @@ def test_detach_acquires_lock_before_spawn_and_hands_fd(tmp_path, monkeypatch):
         repo="mikolaj92/lokay", issue=9, config_path=None, popen=FakePopen
     )
     assert out["ok"] is True
-    assert seen["env"].get("LOKAY_REPO_LOCK_FD")
+    assert seen["env"].get("LOKAY_REPO_SCOPE_LOCK_FD")
     fds = seen["pass_fds"]
     assert fds is not None and len(fds) == 2
-    lock_fd = int(seen["env"]["LOKAY_REPO_LOCK_FD"])
+    lock_fd = int(seen["env"]["LOKAY_REPO_SCOPE_LOCK_FD"])
     assert lock_fd in fds
     lock_path = Path(out["repo_lock"])
     assert lock_path.name == "mikolaj92__lokay.lock"
@@ -209,7 +209,7 @@ def test_child_holds_inherited_lock_until_exit(tmp_path, monkeypatch):
     child_script = tmp_path / "holder.py"
     child_script.write_text(
         "import os,time\n"
-        "fd=int(os.environ['LOKAY_REPO_LOCK_FD'])\n"
+        "fd=int(os.environ['LOKAY_REPO_SCOPE_LOCK_FD'])\n"
         "os.read(int(os.environ['LOKAY_ISSUE_TO_PR_ACTIVATION_FD']), 1)\n"
         "open(os.environ['LOKAY_LOCK_MARKER'], 'w').write('held')\n"
         "time.sleep(30)\n",

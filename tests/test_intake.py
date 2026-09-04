@@ -1,4 +1,4 @@
-"""Deterministic intake checks + graph / mill gate."""
+"""Deterministic intake checks + graph / lokay gate."""
 
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def test_essence_closes_foreign_soul_objection():
     issue = _issue(
         author="stranger",
         assignees=[],
-        title="Lokay should be a kanban not a mill",
+        title="Lokay should be a kanban not a lokay",
         body="Wrong philosophy. Change the soul / kwintesencja of the product.",
     )
     result = check_essence_objection(issue)
@@ -195,7 +195,7 @@ def test_essence_keeps_operator_rewrite():
     issue = _issue(
         author="mikolaj92",
         assignees=["mikolaj92"],
-        title="Rewrite the soul of the mill",
+        title="Rewrite the soul of the lokay",
         body="Kwintesencja ma być inna. Zmienić wizję produktu.",
     )
     result = check_essence_objection(issue)
@@ -207,7 +207,7 @@ def test_essence_keeps_foreign_hang_report():
     issue = _issue(
         author="stranger",
         assignees=[],
-        title="Mill hangs on issue_to_pr",
+        title="Lokay hangs on issue_to_pr",
         body="Does not work as described: daemon stuck after survey, no merge.",
     )
     result = check_essence_objection(issue)

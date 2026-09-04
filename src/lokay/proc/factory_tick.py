@@ -1,4 +1,4 @@
-"""Thin alias: parent Fala ``factory_pass`` (same mill as ``lokay-factory-pass``).
+"""Thin alias: parent Fala ``factory_pass`` (same lokay as ``lokay-factory-pass``).
 
 Production always hosts Fala via ``compose_factory_pass`` → ``graph_run.run_path``.
 The in-process ``compose_tick`` spine remains for hermetic unit tests only.

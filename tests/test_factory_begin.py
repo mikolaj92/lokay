@@ -87,7 +87,7 @@ def test_live_non_live_config_routes_terminal():
 def test_scope_preserves_catalog_without_override(monkeypatch):
     from lokay.proc.select_factory_scope import select
 
-    monkeypatch.delenv("LOKAY_MILL_REPO", raising=False)
+    monkeypatch.delenv("LOKAY_REPO_SCOPE", raising=False)
     assert select({"repos": ["a/b", "c/d"]})["repos"] == ["a/b", "c/d"]
 
 

@@ -4,7 +4,7 @@ import argparse
 from lokay.envelope import emit_exit, err
 from lokay.proc._common import add_config_live
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_LOKAY_REPO_SCOPE = "mikolaj92/lokay"
 
 
 def run_survey_inbox(*, pass_dir: str, config_path: str | None, live: bool) -> dict:

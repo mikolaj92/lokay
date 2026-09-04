@@ -1,6 +1,6 @@
 """Scoped health capability for one detached coding slot.
 
-Only the mill-lock owner mints the parent run capability. Launch copies a
+Only the lokay-lock owner mints the parent run capability. Launch copies a
 delegated record for `{repo}#{issue}` and the worker never mints another
 parent token. Heartbeat and completion update that record in place.
 """

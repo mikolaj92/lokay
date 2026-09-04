@@ -117,7 +117,7 @@ def test_safety_still_forbids_force_push():
 
 
 
-def test_cli_lokay_repo_still_rebases(tmp_path, monkeypatch, capsys):
+def test_cli_factory_repo_still_rebases(tmp_path, monkeypatch, capsys):
     sentinel_runner = object()
     calls = []
     monkeypatch.setattr(rebase_proc, "runner", lambda: sentinel_runner)

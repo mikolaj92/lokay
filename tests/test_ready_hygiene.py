@@ -126,7 +126,7 @@ def test_catalog_removes_one_orphan(monkeypatch):
 
 
 def test_idle_leftover_ready_facade_is_gone():
-    from lokay.compose import mill
+    from lokay.compose import run
 
     assert not hasattr(ready_hygiene, "hygiene_idle_leftover_ready")
-    assert not hasattr(mill, "closeout_leftover_ready")
+    assert not hasattr(run, "closeout_leftover_ready")

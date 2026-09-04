@@ -148,7 +148,7 @@ def test_no_cdn_for_core_stack_in_product_code():
 def test_cli_only_has_no_auth_html_surfaces():
     """Smoke N/A: no login/account/admin HTML means no chrome CDN surface."""
     html_files = _iter_files(HTML_GLOBS)
-    # CLI mill today: zero templates is the compliant baseline.
+    # CLI lokay today: zero templates is the compliant baseline.
     if not html_files:
         return
 

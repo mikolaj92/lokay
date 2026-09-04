@@ -19,7 +19,7 @@ def classify(
     """Return route=idle when the empty-survey TTL still holds; else host.
 
     Missing stamp, occupied last-pass, remaining work, probe failure, dry-run,
-    or pytest on the operator mill always hosts. Fresh stamp does not refresh.
+    or pytest on the operator lokay always hosts. Fresh stamp does not refresh.
     """
     skipped = skip_idle_factory_pass(
         live=live, stamp=stamp, receipt=receipt, now=now, probe=probe

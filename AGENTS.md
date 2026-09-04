@@ -32,7 +32,7 @@
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
   is oil XOR product (product wins). Not a fat `compose/tick.py`.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
-  flatten the mill to one-way issue→done.
+  flatten the lokay to one-way issue→done.
 - **Serial by design.** Default `limits.max_issue_to_pr_per_pass` is **1**
   (ticket after ticket). K is an optional pass budget — not concurrent
   worktrees / harness / tmux. `queue_conflict` is queue hygiene, not a parallel
@@ -44,7 +44,7 @@
   tickets are purposeful; no new human-approval gates in the pass spine. Intake
   CLOSE only for clear obsolete / wrong-shape / superseded / foreign essence
   objections. Others may report hangs or “does not work as described”. They may
-  not object to what Lokay *is*. Human writes → mill delivers.
+  not object to what Lokay *is*. Human writes → lokay delivers.
 - **One Definition of Done:** quality code merged to `main`. Agent-ok, plan-only,
   `health=progress`, and green tests are not Done. Fast scrap and machines-for-
   machines are worthless. See `docs/WORKING.md`.
@@ -68,7 +68,7 @@
 
 - Coding slot: `lokay-run-agent` via `executor.command` / `executor.args` (any real harness; current example is `pi` + `omniroute/pi`). Swap is config, not a product change. See `docs/PROCESS.md`.
 - Scope: `repos.mikolaj92.yaml` (managed repos).
-- Continuous mill: LaunchAgent `ai.mikolaj.lokay-mill` → `scripts/lokay-mill-daemon.sh`.
+- Continuous lokay: LaunchAgent `ai.mikolaj.lokay` → `scripts/lokay-service.sh`.
 
 ## Verify
 

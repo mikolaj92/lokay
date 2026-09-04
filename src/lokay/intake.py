@@ -3,11 +3,11 @@
 Cheap, testable checks that harden inbox triage before `ai:ready` sticks
 eligible for `issue_to_pr`. Pure rules first; no coding harness.
 
-Product law: humans author intentional issues; the mill consumes. Trust the
+Product law: humans author intentional issues; the lokay consumes. Trust the
 operator/assignee — prefer READY+implement autonomy; do not invent distrustful
 human gates. CLOSE / SPLIT / READY+implement are the default exits.
 CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
-bias toward distrusting every ticket. Foreign objections to the mill's
+bias toward distrusting every ticket. Foreign objections to the lokay's
 essence (what Lokay is) CLOSE; operational reports (hangs / does not work as
 described) stay. NEEDS_HUMAN is a rare residual after rules fail closed —
 never the escape hatch for oversized work that can be auto-split.
@@ -114,9 +114,9 @@ _OPERATIONAL_REPORT = re.compile(
 )
 _ESSENCE_OBJECTION = re.compile(
     r"(?i)\b("
-    r"should\s+(?:be|not\s+be)\s+(?:a\s+)?(?:factory|mill|harness|kanban|chat)"
+    r"should\s+(?:be|not\s+be)\s+(?:a\s+)?(?:factory|lokay|harness|kanban|chat)"
     r"|wrong\s+(?:product|philosophy|soul|essence|kwintesenc)"
-    r"|instead\s+of\s+(?:a\s+)?(?:mill|factory|fala\s+graph)"
+    r"|instead\s+of\s+(?:a\s+)?(?:lokay|factory|fala\s+graph)"
     r"|nie\s+powin(?:ien|no)\s+(?:być|byc)\s+(?:młyn|mlynem|fabryk)"
     r"|kwintesenc(?:ja|ji)|dusza\s+(?:lokaya|produktu)"
     r"|zmien(?:ić|ic)\s+(?:wizj|dusz|kierunek|istot)"
@@ -445,7 +445,7 @@ def check_essence_objection(
     *,
     trusted_assignee: str = "mikolaj92",
 ) -> CheckResult:
-    """CLOSE foreign objections to what the mill is. Operator tickets stay.
+    """CLOSE foreign objections to what the lokay is. Operator tickets stay.
 
     Others may report that it hangs or does not work as described. They may
     not file against the soul / quintessence / product law. Those close.
@@ -645,7 +645,7 @@ def aggregate_intake(
             add_labels=("ai:blocked",),
             remove_labels=(ready_label, LABEL_WORK_READY),
             comment=(
-                "Blocked: mill preflight incident. Self-repair owns this, "
+                "Blocked: lokay preflight incident. Self-repair owns this, "
                 "not issue_to_pr."
             ),
             implementable=False,

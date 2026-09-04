@@ -1,13 +1,13 @@
-"""Whether a listed task is mill-owned. Foreign assignees are not takeable.
+"""Whether a listed task is lokay-owned. Foreign assignees are not takeable.
 
-Today the list carries Issue.assignees. Empty or only the configured mill
-(default mikolaj92) may be taken. Anyone else — alone or beside the mill —
-is foreign. Selection skips; assign must not add the mill beside them.
+Today the list carries Issue.assignees. Empty or only the configured lokay
+(default mikolaj92) may be taken. Anyone else — alone or beside the lokay —
+is foreign. Selection skips; assign must not add the lokay beside them.
 """
 
 from __future__ import annotations
 
-DEFAULT_MILL = "mikolaj92"
+DEFAULT_LOKAY = "mikolaj92"
 
 
 def identities(row: dict | None) -> list[str]:
@@ -25,7 +25,7 @@ def identities(row: dict | None) -> list[str]:
     return out
 
 
-def mill_of(*sources: dict | None, default: str = DEFAULT_MILL) -> str:
+def lokay_of(*sources: dict | None, default: str = DEFAULT_LOKAY) -> str:
     for src in sources:
         if not isinstance(src, dict):
             continue
@@ -35,17 +35,17 @@ def mill_of(*sources: dict | None, default: str = DEFAULT_MILL) -> str:
     return default
 
 
-def foreign(row: dict | None, mill: str) -> list[str]:
-    needle = (mill or DEFAULT_MILL).strip().lower()
+def foreign(row: dict | None, lokay: str) -> list[str]:
+    needle = (lokay or DEFAULT_LOKAY).strip().lower()
     return [name for name in identities(row) if name.lower() != needle]
 
 
-def takeable(row: dict | None, mill: str) -> bool:
-    return not foreign(row, mill)
+def takeable(row: dict | None, lokay: str) -> bool:
+    return not foreign(row, lokay)
 
 
-def classify(row: dict | None, mill: str) -> dict:
-    others = foreign(row, mill)
+def classify(row: dict | None, lokay: str) -> dict:
+    others = foreign(row, lokay)
     if others:
         return {
             "ok": True,

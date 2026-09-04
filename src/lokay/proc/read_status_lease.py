@@ -52,7 +52,7 @@ def _active_run_lease(state_dir: Path, lock: Path) -> Path | None:
 
 def read(config: dict) -> dict:
     state_dir = Path(config["state_path"]).parent
-    lock = state_dir / "mill.lock"
+    lock = state_dir / "lokay.lock"
     if os.environ.get("LOKAY_HEALTH_LEASE", ""):
         ok, reason = health_lease_status(lock_path=lock)
         return {

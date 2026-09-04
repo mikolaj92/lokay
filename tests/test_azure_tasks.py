@@ -161,7 +161,7 @@ def test_catalog_row_loads_azure_and_ignores_prs_repo():
 def test_list_get_comment_mark_from_recorded_responses():
     transport = RecordedAzure(
         [
-            _item(12, title="first", description="do it", assigned="mill"),
+            _item(12, title="first", description="do it", assigned="lokay"),
             _item(15, title="second"),
             _item(9, title="done", state="Closed"),
         ]
@@ -174,7 +174,7 @@ def test_list_get_comment_mark_from_recorded_responses():
     assert one.id == TaskId("azure", "contoso/board", 12)
     assert one.title == "first"
     assert one.body == "do it"
-    assert one.assignees == ["mill"]
+    assert one.assignees == ["lokay"]
     assert one.state == "OPEN"
 
     source.comment(one.id, "working")

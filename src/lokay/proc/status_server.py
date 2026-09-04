@@ -31,7 +31,7 @@ LOCAL_OPERATOR = PlatformUser(display_name="Operator lokalny", user_id="local")
 
 
 def create_app(*, config_path: str | None = None) -> FastAPI:
-    """Create an observational app. Requests never survey GitHub or mutate the mill."""
+    """Create an observational app. Requests never survey GitHub or mutate the lokay."""
     app = FastAPI(title="Lokay · Wyniki", docs_url=None, redoc_url=None)
     install_platform(app, environments=[TEMPLATES.env], config=PLATFORM)
 

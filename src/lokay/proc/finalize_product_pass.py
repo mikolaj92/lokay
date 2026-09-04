@@ -19,7 +19,7 @@ def finalize(prepared: dict, decided: dict) -> dict:
     if route == "idle":
         payload = ok(**common, idle=True, health="idle", last=tick)
     elif route in {"dry", "budget"}:
-        payload = {**tick, **common, "mill": True}
+        payload = {**tick, **common, "lokay": True}
     else:
         decision = decided["decision"]
         common.update(

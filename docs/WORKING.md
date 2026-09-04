@@ -1,7 +1,7 @@
 # WORKING machine (Definition of Done)
 
 **One Definition of Done.** An issue is done only when the designed change is
-**quality code on `main`** — produced, reviewed by the mill's gates, and
+**quality code on `main`** — produced, reviewed by the lokay's gates, and
 **merged**. That is the only measure that the factory worked.
 
 Not done: agent session `ok`, plan-only tree, open PR, closed-unmerged PR,
@@ -53,46 +53,46 @@ seed must leave the slot so the next designed issue can land. A stale
 `push_failed` is reconciled from the journal — harvest reopens the slot until
 unique-run N. At/above its bound it is terminal and is not refreshed by a dead
 receipt or old journal event. Crash / red-recheck rows stay buried. Tests and
-pass health are not a representation of whether the mill works. Merges of
+pass health are not a representation of whether the lokay works. Merges of
 intended issues are.
 
-Lokay is **working** only if it continuously mills its **delivery catalog**
-**to that DoD**. Catalog is `repos.mikolaj92.yaml`; this host's mini mill
-(`mill_scope`, `LOKAY_MILL_REPO`, default `mikolaj92/lokay`) delivers only
-that one repo. Product mill for Temida and the rest is a host/CEO decision,
+Lokay is **working** only if it continuously lokays its **delivery catalog**
+**to that DoD**. Catalog is `repos.mikolaj92.yaml`; this host's mini lokay
+(`factory_scope`, `LOKAY_REPO_SCOPE`, default `mikolaj92/lokay`) delivers only
+that one repo. Product lokay for Temida and the rest is a host/CEO decision,
 not an un-clamp on this machine. Order: survey →
 **per-repo PR-first** (close-out) → inbox triage / implement in repos with no
 open AI PR. Agent must be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize
-human: humans write issues; the mill consumes them to merged results — do not
+human: humans write issues; the lokay consumes them to merged results — do not
 add new human gates.
 
-For the autonomous mill Definition of Working (pass promises, night profile,
+For the autonomous lokay Definition of Working (pass promises, night profile,
 hermetic canaries, how to read `lokay status` / `last-pass.json`), see
 [`AUTONOMY.md`](AUTONOMY.md).
 
-## Issue ledger = chat with the mill
+## Issue ledger = chat with the lokay
 
 Operators should read **GitHub Issues** for *decisions* (`ai:ready` / blocked /
 feedback / frozen / tracker) and **open PRs + live jobs** for in-flight work.
 In-flight is not an issue label. `ai:ready` stays until merge + `stage_clear` +
 close. Parking / residual unchanged: `ai:blocked`, `ai:needs-feedback`,
 `ai:needs-review`, `ai:tracker`. Diagram:
-[`AUTONOMY.md`](AUTONOMY.md#issue-ledger--chat-with-the-mill).
+[`AUTONOMY.md`](AUTONOMY.md#issue-ledger--chat-with-the-lokay).
 
 ## Product law: minimize human in the loop
 
-**Humans author intentional issues; the mill consumes.** Trust the issue author:
+**Humans author intentional issues; the lokay consumes.** Trust the issue author:
 when the issue is created or owned by the trusted operator (`github.assignee`,
 default mikolaj92), assume it makes sense — prefer **READY+implement** autonomy.
 Do not add distrustful human gates or clarification parking for ordinary
 operator-authored work. Deeper skepticism is for foreign/external authors if
 distinguished at all.
 
-**Soul is operator-set.** What Lokay *is* — Fala graph, serial mill, one DoD
+**Soul is operator-set.** What Lokay *is* — Fala graph, serial lokay, one DoD
 (quality code on `main`) — is decided here, not in the inbox. Others may file
 that it **hangs** or **does not work as described**. They may not file against
 the quintessence / soul / product law. Those issues CLOSE (`foreign_essence_objection`).
-Operational reports stay and get milled.
+Operational reports stay and get lokayed.
 
 The system should **CLOSE**, **SPLIT**, or **READY+implement**. Maximize
 autonomy. `NEEDS_HUMAN` / `ai:needs-feedback` is a **rare residual** after
@@ -100,7 +100,7 @@ deterministic rules fail closed — never the default escape hatch for oversized
 or ambiguous work that can be auto-split.
 
 `lokay status --human` lists that residual mailbox across managed repos. It is
-**exception reporting**, not a workflow step. The mill does **not** wait on a
+**exception reporting**, not a workflow step. The lokay does **not** wait on a
 human digest and does **not** freeze other repos because one issue is parked
 `ai:needs-feedback` or a PR is `ai:needs-review`.
 
@@ -111,7 +111,7 @@ product. Green repository verification may be reused only for the identical
 
 ## Full pass (one tick)
 
-1. **Survey** every managed repo: inbox, open catalog issues (human stops exclude; mill labels are not a gate), open `ai/fix/*` PRs
+1. **Survey** every managed repo: inbox, open catalog issues (human stops exclude; lokay labels are not a gate), open `ai/fix/*` PRs
    (full newest-first page, cap 1000; hitting the cap is `survey_error`, not idle).
 2. **Per-repo PR-first**: PR close-out (conflict / repair / triage / waiting) is
    scoped to each repository. An **actionable** AI PR in repo A does **not**
@@ -145,7 +145,7 @@ product. Green repository verification may be reused only for the identical
    repos — not the recommended default. Before `issue_to_pr`,
    `lokay-queue-conflict` demotes/defers clear contradictions (open AI PR
    covering the same issue, epic with children, unmet Depends on / Blocked by,
-   obvious path overlap), then `lokay-intake-issue --require-ready` so
+   obvious path overlap), then the authored `issue_intake` gate so
    READY-without-intake cannot implement. Inside `issue_to_pr`: worktree from
    `origin/main` → **`plan_issue`** (`.lokay/approach.md` evidence) →
    configured executor → commit → **`rebase_onto_base`** (fail closed on
@@ -180,18 +180,18 @@ product. Green repository verification may be reused only for the identical
    tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
    Classify with one `ls-remote --heads` per repo — a per-branch fetch
    stalls the pass. Over-cap leftover stacks view at most four oldest
-   issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the mill stamp. The plan atom is trust-with-evidence,
+   issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the lokay stamp. The plan atom is trust-with-evidence,
    not a human gate. `pr_review` is blind to `.lokay/approach.md`
    (ticket + code diff + tests only). For a seed classified separately as unbounded collection
    work, the executor may make only the bounded collector/bootstrap patch: the
    deployed collector starts durably in the background after merge. Pi and the
-   mill never populate its data or wait for it to finish; a later issue observes
+   lokay never populate its data or wait for it to finish; a later issue observes
    whether it is accruing. Stuck → ledger → `ai:blocked`. Live ready with
    `executor.enabled: false` is a **stall**.
 6. **Health** (honest):
    - `idle` — survey finds no remaining work
    - `progress` — mutations moved the queue this pass
-   - `repairing` — active repair / request_changes cycle (not mill-failing)
+   - `repairing` — active repair / request_changes cycle (not lokay-failing)
    - `waiting` — pending CI, no-CI while `require_checks`, review limbo,
      green PRs while `merge.enabled` false (`remaining.merge_disabled`),
      only manual PRs (same soft matrix as `merge_policy`), or ready
@@ -200,18 +200,18 @@ product. Green repository verification may be reused only for the identical
      not merge-disarmed green; not ready behind an open AI PR or live job)
    - `survey_error` — list atoms failed (refuse false idle)
 
-## Continuous mill
+## Continuous lokay
 
 LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
-the mill turning; event wake (`lokay-wake` on a self-hosted `lokay-mill`
+the lokay turning; event wake (`lokay-wake` on a self-hosted `lokay-work`
 runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
 complete. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
 restarts immediately; idle 0 waits the 60s StartInterval. Classified
 `preflight_failed` is a gate and must exit 0 so the interval applies. Plist
 `StartInterval=60` and crash KeepAlive are host `--install` setup
 (`plutil`, not a per-tick rewrite). Missing plists stay missing. The
-LaunchAgent shell leases `mill.lock` and execs `lokay-daemon`; idle TTL
-and host-ff live in `factory_pass` (`host_ff` then `factory_begin_host_gate` begin|restart, then begin only on begin). Same serial mill (K=1), same lock —
+LaunchAgent shell leases `lokay.lock` and execs `lokay-daemon`; idle TTL
+and host-ff live in `factory_pass` (`host_ff` then `factory_begin_host_gate` begin|restart, then begin only on begin). Same serial lokay (K=1), same lock —
 not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 
@@ -224,10 +224,10 @@ export LOKAY_AGENT=pi    # log label only; binary is executor.command in config
 export LOKAY_MERGE_ENABLED=1          # trusted auto-merge when green + approved
 export LOKAY_REQUIRE_CHECKS=1         # pending/none wait; red → repair (recommended live)
 export LOKAY_REQUIRE_LLM_REVIEW=1     # default; approve/merge_ok before merge
-uv run lokay-mill --config config.yaml --live --max-passes 8
+uv run lokay-work --config config.yaml --live --max-passes 8
 ```
 
-Merge policy (fail closed): with `merge.enabled` / `LOKAY_MERGE_ENABLED`, the mill
+Merge policy (fail closed): with `merge.enabled` / `LOKAY_MERGE_ENABLED`, the lokay
 merges in the same `pr_triage` pass when checks are green (honoring `require_checks`),
 LLM review is `approve` / `merge_ok`, and there are no secrets, `needs_human`, or
 escalated `ai:needs-review`. Pending checks → `waiting` (not stall). Merge disabled
@@ -245,16 +245,16 @@ Status JSON includes `health`, merge knobs (`merge_enabled`, `require_checks`,
 `require_llm_review`), `k` / `max_issue_to_pr_per_pass`, per-repo `by_repo`
 (actionable PRs / ready / inbox), and compact `human_residuals`. Each tick also
 writes `~/.lokay/last-pass.json` (or `<state_dir>/last-pass.json`). See
-[`MILL_HEALTH.md`](MILL_HEALTH.md).
+[`HEALTH.md`](HEALTH.md).
 
-**ok=false** when work remains but mill is not live-ready → NOT WORKING.
+**ok=false** when work remains but lokay is not live-ready → NOT WORKING.
 `repairing` / `waiting` are ok (honest wait), not recovery thrash.
-`--human` does not set mill not-working; it only lists residuals.
+`--human` does not set lokay not-working; it only lists residuals.
 
 ## Self-repair / recovery (narrow)
 
 Self-repair must **not** steal cycles from normal review limbo or per-repo waiting.
-Product mill time wins over emergency recovery.
+Product lokay time wins over emergency recovery.
 
 **Self-repair may run only when:**
 
@@ -265,15 +265,15 @@ Product mill time wins over emergency recovery.
    only). `select_repair_route` composes leftover skip / empty survey /
    stale receipt so they never start repair. Only then does `daemon_cycle`
    file one deduplicated incident and enter the `self_repair` child Fala.
-   `recovery_mill` hosts one `factory_pass`; activate stays `self_repair_activate`.
+   `recovery_factory` hosts one `factory_pass`; activate stays `self_repair_activate`.
 
 **Never mint a systemic stall fingerprint / never fill the 4-of-5 quorum for:**
 
-- mill `health=waiting` (pending CI, merge-disarmed green, review limbo, only
+- lokay `health=waiting` (pending CI, merge-disarmed green, review limbo, only
   manual/`ai:needs-review` PRs)
-- mill `health=repairing` (active repair / request_changes cycle)
+- lokay `health=repairing` (active repair / request_changes cycle)
 - other honest soft outcomes (`idle`, `progress`, `offline`, `overlap`)
-- per-event `pr_repair` / `issue_to_pr` / `pr_triage` failures while the mill
+- per-event `pr_repair` / `issue_to_pr` / `pr_triage` failures while the lokay
   envelope itself is still a soft wait above
 
 Soft observations may sit in the rolling window (they **dilute** quorum) but
@@ -291,7 +291,7 @@ See [`GRAPH.md`](GRAPH.md).
 **Law:** order lives in Fala; work is small Unix one-job processes; no Hermes
 Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
 
-- `factory_pass` is the parent Fala run used by the mill. It conducts
+- `factory_pass` is the parent Fala run used by the lokay. It conducts
   `factory_begin` plus five departments (`self_repair`, `issue_triage`,
   `executor`, `pr_triage`, `pr_repair`) then `record_pass` →
   `factory_pass_terminal`.
@@ -304,16 +304,16 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   (`did_not_move`) starts oil.
   `factory_begin` opens a pass workspace after a short host-alive probe.
   Empty survey snapshots do not idle or skip PRs and issues. Launchd does not exec
-  `lokay-daemon` while `mill.lock` is held; `LOKAY_PROCESS_HEAD`
+  `lokay-daemon` while `lokay.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
-  Host-ff lives only in Fala. The mill-daemon shell is OS only (lock, exec,
+  Host-ff lives only in Fala. The lokay-daemon shell is OS only (lock, exec,
   logs, bootstrap incident, 180s lock-owner ceiling). Nested Fala SIGALRM
-  does not release `mill.lock`. Detached `issue_to_pr` survives the ceiling.
+  does not release `lokay.lock`. Detached `issue_to_pr` survives the ceiling.
   Standalone `lokay-daemon` still probes. Healthy first host
   check is not rerun (`gh api user` / ast.parse every lokay module). Repair
   still reruns `_check`.
-  Fala inherit_env is a whitelist: every atom, including nested `recovery_mill`,
-  must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the mill.
+  Fala inherit_env is a whitelist: every atom, including nested `recovery_factory`,
+  must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the lokay.
   Every live Fala sqlite under `~/.lokay/fala/<path>/` is maintained through
   `fala.maintain_journal` when oversized (default 64 MiB) so idle ticks do
   not reopen a multi-GB journal. Heartbeat journals also finalize and delete
@@ -322,14 +322,14 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   per tick, so old debris drains without consuming the next 180s product slot.
   Detached issue-to-PR journals are not finalized. `daemon_entry` /
   `daemon_cycle` / `factory_pass` open a fresh wrapper sqlite per tick and
-  prune old wrapper dirs; they do not reopen the shared mill journals. Each
+  prune old wrapper dirs; they do not reopen the shared lokay journals. Each
   host materializes only the requested path. Nested children never share the tree-root
   sqlite or overwrite a sibling materialized package. The journal is a pass
   trace, not world history. Product recovery stays on `state.jsonl`.
   Over-cap is fail-closed if Fala cannot maintain the file.
   After each factory pass, leftover closeout parks leftover `work:ready` /
-  `ai:ready` on GitHub-CLOSED mill issues. That is not a second hunt through
-  every mill PR; GitHub CLOSED is enough. Mill repo count never fail-closes
+  `ai:ready` on GitHub-CLOSED lokay issues. That is not a second hunt through
+  every lokay PR; GitHub CLOSED is enough. Lokay repo count never fail-closes
   prepare. Candidate overflow parks the first authored handful and leftover-
   skips the rest; it does not fail the pass. After an empty leftover, skip
   those GitHub lists for 300s so idle ticks do not pay them twice a minute.
@@ -342,30 +342,30 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Hosted leftover-closeout reports applied.
   Empty leftover-closeout host is not applied.
   Leftover-closeout rate limit does not stamp empty.
-  Pytest must not skip leftover GitHub lists using the mill stamp.
-  After a complete empty mill survey (no open AI PRs, inbox, or ready), skip
+  Pytest must not skip leftover GitHub lists using the lokay stamp.
+  After a complete empty lokay survey (no open AI PRs, inbox, or ready), skip
   those GitHub lists for 120s without refreshing the stamp.
-  Inbox rate limit does not stamp empty. A live mill with
+  Inbox rate limit does not stamp empty. A live lokay with
   that fresh stamp and an idle last-pass still hosts `factory_pass`;
   `classify_factory_idle` exits authored idle. Missing stamp, occupied
   last-pass, or pytest always hosts the rest of the pass. When the stamp
-  expires, the same idle mill cheap-probes those three GitHub lists inside
+  expires, the same idle lokay cheap-probes those three GitHub lists inside
   Fala. An empty probe refreshes the stamp and idles; probe failure or
   remaining work hosts. Leftover closeout is the authored `leftover_closeout`
   path after a hosted product pass. Idle CLASSIFY_CAP skips no-issue leftovers so
-  Fala cannot starve mill issues. Idle CLASSIFY_CAP skips dirty-real leftovers
-  so KEEP cannot starve mill issues. Harvest leftovers are not mill issues.
+  Fala cannot starve lokay issues. Idle CLASSIFY_CAP skips dirty-real leftovers
+  so KEEP cannot starve lokay issues. Harvest leftovers are not lokay issues.
   Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers
-  cannot freeze mill porcelain. Idle KEEP-only leftovers still write the
+  cannot freeze lokay porcelain. Idle KEEP-only leftovers still write the
   over-cap stamp. Idle worktree removal requires healthy. Classification and
   KEEP stamping do not. Hosted worktree removal also requires healthy; hosted
   KEEP classification does not. Idle over-cap skip outlives leftover-probe.
-  Nested clones are not mill leftover
-  worktrees. Mill worktrees keep a .git file. Pytest must not skip GitHub surveys
-  using the mill stamp.
+  Nested clones are not lokay leftover
+  worktrees. Lokay worktrees keep a .git file. Pytest must not skip GitHub surveys
+  using the lokay stamp.
   Leftover closeout stays the authored `leftover_closeout` path after a
   hosted product pass. The LaunchAgent shell does not leftover-probe or
-  idle-skip. Host-ff and cheap mill-list probes run only inside Fala.
+  idle-skip. Host-ff and cheap lokay-list probes run only inside Fala.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.
@@ -379,7 +379,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Idle leftover-cache skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Idle daemon_cycle skip still runs leftover-cache.
-  Pytest must not skip leftover-cache GitHub lists using the mill stamp.
+  Pytest must not skip leftover-cache GitHub lists using the lokay stamp.
   After an empty leftover-ready probe (`ai:ready` without `work:ready`), skip
   that GitHub list for 300s without refreshing the stamp.
   Fresh leftover-ready skip does not require healthy. Fresh leftover-ready
@@ -392,7 +392,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Idle leftover-ready skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
   Idle daemon_cycle skip still runs leftover-ready.
-  Pytest must not skip leftover-ready GitHub lists using the mill stamp.
+  Pytest must not skip leftover-ready GitHub lists using the lokay stamp.
   After an empty leftover-incident probe (`<!-- lokay-preflight:… -->`), skip
   that GitHub list for 300s without refreshing the stamp.
   Fresh leftover-incident skip is not applied.
@@ -414,7 +414,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Leftover-incident OSError reports probe_failed.
   Idle leftover-incident skip outlives leftover-probe. Hosted factory_pass
   stays at 300s.
-  Pytest must not skip leftover-incident GitHub lists using the mill stamp.
+  Pytest must not skip leftover-incident GitHub lists using the lokay stamp.
   Probe failure does
   not write the stamp. Opening a new incident clears it.
   Dispatch atoms start the smaller workflow Falas through a separate journal
@@ -425,4 +425,4 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Comments carry a durable `<!-- lokay-review head=… -->` marker for idempotency.
 - Env knobs (see `config.example.yaml`): `LOKAY_MERGE_ENABLED`, `LOKAY_REQUIRE_CHECKS`,
   `LOKAY_REQUIRE_LLM_REVIEW`. Keep `merge.enabled: false` in dry-run configs; enable
-  merge on the live mill via env.
+  merge on the live lokay via env.

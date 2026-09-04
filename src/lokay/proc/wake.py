@@ -1,8 +1,8 @@
 """Atomic: interpret a GitHub wake reason and run the matching bounded path.
 
 One job: route issue / PR / checks / factory wakes to ``issue_triage``,
-``pr_triage``, or ``lokay-mill --max-passes 1``. Prefer invocation from a
-self-hosted Actions runner on the mill host (see docs/AUTONOMY.md).
+``pr_triage``, or ``lokay-work --max-passes 1``. Prefer invocation from a
+self-hosted Actions runner on the lokay host (see docs/AUTONOMY.md).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from typing import Any, Callable
 
-from lokay.compose.mill import compose_mill
+from lokay.compose.run import compose_run
 from lokay.compose.pr_triage import compose_pr_triage
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
@@ -18,7 +18,7 @@ from lokay.proc._common import add_config_live, load_cfg
 from lokay.wake import WakePlan, route_wake
 
 
-_REPO_SKIP_REASON = "repo_not_delivered_by_mini_mill"
+_REPO_SKIP_REASON = "repo_not_delivered_by_mini_lokay"
 
 
 def _repo_skip(repo: str, *, planned: bool, plan_only: bool = False) -> dict[str, Any]:
@@ -81,7 +81,7 @@ def execute_wake(
     elif plan.path == "factory_pass":
         max_passes = int(plan.max_passes or 1)
         run = fns.get("factory_pass") or (
-            lambda: compose_mill(
+            lambda: compose_run(
                 config_path=config_path,
                 live=live,
                 max_passes=max_passes,
@@ -150,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--plan-only",
         action="store_true",
-        help="emit routing plan JSON only (no Fala/mill invoke)",
+        help="emit routing plan JSON only (no Fala/lokay invoke)",
     )
     args = p.parse_args(argv)
 

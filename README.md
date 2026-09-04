@@ -1,6 +1,6 @@
 # Lokay
 
-Lokay continuously mills work across configured GitHub repositories: select then **serial** `issue_to_pr` (ticket after ticket; default K=1) with a real configured coding executor. Housecleaning (survey, triage, close-out, leftover reaps) runs only on a pass with no selected work.
+Lokay continuously delivers work across configured GitHub repositories: select then **serial** `issue_to_pr` (ticket after ticket; default K=1) with a real configured coding executor. Housecleaning (survey, triage, close-out, leftover reaps) runs only on a pass with no selected work.
 
 ## What one tick does
 
@@ -41,7 +41,7 @@ Dry-run is the default unless live mode is explicit:
 
 ```bash
 uv run lokay tick --config config.yaml
-uv run lokay mill --config config.yaml --live --max-passes 8
+uv run lokay work --config config.yaml --live --max-passes 8
 ```
 
 For a documented night / live autonomous profile (merge on, local verification,
@@ -57,7 +57,7 @@ uv run lokay-daemon --config config.yaml --max-passes 8 \
   --outbox ~/.lokay/preflight-bootstrap-incidents.log
 ```
 
-This machine uses LaunchAgent label `ai.mikolaj.lokay-mill`, `scripts/lokay-mill-daemon.sh`, and logs under `~/.lokay/logs/`. The repository does not install or version a LaunchAgent plist.
+This machine uses LaunchAgent label `ai.mikolaj.lokay`, `scripts/lokay-service.sh`, and logs under `~/.lokay/logs/`. The repository does not install or version a LaunchAgent plist.
 
 ## Maszyna stanów Lokaya
 
@@ -280,7 +280,7 @@ stateDiagram-v2
 
 Wrapper bezpośredniego CLI posiada tylko capability unikalnej health lease,
 jeden preflight i jej bezpieczne revoke. Zamknięty wynik przekazuje do Fali.
-Fala, a nie `compose/mill.py`, wybiera terminal preflight albo istniejącą
+Fala, a nie `compose/run.py`, wybiera terminal preflight albo istniejącą
 `product_pass_budget` pod-Falę. Wrapper nie odtwarza pętli passów ani routingu.
 
 ### Wejście jednej self-repair — `self_repair_entry`
@@ -463,7 +463,7 @@ read-only fakty konfiguracji, brakujących checkoutów, lease, locków repo,
 opisu grafów, opcjonalnego preflightu i ostatniego trwałego receipt. `lease_ok` opisuje
 wyłącznie zweryfikowaną capability odziedziczoną przez bieżący proces; bez tokena
 ma wartość `null` i powód `not_observed`. Niezależne `run_active` mówi, czy
-config-aware `mill.lock` jest aktualnie zajęty, a `run_lease_path` wskazuje tylko
+config-aware `lokay.lock` jest aktualnie zajęty, a `run_lease_path` wskazuje tylko
 bezpiecznie rozpoznany aktywny per-run lease. `--full` oznacza pełny widok
 dostępnego snapshotu, a nie synchroniczny pass. Żaden node nie tworzy locka ani
 nie zapisuje receiptu, etykiety lub innego stanu domenowego. Dashboard i CLI
@@ -673,7 +673,7 @@ stateDiagram-v2
 
 Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, mutation policy), jeden
 atom katalogu, który w procesie listuje CLOSED ready labels, deduplikuje i
-parkowuje, i efekt stamp. Nie ma 30-slotowego rozwinięcia Fali. Mill repo
+parkowuje, i efekt stamp. Nie ma 30-slotowego rozwinięcia Fali. Lokay repo
 count never fail-closes prepare. Candidate overflow parks the first authored
 handful and leftover-skips the rest; it does not fail the pass. Błąd sondy
 nie udaje pustego katalogu i nie zapisuje empty stamp. Nie ma agenta: stan
@@ -1021,13 +1021,13 @@ parkuje leftover labels. Nie ma 4-slotowego rozwinięcia Fali
 swoich slotach, a kolejny pass bierze remainder (najstarsze najpierw).
 Sklasyfikowane REMOVE **zwalnia dysk** (reclaim po odpięciu rejestru),
 nie tylko rename do `.lokay-preserved`. Stare archiwa `.lokay-preserved`
-przycina TTL GC; mill nie trzyma setek kopii Temidy. KEEP live i2pr jest
+przycina TTL GC; lokay nie trzyma setek kopii Temidy. KEEP live i2pr jest
 **issue-scoped** (repo+issue), nie repo-scoped. KEEP nadal obejmuje
 `pr_survey_failed` / covering PR / dirty unpublished / nieczytelny git.
 Cudze leftover sito (`foreign_localize`) jest REMOVE i bije KEEP z
 `live_issue_to_pr` / `unpublished_or_dirty` / `uncommitted_real`.
 Nie `unlink` Fala sqlite/WAL. Nie podnosić sufitu 180s. Testy tylko na
-tmp — nie reapią operator mill. W `factory_pass` ten reap jest osobnym
+tmp — nie reapią operator lokay. W `factory_pass` ten reap jest osobnym
 dzieckiem od `factory_begin`. Rzuca / puste / `process.failed` to
 sklasyfikowany `route=failed`, nie abort passu. Działy nie czekają na
 sukces sprzątania. `record_pass` też nie. Leftover work copies nie
@@ -1387,13 +1387,13 @@ stateDiagram-v2
 
 ### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
 
-Repair is a side child. It never replaces the factory mill. The moving
+Repair is a side child. It never replaces the factory lokay. The moving
 gate is one leaf (`last_pass_moving`: new PR or merge only). A second
 leaf (`select_repair_route`) composes leftover skip, empty survey, stale
 receipt, occupied, and soft health. Repair is the `self_repair` child
 graph — activate stays a leaf inside that child, not inside
-`recovery_mill`. After one repair the graph always returns to one
-`factory_pass`. LaunchAgent already re-invokes the mill; a 180s tick
+`recovery_factory`. After one repair the graph always returns to one
+`factory_pass`. LaunchAgent already re-invokes the lokay; a 180s tick
 must not nest `product_entry` / `product_pass_budget`.
 
 ```mermaid
@@ -1492,7 +1492,7 @@ kontraktu. Aktualny audyt:
 | `LocalRepairExecution` | `local_repair_execution` | jedna naprawa z logu testu i recheck |
 | `ReviewPullRequest` | `pr_triage` | sito: merge, feedback „popraw”, dowody albo terminal ręczny; bez executora |
 | `RepairPullRequest` | `pr_repair` | osobny dział: nowy SHA na istniejącym PR po werdykcie sita lub czerwonym teście |
-| `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and mill stay outside |
+| `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and lokay stay outside |
 
 ### Reguły przejść
 
@@ -1527,17 +1527,17 @@ kontraktu. Aktualny audyt:
 | `~/.lokay/last-pass.json` | Compact pass receipt after each tick (LaunchAgent-friendly) |
 | `~/.lokay/fala/<path>/` | Fala pass journals (`state.sqlite` next to the materialized package). Hard 64 MiB ceiling; over-cap is maintained through `fala.maintain_journal`, fail-closed if Fala cannot reclaim the file. Nested children never share the tree-root sqlite |
 | `uv run lokay path --describe` | Inspect materialized workflow paths |
-| `uv run lokay mill --config config.yaml --live --max-passes 8` | Run a bounded live mill |
+| `uv run lokay work --config config.yaml --live --max-passes 8` | Run a bounded live lokay |
 | `src/lokay/proc/` | Unix atoms |
-| `src/lokay/compose/` | Path entrypoints and top-level mill policy |
+| `src/lokay/compose/` | Path entrypoints and top-level lokay policy |
 | `fala/` | Authored Fala package |
-| `scripts/lokay-mill-daemon.sh` | Launchd-compatible one-pass wrapper |
+| `scripts/lokay-service.sh` | Launchd-compatible bounded-run caretaker |
 
 ## Binding documentation
 
 - [`docs/WORKING.md`](docs/WORKING.md) — working-machine contract and tick order
-- [`docs/AUTONOMY.md`](docs/AUTONOMY.md) — autonomous mill Definition of Working, night profile, canaries
-- [`docs/MILL_HEALTH.md`](docs/MILL_HEALTH.md) — mill health without watching GitHub
+- [`docs/AUTONOMY.md`](docs/AUTONOMY.md) — autonomous lokay Definition of Working, night profile, canaries
+- [`docs/HEALTH.md`](docs/HEALTH.md) — lokay health without watching GitHub
 - [`docs/GRAPH.md`](docs/GRAPH.md) — Fala paths and conduction
 - [`docs/UNIX.md`](docs/UNIX.md) — process boundaries and JSON envelopes
 - [`docs/NO_STUBS.md`](docs/NO_STUBS.md) — real-agent requirement
@@ -1554,7 +1554,7 @@ uv run lokay-status-server --config config.yaml
 # http://127.0.0.1:8766
 ```
 
-The server does not survey GitHub or mutate the mill. It renders the current local
+The server does not survey GitHub or mutate the lokay. It renders the current local
 pass receipt, 24-hour and 7-day event throughput, supported repositories, per-repo
 work, blockers, and a bounded history of completed pass receipts. Core UI assets
 come from the pinned app-factory platform at same-origin `/static/platform`.

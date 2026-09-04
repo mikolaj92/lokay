@@ -50,9 +50,9 @@ def test_daemon_cycle_is_two_small_gate_processes_then_repair_child():
     assert "recovery_begin" not in ids
     assert "recovery_observe" not in ids
     assert "recovery_record" not in ids
-    assert ids[-2] == "recovery_mill"
+    assert ids[-2] == "recovery_factory"
     assert ids[-1] == "summarize_daemon_cycle"
-    assert ids.index("recovery_run_self_repair") < ids.index("recovery_mill")
+    assert ids.index("recovery_run_self_repair") < ids.index("recovery_factory")
 
 
 def test_leftover_skip_runs_factory_and_skips_repair():
@@ -61,7 +61,7 @@ def test_leftover_skip_runs_factory_and_skips_repair():
     assert status["select_repair_route"] == "succeeded"
     assert status["recovery_incident"] == "skipped"
     assert status["recovery_run_self_repair"] == "skipped"
-    assert status["recovery_mill"] == "succeeded"
+    assert status["recovery_factory"] == "succeeded"
     assert status["summarize_daemon_cycle"] == "succeeded"
 
 
@@ -71,16 +71,16 @@ def test_did_not_move_runs_repair_then_factory():
     assert status["select_repair_route"] == "succeeded"
     assert status["recovery_incident"] == "succeeded"
     assert status["recovery_run_self_repair"] == "succeeded"
-    assert status["recovery_mill"] == "succeeded"
+    assert status["recovery_factory"] == "succeeded"
     assert status["summarize_daemon_cycle"] == "succeeded"
 
 
-def test_recovery_mill_is_factory_only():
+def test_recovery_factory_is_factory_only():
     source = (
-        Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "recovery_mill.py"
+        Path(__file__).resolve().parents[1] / "src" / "lokay" / "proc" / "recovery_factory.py"
     ).read_text(encoding="utf-8")
     assert "compose_factory_pass" in source
-    assert "compose_mill" not in source
+    assert "compose_run" not in source
     assert "product_entry" not in source
     assert "product_pass_budget" not in source
     assert "self_repair" not in source
@@ -96,6 +96,6 @@ def test_docs_say_repair_returns_to_factory():
     assert "last_pass_moving" in section
     assert "select_repair_route" in section
     assert "leftover skip" in section.lower() or "leftover_overflow" in section
-    assert "recovery_mill" in section
+    assert "recovery_factory" in section
     assert "recovery_begin" not in section.split("```")[1]
     assert "classify_last_pass_progress" not in section.split("```")[1]

@@ -16,7 +16,7 @@ def _ctx(repo: str) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("atom", ["list_prs", "pr_label"])
-def test_lokay_repo_runs_finalize_atoms(
+def test_factory_repo_runs_finalize_atoms(
     atom: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[list[str]] = []

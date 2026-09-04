@@ -1,6 +1,6 @@
 """Authored leftover walk. Consume only on authored skip; else keep the row."""
 
-from lokay.proc.classify_issue_assignee import mill_of, takeable
+from lokay.proc.classify_issue_assignee import lokay_of, takeable
 from lokay.proc.pass_lane import is_oil_repo, self_repo
 
 CONSUME = frozenset(
@@ -81,9 +81,9 @@ def product_first(rows: list[dict] | None, *, self_id: str = "") -> list[dict]:
     return product or listed
 
 
-def ownable(rows: list[dict] | None, mill: str) -> list[dict]:
-    """Drop rows that already have someone other than the mill."""
-    return [row for row in list(rows or []) if takeable(row, mill)]
+def ownable(rows: list[dict] | None, lokay: str) -> list[dict]:
+    """Drop rows that already have someone other than the lokay."""
+    return [row for row in list(rows or []) if takeable(row, lokay)]
 
 
 def unoccupied(rows: list[dict] | None, occupied=None) -> list[dict]:
@@ -99,17 +99,17 @@ def queue(
     listed_rows: list | None,
     last: dict | None,
     *,
-    mill: str = "",
+    lokay: str = "",
     occupied=None,
 ) -> list[dict]:
     """Leftover listed issues stay the queue. Oil yields to live product.
 
-    Foreign-owned rows (anyone besides the mill) are not the consumption
+    Foreign-owned rows (anyone besides the lokay) are not the consumption
     queue. They stay on the listed page; selection walks past them.
     A live receipt occupies its repo the same way: leftover walks past it.
     """
     last = last if isinstance(last, dict) else {}
-    mill_login = mill or mill_of(last)
+    lokay_login = lokay or lokay_of(last)
     leftover = [
         row for row in list(last.get("leftover_issues") or []) if isinstance(row, dict)
     ]
@@ -119,8 +119,8 @@ def queue(
         kept = [live[key] for row in leftover if (key := identity(row)) in live]
         product = product_first(kept)
         candidates = product if product else (product_first(live_rows) or kept)
-        return unoccupied(ownable(candidates, mill_login), occupied)
+        return unoccupied(ownable(candidates, lokay_login), occupied)
     return unoccupied(
-        ownable(product_first(after(listed_rows, last) or live_rows), mill_login),
+        ownable(product_first(after(listed_rows, last) or live_rows), lokay_login),
         occupied,
     )

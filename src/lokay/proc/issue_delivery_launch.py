@@ -149,7 +149,7 @@ def detach_issue_to_pr(
             "issue": issue_number,
         }
     env["LOKAY_ISSUE_TO_PR_ACTIVATION_FD"] = str(read_fd)
-    env["LOKAY_REPO_LOCK_FD"] = str(lock_handle.fileno())
+    env["LOKAY_REPO_SCOPE_LOCK_FD"] = str(lock_handle.fileno())
     try:
         log_fh = log_path.open("ab")
     except OSError as exc:

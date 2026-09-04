@@ -54,29 +54,29 @@ OVER_CAP_TTL_SECONDS = 300
 IDLE_OVER_CAP_TTL_SECONDS = 900
 OVER_CAP_STAMP_NAME = "reap-over-cap.stamp"
 
-# The mini mill only delivers Lokay. Product repositories can remain in the
+# The mini lokay only delivers Lokay. Product repositories can remain in the
 # shared catalog, but this atom must not inspect or classify their worktrees.
 
 
 def over_cap_stamp_path(cfg: Any) -> Path | None:
-    """Stamp lives beside mill state. Missing path means always probe."""
+    """Stamp lives beside lokay state. Missing path means always probe."""
     path = getattr(cfg, "state_path", None)
     if not path:
         return None
     return Path(path).expanduser().parent / OVER_CAP_STAMP_NAME
 
 
-def mill_over_cap_stamp_path() -> Path:
-    """Operator mill over-cap stamp beside last-pass / state.jsonl."""
+def lokay_over_cap_stamp_path() -> Path:
+    """Operator lokay over-cap stamp beside last-pass / state.jsonl."""
     return Path.home() / ".lokay" / OVER_CAP_STAMP_NAME
 
 
-def _is_operator_mill_over_cap_stamp(stamp: Path) -> bool:
-    mill = mill_over_cap_stamp_path()
+def _is_operator_lokay_over_cap_stamp(stamp: Path) -> bool:
+    lokay = lokay_over_cap_stamp_path()
     try:
-        return stamp.expanduser().resolve() == mill.resolve()
+        return stamp.expanduser().resolve() == lokay.resolve()
     except OSError:
-        return stamp.expanduser() == mill
+        return stamp.expanduser() == lokay
 
 
 def over_cap_recently_idle(
@@ -84,8 +84,8 @@ def over_cap_recently_idle(
 ) -> bool:
     if stamp is None:
         return False
-    # Pytest must not skip over-cap GitHub views using the mill stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_over_cap_stamp(
+    # Pytest must not skip over-cap GitHub views using the lokay stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_over_cap_stamp(
         stamp
     ):
         return False
@@ -158,9 +158,9 @@ def _oldest(leftovers: list[tuple[Path, str]]) -> list[tuple[Path, str]]:
 def _oldest_issued(
     leftovers: list[tuple[Path, str]], *, branch_prefix: str
 ) -> list[tuple[Path, str]]:
-    """Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve mill issues.
+    """Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve lokay issues.
 
-    Harvest leftovers are not mill issues.
+    Harvest leftovers are not lokay issues.
     """
     issued = [
         item
@@ -173,7 +173,7 @@ def _oldest_issued(
 def _oldest_issued_clean(
     leftovers: list[tuple[Path, str]], *, branch_prefix: str
 ) -> list[tuple[Path, str]]:
-    """Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve mill issues."""
+    """Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve lokay issues."""
     issued = _oldest_issued(leftovers, branch_prefix=branch_prefix)
     git = Runner()
     clean: list[tuple[Path, str]] = []
@@ -193,7 +193,7 @@ def _oldest_issued_clean(
 def _oldest_empty_no_issue(
     leftovers: list[tuple[Path, str]], *, branch_prefix: str
 ) -> list[tuple[Path, str]]:
-    """Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers cannot freeze mill porcelain."""
+    """Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers cannot freeze lokay porcelain."""
     no_issue = [
         item
         for item in leftovers

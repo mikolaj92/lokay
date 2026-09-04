@@ -1,4 +1,4 @@
-"""Fetch + fast-forward the mill host checkout onto origin/main."""
+"""Fetch + fast-forward the lokay host checkout onto origin/main."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ HOST_FF_FETCHED_ENV = "LOKAY_HOST_FF_FETCHED"
 
 
 def caretaker_already_fetched() -> bool:
-    """True when mill-daemon already fetched origin/main this tick."""
+    """True when lokay-daemon already fetched origin/main this tick."""
     return os.environ.get(HOST_FF_FETCHED_ENV, "").strip().lower() in {
         "1",
         "true",
@@ -45,7 +45,7 @@ def github_main_sha(runner: Runner) -> str:
 
 
 def checkout_head(checkout: Path) -> str:
-    """Current HEAD of the mill checkout, or empty when unreadable."""
+    """Current HEAD of the lokay checkout, or empty when unreadable."""
     try:
         out = subprocess.run(
             ["git", "-C", str(checkout), "rev-parse", "HEAD"],
@@ -59,7 +59,7 @@ def checkout_head(checkout: Path) -> str:
 
 
 def snapshot_process_head(checkout: Path, *, refresh: bool = False) -> str:
-    """Remember the HEAD this mill process imported. Empty if already set or unread."""
+    """Remember the HEAD this lokay process imported. Empty if already set or unread."""
     existing = os.environ.get(PROCESS_HEAD_ENV, "").strip()
     if existing and not refresh:
         return existing
@@ -130,7 +130,7 @@ def protected_skip_worktree_paths(skipped: list[str]) -> list[str]:
 def release_unprotected_skip_worktree(
     runner: Runner, checkout: Path, skipped: list[str], incoming: set[str]
 ) -> list[str]:
-    """Drop skip-worktree on product files so mill policy can land."""
+    """Drop skip-worktree on product files so lokay policy can land."""
     released: list[str] = []
     for rel in skipped:
         if rel == SKIP_WORKTREE_CATALOG or rel not in incoming:
@@ -183,7 +183,7 @@ def _dirty_paths(runner: Runner, checkout: Path, skipped: list[str]) -> list[str
 
 
 def _is_harvest_leftover(status: str, rel: str) -> bool:
-    """Changes a finished child may leave in the non-writing mill checkout."""
+    """Changes a finished child may leave in the non-writing lokay checkout."""
     if rel == ".lokay" or rel.startswith(".lokay/"):
         return True
     return status == "??" and (

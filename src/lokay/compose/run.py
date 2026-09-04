@@ -1,8 +1,8 @@
 """Composer: run factory_pass until true idle or budget exhausted.
 
-Continuous miller for the factory: keep calling compose_factory_pass (parent
+Continuous lokayer for the factory: keep calling compose_factory_pass (parent
 Fala) until idle, stall, or max_passes. Does not sleep/poll forever — one fire
-runs a bounded pass budget (external schedulers re-invoke mill).
+runs a bounded pass budget (external schedulers re-invoke lokay).
 """
 
 from __future__ import annotations
@@ -17,14 +17,14 @@ from lokay.preflight import health_lease_status, revoke_health_lease, run_prefli
 from lokay.proc._common import add_config_live, load_cfg
 
 
-def compose_mill(
+def compose_run(
     *,
     config_path: str | None,
     live: bool,
     max_passes: int = 8,
     preflight: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run the mill under one process-tree health capability."""
+    """Run the lokay under one process-tree health capability."""
     inherited_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     owns_lease = False
     owns_lease_path = False
@@ -46,7 +46,7 @@ def compose_mill(
         owns_lease_path = True
     try:
         if preflight is None and live:
-            # A direct lokay-mill invocation owns preflight and must delegate its
+            # A direct lokay-work invocation owns preflight and must delegate its
             # result through the parent Fala subprocess. Otherwise factory_begin
             # repeats preflight and reports this process's lock as contention.
             preflight = run_preflight(config_path, remediate=True, issue_lease=True)
@@ -62,7 +62,7 @@ def compose_mill(
                         "lease": False,
                         "lease_reason": lease_reason,
                     }
-        return _compose_mill(
+        return _compose_run(
             config_path=config_path,
             live=live,
             max_passes=max_passes,
@@ -77,7 +77,7 @@ def compose_mill(
             os.environ.pop(key, None)
 
 
-def _compose_mill(
+def _compose_run(
     *,
     config_path: str | None,
     live: bool,
@@ -97,7 +97,7 @@ def _compose_mill(
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="lokay-mill")
+    p = argparse.ArgumentParser(prog="lokay-work")
     add_config_live(p)
     p.add_argument(
         "--max-passes",
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     return emit_exit(
-        compose_mill(
+        compose_run(
             config_path=args.config,
             live=bool(args.live),
             max_passes=int(args.max_passes),

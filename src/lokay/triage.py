@@ -65,8 +65,8 @@ class TriageDecision:
         return asdict(self)
 
 
-# Parking labels: not inbox, not implementable (factory keeps milling elsewhere).
-# ai:tracker = auto-split parent; mill continues other work (human mailbox only).
+# Parking labels: not inbox, not implementable (factory keeps lokaying elsewhere).
+# ai:tracker = auto-split parent; lokay continues other work (human mailbox only).
 PARK_LABELS = frozenset({"frozen", "ai:frozen", "ai:tracker"})
 
 
@@ -149,7 +149,7 @@ def is_open_work_issue(
 
 
 def is_preflight_incident(*, title: str, body: str) -> bool:
-    """True when GitHub issue is a mill preflight incident, not product work."""
+    """True when GitHub issue is a lokay preflight incident, not product work."""
     if _PREFLIGHT_MARKER.search(body or ""):
         return True
     return bool(_PREFLIGHT_TITLE.search((title or "").strip()))
@@ -223,7 +223,7 @@ def decide_issue(
             reason="preflight_incident",
             add_labels=(blocked_label,),
             comment=(
-                "Blocked: mill preflight incident. Self-repair owns this, "
+                "Blocked: lokay preflight incident. Self-repair owns this, "
                 "not issue_to_pr."
             ),
         )

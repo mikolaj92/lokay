@@ -9,7 +9,7 @@ from lokay.compose import issue_to_pr
 
 
 
-def test_lokay_repo_still_runs_issue_to_pr_path(
+def test_factory_repo_still_runs_issue_to_pr_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[dict[str, object]] = []

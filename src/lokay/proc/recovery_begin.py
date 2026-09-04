@@ -1,4 +1,4 @@
-"""Atomic: capture the state-log boundary before one product mill run."""
+"""Atomic: capture the state-log boundary before one product lokay run."""
 
 from __future__ import annotations
 

@@ -11,7 +11,7 @@ from lokay.code import github as github_code
 from lokay.proc import pr_merge
 
 
-def test_lokay_repo_still_merges_and_parks_issue(
+def test_factory_repo_still_merges_and_parks_issue(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:

@@ -179,7 +179,7 @@ def list_ready_issues(
     live: bool,
     on_cap: str = "fail",
 ) -> list[Issue]:
-    """Open catalog issues minus human stops. Mill labels are not a gate."""
+    """Open catalog issues minus human stops. Lokay labels are not a gate."""
     rows = _list_open_issues(
         runner,
         config,

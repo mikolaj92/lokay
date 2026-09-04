@@ -1,11 +1,11 @@
-"""One job: mill host checkout is origin/main (fetch + ff-only) or fail-closed.
+"""One job: lokay host checkout is origin/main (fetch + ff-only) or fail-closed.
 
 Does not overwrite the skip-worktree host catalog (``repos.mikolaj92.yaml`` on mini).
 Product files such as ``config.yaml`` follow origin/main. Never ``reset --hard``.
-Product ``issue_to_pr`` must not run on stale mill code.
+Product ``issue_to_pr`` must not run on stale lokay code.
 
 This is host maintenance (not a GitHub product mutation): ``--live`` means
-fetch + ff-only. It does not take the mill health lease, so the LaunchAgent
+fetch + ff-only. It does not take the lokay health lease, so the LaunchAgent
 can sync before ``lokay-daemon`` issues one.
 """
 
@@ -41,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     add_config_live(parser)
     parser.add_argument(
         "--checkout",
-        help="mill host git checkout (default: LOKAY_ROOT or lokay clone)",
+        help="lokay host git checkout (default: LOKAY_ROOT or lokay clone)",
     )
     args = parser.parse_args(argv)
     checkout = resolve_checkout(args)
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
             )
         return emit_exit(
             err(
-                "mill checkout unavailable",
+                "lokay checkout unavailable",
                 reason="host_checkout_missing",
                 health="host_behind",
             )

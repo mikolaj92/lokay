@@ -67,7 +67,7 @@ def test_labels_are_not_a_gate(monkeypatch):
     assert "ai:ready" not in out["issues"][0]["labels"]
 
 
-def test_facts_carry_assignees_and_mill(monkeypatch):
+def test_facts_carry_assignees_and_lokay(monkeypatch):
     issue = SimpleNamespace(
         repo="Temida/Temida",
         number=5072,

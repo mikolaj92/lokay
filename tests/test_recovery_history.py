@@ -55,7 +55,7 @@ def test_successful_delivery_breaks_systemic_failure_evidence(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": False, "health": "budget_exhausted", "progress": 9},
+        lokay={"ok": False, "health": "budget_exhausted", "progress": 9},
     )
     assert row["delivered"] is True
     assert row["fingerprint"] is None
@@ -84,7 +84,7 @@ def test_skipped_pr_merge_is_not_delivery(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": False, "health": "budget_exhausted", "progress": 8},
+        lokay={"ok": False, "health": "budget_exhausted", "progress": 8},
     )
     assert row["delivered"] is False
     assert row["fingerprint"] is None
@@ -106,7 +106,7 @@ def test_actual_pr_merge_is_delivery(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": False, "health": "budget_exhausted", "progress": 8},
+        lokay={"ok": False, "health": "budget_exhausted", "progress": 8},
     )
     assert row["delivered"] is True
     assert row["fingerprint"] is None
@@ -123,25 +123,25 @@ def test_observation_reads_only_current_run_tail(tmp_path):
             json.dumps({"kind": "carrier", "ok": False, "error": "new failure 123"})
             + "\n"
         )
-    row = observe_run(state_path=state, state_offset=offset, mill={"ok": False})
+    row = observe_run(state_path=state, state_offset=offset, lokay={"ok": False})
     assert "new failure" in row["evidence"]
     assert "old failure" not in row["evidence"]
     assert history_path_for(state) == tmp_path / "recovery-history.json"
 
 
-def test_waiting_or_repairing_mill_envelope_is_not_failure_fingerprint(tmp_path):
+def test_waiting_or_repairing_lokay_envelope_is_not_failure_fingerprint(tmp_path):
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
     for health in ("waiting", "repairing"):
-        # Both ok=false (defensive) and ok=true (mill early-exit / #55 receipt shape).
+        # Both ok=false (defensive) and ok=true (lokay early-exit / #55 receipt shape).
         for ok_flag in (False, True):
             row = observe_run(
                 state_path=state,
                 state_offset=0,
-                mill={
+                lokay={
                     "ok": ok_flag,
                     "health": health,
-                    "error": f"mill {health}",
+                    "error": f"lokay {health}",
                     "progress": 0,
                 },
             )
@@ -155,7 +155,7 @@ def test_empty_adapter_failed_is_not_stall_fingerprint(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={
+        lokay={
             "ok": False,
             "health": "failed",
             "error": {
@@ -175,7 +175,7 @@ def test_product_adapter_failure_does_not_become_global_source_incident(tmp_path
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={
+        lokay={
             "ok": False,
             "health": "failed",
             "error": {
@@ -195,7 +195,7 @@ def test_running_health_is_not_failure_fingerprint(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": False, "health": "running", "error": "mill stall", "progress": 0},
+        lokay={"ok": False, "health": "running", "error": "lokay stall", "progress": 0},
     )
     assert row["fingerprint"] is None
     assert row["health"] == "running"
@@ -207,7 +207,7 @@ def test_detached_issue_to_pr_started_is_not_stall_fingerprint(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={
+        lokay={
             "ok": False,
             "health": "stall",
             "error": "stall: actionable work remains but no progress this pass",
@@ -254,14 +254,14 @@ def test_pending_ci_and_needs_review_triage_events_do_not_fingerprint(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": True, "health": "waiting", "progress": 0},
+        lokay={"ok": True, "health": "waiting", "progress": 0},
     )
     assert row["fingerprint"] is None
     assert row["health"] == "waiting"
 
 
 def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
-    """#56 waiting/repair/needs-review reasons must not fill quorum under hard mill."""
+    """#56 waiting/repair/needs-review reasons must not fill quorum under hard lokay."""
     from lokay.merge_policy import decide_auto_merge
 
     # Sanity: merge_policy matrix unchanged by recovery work.
@@ -379,33 +379,33 @@ def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
         "checks_failed",
         "merge_disabled",
     )
-    for mill_health in ("stall", "budget_exhausted", "failed"):
+    for lokay_health in ("stall", "budget_exhausted", "failed"):
         observation = observe_run(
             state_path=state,
             state_offset=0,
-            mill={
+            lokay={
                 "ok": False,
-                "health": mill_health,
-                "error": f"mill {mill_health}: actionable work remains",
+                "health": lokay_health,
+                "error": f"lokay {lokay_health}: actionable work remains",
                 "progress": 0,
             },
         )
         evidence = str(observation.get("evidence") or "")
         assert all(token not in evidence for token in soft_tokens), (
-            mill_health,
+            lokay_health,
             evidence,
         )
         # Soft-only event text must not dominate; envelope may still fingerprint.
         if observation["fingerprint"] is not None:
-            assert mill_health in evidence or "actionable work" in evidence
+            assert lokay_health in evidence or "actionable work" in evidence
 
     # Five soft-reason-only observations must not confirm self-repair quorum.
     for _ in range(5):
         observation = observe_run(
             state_path=state,
             state_offset=0,
-            # Soft mill health is the honest #56 product wait path.
-            mill={"ok": True, "health": "waiting", "progress": 0},
+            # Soft lokay health is the honest #56 product wait path.
+            lokay={"ok": True, "health": "waiting", "progress": 0},
         )
         assert observation["fingerprint"] is None
         assert record_observation(history, observation) is None
@@ -429,7 +429,7 @@ def test_event_failures_under_waiting_or_repairing_do_not_fingerprint(tmp_path):
         row = observe_run(
             state_path=state,
             state_offset=0,
-            mill={"ok": True, "health": health, "progress": 0},
+            lokay={"ok": True, "health": health, "progress": 0},
         )
         assert row["fingerprint"] is None, health
         assert row["evidence"] == ""
@@ -471,7 +471,7 @@ def test_soft_waiting_rows_cannot_fill_quorum(tmp_path):
     )
 
 
-def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_path):
+def test_waiting_repairing_lokay_never_escalates_to_self_repair(monkeypatch, tmp_path):
     """Soft last-pass health must skip recovery_run_self_repair."""
     from lokay.proc.classify_last_pass_progress import classify
 
@@ -480,7 +480,7 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
     def forbid_repair(*_a, **_k):
         repair_calls.append(True)
         raise AssertionError(
-            "recovery_run_self_repair must not run for soft mill health"
+            "recovery_run_self_repair must not run for soft lokay health"
         )
 
     monkeypatch.setattr(
@@ -525,7 +525,7 @@ def test_waiting_repairing_mill_never_escalates_to_self_repair(monkeypatch, tmp_
         assert repair_calls == []
 
 
-def test_parked_needs_review_waiting_mill_never_fingerprints(tmp_path):
+def test_parked_needs_review_waiting_lokay_never_fingerprints(tmp_path):
     """Mailbox residual (only ai:needs-review) must not confirm self-repair."""
     state = tmp_path / "state.jsonl"
     state.write_text(
@@ -546,11 +546,11 @@ def test_parked_needs_review_waiting_mill_never_fingerprints(tmp_path):
         observation = observe_run(
             state_path=state,
             state_offset=0,
-            mill={
+            lokay={
                 "ok": True,
                 "health": "waiting",
                 "progress": 0,
-                "error": "mill stall: actionable work remains but no real progress",
+                "error": "lokay stall: actionable work remains but no real progress",
                 "remaining": {
                     "ready": 0,
                     "actionable_open_ai_prs": 0,
@@ -579,7 +579,7 @@ def test_local_work_item_failure_never_enters_global_repair_quorum(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": False, "health": "failed", "progress": 0},
+        lokay={"ok": False, "health": "failed", "progress": 0},
     )
     assert row["fingerprint"] is None
 
@@ -590,7 +590,7 @@ def test_explicit_carrier_failure_can_enter_global_repair_quorum(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={
+        lokay={
             "ok": False,
             "health": "carrier_failed",
             "error": "trusted manifest unreadable",

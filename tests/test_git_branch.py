@@ -27,10 +27,10 @@ def test_docs_path_in_title_is_not_a_nested_ref():
         "ai/fix",
         "mikolaj92/lokay",
         70,
-        "canary mill smoke add docs/MILL_SMOKE.md",
+        "canary lokay smoke add docs/LOKAY_SMOKE.md",
     )
     _assert_single_head("ai/fix", branch)
-    assert "docs-mill_smoke.md" in branch
+    assert "canary-lokay-smoke-add-docs-lokay_smoke" in branch
 
 
 def test_plain_title_keeps_prefix_slash():

@@ -3,7 +3,7 @@
 from pathlib import Path
 from lokay.passkit import io as pass_io
 from lokay.stuck import load_stuck
-from lokay.mill_scope import mill_repo, scoped_repos
+from lokay.factory_scope import factory_repo, scoped_repos
 
 
 def prepare(*, pass_dir: str, slot_count: int) -> dict:
@@ -18,7 +18,7 @@ def prepare(*, pass_dir: str, slot_count: int) -> dict:
         }
     path = str(begin.get("stuck_path") or "")
     stuck = load_stuck(Path(path)) if path else dict(begin.get("stuck") or {})
-    _, skipped = scoped_repos(repos, mill=mill_repo())
+    _, skipped = scoped_repos(repos, lokay=factory_repo())
     return {
         "ok": True,
         "repos": repos,

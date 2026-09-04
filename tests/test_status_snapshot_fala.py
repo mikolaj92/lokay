@@ -7,7 +7,7 @@ from test_issue_triage_fala import base_effector
 def _body(preflight: bool) -> str:
     return base_effector(
         f"""if a=='read_status_config':v.update(config='c',mode='live',executor_enabled=True,merge_enabled=True,require_checks=True,require_llm_review=True,max_issue_to_pr_per_pass=1,state_path='/tmp/state',repos=[],preflight_requested={preflight!s},full=False)
-if a=='classify_status_readiness':v.update(mill_ready=True,blockers=[],policy_notes=[])
+if a=='classify_status_readiness':v.update(lokay_ready=True,blockers=[],policy_notes=[])
 if a=='read_status_clone_facts':v['missing_clones']=[]
 if a=='read_status_lease':v.update(lease_ok=True,lease_reason='ok')
 if a=='read_status_pass_receipt':v['receipt']=None
@@ -16,8 +16,8 @@ if a=='read_status_repo_locks':v['repo_locks']=[]
 if a=='describe_status_graphs':v['graphs']=['factory_pass']
 if a=='run_status_preflight':v.update(route='record',preflight={{'ok':True}})
 if a=='record_status_preflight':v.update(route='record' if {preflight!s} else 'unused',preflight={{'ok':True}} if {preflight!s} else None)
-if a=='reduce_status_snapshot':v['snapshot']={{'mill_ready':True,'survey':False,'snapshot':True}}
-if a=='status_snapshot_terminal':v['result']={{'ok':True,'mill_ready':True,'survey':False,'snapshot':True}}"""
+if a=='reduce_status_snapshot':v['snapshot']={{'lokay_ready':True,'survey':False,'snapshot':True}}
+if a=='status_snapshot_terminal':v['result']={{'ok':True,'lokay_ready':True,'survey':False,'snapshot':True}}"""
     )
 
 

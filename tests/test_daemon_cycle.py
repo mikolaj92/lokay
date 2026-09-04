@@ -8,13 +8,13 @@ def test_finalize_daemon_payload_drops_bulky_orchestration_details():
         "remaining": {"ready": 2},
         "progress": 1,
         "terminal": {
-            "recovery_mill": "m" * 90_000,
+            "recovery_factory": "m" * 90_000,
             "recovery_observe": "o" * 90_000,
         },
         "steps": {"factory_pass": "s" * 185_000},
         "last": {
             "steps": {"factory_pass": "nested"},
-            "terminal": {"recovery_mill": "nested"},
+            "terminal": {"recovery_factory": "nested"},
             "fala": {"host": "nested"},
         },
         "fala": {"host": "f" * 90_000},

@@ -13,7 +13,7 @@ from lokay.runner import CommandResult, CommandSpec
 
 
 
-def test_lokay_repo_still_checks(
+def test_factory_repo_still_checks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:

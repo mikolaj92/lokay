@@ -19,7 +19,7 @@ from lokay.runner import CommandSpec, Runner
 from lokay.test_cache import cache_key, read_green, write_green
 
 TEST_TIMEOUT_SECONDS = 1800
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_LOKAY_REPO_SCOPE = "mikolaj92/lokay"
 
 
 def _argv_from_raw(raw: object) -> tuple[str, ...] | None:
@@ -86,7 +86,7 @@ def declared_test_argv(worktree: Path) -> tuple[str, ...] | None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-test-local")
-    p.add_argument("--repo", default=MINI_MILL_REPO)
+    p.add_argument("--repo", default=MINI_LOKAY_REPO_SCOPE)
     p.add_argument("--worktree", required=True)
     p.add_argument("--changed-scope", action="store_true")
     args = p.parse_args(argv)

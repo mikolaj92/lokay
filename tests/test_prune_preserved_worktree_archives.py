@@ -64,19 +64,19 @@ def test_reclaim_refuses_non_archive_name(tmp_path):
     assert victim.exists()
 
 
-def test_prune_refuses_operator_mill_under_pytest(monkeypatch, tmp_path):
+def test_prune_refuses_operator_lokay_under_pytest(monkeypatch, tmp_path):
     import lokay.proc.prune_preserved_worktree_archives as mod
 
     fake_home = tmp_path / "home"
-    mill = fake_home / ".lokay" / "worktrees"
-    mill.mkdir(parents=True)
-    old = mill / "owner__repo" / ".x.lokay-preserved"
+    lokay = fake_home / ".lokay" / "worktrees"
+    lokay.mkdir(parents=True)
+    old = lokay / "owner__repo" / ".x.lokay-preserved"
     old.mkdir(parents=True)
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "test_prune_refuses (call)")
-    monkeypatch.setattr(mod, "_is_operator_mill_worktrees", lambda root: True)
-    out = prune(managed_root=mill, live=True)
+    monkeypatch.setattr(mod, "_is_operator_lokay_worktrees", lambda root: True)
+    out = prune(managed_root=lokay, live=True)
     assert out.get("skipped") is True
-    assert out["reason"] == "pytest_refuses_operator_mill"
+    assert out["reason"] == "pytest_refuses_operator_lokay"
     assert old.exists()
 
 

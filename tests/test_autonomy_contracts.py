@@ -1,4 +1,4 @@
-"""Autonomy certainty contracts — hermetic mill-pass canaries.
+"""Autonomy certainty contracts — hermetic lokay-pass canaries.
 
 Pins product promises without live gh. Prefer policy atoms / pure functions /
 envelopes. Where tick still owns scheduling until Fala extraction, assert the
@@ -29,7 +29,7 @@ from fixtures.autonomy import (
     open_ai_pr,
     review_envelope,
     step_names,
-    write_mill_config,
+    write_lokay_config,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +67,7 @@ def _issue(**kwargs) -> Issue:
 
 
 @pytest.mark.parametrize("health", ["waiting", "repairing"])
-def test_contract_soft_mill_health_never_stall_fingerprint(tmp_path, health):
+def test_contract_soft_lokay_health_never_stall_fingerprint(tmp_path, health):
     state = tmp_path / "state.jsonl"
     state.write_text(
         '{"kind":"pr_repair","ok":false,"error":"push rejected during repair"}\n',
@@ -76,7 +76,7 @@ def test_contract_soft_mill_health_never_stall_fingerprint(tmp_path, health):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": True, "health": health, "progress": 0},
+        lokay={"ok": True, "health": health, "progress": 0},
     )
     assert row["fingerprint"] is None
     assert row["evidence"] == ""
@@ -95,7 +95,7 @@ def test_contract_soft_merge_policy_reasons_not_stall_evidence(tmp_path):
     row = observe_run(
         state_path=state,
         state_offset=0,
-        mill={"ok": True, "health": "waiting", "progress": 0},
+        lokay={"ok": True, "health": "waiting", "progress": 0},
     )
     assert row["fingerprint"] is None
     assert "checks_pending" not in (row.get("evidence") or "")

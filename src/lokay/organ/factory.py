@@ -61,7 +61,7 @@ def handle_factory(
         record_pass,
         recovery_begin,
         recovery_incident,
-        recovery_mill,
+        recovery_factory,
         recovery_observe,
         recovery_record,
         recovery_run_self_repair,
@@ -105,7 +105,7 @@ def handle_factory(
 
     if atom == "factory_tick":
         # Legacy alias (not in parent factory_pass). Invokes the same Fala
-        # factory_pass mill as lokay-factory-pass — not an in-process spine.
+        # factory_pass lokay as lokay-factory-pass — not an in-process spine.
         return {"ok": True, "tick": _run_atom_main(factory_tick.main, [*cfg, *live])}
 
     if atom == "classify_factory_idle":

@@ -1,10 +1,10 @@
 """Agent slot — run a configured external coding harness.
 
-No stubs. No silent defaults. No per-vendor argv hardcoding in mill code.
+No stubs. No silent defaults. No per-vendor argv hardcoding in lokay code.
 The slot writes an artifact and structured output. It does not persist a
 revision; that is a later graph atom after a ready verdict.
 
-Mill only knows:
+Lokay only knows:
   - executor.command  — binary on PATH
   - executor.args     — argv template with placeholders
   - executor.agent    — label for logs/state (any non-stub name)
@@ -33,7 +33,7 @@ Collector boundary (applies only when the task involves unbounded collection):
 - Work only on a bounded collector/bootstrap patch. Its durable background
   startup hook is activated after merge/deployment; do not start a collection
   job from this coding session.
-- Pi and the Lokay mill must not populate collection data, poll collection
+- Pi and Lokay must not populate collection data, poll collection
   progress, or wait for collection completion.
 - A later, separate issue evaluates whether the background collector produced
   useful results. Do not claim that result from this task.

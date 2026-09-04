@@ -29,7 +29,7 @@ ALT_ARGS = [
 ]
 
 
-def _clear_mill_env(monkeypatch):
+def _clear_lokay_env(monkeypatch):
     for key in (
         "LOKAY_MODE",
         "LOKAY_EXECUTOR_ENABLED",
@@ -132,7 +132,7 @@ def test_execute_true_with_executor_disabled_fails_closed(tmp_path: Path):
 
 
 def test_load_config_empty_agent_fails(tmp_path: Path, monkeypatch):
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -152,7 +152,7 @@ executor:
 
 
 def test_load_config_empty_command_fails(tmp_path: Path, monkeypatch):
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -174,7 +174,7 @@ executor:
 
 def test_enabled_executor_omitted_args_fails_closed(tmp_path: Path, monkeypatch):
     """No silent Pi argv when executor.enabled and args are omitted."""
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -194,7 +194,7 @@ executor:
 
 
 def test_enabled_executor_omitted_command_fails_closed(tmp_path: Path, monkeypatch):
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""

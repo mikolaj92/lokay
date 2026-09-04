@@ -18,14 +18,14 @@ from lokay.preflight import (
 )
 
 
-def _mill_lock_path(config_path: str) -> Path:
+def _lokay_lock_path(config_path: str) -> Path:
     """Same OS advisory lock as preflight: beside configured state.path."""
     try:
         cfg = load_config(config_path)
-        return (cfg.state_path.parent / "mill.lock").expanduser().absolute()
+        return (cfg.state_path.parent / "lokay.lock").expanduser().absolute()
     except (OSError, ValueError, FileNotFoundError):
         # Overlap short-circuit before a readable config still needs a lock path.
-        return (Path.home() / ".lokay" / "mill.lock").expanduser().absolute()
+        return (Path.home() / ".lokay" / "lokay.lock").expanduser().absolute()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,13 +34,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-passes", type=int, default=8)
     parser.add_argument("--outbox", required=True)
     args = parser.parse_args(argv)
-    lock = _mill_lock_path(args.config)
+    lock = _lokay_lock_path(args.config)
     prune_stale_health_leases(lock.parent)
     os.environ["LOKAY_HEALTH_LEASE_PATH"] = str(
         lock.parent / f"health-lease-{os.getpid()}-{secrets.token_hex(8)}"
     )
     if not acquire_run_lock(lock):
-        payload = err("mill skipped; overlapping run", health="overlap", code="overlap")
+        payload = err("lokay skipped; overlapping run", health="overlap", code="overlap")
     else:
         try:
             root = os.environ.get("LOKAY_ROOT", "").strip()

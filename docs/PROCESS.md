@@ -27,7 +27,7 @@ every pass.
 A single Fala path uses **conduction** (dependencies): a node is not ready until
 upstream succeeded. That looks forward inside one path.
 
-The **mill process as a whole is cyclic**:
+The **lokay process as a whole is cyclic**:
 
 - red suite → bounded repair → recheck
 - conflicting PR → close → re-ready → later `issue_to_pr`
@@ -79,6 +79,6 @@ When implementing in this repo:
 
 - `docs/GRAPH.md` — path diagrams and conduction
 - `docs/UNIX.md` — process boundaries and atom map
-- `docs/WORKING.md` / `docs/AUTONOMY.md` — working mill contract
+- `docs/WORKING.md` / `docs/AUTONOMY.md` — working lokay contract
 - `docs/NO_STUBS.md` — real executor only
 - `AGENTS.md` — short agent-facing summary

@@ -83,7 +83,7 @@ def reclaim_preserved_archive(archive: Path, *, managed_root: Path) -> dict[str,
 
 
 def _is_nested_clone(path: Path) -> bool:
-    """Nested clones are not mill leftover worktrees. Mill worktrees keep a .git file."""
+    """Nested clones are not lokay leftover worktrees. Lokay worktrees keep a .git file."""
     git = path / ".git"
     try:
         return git.is_dir() and not git.is_symlink()
@@ -228,7 +228,7 @@ def worktree_dir(config: Config, repo: RepoConfig, branch: str) -> Path:
 def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
     """Existing leftover corners for *repo*: ``(path, branch)``.
 
-    Nested clones are not mill leftover worktrees. Mill worktrees keep a .git file.
+    Nested clones are not lokay leftover worktrees. Lokay worktrees keep a .git file.
     """
     root = config.worktrees_root / repo.name.replace("/", "__")
     if not root.is_dir():

@@ -14,15 +14,15 @@ def stale_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / STALE_STAMP_NAME if path else None
 
 
-def mill_stale_stamp_path() -> Path:
+def lokay_stale_stamp_path() -> Path:
     return Path.home() / ".lokay" / STALE_STAMP_NAME
 
 
-def _is_operator_mill_stale_stamp(stamp: Path) -> bool:
+def _is_operator_lokay_stale_stamp(stamp: Path) -> bool:
     try:
-        return stamp.expanduser().resolve() == mill_stale_stamp_path().resolve()
+        return stamp.expanduser().resolve() == lokay_stale_stamp_path().resolve()
     except OSError:
-        return stamp.expanduser() == mill_stale_stamp_path()
+        return stamp.expanduser() == lokay_stale_stamp_path()
 
 
 def stale_recently_empty(
@@ -30,7 +30,7 @@ def stale_recently_empty(
 ) -> bool:
     if stamp is None:
         return False
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_stale_stamp(stamp):
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_stale_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime

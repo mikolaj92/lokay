@@ -23,9 +23,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | --- | --- |
 | `lokay-list-inbox` | undecided open issues |
 | `lokay-list-issues` | open catalog issues (human stops exclude) |
-| `lokay-triage-issue` | apply triage decision (ready \| split \| rare needs-feedback \| OOS) |
 | `lokay-intake-check` | one deterministic intake check (JSON) |
-| `lokay-intake-issue` | aggregate intake → CLOSE \| READY \| SPLIT \| NEEDS_HUMAN (hard facts + one structured agent call) |
 | `lokay-issue-split` | auto-split oversized issue → bounded child issues (gh + rules) |
 | `lokay-stage-label` | issue decision (`ready` / `clear`); in-flight names keep ready and strip leftover cache |
 | `lokay-select-issue` | pick one issue |
@@ -45,7 +43,7 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-pr-route` | fail-closed closeout route: wait \| repair \| merge \| skip |
 | `lokay-repos` | list managed repos |
 | `lokay-factory-begin` | preflight + open pass workspace |
-| `lokay-host-ff` | mill host fetch + ff-only onto origin/main (fail-closed if behind/dirty) |
+| `lokay-host-ff` | lokay host fetch + ff-only onto origin/main (fail-closed if behind/dirty) |
 | `lokay-survey-prs` | list open AI PRs (all repos) |
 | `lokay-survey-inbox` | list undecided inbox issues |
 | `lokay-survey-ready` | list open catalog issues; skip those covered by open AI PRs |
@@ -61,27 +59,27 @@ Lokay is a **pipeline of small programs**, not a monolith.
 | `lokay-rebase-onto-base` | fetch + rebase onto origin/main; conflict = fail closed |
 | `lokay-queue-conflict` | contradiction gate (SKIP/CLOSE/READY) before implement (covering PR deterministic; rest one agent call) |
 | `lokay-dispatch-implement` | intake gate + up to K issue_to_pr (serial budget) |
-| `lokay-compute-health` | remaining + honest mill health |
+| `lokay-compute-health` | remaining + honest lokay health |
 | `lokay-record-pass` | write last-pass.json receipt (`new_pr` \| `merge` \| `none`; leftover overflow skips) |
 | `lokay-last-pass-moving` | leaf: last receipt moved only on new PR or merge |
 | `lokay-leftover-skip` | leftover overflow is not a stall |
 | `lokay-select-repair-route` | compose moving + leftover/empty/stale/occupied/soft → factory or repair |
 | `lokay-record-inflight-remaining` | rewrite last-pass remaining from this cycle's working.json |
-| `lokay-factory-pass` / `lokay-factory-tick` | parent Fala `factory_pass` (one mill) |
+| `lokay-factory-pass` / `lokay-factory-tick` | parent Fala `factory_pass` (one lokay) |
 
 `lokay-dispatch-closeout` is gone. It was a Python bridge of `resolve_conflicts` then `closeout_prs`. Those remain separate CLI programs and authored Fala paths.
-| `lokay-mill` / `lokay-status` | continuous factory |
+| `lokay-work` / `lokay-status` | continuous factory |
 | `lokay-wake` | event wake: reason → `issue_triage` / `pr_triage` / bounded `factory_pass` |
-| `lokay status --human` | residual human mailbox (exception report; not a mill brake) |
+| `lokay status --human` | residual human mailbox (exception report; not a lokay brake) |
 
 **Factory-pass law:** Fala owns pass order (`factory_pass` conduction). Atoms
 above each do one job and return a JSON envelope. `lokay-factory-tick` and
 `lokay-factory-pass` both invoke that parent path — not a second in-process
-mill. `compose/tick.py` is the hermetic test spine only; do not grow it back
+lokay. `compose/tick.py` is the hermetic test spine only; do not grow it back
 into a multi-repo brain — use new `proc/` atoms + Fala edges.
 
 **Minimize human:** humans author issues; atoms CLOSE / SPLIT / READY+implement.
-`ai:needs-feedback` is rare residual — mill keeps other repos moving.
+`ai:needs-feedback` is rare residual — lokay keeps other repos moving.
 
 ## Anti-patterns
 

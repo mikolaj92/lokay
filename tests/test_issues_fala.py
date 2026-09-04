@@ -89,7 +89,6 @@ def simulate_executor_row(*, select_route: str, do_route: str = "skip") -> dict:
 
 def _require_fala_host():
     pytest.importorskip("fala")
-    os.environ.setdefault("FALA_HOME", os.environ.get("FALA_HOME") or "/Fala")
     try:
         from fala._build import ensure_process_host_library
 

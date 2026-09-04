@@ -17,7 +17,7 @@ def _parent_lease(tmp_path, monkeypatch):
     monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
     monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
     monkeypatch.delenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", raising=False)
-    lock = tmp_path / ".lokay" / "mill.lock"
+    lock = tmp_path / ".lokay" / "lokay.lock"
     assert acquire_run_lock(lock)
     issue_health_lease(lock_path=lock)
     assert has_health_lease() is True

@@ -1,4 +1,4 @@
-"""Honest mill health from remaining counters (pure; no network)."""
+"""Honest lokay health from remaining counters (pure; no network)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from lokay.merge_policy import actionable_mergeable_green, soft_waiting_remainin
 
 
 def implementable_ready(remaining: dict[str, Any], *, live: bool, executor_enabled: bool) -> int:
-    """Ready tickets the mill can start this pass.
+    """Ready tickets the lokay can start this pass.
 
     ``remaining.ready`` is the survey catalog. Per-repo PR-first and occupancy
     freeze that catalog until closeout / the live job finishes — those rows
@@ -164,10 +164,10 @@ def health_payload(
     return payload
 
 
-def evaluate_mill_stop(tick: dict[str, Any]) -> dict[str, Any]:
-    """Stop rules for compose_mill. Lives with health, not the mill loop.
+def evaluate_lokay_stop(tick: dict[str, Any]) -> dict[str, Any]:
+    """Stop rules for compose_run. Lives with health, not the lokay loop.
 
-    ``hard`` means the mill envelope is ok=false (stall/survey_error).
+    ``hard`` means the lokay envelope is ok=false (stall/survey_error).
     ``plateau`` stops the loop but is not a stall fingerprint.
     """
     health = str(tick.get("health") or "")
@@ -183,21 +183,21 @@ def evaluate_mill_stop(tick: dict[str, Any]) -> dict[str, Any]:
             "stop": True,
             "hard": True,
             "health": health,
-            "error": f"mill {health}: actionable work remains but no real progress",
+            "error": f"lokay {health}: actionable work remains but no real progress",
         }
     if health == "plateau":
         return {
             "stop": True,
             "hard": True,
             "health": "plateau",
-            "error": "mill plateau: progress claimed but remaining work unchanged (green noop)",
+            "error": "lokay plateau: progress claimed but remaining work unchanged (green noop)",
         }
     if not tick.get("ok") and health not in {"waiting", "repairing", "progress", "running", "idle"}:
         return {
             "stop": True,
             "hard": True,
             "health": health or "failed",
-            "error": str(tick.get("error") or "mill pass failed"),
+            "error": str(tick.get("error") or "lokay pass failed"),
         }
     if int(tick.get("progress") or 0) == 0 and not tick.get("idle"):
         return {

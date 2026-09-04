@@ -1,4 +1,4 @@
-"""Persistent 4-of-5 confirmation for repeated product-mill failures."""
+"""Persistent 4-of-5 confirmation for repeated product-lokay failures."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ _WINDOW = 5
 _QUORUM = 4
 _VOLATILE = re.compile(r"(?i)(?:0x)?[0-9a-f]{8,}|\b\d+\b")
 _SPACE = re.compile(r"\s+")
-# Honest wait / repair limbo must not confirm as mill failure for recovery.
+# Honest wait / repair limbo must not confirm as lokay failure for recovery.
 _NON_FAILURE_HEALTH = frozenset(
     {
         "waiting",
@@ -89,10 +89,10 @@ _CARRIER_ERROR_CODES = frozenset(
 )
 
 
-def _carrier_envelope_failure(mill: dict[str, Any]) -> bool:
-    if str(mill.get("health") or "") in _CARRIER_HEALTH:
+def _carrier_envelope_failure(lokay: dict[str, Any]) -> bool:
+    if str(lokay.get("health") or "") in _CARRIER_HEALTH:
         return True
-    error = mill.get("error")
+    error = lokay.get("error")
     return isinstance(error, dict) and str(error.get("code") or "") in _CARRIER_ERROR_CODES
 
 
@@ -146,7 +146,7 @@ def _empty_adapter_failure(text: str) -> bool:
     """True when Fala reports adapter_failed with no product detail.
 
     Empty stderr from a subprocess effector is plumbing (often a inherited
-    sqlite.fire cwd), not a confirmed product-mill stall. A real atom error
+    sqlite.fire cwd), not a confirmed product-lokay stall. A real atom error
     keeps words after the adapter wrapper and still fingerprints.
     """
     raw = str(text or "")
@@ -167,11 +167,11 @@ def _empty_adapter_failure(text: str) -> bool:
     return remainder == ""
 
 
-def _soft_mill_health(mill: dict[str, Any]) -> bool:
+def _soft_lokay_health(lokay: dict[str, Any]) -> bool:
     """True for honest wait / repair / idle outcomes — never systemic stall."""
-    if str(mill.get("health") or "") in _NON_FAILURE_HEALTH:
+    if str(lokay.get("health") or "") in _NON_FAILURE_HEALTH:
         return True
-    return _lease_noise(str(mill.get("error") or mill.get("health") or ""))
+    return _lease_noise(str(lokay.get("error") or lokay.get("health") or ""))
 
 
 def _soft_product_outcome(row: dict[str, Any]) -> bool:
@@ -224,9 +224,9 @@ def _failure_texts(row: dict[str, Any]):
 
 
 def observe_run(
-    *, state_path: Path, state_offset: int, mill: dict[str, Any]
+    *, state_path: Path, state_offset: int, lokay: dict[str, Any]
 ) -> dict[str, Any]:
-    """Describe one run using only events appended while that run held mill.lock."""
+    """Describe one run using only events appended while that run held lokay.lock."""
     events: list[dict[str, Any]] = []
     try:
         with state_path.open("r", encoding="utf-8") as handle:
@@ -244,22 +244,22 @@ def observe_run(
     delivered = any(_delivered(row) for row in events)
     # Soft product outcomes (waiting / repairing / review limbo / pending CI /
     # parked needs-review → waiting/idle) must not mint recovery fingerprints
-    # from either the mill envelope or per-event repair/triage failures.
-    # Those cycles belong to the product mill, not self-repair.
-    remaining = mill.get("remaining") if isinstance(mill.get("remaining"), dict) else {}
+    # from either the lokay envelope or per-event repair/triage failures.
+    # Those cycles belong to the product lokay, not self-repair.
+    remaining = lokay.get("remaining") if isinstance(lokay.get("remaining"), dict) else {}
     detached_started = int(remaining.get("issue_to_pr_started") or 0)
-    if delivered or _soft_mill_health(mill) or detached_started > 0:
+    if delivered or _soft_lokay_health(lokay) or detached_started > 0:
         return {
             "ts": datetime.now(UTC).isoformat(),
             "fingerprint": None,
             "evidence": "",
             "delivered": delivered,
             "health": (
-                mill.get("health")
+                lokay.get("health")
                 if detached_started == 0
-                else (mill.get("health") or "running")
+                else (lokay.get("health") or "running")
             ),
-            "progress": max(int(mill.get("progress") or 0), detached_started),
+            "progress": max(int(lokay.get("progress") or 0), detached_started),
         }
 
     failures: list[str] = []
@@ -274,15 +274,15 @@ def observe_run(
             fingerprint = hashlib.sha256(normalized.encode()).hexdigest()[:16]
             failures.append(fingerprint)
             evidence.setdefault(fingerprint, raw[:4000])
-    # True carrier/preflight/product-mill failures only: envelope fallback when
+    # True carrier/preflight/product-lokay failures only: envelope fallback when
     # no event text was available and health is not an honest soft wait.
-    if not failures and not mill.get("ok") and _carrier_envelope_failure(mill):
-        mill_error = mill.get("error")
-        if isinstance(mill_error, dict):
-            raw = str(mill_error.get("message") or mill_error.get("code") or mill_error)
+    if not failures and not lokay.get("ok") and _carrier_envelope_failure(lokay):
+        lokay_error = lokay.get("error")
+        if isinstance(lokay_error, dict):
+            raw = str(lokay_error.get("message") or lokay_error.get("code") or lokay_error)
         else:
-            raw = str(mill_error or mill.get("health") or "mill failed")
-        # Soft-looking mill errors must not confirm either.
+            raw = str(lokay_error or lokay.get("health") or "lokay failed")
+        # Soft-looking lokay errors must not confirm either.
         if (
             normalize_failure(raw) in _SOFT_REASON_NORMALIZED
             or str(raw).strip() in _SOFT_PRODUCT_REASONS
@@ -294,8 +294,8 @@ def observe_run(
                 "fingerprint": None,
                 "evidence": "",
                 "delivered": False,
-                "health": mill.get("health"),
-                "progress": int(mill.get("progress") or 0),
+                "health": lokay.get("health"),
+                "progress": int(lokay.get("progress") or 0),
             }
         normalized = normalize_failure(raw)
         fingerprint = hashlib.sha256(normalized.encode()).hexdigest()[:16]
@@ -307,8 +307,8 @@ def observe_run(
         "fingerprint": dominant,
         "evidence": "" if dominant is None else evidence[dominant],
         "delivered": False,
-        "health": mill.get("health"),
-        "progress": int(mill.get("progress") or 0),
+        "health": lokay.get("health"),
+        "progress": int(lokay.get("progress") or 0),
     }
 
 
@@ -328,7 +328,7 @@ def record_observation(
     except (OSError, ValueError):
         pass
     stored = dict(observation)
-    # Defense in depth: soft mill health cannot fill quorum even if a caller
+    # Defense in depth: soft lokay health cannot fill quorum even if a caller
     # stamped a fingerprint by mistake.
     if str(stored.get("health") or "") in _NON_FAILURE_HEALTH:
         stored["fingerprint"] = None

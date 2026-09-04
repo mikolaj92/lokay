@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         live = mutations_allowed(live_flag=args.live, cfg=cfg)
     except RuntimeError as exc:
-        # A completed issue branch can outlive the mill lease that launched it.
+        # A completed issue branch can outlive the lokay lease that launched it.
         # Allow only the exact branch in a verified linked issue worktree;
         # configured host checkouts (especially main) remain protected.
         checkouts = tuple(repo.clone_path for repo in getattr(cfg, "repos", ()))

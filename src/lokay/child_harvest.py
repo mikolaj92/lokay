@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from lokay.gh_rate import parse_survey_list, survey_list_cap
-from lokay.mill_scope import mill_repo, scoped_repos
+from lokay.factory_scope import factory_repo, scoped_repos
 from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import (
@@ -113,8 +113,8 @@ def _clear_stale_no_pr(stuck: dict[str, Any], repo: str, issue: int) -> None:
     clear_issue(stuck, repo, issue)
 
 
-def _github_closed_mill_issues(repo: str) -> set[int]:
-    """GitHub CLOSED numbers for this mill repo. Empty on probe failure."""
+def _github_closed_lokay_issues(repo: str) -> set[int]:
+    """GitHub CLOSED numbers for this lokay repo. Empty on probe failure."""
     name = str(repo or "").strip()
     if not name:
         return set()
@@ -168,7 +168,7 @@ def _clear_github_closed_catalog_rows(
         repo_rows = [key for key in rows if str(key).startswith(prefix)]
         if not repo_rows:
             continue
-        closed = _github_closed_mill_issues(repo)
+        closed = _github_closed_lokay_issues(repo)
         for key in repo_rows:
             issue = _as_int(str(key).rpartition("#")[2])
             if issue in closed:
@@ -440,8 +440,8 @@ def _resolved(path: Path) -> Path:
         return Path(path).expanduser()
 
 
-def _isolated_mill_roots(state_path: Path, home: Path) -> tuple[Path, Path]:
-    """Host mill reads ~/.lokay/cycle; a tmp mill must not inherit it."""
+def _isolated_lokay_roots(state_path: Path, home: Path) -> tuple[Path, Path]:
+    """Host lokay reads ~/.lokay/cycle; a tmp lokay must not inherit it."""
     host_state = _resolved(Path(home) / ".lokay" / "state.jsonl")
     state = _resolved(Path(state_path))
     if state == host_state:
@@ -452,7 +452,7 @@ def _isolated_mill_roots(state_path: Path, home: Path) -> tuple[Path, Path]:
 def _clear_stale_cycle_start_receipts(
     cycle_dir: Path, *, repos: list[str] | None
 ) -> None:
-    """Drop start-only metric files outside mill catalog or GitHub-CLOSED.
+    """Drop start-only metric files outside lokay catalog or GitHub-CLOSED.
 
     Detach receipts have ``pid`` / ``starting``. Those stay. Unit tests that
     omit ``repos=`` keep hermetic fixtures.
@@ -482,7 +482,7 @@ def _clear_stale_cycle_start_receipts(
             continue
         repo_paths.setdefault(repo, {})[issue] = path
     for repo, paths in repo_paths.items():
-        closed = _github_closed_mill_issues(repo)
+        closed = _github_closed_lokay_issues(repo)
         for issue, path in paths.items():
             if issue in closed:
                 try:
@@ -494,7 +494,7 @@ def _clear_stale_cycle_start_receipts(
 def _drop_out_of_scope_stuck_rows(
     stuck: dict[str, Any], repos: list[str] | None
 ) -> None:
-    """Keep only the mill catalog. Omit repos in unit tests so fixtures stay."""
+    """Keep only the lokay catalog. Omit repos in unit tests so fixtures stay."""
     if repos is None:
         return
     allowed = {str(name).strip() for name in repos if str(name).strip()}
@@ -537,7 +537,7 @@ def harvest_fail_closed_children(
     blocked miss row below N is reconciled (reopened); crash rows stay buried.
     """
     home_root = Path(home) if home is not None else Path.home()
-    default_cycle, isolated_home = _isolated_mill_roots(state_path, home_root)
+    default_cycle, isolated_home = _isolated_lokay_roots(state_path, home_root)
     root = Path(cycle_dir) if cycle_dir is not None else default_cycle
     if home is None:
         home_root = isolated_home
@@ -634,7 +634,7 @@ def harvest_fail_closed_children(
             )
 
     # Receipts can be pruned and stuck.json can be overwritten mid-pass.
-    # Re-apply terminal plan_only from the journal so the mill cannot loop
+    # Re-apply terminal plan_only from the journal so the lokay cannot loop
     # the same ticket after a wipe.
     for (repo, issue), hist in history.items():
         miss_reason, miss_runs = _trailing_miss_runs(hist)
@@ -687,8 +687,8 @@ def harvest_fail_closed_children(
     return stuck
 
 
-def harvest_idle_mill_stuck(*, config_path: str | None, live: bool = True) -> None:
-    """Idle daemon_cycle skip still harvests mill stuck. OSError cannot stall."""
+def harvest_idle_lokay_stuck(*, config_path: str | None, live: bool = True) -> None:
+    """Idle daemon_cycle skip still harvests lokay stuck. OSError cannot stall."""
     from argparse import Namespace
 
     from lokay.proc._common import load_cfg
@@ -698,7 +698,7 @@ def harvest_idle_mill_stuck(*, config_path: str | None, live: bool = True) -> No
     try:
         cfg = load_cfg(Namespace(config=config_path))
         configured = [row.name for row in cfg.active_repos()]
-        repos, _ = scoped_repos(configured, mill=mill_repo())
+        repos, _ = scoped_repos(configured, lokay=factory_repo())
         stuck_path = stuck_path_for(cfg.state_path)
         stuck = load_stuck(stuck_path)
         harvest_fail_closed_children(

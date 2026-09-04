@@ -31,9 +31,9 @@ def compose_factory_pass(
 ) -> dict[str, Any]:
     """Run one parent Fala pass; child workflow paths use another journal."""
     if live and _offline():
-        # Fail closed: a production --live mill must not skip Fala.
+        # Fail closed: a production --live lokay must not skip Fala.
         return err(
-            "live mill cannot skip Fala (LOKAY_OFFLINE is set)",
+            "live lokay cannot skip Fala (LOKAY_OFFLINE is set)",
             health="offline",
             live=True,
             offline=True,

@@ -1,4 +1,4 @@
-"""One job: build remaining counters + honest mill health from pass workspace."""
+"""One job: build remaining counters + honest lokay health from pass workspace."""
 
 from __future__ import annotations
 
@@ -113,7 +113,7 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         clean_repos=list(implement.get("clean_repos") or []),
     )
     pass_io.write_json(pass_io.tick_path(pass_dir), payload)
-    # Domain health is data for the mill; effector itself succeeds for conduction.
+    # Domain health is data for the lokay; effector itself succeeds for conduction.
     return ok(
         pass_dir=pass_dir,
         health=payload.get("health"),

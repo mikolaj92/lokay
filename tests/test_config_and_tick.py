@@ -137,7 +137,7 @@ def _run_inbox(module, pass_dir):
 
 
 def test_load_example(tmp_path: Path, monkeypatch):
-    # File values only — do not inherit LaunchAgent mill env.
+    # File values only — do not inherit LaunchAgent lokay env.
     for key in (
         "LOKAY_MODE",
         "LOKAY_EXECUTOR_ENABLED",
@@ -221,7 +221,7 @@ limits:
 
 
 def test_quoted_yaml_false_does_not_enable_executor(tmp_path: Path, monkeypatch):
-    """bool('false') is True in Python — quoted YAML must not arm the mill."""
+    """bool('false') is True in Python — quoted YAML must not arm the lokay."""
     for key in ("LOKAY_MODE", "LOKAY_EXECUTOR_ENABLED", "LOKAY_AGENT", "LOKAY_CONFIG"):
         monkeypatch.delenv(key, raising=False)
     path = tmp_path / "quoted.yaml"
@@ -253,7 +253,7 @@ merge:
 
 
 def test_committed_live_config_requires_llm_review(monkeypatch):
-    """Quality gate: mill must not merge without a structured reviewer."""
+    """Quality gate: lokay must not merge without a structured reviewer."""
     from pathlib import Path
 
     from lokay.config import load_config
@@ -313,7 +313,7 @@ def test_dead_require_test_evidence_knob_is_gone():
     assert not hasattr(safety, "looks_like_test_evidence")
 
 
-def test_env_overrides_enable_live_mill(tmp_path: Path, monkeypatch):
+def test_env_overrides_enable_live_lokay(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(
         f"""
@@ -410,8 +410,8 @@ def test_make_branch_atomic(capsys):
     )
 
 
-def test_mill_offline_one_pass(tmp_path: Path, monkeypatch):
-    from lokay.compose.mill import compose_mill
+def test_lokay_offline_one_pass(tmp_path: Path, monkeypatch):
+    from lokay.compose.run import compose_run
 
     monkeypatch.setenv("LOKAY_OFFLINE", "1")
     cfg_path = tmp_path / "config.yaml"
@@ -432,7 +432,7 @@ state:
         "lokay.proc.product_entry_subflow.run",
         lambda **kwargs: {"ok": True, "health": "offline", "passes": 1},
     )
-    result = compose_mill(config_path=str(cfg_path), live=False, max_passes=3)
+    result = compose_run(config_path=str(cfg_path), live=False, max_passes=3)
     assert result.get("health") == "offline"
     assert result.get("passes") == 1
 

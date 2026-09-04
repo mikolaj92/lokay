@@ -1,10 +1,10 @@
 # Autonomy (Definition of Working)
 
-Lokay is **working as an autonomous mill** when it continuously turns human-authored
+Lokay is **working as an autonomous lokay** when it continuously turns human-authored
 issues into **merged quality code on `main`** across its delivery catalog — without
 new human gates, without freezing clean repos behind a busy peer, and without
 treating honest waits as recovery stalls. Catalog is `repos.mikolaj92.yaml`;
-this host's mini mill (`mill_scope`, default `mikolaj92/lokay`) delivers that
+this host's mini lokay (`factory_scope`, default `mikolaj92/lokay`) delivers that
 one repo. Un-clamping the rest is a host decision.
 
 That merge is the **only Definition of Done** ([`WORKING.md`](WORKING.md)).
@@ -23,7 +23,7 @@ brain. The promises below are the public surface that must remain.
 
 ## Product law: trust the issue author
 
-**Humans author intentional issues; the mill consumes.**
+**Humans author intentional issues; the lokay consumes.**
 
 When an issue is created or owned by the trusted operator (`github.assignee`,
 default **mikolaj92**), assume it makes sense. Prefer **READY → implement**
@@ -35,7 +35,7 @@ not for the operator’s own issues. Deterministic intake still applies
 shape/superseded/duplicate/size rules (`CLOSE` / `SPLIT` / `READY`), but those
 are fitness checks, not author distrust.
 
-Foreign tickets that object to the mill’s **essence** (soul, quintessence,
+Foreign tickets that object to the lokay’s **essence** (soul, quintessence,
 “should be a harness / kanban / something else”) CLOSE. Foreign tickets that
 report a hang or that it does not work as described stay. Operator tickets
 always stay — even when they rewrite the product.
@@ -47,7 +47,7 @@ for oversized work (auto-`SPLIT`) or obsolete playbooks (`CLOSE`).
 Residual mailbox (`lokay status --human`) is exception reporting, not a
 Fala step and not a Lokay brake.
 
-## Issue ledger = chat with the mill
+## Issue ledger = chat with the lokay
 
 The issue is the conversation for **decisions**. In-flight work is a fact
 (live `issue_to_pr` receipt or covering open PR), not an exclusive label.
@@ -73,7 +73,7 @@ stateDiagram-v2
 
 Atom: `lokay-stage-label --stage <name>`. In-flight names map to ready.
 
-## Product promises (mill pass)
+## Product promises (lokay pass)
 
 1. **Per-repo PR-first** — An actionable `ai/fix/*` PR in repo A does **not**
    block inbox triage or `issue_to_pr` in clean repo B. Never open a second AI PR
@@ -99,29 +99,29 @@ Atom: `lokay-stage-label --stage <name>`. In-flight names map to ready.
 6. **Trusted merge policy** — With merge armed: pending checks → `waiting`;
    red checks → `repair`; approve + green → merge; secrets / needs_human /
    escalated `ai:needs-review` → fail closed.
-7. **Narrow recovery** — Mill `health=waiting` / `repairing` (and soft
+7. **Narrow recovery** — Lokay `health=waiting` / `repairing` (and soft
    merge_policy reasons) never mint recovery stall fingerprints or fill the
    4-of-5 self-repair quorum.
 8. **Collector boundary** — When the separate intake gate classifies a seed as
    unbounded collection work, the coding task is only a bounded collector
    bootstrap patch. Its destination deployment starts the collector durably in
-   the background after merge; Pi and the mill neither populate collection data
+   the background after merge; Pi and the lokay neither populate collection data
    nor wait for completion. A later issue evaluates collection progress.
 
 ## Lokalny heartbeat
 
 Lokay nie używa GitHub Actions, webhookowych workflow ani runnerów Actions.
-LaunchAgent `ai.mikolaj.lokay-mill` uruchamia tę samą lokalną maszynę Fali w
+LaunchAgent `ai.mikolaj.lokay` uruchamia tę samą lokalną maszynę Fali w
 stałym rytmie. To jest jedyny trwały mechanizm pobudzania produktu. Blokada
-`mill.lock` serializuje przebiegi, a domyślne K=1 zachowuje wykonanie ticket po
+`lokay.lock` serializuje przebiegi, a domyślne K=1 zachowuje wykonanie ticket po
 tickecie.
 
 `lokay-wake` pozostaje lokalnym poleceniem operatorskim i testowalnym routerem.
 Nie jest wywoływany przez `.github/workflows` i nie tworzy drugiej floty.
 
-## Night mill profile
+## Night lokay profile
 
-Default example stays dry-run (`config.example.yaml`). For a live night mill,
+Default example stays dry-run (`config.example.yaml`). For a live night lokay,
 use the documented profile:
 
 ```bash
@@ -129,7 +129,7 @@ cp config.live-autonomous.example.yaml config.yaml
 # Or point LaunchAgent at the live profile path.
 uv run lokay validate --config config.yaml
 uv run lokay status --config config.yaml --local
-uv run lokay-mill --config config.yaml --live --max-passes 8
+uv run lokay-work --config config.yaml --live --max-passes 8
 ```
 
 Profile knobs (also overridable via env):
@@ -208,8 +208,8 @@ envelope (and daemon logs), not as a separate time-series product. Keep it light
 | `stall` | Actionable work with no progress — investigate |
 | `survey_error` | List atoms failed — fix auth/network before trusting idle |
 
-`ok=false` means **not working** (work remains but mill not live-ready, or
+`ok=false` means **not working** (work remains but lokay not live-ready, or
 survey errors). Soft waits with `ok=true` are healthy autonomy.
 
-Details: [`WORKING.md`](WORKING.md), [`MILL_HEALTH.md`](MILL_HEALTH.md),
+Details: [`WORKING.md`](WORKING.md), [`HEALTH.md`](HEALTH.md),
 [`GRAPH.md`](GRAPH.md).

@@ -21,7 +21,7 @@ VALID_RISKS = frozenset({"low", "medium", "high"})
 VALID_EVIDENCE_KINDS = frozenset({"pr_metadata", "changed_files", "diff_tail", "commit_summary"})
 COLLECTOR_BOUNDARY = (
     "Collector boundary: a collector change may install/start durable background "
-    "work after merge, but this PR must not use Pi or the mill to populate data "
+    "work after merge, but this PR must not use Pi or the lokay to populate data "
     "or wait for collection to finish."
 )
 

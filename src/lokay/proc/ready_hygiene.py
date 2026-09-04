@@ -27,24 +27,24 @@ HYGIENE_STAMP_NAME = "ready-hygiene.stamp"
 
 
 def hygiene_stamp_path(cfg: Any) -> Path | None:
-    """Stamp lives beside mill state. Missing path means always probe."""
+    """Stamp lives beside lokay state. Missing path means always probe."""
     path = getattr(cfg, "state_path", None)
     if not path:
         return None
     return Path(path).expanduser().parent / HYGIENE_STAMP_NAME
 
 
-def mill_hygiene_stamp_path() -> Path:
-    """Operator mill leftover-ready stamp beside last-pass / state.jsonl."""
+def lokay_hygiene_stamp_path() -> Path:
+    """Operator lokay leftover-ready stamp beside last-pass / state.jsonl."""
     return Path.home() / ".lokay" / HYGIENE_STAMP_NAME
 
 
-def _is_operator_mill_hygiene_stamp(stamp: Path) -> bool:
-    mill = mill_hygiene_stamp_path()
+def _is_operator_lokay_hygiene_stamp(stamp: Path) -> bool:
+    lokay = lokay_hygiene_stamp_path()
     try:
-        return stamp.expanduser().resolve() == mill.resolve()
+        return stamp.expanduser().resolve() == lokay.resolve()
     except OSError:
-        return stamp.expanduser() == mill
+        return stamp.expanduser() == lokay
 
 
 def hygiene_recently_empty(
@@ -52,8 +52,8 @@ def hygiene_recently_empty(
 ) -> bool:
     if stamp is None:
         return False
-    # Pytest must not skip leftover-ready GitHub lists using the mill stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_hygiene_stamp(stamp):
+    # Pytest must not skip leftover-ready GitHub lists using the lokay stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_hygiene_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime

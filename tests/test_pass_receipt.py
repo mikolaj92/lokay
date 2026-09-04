@@ -1,4 +1,4 @@
-"""Compact pass receipt for mill observability."""
+"""Compact pass receipt for lokay observability."""
 
 import json
 from pathlib import Path
@@ -150,7 +150,7 @@ def test_waiting_and_repairing_receipts_do_not_feed_recovery_quorum(tmp_path: Pa
             observation = observe_run(
                 state_path=state,
                 state_offset=0,
-                mill={"ok": True, "health": health, "progress": 0},
+                lokay={"ok": True, "health": health, "progress": 0},
             )
             assert observation["fingerprint"] is None
             assert observation["health"] == health
@@ -164,7 +164,7 @@ def _product_receipt() -> dict:
     return {
         "kind": "pass_receipt",
         "ts": "2026-08-15T16:16:42Z",
-        "config": "/Users/mini-m4-main/Developer/OSS/lokay/config.yaml",
+        "config": "/Users/mini-m4-0/Developer/OSS/lokay/config.yaml",
         "ok": True,
         "health": "progress",
         "idle": False,
@@ -201,35 +201,35 @@ def _fixture_receipt(tmp_path: Path) -> dict:
     }
 
 
-def test_fixture_receipt_does_not_clobber_mill_last_pass(tmp_path: Path, monkeypatch):
+def test_fixture_receipt_does_not_clobber_lokay_last_pass(tmp_path: Path, monkeypatch):
     home = tmp_path / "home"
-    mill = home / ".lokay" / "last-pass.json"
-    mill.parent.mkdir(parents=True)
+    lokay = home / ".lokay" / "last-pass.json"
+    lokay.parent.mkdir(parents=True)
     product = _product_receipt()
-    mill.write_text(json.dumps(product), encoding="utf-8")
+    lokay.write_text(json.dumps(product), encoding="utf-8")
     monkeypatch.setattr("lokay.pass_receipt.Path.home", lambda: home)
 
     written = write_pass_receipt(_fixture_receipt(tmp_path))
-    assert written == mill
-    loaded = json.loads(mill.read_text(encoding="utf-8"))
+    assert written == lokay
+    loaded = json.loads(lokay.read_text(encoding="utf-8"))
     assert loaded["health"] == "progress"
     assert loaded["remaining"]["ready"] == 97
     assert loaded["by_repo"][0]["repo"] == "mikolaj92/Temida"
 
 
-def test_mill_receipt_still_overwrites_last_pass(tmp_path: Path, monkeypatch):
+def test_lokay_receipt_still_overwrites_last_pass(tmp_path: Path, monkeypatch):
     home = tmp_path / "home"
-    mill = home / ".lokay" / "last-pass.json"
-    mill.parent.mkdir(parents=True)
-    mill.write_text(json.dumps(_fixture_receipt(tmp_path)), encoding="utf-8")
+    lokay = home / ".lokay" / "last-pass.json"
+    lokay.parent.mkdir(parents=True)
+    lokay.write_text(json.dumps(_fixture_receipt(tmp_path)), encoding="utf-8")
     monkeypatch.setattr("lokay.pass_receipt.Path.home", lambda: home)
 
     next_pass = _product_receipt()
     next_pass["ts"] = "2026-08-15T16:33:13Z"
     next_pass["remaining"]["ready"] = 96
     written = write_pass_receipt(next_pass)
-    assert written == mill
-    loaded = json.loads(mill.read_text(encoding="utf-8"))
+    assert written == lokay
+    loaded = json.loads(lokay.read_text(encoding="utf-8"))
     assert loaded["health"] == "progress"
     assert loaded["remaining"]["ready"] == 96
     assert loaded["config"].endswith("lokay/config.yaml")

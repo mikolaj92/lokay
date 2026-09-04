@@ -57,7 +57,7 @@ def load_pr_evidence(
 
 
 def review_worktree(cfg: Config, repo: str) -> Path | None:
-    """Return the review directory, or skip repos outside this mini mill."""
+    """Return the review directory, or skip repos outside this mini lokay."""
     try:
         worktree = next(r.clone_path for r in cfg.repos if r.name == repo)
         if not worktree.is_dir():

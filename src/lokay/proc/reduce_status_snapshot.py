@@ -45,7 +45,7 @@ def reduce(
             "repos_total": len(repos),
             "missing_clones": missing,
             "graphs": graphs.get("graphs") or [],
-            "mill_ready": readiness.get("mill_ready"),
+            "lokay_ready": readiness.get("lokay_ready"),
             "blockers": readiness.get("blockers") or [],
             "policy_notes": notes,
             "survey": False,

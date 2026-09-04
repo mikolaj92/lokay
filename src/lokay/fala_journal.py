@@ -38,7 +38,7 @@ _HEARTBEAT_JOURNALS = frozenset(
 )
 
 
-def maintain_mill_fala_journals(
+def maintain_lokay_fala_journals(
     *,
     home: Path | None = None,
     min_bytes: int = DEFAULT_MIN_BYTES,
@@ -47,9 +47,9 @@ def maintain_mill_fala_journals(
     """Reclaim oversized Fala journals through the supported host API.
 
     Every live ``state.sqlite`` under ``~/.lokay/fala/`` is in scope, including
-    the child journal at the tree root. Call only while mill.lock is already
+    the child journal at the tree root. Call only while lokay.lock is already
     held. Sidecars stay under Fala; a failed maintain of an over-cap file is
-    fail-closed. Pytest must not maintain the operator mill. Detached
+    fail-closed. Pytest must not maintain the operator lokay. Detached
     issue-to-PR journals are not finalized.
     """
     if os.environ.get("PYTEST_CURRENT_TEST") and home is None:
@@ -65,11 +65,11 @@ def maintain_mill_fala_journals(
     return {"ok": True, "maintained": maintained}
 
 
-rotate_mill_fala_journals = maintain_mill_fala_journals
+rotate_lokay_fala_journals = maintain_lokay_fala_journals
 
 
 def wrapper_journal_dir(path_id: str, *, home: Path | None = None) -> Path:
-    """Fresh sqlite for one heartbeat wrapper host. Not the shared mill journal.
+    """Fresh sqlite for one heartbeat wrapper host. Not the shared lokay journal.
 
     ``daemon_entry`` / ``daemon_cycle`` are a pass trace. Reopening a 59 MiB
     journal of killed ``created`` runs burns the 180s ceiling. Each tick gets

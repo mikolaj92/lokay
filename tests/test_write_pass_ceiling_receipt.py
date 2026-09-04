@@ -147,7 +147,7 @@ def test_compose_daemon_cycle_keeps_this_tick_idle(monkeypatch, tmp_path: Path):
         return json.loads((tmp_path / "last-pass.json").read_text(encoding="utf-8"))
 
     monkeypatch.setattr(daemon_cycle, "run_path", boom)
-    monkeypatch.setattr(daemon_cycle, "maintain_mill_fala_journals", lambda: None)
+    monkeypatch.setattr(daemon_cycle, "maintain_lokay_fala_journals", lambda: None)
     monkeypatch.setattr(daemon_cycle, "write_pass_ceiling_receipt", keep)
     out = daemon_cycle.compose_daemon_cycle(
         config_path=cfg,

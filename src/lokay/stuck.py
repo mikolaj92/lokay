@@ -1,4 +1,4 @@
-"""Stuck-issue ledger: one failing ready issue must not block the mill.
+"""Stuck-issue ledger: one failing ready issue must not block the lokay.
 
 Persists failure counts next to state.jsonl so subsequent ticks skip
 (and eventually label ai:blocked) issues that keep failing.
@@ -131,7 +131,7 @@ def clear_issue(data: dict[str, Any], repo: str, number: int) -> None:
 
 
 def issue_number_from_branch(head_ref: str, *, branch_prefix: str = "ai/fix") -> int | None:
-    """Parse issue number from mill leftover branches. Harvest leftovers are not mill issues."""
+    """Parse issue number from lokay leftover branches. Harvest leftovers are not lokay issues."""
     prefix = branch_prefix.rstrip("/") + "/"
     ref = (head_ref or "").strip()
     if not ref.startswith(prefix):
@@ -151,7 +151,7 @@ def issue_numbers_covered_by_prs(
     """Issue numbers already represented by open ai/fix/* PR head branches.
 
     Ready issues with an open agent PR belong to PR triage, not a second
-    issue_to_pr mill (avoids duplicate work / agent never needed again).
+    issue_to_pr lokay (avoids duplicate work / agent never needed again).
     """
     out: set[int] = set()
     for pr in prs:

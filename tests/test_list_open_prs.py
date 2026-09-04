@@ -1,4 +1,4 @@
-"""LEAF list_open_prs: live GitHub mill PRs. No 30-slot catalog fail."""
+"""LEAF list_open_prs: live GitHub lokay PRs. No 30-slot catalog fail."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from lokay.proc.list_open_prs import _keep_mill, run
+from lokay.proc.list_open_prs import _keep_lokay, run
 
 
 def _cfg(names: list[str], *, prefix: str = "ai/fix") -> SimpleNamespace:
@@ -34,8 +34,8 @@ class Git:
         return result
 
 
-def test_keep_mill_is_a_small_function() -> None:
-    kept = _keep_mill(
+def test_keep_lokay_is_a_small_function() -> None:
+    kept = _keep_lokay(
         [
             {"pr": 9, "branch": "ai/fix/9-x"},
             {"pr": 10, "branch": "feat/human"},
@@ -52,7 +52,7 @@ def test_empty_list_is_ok(monkeypatch) -> None:
     assert run(config_path=None, live=True) == {"ok": True, "prs": [], "count": 0}
 
 
-def test_lists_live_mill_prs(monkeypatch) -> None:
+def test_lists_live_lokay_prs(monkeypatch) -> None:
     monkeypatch.setattr(
         "lokay.proc.list_open_prs.load_cfg",
         lambda _args: _cfg(["mikolaj92/lokay"]),
@@ -66,7 +66,7 @@ def test_lists_live_mill_prs(monkeypatch) -> None:
                     [
                         {
                             "number": 9,
-                            "title": "mill",
+                            "title": "lokay",
                             "headRefName": "ai/fix/9-x",
                             "headRefOid": "abc",
                             "author": {"login": "mikolaj92"},

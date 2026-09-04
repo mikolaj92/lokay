@@ -10,11 +10,11 @@ def reduce_state(*, prepared: dict, fragments: list[dict], working: dict) -> dic
     for repo in prepared.get("skipped_repos") or []:
         actions.append(
             {
-                "step": "skip_repo_outside_mini_mill",
+                "step": "skip_repo_outside_mini_lokay",
                 "repo": repo,
                 "ok": True,
                 "skipped": True,
-                "reason": "outside configured mill scope",
+                "reason": "outside configured lokay scope",
             }
         )
     for row in fragments:

@@ -11,7 +11,7 @@ def record(prepared: dict, selected: dict, classified: dict) -> dict:
             {
                 "step": "skip_pr_survey_outside_mini_scope",
                 "repo": repo,
-                "reason": f"mini mill only surveys PRs for {prepared['mini_repo']}",
+                "reason": f"mini lokay only surveys PRs for {prepared['mini_repo']}",
             }
         )
     elif route == "cold":

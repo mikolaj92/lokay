@@ -14,7 +14,7 @@ def test_assign_issue_still_assigns_lokay(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    cfg = SimpleNamespace(assignee="mill-bot")
+    cfg = SimpleNamespace(assignee="lokay-bot")
     sentinel_runner = object()
     seen: list[tuple[object, object, str, int, bool]] = []
 
@@ -52,7 +52,7 @@ def test_assign_issue_still_assigns_lokay(
         "applied": True,
         "repo": "mikolaj92/lokay",
         "issue": 465,
-        "assignee": "mill-bot",
+        "assignee": "lokay-bot",
     }
 
 

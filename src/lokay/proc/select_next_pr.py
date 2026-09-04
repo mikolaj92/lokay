@@ -1,4 +1,4 @@
-"""Pick the first open mill PR. One review/repair/merge per pass."""
+"""Pick the first open lokay PR. One review/repair/merge per pass."""
 
 
 def select(listed: dict) -> dict:

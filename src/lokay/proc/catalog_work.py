@@ -1,4 +1,4 @@
-"""Open catalog work: inbox ∪ ready. Mill labels are not a gate."""
+"""Open catalog work: inbox ∪ ready. Lokay labels are not a gate."""
 
 from __future__ import annotations
 

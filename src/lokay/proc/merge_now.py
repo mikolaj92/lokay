@@ -1,6 +1,6 @@
 """Atomic: merge a GitHub PR with a merge-commit. No checks gate, no LLM review.
 
---live plus a healthy mill enables mutation. Otherwise the atom plans only.
+--live plus a healthy lokay enables mutation. Otherwise the atom plans only.
 Hosted merge-now merges require healthy. Planned merges do not.
 --dry-run prints the gh command and does not merge.
 """

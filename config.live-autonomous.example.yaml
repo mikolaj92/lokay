@@ -1,7 +1,7 @@
-# Lokay — night / live autonomous mill profile (NOT the default).
+# Lokay — night / live autonomous lokay profile (NOT the default).
 #
 # Copy to config.yaml (or a dedicated path) only on an intentionally live host.
-# Humans author intentional issues; the mill consumes them to merged results.
+# Humans author intentional issues; the lokay consumes them to merged results.
 # Do not use this as the shared dry-run example — keep config.example.yaml
 # (mode: dry-run, executor off, merge off) for local copies.
 #
@@ -20,7 +20,7 @@ mode: live  # Env override still honored: LOKAY_MODE=live|dry-run
 repos_file: repos.mikolaj92.yaml
 
 github:
-  # Trusted operator: issues owned/assigned here are intentional — mill consumes.
+  # Trusted operator: issues owned/assigned here are intentional — lokay consumes.
   assignee: mikolaj92
   allow_unassigned: false
   ready_label: ai:ready

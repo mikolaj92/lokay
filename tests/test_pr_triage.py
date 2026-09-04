@@ -9,7 +9,7 @@ from lokay.compose import pr_triage
 
 
 
-def test_lokay_repo_still_runs_pr_triage_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_factory_repo_still_runs_pr_triage_path(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 
     def run(**kwargs: object) -> dict[str, object]:

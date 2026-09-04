@@ -1,6 +1,6 @@
-"""Atomic: copy aside skip-worktree repos.mikolaj92.yaml around mill git pull/ff.
+"""Atomic: copy aside skip-worktree repos.mikolaj92.yaml around lokay git pull/ff.
 
-Before fast-forward of the mill checkout, ``--save`` copies the catalog if it is
+Before fast-forward of the lokay checkout, ``--save`` copies the catalog if it is
 skip-worktree (or ``--assume-skip-worktree``). After pull/ff, ``--restore``
 writes the copy back. Fail-closed when restore cannot write.
 """
@@ -90,7 +90,7 @@ def _restore(*, repo_root: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-catalog-guard")
-    p.add_argument("--repo-root", required=True, help="mill checkout root")
+    p.add_argument("--repo-root", required=True, help="lokay checkout root")
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--save", action="store_true", help="copy catalog aside before pull/ff")
     mode.add_argument("--restore", action="store_true", help="restore catalog after pull/ff")

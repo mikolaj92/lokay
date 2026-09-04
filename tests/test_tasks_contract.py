@@ -27,7 +27,7 @@ def test_identity_is_plugin_target_number():
 
 def test_memory_source_does_four_operations():
     source = _source(
-        {"number": 3, "title": "first", "assignees": ["mill"]},
+        {"number": 3, "title": "first", "assignees": ["lokay"]},
         {"number": 5, "title": "second"},
     )
     listed = source.list_open()

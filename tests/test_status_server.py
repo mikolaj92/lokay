@@ -47,7 +47,7 @@ def test_dashboard_uses_product_shell_platform_assets_and_server_html(
     assert "Otwarte zadania do wykonania" in response.text
     assert "Co pozostało do zrobienia" in response.text
     assert "Operator notes" not in response.text
-    assert "Mill health" not in response.text
+    assert "Lokay health" not in response.text
     assert "Loading…" not in response.text
     assert "/static/platform/" in response.text
     assert 'id="main-content"' in response.text

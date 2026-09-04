@@ -20,9 +20,9 @@ def test_issue_number_from_branch():
     assert issue_number_from_branch("ai/fix/3-canary-58b8306c") == 3
     assert issue_number_from_branch("main") is None
     assert issue_number_from_branch("feature/foo") is None
-    # Harvest leftovers are not mill issues.
+    # Harvest leftovers are not lokay issues.
     assert issue_number_from_branch("harvest/414-mini-lokay-only") is None
-    assert issue_number_from_branch("ai/harvest/397-mill-tick-leftover-ready") is None
+    assert issue_number_from_branch("ai/harvest/397-lokay-tick-leftover-ready") is None
     assert issue_number_from_branch("harvest-494") is None
 
 

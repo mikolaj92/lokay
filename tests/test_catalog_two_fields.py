@@ -19,7 +19,7 @@ from lokay.catalog import (
 from lokay.config import RepoConfig, load_config
 
 
-def _clear_mill_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _clear_lokay_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (
         "LOKAY_MODE",
         "LOKAY_EXECUTOR_ENABLED",
@@ -92,7 +92,7 @@ def test_no_separate_pr_field() -> None:
 def test_thirty_current_rows_work_without_hand_edit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     root = Path(__file__).resolve().parents[1]
     catalog = root / "repos.mikolaj92.yaml"
     raw = yaml.safe_load(catalog.read_text(encoding="utf-8")) or {}
@@ -119,7 +119,7 @@ def test_thirty_current_rows_work_without_hand_edit(
 def test_unknown_plugin_fails_at_load(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     path = tmp_path / "bad.yaml"
     path.write_text(
         f"""
@@ -143,7 +143,7 @@ repos:
 def test_explicit_github_and_azure_rows_load(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _clear_mill_env(monkeypatch)
+    _clear_lokay_env(monkeypatch)
     path = tmp_path / "mixed.yaml"
     path.write_text(
         f"""

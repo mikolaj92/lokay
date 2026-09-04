@@ -1,13 +1,13 @@
 """Apply the shared physical health stop policy to one stabilized pass."""
 
-from lokay.passkit.health import evaluate_mill_stop
+from lokay.passkit.health import evaluate_lokay_stop
 
 
 def decide(prepared: dict, observed: dict) -> dict:
     route = str(observed.get("route") or "")
     if route in {"idle", "dry", "budget"}:
         return {**observed, "stop_route": route}
-    decision = evaluate_mill_stop(observed["tick"])
+    decision = evaluate_lokay_stop(observed["tick"])
     return {
         **observed,
         "stop_route": (

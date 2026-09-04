@@ -1,4 +1,4 @@
-"""self_repair owns named children. Gate and mill stay outside this graph."""
+"""self_repair owns named children. Gate and lokay stay outside this graph."""
 
 import ast
 import tomllib
@@ -24,7 +24,7 @@ _FOREIGN = (
     "last_pass_moving",
     "select_repair_route",
     "classify_last_pass_progress",
-    "recovery_mill",
+    "recovery_factory",
     "recovery_begin",
     "factory_pass",
 )
@@ -57,7 +57,7 @@ def test_prepare_validate_activate_are_child_falas():
     assert 'path_id="self_repair_activate_execution"' in activate
 
 
-def test_leaf_procs_do_not_fold_gate_or_mill_or_siblings():
+def test_leaf_procs_do_not_fold_gate_or_lokay_or_siblings():
     leaves = {
         "self_repair_push_main": ROOT / "src/lokay/proc/self_repair_push_main.py",
         "self_repair_preflight": ROOT / "src/lokay/proc/self_repair_preflight.py",
@@ -66,8 +66,8 @@ def test_leaf_procs_do_not_fold_gate_or_mill_or_siblings():
     banned = (
         "last_pass_moving",
         "select_repair_route",
-        "recovery_mill",
-        "compose_mill",
+        "recovery_factory",
+        "compose_run",
         "self_repair_activate",
         "run_self_repair",
     )
@@ -79,7 +79,7 @@ def test_leaf_procs_do_not_fold_gate_or_mill_or_siblings():
             assert token not in source, f"{name} folds {token}"
 
 
-def test_organ_wires_named_children_not_one_recovery_mill():
+def test_organ_wires_named_children_not_one_recovery_factory():
     source = (ROOT / "src/lokay/organ/self_repair.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     handlers = {
@@ -93,7 +93,7 @@ def test_organ_wires_named_children_not_one_recovery_mill():
         and isinstance(node.comparators[0].value, str)
     }
     assert handlers == set(_SELF_REPAIR_CHILDREN)
-    assert "recovery_mill" not in source
+    assert "recovery_factory" not in source
     assert "last_pass_moving" not in source
 
 
@@ -103,5 +103,5 @@ def test_docs_name_each_self_repair_child_in_order():
     for child in _SELF_REPAIR_CHILDREN[:-1]:
         assert child in section
     assert section.index("self_repair_commit") < section.index("self_repair_validate")
-    assert "recovery_mill" not in section.split("```")[1]
+    assert "recovery_factory" not in section.split("```")[1]
     assert "last_pass_moving" not in section.split("```")[1]

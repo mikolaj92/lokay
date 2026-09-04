@@ -1,4 +1,4 @@
-"""DoD status: mill_ready and blockers."""
+"""DoD status: lokay_ready and blockers."""
 
 from pathlib import Path
 
@@ -58,7 +58,7 @@ def test_readiness_reports_only_hard_config_blockers():
         }
     )
     assert (
-        out["mill_ready"] is False
+        out["lokay_ready"] is False
         and len(out["blockers"]) == 3
         and any("require_checks" in x for x in out["policy_notes"])
     )
@@ -76,7 +76,7 @@ def test_require_checks_is_policy_not_hard_blocker():
             "require_llm_review": True,
         }
     )
-    assert out["mill_ready"] is True and out["blockers"] == []
+    assert out["lokay_ready"] is True and out["blockers"] == []
 
 
 def test_snapshot_reducer_reads_last_receipt_without_survey():
@@ -102,7 +102,7 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
     }
     out = reduce(
         config,
-        {"mill_ready": True, "blockers": [], "policy_notes": []},
+        {"lokay_ready": True, "blockers": [], "policy_notes": []},
         {"missing_clones": []},
         {
             "lease_ok": None,
@@ -158,8 +158,8 @@ def test_snapshot_reducer_reads_last_receipt_without_survey():
 def test_status_terminal_fails_only_when_not_live_ready():
     from lokay.proc.status_snapshot_terminal import terminal
 
-    bad = terminal({"snapshot": {"mill_ready": False}})["result"]
-    good = terminal({"snapshot": {"mill_ready": True}})["result"]
+    bad = terminal({"snapshot": {"lokay_ready": False}})["result"]
+    good = terminal({"snapshot": {"lokay_ready": True}})["result"]
     assert bad["ok"] is False and "error" in bad and good["ok"] is True
 
 
@@ -178,13 +178,13 @@ def test_status_human_mailbox_remains_explicit_exception_view(tmp_path, monkeypa
         lambda **k: {
             "ok": True,
             "kind": "human_mailbox",
-            "mill_blocked": False,
+            "lokay_blocked": False,
             "count": 1,
             "items": [],
         },
     )
     result = compose_status(config_path=str(cfg), human=True)
-    assert result["ok"] is True and result["mill_blocked"] is False
+    assert result["ok"] is True and result["lokay_blocked"] is False
 
 
 def test_status_facade_does_not_import_or_run_product_tick():
@@ -196,16 +196,16 @@ def test_status_facade_does_not_import_or_run_product_tick():
     assert "compose_tick" not in source and "write_pass_receipt" not in source
 
 
-def test_mill_daemon_does_not_override_configured_executor_metadata():
+def test_lokay_daemon_does_not_override_configured_executor_metadata():
     script = (
-        Path(__file__).resolve().parents[1] / "scripts/lokay-mill-daemon.sh"
+        Path(__file__).resolve().parents[1] / "scripts/lokay-service.sh"
     ).read_text()
     assert "export LOKAY_AGENT=" not in script and "LOKAY_AGENT:-grok" not in script
 
 
-def test_mill_daemon_does_not_default_require_checks():
+def test_lokay_daemon_does_not_default_require_checks():
     script = (
-        Path(__file__).resolve().parents[1] / "scripts/lokay-mill-daemon.sh"
+        Path(__file__).resolve().parents[1] / "scripts/lokay-service.sh"
     ).read_text()
     assert (
         "LOKAY_REQUIRE_CHECKS:-1" not in script
@@ -225,7 +225,7 @@ def test_status_discovers_active_per_run_lease_without_inherited_capability(
 
     state = tmp_path / "state"
     state.mkdir()
-    lock = state / "mill.lock"
+    lock = state / "lokay.lock"
     held = lock.open("a+")
     fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     lease = state / "health-lease-123-deadbeef"
@@ -274,7 +274,7 @@ def test_status_lease_observation_does_not_create_missing_lock(tmp_path, monkeyp
 
     state = tmp_path / "state"
     state.mkdir()
-    lock = state / "mill.lock"
+    lock = state / "lokay.lock"
     monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
     monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
 
@@ -294,7 +294,7 @@ def test_status_lease_observation_ignores_insecure_record(tmp_path, monkeypatch)
 
     state = tmp_path / "state"
     state.mkdir()
-    lock = state / "mill.lock"
+    lock = state / "lokay.lock"
     held = lock.open("a+")
     fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     lease = state / "health-lease-1-insecure"

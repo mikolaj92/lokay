@@ -26,23 +26,23 @@ def _remaining_of(payload: dict[str, Any]) -> dict[str, Any]:
     return remaining if isinstance(remaining, dict) else {}
 
 
-def mill_glance(payload: dict[str, Any] | None) -> dict[str, Any]:
-    """Best-effort health/progress/remaining from a daemon or mill envelope."""
+def lokay_glance(payload: dict[str, Any] | None) -> dict[str, Any]:
+    """Best-effort health/progress/remaining from a daemon or lokay envelope."""
     if not isinstance(payload, dict):
         return {}
     sources: list[dict[str, Any]] = [payload]
-    mill = _as_dict(payload.get("mill"))
-    if mill is not None:
-        sources.append(mill)
+    lokay = _as_dict(payload.get("lokay"))
+    if lokay is not None:
+        sources.append(lokay)
     last = _as_dict(payload.get("last"))
     if last is not None:
         sources.append(last)
     terminal = _as_dict(payload.get("terminal"))
     if terminal is not None:
-        recovery_mill = _as_dict(terminal.get("recovery_mill"))
-        if recovery_mill is not None:
-            nested = _as_dict(recovery_mill.get("mill"))
-            sources.append(nested if nested is not None else recovery_mill)
+        recovery_factory = _as_dict(terminal.get("recovery_factory"))
+        if recovery_factory is not None:
+            nested = _as_dict(recovery_factory.get("lokay"))
+            sources.append(nested if nested is not None else recovery_factory)
     for src in sources:
         health = str(src.get("health") or "")
         remaining = _remaining_of(src)
@@ -84,11 +84,11 @@ def process_exit_code(
 
     Productive work is ``health=progress``, ``progress>0``, or detached
     ``issue_to_pr_started``. last-pass may confirm those signals only when the
-    current envelope is a Fala wrapper that hid mill health.
+    current envelope is a Fala wrapper that hid lokay health.
     """
     if isinstance(payload, dict) and payload.get("ok", False):
         return 0
-    current = mill_glance(payload)
+    current = lokay_glance(payload)
     if _productive(current):
         return 0
     if isinstance(payload, dict) and (
@@ -100,7 +100,7 @@ def process_exit_code(
     current_health = str(current.get("health") or "")
     if current_health not in _WRAPPER_HEALTH:
         return 1
-    return 0 if _productive(mill_glance(last_pass)) else 1
+    return 0 if _productive(lokay_glance(last_pass)) else 1
 
 
 def emit_exit(payload: dict[str, Any], code: int | None = None) -> int:

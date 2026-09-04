@@ -1,4 +1,4 @@
-"""Run exactly one declared local test command with the mill lease stripped."""
+"""Run exactly one declared local test command with the lokay lease stripped."""
 
 from lokay.proc._common import runner
 from lokay.runner import CommandSpec

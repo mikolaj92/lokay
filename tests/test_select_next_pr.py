@@ -10,7 +10,7 @@ def test_empty_list_is_none() -> None:
     }
 
 
-def test_first_mill_pr_is_picked() -> None:
+def test_first_lokay_pr_is_picked() -> None:
     out = select(
         {
             "ok": True,

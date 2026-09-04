@@ -10,7 +10,7 @@ from lokay.code import github as github_code
 from lokay.proc import pr_close
 
 
-def test_lokay_repo_still_closes(
+def test_factory_repo_still_closes(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:

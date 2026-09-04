@@ -112,11 +112,11 @@ To przypomina ten sam ukryty workflow co punkt 1. Nie kwalifikuję tego jako pot
 
 CLI ręcznie wykonuje `resolve_conflicts`, potem `closeout_prs`, z Pythonowym short-circuit. Jest jawnie opisany jako legacy CLI/test bridge. Nie ma dowodu, że produkcyjny `factory_pass` go używa. Ryzyko polega na utrzymywaniu drugiego publicznego flow, które może zdryfować od parent Fala. Najmniejsza redukcja ryzyka: usunąć publiczny script, jeśli brak konsumentów, albo zastąpić go jednym authored path i `run_path`.
 
-### H3. `recovery_mill` opakowuje wiele passów w jeden atom
+### H3. `recovery_factory` opakowuje wiele passów w jeden atom
 
-- `src/lokay/proc/recovery_mill.py:17-24`
+- `src/lokay/proc/recovery_factory.py:17-24`
 
-Atom uruchamia `compose_mill(max_passes=...)` i celowo podnosi domenowy błąd jako dane przy `ok=True`. Sam mill przechodzi przez authored `product_entry`, więc nie omija Fala, ale parent recovery widzi wielopassowy produkt jako jeden atom. Należy potwierdzić, czy to zamierzona granica procesu nadrzędnego, czy historyczny bridge.
+Atom uruchamia `compose_run(max_passes=...)` i celowo podnosi domenowy błąd jako dane przy `ok=True`. Sam lokay przechodzi przez authored `product_entry`, więc nie omija Fala, ale parent recovery widzi wielopassowy produkt jako jeden atom. Należy potwierdzić, czy to zamierzona granica procesu nadrzędnego, czy historyczny bridge.
 
 ## Kontrole pozytywne
 
@@ -126,7 +126,7 @@ Atom uruchamia `compose_mill(max_passes=...)` i celowo podnosi domenowy błąd j
 - `reap_stale_worktrees` jest siblingiem od `factory_begin` (`:103-108`) i nie przewodzi działów ani `record_pass`.
 - `record_pass` nie zależy od cleanup (`:196-208`).
 - `compose/factory.py:25-63` jest cienkim bridge i zawsze prowadzi przez `run_path(path_id="factory_pass")`, poza jawnym offline dry-run.
-- `compose/mill.py:80-96` nie ma Pythonowej pętli passów; deleguje do authored `product_entry`. Sloty budżetu są jawne w `product_pass_budget` od `fala/lokay.fala-package.toml:4637`.
+- `compose/run.py:80-96` nie ma Pythonowej pętli passów; deleguje do authored `product_entry`. Sloty budżetu są jawne w `product_pass_budget` od `fala/lokay.fala-package.toml:4637`.
 - Przejście repair → ponowna review w następnym passie jest jawnie udokumentowane (`README.md:1355-1356`, `docs/PROCESS.md:25-39`).
 - Nie znaleziono parentowego unrollu 1..8 w Pythonie.
 

@@ -1,12 +1,12 @@
 """Fail-closed TTL for empty factory_pass GitHub surveys.
 
 Idle ticks listed open PRs and open issues every pass (~2s) even when both
-were empty. After a complete empty mill survey, stamp beside mill state and
+were empty. After a complete empty lokay survey, stamp beside lokay state and
 skip those GitHub lists for 120s. Missing stamp always hosts Fala. Skip
 while the stamp is fresh does not refresh it, matching leftover closeout /
 over_cap TTL. A non-empty survey or a survey_error clears the stamp.
 
-After the stamp expires, a live idle mill cheap-probes open PRs and open
+After the stamp expires, a live idle lokay cheap-probes open PRs and open
 issues. An empty probe refreshes the stamp and the first factory_pass atom
 exits authored idle. Probe failure or any open PR / open work issue hosts.
 ``work:ready`` / ``ai:ready`` are not the idle probe.
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from lokay.gh_rate import SURVEY_LIST_CAP
-from lokay.mill_scope import mill_repo
+from lokay.factory_scope import factory_repo
 from lokay.triage import is_open_work_issue
 
 _CSI = re.compile(r"\[[0-9;]*[mK]")
@@ -34,7 +34,7 @@ SURVEY_STAMP_NAME = "factory-survey.stamp"
 
 
 def survey_stamp_path(begin: dict[str, Any] | None) -> Path | None:
-    """Stamp lives beside mill state. Missing path means always probe."""
+    """Stamp lives beside lokay state. Missing path means always probe."""
     if not begin:
         return None
     path = begin.get("state_path") or begin.get("stuck_path")
@@ -46,24 +46,24 @@ def survey_stamp_path(begin: dict[str, Any] | None) -> Path | None:
     return parent / SURVEY_STAMP_NAME
 
 
-def mill_survey_stamp_path() -> Path:
-    """Operator mill stamp beside last-pass / state.jsonl."""
+def lokay_survey_stamp_path() -> Path:
+    """Operator lokay stamp beside last-pass / state.jsonl."""
     return Path.home() / ".lokay" / SURVEY_STAMP_NAME
 
 
-def _is_operator_mill_stamp(stamp: Path) -> bool:
-    mill = mill_survey_stamp_path()
+def _is_operator_lokay_stamp(stamp: Path) -> bool:
+    lokay = lokay_survey_stamp_path()
     try:
-        return stamp.expanduser().resolve() == mill.resolve()
+        return stamp.expanduser().resolve() == lokay.resolve()
     except OSError:
-        return stamp.expanduser() == mill
+        return stamp.expanduser() == lokay
 
 
 def survey_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
         return False
-    # Pytest must not skip GitHub surveys using the mill stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_stamp(stamp):
+    # Pytest must not skip GitHub surveys using the lokay stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_stamp(stamp):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -124,22 +124,22 @@ def skip_idle_factory_pass(
     now: float | None = None,
     probe: Callable[..., bool | None] | None = None,
 ) -> dict[str, Any] | None:
-    """Classify authored idle while a live mill has an empty survey.
+    """Classify authored idle while a live lokay has an empty survey.
 
     Fresh stamp: idle without GitHub and without refreshing the stamp.
     Expired stamp: cheap-probe open PRs and open issues. Empty probe
     refreshes the stamp and idles. Probe failure or remaining work hosts.
     Missing stamp always hosts.
-    Pytest must not skip the operator mill. Compose must still host Fala.
+    Pytest must not skip the operator lokay. Compose must still host Fala.
     """
     if not live:
         return None
     if os.environ.get("PYTEST_CURRENT_TEST") and (
-        stamp is None or _is_operator_mill_stamp(stamp)
+        stamp is None or _is_operator_lokay_stamp(stamp)
     ):
         return None
     if stamp is None:
-        stamp = mill_survey_stamp_path()
+        stamp = lokay_survey_stamp_path()
     if receipt is None:
         from lokay.pass_receipt import read_pass_receipt
 
@@ -164,7 +164,7 @@ def skip_idle_factory_pass(
     except OSError:
         return None
     checker = probe or (
-        lambda: mill_survey_still_empty(repos=catalog_repos_from_receipt(receipt))
+        lambda: lokay_survey_still_empty(repos=catalog_repos_from_receipt(receipt))
     )
     empty = checker()
     if empty is not True:
@@ -227,7 +227,7 @@ def _label_names(raw: Any) -> set[str]:
 
 
 def catalog_repos_from_receipt(receipt: dict[str, Any] | None) -> list[str]:
-    """Catalog repos from last-pass remaining. Missing catalog falls back to mill."""
+    """Catalog repos from last-pass remaining. Missing catalog falls back to lokay."""
     remaining = receipt.get("remaining") if isinstance(receipt, dict) else {}
     rows = remaining.get("by_repo") if isinstance(remaining, dict) else []
     if not isinstance(rows, list):
@@ -243,7 +243,7 @@ def catalog_repos_from_receipt(receipt: dict[str, Any] | None) -> list[str]:
             names.append(name)
     if names:
         return names
-    fallback = str(mill_repo() or "").strip()
+    fallback = str(factory_repo() or "").strip()
     return [fallback] if fallback else []
 
 
@@ -305,7 +305,7 @@ def _repo_still_empty(
     return True
 
 
-def mill_survey_still_empty(
+def lokay_survey_still_empty(
     *,
     repo: str | None = None,
     repos: list[str] | None = None,
@@ -320,7 +320,7 @@ def mill_survey_still_empty(
     if repo:
         names = [str(repo).strip()]
     if not names:
-        names = [str(mill_repo() or "").strip()]
+        names = [str(factory_repo() or "").strip()]
     names = [item for item in names if item]
     if not names:
         return None

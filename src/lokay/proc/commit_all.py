@@ -11,14 +11,14 @@ from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 from lokay.runner import git_spec
 
 
-MINI_MILL_REPO = "mikolaj92/lokay"
+MINI_LOKAY_REPO_SCOPE = "mikolaj92/lokay"
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-commit-all")
     add_config(p)
     p.add_argument("--live", action="store_true")
-    p.add_argument("--repo", default=MINI_MILL_REPO)
+    p.add_argument("--repo", default=MINI_LOKAY_REPO_SCOPE)
     p.add_argument("--worktree", required=True)
     p.add_argument("--message", required=True)
     args = p.parse_args(argv)
@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         live = mutations_allowed(live_flag=args.live, cfg=cfg)
     except RuntimeError as exc:
-        # A coding run can outlive the mill lease that launched it. Preserve
+        # A coding run can outlive the lokay lease that launched it. Preserve
         # completed source only in a verified linked issue worktree; configured
         # host checkouts (especially main) remain protected.
         checkouts = tuple(repo.clone_path for repo in getattr(cfg, "repos", ()))

@@ -1,4 +1,4 @@
-# Lokay — multi-repo mill for mikolaj92 source libraries.
+# Lokay — multi-repo lokay for mikolaj92 source libraries.
 # Stubs/fake agents are FORBIDDEN — docs/NO_STUBS.md
 #
 # Code default is dry-run (no mutations). Set mode: live (or LOKAY_MODE=live)
@@ -42,7 +42,7 @@ departments:
   pr_repair: true
 
 executor:
-  enabled: false  # set true (or LOKAY_EXECUTOR_ENABLED=1) for live milling
+  enabled: false  # set true (or LOKAY_EXECUTOR_ENABLED=1) for live lokaying
   agent: pi                  # log label only
   command: pi               # harness binary — swap to change implementation
   model: omniroute/pi
@@ -72,22 +72,22 @@ limits:
   # Still one open ai/fix/* PR per repo. Legacy alias: max_issues_per_tick.
   max_issue_to_pr_per_pass: 1
 
-# Trusted auto-merge (humans write issues; mill closes the loop to main).
+# Trusted auto-merge (humans write issues; lokay closes the loop to main).
 #
 # Code defaults stay safe for dry-run / local copies:
 #   enabled=false, require_checks=false, require_llm_review=true
 #
-# When the mill is live, turn merge on via env (preferred) or set enabled: true:
+# When the lokay is live, turn merge on via env (preferred) or set enabled: true:
 #   LOKAY_MERGE_ENABLED=1          — merge AI PRs that are green + policy-approved
 #   LOKAY_REQUIRE_CHECKS=1|0       — 1: pending/none wait (no merge without CI);
 #                                    0: allow merge when the branch has no checks
-#                                    (code default false; use 1 on real mills with CI)
+#                                    (code default false; use 1 on real lokays with CI)
 #   LOKAY_REQUIRE_LLM_REVIEW=1|0   — 1 (default): structured approve/merge_ok required;
 #                                    secrets / needs_human / escalated ai:needs-review
 #                                    never auto-merge (fail closed)
 #
 # Do not set enabled: true in a shared dry-run config — that can merge under --live
-# by accident. Prefer LOKAY_MERGE_ENABLED=1 on the live mill LaunchAgent/profile.
+# by accident. Prefer LOKAY_MERGE_ENABLED=1 on the live lokay LaunchAgent/profile.
 merge:
   enabled: false
   require_checks: false

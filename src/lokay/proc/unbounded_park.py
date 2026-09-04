@@ -1,7 +1,7 @@
 """Atomic: park an unbounded issue by removing work:ready and ai:ready.
 
-Mill will not sit a Pi on an issue that is no longer ready.
---live plus a healthy mill enables mutation. Otherwise the atom plans only.
+Lokay will not sit a Pi on an issue that is no longer ready.
+--live plus a healthy lokay enables mutation. Otherwise the atom plans only.
 Hosted unbounded parks require healthy. Planned parks do not.
 --dry-run prints the gh command and does not mutate.
 Fail-closed if repo or issue is missing.

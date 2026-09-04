@@ -66,7 +66,7 @@ def pick_survey_repos(
     if not cold or extra_cold <= 0:
         return [*hot, *anchor] or names
     width = min(extra_cold, len(cold))
-    # Without the mill anchor, ``extra_cold`` is also the K dispatch breadth.
+    # Without the lokay anchor, ``extra_cold`` is also the K dispatch breadth.
     # Keep all K lanes stable and add one rotated discovery lane when available.
     stable_count = width if not hot and not anchor else max(0, width - 1)
     stable = cold[:stable_count]

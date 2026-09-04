@@ -84,7 +84,7 @@ def test_sieve_ready_route_is_do_without_triage() -> None:
     assert out["leftover_issues"][0]["issue"] == 4
 
 
-def test_issue_triage_agent_timeouts_fit_under_mill_ceiling() -> None:
+def test_issue_triage_agent_timeouts_fit_under_lokay_ceiling() -> None:
     by_id = {node["id"]: node for node in _path("issue_triage")["effectors"]}
     for name in (
         "issue_triage_agent",

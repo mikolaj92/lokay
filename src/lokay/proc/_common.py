@@ -26,7 +26,7 @@ def add_config_read(p: argparse.ArgumentParser) -> None:
     """Read-only tools: hit network by default; --offline plans empty.
 
     ``--live`` is accepted as a no-op so factory-pass survey atoms can
-    forward the mill live flag. Network is already the default; ``--offline``
+    forward the lokay live flag. Network is already the default; ``--offline``
     still wins in ``read_live``.
     """
     add_config(p)
@@ -75,7 +75,7 @@ def agent_execute_allowed(cfg: Config, *, live_flag: bool) -> bool:
 
 
 def semantic_agent_allowed(cfg: Config, *, live_flag: bool) -> bool:
-    """Enable a read-only semantic call without minting/owning the mill lease.
+    """Enable a read-only semantic call without minting/owning the lokay lease.
 
     Intake, queue-conflict, and localization agents only return structured
     advice. Their deterministic callers retain all mutation and health gates;

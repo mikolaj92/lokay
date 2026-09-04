@@ -63,7 +63,7 @@ def test_commit_all_cli_still_commits_lokay(
 
 
 def test_commit_all_refuses_configured_checkout_on_main(tmp_path: Path) -> None:
-    repo = tmp_path / "mill-checkout"
+    repo = tmp_path / "lokay-checkout"
     _init_repo(repo)
     tracked = repo / "tracked.txt"
     tracked.write_text("base\n", encoding="utf-8")

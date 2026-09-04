@@ -14,7 +14,7 @@ _HELD_REPO_LOCK_FDS: list[int] = []
 
 def _retain_repo_lock() -> None:
     """Keep the inherited flock open for this process lifetime. Never unlink."""
-    raw = os.environ.get("LOKAY_REPO_LOCK_FD")
+    raw = os.environ.get("LOKAY_REPO_SCOPE_LOCK_FD")
     if raw is None:
         return
     try:

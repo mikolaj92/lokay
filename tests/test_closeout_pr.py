@@ -213,26 +213,26 @@ def test_cli_surface_remains_wired():
     assert not (root / "src" / "lokay" / "proc" / "dispatch_closeout.py").exists()
 
 
-def test_recovery_mill_hosts_one_factory_pass_not_a_pass_budget():
+def test_recovery_factory_hosts_one_factory_pass_not_a_pass_budget():
     src = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "lokay"
         / "proc"
-        / "recovery_mill.py"
+        / "recovery_factory.py"
     ).read_text(encoding="utf-8")
     assert "compose_factory_pass" in src
-    assert "compose_mill" not in src
+    assert "compose_run" not in src
     assert "while " not in src
-    mill = (
+    runner = (
         Path(__file__).resolve().parents[1]
         / "src"
         / "lokay"
         / "compose"
-        / "mill.py"
+        / "run.py"
     ).read_text(encoding="utf-8")
-    assert "product_entry_subflow" in mill
-    assert "while True" not in mill
+    assert "product_entry_subflow" in runner
+    assert "while True" not in runner
 
 
 def test_leftover_catalog_stays_one_in_process_atom():

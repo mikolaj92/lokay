@@ -1,4 +1,4 @@
-"""Write a small live-mill activity checkpoint beside state.jsonl.
+"""Write a small live-lokay activity checkpoint beside state.jsonl.
 
 Ceiling receipts read this file for resume_from / last_atom / transitions.
 Status stays read-only. A failed write must not abort the atom.
@@ -57,7 +57,7 @@ def _path_id(process_id: str | None, inputs: dict[str, Any]) -> str | None:
 
 
 def reset_activity(*, config_path: str | None = None) -> dict[str, Any] | None:
-    """Start a mill tick with a zero transition checkpoint. Never raises."""
+    """Start a lokay tick with a zero transition checkpoint. Never raises."""
     payload_inputs = {"config_path": config_path or "", "live": True}
     try:
         state_dir = _state_dir(payload_inputs)
@@ -85,10 +85,10 @@ def record_atom_start(
     inputs: dict[str, Any] | None = None,
     process_id: str | None = None,
 ) -> dict[str, Any] | None:
-    """Update activity.json for a live mill atom. Never raises.
+    """Update activity.json for a live lokay atom. Never raises.
 
     Status and other observation paths stay read-only. A dry-run organ
-    must not steal mill resume context.
+    must not steal lokay resume context.
     """
     payload_inputs = inputs if isinstance(inputs, dict) else {}
     try:

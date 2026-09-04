@@ -1,4 +1,4 @@
-"""Fala-owned daemon cycle: product mill, stall quorum, and recovery conduction."""
+"""Fala-owned daemon cycle: product lokay, stall quorum, and recovery conduction."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from pathlib import Path
 import signal
 from typing import Any
 
-from lokay.envelope import err, mill_glance
-from lokay.fala_journal import maintain_mill_fala_journals, wrapper_journal_dir
+from lokay.envelope import err, lokay_glance
+from lokay.fala_journal import maintain_lokay_fala_journals, wrapper_journal_dir
 from lokay.graph_run import run_path
 from lokay.preflight import trusted_fala_manifest
 from lokay.pass_receipt import read_pass_receipt
@@ -40,13 +40,13 @@ def ceiling_remaining(
 
 
 def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Lift mill glance fields and drop bulky orchestration details.
+    """Lift lokay glance fields and drop bulky orchestration details.
 
     The journal stays on disk. Launchd stdout must not inherit a multi-MiB
-    JSON line when Fala wraps a productive mill in ``ok: false``.
+    JSON line when Fala wraps a productive lokay in ``ok: false``.
     """
     out = dict(payload)
-    glance = mill_glance(out)
+    glance = lokay_glance(out)
     if str(glance.get("health") or "") == "progress":
         out["health"] = "progress"
     if "progress" not in out and glance.get("progress") is not None:
@@ -83,7 +83,7 @@ def compose_daemon_cycle(
     try:
         try:
             try:
-                maintain_mill_fala_journals()
+                maintain_lokay_fala_journals()
             except Exception as exc:
                 return err(str(exc), reason="journal_rotate")
             return finalize_daemon_payload(

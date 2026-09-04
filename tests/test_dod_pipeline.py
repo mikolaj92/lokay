@@ -15,7 +15,7 @@ def _cfg(tmp_path: Path, *, mode: str = "dry-run", merge_enabled: bool = True) -
         f"""
 mode: {mode}
 github:
-  assignee: mill-bot
+  assignee: lokay-bot
 merge:
   enabled: {str(merge_enabled).lower()}
 repos: []
@@ -61,7 +61,7 @@ def test_assign_dry_run_reports_self_assignee(tmp_path, capsys):
     assert env["ok"] is True
     assert env["planned"] is True
     assert env["applied"] is False
-    assert env["assignee"] == "mill-bot"
+    assert env["assignee"] == "lokay-bot"
     assert env["repo"] == "mikolaj92/lokay"
     assert env["issue"] == 164
 
@@ -78,9 +78,9 @@ def test_assign_live_fixture_applies_configured_self(tmp_path, monkeypatch, caps
     env = _envelope(capsys)
     assert env["ok"] is True
     assert env["applied"] is True
-    assert env["assignee"] == "mill-bot"
+    assert env["assignee"] == "lokay-bot"
     joined = " ".join(" ".join(c) for c in runner.calls)
-    assert "--add-assignee mill-bot" in joined
+    assert "--add-assignee lokay-bot" in joined
     assert "164" in joined
 
 

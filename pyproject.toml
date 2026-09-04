@@ -1,7 +1,7 @@
 [project]
 name = "lokay"
 version = "0.3.0"
-description = "Continuous multi-repo issue-to-PR mill built from Unix atoms and Fala."
+description = "Continuous multi-repo issue-to-PR lokay built from Unix atoms and Fala."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -17,7 +17,7 @@ dependencies = [
 dev = ["pytest>=8.0", "httpx>=0.27"]
 
 [tool.uv.sources]
-fala = { git = "https://github.com/mikolaj92/Fala.git", tag = "v0.7.32" }
+fala = { git = "https://github.com/mikolaj92/Fala.git", tag = "v0.7.33" }
 app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.16" }
 kofte = { git = "https://github.com/mikolaj92/Kofte.git", rev = "cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" }
 
@@ -109,7 +109,7 @@ lokay-classify-leftover-remaining = "lokay.proc.classify_leftover_remaining:main
 lokay-merge-leftover-remaining = "lokay.proc.merge_leftover_remaining:main"
 lokay-select-repair-route = "lokay.proc.select_repair_route:main"
 lokay-recovery-begin = "lokay.proc.recovery_begin:main"
-lokay-recovery-mill = "lokay.proc.recovery_mill:main"
+lokay-recovery-factory = "lokay.proc.recovery_factory:main"
 lokay-recovery-observe = "lokay.proc.recovery_observe:main"
 lokay-recovery-record = "lokay.proc.recovery_record:main"
 lokay-recovery-incident = "lokay.proc.recovery_incident:main"
@@ -126,7 +126,7 @@ lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
 lokay-pr-repair = "lokay.compose.pr_repair:main"
 lokay-pr-triage = "lokay.compose.pr_triage:main"
 lokay-tick = "lokay.compose.tick:main"
-lokay-mill = "lokay.compose.mill:main"
+lokay-work = "lokay.compose.run:main"
 lokay-status = "lokay.compose.status:main"
 lokay-status-server = "lokay.proc.status_server:main"
 lokay-yield-report = "lokay.proc.yield_report:main"
@@ -146,7 +146,7 @@ packages = ["src/lokay"]
 
 [tool.lokay]
 # Repository-declared local verifier for lokay-test-local. Missing this table
-# is an honest skip — the mill must not invent `uv run --extra dev pytest`.
+# is an honest skip — the lokay must not invent `uv run --extra dev pytest`.
 test = ["uv", "run", "--extra", "dev", "pytest", "-q"]
 
 [tool.pytest.ini_options]

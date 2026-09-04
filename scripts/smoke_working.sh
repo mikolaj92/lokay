@@ -17,4 +17,4 @@ assert not missing, f'missing graphs: {missing}'
 print('graphs ok', ids)
 "
 uv run lokay status --config "$CFG" || true
-echo "smoke_working ok (tests+graphs+status). Live mill: see docs/WORKING.md env overrides."
+echo "smoke_working ok (tests+graphs+status). Live lokay: see docs/WORKING.md env overrides."

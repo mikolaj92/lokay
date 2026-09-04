@@ -25,7 +25,7 @@ LEFTOVER_333 = {
     ],
     "source": "agent",
     "worktree": (
-        "/Users/mini-m4-main/.lokay/worktrees/mikolaj92__lokay/"
+        "/Users/mini-m4-0/.lokay/worktrees/mikolaj92__lokay/"
         "ai__fix__333-factory_begin-cold-survey-musi-pokry-sko-1ddbe4a4"
     ),
 }

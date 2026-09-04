@@ -1,8 +1,8 @@
-"""One job: append one mill-step JSON line to the operator trace log.
+"""One job: append one lokay-step JSON line to the operator trace log.
 
 Default path ``~/.lokay/trace.jsonl`` (override with ``--file``). Each line is
 ``{ts, atom, repo, issue, ok, error}`` so an operator can see which atom ran
-and where the mill stuck.
+and where the lokay stuck.
 """
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def run_trace_event(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-trace-event")
-    parser.add_argument("--atom", required=True, help="atom / mill-step name")
+    parser.add_argument("--atom", required=True, help="atom / lokay-step name")
     parser.add_argument("--repo", help="owner/name")
     parser.add_argument("--issue", type=int, help="issue number")
     status = parser.add_mutually_exclusive_group()

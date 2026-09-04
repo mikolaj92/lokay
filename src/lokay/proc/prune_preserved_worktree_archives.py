@@ -1,7 +1,7 @@
 """One job: prune old `.lokay-preserved` archives under the managed worktree root.
 
 Never touches Fala sqlite/WAL. Never walks outside managed_root. Tests must
-pass a tmp managed_root — never the operator mill root by accident.
+pass a tmp managed_root — never the operator lokay root by accident.
 """
 
 from __future__ import annotations
@@ -17,12 +17,12 @@ from lokay.proc.stale_worktree_catalog import SLOTS as ARCHIVE_GC_SLOTS
 # Disk crisis on Temida leftovers: one hour is enough for operator recovery.
 PRESERVED_ARCHIVE_TTL_SECONDS = 3600
 
-def _is_operator_mill_worktrees(root: Path) -> bool:
-    mill = Path.home() / ".lokay" / "worktrees"
+def _is_operator_lokay_worktrees(root: Path) -> bool:
+    lokay = Path.home() / ".lokay" / "worktrees"
     try:
-        return root.expanduser().resolve() == mill.resolve()
+        return root.expanduser().resolve() == lokay.resolve()
     except OSError:
-        return Path(root).expanduser() == mill
+        return Path(root).expanduser() == lokay
 
 
 def _archive_age_seconds(path: Path, *, now: float) -> float | None:
@@ -74,11 +74,11 @@ def prune(
     """Reclaim expired `.lokay-preserved` archives. Dry-run when live is false."""
     root = Path(managed_root).expanduser()
     limit = PRESERVED_ARCHIVE_TTL_SECONDS if ttl is None else ttl
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_worktrees(root):
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_worktrees(root):
         return {
             "ok": True,
             "skipped": True,
-            "reason": "pytest_refuses_operator_mill",
+            "reason": "pytest_refuses_operator_lokay",
             "pruned": [],
             "pruned_count": 0,
             "ttl_seconds": limit,

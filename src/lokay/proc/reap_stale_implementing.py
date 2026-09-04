@@ -8,7 +8,7 @@ from lokay.proc.stale_implementing_stamp import (
     IDLE_STALE_TTL_SECONDS,
     STALE_STAMP_NAME,
     stale_stamp_path,
-    mill_stale_stamp_path,
+    lokay_stale_stamp_path,
     stale_recently_empty,
 )
 

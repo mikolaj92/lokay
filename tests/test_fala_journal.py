@@ -1,4 +1,4 @@
-"""Hermetic tests for mill Fala journal maintenance (tmp dir; no live mill)."""
+"""Hermetic tests for lokay Fala journal maintenance (tmp dir; no live lokay)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from lokay.compose import daemon_cycle
-from lokay.fala_journal import maintain_mill_fala_journals
+from lokay.fala_journal import maintain_lokay_fala_journals
 from lokay.proc import rotate_fala_journals
 
 
@@ -43,7 +43,7 @@ def test_over_cap_journal_uses_fala_maintain_not_rename(tmp_path: Path, monkeypa
     wal.write_bytes(b"wal")
     calls = _capture_maintain(monkeypatch)
 
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert db.exists()
     assert wal.exists()
@@ -75,7 +75,7 @@ def test_maintain_every_fala_journal_including_nested(tmp_path: Path, monkeypatc
     small = _write_db(fala / "product-entry" / "state.sqlite", size=10)
     calls = _capture_maintain(monkeypatch)
 
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert small.exists()
     maintained = {Path(row["path"]) for row in out["maintained"]}
@@ -85,7 +85,7 @@ def test_maintain_every_fala_journal_including_nested(tmp_path: Path, monkeypatc
     assert all(path.exists() for path in maintained)
 
 
-def test_busy_journal_is_skipped_so_live_children_do_not_block_the_mill(
+def test_busy_journal_is_skipped_so_live_children_do_not_block_the_lokay(
     tmp_path: Path, monkeypatch
 ):
     home = tmp_path / "home"
@@ -100,7 +100,7 @@ def test_busy_journal_is_skipped_so_live_children_do_not_block_the_mill(
         return {"ok": True, "deleted_run_count": 1, "vacuumed": True}
 
     monkeypatch.setattr("fala.maintain_journal", maintain)
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert live.exists() and idle.exists()
     assert [Path(row["path"]) for row in out["maintained"]] == [idle]
@@ -116,11 +116,11 @@ def test_maintain_fail_closed_when_fala_rejects(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr("fala.maintain_journal", boom)
     with pytest.raises(RuntimeError, match="maintain_journal"):
-        maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+        maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert db.exists()
 
 
-def test_pytest_without_home_does_not_touch_operator_mill(tmp_path: Path, monkeypatch):
+def test_pytest_without_home_does_not_touch_operator_lokay(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_fala_journal.py::probe")
     monkeypatch.setenv("HOME", str(tmp_path / "operator"))
     db = tmp_path / "operator" / ".lokay" / "fala" / "daemon-cycle" / "state.sqlite"
@@ -130,7 +130,7 @@ def test_pytest_without_home_does_not_touch_operator_mill(tmp_path: Path, monkey
         "fala.maintain_journal",
         lambda *args, **kwargs: called.append((args, kwargs)) or {"ok": True},
     )
-    out = maintain_mill_fala_journals(min_bytes=1)
+    out = maintain_lokay_fala_journals(min_bytes=1)
     assert out["reason"] == "pytest"
     assert db.exists()
     assert called == []
@@ -183,7 +183,7 @@ def test_daemon_cycle_maintains_before_run_path(monkeypatch, tmp_path):
         calls.append("run")
         return {"ok": True, "health": "idle"}
 
-    monkeypatch.setattr(daemon_cycle, "maintain_mill_fala_journals", maintain)
+    monkeypatch.setattr(daemon_cycle, "maintain_lokay_fala_journals", maintain)
     monkeypatch.setattr(daemon_cycle, "run_path", run_path)
     monkeypatch.setattr(daemon_cycle, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml")
     out = daemon_cycle.compose_daemon_cycle(config_path=str(cfg), pass_ceiling_seconds=5)
@@ -203,7 +203,7 @@ def test_daemon_cycle_fail_closed_when_maintain_cannot_run(monkeypatch, tmp_path
         calls.append("run")
         return {"ok": True, "health": "idle"}
 
-    monkeypatch.setattr(daemon_cycle, "maintain_mill_fala_journals", maintain)
+    monkeypatch.setattr(daemon_cycle, "maintain_lokay_fala_journals", maintain)
     monkeypatch.setattr(daemon_cycle, "run_path", run_path)
     monkeypatch.setattr(daemon_cycle, "trusted_fala_manifest", lambda: tmp_path / "pkg.toml")
     out = daemon_cycle.compose_daemon_cycle(config_path=str(cfg), pass_ceiling_seconds=5)
@@ -237,7 +237,7 @@ def test_docs_do_not_claim_rotate_only_covers_daemon_cycle_factory():
         for phrase in exclusive:
             assert phrase not in text
     journal_row = next(
-        line for line in graph.splitlines() if line.startswith("| mill Fala journals |")
+        line for line in graph.splitlines() if line.startswith("| lokay Fala journals |")
     )
     assert "state.sqlite" in journal_row
     assert "~/.lokay/fala/" in journal_row
@@ -284,7 +284,7 @@ def test_created_zombie_runs_are_finalized_and_reclaimed(tmp_path: Path, monkeyp
     monkeypatch.setattr("fala.finalize_run", finalize_run)
     monkeypatch.setattr("fala.delete_terminal_run", delete_terminal_run)
 
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert {Path(row["path"]) for row in out["maintained"]} == {db, i2pr}
     heartbeat = next(row for row in out["maintained"] if Path(row["path"]) == db)
@@ -298,7 +298,7 @@ def test_created_zombie_runs_are_finalized_and_reclaimed(tmp_path: Path, monkeyp
     assert {call["db_path"] for call in maintain_calls} == {db, i2pr}
 
 
-def test_invalid_status_journal_does_not_fail_the_mill(tmp_path: Path, monkeypatch):
+def test_invalid_status_journal_does_not_fail_the_lokay(tmp_path: Path, monkeypatch):
     """Corrupt process/run status must not abort heartbeat journal maintain."""
     home = tmp_path / "home"
     db = _write_db(home / ".lokay" / "fala" / "daemon-cycle" / "state.sqlite", size=80)
@@ -308,7 +308,7 @@ def test_invalid_status_journal_does_not_fail_the_mill(tmp_path: Path, monkeypat
 
     monkeypatch.setattr("fala.list_runs", boom)
     calls = _capture_maintain(monkeypatch)
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert db.exists()
     assert [Path(row["path"]) for row in out["maintained"]] == [db]
@@ -335,7 +335,7 @@ def test_created_reclaim_is_capped_per_journal(tmp_path: Path, monkeypatch):
     monkeypatch.setattr("fala.finalize_run", finalize_run)
     monkeypatch.setattr("fala.delete_terminal_run", delete_terminal_run)
 
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     heartbeat = next(row for row in out["maintained"] if Path(row["path"]) == db)
     assert heartbeat["reclaimed_created"] == 8
@@ -360,7 +360,7 @@ def test_missing_native_finalize_stops_reclaim_after_one_try(tmp_path: Path, mon
     monkeypatch.setattr("fala.finalize_run", finalize_run)
     monkeypatch.setattr("fala.delete_terminal_run", lambda *_a, **_k: {"ok": True})
 
-    out = maintain_mill_fala_journals(home=home, min_bytes=50, keep=1)
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert db.exists()
     assert calls == ["lokay-old-0"]

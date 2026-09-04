@@ -1,4 +1,4 @@
-"""One job: park leftover ready labels on a delivered mill issue."""
+"""One job: park leftover ready labels on a delivered lokay issue."""
 
 from __future__ import annotations
 
@@ -60,31 +60,31 @@ def run_closeout(
 
 
 def leftover_stamp_path(cfg: Any) -> Path | None:
-    """Stamp lives beside mill state. Missing path means always probe."""
+    """Stamp lives beside lokay state. Missing path means always probe."""
     path = getattr(cfg, "state_path", None)
     if not path:
         return None
     return Path(path).expanduser().parent / LEFTOVER_STAMP_NAME
 
 
-def mill_leftover_stamp_path() -> Path:
-    """Operator mill leftover stamp beside last-pass / state.jsonl."""
+def lokay_leftover_stamp_path() -> Path:
+    """Operator lokay leftover stamp beside last-pass / state.jsonl."""
     return Path.home() / ".lokay" / LEFTOVER_STAMP_NAME
 
 
-def _is_operator_mill_leftover_stamp(stamp: Path) -> bool:
-    mill = mill_leftover_stamp_path()
+def _is_operator_lokay_leftover_stamp(stamp: Path) -> bool:
+    lokay = lokay_leftover_stamp_path()
     try:
-        return stamp.expanduser().resolve() == mill.resolve()
+        return stamp.expanduser().resolve() == lokay.resolve()
     except OSError:
-        return stamp.expanduser() == mill
+        return stamp.expanduser() == lokay
 
 
 def leftover_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
         return False
-    # Pytest must not skip leftover GitHub lists using the mill stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_mill_leftover_stamp(
+    # Pytest must not skip leftover GitHub lists using the lokay stamp.
+    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_leftover_stamp(
         stamp
     ):
         return False

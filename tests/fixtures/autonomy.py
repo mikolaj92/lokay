@@ -1,6 +1,6 @@
 """Hermetic helpers for autonomy certainty contracts.
 
-Keep tick/mill wiring out of product code: these fixtures only build configs
+Keep tick/lokay wiring out of product code: these fixtures only build configs
 and stub envelopes for pytest. No network, no gh mutation.
 """
 
@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 
-def write_mill_config(
+def write_lokay_config(
     tmp_path: Path,
     *,
     repos: Iterable[str] = ("a/one", "a/two"),
@@ -24,7 +24,7 @@ def write_mill_config(
     max_repairs_per_tick: int = 0,
     name: str = "config.yaml",
 ) -> str:
-    """Write a minimal mill config under tmp_path; return its path string."""
+    """Write a minimal lokay config under tmp_path; return its path string."""
     path = tmp_path / name
     rows = "\n".join(
         f"  - name: {repo}\n    clone_path: {tmp_path}" for repo in repos

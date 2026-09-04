@@ -3,13 +3,13 @@
 import json
 from pathlib import Path
 
-from lokay.child_harvest import _index_issue_to_pr_log, _isolated_mill_roots
+from lokay.child_harvest import _index_issue_to_pr_log, _isolated_lokay_roots
 
 
 def collect(config: dict, scope: dict, ledger: dict) -> dict:
     state = Path(config["state_path"])
     home = Path.home()
-    default_cycle, isolated = _isolated_mill_roots(state, home)
+    default_cycle, isolated = _isolated_lokay_roots(state, home)
     home = isolated
     receipts = []
     if default_cycle.is_dir():

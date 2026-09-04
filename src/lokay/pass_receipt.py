@@ -26,14 +26,14 @@ _FIXTURE_CONFIG_MARKERS = (
 _PRODUCT_HEALTH = frozenset({"progress", "idle", "overlap", "repairing", "waiting"})
 
 
-def mill_receipt_path() -> Path:
+def lokay_receipt_path() -> Path:
     return Path.home() / ".lokay" / RECEIPT_NAME
 
 
 def receipt_path_for(state_path: Path | None = None) -> Path:
     if state_path is not None:
         return Path(state_path).expanduser().resolve().parent / RECEIPT_NAME
-    return mill_receipt_path()
+    return lokay_receipt_path()
 
 
 def _remaining_of(receipt: dict[str, Any]) -> dict[str, Any]:
@@ -52,7 +52,7 @@ def _repos_of(receipt: dict[str, Any]) -> list[str]:
 
 
 def incoming_is_fixture(receipt: dict[str, Any]) -> bool:
-    """True when this receipt came from pytest / toy catalog, not the mill."""
+    """True when this receipt came from pytest / toy catalog, not the lokay."""
     config = str(receipt.get("config") or "").replace("\\", "/").lower()
     if any(marker in config for marker in _FIXTURE_CONFIG_MARKERS):
         return True
@@ -61,7 +61,7 @@ def incoming_is_fixture(receipt: dict[str, Any]) -> bool:
 
 
 def existing_is_product(receipt: dict[str, Any]) -> bool:
-    """True when on-disk last-pass looks like a live mill glance."""
+    """True when on-disk last-pass looks like a live lokay glance."""
     if receipt.get("kind") != "pass_receipt":
         return False
     rem = _remaining_of(receipt)
@@ -86,7 +86,7 @@ def _should_skip_clobber(target: Path, receipt: dict[str, Any]) -> bool:
         resolved = target.expanduser().resolve()
     except OSError:
         resolved = target
-    if resolved == mill_receipt_path().resolve():
+    if resolved == lokay_receipt_path().resolve():
         return True
     existing = read_pass_receipt(path=target)
     return bool(existing) and existing_is_product(existing)
@@ -226,7 +226,7 @@ def write_pass_receipt(
     """Atomically write receipt JSON. Returns the path written.
 
     Fixture receipts (pytest tmp config, toy ``o/r`` catalog) must not clobber
-    the mill glance file at ``~/.lokay/last-pass.json``. Isolated ``state_path``
+    the lokay glance file at ``~/.lokay/last-pass.json``. Isolated ``state_path``
     writes still land next to the test state.
     """
     target = path or receipt_path_for(state_path)

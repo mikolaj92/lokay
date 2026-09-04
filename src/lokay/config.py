@@ -106,7 +106,7 @@ class Config:
 
 
     def active_repos(self) -> list[RepoConfig]:
-        """Enabled repos only (mill / tick iterate these)."""
+        """Enabled repos only (lokay / tick iterate these)."""
         return [r for r in self.repos if r.enabled]
 
     def review_style_for(self, repo: str) -> str:
@@ -153,7 +153,7 @@ def _yaml_bool(value: Any, default: bool, *, field: str) -> bool:
     """Parse a YAML/JSON boolean fail-closed.
 
     ``bool("false")`` is True in Python — quoted ``enabled: "false"`` must not
-    arm the mill. Accept real bools, 0/1, and the usual truthy/falsy tokens.
+    arm the lokay. Accept real bools, 0/1, and the usual truthy/falsy tokens.
     """
     if value is None:
         return default
@@ -251,9 +251,9 @@ def _env_truthy(name: str) -> bool | None:
 
 
 def apply_env_overrides(cfg: Config) -> Config:
-    """Apply optional process env overrides for continuous/live mill.
+    """Apply optional process env overrides for continuous/live lokay.
 
-    Safe defaults stay in config.yaml; the factory can enable live milling
+    Safe defaults stay in config.yaml; the factory can enable live lokaying
     without rewriting the file:
 
       LOKAY_MODE=live|dry-run

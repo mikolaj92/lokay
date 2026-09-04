@@ -13,15 +13,15 @@ def _pass_dir(tmp_path: Path, *, stuck_path: Path) -> Path:
         {
             "stuck_path": str(stuck_path),
             "live": True,
-            "repos": [dispatch_triage.MINI_MILL_REPO],
+            "repos": [dispatch_triage.MINI_LOKAY_REPO_SCOPE],
         },
     )
     pass_io.write_json(
         pass_io.plan_path(pass_dir),
         {
             "triage_targets": [
-                {"repo": dispatch_triage.MINI_MILL_REPO, "issue": 1},
-                {"repo": dispatch_triage.MINI_MILL_REPO, "issue": 2},
+                {"repo": dispatch_triage.MINI_LOKAY_REPO_SCOPE, "issue": 1},
+                {"repo": dispatch_triage.MINI_LOKAY_REPO_SCOPE, "issue": 2},
             ]
         },
     )
@@ -31,7 +31,7 @@ def _pass_dir(tmp_path: Path, *, stuck_path: Path) -> Path:
             "actions": [],
             "progress": 0,
             "remaining_inbox": 2,
-            "inbox_by_repo": {dispatch_triage.MINI_MILL_REPO: 2},
+            "inbox_by_repo": {dispatch_triage.MINI_LOKAY_REPO_SCOPE: 2},
         },
     )
     return pass_dir

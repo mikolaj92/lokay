@@ -1,4 +1,4 @@
-"""Mill host fetch + ff-only onto origin/main, or fail-closed."""
+"""Lokay host fetch + ff-only onto origin/main, or fail-closed."""
 
 from __future__ import annotations
 
@@ -181,7 +181,7 @@ def test_refuse_when_behind_and_dirty(tmp_path: Path):
 
 def test_skip_worktree_catalog_is_preserved_on_unrelated_ff(tmp_path: Path):
     seed, host = _pair(tmp_path)
-    local = "clone_path: /Users/mini-m4-main/Developer\n"
+    local = "clone_path: /Users/mini-m4-0/Developer\n"
     (host / "repos.mikolaj92.yaml").write_text(local, encoding="utf-8")
     _git(host, "update-index", "--skip-worktree", "--", "repos.mikolaj92.yaml")
     _advance_origin(seed, "new\n")
@@ -194,7 +194,7 @@ def test_skip_worktree_catalog_is_preserved_on_unrelated_ff(tmp_path: Path):
 
 
 def test_skip_worktree_product_config_fast_forwards(tmp_path: Path):
-    """Product config is mill policy, not a host catalog. origin/main must land."""
+    """Product config is lokay policy, not a host catalog. origin/main must land."""
     seed, host = _pair(tmp_path)
     (seed / "config.yaml").write_text("require_llm_review: false\n", encoding="utf-8")
     _git(seed, "add", "config.yaml")
@@ -222,7 +222,7 @@ def test_skip_worktree_product_config_fast_forwards(tmp_path: Path):
 
 def test_refuse_when_skip_worktree_would_be_overwritten(tmp_path: Path):
     seed, host = _pair(tmp_path)
-    local = "clone_path: /Users/mini-m4-main/Developer\n"
+    local = "clone_path: /Users/mini-m4-0/Developer\n"
     (host / "repos.mikolaj92.yaml").write_text(local, encoding="utf-8")
     _git(host, "update-index", "--skip-worktree", "--", "repos.mikolaj92.yaml")
     old = _git(host, "rev-parse", "HEAD").stdout.strip()

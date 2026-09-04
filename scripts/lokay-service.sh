@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# OS caretaker for LaunchAgent ai.mikolaj.lokay-mill.
+# OS caretaker for LaunchAgent ai.mikolaj.lokay.
 # Product idle / host-ff / survey live in Fala. This script only leases the
-# mill lock, execs lokay-daemon, logs, and records a bootstrap incident if
+# lokay lock, execs lokay-daemon, logs, and records a bootstrap incident if
 # the process cannot start. Plist 60s + crash KeepAlive is host setup
 # (`--install`), not a per-tick rewrite.
 set -euo pipefail
@@ -20,7 +20,7 @@ CFG="${LOKAY_CONFIG}"
 LOKAY_HOME="${HOME}/.lokay"
 LOG_DIR="${LOKAY_LOG_DIR:-${LOKAY_HOME}/logs}"
 OUTBOX="${LOKAY_HOME}/preflight-bootstrap-incidents.log"
-LOKAY_LAUNCHD_LABEL="${LOKAY_LAUNCHD_LABEL:-ai.mikolaj.lokay-mill}"
+LOKAY_LAUNCHD_LABEL="${LOKAY_LAUNCHD_LABEL:-ai.mikolaj.lokay}"
 LOKAY_LAUNCHD_START_INTERVAL=60
 LOKAY_LAUNCHD_PLIST="${LOKAY_LAUNCHD_PLIST:-${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist}"
 
@@ -70,8 +70,8 @@ export LOKAY_EXECUTOR_ENABLED="${LOKAY_EXECUTOR_ENABLED:-1}"
 export LOKAY_MERGE_ENABLED="${LOKAY_MERGE_ENABLED:-1}"
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-LOG="${LOG_DIR}/mill-${STAMP}.log"
-LATEST="${LOG_DIR}/mill-latest.log"
+LOG="${LOG_DIR}/lokay-${STAMP}.log"
+LATEST="${LOG_DIR}/lokay-latest.log"
 printf '%s\n' '{"ok":true,"health":"current","reason":"starting"}' | tee "${LOG}" >"${LATEST}"
 
 CEILING="${LOKAY_PASS_CEILING_SECONDS:-180}"
@@ -169,7 +169,7 @@ DAEMON_PID=$!
 ) &
 WATCHDOG_PID=$!
 wait "${DAEMON_PID}"
-MILL_RC=$?
+LOKAY_RC=$?
 if kill -0 "${WATCHDOG_PID}" 2>/dev/null; then
   pkill -P "${WATCHDOG_PID}" 2>/dev/null || true
   kill "${WATCHDOG_PID}" 2>/dev/null || true
@@ -188,7 +188,7 @@ if [[ -f "${CEILING_MARK}" ]]; then
 fi
 set -e
 cp "${LOG}" "${LATEST}" 2>/dev/null || true
-if [[ "${MILL_RC}" -ne 0 ]]; then
+if [[ "${LOKAY_RC}" -ne 0 ]]; then
   bootstrap_incident "daemon_exec"
 fi
-exit "${MILL_RC}"
+exit "${LOKAY_RC}"

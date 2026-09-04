@@ -797,7 +797,7 @@ def test_iter_worktrees_ignores_symlink_corners(tmp_path):
 
 
 def test_iter_worktrees_skips_nested_clones(tmp_path):
-    """Nested clones are not mill leftover worktrees. Mill worktrees keep a .git file."""
+    """Nested clones are not lokay leftover worktrees. Lokay worktrees keep a .git file."""
     from lokay.git_worktree import iter_worktrees
 
     managed = tmp_path / "managed"

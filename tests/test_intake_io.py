@@ -179,7 +179,7 @@ def test_apply_intake_blocked_demotes_ready():
         reason="preflight_incident",
         add_labels=("ai:blocked",),
         remove_labels=("ai:ready", "work:ready"),
-        comment="Blocked: mill preflight incident.",
+        comment="Blocked: lokay preflight incident.",
     )
     runner = _FakeRunner()
     assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True

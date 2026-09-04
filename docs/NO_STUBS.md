@@ -1,6 +1,6 @@
 # No stubs / no silent inventing
 
-Lokay is a **production mill**. The following are **forbidden** in production
+Lokay is a **production lokay**. The following are **forbidden** in production
 code paths (and rejected by tests):
 
 | Pattern | Why |
@@ -34,7 +34,7 @@ The goal passed to the harness is always the same: implement the issue (or repai
 A separate intake gate may classify a seed as unbounded collection work. That
 classification does not turn Pi into a collector: the harness may implement
 only a bounded collector/bootstrap patch. The destination deployment starts the
-collector durably in the background after merge; Pi and the mill must not fill
+collector durably in the background after merge; Pi and the lokay must not fill
 its data store, poll progress, or wait for completion. A later issue evaluates
 whether collection is accruing.
 

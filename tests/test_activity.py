@@ -1,4 +1,4 @@
-"""Live mill atoms write activity.json beside state.jsonl."""
+"""Live lokay atoms write activity.json beside state.jsonl."""
 
 from __future__ import annotations
 
@@ -114,13 +114,13 @@ def test_status_snapshot_does_not_write_activity(tmp_path: Path):
     assert not (tmp_path / "activity.json").exists()
 
 
-def test_status_snapshot_does_not_replace_mill_activity(tmp_path: Path):
+def test_status_snapshot_does_not_replace_lokay_activity(tmp_path: Path):
     from lokay.activity import record_atom_start
 
     cfg = _cfg(tmp_path)
     activity = tmp_path / "activity.json"
     activity.write_text(
-        '{"atom": "recovery_mill", "path": "daemon_cycle", "transitions": 9}\n',
+        '{"atom": "recovery_factory", "path": "daemon_cycle", "transitions": 9}\n',
         encoding="utf-8",
     )
     assert (
@@ -132,7 +132,7 @@ def test_status_snapshot_does_not_replace_mill_activity(tmp_path: Path):
         is None
     )
     payload = json.loads(activity.read_text(encoding="utf-8"))
-    assert payload["atom"] == "recovery_mill"
+    assert payload["atom"] == "recovery_factory"
     assert payload["path"] == "daemon_cycle"
     assert payload["transitions"] == 9
 
@@ -168,9 +168,9 @@ def test_reset_activity_starts_tick_at_zero(tmp_path: Path):
 
     cfg = _cfg(tmp_path)
     record_atom_start(
-        atom="recovery_mill",
+        atom="recovery_factory",
         inputs={"config_path": cfg, "live": True, "repo": "__lokay_daemon__"},
-        process_id="daemon_cycle:recovery_mill",
+        process_id="daemon_cycle:recovery_factory",
     )
     record_atom_start(
         atom="summarize_daemon_cycle",

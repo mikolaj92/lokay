@@ -5,7 +5,7 @@ Data: 2026-08-31. Źródła: cztery niezależne raporty `01`–`04`, inspekcja p
 ## Stan po natychmiastowym sprzątaniu
 
 - Testy preflight używają sandboxowego `HOME`; nie zapisują hostowego `~/.lokay/health-lease`.
-- Status nie tworzy `mill.lock`, toleruje dangling/race, odrzuca symlink, obcy UID i mode inne niż `0600`.
+- Status nie tworzy `lokay.lock`, toleruje dangling/race, odrzuca symlink, obcy UID i mode inne niż `0600`.
 - Status rozdziela zweryfikowaną capability (`lease_ok`) od obserwacji runu (`run_active`).
 - Daemon usuwa bezpiecznie per-run lease wygasłe lub należące do martwego PID.
 - Stare per-run lease zostały zredukowane z około 969 do aktywnego rekordu; obcy `health-lease.token` pozostawiono nietknięty.
@@ -28,7 +28,7 @@ Data: 2026-08-31. Źródła: cztery niezależne raporty `01`–`04`, inspekcja p
 ### P1: ordering musi wrócić do Fala
 
 4. `run_issue_sieve_rows.py` oraz `run_executor_rows.py` chowają Pythonowe `while`, budżet i wybór następnego child path. Przed implementacją zaktualizować Mermaid, potem zrobić authored pod-Fale z jedną iteracją na atom i jawną krawędzią powrotu.
-5. Do decyzji: podobny ukryty unroll w `closeout_catalog`; legacy `lokay-dispatch-closeout`; wielopassowy `recovery_mill` jako jeden atom.
+5. Do decyzji: podobny ukryty unroll w `closeout_catalog`; legacy `lokay-dispatch-closeout`; wielopassowy `recovery_factory` jako jeden atom.
 
 ### P1: usunąć duplikację Fala
 
@@ -62,5 +62,5 @@ Każdy punkt jako osobna mała zmiana. Dla zmian routingu obowiązuje: README Me
 - Naprawiono źródło masowych, kolejnościowych failure’ów: natywne ładowanie Fala zmieniało `DYLD_LIBRARY_PATH` procesu pytest, przez co późniejsze child Python nie mogły importować wbudowanych rozszerzeń `math`/`fcntl`. Adapter `graph_run` i autouse fixture przywracają środowisko.
 - Zaktualizowano rzeczywiście stare kontrakty testowe: katalog 30→31 bez sztywnej liczby, mały receipt `factory_begin`, ghost receipts bez worktree, klasyfikowany `worktree_add` (`ok=true`, `route=missing`), nowe wymagane `localize.route=ready`, oraz brak założenia o kolejności kluczy mapy `effector_results`.
 - `organ/common.py` ma ponownie mniej niż 400 linii bez zmiany logiki.
-- Usunięto osierocony ręczny wrapper młyna i jego rekurencyjne dzieci Fala. Produkcja działa teraz jako pojedynczy LaunchAgent `user/501/ai.mikolaj.lokay-mill` i raportuje aktywny config-aware lease.
+- Usunięto osierocony ręczny wrapper młyna i jego rekurencyjne dzieci Fala. Produkcja działa teraz jako pojedynczy LaunchAgent `user/501/ai.mikolaj.lokay` i raportuje aktywny config-aware lease.
 - `git diff --check` przechodzi.

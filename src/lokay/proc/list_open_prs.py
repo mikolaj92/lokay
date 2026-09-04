@@ -1,4 +1,4 @@
-"""LEAF: list live open mill PRs. Two small functions, no child graph."""
+"""LEAF: list live open lokay PRs. Two small functions, no child graph."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _list_open(cfg, repos, *, live: bool) -> dict:
     return {"ok": True, "prs": rows}
 
 
-def _keep_mill(rows: list[dict], prefix: str) -> list[dict]:
+def _keep_lokay(rows: list[dict], prefix: str) -> list[dict]:
     stem = prefix.rstrip("/") + "/"
     return [
         dict(row)
@@ -46,5 +46,5 @@ def run(*, config_path: str | None, live: bool) -> dict:
     listed = _list_open(cfg, cfg.active_repos(), live=live)
     if listed.get("ok") is False:
         return listed
-    kept = _keep_mill(list(listed.get("prs") or []), str(cfg.branch_prefix or "ai/fix"))
+    kept = _keep_lokay(list(listed.get("prs") or []), str(cfg.branch_prefix or "ai/fix"))
     return {"ok": True, "prs": kept, "count": len(kept)}

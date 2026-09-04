@@ -22,7 +22,7 @@ def test_repair_prompt_delimits_untrusted_review() -> None:
 
 
 
-def test_lokay_repo_runs_fala_and_propagates_review(
+def test_factory_repo_runs_fala_and_propagates_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     seen: dict[str, object] = {}

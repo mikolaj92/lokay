@@ -1,4 +1,4 @@
-"""Event-wake routing: GitHub reason → bounded Fala/mill path.
+"""Event-wake routing: GitHub reason → bounded Fala/lokay path.
 
 Pure policy for ``lokay-wake``. Interprets issue / PR / checks wakes and picks
 ``issue_triage``, ``pr_triage``, or bounded ``factory_pass`` (max-passes 1).
@@ -15,7 +15,7 @@ WakePath = Literal["issue_triage", "pr_triage", "factory_pass"]
 # Skip wakes that are clearly noise / closed-shape (not intentional work).
 SKIP_LABELS = frozenset({"spam", "invalid", "wontfix"})
 
-# For ``issues: labeled`` — only these labels should wake the mill.
+# For ``issues: labeled`` — only these labels should wake the lokay.
 WAKE_ON_LABELS = frozenset({"ai:ready"})
 
 ISSUE_REASONS = frozenset(
@@ -40,7 +40,7 @@ FACTORY_REASONS = frozenset(
     {
         "factory",
         "factory_pass",
-        "mill",
+        "lokay",
         "tick",
     }
 )
@@ -48,7 +48,7 @@ FACTORY_REASONS = frozenset(
 
 @dataclass(frozen=True)
 class WakePlan:
-    """One wake decision (path + targets). ``skip`` means no mill work."""
+    """One wake decision (path + targets). ``skip`` means no lokay work."""
 
     path: WakePath | None
     reason: str
@@ -103,7 +103,7 @@ def route_wake(
     - issue opened / labeled (relevant) → ``issue_triage``
     - PR / checks with pr+branch → ``pr_triage``
     - PR / checks without branch → bounded ``factory_pass``
-    - factory / mill / tick → bounded ``factory_pass``
+    - factory / lokay / tick → bounded ``factory_pass``
     """
     norm = _norm_reason(reason)
     repo_s = str(repo or "").strip() or None

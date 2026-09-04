@@ -147,7 +147,7 @@ class GithubPr:
             checks_status=status,
         )
 
-    def mill_dicts(self) -> list[dict[str, Any]]:
+    def lokay_dicts(self) -> list[dict[str, Any]]:
         """Today's list_prs envelope rows (PullRequest.to_dict)."""
         return [row.to_dict() for row in self._listed.values()]
 

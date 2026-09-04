@@ -1,6 +1,6 @@
 # HTMX boundaries (binding)
 
-Lokay is a **CLI mill** (JSON envelopes on stdout). If a hypermedia UI is
+Lokay is a **CLI lokay** (JSON envelopes on stdout). If a hypermedia UI is
 added later, it follows these rules — no hidden SPA.
 
 ## Rules

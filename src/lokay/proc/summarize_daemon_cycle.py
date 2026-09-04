@@ -1,9 +1,9 @@
 """Return the authored daemon-cycle terminal envelope."""
 
 
-def summarize(*, mill_node: dict, repair: dict) -> dict:
-    mill = mill_node.get("mill")
-    if not isinstance(mill, dict):
+def summarize(*, lokay_node: dict, repair: dict) -> dict:
+    lokay = lokay_node.get("lokay")
+    if not isinstance(lokay, dict):
         return {"ok": False, "error": "daemon cycle completed without Lokay envelope"}
     if repair.get("restart_required") is True:
         return {
@@ -15,4 +15,4 @@ def summarize(*, mill_node: dict, repair: dict) -> dict:
                 "self_repair": repair,
             },
         }
-    return {"ok": True, "result": mill}
+    return {"ok": True, "result": lokay}

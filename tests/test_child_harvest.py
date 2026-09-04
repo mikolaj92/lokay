@@ -172,7 +172,7 @@ def test_harvest_closed_issue_list_refuses_truncation(monkeypatch):
     monkeypatch.setattr(child_harvest, "survey_list_cap", lambda: 2)
     monkeypatch.setattr(child_harvest, "Runner", FullPageRunner)
 
-    assert child_harvest._github_closed_mill_issues("mikolaj92/lokay") == set()
+    assert child_harvest._github_closed_lokay_issues("mikolaj92/lokay") == set()
     source = Path(child_harvest.__file__).read_text(encoding="utf-8")
     assert (
         "Harvest CLOSED list refuses truncation before clearing stuck rows." in source
@@ -180,7 +180,7 @@ def test_harvest_closed_issue_list_refuses_truncation(monkeypatch):
 
 
 def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
-    """Mini mill must not keep Temida/test corpses on this host's ledger."""
+    """Mini lokay must not keep Temida/test corpses on this host's ledger."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
@@ -205,7 +205,7 @@ def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
         }
     }
     monkeypatch.setattr(
-        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+        "lokay.child_harvest._github_closed_lokay_issues", lambda _repo: set()
     )
     harvest_fail_closed_children(
         stuck,
@@ -220,7 +220,7 @@ def test_harvest_drops_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
 
 
 def test_harvest_drops_toplevel_out_of_scope_stuck_rows(tmp_path: Path, monkeypatch):
-    """Top-level Temida keys are still mill-ledger corpses, not issues[] rows."""
+    """Top-level Temida keys are still lokay-ledger corpses, not issues[] rows."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
@@ -245,7 +245,7 @@ def test_harvest_drops_toplevel_out_of_scope_stuck_rows(tmp_path: Path, monkeypa
         },
     }
     monkeypatch.setattr(
-        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+        "lokay.child_harvest._github_closed_lokay_issues", lambda _repo: set()
     )
     harvest_fail_closed_children(
         stuck,
@@ -327,7 +327,7 @@ def test_harvest_drops_out_of_scope_cycle_start_files(tmp_path: Path, monkeypatc
     live = cycle / "mikolaj92__lokay-9.json"
     _receipt(live, repo="mikolaj92/lokay", issue=9, pid=12)
     monkeypatch.setattr(
-        "lokay.child_harvest._github_closed_mill_issues", lambda _repo: set()
+        "lokay.child_harvest._github_closed_lokay_issues", lambda _repo: set()
     )
     harvest_fail_closed_children(
         {"issues": {}},
@@ -626,13 +626,13 @@ def test_fala_journal_fallback_when_jsonl_silent(tmp_path: Path):
     assert stuck["issues"]["a/b#7"].get("reason") == "local_repair_exhausted"
 
 
-def test_tmp_mill_does_not_inherit_host_cycle(tmp_path: Path):
-    """A checkout mill with its own state.jsonl must not harvest host cycle."""
+def test_tmp_lokay_does_not_inherit_host_cycle(tmp_path: Path):
+    """A checkout lokay with its own state.jsonl must not harvest host cycle."""
     host = tmp_path / "host"
-    mill = tmp_path / "mill"
+    lokay = tmp_path / "lokay"
     host_cycle = host / ".lokay" / "cycle"
     host_cycle.mkdir(parents=True)
-    mill.mkdir()
+    lokay.mkdir()
     _receipt(host_cycle / "a__one-2.json", repo="a/one", issue=2, pid=999_999_999)
     host_state = host / ".lokay" / "state.jsonl"
     host_state.parent.mkdir(parents=True, exist_ok=True)
@@ -642,7 +642,7 @@ def test_tmp_mill_does_not_inherit_host_cycle(tmp_path: Path):
     stuck = {"issues": {}}
     harvest_fail_closed_children(
         stuck,
-        state_path=mill / "state.jsonl",
+        state_path=lokay / "state.jsonl",
         home=host,
         is_live=lambda _pid: False,
     )
@@ -1160,15 +1160,15 @@ def test_journal_plan_only_without_receipt_or_stuck_row_leaves_the_slot(tmp_path
     assert stuck["issues"]["a/b#4796"].get("reason") == "plan_only"
 
 
-def test_harvest_idle_mill_stuck_skips_when_not_live(tmp_path: Path):
-    from lokay.child_harvest import harvest_idle_mill_stuck
+def test_harvest_idle_lokay_stuck_skips_when_not_live(tmp_path: Path):
+    from lokay.child_harvest import harvest_idle_lokay_stuck
 
     stuck_path = tmp_path / "stuck.json"
     stuck_path.write_text(
         json.dumps({"issues": {}, "mikolaj92/Temida#4805": {"blocked": True}}) + "\n",
         encoding="utf-8",
     )
-    harvest_idle_mill_stuck(config_path=str(tmp_path / "missing.yaml"), live=False)
+    harvest_idle_lokay_stuck(config_path=str(tmp_path / "missing.yaml"), live=False)
     data = json.loads(stuck_path.read_text(encoding="utf-8"))
     assert "mikolaj92/Temida#4805" in data
 
