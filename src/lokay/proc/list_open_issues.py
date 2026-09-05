@@ -6,7 +6,7 @@ import argparse
 
 from lokay.gh_rate import survey_list_cap
 from lokay.proc._common import load_cfg, runner
-from lokay.github_tasks import issues_source
+from lokay.source import load_tasks
 
 
 def facts(*, config_path: str | None, live: bool) -> dict:
@@ -17,7 +17,7 @@ def facts(*, config_path: str | None, live: bool) -> dict:
     overflow = False
     cap = survey_list_cap()
     for repo in cfg.active_repos():
-        listed = issues_source(
+        listed = load_tasks(
             repo, runner=git, config=cfg, live=live, on_cap="keep"
         ).list_open()
         if live and len(listed) >= cap:
@@ -25,7 +25,7 @@ def facts(*, config_path: str | None, live: bool) -> dict:
         for task in listed:
             rows.append(
                 {
-                    "repo": task.target,
+                    "repo": repo.name,
                     "issue": int(task.number),
                     "title": task.title,
                     "labels": list(task.labels or []),

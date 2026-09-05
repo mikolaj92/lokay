@@ -1,8 +1,9 @@
-"""Catalog row: compose a task source with one code target.
+"""Catalog row: select one external source plugin and its targets.
 
-Two fields. Missing field defaults to github and the same target.
-Code is one plugin (repo + PR together). No separate prs field.
-No executors. No adapters.
+``source.plugin`` owns both work-item and code observations/effects. Its two
+optional targets describe addresses inside that source; they are not separate
+platform plugins. Legacy ``issues`` + ``code`` rows remain readable only when
+both sides select the same plugin. No separate PR field.
 """
 
 from __future__ import annotations
@@ -41,18 +42,39 @@ class CatalogBinding:
 
 
 @dataclass(frozen=True)
+class SourceBinding:
+    """One source plugin with work-item and code addresses in that source."""
+
+    plugin: str
+    issues_target: str
+    code_target: str
+
+
+@dataclass(frozen=True)
 class CatalogRow:
-    """One place: tasks composed with code. Code does not split into PR and repo."""
+    """One source plugin. PR remains part of its code target."""
 
     issues: CatalogBinding
     code: CatalogBinding
     name: str = ""
     clone_path: str = ""
 
+    @property
+    def source(self) -> SourceBinding:
+        if self.issues.plugin != self.code.plugin:
+            raise CatalogError("catalog row must use one source plugin")
+        return SourceBinding(
+            plugin=self.code.plugin,
+            issues_target=self.issues.target,
+            code_target=self.code.target,
+        )
+
 
 def compose_catalog(issues: CatalogBinding, code: CatalogBinding) -> CatalogRow:
-    """Compose task source with code. Two targets may differ. PR stays on code."""
-    return CatalogRow(issues=issues, code=code)
+    """Compose two addresses belonging to one source plugin."""
+    row = CatalogRow(issues=issues, code=code)
+    _ = row.source
+    return row
 
 
 def _binding(raw: Any, *, default_target: str) -> CatalogBinding:
@@ -66,11 +88,30 @@ def _binding(raw: Any, *, default_target: str) -> CatalogBinding:
 
 
 def parse_catalog_row(raw: dict[str, Any]) -> CatalogRow:
-    """Parse one catalog row. Missing issues/code => github + the same target."""
+    """Parse one source plugin row; accept same-plugin legacy fields."""
     if not isinstance(raw, dict):
         raise CatalogError("catalog row must be a mapping")
     if "prs" in raw:
         raise CatalogError("catalog row has no separate prs field; PR goes with code")
+    source_raw = raw.get("source")
+    if source_raw is not None:
+        if not isinstance(source_raw, dict):
+            raise CatalogError("source must be a mapping")
+        if "issues" in raw or "code" in raw:
+            raise CatalogError("source cannot be combined with legacy issues/code fields")
+        plugin = str(source_raw.get("plugin") or DEFAULT_PLUGIN).strip()
+        issues_target = str(source_raw.get("issues_target") or source_raw.get("target") or "").strip()
+        code_target = str(source_raw.get("code_target") or source_raw.get("target") or "").strip()
+        if not issues_target or not code_target:
+            raise CatalogError("source needs issues_target and code_target (or target)")
+        name = str(raw.get("name") or code_target).strip()
+        return CatalogRow(
+            issues=CatalogBinding(plugin, issues_target),
+            code=CatalogBinding(plugin, code_target),
+            name=name,
+            clone_path=str(raw.get("clone_path") or source_raw.get("clone_path") or "").strip(),
+        )
+
     code_raw = raw.get("code")
     if isinstance(code_raw, dict) and "prs" in code_raw:
         raise CatalogError("catalog row has no separate prs field; PR goes with code")
@@ -104,7 +145,9 @@ def parse_catalog_row(raw: dict[str, Any]) -> CatalogRow:
     if not clone and isinstance(code_raw, dict):
         clone = str(code_raw.get("clone_path") or "").strip()
 
-    return CatalogRow(issues=issues, code=code, name=name, clone_path=clone)
+    row = CatalogRow(issues=issues, code=code, name=name, clone_path=clone)
+    _ = row.source
+    return row
 
 
 def assert_known_plugins(row: CatalogRow) -> None:

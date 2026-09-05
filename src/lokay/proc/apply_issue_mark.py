@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from lokay.tasks import TaskId
-from lokay.github_tasks import catalog_row, issues_source
+from lokay.github_tasks import catalog_row
+from lokay.source import load_tasks
 
 
 def apply(*, runner, cfg, repo: str, issue: int, issue_data: dict, decision: dict, live: bool) -> dict:
@@ -11,7 +12,7 @@ def apply(*, runner, cfg, repo: str, issue: int, issue_data: dict, decision: dic
     if not live:
         return {"ok": True, "planned": True, "verdict": "close", "marked": True, "reason": reason}
     row = catalog_row(cfg, repo)
-    source = issues_source(row, runner=runner, config=cfg, live=True)
+    source = load_tasks(row, runner=runner, config=cfg, live=True)
     identity = TaskId(source.plugin, source.target, int(issue))
     source.comment(identity, f"Parked (Lokay intake): {reason}.")
     task = source.mark(identity, "park")

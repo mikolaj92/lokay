@@ -1239,14 +1239,19 @@ stateDiagram-v2
     CloseTracker --> [*]
 ```
 
-Każdy work unit zaczyna recovery od świata, nie receiptów. GitHub/Git/process/
-worktree są obserwowane, czysty reducer wybiera najwyżej jedną trasę, a dopiero
-potem osobny atom może wykonać efekt. `state.jsonl` i receipts zachowują lineage,
-ale nie przeważają nad merged SHA ani zamkniętym issue.
+Każdy work unit zaczyna recovery od świata, nie receiptów. Zewnętrzny system
+pracy i kodu jest wybieranym z katalogu **source pluginem** (obecnie GitHub albo
+Azure), nie modelem kopiowanym do Lokaya. Plugin obserwuje aktualne work itemy,
+changes, checks i rewizje we własnym źródle; Git/process/worktree są obserwowane
+przez ich własne granice. Czysty reducer wybiera najwyżej jedną trasę, a dopiero
+potem osobny atom może wykonać efekt. `state.jsonl` i receipts zachowują lineage
+procesu, ale nie są mirrorem źródła i nie przeważają nad jego późniejszą,
+autorytatywną obserwacją.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ObserveWorkFacts
+    [*] --> SelectSourcePlugin
+    SelectSourcePlugin --> ObserveWorkFacts
     ObserveWorkFacts --> SurveyError: odczyt nieudany
     ObserveWorkFacts --> ReconcileWork
     ReconcileWork --> Delivered: merged SHA

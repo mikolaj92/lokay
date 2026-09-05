@@ -7,7 +7,8 @@ import argparse
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 from lokay.tasks import TaskId
-from lokay.github_tasks import catalog_row, issues_source, task_to_issue
+from lokay.github_tasks import catalog_row
+from lokay.source import issue_from_task, load_tasks
 
 
 
@@ -22,13 +23,15 @@ def main(argv: list[str] | None = None) -> int:
     live = read_live(args)
     try:
         row = catalog_row(cfg, args.repo)
-        source = issues_source(row, runner=runner(), config=cfg, live=live)
+        source = load_tasks(row, runner=runner(), config=cfg, live=live)
         task = source.get(TaskId(source.plugin, source.target, args.issue))
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     if task is None:
         return emit_exit(err(f"issue not found: {args.repo}#{args.issue}"))
-    return emit_exit(ok(offline=not live, issue=task_to_issue(task).to_dict()))
+    return emit_exit(
+        ok(offline=not live, issue=issue_from_task(task, repo=args.repo).to_dict())
+    )
 
 
 if __name__ == "__main__":

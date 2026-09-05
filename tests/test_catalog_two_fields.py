@@ -31,6 +31,34 @@ def _clear_lokay_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
 
 
+def test_catalog_row_selects_one_source_plugin_not_two_platform_sides() -> None:
+    row = parse_catalog_row(
+        {
+            "source": {
+                "plugin": "azure",
+                "issues_target": "contoso/project",
+                "code_target": "contoso/project/repo",
+            },
+            "clone_path": "/tmp/repo",
+        }
+    )
+    assert row.source.plugin == "azure"
+    assert row.source.issues_target == "contoso/project"
+    assert row.source.code_target == "contoso/project/repo"
+    assert row.issues == CatalogBinding("azure", "contoso/project")
+    assert row.code == CatalogBinding("azure", "contoso/project/repo")
+
+
+def test_catalog_rejects_source_plugin_split_across_vendors() -> None:
+    with pytest.raises(CatalogError, match="one source plugin"):
+        parse_catalog_row(
+            {
+                "issues": {"plugin": "github", "target": "owner/tasks"},
+                "code": {"plugin": "azure", "target": "org/project/repo"},
+            }
+        )
+
+
 def test_old_row_is_github_plus_github() -> None:
     row = parse_catalog_row(
         {"name": "mikolaj92/lokay", "clone_path": "/Users/mikomac/Developer/OSS/lokay"}
@@ -42,23 +70,23 @@ def test_old_row_is_github_plus_github() -> None:
     assert row.name == "mikolaj92/lokay"
 
 
-def test_mixed_jira_bitbucket_keeps_two_targets() -> None:
+def test_one_source_plugin_may_use_different_issue_and_code_targets() -> None:
     row = parse_catalog_row(
         {
-            "issues": {"plugin": "jira", "target": "PROJ"},
+            "issues": {"plugin": "azure", "target": "org/project"},
             "code": {
-                "plugin": "bitbucket",
-                "target": "workspace/repo",
+                "plugin": "azure",
+                "target": "org/project/repo",
                 "clone_path": "/tmp/repo",
             },
         }
     )
-    assert row.issues == CatalogBinding("jira", "PROJ")
-    assert row.code == CatalogBinding("bitbucket", "workspace/repo")
-    assert (row.issues.plugin, row.issues.target) != (row.code.plugin, row.code.target)
+    assert row.issues == CatalogBinding("azure", "org/project")
+    assert row.code == CatalogBinding("azure", "org/project/repo")
     composed = compose_catalog(row.issues, row.code)
-    assert composed.issues.target == "PROJ"
-    assert composed.code.target == "workspace/repo"
+    assert composed.source.plugin == "azure"
+    assert composed.source.issues_target == "org/project"
+    assert composed.source.code_target == "org/project/repo"
 
 
 def test_no_separate_pr_field() -> None:
@@ -132,7 +160,7 @@ repos:
 """,
         encoding="utf-8",
     )
-    with pytest.raises(CatalogError, match="unknown catalog plugin 'jira'"):
+    with pytest.raises(CatalogError, match="one source plugin"):
         load_config(path)
     assert "jira" not in KNOWN_PLUGINS
     assert "bitbucket" not in KNOWN_PLUGINS
@@ -173,6 +201,21 @@ def test_repo_config_defaults_github_and_parent_keeps_name() -> None:
     assert repo.issues == CatalogBinding("github", "mikolaj92/lokay")
     assert repo.code == CatalogBinding("github", "mikolaj92/lokay")
     assert not hasattr(repo, "prs")
+
+
+def test_task_source_loader_dispatches_the_catalog_source_plugin(monkeypatch) -> None:
+    from lokay.source import load_tasks
+
+    row = RepoConfig(
+        name="logical/repo",
+        clone_path=Path("/tmp/repo"),
+        issues=CatalogBinding("azure", "contoso/project"),
+        code=CatalogBinding("azure", "contoso/project/repo"),
+    )
+    sentinel = object()
+    monkeypatch.setattr("lokay.azure_tasks.load_tasks", lambda selected, **_: sentinel)
+
+    assert load_tasks(row, runner=object(), config=object(), live=True) is sentinel
 
 
 def test_catalog_module_has_no_adapters_or_gh() -> None:

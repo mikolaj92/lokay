@@ -291,6 +291,7 @@ def test_pr_triage_path_in_package():
         "pr_merge",
         "stage_clear",
         "close_issue",
+        "publish_delivery_receipt",
         "summarize_pr_triage",
     ]
     assert "run_agent" not in node_ids
