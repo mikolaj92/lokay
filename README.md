@@ -1279,6 +1279,12 @@ węzłami (każde jest własną Falą). `select_local_test` zawsze zapisuje
 `local_repair_execution`, nie `process.failed`. `issue_to_pr_subflow` zawsze
 zapisuje route (`no_effect` albo fail-closed). Dwa wyjęte dzieci:
 
+Polityka sesji jest częścią kontraktu grafu, nie harnessu: pierwszy builder ma
+`fresh`, timeout tego samego work identity ma `resume`, repair może `inherit`
+tylko dla zgodnego branch/base/head, a reviewer zawsze zaczyna `fresh` i nigdy
+nie dziedziczy buildera. Receipt zachowuje policy oraz resolved session identity,
+bez transcriptu.
+
 ### Wynik kodowania — `coding_execution`
 
 ```mermaid

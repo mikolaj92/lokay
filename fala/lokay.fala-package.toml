@@ -379,7 +379,7 @@ capability = "lokay_atom"
 conduction = ["get_issue", "make_branch", "worktree_add", "plan_issue", "localize", "cycle_start", "prepare_acceptance"]
 when = { upstream = "localize", path = "route", equals = "ready" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "coding_execution" }
+config = { atom = "coding_execution", session_policy = "resume", first_session_policy = "fresh", session_role = "builder" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
@@ -441,7 +441,7 @@ capability = "lokay_atom"
 conduction = ["get_issue", "worktree_add", "coding_execution", "commit_implementation", "test_local_execution", "select_local_test"]
 when = { upstream = "select_local_test", path = "route", equals = "fail" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "local_repair_execution" }
+config = { atom = "local_repair_execution", session_policy = "inherit", session_role = "repair" }
 retry_policy = "none"
 
 [[correlation_paths.effectors]]
@@ -1345,7 +1345,7 @@ capability = "lokay_atom"
 conduction = ["classify_pr_triage_checks", "collect_pr_review_evidence", "resolve_sha_review"]
 when = { upstream = "resolve_sha_review", path = "route", equals = "agent" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "pr_review_agent" }
+config = { atom = "pr_review_agent", session_policy = "fresh", session_role = "reviewer" }
 retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "validate_pr_review"
@@ -1360,7 +1360,7 @@ capability = "lokay_atom"
 conduction = ["collect_pr_review_evidence", "validate_pr_review"]
 when = { upstream = "validate_pr_review", path = "route", equals = "retry" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "pr_review_retry_agent" }
+config = { atom = "pr_review_retry_agent", session_policy = "resume", session_role = "reviewer" }
 retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "validate_pr_review_retry"
@@ -1422,7 +1422,7 @@ capability = "lokay_atom"
 conduction = ["collect_pr_review_evidence", "select_pr_review", "verify_review_evidence_sha"]
 when = { upstream = "verify_review_evidence_sha", path = "route", equals = "agent" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
-config = { atom = "evidence_review_agent" }
+config = { atom = "evidence_review_agent", session_policy = "fresh", session_role = "reviewer" }
 retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "validate_evidence_review"
