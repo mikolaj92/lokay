@@ -156,7 +156,7 @@ def local_test_repair_prompt(
     )
 
 
-def pr_body(issue: Issue, *, agent_summary: str, incident_fingerprint: str = "") -> str:
+def pr_body(issue: Issue, *, agent_summary: str, incident_fingerprint: str = "", delivery_receipt: dict | None = None) -> str:
     linkage = (
         f"Refs #{issue.number}" if incident_fingerprint else f"Closes #{issue.number}"
     )
@@ -165,6 +165,9 @@ def pr_body(issue: Issue, *, agent_summary: str, incident_fingerprint: str = "")
         if incident_fingerprint
         else ""
     )
+    if delivery_receipt:
+        from lokay.delivery_receipt import marker as receipt_marker
+        marker += receipt_marker(delivery_receipt) + "\n"
     # PR review receives the ticket body, not only the builder's summary.
     return f"""{marker}## Summary
 

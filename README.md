@@ -1373,6 +1373,13 @@ stateDiagram-v2
     RepairTerminal --> [*]
 ```
 
+Każdy autonomiczny PR zawiera jeden canonical
+`lokay.autonomous-delivery/1` marker wiążący work unit, graph/path digest,
+acceptance, sesje builder/reviewer i head SHA. Dedykowany read-only verifier
+fail-close wykrywa brak/tampering; po merge receipt jest domykany ponowną
+obserwacją merge SHA/time, obecności kodu na main i zamknięcia issue. Promptów,
+sekretów ani transcriptów nie zapisuje się w markerze.
+
 ### Zamknięcie PR — `pr_triage`
 
 ```mermaid

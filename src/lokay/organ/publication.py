@@ -221,10 +221,22 @@ def handle_publication(
         issue = Issue.from_dict(issue_raw)
         agent = up.get("run_agent", {})
         summary = str(agent.get("stdout_tail") or agent.get("status") or "")
+        acceptance = up.get("verify_acceptance") or up.get("prepare_acceptance") or {}
+        session = up.get("coding_execution") or {}
+        receipt = inputs.get("delivery_receipt") or {
+            "repo": repo, "issue": issue.number, "work_id": f"{repo}#{issue.number}",
+            "graph_digest": str(inputs.get("graph_digest") or "pending"),
+            "path_digest": str(inputs.get("path_digest") or "issue_to_pr_delivery"),
+            "run_refs": list(inputs.get("run_refs") or []),
+            "builder_session": str(session.get("session") or "unavailable"),
+            "reviewer_session": "pending", "acceptance_digest": str(acceptance.get("acceptance_digest") or acceptance.get("digest") or "pending"),
+            "head_sha": str((up.get("push") or {}).get("head_sha") or inputs.get("head_sha") or "pending"),
+        }
         body = pr_body(
             issue,
             agent_summary=summary,
             incident_fingerprint=str(inputs.get("incident_fingerprint") or ""),
+            delivery_receipt=receipt,
         )
         title = f"fix: {repo}#{issue.number} {issue.title[:72]}"
         with tempfile.NamedTemporaryFile(
