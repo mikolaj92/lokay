@@ -148,18 +148,20 @@ def test_pr_repair_localize_before_run_agent():
     assert "worktree_add" in by_id["localize"]["conduction"]
 
 
-def test_issue_fix_prompt_includes_edit_scope():
+def test_issue_fix_prompt_treats_small_localization_as_start_not_cage():
     text = issue_fix_prompt(
         _issue(),
         branch="ai/fix/88-x",
         paths=["src/lokay/proc/localize.py", "tests/test_localize.py"],
     )
-    assert "Edit scope" in text
+    assert "Edit start" in text
+    assert "hints, not a cage" in text
+    assert "Patch **only**" not in text
     assert "src/lokay/proc/localize.py" in text
     assert "localize.json" in text
 
 
-def test_repair_prompt_includes_edit_scope():
+def test_repair_prompt_treats_small_localization_as_start_not_cage():
     text = repair_pr_prompt(
         repo="owner/repo",
         pr_number=3,
@@ -167,7 +169,9 @@ def test_repair_prompt_includes_edit_scope():
         checks_text="FAILED tests/test_x.py",
         paths=["tests/test_x.py"],
     )
-    assert "Edit scope" in text
+    assert "Edit start" in text
+    assert "hints, not a cage" in text
+    assert "Patch **only**" not in text
     assert "tests/test_x.py" in text
 
 

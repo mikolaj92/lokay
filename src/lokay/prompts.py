@@ -15,9 +15,6 @@ def _clip(text: str, limit: int) -> str:
     return f"{s[:limit]}\n\n[... truncated at {limit} characters]"
 
 
-_SCOPE_LOCK_MAX = 8
-
-
 def _scope_block(paths: Iterable[str] | None) -> tuple[str, str]:
     items = [str(p).strip() for p in (paths or []) if str(p).strip()]
     if not items:
@@ -26,18 +23,11 @@ def _scope_block(paths: Iterable[str] | None) -> tuple[str, str]:
             "3. Stay inside the localize edit scope when provided; do not roam the whole checkout.",
         )
     rendered = render_paths_for_prompt(items)
-    if len(items) <= _SCOPE_LOCK_MAX:
-        header = (
-            "Edit scope (from semantic `localize` atom, validated by Python):\n"
-            "Patch **only** these files/directories. Do not wander the full checkout."
-        )
-        stay = "3. Stay inside the localize edit scope; do not roam the whole checkout."
-    else:
-        header = (
-            "Edit start (from semantic `localize` atom — hints, not a cage):\n"
-            "Start here. Inspect neighbours and tests if the issue needs them."
-        )
-        stay = "3. Start from the localize hints; add a missing test/module if inspection warrants."
+    header = (
+        "Edit start (from semantic `localize` atom — hints, not a cage):\n"
+        "Start here. Inspect neighbours and tests if the issue needs them."
+    )
+    stay = "3. Start from the localize hints; add a missing test/module if inspection warrants."
     block = f"""{header}
 
 {rendered}
