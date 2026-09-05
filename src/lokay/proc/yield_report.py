@@ -11,7 +11,8 @@ from typing import Any
 
 from lokay.config import load_config
 from lokay.envelope import emit_exit, err, ok
-from lokay.github_yield import github_delivery
+from lokay.github_yield import catalog_delivery
+from lokay.delivery_receipt import parse_marker
 from lokay.proc._common import runner
 
 
@@ -105,8 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     report = build_report(cfg.state_path, since=since)
     if not args.local_only:
         try:
-            report["delivery"] = github_delivery(
-                runner(cfg), cfg.incident_repo, since=since, hours=hours
+            def detector(body: str) -> str:
+                try: return "autonomous" if parse_marker(body) else "unattributed"
+                except (ValueError, json.JSONDecodeError): return "unattributed"
+            report["delivery"] = catalog_delivery(
+                runner(cfg), [repo.name for repo in cfg.active_repos()], since=since, hours=hours, receipt_detector=detector
             )
         except Exception as exc:  # noqa: BLE001
             return emit_exit(err(str(exc), kind="yield_report", **report))

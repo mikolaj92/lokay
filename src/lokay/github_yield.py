@@ -64,6 +64,24 @@ def _flatten_api_pages(stdout: str, *, kind: str) -> list[dict[str, Any]]:
     return rows
 
 
+def catalog_delivery(runner: Runner, repos: list[str], *, since: datetime, hours: float, receipt_detector) -> dict[str, Any]:
+    """Read every enabled repository; no persistence and no attribution guess."""
+    cutoff = since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    result: dict[str, Any] = {}; totals = {"merged":0,"autonomous":0,"unattributed":0,"read_errors":0}
+    for repo in repos:
+        try:
+            response=runner.run_checked(gh_spec(["api","--paginate",f"repos/{repo}/pulls?state=closed&per_page=100"],timeout_seconds=120),live=True)
+            rows=_flatten_api_pages(response.stdout,kind="pull")
+            merged=[row for row in rows if row.get("merged_at") and str(row["merged_at"])>=cutoff]
+            autonomous=sum(receipt_detector(str(row.get("body") or ""))=="autonomous" for row in merged)
+            row={"merged":len(merged),"autonomous":autonomous,"unattributed":len(merged)-autonomous,"read_error":None,"summary":_summary(merged,hours=hours,start="created_at",end="merged_at")}
+        except Exception as exc:
+            row={"merged":0,"autonomous":0,"unattributed":0,"read_error":str(exc)};totals["read_errors"]+=1
+        result[repo]=row
+        for key in ("merged","autonomous","unattributed"):totals[key]+=row[key]
+    return {"source":"github","repos":result,"totals":totals}
+
+
 def github_delivery(runner: Runner, repo: str, *, since: datetime, hours: float) -> dict[str, Any]:
     cutoff = since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     pulls = runner.run_checked(
