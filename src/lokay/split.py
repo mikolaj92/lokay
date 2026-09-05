@@ -169,8 +169,37 @@ def plan_split(
         children=children,
         demote_parent=True,
         close_parent=True,
-        detail={"extracted": len(children), "cap": cap},
+        detail={"extracted": len(children), "cap": cap, "parent": f"{issue.repo}#{issue.number}"},
     )
+
+
+def stable_child_marker(parent: Issue, slot: int) -> str:
+    """Idempotent marker independent of retries and generated issue numbers."""
+    return f"<!-- lokay-split:{parent.repo}#{parent.number}:child:{int(slot)} -->"
+
+
+def validate_split_plan(plan: dict[str, Any], *, parent: Issue) -> dict[str, Any]:
+    children = list(plan.get("children") or [])
+    if not MIN_CHILDREN <= len(children) <= MAX_CHILDREN:
+        return {"valid": False, "reason": "child_count_out_of_bounds"}
+    graph: dict[int, list[int]] = {}
+    for slot, child in enumerate(children, 1):
+        if not str(child.get("title") or "").strip() or "## Done means" not in str(child.get("body") or ""):
+            return {"valid": False, "reason": "child_not_implementable", "slot": slot}
+        deps = [int(value) for value in child.get("depends_on") or []]
+        if any(value < 1 or value > len(children) or value == slot for value in deps):
+            return {"valid": False, "reason": "invalid_dependency", "slot": slot}
+        graph[slot] = deps
+    visiting: set[int] = set(); visited: set[int] = set()
+    def visit(node: int) -> bool:
+        if node in visiting: return False
+        if node in visited: return True
+        visiting.add(node)
+        if any(not visit(dep) for dep in graph[node]): return False
+        visiting.remove(node); visited.add(node); return True
+    if any(not visit(node) for node in graph):
+        return {"valid": False, "reason": "dependency_cycle"}
+    return {"valid": True, "reason": "validated", "child_count": len(children), "parent": f"{parent.repo}#{parent.number}"}
 
 
 def parent_tracker_comment(plan: SplitPlan, child_numbers: list[int]) -> str:

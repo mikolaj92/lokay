@@ -1203,6 +1203,27 @@ Triage nie rozcina issue, nie otwiera PR i nie zamyka cudzego issue. Dział
 do `apply_issue_mark` (etykieta + komentarz). `issue_split` nie jest wyjściem
 tego triage. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
 
+Trusted oversized issue przechodzi autonomicznie przez `issue_split`: semantic
+plan → mechaniczna walidacja bounded/acyclic/coverage → idempotentne dzieci ze
+stabilnymi markerami → parent tracker. Dzieci mają jawne Done i `Depends on`,
+są wykonywane seryjnie, a człowiek pozostaje wyłącznie dla sprzecznego lub
+nieokreślonego rezultatu.
+
+```mermaid
+stateDiagram-v2
+    [*] --> TrustedOversized
+    TrustedOversized --> SplitPlan
+    SplitPlan --> ValidateChildren
+    ValidateChildren --> CreateChildren: bounded + acyclic + covered
+    ValidateChildren --> HumanTerminal: sprzeczny / nieokreślony rezultat
+    CreateChildren --> Tracker
+    Tracker --> ChildReady: zależności spełnione
+    ChildReady --> ChildDelivered
+    ChildDelivered --> ChildReady: kolejne dziecko
+    ChildDelivered --> CloseTracker: wszystkie merged
+    CloseTracker --> [*]
+```
+
 ### Implementacja issue — `issue_to_pr`
 
 Kanoniczny chaos acceptance wykonuje dokładnie te same ścieżki Fali przez
