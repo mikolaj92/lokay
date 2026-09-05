@@ -1205,6 +1205,34 @@ tego triage. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
 
 ### Implementacja issue — `issue_to_pr`
 
+Kanoniczny chaos acceptance wykonuje dokładnie te same ścieżki Fali przez
+kolejne passy. Nie jest alternatywnym composerem: testowy adapter świata jedynie
+podstawia Git/GitHub/workera i liczy efekty. Stabilne `work_id`, `session_id`
+oraz fingerprint grafu przeżywają awarie; `Done` pozostaje wyłącznie faktem
+potwierdzonego merge do `main` i zamkniętego issue.
+
+```mermaid
+stateDiagram-v2
+    [*] --> IssueObserved
+    IssueObserved --> CodingWorker
+    CodingWorker --> WorkerCrashed: kill
+    WorkerCrashed --> CodingWorker: następny pass / resume
+    CodingWorker --> LocalTest: commit
+    LocalTest --> LocalRepair: red
+    LocalRepair --> PullRequest: green + push
+    PullRequest --> ReviewChanges: request_changes
+    ReviewChanges --> PrRepair
+    PrRepair --> Rebase: main advanced
+    Rebase --> ReviewGreen: nowy SHA + push
+    ReviewGreen --> MergeEffect: acceptance/review/merge gates
+    MergeEffect --> ConfirmMerge
+    ConfirmMerge --> CloseIssue: merged on main
+    CloseIssue --> Done: issue closed
+    Done --> [*]
+```
+
+Szczegółowa geometria produkcyjna:
+
 ```mermaid
 stateDiagram-v2
     [*] --> RecheckOpenIssue
@@ -1486,6 +1514,7 @@ kontraktu. Aktualny audyt:
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja, reclaim dysku, TTL GC archiwów `.lokay-preserved`; live i2pr issue-scoped |
 | `TriageInbox` | `issue_triage` | sito: robić, nie, oznaczyć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
+| `ChaosAcceptance` | `factory_pass` → `executor_row` / `issue_to_pr` → `pr_triage` / `pr_repair` | kolejne passy z kill/resume, red/repair, request_changes, rebase i confirmed merge; Done dopiero po close |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
 | `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal; nested fire to classified failed |
