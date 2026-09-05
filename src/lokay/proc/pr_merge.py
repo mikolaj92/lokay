@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import argparse
 
-from lokay.code import load_code, slot_from_repo
 from lokay.config import RepoConfig
 from lokay.envelope import emit_exit, err, ok
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.source import load_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         root = getattr(cfg, "worktrees_root", None)
         repo = RepoConfig(name=args.repo, clone_path=Path(root or "/tmp") / "unused")
     try:
-        contract = load_code(slot_from_repo(repo), runner=runner(), config=cfg, live=live)
+        contract = load_code(repo, runner=runner(), config=cfg, live=live)
         contract.pr.merge_commit(args.pr)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))

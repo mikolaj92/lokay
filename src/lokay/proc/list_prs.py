@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 
-from lokay.code import load_code, slot_from_repo
 from lokay.config import RepoConfig
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner
+from lokay.source import load_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +25,7 @@ def main(argv: list[str] | None = None) -> int:
         root = getattr(cfg, "worktrees_root", None)
         repo = RepoConfig(name=args.repo, clone_path=Path(root or "/tmp") / "unused")
     try:
-        contract = load_code(slot_from_repo(repo), runner=runner(cfg), config=cfg, live=live)
+        contract = load_code(repo, runner=runner(cfg), config=cfg, live=live)
         contract.pr.list_open()
         prs = contract.pr.lokay_dicts()  # type: ignore[attr-defined]
     except Exception as exc:  # noqa: BLE001

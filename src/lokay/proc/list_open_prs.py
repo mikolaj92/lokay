@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 
-from lokay.code import load_code, slot_from_repo
 from lokay.proc._common import load_cfg, runner
+from lokay.source import load_code
 
 
 def _list_open(cfg, repos, *, live: bool) -> dict:
@@ -13,7 +13,7 @@ def _list_open(cfg, repos, *, live: bool) -> dict:
     rows: list[dict] = []
     for repo in repos:
         try:
-            contract = load_code(slot_from_repo(repo), runner=git, config=cfg, live=live)
+            contract = load_code(repo, runner=git, config=cfg, live=live)
             for change in contract.pr.list_open():
                 rows.append(
                     {

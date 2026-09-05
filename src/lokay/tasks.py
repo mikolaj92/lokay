@@ -62,6 +62,8 @@ class Tasks(Protocol):
 
     def list_open(self) -> list[Task]: ...
 
+    def list_labeled(self, label: str) -> list[Task]: ...
+
     def get(self, identity: TaskId) -> Task | None: ...
 
     def comment(self, identity: TaskId, body: str) -> Task: ...
@@ -139,6 +141,10 @@ class MemoryTasks:
             for task in self._tasks.values()
             if str(task.state or "").upper() != "CLOSED"
         ]
+
+    def list_labeled(self, label: str) -> list[Task]:
+        token = str(label or "").strip()
+        return [task for task in self.list_open() if token in task.labels]
 
     def get(self, identity: TaskId) -> Task | None:
         return self._owned(identity)

@@ -84,6 +84,10 @@ class AzureTasks:
     def list_open(self) -> list[Task]:
         return [self._to_task(item) for item in self._client.list_open()]
 
+    def list_labeled(self, label: str) -> list[Task]:
+        token = str(label or "").strip()
+        return [task for task in self.list_open() if token in task.labels]
+
     def get(self, identity: TaskId) -> Task | None:
         return self._owned(identity)
 

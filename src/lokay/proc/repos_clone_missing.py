@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import argparse
 
-from lokay.code import load_code, slot_from_repo
 from lokay.envelope import emit_exit, ok
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.source import load_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
             planned.append(entry)
             continue
         try:
-            contract = load_code(slot_from_repo(repo), runner=r, config=cfg, live=True)
+            contract = load_code(repo, runner=r, config=cfg, live=True)
             contract.repo.clone()
             cloned.append(entry)
         except Exception as exc:  # noqa: BLE001

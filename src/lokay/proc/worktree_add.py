@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import argparse
 
-from lokay.code import load_code, slot_from_repo
 from lokay.code.github import InvalidBranchRef
 from lokay.envelope import emit_exit, ok
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.source import load_code
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
     try:
-        contract = load_code(slot_from_repo(repo), runner=runner(), config=cfg, live=live)
+        contract = load_code(repo, runner=runner(), config=cfg, live=live)
         path = contract.repo.worktree(
             args.branch, base=args.base, reset_to_base=bool(args.reset_base)
         )
