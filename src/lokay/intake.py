@@ -568,6 +568,10 @@ def check_ambiguity(issue: Issue) -> CheckResult:
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
     blob = f"{title}\n{body}"
+    from lokay.technical_route import classify_technical_route
+    technical = classify_technical_route(title, body)
+    if technical["route"] == "split":
+        return CheckResult(check="ambiguity", verdict=SPLIT, reason=technical["reason"], detail={})
 
     if _INVENTORY_BLOB.search(blob):
         return CheckResult(

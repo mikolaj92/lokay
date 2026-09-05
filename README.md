@@ -1203,6 +1203,12 @@ Triage nie rozcina issue, nie otwiera PR i nie zamyka cudzego issue. Dział
 do `apply_issue_mark` (etykieta + komentarz). `issue_split` nie jest wyjściem
 tego triage. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
 
+Techniczna trudność nie jest residualem: dependency bump / migracja adaptera /
+HTMX idą do implementacji, god-file do split, timeout/invalid output do bounded
+retry, trudna lokalizacja do relocalize, konflikt do repair. `needs_human` wymaga
+machine-readable `missing_normative_decision` albo dokładnego niedostępnego faktu;
+inne repo nadal płyną, a requeue zachowuje PR-first i historię.
+
 Trusted oversized issue przechodzi autonomicznie przez `issue_split`: semantic
 plan → mechaniczna walidacja bounded/acyclic/coverage → idempotentne dzieci ze
 stabilnymi markerami → parent tracker. Dzieci mają jawne Done i `Depends on`,
