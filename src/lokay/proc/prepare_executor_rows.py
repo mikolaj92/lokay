@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 from lokay.proc.run_executor_rows import budget_of
 from lokay.proc.seed_issue_queue import seed as seed_queue
 
@@ -50,7 +51,10 @@ def prepare(
     if cursor.get("last"):
         last = cursor["last"]
     cap = budget_of(config_path=config_path, live=live, budget=budget)
-    spent = int(cursor.get("spent") or 0)
+    spent = max(
+        int(cursor.get("spent") or 0),
+        len(live_issue_to_pr_receipts()) if live else 0,
+    )
     remaining = max(0, cap - spent)
     if cap > int(slot_count):
         return {

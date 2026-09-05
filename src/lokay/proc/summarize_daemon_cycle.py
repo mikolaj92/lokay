@@ -2,9 +2,9 @@
 
 
 def summarize(*, lokay_node: dict, repair: dict) -> dict:
-    lokay = lokay_node.get("lokay")
+    lokay = lokay_node.get("factory")
     if not isinstance(lokay, dict):
-        return {"ok": False, "error": "daemon cycle completed without Lokay envelope"}
+        return {"ok": False, "error": "daemon cycle completed without factory envelope"}
     if repair.get("restart_required") is True:
         return {
             "ok": True,

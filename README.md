@@ -1132,9 +1132,12 @@ stateDiagram-v2
 ```
 
 Fala rozwija jawne sloty `executor_row`. Każdy slot to jeden wiersz i co
-najwyżej jeden `issue_to_pr`. Budżet to `limits.max_issue_to_pr_per_pass`,
-domyślnie 1, nigdy równoległe worktree. Skip nie zużywa budżetu. `Prepare`
-wznawia kursor w `pass_dir` bez ponownego skanowania skończonych wierszy.
+najwyżej jeden `issue_to_pr`. `PrepareExecutorRows` najpierw obserwuje żywe
+detached receipty całego katalogu; każdy już działający worker zużywa globalny
+budżet przed wyborem kolejnego wiersza. Budżet to
+`limits.max_issue_to_pr_per_pass`, domyślnie 1, nigdy równoległe worktree.
+Skip nie zużywa budżetu. `Prepare` wznawia kursor w `pass_dir` bez ponownego
+skanowania skończonych wierszy.
 Po `cap` leftover zostaje na następny pass. Po executorze rodzic nadal robi
 PR triage.
 

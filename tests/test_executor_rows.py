@@ -49,6 +49,29 @@ def test_prepare_seeds_serial_budget(tmp_path: Path):
     assert out["spent"] == 0
 
 
+def test_prepare_consumes_global_budget_for_live_detached_worker(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr(
+        "lokay.proc.prepare_executor_rows.live_issue_to_pr_receipts",
+        lambda: [{"repo": "other/repo", "issue": 9, "pid": 123}],
+    )
+
+    out = prepare(
+        listed=_listed(2, 3),
+        last={},
+        pass_dir=str(tmp_path),
+        config_path=None,
+        live=True,
+        budget=1,
+        slot_count=8,
+    )
+
+    assert out["cap"] == 1
+    assert out["budget"] == 0
+    assert out["spent"] == 1
+
+
 def test_prepare_fail_closed_when_budget_exceeds_slots(tmp_path: Path):
     out = prepare(
         listed=_listed(1),

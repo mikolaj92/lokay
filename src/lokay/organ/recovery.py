@@ -143,7 +143,7 @@ def handle_recovery(
 
     if atom == "recovery_observe":
         begin = up.get("recovery_begin", {})
-        lokay = up.get("recovery_factory", {}).get("lokay")
+        lokay = up.get("recovery_factory", {}).get("factory")
         assert begin.get("state_path") and lokay is not None
         return _run_atom_main(
             recovery_observe.main,

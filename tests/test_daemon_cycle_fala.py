@@ -4,6 +4,7 @@ import tomllib
 from pathlib import Path
 
 from lokay.graph_run import find_default_package
+from lokay.proc.summarize_daemon_cycle import summarize
 
 
 def _daemon_cycle_raw() -> dict:
@@ -73,6 +74,14 @@ def test_did_not_move_runs_repair_then_factory():
     assert status["recovery_run_self_repair"] == "succeeded"
     assert status["recovery_factory"] == "succeeded"
     assert status["summarize_daemon_cycle"] == "succeeded"
+
+
+def test_daemon_terminal_accepts_the_recovery_factory_contract():
+    factory_result = {"ok": True, "health": "waiting", "progress": 0}
+
+    assert summarize(
+        lokay_node={"ok": True, "factory": factory_result}, repair={}
+    ) == {"ok": True, "result": factory_result}
 
 
 def test_recovery_factory_is_factory_only():
