@@ -60,6 +60,20 @@ def test_successful_delivery_without_pr_is_no_effect():
     assert out["route"] == "no_effect"
 
 
+def test_successful_authored_delivery_terminal_without_pr_is_no_effect():
+    out = classify(
+        {
+            "ok": True,
+            "branch": "ai/fix/84-product-host",
+            "pr": None,
+            "delivered": False,
+        }
+    )
+    assert out["ok"] is True
+    assert out["route"] == "no_effect"
+    assert out["branch"] == "ai/fix/84-product-host"
+
+
 def test_successful_delivery_with_pr_is_deliver():
     out = classify({"ok": True, "pr": 12, "delivered": True, "result": {"pr": 12}})
     assert out["ok"] is True

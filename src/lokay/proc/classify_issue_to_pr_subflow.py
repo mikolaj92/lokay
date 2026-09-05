@@ -45,6 +45,11 @@ def classify(out: object = None, error: object = None) -> dict:
             route = "no_effect"
         elif isinstance(result, dict) and result:
             route = "no_effect"
+        elif "delivered" in out and out.get("delivered") is False:
+            # Authored summarize_issue_delivery is a complete terminal even
+            # when it produced no PR. ``normalize_path_result`` lifts that
+            # result onto the top-level envelope and removes the nested shape.
+            route = "no_effect"
         else:
             return failed(out.get("error") or "empty issue_to_pr_delivery child")
     payload = {
