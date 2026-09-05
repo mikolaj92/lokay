@@ -456,6 +456,29 @@ def test_validate_localization_paths_drops_ghost_extras():
     assert out["route"] == "terminal" and out["paths"] == [] and out["reason"] == "empty_paths"
 
 
+def test_validate_localization_paths_accepts_new_files_under_existing_directories():
+    from lokay.proc.validate_localization_paths import validate
+
+    out = validate(
+        {"extras": []},
+        {"tree": ["argus", "argus/scripts", "argus/tests"]},
+        {
+            "paths": [
+                "argus/scripts/live_auth_boundaries_smoke.py",
+                "argus/tests/test_live_auth_boundaries_smoke.py",
+            ],
+            "source": "agent",
+        },
+        {},
+    )
+
+    assert out["route"] == "write"
+    assert out["paths"] == [
+        "argus/scripts/live_auth_boundaries_smoke.py",
+        "argus/tests/test_live_auth_boundaries_smoke.py",
+    ]
+
+
 def test_validate_localization_paths_keeps_tree_hits():
     from lokay.proc.validate_localization_paths import validate
 

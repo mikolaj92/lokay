@@ -10,8 +10,16 @@ def validate(
     extras = [_norm_rel(x) for x in request.get("extras") or [] if _norm_rel(x)]
     raw = [_norm_rel(x) for x in candidate.get("paths") or [] if _norm_rel(x)]
     source = str(candidate.get("source") or "deterministic")
-    # Extra/seed tokens are not a cage: keep them only when they exist.
-    accepted = [x for x in dict.fromkeys([*extras, *raw]) if x in tree]
+    # Existing files/directories are valid. A new file is also valid when its
+    # parent directory already exists; localization is an edit boundary, not a
+    # ban on creating the implementation requested by the ticket.
+    def belongs_to_tree(path: str) -> bool:
+        parent = path.rsplit("/", 1)[0] if "/" in path else ""
+        return path in tree or bool(parent and parent in tree and "." in path.rsplit("/", 1)[-1])
+
+    accepted = [
+        x for x in dict.fromkeys([*extras, *raw]) if belongs_to_tree(x)
+    ]
     return {
         "ok": True,
         "route": "write" if accepted else "terminal",
