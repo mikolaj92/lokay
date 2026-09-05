@@ -1463,7 +1463,11 @@ stateDiagram-v2
     LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
     LocalMergeGate --> RepairVerdict: test lokalny nie przechodzi
     MergePullRequest --> CloseIssue
-    CloseIssue --> Delivered
+    CloseIssue --> ObserveDeliveryConfirmation
+    ObserveDeliveryConfirmation --> PublishDeliveryReceipt: merge SHA/time + closed issue + head on main
+    ObserveDeliveryConfirmation --> ReceiptPending: authoritative confirmation incomplete
+    PublishDeliveryReceipt --> Delivered
+    ReceiptPending --> [*]
     RepairVerdict --> [*]: rodzic może później uruchomić pr_repair
     ConflictRecovery --> [*]
     HumanTerminal --> [*]
