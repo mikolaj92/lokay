@@ -17,12 +17,13 @@ def run_graph(tmp_path, body, run_id, path_id="select_implement"):
         .read_text()
         .replace("PLACEHOLDER_PROJECT", str(root))
     )
-    path = next(
-        x
-        for x in tomllib.loads(package.read_text())["correlation_paths"]
-        if x["id"] == path_id
-    )
-    commands = {x["id"]: [sys.executable, str(effector)] for x in path["effectors"]}
+    authored = tomllib.loads(package.read_text())
+    path = next(x for x in authored["correlation_paths"] if x["id"] == path_id)
+    effectors = path.get("effectors")
+    if effectors is None:
+        expanded = json.loads((root / "fala/lokay.expanded.golden.json").read_text())
+        effectors = next(x for x in expanded["correlation_paths"] if x["id"] == path_id)["effectors"]
+    commands = {x["id"]: [sys.executable, str(effector)] for x in effectors}
     script = "import fala,json,sys;print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id=sys.argv[5],run_id=sys.argv[4],command_overrides=json.loads(sys.argv[3]),max_ticks=512)))"
     env = os.environ.copy()
     for key in (

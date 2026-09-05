@@ -653,6 +653,12 @@ stateDiagram-v2
     ProductBudgetResult --> [*]
 ```
 
+`survey_prs` używa teraz bounded materialization Fali: authored TOML zawiera
+jeden `pr_survey_repo_slot` z `max_items = 30` i `serial = true`, podczas gdy
+canonical expanded golden nadal pokazuje 124 jawne węzły oraz każdą legalną
+krawędź. Runtime nie rekonstruuje ich Pythonową pętlą; Python jedynie redukuje
+wyniki już zmaterializowanych procesów.
+
 Fala rozwija do ośmiu kolejnych, jawnych slotów `factory_pass`. Każdy slot ma
 osobny leftover-closeout effect i czysty evaluator porównujący fizyczny wynik
 z poprzednim slotem. Python nie prowadzi pętli, nie wybiera następnego passu i

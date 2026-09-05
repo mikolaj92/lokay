@@ -618,7 +618,7 @@ def test_every_subprocess_atom_inherits_pythonpath():
     missing = [
         f"{path['id']}:{effector['id']}"
         for path in package["correlation_paths"]
-        for effector in path["effectors"]
+        for effector in path.get("effectors", [])
         if (effector.get("adapter") or {}).get("kind") == "subprocess"
         and (
             "PYTHONPATH"
@@ -656,7 +656,7 @@ def test_subprocess_atoms_pin_project_cwd():
     missing = [
         f"{path['id']}:{effector['id']}"
         for path in package["correlation_paths"]
-        for effector in path["effectors"]
+        for effector in path.get("effectors", [])
         if (effector.get("adapter") or {}).get("kind") == "subprocess"
         and (effector.get("adapter") or {}).get("cwd") != "PLACEHOLDER_PROJECT"
     ]
@@ -806,7 +806,7 @@ def test_test_local_timeouts_are_bounded():
     test_locals = [
         effector
         for path in package["correlation_paths"]
-        for effector in path["effectors"]
+        for effector in path.get("effectors", [])
         if effector["id"] == "test_local"
     ]
     assert test_locals
