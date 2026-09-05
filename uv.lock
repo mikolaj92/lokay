@@ -35,8 +35,8 @@ wheels = [
 
 [[package]]
 name = "app-factory"
-version = "0.6.16"
-source = { git = "https://github.com/mikolaj92/app-factory.git?tag=v0.6.16#65c7d82fc1d3bac8e238d89fc1f0096476ef9d5c" }
+version = "0.6.22"
+source = { git = "https://github.com/mikolaj92/app-factory.git?tag=v0.6.22#d433910d60de71fa45c4325640c7a6d79f127244" }
 dependencies = [
     { name = "jinja2" },
 ]
@@ -234,7 +234,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory.git?tag=v0.6.16" },
+    { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory.git?tag=v0.6.22" },
     { name = "fala", git = "https://github.com/mikolaj92/Fala.git?tag=v0.7.36" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "kofte", git = "https://github.com/mikolaj92/Kofte.git?rev=cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" },

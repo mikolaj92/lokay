@@ -63,14 +63,14 @@ one compatible row; they are not installed by Lokay today.
 
 | Package | Current COMPAT tag | Lokay usage |
 | --- | --- | --- |
-| **app-factory** | `v0.6.16` | installed as `app-factory[platform]`; owns `product_shell` and `/static/platform` |
+| **app-factory** | `v0.6.22` | installed as `app-factory[platform]`; owns `product_shell` and `/static/platform` |
 | **my-auth** | `v0.4.8` | not installed; no authentication surface |
 | **my-usermanager** | `v0.5.11` | not installed; no account/admin surface |
 
 ```toml
 dependencies = ["app-factory[platform]"]
 [tool.uv.sources]
-app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.16" }
+app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.22" }
 ```
 
 Do not use a local `path`, floating `main`, or mix generations. If identity is

@@ -65,7 +65,7 @@ HOST_STACK_FORK = re.compile(
 # Current immutable upstream COMPAT row. Only app-factory is installed because
 # the local status host has no identity routes.
 COMPAT_BOM = {
-    "app-factory": "v0.6.16",
+    "app-factory": "v0.6.22",
     "my-auth": "v0.4.8",
     "my-usermanager": "v0.5.11",
 }
@@ -99,7 +99,7 @@ def test_platform_ui_binding_doc_exists():
         "HTMX",
         "Alpine",
         "COMPAT",
-        "v0.6.16",
+        "v0.6.22",
         "v0.4.8",
         "v0.5.11",
         "Same-origin",
