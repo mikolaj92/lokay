@@ -1245,7 +1245,8 @@ stateDiagram-v2
     PrepareWorktree --> PlanIssue: ready
     PrepareWorktree --> DeliveryResult: missing
     PlanIssue --> Localize
-    Localize --> CodingExecution: ready
+    Localize --> PrepareAcceptance: ready
+    PrepareAcceptance --> CodingExecution: immutable digest
     Localize --> DeliveryResult: empty
     CodingExecution --> HumanTerminal: human
     CodingExecution --> VerifyImplementationDiff: implemented
@@ -1256,7 +1257,9 @@ stateDiagram-v2
     LocalTest --> VerifyPublishDiff: PASS
     LocalTest --> LocalRepair: FAIL
     LocalTest --> DeliveryResult: skip
-    LocalRepair --> VerifyPublishDiff: PASS
+    LocalRepair --> VerifyAcceptance: PASS
+    VerifyAcceptance --> VerifyPublishDiff: accepted
+    VerifyAcceptance --> LocalRepair: rejected
     LocalRepair --> RepairTerminal: FAIL / human
     VerifyPublishDiff --> PushBranch
     PushBranch --> CreatePullRequest

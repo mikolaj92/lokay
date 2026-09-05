@@ -16,6 +16,7 @@ from lokay.atom_runtime import (  # noqa: F401 — tests patch these names
     run_atom_main as _run_atom_main,
 )
 from lokay.organ.agent import handle_agent
+from lokay.organ.acceptance_boundary import handle_acceptance
 from lokay.organ.child_harvest_boundary import handle_child_harvest
 from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.organ.common import (  # noqa: F401
@@ -178,6 +179,7 @@ def _handle(
             return refused
 
     for handler in (
+        handle_acceptance,
         handle_recovery,
         handle_factory,
         handle_departments,
