@@ -1262,6 +1262,11 @@ stateDiagram-v2
     Resume --> ObserveWorkFacts
     Repair --> ObserveWorkFacts
     Continue --> ObserveWorkFacts
+    ReconcileWork --> PassCeiling: watchdog timeout
+    PassCeiling --> PreserveRegisteredWorker: detached receipt
+    PassCeiling --> TerminateCycleTree: niezarejestrowany potomek
+    PreserveRegisteredWorker --> ObserveWorkFacts: następny cykl
+    TerminateCycleTree --> ObserveWorkFacts: następny cykl
     Delivered --> [*]
     SurveyError --> [*]
 ```

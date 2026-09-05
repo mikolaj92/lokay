@@ -91,70 +91,11 @@ raise SystemExit(main(sys.argv[1:]))
 PY
 }
 
-stop_lock_owner() {
-  # Signal the lock-owning uv/lokay-daemon tree in this session only.
-  # Detached issue_to_pr uses start_new_session and must survive.
-  local root_pid="$1"
-  uv run python - "${root_pid}" <<'PY' 2>/dev/null || true
-import os, signal, subprocess, sys, time
-
-root = int(sys.argv[1])
-try:
-    self_sid = os.getsid(os.getpid())
-except OSError:
-    raise SystemExit(0)
-
-def children(pid: int) -> list[int]:
-    try:
-        out = subprocess.run(
-            ["pgrep", "-P", str(pid)],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    except OSError:
-        return []
-    return [int(line) for line in (out.stdout or "").split() if line.strip().isdigit()]
-
-def walk(pid: int, acc: list[int]) -> None:
-    for child in children(pid):
-        acc.append(child)
-        walk(child, acc)
-
-tree = [root]
-walk(root, tree)
-same_session = []
-for pid in tree:
-    try:
-        if os.getsid(pid) == self_sid:
-            same_session.append(pid)
-    except OSError:
-        continue
-
-def signal_tree(signum: int) -> None:
-    for pid in reversed(same_session):
-        try:
-            os.kill(pid, signum)
-        except OSError:
-            pass
-
-signal_tree(signal.SIGTERM)
-deadline = time.monotonic() + 5
-while time.monotonic() < deadline:
-    alive = False
-    for pid in same_session:
-        try:
-            os.kill(pid, 0)
-            alive = True
-            break
-        except OSError:
-            continue
-    if not alive:
-        break
-    time.sleep(0.05)
-else:
-    signal_tree(signal.SIGKILL)
-PY
+stop_cycle_tree() {
+  # Stop every descendant of this daemon except a registered detached
+  # issue_to_pr process group created with start_new_session. Fala effectors also use new sessions, so session
+  # identity alone cannot prove that a process owns durable work.
+  uv run python -m lokay.proc.stop_cycle_tree "$1" "${LOKAY_HOME}/cycle" >/dev/null 2>&1 || true
 }
 
 set +e
@@ -164,7 +105,7 @@ DAEMON_PID=$!
   sleep "${CEILING}"
   if kill -0 "${DAEMON_PID}" 2>/dev/null; then
     printf '%s\n' "${DAEMON_PID}" >"${LOKAY_HOME}/.pass-ceiling.${DAEMON_PID}"
-    stop_lock_owner "${DAEMON_PID}"
+    stop_cycle_tree "${DAEMON_PID}"
   fi
 ) &
 WATCHDOG_PID=$!

@@ -31,7 +31,8 @@ def test_daemon_is_os_only():
     assert "LOKAY_LOCK" not in script
     assert "uv run lokay-daemon" in script
     assert "LOKAY_PASS_CEILING_SECONDS" in script
-    assert "stop_lock_owner" in script
+    assert "stop_cycle_tree" in script
+    assert "lokay.proc.stop_cycle_tree" in script
     assert "start_new_session" in script
     assert "pass_ceiling" in script
     assert "bootstrap_incident" in script
@@ -570,7 +571,7 @@ def test_daemon_progress_despite_fala_ok_false_exits_zero(
 
 
 def test_os_pass_ceiling_kills_lock_owner_not_detached_worker(tmp_path):
-    """Caretaker SIGTERM is the lokay.lock release. Nested Fala SIGALRM is not."""
+    """Caretaker releases the lock and preserves only registered workers."""
     import time
 
     extra = {
