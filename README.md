@@ -1224,6 +1224,28 @@ stateDiagram-v2
     CloseTracker --> [*]
 ```
 
+Każdy work unit zaczyna recovery od świata, nie receiptów. GitHub/Git/process/
+worktree są obserwowane, czysty reducer wybiera najwyżej jedną trasę, a dopiero
+potem osobny atom może wykonać efekt. `state.jsonl` i receipts zachowują lineage,
+ale nie przeważają nad merged SHA ani zamkniętym issue.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ObserveWorkFacts
+    ObserveWorkFacts --> SurveyError: odczyt nieudany
+    ObserveWorkFacts --> ReconcileWork
+    ReconcileWork --> Delivered: merged SHA
+    ReconcileWork --> Continue: PR / live process
+    ReconcileWork --> Resume: dirty resumable worktree
+    ReconcileWork --> Repair: deleted branch / recoverable mismatch
+    ReconcileWork --> TerminalConflict: sprzeczne fakty
+    Resume --> ObserveWorkFacts
+    Repair --> ObserveWorkFacts
+    Continue --> ObserveWorkFacts
+    Delivered --> [*]
+    SurveyError --> [*]
+```
+
 ### Implementacja issue — `issue_to_pr`
 
 Kanoniczny chaos acceptance wykonuje dokładnie te same ścieżki Fali przez
