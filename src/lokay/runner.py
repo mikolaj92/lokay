@@ -38,6 +38,7 @@ class CommandSpec:
     cwd: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)
     timeout_seconds: int = 120
+    inherit_env: bool = True
 
     def display(self) -> str:
         return " ".join(self.argv)
@@ -80,7 +81,7 @@ class Runner:
         validate_argv(spec.argv)
         if not live:
             return CommandResult(spec=spec, executed=False, returncode=0)
-        env = os.environ.copy()
+        env = os.environ.copy() if spec.inherit_env else {}
         env.update(_MACHINE_ENV)
         env.update(spec.env)
         # Command-specific environment must never mutate the long-lived organ.

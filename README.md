@@ -1351,6 +1351,12 @@ tylko dla zgodnego branch/base/head, a reviewer zawsze zaczyna `fresh` i nigdy
 nie dziedziczy buildera. Receipt zachowuje policy oraz resolved session identity,
 bez transcriptu.
 
+Capability boundary jest niezależna od harnessu. Builder dostaje checkout i
+`code.write`, ale proces potomny startuje bez ambient `GH_TOKEN`, merge/close i
+`acceptance.write`. Reviewer ma tylko evidence read + proposal verdict, bez push
+i branch mutation. Dopiero dedykowane effect atoms po conduction gates dostają
+minimalną authority; odmowa ma `capability_denied` w trace i fail-close slot.
+
 ### Wynik kodowania — `coding_execution`
 
 ```mermaid

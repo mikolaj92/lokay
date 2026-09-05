@@ -214,13 +214,17 @@ def run_agent(
         )
 
     timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
+    from lokay.capabilities import executor_environment
+    capability_env = executor_environment("reviewer" if session_kind.startswith("review") else "builder", os.environ)
+    capability_env["LOKAY_HEALTH_LEASE"] = ""
     result = runner.run(
         CommandSpec(
             argv=tuple(argv),
             cwd=str(worktree),
-            # Never delegate the orchestration health capability to the coding agent.
-            env={"LOKAY_HEALTH_LEASE": ""},
+            # Never delegate GitHub credentials or orchestration authority.
+            env=capability_env,
             timeout_seconds=timeout,
+            inherit_env=False,
         ),
         live=True,
     )
