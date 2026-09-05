@@ -1246,6 +1246,29 @@ stateDiagram-v2
     SurveyError --> [*]
 ```
 
+Cross-repo release train jest osobną, seryjną Falą. Release unit wiąże
+potwierdzony source main SHA/tag z uporządkowanymi consumerami i ich verification
+commands. Cursor rusza dopiero po confirmed terminalu poprzednika; retry obserwuje
+istniejący tag/issue/PR przed efektem, więc restart nie duplikuje publikacji.
+
+```mermaid
+stateDiagram-v2
+    [*] --> VerifySourceMain
+    VerifySourceMain --> EnsureImmutableRelease
+    EnsureImmutableRelease --> SelectConsumer
+    SelectConsumer --> OpenConsumerIssue
+    OpenConsumerIssue --> BumpPin
+    BumpPin --> VerifyConsumer
+    VerifyConsumer --> ConsumerPR: green
+    VerifyConsumer --> RepairWait: red / unavailable
+    ConsumerPR --> ConfirmConsumerMerge
+    ConfirmConsumerMerge --> AdvanceCursor
+    AdvanceCursor --> SelectConsumer: następny ordered consumer
+    AdvanceCursor --> ReleaseDone: katalog wyczerpany
+    RepairWait --> VerifyConsumer
+    ReleaseDone --> [*]
+```
+
 ### Implementacja issue — `issue_to_pr`
 
 Kanoniczny chaos acceptance wykonuje dokładnie te same ścieżki Fali przez
@@ -1574,6 +1597,7 @@ kontraktu. Aktualny audyt:
 | `TriageInbox` | `issue_triage` | sito: robić, nie, oznaczyć, człowiek |
 | `SplitIssue` | `issue_split` | do 5 dzieci, tracker i zamknięcie rodzica |
 | `ChaosAcceptance` | `factory_pass` → `executor_row` / `issue_to_pr` → `pr_triage` / `pr_repair` | kolejne passy z kill/resume, red/repair, request_changes, rebase i confirmed merge; Done dopiero po close |
+| `CrossRepoReleaseTrain` | `cross_repo_release_train` | potwierdzony source release, ordered consumer cursor i najwyżej jeden jawny efekt |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
 | `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
 | `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal; nested fire to classified failed |

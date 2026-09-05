@@ -8019,3 +8019,20 @@ conduction = ["select_pr_sieve", "run_pr_sieve", "select_pr_triage_verdict"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_pr_triage_department" }
 retry_policy = "none"
+
+[[correlation_paths]]
+id = "cross_repo_release_train"
+title = "Serial cross-repo release train"
+description = "Observe source/tag and current ordered consumer, select exactly one legal effect, then confirm before cursor advance."
+
+[[correlation_paths.effectors]]
+id = "select_release_action"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.proc.select_release_action"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "TMPDIR", "LANG", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED"] }
+retry_policy = "none"
+
+[[correlation_paths.terminals]]
+id = "release_route"
+source_effector = "select_release_action"
+status = "succeeded"
+output_schema = { type = "object", required = ["route", "effect"] }

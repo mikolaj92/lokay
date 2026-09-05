@@ -132,6 +132,7 @@ lokay-status = "lokay.compose.status:main"
 lokay-status-server = "lokay.proc.status_server:main"
 lokay-yield-report = "lokay.proc.yield_report:main"
 lokay-wake = "lokay.proc.wake:main"
+lokay-select-release-action = "lokay.proc.select_release_action:main"
 
 [build-system]
 requires = ["hatchling"]
