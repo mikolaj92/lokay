@@ -89,6 +89,93 @@ def handle_lanes(
             argv.extend(["--issue", str(issue_number)])
         return _run_atom_main(pr_merge.main, argv)
 
+    if atom == "publish_delivery_receipt":
+        assert repo and pr_number is not None and issue_number is not None
+        from lokay.proc.publish_delivery_receipt import publish
+
+        def read_pr(observed_repo: str, observed_pr: int) -> dict[str, Any]:
+            from lokay.gh_prs import gh_json
+
+            return gh_json(
+                runner(),
+                [
+                    "pr",
+                    "view",
+                    str(observed_pr),
+                    "--repo",
+                    observed_repo,
+                    "--json",
+                    "body,headRefOid,mergeCommit,mergedAt",
+                ],
+                live=bool(inputs.get("live")),
+            )
+
+        def read_issue(observed_repo: str, observed_issue: int) -> dict[str, Any]:
+            from lokay.gh_prs import gh_json
+
+            return gh_json(
+                runner(),
+                [
+                    "issue",
+                    "view",
+                    str(observed_issue),
+                    "--repo",
+                    observed_repo,
+                    "--json",
+                    "state",
+                ],
+                live=bool(inputs.get("live")),
+            )
+
+        def main_contains(observed_repo: str, head: str) -> bool:
+            from lokay.gh_prs import gh_text
+
+            return bool(
+                gh_text(
+                    runner(),
+                    [
+                        "api",
+                        f"repos/{observed_repo}/compare/{head}...main",
+                        "--jq",
+                        ".status",
+                    ],
+                    live=bool(inputs.get("live")),
+                    require_success=True,
+                ).strip()
+                in {"ahead", "identical"}
+            )
+
+        def edit_pr(observed_repo: str, observed_pr: int, body: str) -> str:
+            from lokay.gh_prs import gh_text
+
+            return gh_text(
+                runner(),
+                [
+                    "pr",
+                    "edit",
+                    str(observed_pr),
+                    "--repo",
+                    observed_repo,
+                    "--body",
+                    body,
+                ],
+                live=bool(inputs.get("live")),
+                require_success=True,
+            )
+
+        return publish(
+            repo=repo,
+            pr=pr_number,
+            issue=issue_number,
+            merge=up.get("pr_merge") or {},
+            close=up.get("close_issue") or {},
+            live=bool(inputs.get("live")),
+            read_pr=read_pr,
+            read_issue=read_issue,
+            main_contains=main_contains,
+            edit_pr=edit_pr,
+        )
+
     if atom == "close_issue":
         assert repo
         if inputs.get("keep_issue_open"):

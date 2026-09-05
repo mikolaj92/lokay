@@ -1536,12 +1536,20 @@ when = { upstream = "select_pr_triage_outcome", path = "route", equals = "merge"
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "close_issue" }
 retry_policy = "none"
+[[correlation_paths.effectors]]
+id = "publish_delivery_receipt"
+capability = "lokay_atom"
+conduction = ["pr_merge", "close_issue", "select_pr_triage_outcome"]
+when = { upstream = "select_pr_triage_outcome", path = "route", equals = "merge" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "publish_delivery_receipt" }
+retry_policy = "none"
 # --- Emergency self-repair: direct validated fast-forward commit to main ---
 
 [[correlation_paths.effectors]]
 id = "summarize_pr_triage"
 capability = "lokay_atom"
-conduction = ["classify_pr_triage_checks", "select_pr_triage_outcome", "pr_repair_verdict", "review_repair_manual", "review_manual", "pr_merge", "close_issue"]
+conduction = ["classify_pr_triage_checks", "select_pr_triage_outcome", "pr_repair_verdict", "review_repair_manual", "review_manual", "pr_merge", "close_issue", "publish_delivery_receipt"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "summarize_pr_triage" }
 retry_policy = "none"

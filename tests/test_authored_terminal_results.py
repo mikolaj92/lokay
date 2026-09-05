@@ -33,8 +33,25 @@ def test_pr_triage_approve_terminal_is_authoritative():
         manual={},
         merge={"merged": True},
         close={"issue": 7},
+        receipt={"confirmed": True, "receipt": {"receipt_digest": "sha256:r"}},
     )["result"]
     assert out["merged"] is True and out["closed_issue"] == 7
+    assert out["delivery_confirmed"] is True
+
+
+def test_pr_triage_merge_without_confirmed_receipt_is_not_done():
+    out = pr_triage(
+        review={"decision": {"verdict": "approve"}},
+        repair={},
+        repair_manual={},
+        manual={},
+        merge={"merged": True},
+        close={"issue": 7},
+        receipt={"confirmed": False, "reason": "delivery_confirmation_incomplete"},
+    )["result"]
+    assert out["merged"] is True
+    assert out["delivery_confirmed"] is False
+    assert out["reason"] == "delivery_confirmation_incomplete"
 
 
 def test_pr_triage_request_changes_leaves_repair_verdict():

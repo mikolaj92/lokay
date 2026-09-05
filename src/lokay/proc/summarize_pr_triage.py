@@ -9,6 +9,7 @@ def summarize(
     manual: dict,
     merge: dict,
     close: dict,
+    receipt: dict | None = None,
     outcome: dict | None = None,
 ) -> dict:
     decision = dict(review.get("decision") or {})
@@ -64,10 +65,17 @@ def summarize(
                 needs_review=bool(merge.get("needs_review")),
             )
         else:
+            confirmed = dict(receipt or {})
             result.update(
                 merged=bool(merge.get("merged") or merge.get("planned")),
                 closed_issue=close.get("issue"),
+                delivery_confirmed=bool(confirmed.get("confirmed")),
+                delivery_receipt=dict(confirmed.get("receipt") or {}),
             )
+            if not confirmed.get("confirmed"):
+                result["reason"] = str(
+                    confirmed.get("reason") or "delivery_receipt_unconfirmed"
+                )
     else:
         return {
             "ok": False,

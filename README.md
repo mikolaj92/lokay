@@ -14,7 +14,7 @@ The top-level Lokay runs the parent `factory_pass` Fala. Catalog surveys, planni
 
 ## Architecture
 
-- **Core value:** authored Fala process graph(s) (`fala/`). Workers, GitHub, and atom bodies are replaceable blocks under JSON contracts — see `docs/PROCESS.md`.
+- **Core value:** authored Fala process graph(s) (`fala/`). The graph is the process and accumulated product knowledge: order, state, gates, returns, effect authority, and Done. Every node body is replaceable behind its contract — small Unix program, deterministic function, agent, human, or service. The coding harness is not privileged and is not the product. See `docs/PROCESS.md`.
 - `src/lokay/proc/`: small command-line atoms. They exchange JSON envelopes on stdout.
 - `fala/lokay.fala-package.toml`: authored parent `factory_pass` plus child conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
 - `src/lokay/compose/`: thin graph and read-only status entrypoints; product ordering stays in Fala.

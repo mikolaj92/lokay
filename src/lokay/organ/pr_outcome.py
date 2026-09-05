@@ -21,6 +21,7 @@ def handle_pr_outcome(
             manual=up.get("review_manual") or {},
             merge=up.get("pr_merge") or {},
             close=up.get("close_issue") or {},
+            receipt=up.get("publish_delivery_receipt") or {},
             outcome=up.get("select_pr_triage_outcome") or {},
         )
 
