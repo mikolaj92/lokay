@@ -33,6 +33,8 @@ _ATOMS = frozenset(
         "coding_repair_terminal",
         "resolve_implementation_issue",
         "validate_repair_result",
+        "local_repair_retry_agent",
+        "validate_local_repair_retry",
         "select_repair_result",
         "summarize_issue_delivery",
         "summarize_issue_to_pr",
@@ -167,6 +169,7 @@ def handle_coding_boundary(
         "validate_coding_retry",
         "validate_evidence_coding",
         "validate_repair_result",
+        "validate_local_repair_retry",
     }:
         from lokay.proc.validate_coding_result import validate
 
@@ -175,6 +178,7 @@ def handle_coding_boundary(
             "validate_coding_retry": "coding_retry_agent",
             "validate_evidence_coding": "evidence_coding_agent",
             "validate_repair_result": "repair_agent",
+            "validate_local_repair_retry": "local_repair_retry_agent",
         }[atom]
         source_blob = up.get(source) or {}
         if str(source_blob.get("route") or "") == "empty" or str(
@@ -272,8 +276,27 @@ def handle_coding_boundary(
 
         return select(
             up.get("validate_repair_result") or {},
+            up.get("validate_local_repair_retry") or {},
             applicable=(up.get("select_local_test") or {}).get("route") == "fail"
             or "prepare_local_repair_request" in up,
+        )
+    if atom == "local_repair_retry_agent":
+        from lokay.proc.run_coding_retry_agent import run
+
+        first = up.get("validate_repair_result") or {}
+        prompt = (
+            "Your previous local-repair response JSON was invalid. Return ONLY the required closed coding JSON object with verdict=implemented. Never needs_human / human / manual. Validator feedback: %s
+Invalid response: %s"
+            % (
+                first.get("validation_error") or "invalid JSON",
+                first.get("agent_stdout_tail") or "",
+            )
+        )
+        return run(
+            cfg=load_config(inputs.get("config_path") or inputs.get("config")),
+            worktree=worktree,
+            prompt=prompt,
+            live=bool(inputs.get("live")),
         )
     if atom == "coding_retry_agent":
         from lokay.proc.run_coding_retry_agent import run

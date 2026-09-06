@@ -684,7 +684,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "local_repair_execution"
 title = "One local-test repair"
-description = "One repair agent from the first red log, one recheck, and a terminal."
+description = "One repair agent from the first red log, one invalid-JSON retry, one recheck, and a terminal. Zero needs_human."
 
 [[correlation_paths.effectors]]
 id = "prepare_local_repair_request"
@@ -709,10 +709,29 @@ adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLD
 config = { atom = "validate_repair_result" }
 retry_policy = "none"
 
+
+[[correlation_paths.effectors]]
+id = "local_repair_retry_agent"
+capability = "lokay_atom"
+conduction = ["prepare_local_repair_request", "validate_repair_result"]
+when = { upstream = "validate_repair_result", path = "route", equals = "retry" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "local_repair_retry_agent" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
+id = "validate_local_repair_retry"
+capability = "lokay_atom"
+conduction = ["validate_repair_result", "local_repair_retry_agent"]
+when = { upstream = "validate_repair_result", path = "route", equals = "retry" }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "validate_local_repair_retry" }
+retry_policy = "none"
+
 [[correlation_paths.effectors]]
 id = "select_repair_result"
 capability = "lokay_atom"
-conduction = ["validate_repair_result", "prepare_local_repair_request"]
+conduction = ["validate_repair_result", "validate_local_repair_retry"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_repair_result" }
 retry_policy = "none"
@@ -738,7 +757,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "test_local_recheck"
 capability = "lokay_atom"
-conduction = ["prepare_local_repair_request", "commit_repair", "repair_agent", "select_repair_result"]
+conduction = ["prepare_local_repair_request", "commit_repair", "repair_agent", "local_repair_retry_agent", "select_repair_result"]
 when = { upstream = "select_repair_result", path = "route", equals = "repaired" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 2100, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "test_local", changed_scope = true }

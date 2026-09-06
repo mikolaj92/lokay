@@ -615,6 +615,15 @@ def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
         "equals": "fail",
     }
     assert repair_by["repair_agent"]["conduction"] == ["prepare_local_repair_request"]
+    assert repair_by["local_repair_retry_agent"]["when"] == {
+        "upstream": "validate_repair_result",
+        "path": "route",
+        "equals": "retry",
+    }
+    assert repair_by["select_repair_result"]["conduction"] == [
+        "validate_repair_result",
+        "validate_local_repair_retry",
+    ]
     assert by_id["push"]["when"] == {
         "upstream": "verify_acceptance",
         "path": "route",
