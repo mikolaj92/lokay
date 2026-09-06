@@ -41,7 +41,8 @@ def test_organ_writes_activity_before_atom(tmp_path: Path):
     assert payload["transitions"] == 1
     assert payload["repo"] == "mikolaj92/reviewkit"
     assert payload["work_id"] == "mikolaj92/reviewkit#308"
-    assert payload["last_progress_at"]
+    assert payload["last_activity_at"]
+    assert payload["last_progress_at"]  # compat alias
 
 
 def test_organ_increments_transitions(tmp_path: Path):

@@ -4,7 +4,7 @@ from lokay.fala_organ import _handle as fala_handle
 from lokay.pass_receipt import build_pass_receipt
 from lokay.proc.classify_last_pass_progress import classify, leftover_skip_signal
 from lokay.proc.last_pass_moving import classify as classify_moving
-from lokay.proc.last_pass_moving import moved_forward
+from lokay.proc.last_pass_moving import claims_dod_progress, moved_forward
 
 
 def _receipt(**fields):
@@ -197,3 +197,19 @@ def test_organ_skips_repair_for_leftover_overflow(monkeypatch):
     assert repair["skipped"] is True
     assert repair["reason"] == "leftover_skip"
     assert repair_calls == []
+
+
+def test_claims_dod_progress_inflight_or_moved_only():
+    assert claims_dod_progress({"remaining": {"issue_to_pr_started": 2}}) is True
+    assert claims_dod_progress(_receipt(outcome="new_pr")) is True
+    assert claims_dod_progress(_receipt(outcome="merge")) is True
+    assert claims_dod_progress(
+        {
+            "remaining": {"issue_to_pr_started": 0, "ready": 1},
+            "actions": [{"step": "pr_close_conflict"}],
+            "progress": 1,
+        }
+    ) is False
+    assert claims_dod_progress(
+        {"remaining": {}, "actions": [{"step": "issue_triage"}], "progress": 1}
+    ) is False

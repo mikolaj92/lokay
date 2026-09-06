@@ -1,6 +1,7 @@
 """Write a small live-lokay activity checkpoint beside state.jsonl.
 
 Ceiling receipts read this file for resume_from / last_atom / transitions.
+Timestamps are last_activity_at (Fala atom transitions ≠ DoD progress).
 Status stays read-only. A failed write must not abort the atom.
 """
 
@@ -63,11 +64,12 @@ def reset_activity(*, config_path: str | None = None) -> dict[str, Any] | None:
         state_dir = _state_dir(payload_inputs)
         if state_dir is None:
             return None
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         payload: dict[str, Any] = {
             "transitions": 0,
-            "last_progress_at": datetime.now(timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z"),
+            "last_activity_at": now,
+            # Compat alias — activity is not DoD progress (#1042).
+            "last_progress_at": now,
         }
         path = state_dir / ACTIVITY_NAME
         state_dir.mkdir(parents=True, exist_ok=True)
@@ -112,15 +114,16 @@ def record_atom_start(
             transitions = int(previous.get("transitions") or 0) + 1
         except (TypeError, ValueError):
             transitions = 1
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         payload: dict[str, Any] = {
             "atom": str(atom or "").strip() or None,
             "path": _path_id(process_id, payload_inputs),
             "repo": str(payload_inputs.get("repo") or "").strip() or None,
             "work_id": _work_id(payload_inputs),
             "transitions": transitions,
-            "last_progress_at": datetime.now(timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z"),
+            "last_activity_at": now,
+            # Compat alias — activity is not DoD progress (#1042).
+            "last_progress_at": now,
         }
         payload = {key: value for key, value in payload.items() if value is not None}
         state_dir.mkdir(parents=True, exist_ok=True)

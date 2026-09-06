@@ -6,6 +6,7 @@ from typing import Any
 
 from lokay.envelope import ok
 from lokay.merge_policy import actionable_mergeable_green, soft_waiting_remaining
+from lokay.proc.last_pass_moving import claims_dod_progress
 
 
 def implementable_ready(remaining: dict[str, Any], *, live: bool, executor_enabled: bool) -> int:
@@ -111,21 +112,36 @@ def health_payload(
         and review_limbo == 0
         and survey_errors == 0
     )
-    if survey_errors > 0 and progress == 0:
+    # CEO/status progress = DoD (inflight | merge | new_pr), not Fala/queue noise (#1042).
+    dod = claims_dod_progress(
+        {
+            "remaining": remaining,
+            "actions": actions,
+        }
+    )
+    if dod:
+        progress = max(int(progress), 1)
+
+    if survey_errors > 0 and not dod and progress == 0:
         health = "survey_error"
+    elif dod:
+        # Merge/new_pr/inflight beat empty-queue idle (DoD happened this pass).
+        health = "progress"
     elif idle:
         health = "idle"
-    elif progress > 0:
-        health = "progress"
     elif not live and (actionable_now > 0 or survey_errors > 0):
         health = "work_remaining"
-    elif agent_blocked and progress == 0 and inbox == 0 and mergeable_now == 0:
+    elif agent_blocked and inbox == 0 and mergeable_now == 0:
         # NOT WORKING: ready work exists but agent never runs.
         health = "stall"
-    elif actively_repairing and progress == 0:
+    elif actively_repairing:
         # Repair / re-review cycle in flight — waiting on next CI/head move.
         health = "repairing"
-    elif honestly_waiting and progress == 0:
+    elif honestly_waiting:
+        health = "waiting"
+    elif progress > 0:
+        # Non-DoD Fala/queue activity (triage apply, conflict close, park, …).
+        # Soft waiting — never "Lokay pracuje", never needs_human thrash.
         health = "waiting"
     elif actionable_now > 0:
         health = "stall"
@@ -146,6 +162,7 @@ def health_payload(
         stuck_path=stuck_path,
         executor_enabled=executor_enabled,
         merge_enabled=merge_enabled,
+        dod_progress=bool(dod),
     )
     if not ok_flag:
         payload["ok"] = False

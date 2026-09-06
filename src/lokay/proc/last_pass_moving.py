@@ -67,6 +67,26 @@ def moved_forward(receipt: dict[str, Any] | None) -> bool:
     return _new_pr(receipt) or _merged(receipt)
 
 
+def claims_dod_progress(receipt_or_fields: dict[str, Any] | None) -> bool:
+    """True iff this pass claims DoD-aligned progress (not Fala/queue noise).
+
+    Progress for CEO/status is inflight ``issue_to_pr_started``, a new PR, or a
+    merge — triage/queue activity alone does not qualify (#1042).
+    """
+    if not isinstance(receipt_or_fields, dict):
+        return False
+    rem = receipt_or_fields.get("remaining")
+    rem = rem if isinstance(rem, dict) else {}
+    started = int(
+        rem.get("issue_to_pr_started")
+        or receipt_or_fields.get("issue_to_pr_started")
+        or 0
+    )
+    if started > 0:
+        return True
+    return moved_forward(receipt_or_fields)
+
+
 def classify(receipt: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(receipt, dict):
         return {
