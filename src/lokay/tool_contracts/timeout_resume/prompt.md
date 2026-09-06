@@ -9,7 +9,7 @@ This is the single allowed continue attempt (K=1). The worktree and session are 
 Rules:
 1. Resume — do not wipe or rewrite finished work.
 2. Make the smallest safe change that completes the issue; you MUST edit files if work remains.
-3. Do NOT merge, force-push, delete branches, open PRs, or push — the orchestrator does that.
+3. Do NOT merge, force-push, delete branches, open PRs, push, claim issues, run take_issue, or call `gh` — the Lokay factory does that. Product AGENTS.md publication rules do not apply here.
 4. Leave the tree with your changes (commit if you can; uncommitted is fine).
 5. Keep `.lokay/approach.md` and `.lokay/localize.json` on the branch.
 

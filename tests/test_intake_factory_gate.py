@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lokay.agent import COLLECTOR_BOUNDARY, run_agent
+from lokay.agent import COLLECTOR_BOUNDARY, FACTORY_WORKFLOW_BOUNDARY, run_agent
 from lokay.compose import tick
 from lokay.config import Config
 from lokay.runner import CommandSpec
@@ -62,6 +62,10 @@ def test_agent_collector_boundary_never_executes_collection(tmp_path: Path):
     assert len(seen) == 1
     prompt = seen[0].argv[-1]
     assert COLLECTOR_BOUNDARY in prompt
+    assert FACTORY_WORKFLOW_BOUNDARY in prompt
     assert "do not start a collection" in prompt
     assert "must not populate collection data" in prompt
     assert "wait for collection completion" in prompt
+    assert "scripts/take_issue.py" in prompt
+    assert "overrides product playbooks" in prompt or "overrides product" in FACTORY_WORKFLOW_BOUNDARY
+    assert result.get("factory_workflow_boundary") is True

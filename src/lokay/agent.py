@@ -39,10 +39,36 @@ Collector boundary (applies only when the task involves unbounded collection):
   useful results. Do not claim that result from this task.
 """.strip()
 
+# Factory owns claim/publish. Product AGENTS.md / CLAUDE.md / docs/agents
+# playbooks in the checkout may still tell humans (or other orchestrators) to
+# take_issue/gh/PR — this coding slot must ignore those publication rules.
+FACTORY_WORKFLOW_BOUNDARY = """
+Factory workflow boundary (Lokay coding session — overrides product playbooks):
+- This slot is owned by the Lokay factory graph, not by product AGENTS.md,
+  CLAUDE.md, or docs/agents GitHub workflow playbooks in the checkout.
+- Do NOT run scripts/take_issue.py, claim/assign issues, call `gh`, push,
+  open/merge PRs, or close issues — even if a product playbook says tracked
+  work requires that.
+- Claim/assign, branch, and worktree already happened before this step as
+  deterministic atoms. Commit/push/PR happen after as deterministic atoms.
+- Your only job: edit files in this worktree and return the required
+  structured result (files + verdict JSON). Architecture notes in product
+  docs may still guide *how* to change code; publication/claim steps do not.
+""".strip()
+
 
 def with_collector_boundary(prompt: str) -> str:
-    """Attach the collector execution boundary without classifying the task."""
-    return f"{(prompt or '').rstrip()}\n\n{COLLECTOR_BOUNDARY}\n"
+    """Attach collector + factory workflow boundaries without classifying the task."""
+    return with_coding_boundaries(prompt)
+
+
+def with_coding_boundaries(prompt: str) -> str:
+    """Append fail-closed factory boundaries to a coding harness prompt."""
+    return (
+        f"{(prompt or '').rstrip()}\n\n"
+        f"{COLLECTOR_BOUNDARY}\n\n"
+        f"{FACTORY_WORKFLOW_BOUNDARY}\n"
+    )
 
 
 class AgentError(RuntimeError):
@@ -201,6 +227,7 @@ def run_agent(
             "command": display,
             "prompt_len": len(effective_prompt),
             "collector_boundary": bool(attach_collector_boundary),
+            "factory_workflow_boundary": bool(attach_collector_boundary),
             "worktree": str(worktree),
             "executor_enabled": config.executor_enabled,
             "execute": execute,
@@ -237,6 +264,7 @@ def run_agent(
         "stdout_tail": (result.stdout or "")[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],
         "collector_boundary": bool(attach_collector_boundary),
+        "factory_workflow_boundary": bool(attach_collector_boundary),
         "worktree": str(worktree),
         "session": session_id_for_worktree(worktree, kind=session_kind),
     }
