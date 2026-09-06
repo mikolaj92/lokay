@@ -1,4 +1,4 @@
-"""Atomic: git push -u origin <branch> (never force)."""
+"""Atomic: git push -u origin <branch> (never force). Bounded ref-lock retry."""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ from pathlib import Path
 from lokay.envelope import emit_exit, err, ok
 from lokay.git_push import is_configured_issue_branch, push_branch
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
-
-
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -34,16 +32,27 @@ def main(argv: list[str] | None = None) -> int:
         ):
             return emit_exit(err(str(exc)))
         live = True
-    try:
-        push_branch(run, Path(args.worktree), args.branch, live=live)
-    except Exception as exc:  # noqa: BLE001
-        return emit_exit(err(str(exc)))
+    result = push_branch(run, Path(args.worktree), args.branch, live=live)
+    if result.get("ok") is not True:
+        return emit_exit(
+            err(
+                str(result.get("error") or "push failed"),
+                reason=str(result.get("reason") or "push_failed"),
+                attempts=int(result.get("attempts") or 0),
+                branch=args.branch,
+                worktree=args.worktree,
+                repo=args.repo,
+                head_sha=str(result.get("head_sha") or ""),
+            )
+        )
     return emit_exit(
         ok(
             planned=not live,
             repo=args.repo,
             branch=args.branch,
             worktree=args.worktree,
+            head_sha=str(result.get("head_sha") or ""),
+            attempts=int(result.get("attempts") or 1),
         )
     )
 
