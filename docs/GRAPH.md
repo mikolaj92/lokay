@@ -585,6 +585,7 @@ One `run_path` never rewrites the shared `~/.lokay/fala/lokay.fala-package.toml`
 | `lokay.graph_run` | `host_run_package` wrapper |
 | `lokay-*` procs | Unix atoms |
 
+Fail-run digest (`fail-digest-latest.md` beside last-pass) is a short ok:false diagnostic only — not Definition of Done progress.
 Do not put graph order in the coding harness. Do not reintroduce Hermes Kanban as the ledger for step order.
 
 **Runtime note:** Fala is the only workflow composer. Python composers validate the public command contract, invoke

@@ -39,13 +39,31 @@ def ceiling_remaining(
     return None, None
 
 
-def finalize_daemon_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def finalize_daemon_payload(
+    payload: dict[str, Any],
+    *,
+    config_path: str | None = None,
+    state_dir: Path | None = None,
+) -> dict[str, Any]:
     """Lift lokay glance fields and drop bulky orchestration details.
 
     The journal stays on disk. Launchd stdout must not inherit a multi-MiB
     JSON line when Fala wraps a productive lokay in ``ok: false``.
+
+    When ``ok`` is false, persist a short fail-run digest beside last-pass
+    before stripping bulky Fala fields (never raises).
     """
     out = dict(payload)
+    # Only when caller supplied a state target (compose passes config_path).
+    # Bare finalize() in unit tests must not clobber ~/.lokay.
+    if out.get("ok") is False and (state_dir is not None or config_path):
+        try:
+            from lokay.fail_digest import resolve_state_dir, write_digest
+
+            target = state_dir if state_dir is not None else resolve_state_dir(config_path)
+            write_digest(target, out)
+        except Exception:
+            pass
     glance = lokay_glance(out)
     if str(glance.get("health") or "") == "progress":
         out["health"] = "progress"
@@ -95,7 +113,8 @@ def compose_daemon_cycle(
                     package_path=str(trusted_fala_manifest()),
                     db_path=wrapper_journal_dir("daemon_cycle"),
                     extra_inputs={"max_passes": max(1, int(max_passes))},
-                )
+                ),
+                config_path=config_path,
             )
         except _PassCeiling:
             pass
