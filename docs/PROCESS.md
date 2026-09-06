@@ -95,7 +95,7 @@ still require real diff, local verification and publication gates.
 | `issue_triage_agent` | entropy | Issue and hard facts → triage decision |
 | `issue_triage_retry_agent` | entropy | Invalid triage and feedback → corrected decision |
 | `issue_evidence_agent` | entropy | Requested evidence → triage decision |
-| `run_localization_agent` | entropy | Issue and tree → edit-path proposal |
+| `run_localization_agent` | entropy | Optional / off happy path (#1032). Issue and tree → edit-path proposal |
 | `retry_localization_agent` | entropy | Rejected paths → corrected proposal |
 | `run_relocalization_agent` | entropy | Existing diff and scope → scope reconciliation |
 | `retry_relocalization_agent` | entropy | Reconciliation feedback → corrected proposal |

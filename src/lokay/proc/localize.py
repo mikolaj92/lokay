@@ -1,7 +1,7 @@
 """Atomic: localize edit paths before run_agent.
 
-Live mode may ask the configured executor for a JSON path list; Python
-validates against the tree. Fail-closed when empty. No embeddings.
+Happy path is deterministic structure/grep (plus plan_issue approach seed).
+Empty paths fail closed. No embeddings; no second LLM before coding (#1032).
 """
 
 from __future__ import annotations

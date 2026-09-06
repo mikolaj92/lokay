@@ -3066,7 +3066,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "localize_execution"
 title = "Localization execution"
-description = "Existing evidence, explicit hints, deterministic candidate, bounded agent JSON with one validator-feedback retry, physical validation, write, and terminal."
+description = "Existing evidence, explicit hints, deterministic candidate (happy path #1032). Agent JSON retained off happy path. Physical validation, write, terminal. Empty paths fail closed."
 
 [[correlation_paths.effectors]]
 id = "prepare_localization_request"

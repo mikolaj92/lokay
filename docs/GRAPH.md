@@ -390,13 +390,10 @@ has paths **for this issue** and every path exists in the worktree, skip the
 localize executor and start `run_agent`. A leftover inherited from main
 (other issue in `worktree`, missing issue id) is not a sieve. A same-issue
 path list with a missing file or non-path token is also not a sieve —
-discard and run deterministic + semantic localize. Live mode asks the
-configured executor for a structured path proposal; Python still validates
-against the tree. Extra/seed paths are kept only when they exist in the
-worktree. A version token or vanished file is rejected. Empty after that
-fails closed.
-Invalid JSON / timeout falls back to the deterministic scorer. Not an
-embedding service and not a second planner.
+discard and run **deterministic** localize (structure/grep + plan seed).
+Happy path before coding is `plan_issue` (deterministic) + `localize`
+(deterministic) — fewer than two LLM calls (#1032). Empty after validation
+fails closed. Not an embedding service and not a second planner.
 
 ### `issue_triage` (triage child of `issue_triage_department`)
 
@@ -493,7 +490,8 @@ to the live triage and repair departments, not a second catalog pass.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the lokay do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
 - **localize** proposes paths immediately before the coding slot (serial path:
-  `worktree_add` `route=ready` → `plan_issue` → `localize` → `coding_execution`). Existing
+  `worktree_add` `route=ready` → `plan_issue` → `localize` → `coding_execution`). Deterministic
+  happy path (#1032); no localization LLM before `run_agent`. Existing
   `.lokay/localize.json` paths skip the localize executor only when they
   belong to this issue number. Live mode may call the
   configured executor once for a JSON path list; Python validates and still
