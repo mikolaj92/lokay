@@ -76,10 +76,14 @@ def test_valid_implementation_skips_repair_then_publishes():
             "select_local_test": {"route": "pass"},
             "finalize_local_tests": {"route": "publish"},
             "verify_acceptance": {"route": "publish", "accepted": True},
+            "list_dirty_stamp_paths": {"route": "clean"},
+            "assert_stamps_committed": {"route": "publish", "ok": True},
+            "select_publish_gate": {"route": "publish", "ok": True},
         },
     )
     assert st["local_repair_execution"] == "skipped"
     assert st["verify_acceptance"] == "succeeded"
+    assert st["select_publish_gate"] == "succeeded"
     assert st["push"] == "succeeded"
     assert st["pr_create"] == "succeeded"
 
@@ -331,6 +335,29 @@ def test_empty_localize_skips_coding_and_publish():
     assert st["summarize_issue_delivery"] == "succeeded"
 
 
+
+
+def test_dirty_stamps_block_publish():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
+            "coding_execution": {"route": "implemented"},
+            "select_local_test": {"route": "pass"},
+            "finalize_local_tests": {"route": "publish"},
+            "verify_acceptance": {"route": "publish", "accepted": True},
+            "list_dirty_stamp_paths": {"route": "dirty", "dirty_stamps": ["README.md"]},
+            "assert_stamps_committed": {"route": "fail", "ok": False},
+        },
+    )
+    assert st["verify_acceptance"] == "succeeded"
+    assert st["assert_stamps_committed"] == "succeeded"
+    assert st["select_publish_gate"] == "skipped"
+    assert st["push"] == "skipped"
+    assert st["pr_create"] == "skipped"
+
 def test_native_valid_implementation_skips_repair_then_publishes(tmp_path):
     if not _fala_host_ready():
         pytest.skip("Fala Mojo process host is not available")
@@ -345,6 +372,9 @@ if a=='test_local_execution':v.update(tested=True)
 if a=='select_local_test':v['route']='pass'
 if a=='finalize_local_tests':v['route']='publish'
 if a=='verify_acceptance':v.update(route='publish',accepted=True,ok=True)
+if a=='list_dirty_stamp_paths':v.update(route='clean',dirty_stamps=[])
+if a=='assert_stamps_committed':v.update(route='publish',ok=True)
+if a=='select_publish_gate':v.update(route='publish',ok=True)
 if a=='push':Path(%r).write_text('ran')
 if a=='local_repair_execution':Path(%r).write_text(a)"""
         % (str(pushed), str(wrong))

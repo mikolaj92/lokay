@@ -5,9 +5,15 @@ from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 from lokay.runner import Runner, git_spec
+from lokay.stamp_paths import dirty_stamp_paths, is_stamp_rel
 
 
 _EVIDENCE_PATHS = {".lokay/approach.md", ".lokay/localize.json"}
+
+
+def _commit_argv(*args: str) -> list[str]:
+    """Commits never run repo hooks (LFS/post-checkout noise fails closed wrongly)."""
+    return ["-c", "core.hookspath=", *args]
 
 
 def _localized_paths(worktree: Path) -> list[str] | None:
@@ -169,6 +175,15 @@ def commit_all(
             if (worktree / rel).exists()
             or any(path == rel or path.startswith(f"{rel}/") for path in tracked)
         ]
+        # Done-means stamp files must ride with the implementation commit even
+        # when localize omitted them (Fala#222: dirty README green on worktree,
+        # check_stamps red vs HEAD).
+        porcelain = runner.run(
+            git_spec(["status", "--porcelain", "-u"], cwd=worktree), live=True
+        ).stdout
+        for rel in dirty_stamp_paths(worktree, porcelain=porcelain):
+            if rel not in actionable:
+                actionable.append(rel)
         if not actionable:
             return False
         pathspecs = _literal_pathspecs(actionable)
@@ -184,7 +199,10 @@ def commit_all(
         # --only prevents an already-staged off-goal file (or plan evidence)
         # from hitching a ride in this commit.
         runner.run_checked(
-            git_spec(["commit", "--only", "-m", message, "--", *pathspecs], cwd=worktree),
+            git_spec(
+                [*_commit_argv("commit", "--only", "-m", message, "--", *pathspecs)],
+                cwd=worktree,
+            ),
             live=True,
         )
         return True
@@ -200,5 +218,7 @@ def commit_all(
     status = runner.run(git_spec(["diff", "--cached", "--quiet"], cwd=worktree), live=True)
     if status.returncode == 0:
         return False
-    runner.run_checked(git_spec(["commit", "-m", message], cwd=worktree), live=True)
+    runner.run_checked(
+        git_spec([*_commit_argv("commit", "-m", message)], cwd=worktree), live=True
+    )
     return True

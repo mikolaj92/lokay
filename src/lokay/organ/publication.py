@@ -170,6 +170,11 @@ def handle_publication(
         refused = _require_acceptance(up)
         if refused is not None:
             return refused
+        from lokay.organ.common import _require_publish_gate
+
+        refused = _require_publish_gate(up)
+        if refused is not None:
+            return refused
         committed = next(
             (
                 (up.get(name) or {}).get("committed")
@@ -226,6 +231,11 @@ def handle_publication(
         refused = _require_acceptance(up)
         if refused is not None:
             return refused
+        from lokay.organ.common import _require_publish_gate
+
+        refused = _require_publish_gate(up)
+        if refused is not None:
+            return refused
         branch = str(up.get("make_branch", {}).get("branch") or "")
         issue_raw = _issue_raw(up, inputs)
         issue = Issue.from_dict(issue_raw)
@@ -269,5 +279,53 @@ def handle_publication(
             )
         finally:
             Path(body_path).unlink(missing_ok=True)
+
+
+    if atom == "list_dirty_stamp_paths":
+        worktree = _worktree_path(up, inputs)
+        assert worktree
+        from lokay.proc.list_dirty_stamp_paths import list_paths
+
+        return list_paths(worktree, live=bool(inputs.get("live")))
+
+    if atom == "commit_stamp_files":
+        worktree = _worktree_path(up, inputs)
+        assert worktree
+        from lokay.proc.commit_stamp_files import commit
+
+        issue_raw = _issue_raw(up, inputs)
+        n = issue_raw.get("number", issue_number)
+        msg = str(
+            inputs.get("message")
+            or f"chore: commit Done-means stamps for {repo}#{n}"
+        )
+        return commit(worktree, message=msg, live=bool(inputs.get("live")))
+
+    if atom == "assert_stamps_committed":
+        listed = up.get("list_dirty_stamp_paths") or {}
+        # After commit_stamp_files, re-list is preferred; fall back to prior list.
+        if "commit_stamp_files" in up:
+            worktree = _worktree_path(up, inputs)
+            assert worktree
+            from lokay.proc.list_dirty_stamp_paths import list_paths
+
+            listed = list_paths(worktree, live=bool(inputs.get("live")))
+        from lokay.proc.assert_stamps_committed import assert_clean
+
+        return assert_clean(listed)
+
+    if atom == "local_verification_terminal":
+        from lokay.proc.local_verification_terminal import terminal
+
+        return terminal(up.get("finalize_local_tests") or {})
+
+    if atom == "select_publish_gate":
+        from lokay.proc.select_publish_gate import select
+
+        return select(
+            finalize_local_tests=up.get("finalize_local_tests") or {},
+            verify_acceptance=up.get("verify_acceptance") or {},
+            assert_stamps_committed=up.get("assert_stamps_committed") or {},
+        )
 
     return None

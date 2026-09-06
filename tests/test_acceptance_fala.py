@@ -10,10 +10,21 @@ def test_acceptance_is_authored_before_builder_and_verified_before_push():
     prepare=next(e for e in path['effectors'] if e['id']=='prepare_acceptance')
     builder=next(e for e in path['effectors'] if e['id']=='coding_execution')
     verify=next(e for e in path['effectors'] if e['id']=='verify_acceptance')
+    gate=next(e for e in path['effectors'] if e['id']=='select_publish_gate')
     push=next(e for e in path['effectors'] if e['id']=='push')
-    assert ids.index('prepare_acceptance') < ids.index('coding_execution') < ids.index('verify_acceptance') < ids.index('push')
+    assert ids.index('prepare_acceptance') < ids.index('coding_execution') < ids.index('verify_acceptance') < ids.index('select_publish_gate') < ids.index('push')
     assert 'prepare_acceptance' in builder['conduction']
-    assert 'verify_acceptance' in push['conduction']
+    assert 'select_publish_gate' in push['conduction']
     assert verify['when']=={'upstream':'finalize_local_tests','path':'route','equals':'publish'}
-    assert push['when']=={'upstream':'verify_acceptance','path':'route','equals':'publish'}
+    assert push['when']=={'upstream':'select_publish_gate','path':'route','equals':'publish'}
+    assert gate['when']=={'upstream':'assert_stamps_committed','path':'route','equals':'publish'}
+    assert 'verify_acceptance' in gate['conduction'] and 'assert_stamps_committed' in gate['conduction']
     assert prepare['capability']=='acceptance_write' and builder['capability']!='acceptance_write'
+
+def test_local_verification_terminal_is_unglued_from_publish():
+    package=tomllib.loads((ROOT/'fala/lokay.fala-package.toml').read_text())
+    path=next(p for p in package['correlation_paths'] if p['id']=='issue_to_pr_delivery')
+    ids=[e['id'] for e in path['effectors']]
+    assert ids.index('finalize_local_tests') < ids.index('local_verification_terminal') < ids.index('verify_acceptance')
+    term=next(e for e in path['effectors'] if e['id']=='local_verification_terminal')
+    assert term['conduction']==['finalize_local_tests']
