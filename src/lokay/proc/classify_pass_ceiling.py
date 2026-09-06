@@ -50,7 +50,9 @@ def classify(
         str(row.get("state") or "") in _WAITING or str(row.get("reason") or "") in _WAITING
         for row in pending
     )
-    if transitions > 0 or remaining_source == "inflight_working":
+    # #1013: bare Fala transitions (even with work_id) are not issue→PR progress.
+    # Only this-tick inflight working remaining may claim ceiling_with_progress.
+    if remaining_source == "inflight_working":
         reason = "ceiling_with_progress"
     elif waiting:
         reason = "ceiling_waiting_external"

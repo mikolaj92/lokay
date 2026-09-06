@@ -145,7 +145,8 @@ def test_this_tick_pass_dir_still_counts_as_inflight(tmp_path: Path):
     assert out["remaining_source"] == "inflight_working"
 
 
-def test_activity_transitions_still_mean_progress(tmp_path: Path):
+def test_activity_transitions_alone_are_not_progress(tmp_path: Path):
+    """#1013: Fala transitions without live delivery must not claim progress."""
     (tmp_path / "activity.json").write_text(
         json.dumps(
             {
@@ -153,12 +154,32 @@ def test_activity_transitions_still_mean_progress(tmp_path: Path):
                 "atom": "list_open_issues",
                 "work_id": "mikolaj92/reviewkit#308",
                 "repo": "mikolaj92/reviewkit",
-                "transitions": 1,
+                "transitions": 142,
             }
         ),
         encoding="utf-8",
     )
     out = classify(state_dir=tmp_path, elapsed_seconds=180.0)
-    assert out["reason"] == "ceiling_with_progress"
+    assert out["reason"] == "ceiling_stalled"
+    assert out["transitions"] == 142
     assert out["resume_from"] == "executor_department"
+    assert out["work_id"] == "mikolaj92/reviewkit#308"
+
+
+def test_transitions_plus_work_id_still_not_progress_without_inflight(tmp_path: Path):
+    """Activity work_id + transitions without inflight remaining ≠ progress (#1013)."""
+    (tmp_path / "activity.json").write_text(
+        json.dumps(
+            {
+                "path": "executor_department",
+                "atom": "list_open_issues",
+                "work_id": "mikolaj92/reviewkit#308",
+                "repo": "mikolaj92/reviewkit",
+                "transitions": 42,
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = classify(state_dir=tmp_path, elapsed_seconds=2400.0)
+    assert out["reason"] == "ceiling_stalled"
     assert out["work_id"] == "mikolaj92/reviewkit#308"

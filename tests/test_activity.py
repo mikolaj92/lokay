@@ -74,7 +74,8 @@ def test_process_id_fills_path(tmp_path: Path):
     assert payload["path"] == "factory_pass"
     assert payload["atom"] == "host_ff"
     ceiling = classify(state_dir=tmp_path, elapsed_seconds=180)
-    assert ceiling["reason"] == "ceiling_with_progress"
+    # #1013: activity/transitions alone keep resume context but are not progress
+    assert ceiling["reason"] == "ceiling_stalled"
     assert ceiling["resume_from"] == "factory_pass"
     assert ceiling["last_atom"] == "host_ff"
 

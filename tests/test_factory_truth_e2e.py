@@ -151,14 +151,15 @@ def test_two_pass_delivery_survives_stale_false_negative(tmp_path: Path):
     assert snap1["last_pass"]["outcome"] == "none"
     assert github["issue"]["state"] == "open" and github["pr"]["merged"] is False
 
-    # Ceiling during the wait must keep resume context, not stall-wipe.
+    # Ceiling during the wait: keep resume context; bare transitions ≠ progress (#1013).
     (tmp_path / "activity.json").write_text(
         json.dumps({"transitions": 1, "path": "executor_row", "work_id": WORK_ID, "repo": REPO}),
         encoding="utf-8",
     )
     ceiling = classify_ceiling(state_dir=tmp_path, elapsed_seconds=180)
-    assert ceiling["reason"] == "ceiling_with_progress"
+    assert ceiling["reason"] == "ceiling_waiting_external"
     assert ceiling["work_id"] == WORK_ID
+    assert ceiling["resume_from"] == "executor_row"
 
     # Detached worker finishes after the launching pass. Checks still pending.
     append_event(
