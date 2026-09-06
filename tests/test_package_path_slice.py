@@ -54,6 +54,30 @@ def test_materialize_unknown_path_fails_closed(tmp_path: Path):
         raise AssertionError("expected ValueError")
 
 
+def test_authored_package_is_ascii_only():
+    """Fala Mojo toml (v0.7.36) SIGTRAPs on multi-byte UTF-8 string spans.
+
+    Keep the authored catalog ASCII so host_run_package can load sliced paths
+    (notably issue_sieve_row) without debug_assert in toml.mojo.
+    """
+    text = find_default_package().read_text(encoding="utf-8")
+    non_ascii = sorted({ch for ch in text if ord(ch) > 127})
+    assert not non_ascii, f"non-ASCII in fala package: {non_ascii!r}"
+
+
+def test_materialize_issue_sieve_row_stays_ascii(tmp_path: Path):
+    dest = tmp_path / "lokay.fala-package.toml"
+    _materialize_package(
+        find_default_package(),
+        dest,
+        project=tmp_path / "checkout",
+        path_id="issue_sieve_row",
+    )
+    text = dest.read_text(encoding="utf-8")
+    assert all(ord(ch) < 128 for ch in text)
+    assert 'id = "issue_sieve_row"' in text
+
+
 def test_factory_pass_uses_wrapper_journal():
     src = (
         Path(__file__).resolve().parents[1]
