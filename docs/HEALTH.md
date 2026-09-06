@@ -46,7 +46,7 @@ uv run lokay status --config config.yaml --local
 `health=pass_ceiling` still means the caretaker released the daemon slot.
 `reason` now classifies the stop:
 
-- `ceiling_with_progress` — the pass moved, or leftover remaining/delivery is known;
+- `ceiling_with_progress` — this-tick inflight working remaining only (`remaining_source=="inflight_working"`); Fala transitions/activity alone ≠ progress (#1013/#1042);
 - `ceiling_waiting_external` — work is waiting on checks/agent/GitHub;
 - `ceiling_stalled` — no progress, wait, or delivery evidence.
 
@@ -139,7 +139,7 @@ tip is reaped; `issue_to_pr` RESETs from main.
 | `health` | Operator action |
 | --- | --- |
 | `idle` | No remaining actionable work — lokay may sleep until new issues |
-| `progress` | Last pass moved the queue — lokay is turning; **not** proof of Done |
+| `progress` | DoD-aligned this pass (inflight `issue_to_pr_started` / merge / new_pr) — not Fala/triage/queue noise; **not** proof of Done |
 | `waiting` | legacy remote-check wait / review limbo / green but `merge.enabled` false (`remaining.merge_disabled`) / parked `ai:needs-review` mailbox / ready catalog frozen by per-repo PR-first or occupancy — honest wait |
 | `repairing` | Repair / request_changes cycle in flight — honest wait |
 | `stall` | Actionable work with no progress — investigate agent/config (not merge-disarmed green) |

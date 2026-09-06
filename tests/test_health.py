@@ -369,7 +369,78 @@ def test_detached_issue_to_pr_is_progress_not_stall():
     assert payload["ok"] is True
     assert payload["progress"] == 4
     assert payload["idle"] is False
+    assert payload.get("dod_progress") is True
 
+
+def test_triage_only_progress_is_not_health_progress():
+    """Triage apply increments progress but must not say Lokay pracuje (#1042)."""
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=1,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "actionable_open_ai_prs": 1,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+            "pending_checks": 1,
+        },
+        actions=[{"step": "issue_triage", "applied": True}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "waiting"
+    assert payload["ok"] is True
+    assert payload.get("dod_progress") is False
+
+
+def test_merge_action_is_dod_progress():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=1,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 0,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+        },
+        actions=[{"step": "pr_merge", "merged": True}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "progress"
+    assert payload["ok"] is True
+    assert payload.get("dod_progress") is True
+
+
+def test_new_pr_action_is_dod_progress():
+    payload = _health_payload(
+        cfg_mode="live",
+        live=True,
+        executed=True,
+        progress=0,
+        remaining={
+            "inbox": 0,
+            "ready": 0,
+            "open_ai_prs": 1,
+            "mergeable_green": 0,
+            "needs_repair": 0,
+        },
+        actions=[{"step": "pr_create", "pr": 12}],
+        planned=[],
+        stuck_path=None,
+        executor_enabled=True,
+    )
+    assert payload["health"] == "progress"
+    assert payload.get("dod_progress") is True
 
 
 def test_soft_waiting_remaining_maps_merge_policy_matrix():
@@ -411,6 +482,7 @@ def test_live_waiting_when_no_checks_blocked_only():
 
 
 def test_progress_after_conflict_close():
+    """Queue-conflict close bumps the progress counter but is not DoD (#1042)."""
     payload = _health_payload(
         cfg_mode="live",
         live=True,
@@ -428,8 +500,10 @@ def test_progress_after_conflict_close():
         stuck_path=None,
         executor_enabled=True,
     )
-    assert payload["health"] == "progress"
+    assert payload["health"] != "progress"
+    assert payload["health"] == "waiting"
     assert payload["ok"] is True
+    assert payload.get("dod_progress") is False
 
 
 

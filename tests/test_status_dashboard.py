@@ -84,3 +84,56 @@ def test_snapshot_is_local_and_exposes_catalog_and_throughput(
     assert data["backlog"]["ready_with_open_pr"] == 1
     assert data["health"]["label"] == "Lokay pracuje"
     assert data["status"]["survey"] is False
+
+
+def test_triage_noise_receipt_is_not_pracuje(tmp_path: Path, monkeypatch):
+    """health=waiting with a progress counter must not label Lokay pracuje (#1042)."""
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("")
+    now = (
+        __import__("datetime")
+        .datetime.now(__import__("datetime").timezone.utc)
+        .isoformat()
+    )
+    (tmp_path / "last-pass.json").write_text(
+        __import__("json").dumps(
+            {
+                "kind": "pass_receipt",
+                "ts": now,
+                "health": "waiting",
+                "progress": 1,
+                "dod_progress": False,
+                "outcome": "none",
+                "remaining": {
+                    "inbox": 0,
+                    "ready": 1,
+                    "open_ai_prs": 0,
+                    "issue_to_pr_started": 0,
+                    "survey_errors": 0,
+                    "by_repo": [],
+                },
+            }
+        )
+    )
+    config = tmp_path / "config.yaml"
+    config.write_text(f"""mode: live
+repos:
+  - name: o/r
+    clone_path: {clone}
+executor:
+  enabled: true
+  agent: pi
+  command: pi
+  args: ["--prompt", "{{prompt}}"]
+merge:
+  enabled: true
+state:
+  path: {state}
+""")
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    data = dashboard_snapshot(str(config))
+    assert data["health"]["code"] == "waiting"
+    assert data["health"]["label"] != "Lokay pracuje"
+    assert data["health"]["label"] == "Oczekiwanie na zewnętrzny wynik"
