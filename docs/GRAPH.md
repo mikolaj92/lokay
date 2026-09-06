@@ -99,7 +99,7 @@ position must not turn it into a dependency of product or the terminal.
 | `factory_begin_host_gate` | Succeeds with `route=begin` or `route=restart`. Restart means host-ff moved HEAD under this process. Never `ok=false`: a failed gate still unblocks product children in Fala. |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. `when` gate `route=begin`. Always writes `pass_dir` when the host probe routes `up`. No idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only on a confirmed stall (`did_not_move`). Same exclusions as `select_repair_route`: leftover skip, empty survey, occupied, idle, pass_ceiling, waiting. One pass is oil XOR product (product wins). Body is child Fala `self_repair_department`. Off never touches lokay main. |
-| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, intake. Stops at `limits.max_triage_per_tick`, publishes leftover, then yields to executor. Zero `ai/fix`. Foreign assignee still skipped. |
+| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, park. One triage boundary after hard_facts — never a second intake engine. Stops at `limits.max_triage_per_tick`, publishes leftover, then yields to executor. Zero `ai/fix`. Zero `needs_human`. Foreign assignee still skipped. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Child Fala `pr_triage_department`: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. |
 | `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict from `run_pr_triage_department`. Conducts from the sieve run plus the PR-triage switch. Not started from inside `pr_triage_department`. Disabled skip leaves published feedback and does not touch the branch. |
@@ -234,7 +234,7 @@ worktree; deterministic atoms alone commit and push directly to `main`. The
 other agent paths. A successful path always returns `restart_required`; product
 work never resumes in the stale daemon process.
 
-### `issue_triage_department` (sieve + split + intake)
+### `issue_triage_department` (sieve + split + park)
 
 Two small blocks plus graph. Zero code. Zero PR. Parent
 `run_issue_triage_department` invokes this child. Foreign assignees stay
@@ -266,11 +266,12 @@ finished rows.
 select_next_issue             route=ready when the row already has ai:ready
                               or work:ready — skips issue triage
   → issues_run_triage         when route=issue
-    → select_issue_sieve      do / skip / park / human / split / intake
+    → select_issue_sieve      do / skip / park / split
+                              (published triage verdict is final — no second
+                              intake_check / run_issue_sieve_intake)
                               route=ready is do / already_ready without a
                               triage envelope
       → run_issue_sieve_split   when route=split   (children only)
-      → run_issue_sieve_intake  when route=intake
         → summarize_issue_sieve_row
 ```
 
@@ -281,7 +282,7 @@ skipped `issues_run_triage` as done (same skipped-upstream pattern as an
 empty pick). A "do" mark is not a branch. Executor is the next department.
 The catalog loop is the authored `issue_sieve_rows` child, not a daemon tick
 and not a Python `while`. Leftover is consumed only on an authored skip
-(`needs_human`, `blocked`, already-closed). `triage_not_done` / adapter
+(`park`, `blocked`, already-closed). `triage_not_done` / adapter
 fail keep the row. `leftover=0` only when the takeable list is exhausted.
 Sieve already-ready consumes the current row so the next slot can sito an
 unlabeled leftover. Executor `select_issue_do_row` keeps a ready leftover
@@ -416,15 +417,15 @@ get_issue
                 ├─→ apply_issue_skip      nie
                 ├─→ apply_issue_blocked   nie (preflight incident leaf)
                 ├─→ apply_issue_mark      zamknąć → park (no close_issue)
-                └─→ apply_issue_manual    człowiek
+                └─→ apply_issue_manual    park (factory; zero human)
 ```
 
 Hard facts stay deterministic (still-open, superseded/merged PR, duplicate AI PR).
 Semantic remainder is one structured executor call; invalid JSON gets one retry;
-a second evidence request is człowiek. A close verdict marks; it does not close
+a second evidence request parks fail-closed. A close verdict marks; it does not close
 GitHub. Own-work closeout after merge stays in `pr_triage` (`close_issue`).
-Oversized / multi-epic work is człowiek until `issue_split` has its own agent.
-The executor department launches `issue_to_pr` only after a do mark.
+Oversized / multi-epic parks with `issue_split` reason; sieve auto-splits.
+Zero `needs_human`. The executor department launches `issue_to_pr` only after a do mark.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 

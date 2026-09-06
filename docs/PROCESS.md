@@ -80,10 +80,11 @@ publication, labels, lists, gates and merge. No agent substitutes for listing,
 
 Issue triage has one decision boundary: hard facts → agent only if needed →
 validation/evidence → publish. `issue_sieve_row` consumes that decision; words
-such as superseded, duplicate or shape do not trigger a second intake engine.
-`intake_check_execution` remains an explicit named-check CLI/dispatch capability,
-not a competing READY/CLOSE after triage. Shape and named-path evidence belong
-inside the existing triage evidence branch (#1001).
+such as superseded, duplicate or shape do not trigger a second intake engine
+(#1031). `intake_check_execution` remains an explicit named-check CLI/dispatch
+capability, not a competing READY/CLOSE after triage. Shape and named-path
+evidence belong inside the existing triage evidence branch (#1001). Published
+verdicts are park / ready / close / skip / split only — zero `needs_human`.
 
 The allowlist names actual organ bindings, not suffixes or vendor harnesses.
 Code workers return a transport envelope and scoped worktree changes; those

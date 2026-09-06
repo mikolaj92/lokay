@@ -4256,7 +4256,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_sieve_row"
 title = "One issue sieve row"
-description = "Select, one triage verdict, optional split. Never repeat intake or launch issue_to_pr."
+description = "Select, one triage verdict, optional split. Published verdict final — no second intake. Zero needs_human. Never launch issue_to_pr."
 
 [[correlation_paths.effectors]]
 id = "select_next_issue"
