@@ -82,6 +82,16 @@ def test_physical_tests_route_once_to_repair():
 def test_repair_requires_valid_implemented_result():
     assert select_repair(validate_output(valid()))["route"] == "repaired"
     assert select_repair(validate_output("bad"))["route"] == "terminal"
+    assert (
+        select_repair(validate_output("bad"), retry=validate_output(valid()))["route"]
+        == "repaired"
+    )
+    assert (
+        select_repair(validate_output("bad"), retry=validate_output("still bad"))[
+            "route"
+        ]
+        == "terminal"
+    )
 
 
 def test_needs_human_verdict_is_not_a_valid_state():
@@ -94,4 +104,20 @@ def test_needs_human_verdict_is_not_a_valid_state():
         validate_output('{"verdict":"needs_human","summary":"x","tests_run":[],"residual_risk":""}'),
     )
     assert out["route"] == "fail_closed"
+    assert "needs_human" not in str(out.get("decision") or {})
+
+
+def test_needs_human_not_a_local_repair_route():
+    """CEO/#1044: local_repair never routes human — needs_human → retry → terminal."""
+    human = '{"verdict":"needs_human","summary":"x","tests_run":[],"residual_risk":""}'
+    first = validate_output(human)
+    assert first["route"] == "retry"
+    out = select_repair(first, retry=validate_output(human))
+    assert out["route"] == "terminal"
+    assert out.get("route") not in {"needs_human", "human", "manual"}
+    assert (out.get("decision") or {}).get("verdict") not in {
+        "needs_human",
+        "human",
+        "manual",
+    }
     assert "needs_human" not in str(out.get("decision") or {})

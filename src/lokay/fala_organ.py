@@ -77,6 +77,7 @@ _MUTATING_ATOMS = frozenset(
         "run_agent",
         "repair_agent",
         "coding_retry_agent",
+        "local_repair_retry_agent",
         "evidence_coding_agent",
         "pr_repair_retry_agent",
         "evidence_repair_agent",

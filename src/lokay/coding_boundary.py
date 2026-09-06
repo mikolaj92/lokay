@@ -151,18 +151,34 @@ def finalize_tests(
 
 
 def select_repair(
-    validation: Mapping[str, Any], applicable: bool = True
+    first: Mapping[str, Any],
+    applicable: bool = True,
+    retry: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Map coding select_initial onto local_repair routes (no human / evidence).
+
+    One invalid-JSON retry budget (like coding). Implemented → repaired;
+    fail_closed / failed / evidence → terminal. needs_human is not a verdict.
+    """
     if not applicable:
         return {"ok": True, "route": "not_applicable"}
-    if validation.get("route") != "valid":
-        return {"ok": True, "route": "terminal", "reason": "invalid_repair_json"}
-    decision = dict(validation.get("decision") or {})
-    if decision.get("verdict") != "implemented":
-        return {
-            "ok": True,
-            "route": "terminal",
-            "reason": "repair_fail_closed",
-            "decision": decision,
-        }
-    return {"ok": True, "route": "repaired", "decision": decision}
+    selected = select_initial(first, retry or {})
+    route = str(selected.get("route") or "")
+    decision = dict(selected.get("decision") or {})
+    if route == "implemented" and decision.get("verdict") == "implemented":
+        return {"ok": True, "route": "repaired", "decision": decision}
+    reason = str(selected.get("reason") or "")
+    if not reason:
+        if route == "evidence":
+            reason = "repair_fail_closed"
+        elif route == "fail_closed":
+            reason = "invalid_repair_json"
+        else:
+            reason = "repair_fail_closed"
+    out: dict[str, Any] = {
+        "ok": True,
+        "route": "terminal",
+        "reason": reason,
+        "decision": decision or {"verdict": "fail_closed"},
+    }
+    return out

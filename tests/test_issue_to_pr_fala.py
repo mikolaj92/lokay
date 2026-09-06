@@ -262,18 +262,35 @@ def test_coding_execution_runs_only_selected_collector():
 
 
 def test_local_repair_invalid_json_is_terminal():
+    """Invalid JSON runs one retry agent; second invalid → terminal (no human)."""
     st = simulate_path(
         "local_repair_execution",
         {
             "validate_repair_result": {"route": "retry"},
+            "validate_local_repair_retry": {"route": "retry"},
             "select_repair_result": {"route": "terminal"},
             "select_local_test_recheck": {"route": "not_applicable"},
         },
     )
     assert st["repair_agent"] == "succeeded"
+    assert st["local_repair_retry_agent"] == "succeeded"
+    assert st["validate_local_repair_retry"] == "succeeded"
     assert st["commit_repair"] == "skipped"
     assert st["test_local_recheck"] == "skipped"
     assert st["local_repair_terminal"] == "succeeded"
+
+
+def test_local_repair_prompt_has_zero_needs_human():
+    from lokay.tool_contracts import render_contract
+
+    prompt = render_contract(
+        "local_test_repair",
+        repo="a/b",
+        branch="x",
+        issue_line="Issue: #1",
+        log_text="FAIL",
+    )
+    assert "needs_human" not in prompt
 
 
 def test_missing_worktree_skips_coding_and_publish():

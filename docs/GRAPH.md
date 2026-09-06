@@ -363,7 +363,7 @@ get_issue
                                 └─→ commit_all
                                       └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
                                             └─→ test_local_execution   ← grandchild Fala; skip if no suite
-                                            ├─ (red, recorded) → local_repair_execution   ← child Fala: K=1 patch + recheck
+                                            ├─ (red, recorded) → local_repair_execution   ← child Fala: K=1 patch + one JSON retry then fail_closed; zero needs_human
                                             ├─ (select_local_test skip) → miss repair; delivery still writes a route
                                             └─→ assert_real_diff ← refuse plan/localize-only diffs
                                                   └─→ push            ← only after green / honest skip
@@ -492,7 +492,8 @@ to the live triage and repair departments, not a second catalog pass.
 - **issue_to_pr red suite** does **not by itself** open a PR. The delivery
   parent records the first `test_local_execution` probe red, then invokes
   child Fala `local_repair_execution`: `repair_agent` (K=1 patch from the
-  test log) → `test_local_recheck`. The recheck first runs the declared suite;
+  test log) + one invalid-JSON retry then fail_closed (zero `needs_human`) →
+  `test_local_recheck`. The recheck first runs the declared suite;
   if it is still red and the branch changes Python under `src/`, it may fall
   back to changed ticket tests plus conventional
   `tests/test_<changed-module>.py` tests. That changed scope must be green; an
