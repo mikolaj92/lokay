@@ -3,6 +3,8 @@
 Operators should not need chat notifications or the GitHub inbox to know whether
 the autonomous lokay is healthy. Use local commands and the pass receipt.
 
+Fail-run digest (`fail-digest-latest.md` / `fail-digests/`) explains an `ok:false` tick; it is not DoD progress.
+
 **Health is not Done.** `last-pass.json` / `lokay status` tell you whether the
 lokay is turning. The Definition of Done is still only **quality code merged
 to `main`** ([`WORKING.md`](WORKING.md)). `health=progress` with no merges is a
