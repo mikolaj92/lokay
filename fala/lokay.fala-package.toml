@@ -1044,7 +1044,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "pr_repair"
 title = "PR repair"
-description = "Explicit Fala-owned repair JSON, one invalid retry, one closed evidence round, and one test-repair round."
+description = "Explicit Fala-owned repair JSON, one invalid retry, one closed evidence round, and one test-repair round. Parent enforces per-PR lifetime K via durable receipt (default K=1 from limits.max_repairs_per_tick); exhausted → fail_closed park, no next-tick repair loop."
 
 [[correlation_paths.effectors]]
 id = "pr_checks"
