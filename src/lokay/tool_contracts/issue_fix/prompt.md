@@ -3,8 +3,6 @@ Goal: implement GitHub issue #<<issue_number>> in this worktree so the orchestra
 Repository: <<repo>>
 Issue: #<<issue_number>>
 Branch (already checked out): <<branch>>
-Issue URL: <<issue_url>>
-
 Approach evidence: read `.lokay/approach.md` if present (deterministic plan written before this step).
 Treat it as trust-with-evidence for the intentional issue — stay on its goal/non-goals; refine file lists if inspection warrants.
 
@@ -27,5 +25,7 @@ Workflow:
 4. Finish with ONLY one JSON object matching this closed schema:
    {"verdict":"implemented"|"needs_evidence"|"needs_human","evidence_kind":"issue_snapshot"|"repo_structure"|"test_contract"|"localized_diff"|null,"summary":"...","tests_run":["..."],"residual_risk":"..."}
 5. Use `implemented` only after leaving a real implementation diff. Use `needs_evidence` only when exactly one listed mechanical fact is required. Do not request another evidence kind after a supplement.
+
+Issue evidence (full title/body text inlined by the factory — do not open GitHub):
 
 <<untrusted_issue>>

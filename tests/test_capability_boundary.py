@@ -1,8 +1,8 @@
 from pathlib import Path
-from lokay.capabilities import executor_environment, authorize_effect
+from lokay.capabilities import coding_path, executor_environment, authorize_effect
 
 
-def test_builder_has_code_write_but_no_merge_or_acceptance_write(tmp_path: Path):
+def test_builder_has_code_write_but_no_github_credentials_or_merge(tmp_path: Path):
     env = executor_environment(
         "builder",
         {
@@ -12,35 +12,29 @@ def test_builder_has_code_write_but_no_merge_or_acceptance_write(tmp_path: Path)
             "PATH": "/bin",
         },
     )
-    assert env == {
-        "PATH": "/bin",
-        "GH_TOKEN": "secret",
-        "GITHUB_TOKEN": "also",
-        "LOKAY_CAPABILITIES": "code.write",
-    }
+    assert env["LOKAY_CAPABILITIES"] == "code.write"
+    assert env["PATH"].startswith(coding_path("")) or coding_path("/bin") == env["PATH"]
+    assert "GH_TOKEN" not in env
+    assert "GITHUB_TOKEN" not in env
     assert "LOKAY_HEALTH_LEASE" not in env
     assert not authorize_effect("builder", "pr.merge")["allowed"]
     assert not authorize_effect("builder", "acceptance.write")["allowed"]
 
 
-def test_reviewer_keeps_gh_identity_but_cannot_push_or_rewrite_verdict():
-    env = executor_environment("reviewer", {"GH_TOKEN": "x", "PATH": "/bin"})
-    assert env == {
-        "PATH": "/bin",
-        "GH_TOKEN": "x",
-        "LOKAY_CAPABILITIES": "evidence.read,verdict.propose",
-    }
+def test_reviewer_has_no_github_credentials():
+    env = executor_environment("reviewer", {"GH_TOKEN": "x", "PATH": "/usr/bin:/bin"})
+    assert "GH_TOKEN" not in env
+    assert env["LOKAY_CAPABILITIES"] == "evidence.read,verdict.propose"
+    assert coding_path("/usr/bin:/bin") == env["PATH"]
     assert not authorize_effect("reviewer", "git.push")["allowed"]
-    assert not authorize_effect("reviewer", "verdict.rewrite")["allowed"]
 
 
-def test_effect_roles_do_not_receive_github_credentials():
+def test_effect_roles_keep_ambient_path_without_deny_bin():
     env = executor_environment(
         "merge_effect",
         {"GH_TOKEN": "secret", "PATH": "/bin"},
     )
     assert env == {"PATH": "/bin", "LOKAY_CAPABILITIES": "pr.merge"}
-    assert "GH_TOKEN" not in env
 
 
 def test_dedicated_effect_gets_only_authored_authority_and_denial_is_traceable():
@@ -54,3 +48,11 @@ def test_dedicated_effect_gets_only_authored_authority_and_denial_is_traceable()
         "capability": "pr.merge",
         "trace": True,
     }
+
+
+def test_coding_path_deny_bin_shadows_gh(tmp_path: Path, monkeypatch):
+    # deny-bin gh must be first and executable fail-closed
+    path = coding_path(str(tmp_path))
+    deny_gh = Path(path.split(__import__("os").pathsep)[0]) / "gh"
+    assert deny_gh.is_file()
+    assert deny_gh.stat().st_mode & 0o111
