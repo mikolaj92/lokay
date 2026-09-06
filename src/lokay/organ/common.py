@@ -322,6 +322,43 @@ def _require_real_diff(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
         }
     return None
 
+
+def _require_acceptance(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed gate: when acceptance is in the path, it must accept (#1015).
+
+    issue_to_pr_delivery prepares acceptance before the builder. If that
+    artifact exists upstream, push/pr_create require verify_acceptance
+    accepted — never delivered=true on a failed verdict.
+    Paths without prepare_acceptance (e.g. pr_repair) skip this gate.
+    None means go.
+    """
+    prepared = up.get("prepare_acceptance")
+    if not isinstance(prepared, dict) or not prepared:
+        return None
+    verdict = up.get("verify_acceptance")
+    if not isinstance(verdict, dict) or not verdict:
+        return {
+            "ok": False,
+            "error": "refusing: verify_acceptance conduction missing",
+            "reason": "acceptance_missing",
+            "accepted": False,
+            "route": "fail_closed",
+        }
+    if verdict.get("accepted") is True:
+        return None
+    return {
+        "ok": False,
+        "error": str(
+            verdict.get("error")
+            or verdict.get("reason")
+            or "refusing: verify_acceptance did not accept"
+        ),
+        "reason": "acceptance_failed",
+        "accepted": False,
+        "route": "fail_closed",
+        "failed_evidence": list(verdict.get("failed_evidence") or []),
+    }
+
 def _resume_after_timeout(
     *,
     run_agent_main,

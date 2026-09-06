@@ -75,11 +75,31 @@ def test_valid_implementation_skips_repair_then_publishes():
             "coding_execution": {"route": "implemented"},
             "select_local_test": {"route": "pass"},
             "finalize_local_tests": {"route": "publish"},
+            "verify_acceptance": {"route": "publish", "accepted": True},
         },
     )
     assert st["local_repair_execution"] == "skipped"
+    assert st["verify_acceptance"] == "succeeded"
     assert st["push"] == "succeeded"
     assert st["pr_create"] == "succeeded"
+
+
+def test_acceptance_fail_skips_publish():
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
+            "coding_execution": {"route": "implemented"},
+            "select_local_test": {"route": "pass"},
+            "finalize_local_tests": {"route": "publish"},
+            "verify_acceptance": {"route": "repair", "accepted": False},
+        },
+    )
+    assert st["verify_acceptance"] == "succeeded"
+    assert st["push"] == "skipped"
+    assert st["pr_create"] == "skipped"
 
 
 def test_fail_closed_coding_skips_publish():
@@ -307,6 +327,7 @@ if a=='coding_execution':v.update(route='implemented',decision={'verdict':'imple
 if a=='test_local_execution':v.update(tested=True)
 if a=='select_local_test':v['route']='pass'
 if a=='finalize_local_tests':v['route']='publish'
+if a=='verify_acceptance':v.update(route='publish',accepted=True,ok=True)
 if a=='push':Path(%r).write_text('ran')
 if a=='local_repair_execution':Path(%r).write_text(a)"""
         % (str(pushed), str(wrong))
