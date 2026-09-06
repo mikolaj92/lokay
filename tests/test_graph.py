@@ -159,6 +159,11 @@ def test_describe_parent_factory_graph():
         "select_executor_department",
         "select_pr_triage_department",
         "select_pr_repair_department",
+        "run_self_repair_department",
+        "run_issue_triage_department",
+        "run_executor_department",
+        "run_pr_triage_department",
+        "run_pr_repair_department",
     ]
     assert conduction["factory_pass_terminal"] == ["record_pass"]
     assert when["run_issue_triage_department"]["equals"] == "run"

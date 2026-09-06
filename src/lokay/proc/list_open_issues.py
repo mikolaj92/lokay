@@ -22,7 +22,9 @@ def facts(*, config_path: str | None, live: bool) -> dict:
         ).list_open()
         if live and len(listed) >= cap:
             overflow = True
-        for task in listed:
+        # Source APIs may return newest first. Keep repo priority, but do not
+        # start a newer integration ticket ahead of its older foundations.
+        for task in sorted(listed, key=lambda task: int(task.number)):
             rows.append(
                 {
                     "repo": repo.name,

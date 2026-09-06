@@ -8,6 +8,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from lokay.graph_run import _materialize_package
 
 
 def test_request_changes_runs_repair_branch_not_merge(tmp_path):
@@ -35,10 +36,7 @@ def test_request_changes_runs_repair_branch_not_merge(tmp_path):
         encoding="utf-8",
     )
     package = tmp_path / "lokay.fala-package.toml"
-    package.write_text(
-        (root / "fala/lokay.fala-package.toml").read_text().replace("PLACEHOLDER_PROJECT", str(root)),
-        encoding="utf-8",
-    )
+    _materialize_package(root / "fala/lokay.fala-package.toml", package, project=root, path_id="pr_triage")
     data = tomllib.loads(package.read_text())
     path = next(item for item in data["correlation_paths"] if item["id"] == "pr_triage")
     commands = {item["id"]: [sys.executable, str(effector)] for item in path["effectors"]}
@@ -96,7 +94,7 @@ def test_invalid_review_runs_one_retry_then_approve_branch(tmp_path):
         encoding="utf-8",
     )
     package = tmp_path / "lokay.fala-package.toml"
-    package.write_text((root / "fala/lokay.fala-package.toml").read_text().replace("PLACEHOLDER_PROJECT", str(root)), encoding="utf-8")
+    _materialize_package(root / "fala/lokay.fala-package.toml", package, project=root, path_id="pr_triage")
     path = next(item for item in tomllib.loads(package.read_text())["correlation_paths"] if item["id"] == "pr_triage")
     commands = {item["id"]: [sys.executable, str(effector)] for item in path["effectors"]}
     script = (
@@ -136,7 +134,7 @@ def test_cached_sha_verdict_skips_both_review_agents(tmp_path):
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
         "if a=='pr_repair_verdict': Path("+repr(str(repair_sentinel))+").write_text('ran')\n"
         "(Path(os.environ['FALA_EFFECTOR_OUTPUT_DIR'])/'result.json').write_text(json.dumps({'values':v}))\n",encoding='utf-8')
-    package=tmp_path/'pkg.toml'; package.write_text((root/'fala/lokay.fala-package.toml').read_text().replace('PLACEHOLDER_PROJECT',str(root)))
+    package = _materialize_package(root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml", project=root, path_id="pr_triage")
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
     script="import fala,json,sys; print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id='pr_triage',run_id='cached',command_overrides=json.loads(sys.argv[3]),max_ticks=32)))"
     env=os.environ.copy(); env.pop("DYLD_LIBRARY_PATH",None); env.pop("DYLD_FALLBACK_LIBRARY_PATH",None); env.setdefault("PYTHONPATH","")
@@ -177,7 +175,7 @@ def test_needs_evidence_runs_only_selected_collector_then_one_agent(tmp_path):
         "if a=='select_pr_triage_outcome': v['route']='merge'\n"
         "if a=='pr_merge': Path("+repr(str(merge_sentinel))+").write_text('ran')\n"
         "(Path(os.environ['FALA_EFFECTOR_OUTPUT_DIR'])/'result.json').write_text(json.dumps({'values':v}))\n",encoding='utf-8')
-    package=tmp_path/'pkg.toml'; package.write_text((root/'fala/lokay.fala-package.toml').read_text().replace('PLACEHOLDER_PROJECT',str(root)))
+    package = _materialize_package(root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml", project=root, path_id="pr_triage")
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
     script="import fala,json,sys; print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id='pr_triage',run_id='evidence',command_overrides=json.loads(sys.argv[3]),max_ticks=64)))"
     env=os.environ.copy(); env.pop("DYLD_LIBRARY_PATH",None); env.pop("DYLD_FALLBACK_LIBRARY_PATH",None); env.setdefault("PYTHONPATH","")
@@ -220,9 +218,7 @@ def test_red_checks_run_repair_node_not_review_or_merge(tmp_path):
         encoding="utf-8",
     )
     package = tmp_path / "pkg.toml"
-    package.write_text(
-        (root / "fala/lokay.fala-package.toml").read_text().replace("PLACEHOLDER_PROJECT", str(root))
-    )
+    _materialize_package(root / "fala/lokay.fala-package.toml", package, project=root, path_id="pr_triage")
     path = next(
         item
         for item in tomllib.loads(package.read_text())["correlation_paths"]

@@ -108,6 +108,7 @@ def handle_recovery(
         return summarize(
             lokay_node=up.get("recovery_factory") or {},
             repair=up.get("recovery_run_self_repair") or {},
+            selected=up.get("select_repair_route") or {},
         )
 
     if atom == "last_pass_moving":
@@ -130,7 +131,12 @@ def handle_recovery(
         moving = up.get("last_pass_moving") or classify_moving(receipt)
         leftover = up.get("leftover_skip") or leftover_classify(receipt)
         enabled = bool(getattr(loaded, "department_self_repair", True))
-        return select(moving, leftover, receipt, enabled=enabled)
+        from lokay.pass_history import read_pass_history
+        from lokay.proc.read_self_repair_attempt import read_started_at
+
+        return select(moving, leftover, receipt, enabled=enabled,
+                      history=read_pass_history(state_path=loaded.state_path),
+                      repair_started_at=read_started_at())
 
     if atom == "recovery_begin":
         return _run_atom_main(recovery_begin.main, [*cfg, *live])

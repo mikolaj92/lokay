@@ -13,7 +13,7 @@ def test_self_repair_only_when_last_pass_did_not_move() -> None:
         "route": "skip",
         "reason": "last_pass_moved",
     }
-    assert select_self_repair(enabled=True, moved_forward=False)["route"] == "run"
+    assert select_self_repair(enabled=True, moved_forward=False)["reason"] == "stale_receipt"
     assert select_self_repair(
         enabled=True, moved_forward=False, receipt_present=False
     )["reason"] == "stale_receipt"
@@ -41,7 +41,7 @@ def test_self_repair_only_when_last_pass_did_not_move() -> None:
     }
     assert select_self_repair(
         enabled=True, moved_forward=False, receipt=stall
-    )["route"] == "run"
+    )["reason"] == "unconfirmed_stall"
     assert select_self_repair(
         enabled=True,
         moved_forward=False,

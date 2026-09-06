@@ -20,5 +20,7 @@ def run_tests(identity: dict) -> dict:
         **identity,
         "ok": out.returncode == 0,
         "route": "untracked" if out.returncode == 0 else "failed",
+        "test_returncode": out.returncode,
+        "test_timed_out": out.timed_out,
         "error": "" if out.returncode == 0 else "self-repair validation suite failed",
     }

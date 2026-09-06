@@ -135,7 +135,8 @@ def handle_implement(
             live=bool(inputs.get("live")),
             extra_inputs={
                 "worktree": worktree,
-                "base": str(inputs.get("base") or "origin/main"),
+                "base": str(inputs.get("base") or ("@{upstream}" if repair_mode else "origin/main")),
+                "repair_mode": repair_mode,
                 "repo": repo,
                 "issue_raw": dict(up.get("get_issue", {}).get("issue") or {}),
             },

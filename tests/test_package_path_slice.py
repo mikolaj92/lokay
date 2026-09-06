@@ -25,6 +25,19 @@ def test_materialize_keeps_only_requested_path(tmp_path: Path):
     assert "[runtime.backend]" in text
 
 
+def test_materialize_preserves_authored_templates(tmp_path: Path):
+    import tomllib
+
+    source = find_default_package()
+    authored = tomllib.loads(source.read_text().replace("PLACEHOLDER_PROJECT", str(tmp_path.resolve())))
+    for path_id in ("survey_prs", "daemon_cycle"):
+        dest = tmp_path / f"{path_id}.toml"
+        _materialize_package(source, dest, project=tmp_path, path_id=path_id)
+        package = tomllib.loads(dest.read_text())
+        assert package.get("path_templates") == authored["path_templates"]
+        assert [path["id"] for path in package["correlation_paths"]] == [path_id]
+
+
 def test_materialize_unknown_path_fails_closed(tmp_path: Path):
     dest = tmp_path / "lokay.fala-package.toml"
     try:

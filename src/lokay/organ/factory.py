@@ -339,8 +339,8 @@ def handle_factory(
             prs=up.get("run_pr_triage_department")
             or up.get("run_pr_repair_department")
             or {},
-            issues=up.get("run_issue_triage_department")
-            or up.get("run_executor_department")
+            issues=up.get("run_executor_department")
+            or up.get("run_issue_triage_department")
             or {},
             leftover=up.get("leftover_catalog") or up.get("leftover") or {},
         )

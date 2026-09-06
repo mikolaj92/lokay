@@ -145,7 +145,10 @@ def handle_publication(
 
         issue_raw = _issue_raw(up, inputs)
         return run_real_diff(
-            worktree=worktree, issue_body=str(issue_raw.get("body") or ""), repo=repo
+            worktree=worktree,
+            base="@{upstream}" if repair_mode else "origin/main",
+            issue_body=str(issue_raw.get("body") or ""),
+            repo=repo,
         )
 
     if atom == "push":

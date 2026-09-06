@@ -7,6 +7,8 @@ from typing import Any
 
 from lokay.envelope import emit_exit, ok
 from lokay.pass_receipt import read_pass_receipt
+from lokay.pass_history import read_pass_history
+from lokay.recovery_history import normalize_failure
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.proc.last_pass_moving import classify as classify_moving
 from lokay.proc.leftover_skip import classify as classify_leftover
@@ -72,7 +74,7 @@ def _factory(reason: str, *, moved: bool = False) -> dict[str, Any]:
     }
 
 
-def select(
+def _select_last(
     moving: dict[str, Any],
     leftover: dict[str, Any],
     receipt: dict[str, Any] | None,
@@ -108,9 +110,51 @@ def select(
     }
 
 
-def classify(receipt: dict[str, Any] | None) -> dict[str, Any]:
-    """Library compose of the two leaves. Fala runs the leaves as processes."""
-    return select(classify_moving(receipt), classify_leftover(receipt), receipt)
+def select(
+    moving: dict[str, Any],
+    leftover: dict[str, Any],
+    receipt: dict[str, Any] | None,
+    *,
+    enabled: bool = True,
+    history: list[dict[str, Any]] | None = None,
+    repair_started_at: str = "",
+) -> dict[str, Any]:
+    route = _select_last(moving, leftover, receipt, enabled=enabled)
+    if route["route"] != "repair":
+        return route
+    # History is newest first; a repeated heartbeat is not another attempt.
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in [receipt, *(history or [])]:
+        if not isinstance(row, dict) or _stale_receipt(row):
+            continue
+        if repair_started_at and str(row.get("ts") or "") <= repair_started_at:
+            continue
+        identity = str(row.get("pass_dir") or row.get("ts"))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        rows.append(row)
+        if len(rows) == 5:
+            break
+    evidence = normalize_failure(route["evidence"])
+    matches = 0
+    for row in rows:
+        previous = _select_last(classify_moving(row), classify_leftover(row), row)
+        if previous["route"] == "repair" and normalize_failure(previous["evidence"]) == evidence:
+            matches += 1
+    if len(rows) < 5 or matches < 4:
+        return _factory("unconfirmed_stall")
+    return {**route, "matches": matches, "window": len(rows)}
+
+
+def classify(
+    receipt: dict[str, Any] | None, *, history: list[dict[str, Any]] | None = None,
+    repair_started_at: str = "",
+) -> dict[str, Any]:
+    """Read-only gate; distinct completed passes, not repeated observations."""
+    return select(classify_moving(receipt), classify_leftover(receipt), receipt,
+                  history=history, repair_started_at=repair_started_at)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,7 +163,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     cfg = load_cfg(args)
     receipt = read_pass_receipt(state_path=cfg.state_path)
-    return emit_exit(ok(**classify(receipt)))
+    from lokay.proc.read_self_repair_attempt import read_started_at
+
+    return emit_exit(ok(**classify(receipt, history=read_pass_history(state_path=cfg.state_path),
+                                  repair_started_at=read_started_at())))
 
 
 if __name__ == "__main__":

@@ -12,9 +12,10 @@ which jobs run after which.
 ```text
 last_pass_moving
   → select_repair_route
-    → recovery_incident (when last receipt did not move: no new PR and no merge)
+    → recovery_incident (same failure in 4 of 5 distinct pass receipts; last pass still stalled)
       → recovery_run_self_repair (self_repair child Fala; skipped otherwise)
-  → recovery_factory (always: one factory_pass; leftover skip never starts repair)
+    → recovery_factory (factory route only: one factory_pass; leftover skip never starts repair)
+  → summarize_daemon_cycle (repair failed / restart required, or factory result)
 ```
 
 The moving gate is one leaf. Repair is its own child graph. `recovery_factory`
@@ -24,8 +25,8 @@ the lokay; a 180s tick must not stack eight factory slots. `product_entry`
 stays the CLI multi-pass wrapper. Moving
 forward is only a new PR or a merge on the last receipt. Leftover skip,
 empty survey, and a stale receipt do not count as “not moving” and do not
-start recovery. After one repair the graph always returns to the five
-departments. The daemon owns only the singleton lock, health lease and initial
+start recovery. A repair attempt ends the cycle, including on failure; it never
+starts a second repair through the five departments in that same cycle. The daemon owns only the singleton lock, health lease and initial
 carrier preflight. Fala owns product/recovery order. Every node above is a
 separate Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
@@ -76,7 +77,9 @@ survey, stale / missing receipt, occupied / in-flight `issue_to_pr`, and
 soft lokay health (`waiting`, `repairing`, `idle`, `progress`, `offline`,
 `overlap`). Those exclusions route `factory` and never start
 `recovery_run_self_repair`. `recovery_incident` runs only when the last
-receipt did not move; incidents reuse the preflight cooldown ledger
+receipt did not move and the existing pass-history.jsonl confirms 4-of-5
+from passes newer than the latest self-repair attempt in the Fala journal;
+incidents reuse the preflight cooldown ledger
 (`github.incident_cooldown_hours`). Activate stays a `self_repair_*` leaf.
 
 ### `factory_pass` (parent)

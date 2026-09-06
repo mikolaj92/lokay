@@ -99,6 +99,9 @@ stop_cycle_tree() {
 }
 
 set +e
+# Job control gives the daemon its own process group. Without it the group
+# watchdog also terminates this caretaker before it can record pass_ceiling.
+set -m
 uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1 &
 DAEMON_PID=$!
 (

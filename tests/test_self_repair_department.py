@@ -31,7 +31,7 @@ def test_select_skips_leftover_even_when_last_pass_did_not_move() -> None:
         "route": "skip",
         "reason": "leftover_skip",
     }
-    assert select(enabled=True, moved_forward=False)["route"] == "run"
+    assert select(enabled=True, moved_forward=False)["reason"] == "stale_receipt"
     assert select(enabled=False, moved_forward=False, leftover_skip=True) == {
         "ok": True,
         "route": "skip",

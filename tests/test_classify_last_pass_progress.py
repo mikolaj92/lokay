@@ -116,7 +116,9 @@ def test_occupied_inflight_does_not_start_repair():
 
 
 def test_did_not_move_starts_repair():
-    out = classify(_receipt(health="stall", ok=False, error="no product delivery"))
+    history = [_receipt(ts=f"2026-09-06T00:00:0{n}Z", error="no product delivery")
+               for n in range(5, 0, -1)]
+    out = classify(history[0], history=history)
     assert out == {
         "ok": True,
         "route": "repair",
@@ -124,6 +126,8 @@ def test_did_not_move_starts_repair():
         "moved_forward": False,
         "fingerprint": "did_not_move",
         "evidence": "no product delivery",
+        "matches": 5,
+        "window": 5,
     }
 
 

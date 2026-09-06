@@ -69,6 +69,25 @@ def test_successful_cleanup_is_cleaned():
     assert out["route"] == "cleaned"
 
 
+def test_normalized_cleanup_retains_terminal_result():
+    from lokay.graph_run import normalize_path_result
+
+    result = {"reaped_count": 0, "kept_count": 2}
+    normalized = normalize_path_result({
+        "ok": True,
+        "path_id": "stale_worktree_reap",
+        "fala": {"effector_results": {
+            "summarize_stale_worktree_reap": {
+                "status": "succeeded",
+                "output": {"values": {"ok": True, "result": result}},
+            },
+        }},
+    })
+    out = classify(normalized)
+    assert out["route"] == "cleaned"
+    assert out["result"] == result
+
+
 def test_overflow_skip_is_skip():
     out = classify(
         {"ok": True, "result": {"skipped": True, "reason": "stale_worktree_overflow"}}

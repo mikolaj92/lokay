@@ -11,11 +11,10 @@ def run_graph(tmp_path, body, run_id, path_id="select_implement"):
     root = Path(__file__).resolve().parents[1]
     effector = tmp_path / "effector.py"
     effector.write_text(body)
-    package = tmp_path / "pkg.toml"
-    package.write_text(
-        (root / "fala/lokay.fala-package.toml")
-        .read_text()
-        .replace("PLACEHOLDER_PROJECT", str(root))
+    from lokay.graph_run import _materialize_package
+    package = _materialize_package(
+        root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml",
+        project=root, path_id=path_id,
     )
     authored = tomllib.loads(package.read_text())
     path = next(x for x in authored["correlation_paths"] if x["id"] == path_id)

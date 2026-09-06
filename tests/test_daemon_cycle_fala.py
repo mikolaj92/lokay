@@ -66,13 +66,13 @@ def test_leftover_skip_runs_factory_and_skips_repair():
     assert status["summarize_daemon_cycle"] == "succeeded"
 
 
-def test_did_not_move_runs_repair_then_factory():
+def test_did_not_move_runs_repair_without_second_factory_repair():
     status = simulate_daemon_cycle(select_route="repair")
     assert status["last_pass_moving"] == "succeeded"
     assert status["select_repair_route"] == "succeeded"
     assert status["recovery_incident"] == "succeeded"
     assert status["recovery_run_self_repair"] == "succeeded"
-    assert status["recovery_factory"] == "succeeded"
+    assert status["recovery_factory"] == "skipped"
     assert status["summarize_daemon_cycle"] == "succeeded"
 
 

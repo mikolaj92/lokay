@@ -33,7 +33,10 @@ def _row(*, issue: int, leftover: list[dict], launched: str | None = "started", 
     }
 
 
-def test_prepare_seeds_serial_budget(tmp_path: Path):
+def test_prepare_seeds_serial_budget(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        "lokay.proc.prepare_executor_rows.live_issue_to_pr_receipts", lambda: []
+    )
     out = prepare(
         listed=_listed(2, 3),
         last={},

@@ -18,7 +18,18 @@
 
 ## Design law
 
-**Product = Fala graph(s).** Unix atoms are replaceable blocks. Coding harness is not the product.
+**Product = Fala graph(s). The graph is the process and the accumulated
+value.** Build small Unix programs around that graph: one process, one job, one
+JSON envelope. A Unix atom's body may delegate to deterministic code, an agent,
+a human, or a service; these are replaceable implementations of the node. Do
+not privilege agents conceptually; a coding harness is only today's
+implementation of a bounded semantic slot.
+
+A node is **role + contract + capabilities**, not its current executor. Durable
+product knowledge lives in graph order, gates, state, return edges, and Done.
+Improve/replace node bodies freely behind their contracts. Change graph
+geometry only when changing the process itself. Never move process knowledge
+into a worker prompt, Python composer, UI, or vendor harness.
 
 - See **`docs/PROCESS.md`**, `docs/UNIX.md`, `docs/GRAPH.md`, `docs/WORKING.md`, **`docs/AUTONOMY.md`**, **`docs/NO_STUBS.md`**, **`docs/HTMX.md`**, **`docs/ALPINE.md`**, **`docs/PLATFORM_UI.md`**.
 - New capability → `src/lokay/proc/` + `project.scripts`.

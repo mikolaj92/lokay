@@ -31,7 +31,8 @@ def handle_relocalize(
     if atom == "classify_relocalization_residue":
         from lokay.proc.classify_relocalization_residue import classify
 
-        return classify(changed, up.get("read_relocalization_issue_paths") or {})
+        return classify(changed, up.get("read_relocalization_issue_paths") or {},
+                        repair_mode=bool(inputs.get("repair_mode")))
     if atom == "authorize_relocalization_restore":
         from lokay.proc.authorize_relocalization_restore import authorize
 

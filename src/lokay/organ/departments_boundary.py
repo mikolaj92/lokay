@@ -45,7 +45,12 @@ def handle_departments(
         from lokay.proc.leftover_skip import classify as classify_leftover
         from lokay.proc.select_self_repair_department import select
 
-        receipt = read_pass_receipt()
+        from lokay.config import load_config
+        from lokay.pass_history import read_pass_history
+        from lokay.proc.read_self_repair_attempt import read_started_at
+
+        state_path = load_config(config).state_path
+        receipt = read_pass_receipt(state_path=state_path)
         moving = classify_moving(receipt)
         leftover = classify_leftover(receipt)
         return select(
@@ -54,6 +59,8 @@ def handle_departments(
             receipt_present=isinstance(receipt, dict) and bool(receipt),
             leftover_skip=bool(leftover.get("leftover_skip")),
             receipt=receipt if isinstance(receipt, dict) else None,
+            history=read_pass_history(state_path=state_path),
+            repair_started_at=read_started_at(),
         )
     if atom == "run_self_repair_department":
         from lokay.proc.run_self_repair_department import run

@@ -79,14 +79,18 @@ wymieniają te same ścieżki.
 ```mermaid
 stateDiagram-v2
     [*] --> Heartbeat
-    Heartbeat --> FactoryPass
+    Heartbeat --> LastPassMoving
+    LastPassMoving --> SelectRepairRoute
+    SelectRepairRoute --> FactoryPass: factory route / unconfirmed stall
+    SelectRepairRoute --> SelfRepair: same failure in 4 of 5 distinct pass receipts
+    SelfRepair --> [*]: failed / restart required; next heartbeat starts a fresh cycle
     FactoryPass --> HostFF
     HostFF --> FactoryBeginHostGate
     FactoryBeginHostGate --> FactoryBegin: begin
     FactoryBeginHostGate --> RecordPass: restart
     FactoryBegin --> ReapStaleWorktrees
     FactoryBegin --> SelectSelfRepairDepartment
-    SelectSelfRepairDepartment --> RunSelfRepairDepartment: did_not_move
+    SelectSelfRepairDepartment --> RunSelfRepairDepartment: confirmed 4-of-5 stall
     SelectSelfRepairDepartment --> SelectIssueTriageDepartment
     SelectIssueTriageDepartment --> RunIssueTriageDepartment
     SelectIssueTriageDepartment --> SelectExecutorDepartment
@@ -97,14 +101,14 @@ stateDiagram-v2
     RunPrTriageDepartment --> SelectPrRepairDepartment
     SelectPrRepairDepartment --> RunPrRepairDepartment
     SelectPrRepairDepartment --> RecordPass
+    RunSelfRepairDepartment --> RecordPass: completed result
+    RunIssueTriageDepartment --> RecordPass: completed result
+    RunExecutorDepartment --> RecordPass: execution evidence before classification
+    RunPrTriageDepartment --> RecordPass: review and merge result
+    RunPrRepairDepartment --> RecordPass: completed repair result
     RecordPass --> FactoryPassTerminal
     ReapStaleWorktrees --> [*]: cleaned / failed classified sibling
-    FactoryPassTerminal --> LastPassMoving
-    LastPassMoving --> SelectRepairRoute
-    SelectRepairRoute --> [*]: new PR / merge / leftover skip / empty survey / stale
-    SelectRepairRoute --> SelfRepair: last receipt did not move
-    SelfRepair --> CloseoutPrs
-    SelfRepair --> DispatchImplement
+    FactoryPassTerminal --> [*]: next heartbeat reads the completed receipt
 ```
 
 ### Otwarcie workspace passu — `factory_begin`
@@ -509,7 +513,7 @@ Dirty checkout nigdy nie jest czyszczony ani nadpisywany.
 ```mermaid
 stateDiagram-v2
     [*] --> InspectDiffWorktree
-    InspectDiffWorktree --> ReadChangedPaths: poprawny worktree
+    InspectDiffWorktree --> ReadChangedPaths: poprawny worktree; issue od origin/main, naprawa PR od upstream gałęzi
     InspectDiffWorktree --> RealDiffTerminal: błędny worktree
     ReadChangedPaths --> ClassifyDiffKind
     ReadChangedPaths --> RealDiffTerminal: błąd Git
@@ -825,7 +829,8 @@ stateDiagram-v2
     ReadSelfRepairCandidateState --> ClassifySelfRepairCandidateDiff
     ClassifySelfRepairCandidateDiff --> VerifySelfRepairCandidateIdentity
     VerifySelfRepairCandidateIdentity --> RunSelfRepairTests
-    RunSelfRepairTests --> ListSelfRepairUntrackedPaths
+    RunSelfRepairTests --> ListSelfRepairUntrackedPaths: testy udane
+    RunSelfRepairTests --> [*]: testy failed / timeout / adapter failed; dalsze kontrole skipped
     ListSelfRepairUntrackedPaths --> SelectUntrackedPathSlot
     SelectUntrackedPathSlot --> CheckUntrackedPathDiff: slot zawiera ścieżkę
     SelectUntrackedPathSlot --> RecordUntrackedPathCheck: slot pusty
@@ -834,9 +839,11 @@ stateDiagram-v2
     RecordUntrackedPathCheck --> ReduceUntrackedChecks: ostatni slot
     ReduceUntrackedChecks --> CheckSelfRepairWorkingDiff
     CheckSelfRepairWorkingDiff --> CheckSelfRepairCachedDiff
-    CheckSelfRepairCachedDiff --> CheckSelfRepairCommittedDiff: jest base SHA
-    CheckSelfRepairCachedDiff --> RecheckSelfRepairIdentity: brak base SHA
-    CheckSelfRepairCommittedDiff --> RecheckSelfRepairIdentity
+    CheckSelfRepairCachedDiff --> SelectSelfRepairCommittedNeed
+    SelectSelfRepairCommittedNeed --> CheckSelfRepairCommittedDiff: jest base SHA
+    SelectSelfRepairCommittedNeed --> SelectSelfRepairCommittedGate: brak base SHA
+    CheckSelfRepairCommittedDiff --> SelectSelfRepairCommittedGate
+    SelectSelfRepairCommittedGate --> RecheckSelfRepairIdentity
     RecheckSelfRepairIdentity --> SelfRepairValidationResult
     SelfRepairValidationResult --> [*]
 ```
@@ -1107,12 +1114,16 @@ Werdykt `do` nie otwiera gałęzi — to robi dział executor.
 ```mermaid
 stateDiagram-v2
     [*] --> ListOpenIssues
-    ListOpenIssues --> RunExecutorRows
+    ListOpenIssues --> RunExecutorRows: katalog repo, najstarsze issue najpierw
     RunExecutorRows --> SummarizeExecutorDepartment
     SummarizeExecutorDepartment --> [*]
 ```
 
 Dział `executor_department` listuje raz i gnieździ pod-Falę `executor_rows`.
+`ListOpenIssues` zachowuje priorytet repo z katalogu, a w repo porządkuje
+issue od najstarszego numeru; nie dziedziczy newest-first API. Istniejący
+kursor nadal zachowuje kolejność rozpoczętej pracy. To nie jest rozwiązywanie
+zależności między issue.
 Nie jest triage. Nie scala. Python nie prowadzi pętli wierszy.
 
 ### Iteracja executora — `executor_rows`
@@ -1478,7 +1489,9 @@ stateDiagram-v2
     ObserveDeliveryConfirmation --> ReceiptPending: authoritative confirmation incomplete
     PublishDeliveryReceipt --> Delivered
     ReceiptPending --> [*]
-    RepairVerdict --> [*]: rodzic może później uruchomić pr_repair
+    RepairVerdict --> TriageReceipt: published review decision and blocking findings
+    ReviewVerdict --> TriageReceipt: published decision for every outcome
+    TriageReceipt --> [*]: rodzic przekazuje review do pr_repair
     ConflictRecovery --> [*]
     HumanTerminal --> [*]
     WaitChecks --> [*]
@@ -1510,14 +1523,16 @@ stateDiagram-v2
     ValidateEvidenceRepair --> FinalizeRepairResult: wynik poprawny
     ValidateEvidenceRepair --> HumanTerminal: invalid JSON
     FinalizeRepairResult --> HumanTerminal: ponowne NEEDS_EVIDENCE / NEEDS_HUMAN
-    SelectRepairResult --> VerifyRepairDiff: REPAIRED
-    FinalizeRepairResult --> VerifyRepairDiff: REPAIRED
+    SelectRepairResult --> RelocalizeRepair: REPAIRED
+    FinalizeRepairResult --> RelocalizeRepair: REPAIRED
+    RelocalizeRepair --> VerifyRepairDiff: bounded scope reconciliation against PR upstream; no automatic residue restore; diff gate remains mandatory
     VerifyRepairDiff --> CommitRepair
     CommitRepair --> LocalRepairTest
     LocalRepairTest --> VerifyPublishDiff: PASS
     LocalRepairTest --> TestRepairAgent: FAIL
     TestRepairAgent --> ValidateTestRepair
-    ValidateTestRepair --> VerifyTestRepairDiff: REPAIRED
+    ValidateTestRepair --> RelocalizeTestRepair: REPAIRED
+    RelocalizeTestRepair --> VerifyTestRepairDiff: bounded scope reconciliation; no automatic approval
     ValidateTestRepair --> RepairTerminal: invalid JSON / NEEDS_HUMAN
     VerifyTestRepairDiff --> CommitTestRepair
     CommitTestRepair --> LocalRepairTestAgain
@@ -1535,20 +1550,29 @@ stateDiagram-v2
 Repair is a side child. It never replaces the factory lokay. The moving
 gate is one leaf (`last_pass_moving`: new PR or merge only). A second
 leaf (`select_repair_route`) composes leftover skip, empty survey, stale
-receipt, occupied, and soft health. Repair is the `self_repair` child
+receipt, occupied, and soft health, then reads the existing pass history.
+Only the same failure in 4 of 5 distinct passes after the last self-repair attempt
+authorizes recovery; a poll
+of one receipt is not another attempt. Both daemon and department gates use
+the configured state directory. The existing Fala self-repair journal supplies
+the attempt boundary: already consumed failures cannot restart recovery after
+a restart. Missing history leaves the factory running.
+Repair is the `self_repair` child
 graph — activate stays a leaf inside that child, not inside
-`recovery_factory`. After one repair the graph always returns to one
-`factory_pass`. LaunchAgent already re-invokes the lokay; a 180s tick
-must not nest `product_entry` / `product_pass_budget`.
+`recovery_factory`. A repair attempt ends this cycle with a failed or
+restart-required terminal; it cannot enter `factory_pass` and repair the same
+candidate again. The factory route hosts one `factory_pass`. LaunchAgent
+re-invokes the lokay; the cycle must not nest `product_entry` / `product_pass_budget`.
 
 ```mermaid
 stateDiagram-v2
     [*] --> LastPassMoving
     LastPassMoving --> SelectRepairRoute
     SelectRepairRoute --> RunFactoryPass: new PR / merge
-    SelectRepairRoute --> RunFactoryPass: leftover skip / empty survey / stale
-    SelectRepairRoute --> SelfRepair: last receipt did not move
-    SelfRepair --> RunFactoryPass
+    SelectRepairRoute --> RunFactoryPass: leftover skip / empty survey / stale / unconfirmed stall
+    SelectRepairRoute --> SelfRepair: same failure in 4 of 5 distinct pass receipts
+    SelfRepair --> RepairFailed: failed / timeout
+    RepairFailed --> [*]
     RunFactoryPass --> [*]
     SelfRepair --> SelfRepairPrepare
     SelfRepairPrepare --> SelfRepairRunAgent
@@ -1558,7 +1582,8 @@ stateDiagram-v2
     SelfRepairPushMain --> SelfRepairActivate
     SelfRepairActivate --> SelfRepairPreflight
     SelfRepairPreflight --> SelfRepairClose
-    SelfRepairClose --> RunFactoryPass
+    SelfRepairClose --> RestartRequired
+    RestartRequired --> [*]
 ```
 
 ### Zgodność diagramu z implementacją
@@ -1584,7 +1609,7 @@ kontraktu. Aktualny audyt:
 
 | Stan z diagramu | Ścieżka Fali | Efekt domenowy |
 | --- | --- | --- |
-| `DaemonCycle` | `daemon_cycle` | last_pass_moving leaf + select_repair_route; self_repair child only when not moving; then one factory_pass |
+| `DaemonCycle` | `daemon_cycle` | last_pass_moving + select_repair_route with distinct-pass 4-of-5 confirmation; self_repair child ends the cycle; otherwise one factory_pass |
 | `FactoryPass` | `factory_pass` | five named departments with on/off switches, then receipt; leftover work-copy cleanup is a sibling child |
 | `SelfRepairDepartment` | `self_repair_department` | stall incident, then existing self_repair child |
 | `IssueTriageDepartment` | `issue_triage_department` | list, nest triage rows, receipt. Marks and children. Zero ai/fix |
@@ -1638,7 +1663,7 @@ kontraktu. Aktualny audyt:
 | `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal; nested fire to classified failed |
 | `LocalRepairExecution` | `local_repair_execution` | jedna naprawa z logu testu i recheck |
 | `ReviewPullRequest` | `pr_triage` | sito: merge, feedback „popraw”, dowody albo terminal ręczny; bez executora |
-| `RepairPullRequest` | `pr_repair` | osobny dział: nowy SHA na istniejącym PR po werdykcie sita lub czerwonym teście |
+| `RepairPullRequest` | `pr_repair` | osobny dział: nowy SHA na istniejącym PR; bounded relokalizacja po naprawie i naprawie testów, potem obowiązkowe diff gates |
 | `SelfRepair` | `self_repair` | named children only: prepare/run_agent/commit/validate/push/activate/preflight/close; gate and lokay stay outside |
 
 ### Reguły przejść
@@ -1686,6 +1711,7 @@ kontraktu. Aktualny audyt:
 - [`docs/AUTONOMY.md`](docs/AUTONOMY.md) — autonomous lokay Definition of Working, night profile, canaries
 - [`docs/HEALTH.md`](docs/HEALTH.md) — lokay health without watching GitHub
 - [`docs/GRAPH.md`](docs/GRAPH.md) — Fala paths and conduction
+- [`docs/DARK_FACTORY_ARCHETYPE.md`](docs/DARK_FACTORY_ARCHETYPE.md) — wspólna geometria dark factories: control plane, bounded workers, gates, capabilities, reconciliation i confirmed delivery
 - [`docs/UNIX.md`](docs/UNIX.md) — process boundaries and JSON envelopes
 - [`docs/NO_STUBS.md`](docs/NO_STUBS.md) — real-agent requirement
 - [`docs/HTMX.md`](docs/HTMX.md), [`docs/ALPINE.md`](docs/ALPINE.md), [`docs/PLATFORM_UI.md`](docs/PLATFORM_UI.md) — UI boundaries

@@ -10,6 +10,7 @@ from typing import Mapping, Sequence
 
 from lokay.gh_rate import backoff_seconds, is_rate_limit_text
 from lokay.safety import validate_argv
+from lokay.process_timeout import run_process
 
 # Force machine-readable CLI output. Host shells often export CLICOLOR_FORCE /
 # FORCE_COLOR which make modern `gh --json` emit ANSI and break json.loads.
@@ -100,7 +101,7 @@ class Runner:
         last = CommandResult(spec=spec, executed=True, returncode=1)
         for attempt in range(attempts):
             try:
-                completed = subprocess.run(
+                completed = run_process(
                     list(spec.argv),
                     cwd=spec.cwd,
                     env=env,

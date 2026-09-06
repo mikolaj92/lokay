@@ -1,5 +1,7 @@
 """Contracts for minimal self-repair preparation validators."""
 
+import json
+
 
 def _changes(**kw):
     row = {
@@ -103,3 +105,85 @@ def test_planned_result_does_not_mutate():
         ]
         is True
     )
+
+
+def test_timed_out_committed_candidate_is_removed(tmp_path):
+    import sqlite3
+
+    from lokay.proc.inspect_self_repair_ancestry import inspect
+
+    head = "c" * 40
+    journal = tmp_path / "self_repair_validate"
+    journal.mkdir()
+    db = journal / "state.sqlite"
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "CREATE TABLE processes ("
+            "id TEXT, output_json TEXT, started_at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO processes VALUES (?, ?, ?)",
+            (
+                "self_repair_validate:run_self_repair_tests",
+                '{"values": {"head": "%s", "test_timed_out": true, "ok": false}}'
+                % head,
+                "2026-09-06T00:00:00Z",
+            ),
+        )
+    out = inspect(
+        {
+            "worktree": str(tmp_path / "w"),
+            "base_sha": "b" * 40,
+            "ahead": 1,
+            "head": head,
+            "uncommitted": "empty",
+            "journal_home": str(tmp_path),
+        }
+    )
+    assert out["route"] == "remove"
+    assert "timed out" in out["error"]
+
+
+def test_redacted_timeout_error_is_removed(tmp_path):
+    import sqlite3
+
+    from lokay.proc.inspect_self_repair_ancestry import inspect
+
+    head = "e97696d891e6e8d34cccf6ff357b488e6d5e67ad"
+    journal = tmp_path / "self_repair_validate"
+    journal.mkdir()
+    with sqlite3.connect(journal / "state.sqlite") as conn:
+        conn.execute(
+            "CREATE TABLE processes ("
+            "id TEXT, input_json TEXT, output_json TEXT, error_json TEXT, started_at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO processes VALUES (?, ?, ?, ?, ?)",
+            (
+                "self_repair_validate:run_self_repair_tests",
+                json.dumps({"expected_commit": head, "worktree": "/tmp/w"}),
+                "{}",
+                json.dumps(
+                    {
+                        "code": "adapter_failed",
+                        "message": (
+                            'subprocess adapter failed: {"expected_commit": '
+                            '"e97696d89<redacted>e6e8d34cccf6ff357b488e6d5e67ad", '
+                            '"test_timed_out": true, "route": "failed"}'
+                        ),
+                    }
+                ),
+                "2026-09-05T23:55:43Z",
+            ),
+        )
+    out = inspect(
+        {
+            "worktree": str(tmp_path / "w"),
+            "base_sha": "b" * 40,
+            "ahead": 1,
+            "head": head,
+            "uncommitted": "empty",
+            "journal_home": str(tmp_path),
+        }
+    )
+    assert out["route"] == "remove"

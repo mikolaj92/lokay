@@ -28,6 +28,11 @@ def classify(out: object = None, error: object = None) -> dict:
         return failed(out.get("error") or out.get("reason") or out)
     route = str(out.get("route") or "")
     result = out.get("result")
+    if result is None:
+        terminal = out.get("terminal") or {}
+        summary = terminal.get("summarize_stale_worktree_reap") or {}
+        if summary.get("status") in {"succeeded", "completed", "success"}:
+            result = summary.get("result")
     if isinstance(result, dict):
         route = route or str(result.get("route") or "")
         if result.get("skipped"):

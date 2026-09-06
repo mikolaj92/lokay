@@ -1,7 +1,7 @@
 """Authorize the self_repair department after last-pass motion + leftover + switch.
 
 One pass is oil XOR product (product wins). Idle, pass_ceiling, occupied,
-leftover skip, and empty survey are not stalls. Only did_not_move starts oil.
+leftover skip, and empty survey are not stalls. Only confirmed 4-of-5 starts oil.
 The exclusions match select_repair_route.
 """
 
@@ -27,6 +27,8 @@ def select(
     receipt_present: bool = True,
     leftover_skip: bool = False,
     receipt: dict[str, Any] | None = None,
+    history: list[dict[str, Any]] | None = None,
+    repair_started_at: str = "",
 ) -> dict:
     if not enabled:
         return ok(route="skip", reason="self_repair_disabled")
@@ -37,8 +39,10 @@ def select(
         return ok(route="skip", reason="stale_receipt")
     if moved_forward:
         return ok(route="skip", reason="last_pass_moved")
+    if receipt is None:
+        return ok(route="skip", reason="stale_receipt")
     if receipt is not None:
-        routed = classify_repair_route(receipt)
+        routed = classify_repair_route(receipt, history=history, repair_started_at=repair_started_at)
         if str(routed.get("route") or "") != "repair":
             return ok(
                 route="skip",

@@ -283,8 +283,6 @@ def pr_checks_report(
     if (
         result.timed_out
         or result.returncode == 8
-        or "pending" in low
-        or "in_progress" in low
         or is_transient_github_text(result.stdout or "", result.stderr or "")
     ):
         return {

@@ -126,13 +126,13 @@ def list_committed_paths(runner: Runner, worktree: Path, *, base: str) -> list[s
 
 
 def list_changed_paths(runner: Runner, worktree: Path, *, base: str) -> list[str]:
-    """Union of committed, staged, unstaged, and untracked paths vs *base*."""
+    """Union of branch commits and local changes, excluding upstream-only edits."""
+    # A direct diff against base includes changes made only upstream while the
+    # worktree was running. Attribute commits from the merge-base instead;
+    # list_uncommitted_paths already covers the index and working tree.
     committed = _list_paths(
         runner,
         worktree,
-        (
-            ["diff", "--name-only", "--relative", "-z", f"{base}...HEAD"],
-            ["diff", "--name-only", "--relative", "-z", base],
-        ),
+        (["diff", "--name-only", "--relative", "-z", f"{base}...HEAD"],),
     )
     return sorted(set(committed).union(list_uncommitted_paths(runner, worktree)))

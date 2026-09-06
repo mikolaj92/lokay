@@ -1,26 +1,44 @@
 # Process (binding)
 
-**The product of Lokay is the process graph(s), not the workers.**
+**The product of Lokay is the process graph(s), not the workers. The graph is
+the accumulated value.**
+
+The graph preserves the knowledge of how software gets delivered: order,
+state, gates, retries, return edges, side-effect authority, and close-out.
+Everything built around it is a replaceable implementation of one node under a
+stable contract. A node may be executed by a small Unix program, deterministic
+function, agent, human, or service. Its nature does not determine its place in
+the process.
+
+```text
+node = role + contract + capabilities
+executor = replaceable implementation of the node
+product = graph + state + transition rules + Definition of Done
+```
+
 The **output** of that process is **quality code merged to `main`** — one
 Definition of Done ([`WORKING.md`](WORKING.md)). A running graph that ships
-nothing (or scrap) is not the product working.
-
-Lokay’s valuable asset is one or more **Fala graphs** that describe how software
-gets delivered: order, gates, retries, and close-out. Everything else is a
-replaceable block under a stable contract.
+nothing (or scrap) is not the product working. Likewise, a stronger model only
+improves a block; a better graph improves every present and future executor.
+Never hide accumulated process knowledge in a worker prompt, Python composer,
+UI, or vendor harness.
 
 ## Hierarchy (non-negotiable)
 
 1. **Fala graph(s)** — the process (what happens after what, what may fail closed,
    what may return into the queue).
-2. **Unix atoms** — small processes with JSON envelopes; one job each.
+2. **Unix atoms** — the universal node boundary: one small process, one job,
+   one JSON envelope. Its body may use deterministic code, an agent, a human,
+   or a service; Fala does not privilege one kind of executor.
 3. **Adapters** — GitHub today, another host tomorrow; coding harness today,
    another `executor.command` tomorrow.
 
 If the graph is right, you can swap firm A for firm B (language, framework,
 tooling) and still get software delivered — provided the process is followed.
 Lokay encodes that process so it can run continuously without reinventing it
-every pass.
+every pass. In Lokay, even an agent, human handoff, or remote service enters the
+graph through the same small Unix-process contract. The implementation may be
+non-deterministic; the composition remains explicit.
 
 ## Graphs are not one-way only
 
@@ -57,9 +75,9 @@ and document why in `docs/GRAPH.md` / this file.
 - One process = one job.
 - JSON envelope on stdout (`ok` / `error` / job fields).
 - No vendor knowledge inside Fala conduction.
-- Deterministic or nondeterministic is a property of the **body**, not of the
-  node id: the same graph slot may run a pure function today and an agent
-  tomorrow if the envelope stays valid.
+- Deterministic or nondeterministic, machine or human, is a property of the
+  **body**, not of the node id: the same graph slot may run a Unix program,
+  pure function, agent, human, or service if the contract stays valid.
 - Coding slot is only `run_agent` (config binary + args). No Pi/Claude/… hardcode
   in product paths. Swap = one small Unix script or config change.
 
@@ -78,6 +96,7 @@ When implementing in this repo:
 ## Related
 
 - `docs/GRAPH.md` — path diagrams and conduction
+- `docs/DARK_FACTORY_ARCHETYPE.md` — non-binding synthesis of the shared geometry across deterministic-first software factories
 - `docs/UNIX.md` — process boundaries and atom map
 - `docs/WORKING.md` / `docs/AUTONOMY.md` — working lokay contract
 - `docs/NO_STUBS.md` — real executor only

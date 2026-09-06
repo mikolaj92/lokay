@@ -26,7 +26,7 @@ def test_runner_spec_env_does_not_mutate_parent(monkeypatch):
         captured.update(kwargs["env"])
         return type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
-    monkeypatch.setattr("lokay.runner.subprocess.run", fake_run)
+    monkeypatch.setattr("lokay.runner.run_process", fake_run)
     Runner().run(
         CommandSpec(argv=("echo",), env={"LOKAY_HEALTH_LEASE": ""}),
         live=True,
@@ -53,7 +53,7 @@ def test_runner_env_disables_force_color(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr('lokay.runner.subprocess.run', fake_run)
+    monkeypatch.setattr('lokay.runner.run_process', fake_run)
     r = Runner()
     res = r.run(CommandSpec(argv=('gh', 'issue', 'list', '--json', 'number')), live=True)
     assert res.returncode == 0
@@ -68,7 +68,7 @@ def test_runner_timeout_is_machine_reason(monkeypatch):
     def boom(*_a, **_kw):
         raise subprocess.TimeoutExpired(cmd=("pi",), timeout=1800, output="partial", stderr="")
 
-    monkeypatch.setattr("lokay.runner.subprocess.run", boom)
+    monkeypatch.setattr("lokay.runner.run_process", boom)
     res = Runner().run(
         CommandSpec(argv=("pi", "-p", "x"), timeout_seconds=1800),
         live=True,

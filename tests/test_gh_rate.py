@@ -73,7 +73,7 @@ def test_runner_retries_gh_429_then_succeeds(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr("lokay.runner.subprocess.run", fake_run)
+    monkeypatch.setattr("lokay.runner.run_process", fake_run)
     result = Runner(gh_retry_max=3, sleep_fn=sleeps.append).run(
         CommandSpec(argv=("gh", "pr", "list", "--repo", "a/b")),
         live=True,
@@ -94,7 +94,7 @@ def test_runner_exhausts_429_and_run_checked_raises(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr("lokay.runner.subprocess.run", fake_run)
+    monkeypatch.setattr("lokay.runner.run_process", fake_run)
     runner = Runner(gh_retry_max=2, sleep_fn=sleeps.append)
     result = runner.run(CommandSpec(argv=("gh", "issue", "list")), live=True)
     assert result.returncode == 1
@@ -119,7 +119,7 @@ def test_runner_does_not_retry_non_rate_errors(monkeypatch):
 
         return R()
 
-    monkeypatch.setattr("lokay.runner.subprocess.run", fake_run)
+    monkeypatch.setattr("lokay.runner.run_process", fake_run)
     result = Runner(gh_retry_max=5, sleep_fn=lambda *_: None).run(
         CommandSpec(argv=("gh", "api", "user")),
         live=True,

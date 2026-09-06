@@ -137,10 +137,10 @@ _PATH_ID = re.compile(r'(?m)^id\s*=\s*"([^"]+)"')
 
 
 def _extract_runtime_tables(text: str) -> tuple[str, str]:
-    """Pull ``[runtime…]`` tables out of a TOML chunk.
+    """Pull runtime and shared path-template tables out of a TOML chunk.
 
-    Authored runtime currently sits inside ``self_repair``. A sliced host
-    still needs those tables even when that path is not selected.
+    Shared declarations can follow any path in the authored catalog. Slicing
+    that path must not discard templates referenced by another path.
     """
     kept: list[str] = []
     runtime: list[str] = []
@@ -148,7 +148,11 @@ def _extract_runtime_tables(text: str) -> tuple[str, str]:
     for line in text.splitlines(keepends=True):
         stripped = line.strip()
         if stripped.startswith("[") and stripped.endswith("]"):
-            capturing = stripped == "[runtime]" or stripped.startswith("[runtime.")
+            table = stripped.strip("[]")
+            capturing = (
+                table == "runtime" or table.startswith("runtime.")
+                or table == "path_templates" or table.startswith("path_templates.")
+            )
         if capturing:
             runtime.append(line)
         else:

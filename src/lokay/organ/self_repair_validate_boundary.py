@@ -91,9 +91,15 @@ def handle_self_repair_validate(
         source = {
             "working": "reduce_self_repair_untracked_checks",
             "cached": "check_self_repair_tracked_working",
-            "committed": "check_self_repair_tracked_cached",
+            "committed": "select_self_repair_committed_need",
         }[kind]
         return check(up.get(source) or {}, kind=kind)
+    if atom == "select_self_repair_committed_need":
+        candidate = up.get("check_self_repair_tracked_cached") or {}
+        return {
+            **candidate,
+            "route": "has_base" if candidate.get("base_sha") else "no_base",
+        }
     if atom == "select_self_repair_committed_gate":
         return (
             up.get("check_self_repair_tracked_committed")

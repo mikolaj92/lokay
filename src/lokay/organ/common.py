@@ -225,6 +225,9 @@ def _test_local_probe(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             "reason": "test_local_missing",
         }
     recheck = up.get("test_local_recheck")
+    # Fala emits a nonempty envelope for an unselected optional branch.
+    if isinstance(recheck, dict) and recheck.get("reason") == "condition_not_met":
+        recheck = None
     if not isinstance(recheck, dict) or not recheck:
         repair = up.get("local_repair_execution")
         if isinstance(repair, dict) and repair.get("route") in {

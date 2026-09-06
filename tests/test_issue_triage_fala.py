@@ -5,7 +5,8 @@ import pytest
 
 def run_graph(tmp_path, body: str, run_id: str, path_id: str = "issue_triage"):
     pytest.importorskip("fala"); root=Path(__file__).resolve().parents[1]; effector=tmp_path/"effector.py"; effector.write_text(body)
-    package=tmp_path/"pkg.toml"; package.write_text((root/"fala/lokay.fala-package.toml").read_text().replace("PLACEHOLDER_PROJECT",str(root)))
+    from lokay.graph_run import _materialize_package
+    package = _materialize_package(root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml", project=root, path_id=path_id)
     path=next(x for x in tomllib.loads(package.read_text())["correlation_paths"] if x["id"]==path_id); commands={x["id"]:[sys.executable,str(effector)] for x in path["effectors"]}
     script="import fala,json,sys;print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id=sys.argv[5],run_id=sys.argv[4],command_overrides=json.loads(sys.argv[3]),max_ticks=64)))"
     env=os.environ.copy()

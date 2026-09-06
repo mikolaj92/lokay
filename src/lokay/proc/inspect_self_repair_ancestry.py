@@ -2,10 +2,18 @@
 
 from pathlib import Path
 from lokay.proc._common import runner
+from lokay.proc.read_self_repair_validation_outcome import read_for_head
 from lokay.runner import git_spec
 
 
 def inspect(candidate: dict) -> dict:
+    outcome = read_for_head(candidate)
+    if outcome.get("test_timed_out") is True:
+        return {
+            **candidate,
+            "route": "remove",
+            "error": "cannot resume self-repair candidate whose validation timed out",
+        }
     ancestor = (
         runner()
         .run(
