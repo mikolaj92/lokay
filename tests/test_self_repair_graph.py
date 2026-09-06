@@ -105,3 +105,14 @@ def test_docs_name_each_self_repair_child_in_order():
     assert section.index("self_repair_commit") < section.index("self_repair_validate")
     assert "recovery_factory" not in section.split("```")[1]
     assert "last_pass_moving" not in section.split("```")[1]
+
+
+def test_self_repair_validate_uses_untracked_catalog():
+    import tomllib
+    data = tomllib.loads((ROOT / "fala/lokay.fala-package.toml").read_text())
+    path = next(p for p in data["correlation_paths"] if p["id"] == "self_repair_validate")
+    ids = [e["id"] for e in path["effectors"]]
+    assert "self_repair_untracked_catalog" in ids
+    assert not any(i.startswith("select_self_repair_untracked_") for i in ids)
+    assert "reduce_self_repair_untracked_checks" not in ids
+    assert len(ids) < 30

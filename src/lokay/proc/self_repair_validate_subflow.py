@@ -9,7 +9,7 @@ def run(
     return run_path(
         path_id="self_repair_validate",
         repo="mikolaj92/lokay",
-        max_ticks=256,
+        max_ticks=32,
         extra_inputs={
             "worktree": worktree,
             "base_sha": base_sha,

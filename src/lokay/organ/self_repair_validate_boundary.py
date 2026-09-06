@@ -5,10 +5,6 @@ from typing import Any
 SLOTS = 30
 
 
-def _slot(atom):
-    return int(atom.rsplit("_", 1)[1])
-
-
 def handle_self_repair_validate(
     atom: str,
     inputs: dict[str, Any],
@@ -58,38 +54,16 @@ def handle_self_repair_validate(
         from lokay.proc.list_self_repair_untracked_paths import list_paths
 
         return list_paths(up.get("run_self_repair_tests") or {}, slot_count=SLOTS)
-    slot = _slot(atom) if atom.rsplit("_", 1)[-1].isdigit() else 0
-    if atom.startswith("select_self_repair_untracked_"):
-        from lokay.proc.select_self_repair_untracked_slot import select
+    if atom == "self_repair_untracked_catalog":
+        from lokay.proc.self_repair_untracked_catalog import run
 
-        return select(up.get("list_self_repair_untracked_paths") or {}, slot=slot)
-    if atom.startswith("check_self_repair_untracked_"):
-        from lokay.proc.check_self_repair_untracked_path import check
-
-        return check(up.get(f"select_self_repair_untracked_{slot}") or {})
-    if atom.startswith("record_self_repair_untracked_"):
-        from lokay.proc.record_self_repair_untracked_check import record
-
-        return record(
-            up.get(f"select_self_repair_untracked_{slot}") or {},
-            up.get(f"check_self_repair_untracked_{slot}") or {},
-        )
-    if atom == "reduce_self_repair_untracked_checks":
-        from lokay.proc.reduce_self_repair_untracked_checks import reduce_state
-
-        return reduce_state(
-            [
-                up.get(f"record_self_repair_untracked_{i}") or {}
-                for i in range(1, SLOTS + 1)
-            ],
-            up.get("list_self_repair_untracked_paths") or {},
-        )
+        return run(up.get("list_self_repair_untracked_paths") or {})
     if atom.startswith("check_self_repair_tracked_"):
         from lokay.proc.check_self_repair_tracked_diff import check
 
         kind = atom.removeprefix("check_self_repair_tracked_")
         source = {
-            "working": "reduce_self_repair_untracked_checks",
+            "working": "self_repair_untracked_catalog",
             "cached": "check_self_repair_tracked_working",
             "committed": "select_self_repair_committed_need",
         }[kind]
