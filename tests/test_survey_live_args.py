@@ -7,7 +7,7 @@ from pathlib import Path
 from lokay.envelope import emit_exit, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
-from lokay.proc import list_inbox, list_issues, list_prs, survey_inbox, survey_prs
+from lokay.proc import list_inbox, list_issues, list_prs
 
 
 def test_list_read_atoms_accept_live_with_offline(tmp_path: Path) -> None:

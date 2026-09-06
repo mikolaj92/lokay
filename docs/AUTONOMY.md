@@ -12,14 +12,21 @@ A green agent, a plan-only worktree, a pass receipt, or a green test suite is
 not output. Broken toys shipped fast are worthless; machines that only feed
 machines are worthless. Bounded misses must free the slot.
 
-Design law: **Fala coordinates; small atoms do one job.** Certainty scaffolding
-here is additive (tests / fixtures / docs / config profile). Fleet pass order
-lives in parent Fala ``factory_pass`` (`host_ff → factory_begin_host_gate → factory_begin → select →
-queue_conflict → implement → health → receipt`; surveys / closeout / occupancy
-/ leftover reaps stay as housecleaning when `select.route == none` and do not
-run in a selected pass). Serial by design (default K=1).
+Design law: **Fala coordinates; small atoms do one job.** Fleet pass order
+lives in parent Fala `factory_pass`: host fast-forward and workspace, then
+`self_repair`, `issue_triage`, `executor`, `pr_triage`, `pr_repair`, then the
+receipt. Worktree cleanup is an independent sibling. Serial by design
+(default K=1); see the authored state machine in README.
 `compose_tick` is a thin in-process bridge for canaries/CLI — not the multi-repo
 brain. The promises below are the public surface that must remain.
+
+## Entropy and autonomy
+
+Agents minimize uncertainty into validated results; Fala conducts the resulting
+state and side effects. Hard facts terminate before inference, and a published
+triage verdict is not evaluated again by intake. The binding allowlist and
+input/output contracts live in [PROCESS.md](PROCESS.md#entropy-reduce-uncertainty-then-conduct-effects).
+No agent belongs on mechanical list, label, host-ff or merge operations.
 
 ## Product law: trust the issue author
 

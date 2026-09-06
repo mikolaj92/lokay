@@ -5,7 +5,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from lokay.models import Issue
-from lokay.proc.reap_stale_implementing import run_reap_stale_implementing
 from lokay.stage_ledger import LABEL_IMPLEMENTING, LABEL_PR_OPEN
 from lokay.stale_implementing import (
     issue_has_covering_pr,

@@ -298,39 +298,3 @@ def test_persist_stuck_conducts_path_and_count(tmp_path):
     assert out == {"ok": True, "stuck_path": str(path), "issue_count": 1}
     assert "stuck" not in out
     assert path.is_file()
-
-
-def test_survey_prs_does_not_receive_begin_blob(monkeypatch):
-    from lokay.organ.factory import handle_factory
-
-    captured = {}
-    monkeypatch.setattr(
-        "lokay.proc.survey_prs_subflow.run",
-        lambda **kwargs: captured.update(kwargs) or {"ok": True},
-    )
-    blob = {
-        "pass_dir": "/pass",
-        "stuck": {"issues": {"pad": "x" * 50_000}},
-        "fala": {"cart": "y" * 50_000},
-        "begin": {"stuck": "z" * 50_000},
-    }
-    ctx = {
-        "cfg": None,
-        "live": False,
-        "repo": "o/r",
-        "issue_number": 0,
-        "pr_number": 0,
-        "repair_mode": False,
-        "branch": "",
-    }
-    out = handle_factory(
-        "survey_prs",
-        {"config_path": None, "live": False},
-        {"factory_begin": blob},
-        ctx,
-    )
-    assert out == {"ok": True}
-    assert captured == {"pass_dir": "/pass", "config_path": None, "live": False}
-    assert "stuck" not in captured
-    assert "fala" not in captured
-    assert "begin" not in captured

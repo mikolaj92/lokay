@@ -35,10 +35,13 @@ Implementation lives under `executor_department` / `issue_to_pr`.
 `select_implement` is not the first step of the LaunchAgent tick.
 
 The explicit CLI `product_entry` / `product_pass_budget` hosts bounded
-multi-pass work and `leftover_closeout`. Its currently repeated slots are
-tracked in #996; they are not eight passes inside `daemon_cycle`.
-Legacy survey/plan/closeout paths still exist, but existence is not reachability
-from the live parent. Do not describe them as its hidden housecleaning branch.
+multi-pass work and `leftover_closeout`. Native bounded templates author
+slots 2–8 after a fixed first slot; they are not eight passes inside `daemon_cycle`.
+The retired survey/plan/closeout fleet paths and their CLI wrappers are removed.
+Issue listing belongs to issue triage/executor; PR listing and closeout belong
+to PR triage; occupancy comes from delivery receipts; recovery and work-copy
+cleanup keep their existing department/sibling paths. Domain collectors remain
+independent and tested, not a second parent spine.
 
 ## Atomic CLI map
 
@@ -46,7 +49,7 @@ from the live parent. Do not describe them as its hidden housecleaning branch.
 | --- | --- | --- |
 | `lokay-list-inbox` | nested | list undecided open issues |
 | `lokay-list-issues` | nested | list intentional open catalog issues |
-| `lokay-intake-check` | cli-wrapper | one named deterministic intake check; post-triage overlap tracked in #1001 |
+| `lokay-intake-check` | cli-wrapper | one named deterministic intake check; not a second post-triage verdict |
 | `lokay-issue-split` | nested | bounded child-issue split |
 | `lokay-stage-label` | nested | publish one issue decision |
 | `lokay-select-issue` | nested | pick one issue |
@@ -67,16 +70,8 @@ from the live parent. Do not describe them as its hidden housecleaning branch.
 | `lokay-repos` | cli-wrapper | read managed scope |
 | `lokay-factory-begin` | top | open workspace through child Fala |
 | `lokay-host-ff` | top | fetch and ff-only; never reset hard |
-| `lokay-survey-prs` | legacy-unused | old fleet PR survey wrapper |
-| `lokay-survey-inbox` | legacy-unused | old fleet inbox survey wrapper |
-| `lokay-survey-ready` | legacy-unused | old fleet catalog survey wrapper |
-| `lokay-survey-repos` | legacy-unused | Python survey chain pending removal (#999), not a valid composition example |
-| `lokay-plan-pass` | legacy-unused | old fleet target planning |
 | `lokay-dispatch-triage` | legacy-unused | old planned-inbox dispatch |
-| `lokay-resolve-conflicts` | legacy-unused | old conflict sweep |
 | `lokay-closeout-pr` | nested | one PR closeout child |
-| `lokay-closeout-prs` | legacy-unused | old per-repo closeout sweep |
-| `lokay-refresh-occupancy` | legacy-unused | old fleet occupancy refresh |
 | `lokay-reap-stale-worktrees` | top | independent cleanup sibling |
 | `lokay-select-implement` | legacy-unused | old fleet implement selection; not parent-first |
 | `lokay-rebase-onto-base` | nested | rebase; conflict fails closed |

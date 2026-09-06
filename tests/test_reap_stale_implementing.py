@@ -257,24 +257,3 @@ def test_catalog_recent_empty_skips_physical_effects(monkeypatch):
         live=True,
     )
     assert out["ok"] is True and out["reaped_count"] == 0 and not called
-
-
-def test_reap_stale_implementing_subflow_uses_handful_of_ticks():
-    from lokay.proc.reap_stale_implementing_subflow import run
-    import inspect
-
-    source = inspect.getsource(run)
-    assert "max_ticks=16" in source
-    assert "max_ticks=1024" not in source
-
-
-def test_idle_facade_runs_only_live(monkeypatch):
-    from lokay.proc import reap_stale_implementing as facade
-
-    calls = []
-    monkeypatch.setattr(
-        facade, "run_reap_stale_implementing", lambda **kw: calls.append(kw)
-    )
-    facade.reap_idle_leftover_cache(config_path="x", live=False)
-    facade.reap_idle_leftover_cache(config_path="x", live=True)
-    assert calls == [{"pass_dir": None, "config_path": "x", "live": True}]

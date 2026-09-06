@@ -105,10 +105,6 @@ def handle_issue_triage_department(
         from lokay.proc.run_issue_sieve_split import run
 
         return run(up.get("select_issue_sieve") or {}, config_path=config, live=live)
-    if atom == "run_issue_sieve_intake":
-        from lokay.proc.run_issue_sieve_intake import run
-
-        return run(up.get("select_issue_sieve") or {}, config_path=config, live=live)
     if atom == "summarize_issue_sieve_row":
         from lokay.proc.summarize_issue_sieve_row import summarize
 
@@ -116,7 +112,6 @@ def handle_issue_triage_department(
             up.get("select_next_issue") or {},
             up.get("select_issue_sieve") or {},
             up.get("run_issue_sieve_split") or {},
-            up.get("run_issue_sieve_intake") or {},
         )
     if atom == "summarize_issue_triage_department":
         from lokay.proc.summarize_issue_triage_department import summarize

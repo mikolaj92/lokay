@@ -11,7 +11,6 @@ from lokay.passkit.hot import (
     repo_is_hot,
     survey_scope,
 )
-from lokay.proc.survey_prs import run_survey_prs
 
 
 def test_empty_row_is_cold():

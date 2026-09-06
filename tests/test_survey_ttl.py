@@ -3,7 +3,6 @@ import os
 import time
 
 from lokay.passkit import io as pass_io
-from lokay.proc import survey_inbox, survey_prs
 from lokay.proc import survey_ttl
 
 
