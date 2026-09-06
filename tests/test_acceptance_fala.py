@@ -28,3 +28,23 @@ def test_local_verification_terminal_is_unglued_from_publish():
     assert ids.index('finalize_local_tests') < ids.index('local_verification_terminal') < ids.index('verify_acceptance')
     term=next(e for e in path['effectors'] if e['id']=='local_verification_terminal')
     assert term['conduction']==['finalize_local_tests']
+
+
+def test_acceptance_repair_nodes_wired():
+    package=tomllib.loads((ROOT/'fala/lokay.fala-package.toml').read_text())
+    path=next(p for p in package['correlation_paths'] if p['id']=='issue_to_pr_delivery')
+    by_id={e['id']: e for e in path['effectors']}
+    assert by_id["acceptance_repair_execution"]["when"] == {
+        "upstream": "verify_acceptance",
+        "path": "route",
+        "equals": "repair",
+    }
+    assert by_id["list_dirty_stamp_paths"]["when"] == {
+        "upstream": "finalize_acceptance",
+        "path": "route",
+        "equals": "publish",
+    }
+    assert "finalize_acceptance" in by_id
+    assert "verify_acceptance_recheck" in by_id
+    assert "Merge is separate (Alfred)" not in path.get("description", "")
+    assert "lokaj merges itself" in path.get("description", "")

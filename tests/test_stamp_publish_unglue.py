@@ -64,14 +64,14 @@ def test_assert_stamps_committed_fail_closed_on_dirty_readme(tmp_path: Path) -> 
 def test_select_publish_gate_names_failed_atom() -> None:
     blocked = select(
         finalize_local_tests={"route": "publish"},
-        verify_acceptance={"accepted": True, "route": "publish"},
+        finalize_acceptance={"accepted": True, "route": "publish"},
         assert_stamps_committed={"ok": False, "route": "fail", "dirty_stamps": ["README.md"]},
     )
     assert blocked["route"] == "block"
     assert blocked["failed_atom"] == "assert_stamps_committed"
     opened = select(
         finalize_local_tests={"route": "publish"},
-        verify_acceptance={"accepted": True, "route": "publish"},
+        finalize_acceptance={"accepted": True, "route": "publish"},
         assert_stamps_committed={"ok": True, "route": "publish"},
     )
     assert opened == {"ok": True, "route": "publish", "reason": "publish_gate_open"}

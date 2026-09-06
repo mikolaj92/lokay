@@ -75,15 +75,46 @@ def test_valid_implementation_skips_repair_then_publishes():
             "coding_execution": {"route": "implemented"},
             "select_local_test": {"route": "pass"},
             "finalize_local_tests": {"route": "publish"},
-            "verify_acceptance": {"route": "publish", "accepted": True},
+            "verify_acceptance": {"route": "publish", "accepted": True, "ok": True},
+            "finalize_acceptance": {"route": "publish", "accepted": True, "ok": True},
             "list_dirty_stamp_paths": {"route": "clean"},
             "assert_stamps_committed": {"route": "publish", "ok": True},
             "select_publish_gate": {"route": "publish", "ok": True},
         },
     )
     assert st["local_repair_execution"] == "skipped"
+    assert st["acceptance_repair_execution"] == "skipped"
     assert st["verify_acceptance"] == "succeeded"
+    assert st["finalize_acceptance"] == "succeeded"
     assert st["select_publish_gate"] == "succeeded"
+    assert st["push"] == "succeeded"
+    assert st["pr_create"] == "succeeded"
+
+
+def test_acceptance_repair_then_recheck_publishes():
+    """#1069: verify route=repair conducts local_repair → recheck → publish."""
+    st = simulate_path(
+        "issue_to_pr_delivery",
+        {
+            "resolve_implementation_issue": {"route": "open"},
+            "worktree_add": {"route": "ready"},
+            "localize": {"route": "ready"},
+            "coding_execution": {"route": "implemented"},
+            "select_local_test": {"route": "pass"},
+            "finalize_local_tests": {"route": "publish"},
+            "verify_acceptance": {"route": "repair", "accepted": False, "ok": True},
+            "acceptance_repair_execution": {"ok": True, "passed": True, "route": "terminal"},
+            "verify_acceptance_recheck": {"route": "publish", "accepted": True, "ok": True},
+            "finalize_acceptance": {"route": "publish", "accepted": True},
+            "list_dirty_stamp_paths": {"route": "clean"},
+            "assert_stamps_committed": {"route": "publish", "ok": True},
+            "select_publish_gate": {"route": "publish", "ok": True},
+        },
+    )
+    assert st["verify_acceptance"] == "succeeded"
+    assert st["acceptance_repair_execution"] == "succeeded"
+    assert st["verify_acceptance_recheck"] == "succeeded"
+    assert st["finalize_acceptance"] == "succeeded"
     assert st["push"] == "succeeded"
     assert st["pr_create"] == "succeeded"
 
@@ -98,10 +129,13 @@ def test_acceptance_fail_skips_publish():
             "coding_execution": {"route": "implemented"},
             "select_local_test": {"route": "pass"},
             "finalize_local_tests": {"route": "publish"},
-            "verify_acceptance": {"route": "repair", "accepted": False},
+            "verify_acceptance": {"route": "repair", "accepted": False, "ok": True},
+            "finalize_acceptance": {"route": "repair_terminal", "accepted": False},
         },
     )
     assert st["verify_acceptance"] == "succeeded"
+    assert st["acceptance_repair_execution"] == "succeeded"
+    assert st["finalize_acceptance"] == "succeeded"
     assert st["push"] == "skipped"
     assert st["pr_create"] == "skipped"
 
@@ -347,7 +381,8 @@ def test_dirty_stamps_block_publish():
             "coding_execution": {"route": "implemented"},
             "select_local_test": {"route": "pass"},
             "finalize_local_tests": {"route": "publish"},
-            "verify_acceptance": {"route": "publish", "accepted": True},
+            "verify_acceptance": {"route": "publish", "accepted": True, "ok": True},
+            "finalize_acceptance": {"route": "publish", "accepted": True, "ok": True},
             "list_dirty_stamp_paths": {"route": "dirty", "dirty_stamps": ["README.md"]},
             "assert_stamps_committed": {"route": "fail", "ok": False},
         },
@@ -372,6 +407,7 @@ if a=='test_local_execution':v.update(tested=True)
 if a=='select_local_test':v['route']='pass'
 if a=='finalize_local_tests':v['route']='publish'
 if a=='verify_acceptance':v.update(route='publish',accepted=True,ok=True)
+if a=='finalize_acceptance':v.update(route='publish',accepted=True,ok=True)
 if a=='list_dirty_stamp_paths':v.update(route='clean',dirty_stamps=[])
 if a=='assert_stamps_committed':v.update(route='publish',ok=True)
 if a=='select_publish_gate':v.update(route='publish',ok=True)

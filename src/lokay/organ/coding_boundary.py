@@ -265,7 +265,10 @@ def handle_coding_boundary(
             branch=up.get("make_branch") or {},
             pr_create=up.get("pr_create") or {},
             pr_label=up.get("pr_label") or {},
-            acceptance=up.get("verify_acceptance") or {},
+            acceptance=up.get("finalize_acceptance")
+            or up.get("verify_acceptance_recheck")
+            or up.get("verify_acceptance")
+            or {},
         )
     if atom == "resolve_implementation_issue":
         from lokay.proc.resolve_implementation_issue import resolve

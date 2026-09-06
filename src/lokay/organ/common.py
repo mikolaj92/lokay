@@ -335,7 +335,11 @@ def _require_acceptance(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     prepared = up.get("prepare_acceptance")
     if not isinstance(prepared, dict) or not prepared:
         return None
-    verdict = up.get("verify_acceptance")
+    verdict = (
+        up.get("finalize_acceptance")
+        or up.get("verify_acceptance_recheck")
+        or up.get("verify_acceptance")
+    )
     if not isinstance(verdict, dict) or not verdict:
         return {
             "ok": False,
@@ -344,7 +348,7 @@ def _require_acceptance(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
             "accepted": False,
             "route": "fail_closed",
         }
-    if verdict.get("accepted") is True:
+    if verdict.get("accepted") is True or verdict.get("route") == "publish":
         return None
     return {
         "ok": False,
