@@ -450,13 +450,18 @@ pr_checks
         ├─ wait     → summarize (pending / offline; do not fail the pass)
         ├─ repair   → summarize repair verdict (red CI; no executor)
         └─ review   → collect evidence → publish verdict
+              ├─ needs_evidence → review_evidence_catalog (one atom: collect_* + SHA verify)
+              │                    → evidence_review_agent → finalize → publish
               ├─ request_changes → summarize repair verdict
-              ├─ secrets-human   → terminal
+              ├─ secrets / fail_closed → terminal (never needs_human)
               └─ approve → worktree_add → test_local (record_red)
                     └─→ select_pr_triage_outcome
                           ├─ merge  → pr_merge → stage_clear → close_issue
                           └─ repair → summarize repair verdict (local suite red)
 ```
+
+Supplemental evidence is one catalog atom (`review_evidence_catalog`), not four
+when-gated `collect_review_*` nodes plus `verify_review_evidence_sha`.
 
 The parent `factory_pass` consumes that verdict and may invoke the
 `pr_repair` department. With repair disabled, feedback remains published and no code

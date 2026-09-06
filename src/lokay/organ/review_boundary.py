@@ -5,8 +5,8 @@ from typing import Any
 OWNED = frozenset({
     "collect_pr_review_evidence", "resolve_sha_review", "pr_review_agent",
     "validate_pr_review", "pr_review_retry_agent", "validate_pr_review_retry",
-    "select_pr_review", "collect_review_pr_metadata", "collect_review_changed_files",
-    "collect_review_diff_tail", "collect_review_commit_summary", "verify_review_evidence_sha", "evidence_review_agent", "validate_evidence_review", "select_evidence_review",
+    "select_pr_review", "review_evidence_catalog", "evidence_review_agent",
+    "validate_evidence_review", "select_evidence_review",
     "finalize_pr_review", "publish_pr_review",
 })
 
@@ -52,7 +52,7 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
         return run(config_path=config,repo=repo,pr=pr,evidence=evidence,feedback=up.get("validate_pr_review") or {},live=live)
     if atom == "evidence_review_agent":
         from lokay.proc.run_evidence_review_agent import run
-        additional=dict((up.get("verify_review_evidence_sha") or {}).get("additional_evidence") or {})
+        additional=dict((up.get("review_evidence_catalog") or {}).get("additional_evidence") or {})
         return run(config_path=config,repo=repo,pr=pr,evidence=evidence,additional=additional,live=live)
     if atom in {"validate_pr_review", "validate_pr_review_retry", "validate_evidence_review"}:
         from lokay.review_boundary import validate_review_output
@@ -63,24 +63,15 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
     if atom == "select_pr_review":
         from lokay.review_boundary import select_review_decision
         return select_review_decision(up.get("resolve_sha_review") or {},up.get("validate_pr_review") or {},up.get("validate_pr_review_retry") or {})
-    if atom in {"collect_review_pr_metadata", "collect_review_changed_files", "collect_review_diff_tail", "collect_review_commit_summary"}:
-        module=__import__(f"lokay.proc.{atom}",fromlist=["collect"])
-        return module.collect(repo=repo,pr=pr,live=live)
-    if atom == "verify_review_evidence_sha":
-        if (up.get("select_pr_review") or {}).get("route") != "evidence":
-            return {"ok":True,"route":"not_applicable"}
-        from lokay.proc.verify_review_evidence_sha import verify
-        chosen={}
-        for source in ("collect_review_pr_metadata", "collect_review_changed_files", "collect_review_diff_tail", "collect_review_commit_summary"):
-            if (up.get(source) or {}).get("additional_evidence") is not None:
-                chosen={"kind":source.removeprefix("collect_review_"),"value":up[source]["additional_evidence"]}
-                break
-        if not chosen:
-            return {"ok":True,"route":"fail_closed","reason":"requested_review_evidence_unavailable"}
-        result=verify(repo=repo,pr=pr,expected_sha=str(evidence.get("head_sha") or ""),live=live)
-        if result.get("route") == "agent":
-            result["additional_evidence"]=chosen
-        return result
+    if atom == "review_evidence_catalog":
+        from lokay.proc.review_evidence_catalog import run
+        return run(
+            up.get("select_pr_review") or {},
+            repo=repo,
+            pr=pr,
+            live=live,
+            expected_sha=str(evidence.get("head_sha") or ""),
+        )
     if atom == "select_evidence_review":
         from lokay.review_boundary import select_evidence_review
         return select_evidence_review(up.get("select_pr_review") or {},up.get("validate_evidence_review") or {})
