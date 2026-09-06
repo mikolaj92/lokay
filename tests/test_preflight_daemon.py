@@ -31,6 +31,8 @@ def test_daemon_is_os_only():
     assert "LOKAY_LOCK" not in script
     assert "uv run lokay-daemon" in script
     assert "LOKAY_PASS_CEILING_SECONDS" in script
+    assert "${LOKAY_PASS_CEILING_SECONDS:-2400}" in script
+    assert "CEILING=2400" in script
     assert "stop_cycle_tree" in script
     assert "lokay.proc.stop_cycle_tree" in script
     assert "start_new_session" in script
@@ -644,14 +646,15 @@ def test_pass_ceiling_classifies_progress_and_keeps_resume_context(monkeypatch, 
     )
 
     assert out["health"] == "pass_ceiling"
-    assert out["reason"] == "ceiling_with_progress"
+    # #1013: transitions + historical delivery keep resume; do not claim progress
+    assert out["reason"] == "ceiling_stalled"
     assert out["last_path"] == "executor_department"
     assert out["last_atom"] == "list_open_issues"
     assert out["work_id"] == "mikolaj92/reviewkit#308"
     assert out["resume_from"] == "executor_department"
     assert out["latest_delivery"]["pr"] == 309
     receipt = json.loads((state / "last-pass.json").read_text())
-    assert receipt["reason"] == "ceiling_with_progress"
+    assert receipt["reason"] == "ceiling_stalled"
     assert receipt["last_path"] == "executor_department"
 
 

@@ -84,10 +84,11 @@ LOG="${LOG_DIR}/lokay-${STAMP}.log"
 LATEST="${LOG_DIR}/lokay-latest.log"
 printf '%s\n' '{"ok":true,"health":"current","reason":"starting"}' | tee "${LOG}" >"${LATEST}"
 
-CEILING="${LOKAY_PASS_CEILING_SECONDS:-180}"
+# Single source with LaunchAgent: default 2400 when env unset (never silent 180).
+CEILING="${LOKAY_PASS_CEILING_SECONDS:-2400}"
 CEILING="${CEILING%.*}"
 case "${CEILING}" in
-  ''|*[!0-9]*) CEILING=180 ;;
+  ''|*[!0-9]*) CEILING=2400 ;;
 esac
 if [[ "${CEILING}" -lt 1 ]]; then
   CEILING=1
