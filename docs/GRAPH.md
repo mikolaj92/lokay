@@ -168,7 +168,7 @@ the ledger for step order.
 
 The retired `closeout_prs` catalog path is removed. Live `pr_triage_department`
 and `pr_repair_department` own fleet PR decisions and repairs. The single-PR
-`closeout_pr` child remains for existing-PR delivery and the explicit CLI.
+`closeout_pr` child remains for existing-PR delivery and the explicit CLI. Parent `issue_to_pr` closeout of an existing open/merged ai/fix PR is path success (`delivered`, reason `delivery_pr_exists`), never `condition_not_met`.
 `product_entry` / `product_pass_budget` are CLI multi-pass wrappers, not the
 heartbeat. `leftover_catalog` only parks CLOSED-ready labels.
 ### `pr_triage_department` (PR sieve)
