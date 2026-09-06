@@ -13,7 +13,7 @@ def run(*, cfg, worktree, prompt: str, live: bool) -> dict:
         prompt=prompt,
         execute=agent_execute_allowed(cfg, live_flag=live) and live,
         session_kind="code",
-        attach_collector_boundary=False,
+        attach_collector_boundary=True,  # same as coding: collector + FACTORY_WORKFLOW_BOUNDARY
     )
     return {
         "ok": True,
