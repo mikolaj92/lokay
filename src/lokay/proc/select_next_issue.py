@@ -61,5 +61,7 @@ def select(listed: dict, last: dict | None = None, occupied=None) -> dict:
             reason = "occupied"
         else:
             reason = "exhausted"
+        # Nothing takeable now (#1017). Do not emit leftover_issues=[] — a bare
+        # leftover:0 without the list lets record_pass keep prior fuel (#1067).
         return {"ok": True, "route": "none", "reason": reason, "leftover": 0}
     return pick({**classified, "issues": rows, "route": "listed"})
