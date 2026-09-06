@@ -92,7 +92,7 @@ def handle_issue_triage(
                 "ok": True,
                 "route": "terminal",
                 "decision": {
-                    "verdict": "needs_human",
+                    "verdict": "park",
                     "reason": "hard_fact_evidence_unavailable",
                 },
             }
@@ -138,7 +138,7 @@ def handle_issue_triage(
         if not chosen.get("collected") or chosen.get("additional_evidence") is None:
             return {
                 "ok": True,
-                "route": "needs_human",
+                "route": "park",
                 "reason": "requested_issue_evidence_unavailable",
             }
         return {

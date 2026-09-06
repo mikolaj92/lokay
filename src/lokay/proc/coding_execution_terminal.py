@@ -2,7 +2,7 @@
 
 
 def terminal(finalized: dict, manual: dict) -> dict:
-    route = str(finalized.get("route") or "human")
+    route = str(finalized.get("route") or "fail_closed")
     payload = {
         "ok": True,
         "route": route,

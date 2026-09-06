@@ -1,4 +1,4 @@
-"""Sieve verdict only: do / skip / park / human / split. Never launch."""
+"""Sieve verdict only: do / skip / park / split. Never launch. Zero human route."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from lokay.proc.select_issue_do import leftover_of
 from lokay.proc.walk_issue_leftover import consumes, row_is_ready
 
 _SPLIT_MARKERS = ("split", "issue_split", "multi_epic", "oversized")
-_PARK = frozenset({"close", "blocked", "mark", "park"})
+_PARK = frozenset({"close", "blocked", "mark"})
 
 
 def classify_sieve(triage_run: Mapping[str, Any], picked: Mapping[str, Any]) -> dict:
@@ -26,22 +26,32 @@ def classify_sieve(triage_run: Mapping[str, Any], picked: Mapping[str, Any]) -> 
     reason = str(
         decision.get("reason") or result.get("reason") or sito.get("reason") or ""
     )
+    # Terminal close/blocked/mark win even if reason mentions "split".
     if verdict in _PARK:
         return ok(route="park", reason=reason or verdict, verdict=verdict)
-    if verdict == "ready":
-        return ok(route="do", reason=reason or "ready", verdict=verdict)
+    if verdict == "ready" or sito.get("route") == "ready":
+        return ok(route="do", reason=reason or "ready", verdict="ready")
     token = f"{verdict} {reason}".lower()
+    # Factory park/fail_closed with split markers → auto-split (#1014), never human.
     if any(marker in token for marker in _SPLIT_MARKERS):
         return ok(route="split", reason=reason or "issue_split", verdict=verdict)
-    if sito.get("route") == "ready" or verdict == "ready":
-        return ok(route="do", reason=reason or "ready", verdict="ready")
     if verdict in _PARK or reason in _PARK:
         return ok(route="park", reason=reason or verdict or "park", verdict=verdict)
-    if verdict in {"needs_human", "human", "manual"} or reason in {
+    if verdict in {"park", "fail_closed", "needs_human", "human", "manual"} or reason in {
+        "park",
+        "fail_closed",
         "needs_human",
         "human",
     }:
-        return ok(route="human", reason=reason or "needs_human", verdict=verdict)
+        return ok(
+            route="park",
+            reason=reason or "park",
+            verdict=(
+                "park"
+                if verdict in {"needs_human", "human", "manual", "fail_closed", ""}
+                else verdict
+            ),
+        )
     if not consumes(sito.get("reason")) and row_is_ready(dict(picked)):
         return ok(route="do", reason="already_ready", verdict="ready")
     return ok(route="skip", reason=reason or sito.get("reason") or "sito_nie_robic")

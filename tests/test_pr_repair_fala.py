@@ -39,7 +39,7 @@ if a in {'pr_repair_retry_agent','evidence_repair_agent','pr_test_repair_agent'}
     assert push.exists() and not wrong.exists()
 
 
-def test_invalid_json_gets_one_retry_then_human(tmp_path):
+def test_invalid_json_gets_one_retry_then_fail_closed(tmp_path):
     retry = tmp_path / "retry"
     body = base_effector(
         defaults()
@@ -47,8 +47,8 @@ def test_invalid_json_gets_one_retry_then_human(tmp_path):
 if a=='validate_initial_repair':v.update(route='retry',validation_error='bad')
 if a=='pr_repair_retry_agent':Path(%r).write_text('ran')
 if a=='validate_repair_retry':v['route']='retry'
-if a=='select_initial_repair':v.update(route='human',evidence_kind='none',decision={'verdict':'needs_human'})
-if a=='finalize_repair_result':v.update(route='human',decision={'verdict':'needs_human'})
+if a=='select_initial_repair':v.update(route='fail_closed',evidence_kind='none',decision={'verdict':'fail_closed'})
+if a=='finalize_repair_result':v.update(route='fail_closed',decision={'verdict':'fail_closed'})
 if a in {'select_repair_test','select_test_repair_result','finalize_repair_tests'}:v['route']='not_applicable'"""
         % str(retry)
     )
@@ -56,7 +56,7 @@ if a in {'select_repair_test','select_test_repair_result','finalize_repair_tests
     st = {k: x["status"] for k, x in result["effector_results"].items()}
     assert (
         st["pr_repair_retry_agent"] == "succeeded"
-        and st["pr_repair_manual"] == "succeeded"
+        and st["pr_repair_fail_closed"] == "succeeded"
         and st["push"] == "skipped"
         and retry.exists()
     )
@@ -72,9 +72,9 @@ if a=='validate_initial_repair':v.update(route='valid',decision={'verdict':'need
 if a=='select_initial_repair':v.update(route='evidence',evidence_kind='review_findings',decision={'verdict':'needs_evidence'})
 if a=='collect_repair_review_findings':Path(%r).write_text('ran')
 if a in {'collect_repair_pr_metadata','collect_repair_changed_files','collect_repair_test_contract'}:Path(%r).write_text(a)
-if a=='validate_evidence_repair':v.update(route='valid',decision={'verdict':'needs_human'})
-if a=='select_evidence_repair':v.update(route='human',decision={'verdict':'needs_human'})
-if a=='finalize_repair_result':v.update(route='human',decision={'verdict':'needs_human'})
+if a=='validate_evidence_repair':v.update(route='valid',decision={'verdict':'fail_closed'})
+if a=='select_evidence_repair':v.update(route='fail_closed',decision={'verdict':'fail_closed'})
+if a=='finalize_repair_result':v.update(route='fail_closed',decision={'verdict':'fail_closed'})
 if a in {'select_repair_test','select_test_repair_result','finalize_repair_tests'}:v['route']='not_applicable'"""
         % (str(chosen), str(wrong))
     )

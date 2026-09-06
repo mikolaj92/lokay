@@ -5,7 +5,7 @@ def summarize(*, plan: dict, comment: dict, close: dict, manual: dict) -> dict:
     children = list(comment.get("children") or [])
     route = str(plan.get("route") or "")
     decision = {
-        "verdict": "split" if route == "children" else "needs_human",
+        "verdict": "split" if route == "children" else "park",
         "reason": plan.get("reason"),
     }
     return {

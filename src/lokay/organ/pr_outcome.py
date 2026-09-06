@@ -69,11 +69,11 @@ def handle_pr_outcome(
 
         review = up.get("publish_pr_review") or {}
         decision = review.get("decision") if isinstance(review, dict) else {}
-        verdict = str((decision or {}).get("verdict") or "needs_human")
+        verdict = str((decision or {}).get("verdict") or "fail_closed")
         reason = (
             "review_repair_escalated"
             if atom == "review_repair_manual"
-            else "review_needs_human"
+            else "review_fail_closed"
         )
         return terminal_review(verdict=verdict, reason=reason)
 

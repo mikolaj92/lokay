@@ -114,7 +114,7 @@ def test_queue_agent_can_keep_ready_when_heuristics_skip():
     assert v.semantic["source"] == "agent"
 
 
-def test_parse_queue_conflict_rejects_needs_human():
+def test_parse_queue_conflict_rejects_human_outcome():
     with pytest.raises(Exception):
         parse_queue_conflict_output('{"outcome":"needs_human"}')
 

@@ -1,7 +1,7 @@
 """Trusted auto-merge decision matrix (pure, hermetic).
 
 Product law: once an AI PR is green and policy-approved, merge without a
-person. Fail closed on secrets, needs_human, escalated needs-review, and
+person. Fail closed on secrets, fail_closed, escalated needs-review, and
 terminal ``ai:needs-review`` labels.
 
 Actions:
@@ -38,7 +38,7 @@ WAITING_REMAINING_FIELDS: Mapping[str, str] = {
 NEEDS_REVIEW_REASONS = frozenset(
     {
         "secrets",
-        "needs_human",
+        "fail_closed",
         "llm_review_escalated_needs_review",
         "ai_needs_review_label",
         "invalid_review_json",
@@ -170,10 +170,10 @@ def _review_gate(
             reason="llm_review_escalated_needs_review",
             needs_review=True,
         )
-    if verdict == "needs_human":
+    if verdict == "fail_closed":
         return AutoMergeDecision(
             action="blocked",
-            reason="needs_human",
+            reason="fail_closed",
             needs_review=True,
         )
 

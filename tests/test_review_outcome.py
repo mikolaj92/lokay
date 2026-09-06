@@ -17,20 +17,20 @@ def test_request_changes_cap_routes_to_terminal_human():
         "escalated": True,
         "decision": {"verdict": "request_changes", "secrets": False},
     })
-    assert result["route"] == "needs_human"
+    assert result["route"] == "fail_closed"
 
 
 def test_secret_request_changes_routes_to_terminal_human():
     result = route_review_repair({
         "decision": {"verdict": "request_changes", "secrets": True},
     })
-    assert result["route"] == "needs_human"
+    assert result["route"] == "fail_closed"
 
 
 def test_manual_terminal_is_a_domain_result():
-    result = terminal_review(verdict="needs_human", reason="review_needs_human")
+    result = terminal_review(verdict="fail_closed", reason="review_needs_human")
     assert result["terminal"] is True
-    assert result["verdict"] == "needs_human"
+    assert result["verdict"] == "fail_closed"
     assert result["needs_review"] is True
 
 

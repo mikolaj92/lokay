@@ -41,7 +41,7 @@ def test_one_invalid_retry_selects_valid_retry():
 
 def test_second_invalid_fails_closed():
     out = select_initial(validate_output("no"), validate_output("still no"))
-    assert out["route"] == "human" and out["decision"]["verdict"] == "needs_human"
+    assert out["route"] == "fail_closed" and out["decision"]["verdict"] == "fail_closed"
 
 
 def test_empty_localize_is_failed_not_invalid_json_retry():
@@ -66,7 +66,7 @@ def test_closed_evidence_round_can_implement():
 def test_second_evidence_request_fails_closed():
     initial = {"route": "evidence"}
     again = validate_output(valid("needs_evidence", "localized_diff"))
-    assert select_evidence(initial, again)["route"] == "human"
+    assert select_evidence(initial, again)["route"] == "fail_closed"
 
 
 def test_physical_tests_route_once_to_repair():
@@ -82,3 +82,16 @@ def test_physical_tests_route_once_to_repair():
 def test_repair_requires_valid_implemented_result():
     assert select_repair(validate_output(valid()))["route"] == "repaired"
     assert select_repair(validate_output("bad"))["route"] == "terminal"
+
+
+def test_needs_human_verdict_is_not_a_valid_state():
+    """CEO/#1014: needs_human is not a verdict — invalid → retry → fail_closed."""
+    assert validate_output(
+        '{"verdict":"needs_human","summary":"x","tests_run":[],"residual_risk":""}'
+    )["route"] == "retry"
+    out = select_initial(
+        validate_output('{"verdict":"needs_human","summary":"x","tests_run":[],"residual_risk":""}'),
+        validate_output('{"verdict":"needs_human","summary":"x","tests_run":[],"residual_risk":""}'),
+    )
+    assert out["route"] == "fail_closed"
+    assert "needs_human" not in str(out.get("decision") or {})

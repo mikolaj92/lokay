@@ -58,7 +58,7 @@ def handle_lanes(
         checks = up.get("pr_checks") or {}
         review = up.get("publish_pr_review") or up.get("pr_review") or {}
         # Trusted auto-merge gate (fail closed). Pending → waiting; red → repair;
-        # secrets / needs_human / escalated needs-review never merge.
+        # secrets / fail_closed / escalated needs-review never merge.
         gate = decide_auto_merge(
             merge_enabled=bool(merge_cfg.merge_enabled),
             require_checks=bool(merge_cfg.require_checks),

@@ -7,7 +7,7 @@ from lokay.safety import untrusted_issue_block
 from lokay.tool_contracts import render_contract
 
 SCHEMA = """{
-  "verdict": "ready" | "close" | "needs_evidence" | "needs_human",
+  "verdict": "ready" | "close" | "needs_evidence" | "park",
   "reason": "short_snake_case_reason",
   "evidence": ["one-line physical facts"],
   "evidence_kind": "repo_shape" | "named_paths" | "linked_prs" | "covering_prs" | null,

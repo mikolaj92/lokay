@@ -71,7 +71,7 @@ def park_needs_review(tri: Mapping[str, Any]) -> bool:
     return bool(
         tri.get("escalated")
         or tri.get("needs_review")
-        or (isinstance(review, dict) and (review.get("verdict") == "needs_human" or review.get("secrets") is True))
+        or (isinstance(review, dict) and (review.get("verdict") == "fail_closed" or review.get("secrets") is True))
     )
 
 

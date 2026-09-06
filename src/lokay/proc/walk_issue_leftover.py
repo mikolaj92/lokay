@@ -5,7 +5,7 @@ from lokay.proc.pass_lane import is_oil_repo, self_repo
 
 CONSUME = frozenset(
     {
-        "needs_human",
+        "park",
         "blocked",
         "already-closed",
         "already_closed",

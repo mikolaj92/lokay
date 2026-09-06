@@ -16,7 +16,7 @@ def _path(path_id: str) -> dict:
     return next(row for row in package["correlation_paths"] if row["id"] == path_id)
 
 
-def test_sieve_routes_do_skip_park_human_split_intake() -> None:
+def test_sieve_routes_do_skip_park_split_intake() -> None:
     assert classify_sieve(
         {"route": "completed", "triage": {"result": {"implementable": True}}},
         {"route": "issue"},
@@ -33,13 +33,13 @@ def test_sieve_routes_do_skip_park_human_split_intake() -> None:
         {"route": "issue"},
     )["route"] == "park"
     assert classify_sieve(
-        {"route": "completed", "triage": {"decision": {"verdict": "needs_human"}}},
+        {"route": "completed", "triage": {"decision": {"verdict": "park"}}},
         {"route": "issue"},
-    )["route"] == "human"
+    )["route"] == "park"
     assert classify_sieve(
         {
             "route": "completed",
-            "triage": {"decision": {"verdict": "needs_human", "reason": "oversized_split"}},
+            "triage": {"decision": {"verdict": "park", "reason": "oversized_split"}},
         },
         {"route": "issue"},
     )["route"] == "split"

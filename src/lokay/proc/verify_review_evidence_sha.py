@@ -8,11 +8,11 @@ def verify(*, repo: str, pr: int, expected_sha: str, live: bool) -> dict:
     try:
         view=gh_json(runner(),["pr","view",str(pr),"--repo",repo,"--json","headRefOid"],live=live)
     except Exception as exc:
-        return ok(route="needs_human",reason=f"failed to verify supplemental evidence SHA: {exc}",probe_failed=True)
+        return ok(route="fail_closed",reason=f"failed to verify supplemental evidence SHA: {exc}",probe_failed=True)
     actual=str(view.get("headRefOid") or "").strip().lower()
     expected=str(expected_sha or "").strip().lower()
     if live and (not expected or actual != expected):
-        return ok(route="needs_human",reason="supplemental review evidence SHA changed",expected_sha=expected,actual_sha=actual)
+        return ok(route="fail_closed",reason="supplemental review evidence SHA changed",expected_sha=expected,actual_sha=actual)
     return ok(route="agent",repo=repo,pr=pr,head_sha=actual or expected)
 
 

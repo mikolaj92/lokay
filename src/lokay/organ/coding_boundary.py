@@ -26,7 +26,7 @@ _ATOMS = frozenset(
         "validate_evidence_coding",
         "select_evidence_coding",
         "finalize_coding_result",
-        "coding_manual",
+        "coding_fail_closed",
         "select_local_test",
         "select_local_test_recheck",
         "finalize_local_tests",
@@ -105,7 +105,7 @@ def handle_coding_boundary(
 
         return terminal(
             up.get("finalize_coding_result") or {},
-            up.get("coding_manual") or {},
+            up.get("coding_fail_closed") or {},
         )
     if atom == "prepare_local_repair_request":
         from lokay.proc.prepare_local_repair_request import prepare
@@ -338,17 +338,17 @@ def handle_coding_boundary(
         return finalize_result(
             up.get("select_coding_result") or {}, up.get("select_evidence_coding") or {}
         )
-    if atom in {"coding_manual", "coding_repair_terminal"}:
+    if atom in {"coding_fail_closed", "coding_repair_terminal"}:
         from lokay.proc.coding_terminal import terminal
 
         source = (
             "finalize_coding_result"
-            if atom == "coding_manual"
+            if atom == "coding_fail_closed"
             else "finalize_local_tests"
         )
         return terminal(
             dict((up.get(source) or {}).get("decision") or {}),
-            kind="needs_human" if atom == "coding_manual" else "repair_exhausted",
+            kind="fail_closed" if atom == "coding_fail_closed" else "repair_exhausted",
         )
     if atom in {"select_local_test", "select_local_test_recheck"}:
         from lokay.proc.select_local_test import select

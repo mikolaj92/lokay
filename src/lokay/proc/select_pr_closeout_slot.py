@@ -36,7 +36,7 @@ def select(prepared: dict, previous: dict, *, slot: int) -> dict:
     if len(prs) > 1:
         return {
             "ok": True,
-            "route": "needs_human",
+            "route": "fail_closed",
             "reason": "multiple_open_ai_prs",
             "slot": slot,
             "repo": repo,

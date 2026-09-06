@@ -62,8 +62,8 @@ def select_review_decision(
     candidate = retry if first.get("route") == "retry" else first
     if candidate.get("route") != "valid":
         return {
-            "ok": True, "route": "needs_human",
-            "decision": {"verdict": "needs_human"},
+            "ok": True, "route": "fail_closed",
+            "decision": {"verdict": "fail_closed"},
             "evidence_kind": "none",
             "reason": "invalid_review_json_exhausted",
             "validation_error": str(candidate.get("validation_error") or "invalid review"),
@@ -85,17 +85,17 @@ def select_evidence_review(
         return {"ok": True, "route": "not_applicable"}
     if validation.get("route") != "valid":
         return {
-            "ok": True, "route": "needs_human",
+            "ok": True, "route": "fail_closed",
             "reason": "evidence_review_invalid",
-            "decision": {"verdict": "needs_human"},
+            "decision": {"verdict": "fail_closed"},
             "request_changes_count": int(selected.get("request_changes_count") or 0),
         }
     decision = dict(validation.get("decision") or {})
     if decision.get("verdict") == "needs_evidence":
         return {
-            "ok": True, "route": "needs_human",
+            "ok": True, "route": "fail_closed",
             "reason": "evidence_still_insufficient",
-            "decision": {"verdict": "needs_human"},
+            "decision": {"verdict": "fail_closed"},
         }
     return {
         "ok": True, "route": "publish", "decision": decision,

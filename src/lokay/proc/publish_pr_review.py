@@ -10,9 +10,9 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
     route=str(selected.get("route") or "")
     if route in {"cached", "policy"}: return ok(repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),decision=dict(selected.get("decision") or {}),merge_ok=bool(selected.get("merge_ok")),execution={"source":"cache" if route == "cached" else "policy"})
     mutate=mutations_allowed(live_flag=live,cfg=cfg)
-    if route == "needs_human":
+    if route == "fail_closed":
         applied=publish_fail_closed(runner(cfg),repo,pr,ValueError(str(selected.get("validation_error") or "invalid review JSON")),mutate=mutate)
-        return ok(repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),decision={"verdict":"needs_human"},merge_ok=False,reason=str(selected.get("reason") or "review_validation_exhausted"),applied=applied,execution={"source":"agent_retry_exhausted"})
+        return ok(repo=repo,pr=pr,head_sha=str(evidence.get("head_sha") or ""),decision={"verdict":"fail_closed"},merge_ok=False,reason=str(selected.get("reason") or "review_validation_exhausted"),applied=applied,execution={"source":"agent_retry_exhausted"})
     if route != "publish": return err(f"unknown selected review route: {route}")
     decision=decision_from_dict(dict(selected.get("decision") or {})); prior=int(selected.get("request_changes_count") or 0); limit=max(1,int(getattr(cfg,"max_request_changes_per_pr",2))); merge_ok,escalated=decide_review_merge(decision,prior,max_request_changes=limit)
     style_target = cfg.review_style_for(repo) if hasattr(cfg, "review_style_for") else ""

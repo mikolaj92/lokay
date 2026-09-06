@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 from lokay.pr_review import extract_json_object, PrReviewError
 
-VERDICTS = frozenset({"repaired", "needs_evidence", "needs_human"})
+VERDICTS = frozenset({"repaired", "needs_evidence"})
 EVIDENCE_KINDS = frozenset(
     {"pr_metadata", "changed_files", "test_contract", "review_findings"}
 )
@@ -70,9 +70,9 @@ def select_initial(
     if candidate.get("route") != "valid":
         return {
             "ok": True,
-            "route": "human",
+            "route": "fail_closed",
             "evidence_kind": "none",
-            "decision": {"verdict": "needs_human"},
+            "decision": {"verdict": "fail_closed"},
             "reason": "invalid_repair_json_exhausted",
         }
     decision = dict(candidate.get("decision") or {})
@@ -82,7 +82,7 @@ def select_initial(
         "route": (
             "evidence"
             if verdict == "needs_evidence"
-            else ("repaired" if verdict == "repaired" else "human")
+            else ("repaired" if verdict == "repaired" else "fail_closed")
         ),
         "evidence_kind": str(decision.get("evidence_kind") or "none"),
         "decision": decision,
@@ -100,8 +100,8 @@ def select_evidence(
     ):
         return {
             "ok": True,
-            "route": "human",
-            "decision": {"verdict": "needs_human"},
+            "route": "fail_closed",
+            "decision": {"verdict": "fail_closed"},
             "reason": "repair_evidence_exhausted",
         }
     return {

@@ -169,12 +169,12 @@ def test_authored_skip_consumes_leftover():
         first,
         {
             "route": "completed",
-            "triage": {"decision": {"verdict": "needs_human"}},
+            "triage": {"decision": {"verdict": "park"}},
         },
         listed,
     )
     assert skipped["route"] == "skip"
-    assert skipped["reason"] == "needs_human"
+    assert skipped["reason"] == "park"
     assert skipped["leftover"] == 2
     assert skipped["leftover_issues"][0]["issue"] == 2
     second = select(listed, last=skipped)
@@ -182,7 +182,7 @@ def test_authored_skip_consumes_leftover():
     assert second["leftover"] == 1
 
 
-def test_parked_human_stop_already_excluded_by_list_facts():
+def test_parked_factory_stop_already_excluded_by_list_facts():
     listed = _listed({"repo": "o/r", "issue": 9, "title": "open", "labels": []})
     out = select(listed)
     assert out["route"] == "issue"

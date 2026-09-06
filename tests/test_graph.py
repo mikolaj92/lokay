@@ -961,7 +961,7 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
     assert by_id["review_manual"]["when"] == {
         "upstream": "publish_pr_review",
         "path": "decision.verdict",
-        "equals": "needs_human",
+        "equals": "fail_closed",
     }
     for node_id in ("worktree_add", "test_local"):
         assert by_id[node_id]["when"] == {

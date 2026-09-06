@@ -38,7 +38,7 @@ def test_invalid_retry_is_bounded():
     )
     assert (
         select_initial(validate_output("bad"), validate_output("bad"))["route"]
-        == "human"
+        == "fail_closed"
     )
 
 
@@ -55,7 +55,7 @@ def test_one_evidence_round():
         select_evidence(
             initial, validate_output(valid("needs_evidence", "pr_metadata"))
         )["route"]
-        == "human"
+        == "fail_closed"
     )
 
 

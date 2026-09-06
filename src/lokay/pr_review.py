@@ -12,11 +12,11 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-Verdict = Literal["approve", "request_changes", "needs_evidence", "needs_human"]
+Verdict = Literal["approve", "request_changes", "needs_evidence", "fail_closed"]
 Risk = Literal["low", "medium", "high"]
 EvidenceKind = Literal["pr_metadata", "changed_files", "diff_tail", "commit_summary"]
 
-VALID_VERDICTS = frozenset({"approve", "request_changes", "needs_evidence", "needs_human"})
+VALID_VERDICTS = frozenset({"approve", "request_changes", "needs_evidence", "fail_closed"})
 VALID_RISKS = frozenset({"low", "medium", "high"})
 VALID_EVIDENCE_KINDS = frozenset({"pr_metadata", "changed_files", "diff_tail", "commit_summary"})
 COLLECTOR_BOUNDARY = (
@@ -150,21 +150,21 @@ def is_soft_nits_only(decision: PrReviewDecision) -> bool:
         return False
     if not decision.nits:
         return False
-    return decision.verdict in {"approve", "request_changes", "needs_human"}
+    return decision.verdict in {"approve", "request_changes", "fail_closed"}
 
 
 def coerce_soft_nits(decision: PrReviewDecision) -> PrReviewDecision:
     """Documentation/style-only nits must not park PRs for humans or thrash repair.
 
-    Keep ``needs_human`` for product/security judgment and ``request_changes`` for
+    Keep ``fail_closed`` for product/security judgment and ``request_changes`` for
     real blocking work. Soft nits alone become ``approve`` (nits preserved).
     """
     if not is_soft_nits_only(decision):
         return decision
     if decision.verdict == "approve":
         return decision
-    # needs_human with only soft nits: only coerce low-risk (product/high stays human).
-    if decision.verdict == "needs_human" and decision.risk != "low":
+    # fail_closed with only soft nits: only coerce low-risk (product/high stays human).
+    if decision.verdict == "fail_closed" and decision.risk != "low":
         return decision
     return PrReviewDecision(
         verdict="approve",
@@ -185,7 +185,7 @@ def should_label_needs_review(
     """``ai:needs-review`` only for secrets, product/human, or request_changes cap."""
     if escalated or decision.secrets:
         return True
-    return decision.verdict == "needs_human"
+    return decision.verdict == "fail_closed"
 
 
 def labels_for_review(
@@ -229,7 +229,7 @@ REVIEW_MARKER_RE = re.compile(
 
 def format_review_marker(*, head_sha: str, verdict: str, merge_ok: bool) -> str:
     sha = (head_sha or "").strip()
-    verd = (verdict or "").strip().lower() or "needs_human"
+    verd = (verdict or "").strip().lower() or "fail_closed"
     return f"<!-- lokay-review head={sha} verdict={verd} merge_ok={1 if merge_ok else 0} -->"
 
 
@@ -355,7 +355,7 @@ def review_prompt(
 ) -> str:
     reviewer_diff = strip_approach_from_diff(diff_text or "")
     schema = """{
-  "verdict": "approve" | "request_changes" | "needs_evidence" | "needs_human",
+  "verdict": "approve" | "request_changes" | "needs_evidence" | "fail_closed",
   "risk": "low" | "medium" | "high",
   "scope_ok": boolean,
   "secrets": boolean,

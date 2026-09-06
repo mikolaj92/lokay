@@ -17,7 +17,7 @@ def test_invalid_json_gets_one_retry_then_human():
     first=validate_output("not json"); assert first["route"] == "retry"
     retry=validate_output("still invalid")
     out=select_initial({"route":"agent"},first,retry)
-    assert out["decision"]["verdict"] == "needs_human"
+    assert out["decision"]["verdict"] == "park"
 
 def test_closed_schema_rejects_unknown_and_non_scalar_evidence_request():
     out=validate_output('{"verdict":"ready","route":"merge"}')
@@ -31,7 +31,7 @@ def test_evidence_request_routes_directly_and_second_request_is_terminal():
     assert selected["route"] == "evidence" and selected["evidence_kind"] == "named_paths"
     again=validate_output('{"verdict":"needs_evidence","evidence_kind":"repo_shape","evidence":[]}')
     final=select_evidence(selected,again)
-    assert final["decision"] == {"verdict":"needs_human","reason":"issue_evidence_exhausted"}
+    assert final["decision"] == {"verdict":"park","reason":"issue_evidence_exhausted"}
 
 
 def test_agent_split_is_not_a_sito_verdict():

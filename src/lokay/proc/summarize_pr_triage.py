@@ -48,7 +48,7 @@ def summarize(
     elif manual and manual.get("reason") != "condition_not_met":
         result.update(
             skipped=True,
-            reason=str(manual.get("reason") or "review_needs_human"),
+            reason=str(manual.get("reason") or "review_fail_closed"),
             repairable=False,
             needs_review=True,
         )

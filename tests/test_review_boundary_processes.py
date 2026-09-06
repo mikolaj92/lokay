@@ -37,8 +37,8 @@ def test_exhausted_invalid_review_publishes_terminal_not_approval(monkeypatch):
     monkeypatch.setattr(publish_pr_review,"runner",lambda *_:object())
     applied=[]
     monkeypatch.setattr(publish_pr_review,"publish_fail_closed",lambda *_args,**_kwargs:applied.append(True) or True)
-    out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"abc"},selected={"route":"needs_human","reason":"invalid_review_json_exhausted","validation_error":"bad"},live=True)
-    assert out["decision"] == {"verdict":"needs_human"}
+    out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"abc"},selected={"route":"fail_closed","reason":"invalid_review_json_exhausted","validation_error":"bad"},live=True)
+    assert out["decision"] == {"verdict":"fail_closed"}
     assert out["merge_ok"] is False and applied == [True]
 
 
@@ -87,7 +87,7 @@ def test_verify_supplement_rejects_changed_sha(monkeypatch):
     monkeypatch.setattr(verify_review_evidence_sha,"runner",lambda:object())
     monkeypatch.setattr(verify_review_evidence_sha,"gh_json",lambda *_args,**_kwargs:{"headRefOid":"new"})
     out=verify_review_evidence_sha.verify(repo="a/b",pr=7,expected_sha="old",live=True)
-    assert out["ok"] is True and out["route"] == "needs_human"
+    assert out["ok"] is True and out["route"] == "fail_closed"
     assert out["expected_sha"] == "old" and out["actual_sha"] == "new"
 
 
@@ -100,4 +100,4 @@ def test_missing_selected_evidence_routes_human_without_agent(monkeypatch):
         "collect_review_changed_files":{"ok":True,"collected":False,"reason":"unavailable"},
     }
     out=handle_review_boundary("verify_review_evidence_sha",{},up,ctx)
-    assert out == {"ok":True,"route":"needs_human","reason":"requested_review_evidence_unavailable"}
+    assert out == {"ok":True,"route":"fail_closed","reason":"requested_review_evidence_unavailable"}

@@ -120,11 +120,11 @@ def test_contract_trusted_author_ordinary_issue_prefers_ready(tmp_path: Path):
     )
     assert d.decision == "ready"
     assert d.implementable is True
-    assert d.decision != "needs_human"
+    assert d.decision != "park"
 
 
 def test_contract_intake_close_not_implementable(tmp_path: Path):
-    """Wrong-shape playbook closes — does not park NEEDS_HUMAN."""
+    """Wrong-shape playbook closes — does not park as human residual."""
     (tmp_path / "README.md").write_text("A pure library kit.\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
     (tmp_path / "pyproject.toml").write_text(
@@ -140,10 +140,10 @@ def test_contract_intake_close_not_implementable(tmp_path: Path):
     )
     assert d.decision == "close"
     assert d.implementable is False
-    assert d.decision != "needs_human"
+    assert d.decision != "park"
 
 
-def test_contract_intake_split_not_needs_human(tmp_path: Path):
+def test_contract_intake_split_not_park(tmp_path: Path):
     """Oversized / inventory → SPLIT (autonomy), never NEEDS_HUMAN escape hatch."""
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
@@ -156,10 +156,10 @@ def test_contract_intake_split_not_needs_human(tmp_path: Path):
     )
     assert d.decision == "split"
     assert d.implementable is False
-    assert d.decision != "needs_human"
+    assert d.decision != "park"
 
 
-def test_contract_needs_human_is_rare_residual_only(tmp_path: Path):
+def test_contract_park_is_factory_terminal_only(tmp_path: Path):
     """NEEDS_HUMAN only when evidence is missing — not distrust of the author."""
     # Removal paths named but clone missing → fail closed residual.
     d = decide_intake(
@@ -170,7 +170,7 @@ def test_contract_needs_human_is_rare_residual_only(tmp_path: Path):
         ),
         clone_path=None,
     )
-    assert d.decision == "needs_human"
+    assert d.decision == "park"
     assert d.implementable is False
     assert d.reason.startswith("inconclusive_")
 

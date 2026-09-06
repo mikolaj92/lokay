@@ -76,7 +76,7 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
                 chosen={"kind":source.removeprefix("collect_review_"),"value":up[source]["additional_evidence"]}
                 break
         if not chosen:
-            return {"ok":True,"route":"needs_human","reason":"requested_review_evidence_unavailable"}
+            return {"ok":True,"route":"fail_closed","reason":"requested_review_evidence_unavailable"}
         result=verify(repo=repo,pr=pr,expected_sha=str(evidence.get("head_sha") or ""),live=live)
         if result.get("route") == "agent":
             result["additional_evidence"]=chosen

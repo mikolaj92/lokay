@@ -1,12 +1,12 @@
 """Re-select the next implementable catalog row after a parked queue-conflict.
 
-One needs_human / skip / close must not empty clean_repos while another
+One park / fail_closed / skip / close must not empty clean_repos while another
 product candidate remains implementable.
 """
 
 from __future__ import annotations
 
-PARK_ROUTES = frozenset({"needs_human", "skip", "close"})
+PARK_ROUTES = frozenset({"park", "fail_closed", "skip", "close"})
 
 
 def run(*, pass_dir: str, recorded: dict) -> dict:

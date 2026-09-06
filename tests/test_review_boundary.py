@@ -33,11 +33,11 @@ def test_valid_retry_becomes_authoritative_domain_result():
     assert out["decision"]["verdict"] == "approve"
 
 
-def test_second_invalid_result_is_terminal_needs_human():
+def test_second_invalid_result_is_terminal_fail_closed():
     first=validate_review_output("bad one")
     retry=validate_review_output("bad two")
     out=select_review_decision({"route":"agent"},first,retry)
-    assert out["route"] == "needs_human"
+    assert out["route"] == "fail_closed"
     assert out["reason"] == "invalid_review_json_exhausted"
 
 
@@ -73,12 +73,12 @@ def test_needs_evidence_routes_one_closed_collector_round():
     assert final["request_changes_count"] == 2
 
 
-def test_second_evidence_request_is_terminal_needs_human():
+def test_second_evidence_request_is_terminal_fail_closed():
     selected={"route":"evidence","decision":{"verdict":"needs_evidence","evidence_kind":"changed_files"}}
     validation=validate_review_output('{"verdict":"needs_evidence","evidence_kind":"commit_summary"}')
     out=select_evidence_review(selected,validation)
-    assert out["route"] == "needs_human"
-    assert out["decision"] == {"verdict":"needs_human"}
+    assert out["route"] == "fail_closed"
+    assert out["decision"] == {"verdict":"fail_closed"}
 
 
 def test_invalid_evidence_kind_is_rejected_before_routing():
