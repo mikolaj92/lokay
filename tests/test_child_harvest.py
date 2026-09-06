@@ -516,6 +516,89 @@ def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
     assert "a/b#9" not in stuck["issues"]
 
 
+def test_ok_true_no_delivery_dead_pid_is_fail_closed(tmp_path: Path):
+    """lokay#1061: ok:true + delivered:false + no_delivery blocks, not silent-reap."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    receipt = cycle / "a__b-5637.json"
+    _receipt(receipt, repo="a/b", issue=5637, pid=42)
+    with state.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "issue_to_pr",
+                    "repo": "a/b",
+                    "issue": 5637,
+                    "ok": True,
+                    "delivered": False,
+                    "stopped": True,
+                    "reason": "no_delivery",
+                    "run_id": "temida-5637-loop",
+                }
+            )
+            + "\n"
+        )
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    assert 5637 in excluded_numbers(stuck, "a/b")
+    row = stuck["issues"]["a/b#5637"]
+    assert row.get("blocked") is True
+    assert row.get("reason") == "no_pr"
+    stamped = json.loads(receipt.read_text(encoding="utf-8"))
+    assert stamped.get("reaped") is True
+    assert stamped.get("reason") == "no_pr"
+
+
+def test_ok_true_delivered_true_with_pr_is_not_blocked(tmp_path: Path):
+    """Regression #1061: true delivery still clears and does not fail-close."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    _receipt(cycle / "a__b-10.json", repo="a/b", issue=10, pid=13)
+    with state.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "issue_to_pr",
+                    "repo": "a/b",
+                    "issue": 10,
+                    "ok": True,
+                    "delivered": True,
+                    "pr": 99,
+                    "reason": "delivery_pr_exists",
+                    "run_id": "delivered-10",
+                }
+            )
+            + "\n"
+        )
+    stuck = {
+        "issues": {
+            "a/b#10": {
+                "blocked": True,
+                "reason": "no_pr",
+                "failures": 1,
+                "last_error": "issue_to_pr produced no PR",
+            }
+        }
+    }
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    assert 10 not in excluded_numbers(stuck, "a/b")
+    assert "a/b#10" not in (stuck.get("issues") or {})
+
+
 def test_dead_pid_without_event_or_reason_is_fail_closed(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
