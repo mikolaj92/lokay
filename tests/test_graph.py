@@ -625,7 +625,17 @@ def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
         "validate_local_repair_retry",
     ]
     assert by_id["push"]["when"] == {
-        "upstream": "verify_acceptance",
+        "upstream": "select_publish_gate",
+        "path": "route",
+        "equals": "publish",
+    }
+    assert by_id["select_publish_gate"]["when"] == {
+        "upstream": "assert_stamps_committed",
+        "path": "route",
+        "equals": "publish",
+    }
+    assert by_id["verify_acceptance"]["when"] == {
+        "upstream": "finalize_local_tests",
         "path": "route",
         "equals": "publish",
     }

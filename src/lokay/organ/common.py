@@ -359,6 +359,43 @@ def _require_acceptance(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
         "failed_evidence": list(verdict.get("failed_evidence") or []),
     }
 
+def _require_publish_gate(up: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Fail-closed: push/pr_create need select_publish_gate route=publish.
+
+    Unglues verify_acceptance from publish. Missing gate fails closed when
+    assert_stamps_committed or verify_acceptance is present in the path.
+    None means go (paths without the gate, e.g. pr_repair).
+    """
+    gate = up.get("select_publish_gate")
+    if isinstance(gate, dict) and gate:
+        if gate.get("route") == "publish" and gate.get("ok") is True:
+            return None
+        return {
+            "ok": False,
+            "error": str(
+                gate.get("error")
+                or gate.get("reason")
+                or "refusing: select_publish_gate did not open publish"
+            ),
+            "reason": str(gate.get("reason") or "publish_gate_blocked"),
+            "failed_atom": gate.get("failed_atom"),
+        }
+    # Transition: if stamps assert exists, require it even without select node.
+    stamps = up.get("assert_stamps_committed")
+    if isinstance(stamps, dict) and stamps:
+        if stamps.get("ok") is True and stamps.get("route") == "publish":
+            return None
+        return {
+            "ok": False,
+            "error": str(
+                stamps.get("error")
+                or "refusing: Done-means stamp files dirty vs HEAD"
+            ),
+            "reason": str(stamps.get("reason") or "dirty_stamp_files"),
+        }
+    return None
+
+
 def _resume_after_timeout(
     *,
     run_agent_main,
