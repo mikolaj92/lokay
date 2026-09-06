@@ -206,7 +206,7 @@ executor / PR triage. This graph never starts from leftover overflow.
 self_repair_prepare          child Fala: detached exact origin/main
   → self_repair_run_agent    leaf: coding slot in that worktree
     → self_repair_commit     leaf: commit_all
-      → self_repair_validate child Fala: identity + suite + diff
+      → self_repair_validate child Fala: identity + suite + untracked catalog + diff (no 30-slot unroll)
         → self_repair_push_main   leaf: fast-forward only, exact unchanged base
           → self_repair_activate  child Fala: exact commit
             → self_repair_preflight  leaf: fresh process

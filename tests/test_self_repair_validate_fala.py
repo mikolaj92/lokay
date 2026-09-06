@@ -10,8 +10,7 @@ def test_clean_candidate_without_untracked_paths(tmp_path):
     body = base_effector(
         """if a in {'read_self_repair_candidate_state','classify_self_repair_candidate_diff','validate_self_repair_identity_request','inspect_self_repair_candidate_identity','select_self_repair_identity_gate','verify_self_repair_candidate_identity','run_self_repair_tests'}:v.update(route='tests',worktree='/tmp/w',base_sha='',expected_subject='')
 if a=='list_self_repair_untracked_paths':v.update(route='paths',paths=[],worktree='/tmp/w')
-if a.startswith('select_self_repair_untracked_') or a.startswith('record_self_repair_untracked_'):v['route']='empty'
-if a=='reduce_self_repair_untracked_checks':v.update(route='tracked',worktree='/tmp/w',base_sha='')
+if a=='self_repair_untracked_catalog':v.update(route='tracked',worktree='/tmp/w',base_sha='')
 if a.startswith('check_self_repair_tracked_'):v.update(route='valid',worktree='/tmp/w',base_sha='')
 if a=='select_self_repair_committed_need':v.update(route='no_base',worktree='/tmp/w',base_sha='')
 if a=='select_self_repair_committed_gate':v.update(route='valid',worktree='/tmp/w',base_sha='',expected_subject='')
@@ -22,7 +21,7 @@ if a=='summarize_self_repair_validation':v['result']={'validated':True}"""
     result = run_graph(tmp_path, body, "validate-clean", path_id="self_repair_validate")
     status = {k: v["status"] for k, v in result["effector_results"].items()}
     assert (
-        status["check_self_repair_untracked_1"] == "skipped"
+        status["self_repair_untracked_catalog"] == "succeeded"
         and status["check_self_repair_tracked_committed"] == "skipped"
         and status["summarize_self_repair_validation"] == "succeeded"
     )
@@ -39,8 +38,6 @@ def test_failed_tests_skip_all_diff_validation(tmp_path, adapter_failed):
     )
     result = run_graph(tmp_path, body, "validate-failed", path_id="self_repair_validate")
     statuses = result["effector_results"]
-    names = list(statuses)
-    # Every downstream effector must stay unexecuted, not forge empty checks.
     import tomllib
     from pathlib import Path
     root = Path(__file__).resolve().parents[1]
