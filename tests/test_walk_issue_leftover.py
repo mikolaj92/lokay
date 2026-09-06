@@ -93,7 +93,7 @@ def test_queue_drops_foreign_assignee():
 
 
 def test_consumes_only_authored_skip():
-    assert consumes("needs_human")
+    assert consumes("park")
     assert consumes("blocked")
     assert consumes("already-closed")
     assert not consumes("triage_not_done")

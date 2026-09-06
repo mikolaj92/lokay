@@ -19,7 +19,7 @@ _ATOMS = frozenset(
         "validate_evidence_repair",
         "select_evidence_repair",
         "finalize_repair_result",
-        "pr_repair_manual",
+        "pr_repair_fail_closed",
         "select_repair_test",
         "pr_test_repair_agent",
         "validate_test_repair",
@@ -127,17 +127,17 @@ def handle_repair_boundary(
             pr=pr,
             branch=str(inputs.get("branch") or ""),
         )
-    if atom in {"pr_repair_manual", "pr_repair_terminal"}:
+    if atom in {"pr_repair_fail_closed", "pr_repair_terminal"}:
         from lokay.proc.repair_terminal import terminal
 
         source = (
             "finalize_repair_result"
-            if atom == "pr_repair_manual"
+            if atom == "pr_repair_fail_closed"
             else "finalize_repair_tests"
         )
         return terminal(
             dict((up.get(source) or {}).get("decision") or {}),
-            kind="needs_human" if atom == "pr_repair_manual" else "repair_exhausted",
+            kind="fail_closed" if atom == "pr_repair_fail_closed" else "repair_exhausted",
         )
     if atom in {"select_repair_test", "select_repair_test_recheck"}:
         from lokay.proc.select_repair_test import select

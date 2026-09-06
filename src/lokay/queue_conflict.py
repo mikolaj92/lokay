@@ -134,7 +134,7 @@ def evaluate_queue_conflict(
     - ready: no clear contradiction
     - skip: defer to a later pass (leave labels; filter from this pass)
     - close: demote with receipt (drop ready; optional tracker label)
-    Never returns needs_human.
+    Never returns park.
     """
     issue = _as_issue(candidate)
     prs = [dict(p) for p in open_prs if isinstance(p, Mapping)]

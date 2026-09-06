@@ -181,7 +181,7 @@ def test_one_open_pr_invariant_fails_closed():
         "repair_budget": 1,
     }
     out = select(prepared, {}, slot=1)
-    assert out["route"] == "needs_human" and out["reason"] == "multiple_open_ai_prs"
+    assert out["route"] == "fail_closed" and out["reason"] == "multiple_open_ai_prs"
 
 
 def test_closeout_reducer_removes_merged_pr():

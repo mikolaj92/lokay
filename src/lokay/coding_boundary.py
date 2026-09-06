@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 from lokay.pr_review import extract_json_object, PrReviewError
 
-VERDICTS = frozenset({"implemented", "needs_evidence", "needs_human"})
+VERDICTS = frozenset({"implemented", "needs_evidence"})
 EVIDENCE_KINDS = frozenset(
     {"issue_snapshot", "repo_structure", "test_contract", "localized_diff"}
 )
@@ -69,16 +69,16 @@ def select_initial(
             "ok": True,
             "route": "failed",
             "evidence_kind": "none",
-            "decision": {"verdict": "needs_human"},
+            "decision": {"verdict": "fail_closed"},
             "reason": str(first.get("reason") or "localize_empty"),
         }
     candidate = retry if first.get("route") == "retry" else first
     if candidate.get("route") != "valid":
         return {
             "ok": True,
-            "route": "human",
+            "route": "fail_closed",
             "evidence_kind": "none",
-            "decision": {"verdict": "needs_human"},
+            "decision": {"verdict": "fail_closed"},
             "reason": "invalid_coding_json_exhausted",
         }
     decision = dict(candidate.get("decision") or {})
@@ -88,7 +88,9 @@ def select_initial(
             "evidence"
             if decision.get("verdict") == "needs_evidence"
             else (
-                "implemented" if decision.get("verdict") == "implemented" else "human"
+                "implemented"
+                if decision.get("verdict") == "implemented"
+                else "fail_closed"
             )
         ),
         "evidence_kind": str(decision.get("evidence_kind") or "none"),
@@ -104,16 +106,16 @@ def select_evidence(
     if validation.get("route") != "valid":
         return {
             "ok": True,
-            "route": "human",
-            "decision": {"verdict": "needs_human"},
+            "route": "fail_closed",
+            "decision": {"verdict": "fail_closed"},
             "reason": "evidence_coding_invalid",
         }
     decision = dict(validation.get("decision") or {})
     if decision.get("verdict") != "implemented":
         return {
             "ok": True,
-            "route": "human",
-            "decision": {"verdict": "needs_human"},
+            "route": "fail_closed",
+            "decision": {"verdict": "fail_closed"},
             "reason": "coding_evidence_exhausted",
         }
     return {"ok": True, "route": "implemented", "decision": decision}
@@ -160,7 +162,7 @@ def select_repair(
         return {
             "ok": True,
             "route": "terminal",
-            "reason": "repair_needs_human",
+            "reason": "repair_fail_closed",
             "decision": decision,
         }
     return {"ok": True, "route": "repaired", "decision": decision}

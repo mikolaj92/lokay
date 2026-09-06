@@ -9,7 +9,7 @@ def record(*, pass_dir: str, outcome: dict, remove: dict, tracker: dict) -> dict
     working = read_json(working_path(pass_dir))
     repo, number = str(outcome.get("repo") or ""), int(outcome.get("issue") or 0)
     decision = dict(outcome.get("decision") or {})
-    route = str(outcome.get("route") or "needs_human")
+    route = str(outcome.get("route") or "park")
     ready = dict(working.get("ready_by_repo") or {})
     inbox = dict(working.get("inbox_issues_by_repo") or {})
     if route != "ready":

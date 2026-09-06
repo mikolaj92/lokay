@@ -3,7 +3,7 @@
 from lokay.passkit import io as pass_io
 
 
-def test_validator_retries_then_selects_human():
+def test_validator_retries_then_selects_park():
     from lokay.proc.queue_conflict_boundary import select, validate
 
     bad = validate("not json")
@@ -14,7 +14,7 @@ def test_validator_retries_then_selects_human():
         bad,
     )
     assert bad["route"] == "retry"
-    assert out["route"] == "needs_human"
+    assert out["route"] == "park"
 
 
 def test_valid_agent_result_is_authoritative():
@@ -122,7 +122,7 @@ def _live_shape_pass(tmp_path):
     return path
 
 
-def test_needs_human_on_first_product_selects_next_catalog_row(tmp_path):
+def test_park_on_first_product_selects_next_catalog_row(tmp_path):
     from lokay.proc.advance_implementation_selection import run as advance
     from lokay.proc.implementation_selection_catalog import run as catalog
     from lokay.proc.persist_implementation_selection import persist
@@ -145,7 +145,7 @@ def test_needs_human_on_first_product_selects_next_catalog_row(tmp_path):
     recorded = record(
         pass_dir=str(path),
         outcome={
-            "route": "needs_human",
+            "route": "park",
             "repo": "mikolaj92/Temida",
             "issue": 4990,
             "decision": {
@@ -156,7 +156,7 @@ def test_needs_human_on_first_product_selects_next_catalog_row(tmp_path):
         remove={},
         tracker={},
     )
-    assert recorded["route"] == "needs_human"
+    assert recorded["route"] == "park"
     nxt = advance(pass_dir=str(path), recorded=recorded)
     assert nxt["ok"] is True and nxt["advanced"] is True
     assert nxt["clean_repos"] == ["mikolaj92/reviewkit"]
@@ -167,7 +167,7 @@ def test_needs_human_on_first_product_selects_next_catalog_row(tmp_path):
     assert select(pass_dir=str(path))["issue"] == 205
 
 
-def test_needs_human_does_not_reselect_parked_inbox_issue(tmp_path):
+def test_park_does_not_reselect_parked_inbox_issue(tmp_path):
     from lokay.proc.advance_implementation_selection import run as advance
     from lokay.proc.record_queue_conflict import record
 
@@ -179,7 +179,7 @@ def test_needs_human_does_not_reselect_parked_inbox_issue(tmp_path):
     recorded = record(
         pass_dir=str(path),
         outcome={
-            "route": "needs_human",
+            "route": "park",
             "repo": "mikolaj92/Temida",
             "issue": 4990,
             "decision": {"reason": "execution_scope_ambiguous"},

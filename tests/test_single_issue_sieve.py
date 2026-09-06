@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
     ('blocked', 'duplicate_pr', 'park'),
     ('ready', 'shape_verified', 'do'),
     ('skip', 'intake_superseded', 'skip'),
-    ('needs_human', 'shape_uncertain', 'human'),
+    ('park', 'shape_uncertain', 'park'),
 ])
 def test_terminal_verdict_is_not_rerouted_by_intake_words(verdict, reason, route):
     out = classify_sieve({'triage': {'decision': {'verdict': verdict, 'reason': reason}}}, {})

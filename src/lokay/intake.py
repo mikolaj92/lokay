@@ -1,4 +1,4 @@
-"""Deterministic issue intake: CLOSE | READY | SPLIT | NEEDS_HUMAN.
+"""Deterministic issue intake: CLOSE | READY | SPLIT | PARK.
 
 Cheap, testable checks that harden inbox triage before `ai:ready` sticks
 eligible for `issue_to_pr`. Pure rules first; no coding harness.
@@ -9,7 +9,7 @@ human gates. CLOSE / SPLIT / READY+implement are the default exits.
 CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
 bias toward distrusting every ticket. Foreign objections to the lokay's
 essence (what Lokay is) CLOSE; operational reports (hangs / does not work as
-described) stay. NEEDS_HUMAN is a rare residual after rules fail closed —
+described) stay. PARK is a rare residual after rules fail closed —
 never the escape hatch for oversized work that can be auto-split.
 """
 
@@ -29,7 +29,7 @@ from lokay.triage import is_parked, is_preflight_incident, is_undecided
 PASS = "pass"
 CLOSE = "close"
 SPLIT = "split"
-NEEDS_HUMAN = "needs_human"
+PARK = "park"  # factory park; human is not a state
 INCONCLUSIVE = "inconclusive"
 BLOCKED = "blocked"
 
@@ -159,7 +159,7 @@ class CheckResult:
     """One deterministic intake check."""
 
     check: str
-    verdict: str  # pass | close | split | needs_human | inconclusive
+    verdict: str  # pass | close | split | park | inconclusive
     reason: str
     detail: dict[str, Any] = field(default_factory=dict)
 
@@ -171,7 +171,7 @@ class CheckResult:
 class IntakeDecision:
     """Aggregated intake outcome for one issue."""
 
-    decision: str  # close | ready | split | needs_human | skip
+    decision: str  # close | ready | split | park | skip
     reason: str
     checks: tuple[CheckResult, ...] = ()
     add_labels: tuple[str, ...] = ()
@@ -498,7 +498,7 @@ def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
     # unknown tree — do not READY platform adoption blindly
     return CheckResult(
         check="shape",
-        verdict=NEEDS_HUMAN,
+        verdict=PARK,
         reason="host_markers_unclear",
         detail=detail,
     )
@@ -564,7 +564,7 @@ def check_satisfied(issue: Issue, *, clone_path: Path | None) -> CheckResult:
 
 
 def check_ambiguity(issue: Issue) -> CheckResult:
-    """Oversized/multi-part → SPLIT when possible; residual ambiguity → NEEDS_HUMAN."""
+    """Oversized/multi-part → SPLIT when possible; residual ambiguity → PARK."""
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
     blob = f"{title}\n{body}"
@@ -603,7 +603,7 @@ def check_ambiguity(issue: Issue) -> CheckResult:
     if body and _TITLE_ONLY_BODY.match(body):
         return CheckResult(
             check="ambiguity",
-            verdict=NEEDS_HUMAN,
+            verdict=PARK,
             reason="title_only_body",
             detail={},
         )
@@ -613,7 +613,7 @@ def check_ambiguity(issue: Issue) -> CheckResult:
         if len(body) < 120:
             return CheckResult(
                 check="ambiguity",
-                verdict=NEEDS_HUMAN,
+                verdict=PARK,
                 reason="audit_without_acceptance",
                 detail={},
             )
@@ -630,7 +630,7 @@ def aggregate_intake(
     skip_reason: str = "",
     force_split: bool = False,
 ) -> IntakeDecision:
-    """Aggregate check verdicts → CLOSE | READY | SPLIT | NEEDS_HUMAN | skip."""
+    """Aggregate check verdicts → CLOSE | READY | SPLIT | PARK | skip."""
     checked = tuple(checks)
     if skip:
         return IntakeDecision(
@@ -685,15 +685,15 @@ def aggregate_intake(
             implementable=False,
         )
 
-    human_hit = next((c for c in checked if c.verdict == NEEDS_HUMAN), None)
-    if human_hit is not None:
+    park_hit = next((c for c in checked if c.verdict == PARK), None)
+    if park_hit is not None:
         return IntakeDecision(
-            decision="needs_human",
-            reason=human_hit.reason,
+            decision="park",
+            reason=park_hit.reason,
             checks=checked,
             add_labels=(needs_feedback_label,),
             remove_labels=(ready_label,),
-            comment=_needs_human_comment(human_hit),
+            comment=_park_comment(park_hit),
             implementable=False,
         )
 
@@ -702,7 +702,7 @@ def aggregate_intake(
         # Fail closed: do not READY when evidence is missing.
         hit = inconclusive[0]
         return IntakeDecision(
-            decision="needs_human",
+            decision="park",
             reason=f"inconclusive_{hit.reason}",
             checks=checked,
             add_labels=(needs_feedback_label,),
@@ -769,7 +769,7 @@ def _split_comment(hit: CheckResult) -> str:
     )
 
 
-def _needs_human_comment(hit: CheckResult) -> str:
+def _park_comment(hit: CheckResult) -> str:
     return (
         f"Needs feedback (rare): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
         "Clarify a single implementable ask, then remove this label."

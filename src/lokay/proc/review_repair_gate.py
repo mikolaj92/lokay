@@ -16,7 +16,7 @@ def route_review_repair(review: Mapping[str, Any]) -> dict[str, Any]:
     if decision.get("verdict") != "request_changes":
         return ok(route="not_applicable", reason="review_does_not_request_changes")
     if review.get("escalated") or decision.get("secrets") is True:
-        return ok(route="needs_human", reason="review_repair_escalated")
+        return ok(route="fail_closed", reason="review_repair_escalated")
     return ok(route="repair", reason="review_requested_changes")
 
 

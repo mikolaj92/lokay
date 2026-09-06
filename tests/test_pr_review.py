@@ -70,11 +70,11 @@ def test_should_merge_rejects_blocking():
     assert should_merge(d) is False
 
 
-def test_needs_human():
+def test_fail_closed_blocks_merge():
     d = parse_review_output(
-        '{"verdict":"needs_human","risk":"high","summary":"policy"}'
+        '{"verdict":"fail_closed","risk":"high","summary":"policy"}'
     )
-    assert d.verdict == "needs_human"
+    assert d.verdict == "fail_closed"
     assert should_merge(d) is False
 
 

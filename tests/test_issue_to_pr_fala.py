@@ -82,14 +82,14 @@ def test_valid_implementation_skips_repair_then_publishes():
     assert st["pr_create"] == "succeeded"
 
 
-def test_human_coding_skips_publish():
+def test_fail_closed_coding_skips_publish():
     st = simulate_path(
         "issue_to_pr_delivery",
         {
             "resolve_implementation_issue": {"route": "open"},
             "worktree_add": {"route": "ready"},
             "localize": {"route": "ready"},
-            "coding_execution": {"route": "human"},
+            "coding_execution": {"route": "fail_closed"},
             "select_local_test": {"route": "skip"},
             "finalize_local_tests": {"route": "not_applicable"},
         },
@@ -212,13 +212,13 @@ def test_coding_execution_invalid_json_runs_one_retry():
         {
             "validate_coding_result": {"route": "retry"},
             "validate_coding_retry": {"route": "valid"},
-            "select_coding_result": {"route": "human", "evidence_kind": "none"},
+            "select_coding_result": {"route": "fail_closed", "evidence_kind": "none"},
             "select_evidence_coding": {"route": "not_applicable"},
-            "finalize_coding_result": {"route": "human"},
+            "finalize_coding_result": {"route": "fail_closed"},
         },
     )
     assert st["coding_retry_agent"] == "succeeded"
-    assert st["coding_manual"] == "succeeded"
+    assert st["coding_fail_closed"] == "succeeded"
 
 
 def test_coding_execution_runs_only_selected_collector():
@@ -231,8 +231,8 @@ def test_coding_execution_runs_only_selected_collector():
                 "evidence_kind": "test_contract",
             },
             "validate_evidence_coding": {"route": "valid"},
-            "select_evidence_coding": {"route": "human"},
-            "finalize_coding_result": {"route": "human"},
+            "select_evidence_coding": {"route": "fail_closed"},
+            "finalize_coding_result": {"route": "fail_closed"},
         },
     )
     assert st["collect_coding_test_contract"] == "succeeded"

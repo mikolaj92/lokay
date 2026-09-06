@@ -296,7 +296,7 @@ def test_decide_intake_never_ready_on_inconclusive(tmp_path: Path):
         ),
         clone_path=None,
     )
-    assert d.decision == "needs_human"
+    assert d.decision == "park"
     assert d.implementable is False
 
 

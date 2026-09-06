@@ -5,4 +5,4 @@ from lokay.technical_route import classify_technical_route
 def test_trusted_technical_work_never_needs_human(title,body,route):assert classify_technical_route(title,body)=={'route':route,'reason':'technical_'+route}
 def test_only_missing_normative_result_is_human_with_exact_machine_reason():
  out=classify_technical_route('Choose product behavior','Should this charge monthly or yearly? Desired result is not specified.')
- assert out=={'route':'needs_human','reason':'missing_normative_decision','missing':'billing cadence: monthly or yearly'}
+ assert out=={'route':'park','reason':'missing_normative_decision','missing':'billing cadence: monthly or yearly'}

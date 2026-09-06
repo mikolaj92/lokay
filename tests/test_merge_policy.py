@@ -104,10 +104,10 @@ def _review(
             {
                 "merge_enabled": True,
                 "checks": {"status": "passed", "merge_ok": True},
-                "review": _review("needs_human", merge_ok=False),
+                "review": _review("fail_closed", merge_ok=False),
             },
             "blocked",
-            "needs_human",
+            "fail_closed",
         ),
         (
             {
@@ -188,7 +188,7 @@ def test_decide_auto_merge_matrix(kwargs, action, reason):
         assert got.merge_ok is True
     if action == "waiting" or reason == "merge_disabled":
         assert got.waiting is True
-    if reason in {"secrets", "needs_human", "llm_review_escalated_needs_review", "ai_needs_review_label"}:
+    if reason in {"secrets", "fail_closed", "llm_review_escalated_needs_review", "ai_needs_review_label"}:
         assert got.needs_review is True
     if action == "repair" and reason == "llm_review_requested_changes":
         assert got.repairable is True
@@ -238,10 +238,10 @@ def test_request_changes_soft_nits_coerced_to_approve():
     assert should_label_needs_review(d) is False
 
 
-def test_needs_human_low_risk_soft_nits_coerced():
+def test_fail_closed_low_risk_soft_nits_coerced():
     d = coerce_soft_nits(
         parse_review_output(
-            '{"verdict":"needs_human","risk":"low","secrets":false,'
+            '{"verdict":"fail_closed","risk":"low","secrets":false,'
             '"blocking":[],"nits":["comment polish"],"scope_ok":true,'
             '"tests_adequate":true,"summary":"nit"}'
         )
@@ -250,14 +250,14 @@ def test_needs_human_low_risk_soft_nits_coerced():
     assert should_label_needs_review(d) is False
 
 
-def test_needs_human_product_judgment_not_coerced():
+def test_fail_closed_product_judgment_not_coerced():
     d = coerce_soft_nits(
         parse_review_output(
-            '{"verdict":"needs_human","risk":"high","secrets":false,'
+            '{"verdict":"fail_closed","risk":"high","secrets":false,'
             '"blocking":[],"nits":[],"summary":"product call"}'
         )
     )
-    assert d.verdict == "needs_human"
+    assert d.verdict == "fail_closed"
     assert should_label_needs_review(d) is True
     assert should_merge(d) is False
 

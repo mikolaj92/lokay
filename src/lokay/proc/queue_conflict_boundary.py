@@ -2,7 +2,7 @@
 
 from lokay.pr_review import extract_json_object, PrReviewError
 
-OUTCOMES = frozenset({"ready", "skip", "close", "needs_human"})
+OUTCOMES = frozenset({"ready", "skip", "close", "park"})
 
 
 def validate(stdout: str) -> dict:
@@ -49,7 +49,7 @@ def select(target: dict, covering: dict, first: dict, retry: dict) -> dict:
         decision = dict(retry["decision"])
     else:
         decision = {
-            "outcome": "needs_human",
+            "outcome": "park",
             "reason": "invalid_queue_conflict_json",
             "detail": {},
             "summary": "Queue conflict agent did not return valid JSON.",

@@ -8,7 +8,7 @@ def _apply(row, prs, merged, failures):
     repo = str(row.get("repo") or "")
     if not repo:
         return 0
-    if row.get("route") in {"failed", "needs_human"}:
+    if row.get("route") in {"failed", "fail_closed"}:
         failures.append({"repo": repo, "reason": row.get("reason") or row.get("error")})
     if row.get("still_open") is False:
         prs[repo] = []

@@ -34,9 +34,9 @@ def select(
             repairable=True,
         )
     rg = str(review_gate.get("route") or "")
-    if rg == "needs_human":
+    if rg == "fail_closed":
         return ok(
-            route="needs_human",
+            route="fail_closed",
             reason=str(review_gate.get("reason") or "review_repair_escalated"),
         )
     if rg == "repair":

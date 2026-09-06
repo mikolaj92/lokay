@@ -10,16 +10,16 @@ def plan(*, issue_data: dict, reason: str) -> dict:
     if value is None:
         return {
             "ok": True,
-            "route": "needs_human",
+            "route": "park",
             "reason": "split_impossible",
-            "decision": {"verdict": "needs_human", "reason": "split_impossible"},
+            "decision": {"verdict": "park", "reason": "split_impossible"},
             "child_count": 0,
         }
     data = value.to_dict()
     data["parent"] = f"{issue_data['repo']}#{issue_data['number']}"
     validation = validate_split_plan(data, parent=Issue.from_dict(issue_data))
     if not validation["valid"]:
-        return {"ok": False, "route": "needs_human", "reason": validation["reason"], "child_count": 0}
+        return {"ok": False, "route": "park", "reason": validation["reason"], "child_count": 0}
     count = len(data["children"])
     slots = {
         f"child_{slot}": "present" if slot <= count else "absent"
