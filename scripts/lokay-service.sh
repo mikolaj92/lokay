@@ -69,7 +69,9 @@ export LOKAY_MODE="${LOKAY_MODE:-live}"
 export LOKAY_EXECUTOR_ENABLED="${LOKAY_EXECUTOR_ENABLED:-1}"
 export LOKAY_MERGE_ENABLED="${LOKAY_MERGE_ENABLED:-1}"
 
-# Coding harness ambient (agent.py inherit_env=False) only sees executor_environment().
+# Host/daemon ambient for effect atoms that call real `gh` (push/merge/close/PR).
+# Coding harness never inherits this: agent.py uses inherit_env=False +
+# executor_environment (allowlist PATH+LOKAY_CAPABILITIES, deny-bin).
 # LaunchAgent plist must not embed tokens; mint GH_TOKEN from gh keyring when missing.
 if [[ -z "${GH_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
   _tok="$(gh auth token 2>/dev/null || true)"

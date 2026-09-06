@@ -17,14 +17,6 @@ ROLE_CAPABILITIES = {
 
 _AGENT_ROLES = frozenset({"builder", "reviewer"})
 
-# Coding/review harnesses must not receive GitHub identity (#1008 was a bandage).
-_GITHUB_CREDENTIAL_KEYS = (
-    "GH_TOKEN",
-    "GITHUB_TOKEN",
-    "GH_HOST",
-    "GH_ENTERPRISE_TOKEN",
-)
-
 
 def _deny_bin_dir() -> str:
     return str(files("lokay").joinpath("data", "deny-bin"))
@@ -40,13 +32,17 @@ def coding_path(ambient_path: str) -> str:
 
 
 def executor_environment(role: str, ambient: Mapping[str, str]) -> dict[str, str]:
+    """Build the process env for an executor role.
+
+    Builder/reviewer env is allowlist-only: ``PATH`` (deny-bin first) and
+    ``LOKAY_CAPABILITIES``. Ambient secrets (``GH_*``, ``GITHUB_*``, leases,
+    etc.) are never copied into agent roles — isolation is deny-bin + this
+    allowlist, not a post-hoc credential scrub.
+    """
     caps = ROLE_CAPABILITIES.get(role, set())
     out: dict[str, str] = {}
     if role in _AGENT_ROLES:
         out["PATH"] = coding_path(ambient.get("PATH", ""))
-        # Explicitly do not forward GitHub credentials into the harness.
-        for key in _GITHUB_CREDENTIAL_KEYS:
-            out.pop(key, None)
     else:
         if ambient.get("PATH"):
             out["PATH"] = ambient["PATH"]
