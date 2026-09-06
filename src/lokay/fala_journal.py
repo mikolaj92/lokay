@@ -3,9 +3,9 @@
 The journal is a pass trace, not world history. Each live ``state.sqlite``
 has a hard megabyte ceiling. Product recovery stays on state.jsonl.
 Lokay never mutates those files directly: Fala ``maintain_journal`` owns
-retention, trigger restoration, and VACUUM. Killed heartbeat runs left in
-``created`` are finalized through ``finalize_run`` first, so retention can
-see them.
+retention, trigger restoration, and VACUUM. Heartbeat leftover ``created``
+runs are finalized then deleted; self-repair incomplete runs are finalized
+as ``timed_out`` evidence and kept (prepare / ancestry read them).
 """
 
 from __future__ import annotations
@@ -36,6 +36,11 @@ _HEARTBEAT_JOURNALS = frozenset(
         "factory_begin",
     }
 )
+# Run statuses that are not terminal. Matches read_self_repair_validation_outcome.
+_SELF_REPAIR_INCOMPLETE = frozenset(
+    {"created", "running", "ready", "pending", "leased"}
+)
+_HEARTBEAT_INCOMPLETE = frozenset({"created"})
 
 
 def maintain_lokay_fala_journals(
@@ -140,6 +145,47 @@ def _is_heartbeat_journal(db: Path) -> bool:
     return parent == "fala"
 
 
+def _is_self_repair_journal(db: Path) -> bool:
+    """Journals named self_repair / self_repair_* hold repair evidence."""
+    return db.parent.name.startswith("self_repair")
+
+
+def _reclaim_policy(db: Path) -> tuple[frozenset[str], str, bool] | None:
+    """Incomplete statuses, finalize reason, and whether to delete after."""
+    if _is_heartbeat_journal(db):
+        return _HEARTBEAT_INCOMPLETE, "heartbeat_reclaim", True
+    if _is_self_repair_journal(db):
+        return _SELF_REPAIR_INCOMPLETE, "self_repair_reclaim", False
+    return None
+
+
+def reclaim_self_repair_incomplete_journals(
+    *,
+    home: Path | None = None,
+) -> dict[str, Any]:
+    """Finalize incomplete self-repair runs; keep rows as timeout evidence.
+
+    Fail-soft for organ callers: busy/corrupt journals are skipped. Pytest
+    without an explicit home must not touch the operator lokay.
+    """
+    if os.environ.get("PYTEST_CURRENT_TEST") and home is None:
+        return {"ok": True, "reclaimed": [], "reason": "pytest"}
+    root = (home or Path.home()) / ".lokay" / "fala"
+    reclaimed: list[dict[str, Any]] = []
+    for db in _iter_live_journals(root):
+        if not _is_self_repair_journal(db):
+            continue
+        try:
+            count = _reclaim_incomplete_runs(db)
+        except Exception as exc:
+            if _skip_busy_or_corrupt(exc):
+                continue
+            raise
+        if count:
+            reclaimed.append({"path": str(db), "reclaimed": count})
+    return {"ok": True, "reclaimed": reclaimed}
+
+
 def _skip_busy_or_corrupt(exc: BaseException) -> bool:
     if isinstance(exc, AttributeError):
         return True
@@ -157,10 +203,12 @@ def _skip_busy_or_corrupt(exc: BaseException) -> bool:
     )
 
 
-def _reclaim_created_runs(db: Path) -> int:
-    """Finalize and delete killed heartbeat runs that never left created."""
-    if not _is_heartbeat_journal(db):
+def _reclaim_incomplete_runs(db: Path) -> int:
+    """Finalize incomplete runs per journal policy; optionally delete."""
+    policy = _reclaim_policy(db)
+    if policy is None:
         return 0
+    statuses, reason, delete_after = policy
     import fala
 
     try:
@@ -175,7 +223,7 @@ def _reclaim_created_runs(db: Path) -> int:
             break
         if not isinstance(run, dict):
             continue
-        if str(run.get("status") or "") != "created":
+        if str(run.get("status") or "") not in statuses:
             continue
         run_id = str(run.get("id") or "").strip()
         if not run_id:
@@ -185,9 +233,10 @@ def _reclaim_created_runs(db: Path) -> int:
                 db,
                 run_id=run_id,
                 status="timed_out",
-                reason="heartbeat_reclaim",
+                reason=reason,
             )
-            fala.delete_terminal_run(db, run_id)
+            if delete_after:
+                fala.delete_terminal_run(db, run_id)
         except AttributeError:
             return reclaimed
         except Exception as exc:
@@ -196,6 +245,11 @@ def _reclaim_created_runs(db: Path) -> int:
             continue
         reclaimed += 1
     return reclaimed
+
+
+def _reclaim_created_runs(db: Path) -> int:
+    """Backward-compatible alias used by maintain; prefer policy helper."""
+    return _reclaim_incomplete_runs(db)
 
 
 def _maintain_sqlite(db: Path, *, min_bytes: int, keep: int) -> dict[str, Any] | None:

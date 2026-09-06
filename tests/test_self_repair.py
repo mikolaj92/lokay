@@ -239,3 +239,168 @@ def test_self_repair_facade_contains_no_routing():
 
     source = inspect.getsource(self_repair.run_self_repair)
     assert "if " not in source and "run_path" not in source
+
+def test_self_repair_validate_fail_soft_skips_push_and_summarizes_failed(
+    tmp_path, monkeypatch
+):
+    """Validate not-validated still ok=True; push/activate/preflight/close soft-skip."""
+    from lokay.organ.self_repair import handle_self_repair
+    from lokay.proc import self_repair_push_main as push_module
+    from lokay.proc.summarize_self_repair import summarize
+
+    calls: list[tuple[object, list[str]]] = []
+
+    def fake_atom(main, argv):
+        calls.append((main, list(argv)))
+        raise AssertionError(f"atom should not run on fail-closed: {main}")
+
+    prepared = {
+        "ok": True,
+        "worktree": str(tmp_path),
+        "base_sha": "a" * 40,
+    }
+    committed = {"ok": True, "commit": "c" * 40}
+    ctx = {
+        "cfg": [],
+        "live": [],
+        "repo": "mikolaj92/lokay",
+        "issue_number": 44,
+        "pr_number": None,
+        "repair_mode": False,
+        "branch": "",
+        "run_atom_main": fake_atom,
+    }
+    reclaim_calls: list[dict] = []
+    monkeypatch.setattr(
+        "lokay.fala_journal.reclaim_self_repair_incomplete_journals",
+        lambda **kwargs: reclaim_calls.append(kwargs) or {"ok": True, "reclaimed": []},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.self_repair_validate_subflow.run",
+        lambda **kwargs: {
+            "ok": False,
+            "validated": False,
+            "error": "suite_failed",
+            "commit": kwargs["expected_commit"],
+        },
+    )
+    validated = handle_self_repair(
+        "self_repair_validate",
+        {"fingerprint": "deadbeef"},
+        {"self_repair_prepare": prepared, "self_repair_commit": committed},
+        ctx,
+    )
+    assert validated["ok"] is True
+    assert validated["validated"] is False
+    assert validated["route"] == "fail_closed"
+    assert reclaim_calls == [{}]
+
+    pushed = handle_self_repair(
+        "self_repair_push_main",
+        {},
+        {
+            "self_repair_prepare": prepared,
+            "self_repair_validate": validated,
+            "self_repair_commit": committed,
+        },
+        ctx,
+    )
+    assert pushed["ok"] is True
+    assert pushed["skipped"] is True
+    assert pushed["route"] == "fail_closed"
+    assert pushed["pushed"] is False
+
+    activated = handle_self_repair(
+        "self_repair_activate",
+        {"config_path": str(tmp_path / "config.yaml"), "live": False},
+        {"self_repair_prepare": prepared, "self_repair_push_main": pushed},
+        ctx,
+    )
+    assert activated["ok"] is True
+    assert activated["skipped"] is True
+    assert activated["route"] == "fail_closed"
+
+    preflight = handle_self_repair(
+        "self_repair_preflight",
+        {"config_path": str(tmp_path / "config.yaml")},
+        {"self_repair_activate": activated},
+        ctx,
+    )
+    assert preflight["ok"] is True
+    assert preflight["skipped"] is True
+    assert preflight.get("validated") is False
+
+    closed = handle_self_repair(
+        "self_repair_close",
+        {},
+        {"self_repair_preflight": preflight},
+        ctx,
+    )
+    assert closed["ok"] is True
+    assert closed["skipped"] is True
+    assert closed["closed"] is False
+
+    terminal = summarize(
+        preflight=preflight, push=pushed, activate=activated, close=closed
+    )
+    assert terminal["ok"] is True
+    assert terminal["terminal"] == "failed"
+    assert terminal["result"]["ok"] is False
+    assert calls == []
+    # push_module imported only to prove happy-path contrast stays available
+    assert push_module.main
+
+
+def test_self_repair_happy_path_still_pushes(tmp_path, monkeypatch):
+    """Validated candidate still invokes push_main atom."""
+    from lokay.organ.self_repair import handle_self_repair
+    from lokay.proc import self_repair_push_main as push_module
+
+    calls: list[tuple[object, list[str]]] = []
+
+    def fake_atom(main, argv):
+        calls.append((main, list(argv)))
+        return {"ok": True, "pushed": True, "commit": "c" * 40}
+
+    prepared = {
+        "ok": True,
+        "worktree": str(tmp_path),
+        "base_sha": "a" * 40,
+    }
+    committed = {"ok": True, "commit": "c" * 40}
+    validated = {"ok": True, "validated": True, "commit": "c" * 40}
+    ctx = {
+        "cfg": [],
+        "live": [],
+        "repo": "mikolaj92/lokay",
+        "issue_number": 1,
+        "pr_number": None,
+        "repair_mode": False,
+        "branch": "",
+        "run_atom_main": fake_atom,
+    }
+    pushed = handle_self_repair(
+        "self_repair_push_main",
+        {},
+        {
+            "self_repair_prepare": prepared,
+            "self_repair_validate": validated,
+            "self_repair_commit": committed,
+        },
+        ctx,
+    )
+    assert pushed["pushed"] is True
+    assert calls == [
+        (
+            push_module.main,
+            [
+                "--worktree",
+                str(tmp_path),
+                "--base-sha",
+                "a" * 40,
+                "--validated",
+                "--expected-commit",
+                "c" * 40,
+            ],
+        )
+    ]
