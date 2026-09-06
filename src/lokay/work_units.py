@@ -47,6 +47,34 @@ def _state(event: dict[str, Any]) -> str:
     return "stopped" if event.get("stopped") else "observed"
 
 
+# Terminal / noise states that must not look like live factory occupancy (#1017).
+_DEAD_STATES = frozenset(
+    {
+        "stopped",
+        "condition_not_met",
+        "fail_closed",
+        "failed",
+        "park",
+        "observed",
+        "no_delivery",
+        "acceptance_failed",
+        "acceptance_missing",
+        "push_failed",
+        "repair_exhausted",
+    }
+)
+
+
+def is_live_work_unit(row: dict[str, Any]) -> bool:
+    """True when the unit is still an active delivery occupancy."""
+    if row.get("delivered"):
+        return False
+    state = str(row.get("state") or "").strip()
+    if not state or state in _DEAD_STATES:
+        return False
+    return True
+
+
 def _project(event: dict[str, Any]) -> dict[str, Any]:
     repo = str(event["repo"])
     issue = int(event["issue"])
@@ -99,12 +127,12 @@ def project_work_units(state_path: Path) -> list[dict[str, Any]]:
 def status_work_units(
     units: list[dict[str, Any]], *, limit: int = 20
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    """Return a bounded operational view and the latest durable delivery."""
+    """Live occupancy only + latest durable delivery (#1017).
+
+    Stale stopped / condition_not_met tails are not factory state.
+    """
     deliveries = [row for row in units if row.get("delivered")]
     latest = deliveries[-1] if deliveries else None
-    pending = [row for row in units if not row.get("delivered")]
-    chosen: list[dict[str, Any]] = pending[-max(0, int(limit)) :]
-    remaining = max(0, int(limit) - len(chosen))
-    if remaining:
-        chosen = deliveries[-remaining:] + chosen
-    return chosen[-max(0, int(limit)) :], latest
+    live = [row for row in units if is_live_work_unit(row)]
+    cap = max(0, int(limit))
+    return live[-cap:], latest

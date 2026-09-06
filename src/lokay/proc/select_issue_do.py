@@ -1,11 +1,15 @@
 """Route do or skip. Two small functions: classify sito, then leftover queue."""
 
 from lokay.proc.classify_issue_do import classify
-from lokay.proc.walk_issue_leftover import after, consumes, identity, keep, row_is_ready
+from lokay.proc.walk_issue_leftover import after, consumes, identity, keep, row_is_ready, unoccupied
 
 
 def leftover_of(
-    picked: dict, listed: dict | None = None, *, consume: bool = False
+    picked: dict,
+    listed: dict | None = None,
+    *,
+    consume: bool = False,
+    occupied=None,
 ) -> tuple[int, list[dict]]:
     rows = [
         dict(row)
@@ -13,7 +17,7 @@ def leftover_of(
         if isinstance(row, dict)
     ]
     if rows:
-        leftover_rows = (after if consume else keep)(rows, picked)
+        leftover_rows = unoccupied((after if consume else keep)(rows, picked), occupied)
         return len(leftover_rows), leftover_rows
     leftover_rows = [
         dict(row)
@@ -30,8 +34,11 @@ def leftover_of(
                     if key in picked
                 }
             )
-        leftover_rows = (after if consume else keep)(seed + leftover_rows, picked)
+        leftover_rows = unoccupied(
+            (after if consume else keep)(seed + leftover_rows, picked), occupied
+        )
         return len(leftover_rows), leftover_rows
+    leftover_rows = unoccupied(leftover_rows, occupied)
     return int(picked.get("leftover") or 0), leftover_rows
 
 

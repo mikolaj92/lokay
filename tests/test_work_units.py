@@ -47,15 +47,24 @@ def test_latest_nonterminal_state_is_kept_before_delivery(tmp_path: Path):
     assert project_work_units(state)[0]["state"] == "checks_pending"
 
 
-def test_status_projection_is_bounded_and_keeps_latest_delivery():
+def test_status_projection_is_live_only_and_keeps_latest_delivery():
     rows = [
         {"work_id": f"a/b#{n}", "repo": "a/b", "issue": n, "state": "delivered", "delivered": True, "pr": n, "updated_at": str(n)}
         for n in range(1, 80)
     ]
+    rows.append({"work_id": "a/b#88", "repo": "a/b", "issue": 88, "state": "condition_not_met", "delivered": False, "updated_at": "88"})
+    rows.append({"work_id": "a/b#89", "repo": "a/b", "issue": 89, "state": "stopped", "delivered": False, "updated_at": "89"})
     rows.append({"work_id": "a/b#90", "repo": "a/b", "issue": 90, "state": "checks_pending", "delivered": False, "updated_at": "90"})
+    rows.append({"work_id": "a/b#91", "repo": "a/b", "issue": 91, "state": "implementing", "delivered": False, "updated_at": "91"})
 
     visible, latest = status_work_units(rows, limit=20)
 
-    assert len(visible) == 20
-    assert any(row["work_id"] == "a/b#90" for row in visible)
+    assert [row["work_id"] for row in visible] == ["a/b#90", "a/b#91"]
     assert latest["work_id"] == "a/b#79"
+
+
+def test_stale_condition_not_met_is_not_live_occupancy():
+    from lokay.work_units import is_live_work_unit
+
+    assert is_live_work_unit({"state": "condition_not_met", "delivered": False}) is False
+    assert is_live_work_unit({"state": "implementing", "delivered": False}) is True
