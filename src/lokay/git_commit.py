@@ -184,6 +184,15 @@ def commit_all(
         for rel in dirty_stamp_paths(worktree, porcelain=porcelain):
             if rel not in actionable:
                 actionable.append(rel)
+        # Done-means source left dirty outside localize.json (Fala#223:
+        # cli.mojo edited, not in localize paths) must ride before verify.
+        from lokay.stamp_paths import dirty_paths
+
+        for rel in dirty_paths(worktree, porcelain=porcelain):
+            if rel in _EVIDENCE_PATHS or rel.startswith(".lokay/"):
+                continue
+            if rel not in actionable:
+                actionable.append(rel)
         if not actionable:
             return False
         pathspecs = _literal_pathspecs(actionable)

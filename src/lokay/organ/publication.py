@@ -324,7 +324,10 @@ def handle_publication(
 
         return select(
             finalize_local_tests=up.get("finalize_local_tests") or {},
-            verify_acceptance=up.get("verify_acceptance") or {},
+            finalize_acceptance=up.get("finalize_acceptance") or {},
+            verify_acceptance=up.get("verify_acceptance_recheck")
+            or up.get("verify_acceptance")
+            or {},
             assert_stamps_committed=up.get("assert_stamps_committed") or {},
         )
 
