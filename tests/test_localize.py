@@ -707,3 +707,15 @@ def test_select_localization_candidate_uses_fallback_when_agent_fails():
     assert out["ok"] is True
     assert out["paths"] == ["posejdon/pyproject.toml"]
     assert out["source"] == "deterministic"
+
+
+def test_happy_path_prefers_deterministic_over_agent_even_when_allowed():
+    """#1032: live semantic localize is not a second LLM before coding."""
+    from lokay.proc.classify_localization_route import classify
+
+    out = classify(
+        {"seed": "Touch `src/lokay/proc/localize.py`.", "has_file_hints": False},
+        {"existing": [], "worktree_exists": True},
+        agent_allowed=True,
+    )
+    assert out["route"] == "fallback"
