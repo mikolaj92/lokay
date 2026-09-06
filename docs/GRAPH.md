@@ -540,6 +540,7 @@ to the live triage and repair departments, not a second catalog pass.
   contains `origin/<base>`, or a dirty leftover. Unpublished-but-behind-main
   (rebase_conflict leftover) also RESET — replaying those commits loops.
   Never force-push.
+- **Dead cycle pid**: harvest stamps the receipt terminal (`ok=false`, `reaped=true`, state cleared) — never leave `implementing` without a live process (closeout/delivered when PR exists; else classified fail-closed / miss reason).
 - **Miss harvest** (`factory_begin` → `harvest_fail_closed_children`): `plan_only`
   / `zero_diff` / `rebase_conflict` leave the slot after **3** unique `run_id`s;
   `push_failed` after **2**. A stale ledger row already `blocked` below that
