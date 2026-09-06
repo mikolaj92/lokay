@@ -27,6 +27,7 @@ _SOFT_HEALTH = frozenset(
         "plateau",
         "host_updated",
         "pass_ceiling",
+        "hosted",
     }
 )
 

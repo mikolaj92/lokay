@@ -135,7 +135,8 @@ def test_two_pass_delivery_survives_stale_false_negative(tmp_path: Path):
         pass_dir=str(pass1),
         issues={"result": {"route": "do", "launched": "started", "repo": REPO, "issue": ISSUE}},
     )
-    assert launch["outcome"] == "new_pr"
+    assert launch["outcome"] == "none"
+    assert launch["result"]["remaining"]["issue_to_pr_started"] == 1
     units = project_work_units(state)
     visible, latest = status_work_units(units)
     assert units[0]["work_id"] == WORK_ID
@@ -143,10 +144,11 @@ def test_two_pass_delivery_survives_stale_false_negative(tmp_path: Path):
     assert units[0]["state"] == "implementing"
     assert latest is None
     receipt1 = read_pass_receipt(state_path=state)
-    assert receipt1["outcome"] == "new_pr"
+    assert receipt1["outcome"] == "none"
+    assert receipt1["remaining"]["issue_to_pr_started"] == 1
     snap1 = _status(tmp_path, receipt1, visible, latest)
     assert snap1["latest_delivery"] is None
-    assert snap1["last_pass"]["outcome"] == "new_pr"
+    assert snap1["last_pass"]["outcome"] == "none"
     assert github["issue"]["state"] == "open" and github["pr"]["merged"] is False
 
     # Ceiling during the wait must keep resume context, not stall-wipe.

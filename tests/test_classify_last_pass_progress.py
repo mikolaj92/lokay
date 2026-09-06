@@ -115,6 +115,24 @@ def test_occupied_inflight_does_not_start_repair():
     assert out["route"] == "factory" and out["reason"] == "occupied"
 
 
+def test_started_receipt_is_occupied_not_moved_forward():
+    out = classify(
+        _receipt(
+            outcome="none",
+            health="hosted",
+            ok=True,
+            remaining={"inbox": 0, "ready": 0, "issue_to_pr_started": 1},
+        )
+    )
+    assert out["route"] == "factory" and out["reason"] == "occupied"
+    assert out["moved_forward"] is False
+
+
+def test_hosted_workspace_is_not_a_stall():
+    out = classify(_receipt(health="hosted", ok=True, error=""))
+    assert out["route"] == "factory" and out["reason"] == "hosted"
+
+
 def test_did_not_move_starts_repair():
     history = [_receipt(ts=f"2026-09-06T00:00:0{n}Z", error="no product delivery")
                for n in range(5, 0, -1)]

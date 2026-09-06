@@ -17,6 +17,7 @@ from lokay.proc._common import add_config_live
 OUTCOMES = ("merge", "new_pr", "none")
 _OVERFLOW = "leftover_overflow"
 _DROP = frozenset({"by_repo", "candidates", "repos", "leftover_rows"})
+_PUBLISHED = frozenset({"pr", "new_pr"})
 
 
 def _blob(value: Any) -> dict[str, Any]:
@@ -62,8 +63,6 @@ def classify_outcome(
     prs_r = _result(prs)
     issues_r = _result(issues)
     working = _blob(working)
-    tick = _blob(tick)
-    rem = tick.get("remaining") if isinstance(tick.get("remaining"), dict) else {}
     triage = _result(prs_r.get("triage") or prs_r.get("triaged"))
     merged = (
         bool(prs_r.get("merged"))
@@ -76,10 +75,26 @@ def classify_outcome(
     if merged:
         return "merge"
     launched = str(issues_r.get("launched") or "")
-    started = int(working.get("issue_to_pr_started") or rem.get("issue_to_pr_started") or 0)
-    if launched in {"started", "pr", "new_pr"} or started > 0:
+    if launched in _PUBLISHED:
         return "new_pr"
     return "none"
+
+
+def occupancy_started(
+    *,
+    issues: dict[str, Any] | None = None,
+    working: dict[str, Any] | None = None,
+    tick: dict[str, Any] | None = None,
+) -> int:
+    """Detached coding occupies the slot. That is not a published PR."""
+    issues_r = _result(issues)
+    working = _blob(working)
+    rem = _blob(tick).get("remaining")
+    rem = rem if isinstance(rem, dict) else {}
+    started = int(working.get("issue_to_pr_started") or rem.get("issue_to_pr_started") or 0)
+    if str(issues_r.get("launched") or "") == "started":
+        return max(started, 1)
+    return started
 
 
 def _state_path(begin: dict[str, Any], pass_dir: str) -> Path:
@@ -136,14 +151,18 @@ def run_record_pass(
     begin = {**disk_begin, **_blob(begin)}
     overflow = leftover_overflowed(leftover, tick, working, prs, issues, begin)
     outcome = classify_outcome(prs=prs, issues=issues, working=working, tick=tick)
+    started = occupancy_started(issues=issues, working=working, tick=tick)
     remaining = _issues_leftover_remaining(
         issues, _small_remaining(tick, overflow=overflow)
     )
+    if started:
+        remaining = {**remaining, "issue_to_pr_started": started}
     leftover_n = int(remaining.get("leftover") or 0)
     progress = int(tick.get("progress") or 0)
-    if outcome != "none":
+    productive = outcome != "none" or started > 0
+    if productive:
         progress = max(progress, 1)
-    health = str(tick.get("health") or ("progress" if outcome != "none" else "idle"))
+    health = str(tick.get("health") or ("progress" if productive else "idle"))
     if leftover_n and health in {"", "idle"}:
         health = "waiting"
     if overflow and health in {"", "idle"}:
@@ -158,11 +177,12 @@ def run_record_pass(
             outcome == "none"
             and not overflow
             and leftover_n == 0
+            and started == 0
             and tick.get("idle", outcome == "none")
         ),
         "live": bool(begin.get("live", tick.get("live"))),
         "progress": progress,
-        "lane": str(tick.get("lane") or ("product" if outcome != "none" else "idle")),
+        "lane": str(tick.get("lane") or ("product" if productive else "idle")),
         "config": begin.get("config_path"),
         "remaining": remaining,
         _OVERFLOW: overflow,

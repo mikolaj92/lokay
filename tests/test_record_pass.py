@@ -30,14 +30,18 @@ def test_classify_merge_wins_over_new_pr() -> None:
     assert (
         classify_outcome(
             prs={"result": {"merged": True}},
-            issues={"result": {"launched": "started"}},
+            issues={"result": {"launched": "pr"}},
         )
         == "merge"
     )
 
 
-def test_classify_new_pr_from_issues_launch() -> None:
-    assert classify_outcome(issues={"result": {"launched": "started"}}) == "new_pr"
+def test_started_launch_is_occupancy_not_new_pr() -> None:
+    assert classify_outcome(issues={"result": {"launched": "started"}}) == "none"
+
+
+def test_classify_new_pr_from_published_pr() -> None:
+    assert classify_outcome(issues={"result": {"launched": "pr"}}) == "new_pr"
 
 
 def test_classify_none_when_children_skip() -> None:
@@ -79,7 +83,7 @@ def test_leftover_overflow_does_not_fail_when_tick_missing(tmp_path: Path) -> No
     assert "by_repo" not in receipt.get("remaining", {})
 
 
-def test_writes_new_pr_receipt(tmp_path: Path) -> None:
+def test_writes_occupancy_receipt_for_started_launch(tmp_path: Path) -> None:
     pass_dir = _begin(tmp_path)
     pass_io.write_json(pass_io.working_path(pass_dir), {"issue_to_pr_started": 1})
     out = run_record_pass(
@@ -87,12 +91,29 @@ def test_writes_new_pr_receipt(tmp_path: Path) -> None:
         issues={"result": {"route": "do", "launched": "started"}},
     )
     assert out["ok"] is True
+    assert out["outcome"] == "none"
+    receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
+    assert receipt is not None
+    assert receipt["outcome"] == "none"
+    assert receipt["progress"] == 1
+    assert receipt["idle"] is False
+    assert receipt["lane"] == "product"
+    assert receipt["remaining"]["issue_to_pr_started"] == 1
+    assert read_pass_history(state_path=tmp_path / "state.jsonl")[0]["outcome"] == "none"
+
+
+def test_writes_new_pr_receipt_only_after_published_pr(tmp_path: Path) -> None:
+    pass_dir = _begin(tmp_path)
+    out = run_record_pass(
+        pass_dir=str(pass_dir),
+        issues={"result": {"route": "do", "launched": "pr"}},
+    )
+    assert out["ok"] is True
     assert out["outcome"] == "new_pr"
     receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
     assert receipt is not None
     assert receipt["outcome"] == "new_pr"
     assert receipt["progress"] == 1
-    assert read_pass_history(state_path=tmp_path / "state.jsonl")[0]["outcome"] == "new_pr"
 
 
 def test_writes_merge_receipt(tmp_path: Path) -> None:

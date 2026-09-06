@@ -35,13 +35,19 @@ def test_authored_receipt_receives_completed_delivery(tmp_path, delivery):
         "pr_number": None, "repair_mode": False, "branch": None,
     }
     out = handle_factory("record_pass", {}, upstream, ctx)
-    expected = {"executor": "new_pr", "pr_triage": "merge", "none": "none"}
+    expected = {"executor": "none", "pr_triage": "merge", "none": "none"}
     assert out is not None
     assert out["outcome"] == expected[delivery]
     receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
-    assert classify(receipt)["reason"] == (
-        "unconfirmed_stall" if delivery == "none" else "moved_forward"
-    )
+    if delivery == "executor":
+        assert receipt["remaining"]["issue_to_pr_started"] == 1
+        assert classify(receipt)["reason"] == "occupied"
+        assert classify(receipt)["moved_forward"] is False
+    elif delivery == "none":
+        assert classify(receipt)["reason"] == "hosted"
+        assert classify(receipt)["moved_forward"] is False
+    else:
+        assert classify(receipt)["reason"] == "moved_forward"
 
 
 def test_receipt_waits_for_department_results_not_cleanup():

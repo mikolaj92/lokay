@@ -1550,7 +1550,7 @@ stateDiagram-v2
 Repair is a side child. It never replaces the factory lokay. The moving
 gate is one leaf (`last_pass_moving`: new PR or merge only). A second
 leaf (`select_repair_route`) composes leftover skip, empty survey, stale
-receipt, occupied, and soft health, then reads the existing pass history.
+receipt, occupied, hosted workspace, and other soft health, then reads the existing pass history.
 Only the same failure in 4 of 5 distinct passes after the last self-repair attempt
 authorizes recovery; a poll
 of one receipt is not another attempt. Both daemon and department gates use
