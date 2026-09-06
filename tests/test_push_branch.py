@@ -18,8 +18,9 @@ def test_factory_repo_still_pushes(
     calls: list[tuple[object, object, str, bool]] = []
     monkeypatch.setattr(push_branch, "runner", lambda: sentinel_runner)
 
-    def record_push(run: object, worktree, branch: str, *, live: bool) -> None:
+    def record_push(run: object, worktree, branch: str, *, live: bool, **_kw):
         calls.append((run, worktree, branch, live))
+        return {"ok": True, "head_sha": "abc123", "attempts": 1, "branch": branch}
 
     monkeypatch.setattr(push_branch, "push_branch", record_push)
 
@@ -43,4 +44,6 @@ def test_factory_repo_still_pushes(
         "repo": "mikolaj92/lokay",
         "branch": "ai/fix/494-x",
         "worktree": str(tmp_path),
+        "head_sha": "abc123",
+        "attempts": 1,
     }
