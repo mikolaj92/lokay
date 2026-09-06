@@ -430,6 +430,8 @@ Zero `needs_human`. The executor department launches `issue_to_pr` only after a 
 
 ### `pr_repair` (red checks on open ai/fix PR)
 
+Repair coding slots (`run_agent` + `run_coding_retry_agent` / evidence / test-repair) use the same builder deny-bin `gh` PATH and `FACTORY_WORKFLOW_BOUNDARY` as coding; product AGENTS.md publication rules are superseded.
+
 Parent department lifetime K=1 is enforced with a durable receipt under the config state dir (`pr-repair-receipts/<owner>__<repo>__<pr>.json`, else `~/.lokay/pr-repair-receipts`). Each compose attempt stamps `attempts`; when `attempts >= budget` (default `limits.max_repairs_per_tick` = 1) select returns `fail_closed` / `pr_repair_budget_exhausted` and parks — no next-tick repair limbo when non-test CI stays red. Fleet `max_repairs_per_tick` remains the per-tick cap; the receipt is the per-PR lifetime gate.
 
 ```text
