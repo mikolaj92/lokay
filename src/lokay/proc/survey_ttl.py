@@ -105,8 +105,11 @@ def last_pass_is_empty_idle(receipt: dict[str, Any] | None) -> bool:
         + int(remaining.get("open_ai_prs") or 0)
         + int(remaining.get("issue_to_pr_started") or 0)
         + int(remaining.get("survey_errors") or 0)
+        + int(remaining.get("leftover") or 0)
     )
     if work:
+        return False
+    if remaining.get("leftover_issues"):
         return False
     by_repo = remaining.get("by_repo") or receipt.get("by_repo") or []
     if isinstance(by_repo, list) and any(

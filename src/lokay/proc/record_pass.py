@@ -128,6 +128,14 @@ def _occupied_repos_for_leftover(
     return occupied
 
 
+def _prior_leftover_issues(remaining: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in list(remaining.get("leftover_issues") or [])
+        if isinstance(row, dict)
+    ]
+
+
 def _issues_leftover_remaining(
     issues: dict[str, Any] | None,
     remaining: dict[str, Any],
@@ -137,22 +145,46 @@ def _issues_leftover_remaining(
     """Skip / triage_not_done must not wipe leftover. Count stays on last-pass.
 
     Live issue_to_pr occupancy removes that repo from leftover ready (#1017).
+    Occupancy alone must not cold-wipe non-occupied leftover fuel (#1067).
     """
     issues_r = _result(issues)
     occupied = _occupied_repos_for_leftover(working, issues)
     raw_issues = [
         row for row in list(issues_r.get("leftover_issues") or []) if isinstance(row, dict)
     ]
-    leftover_issues = [
-        row for row in raw_issues if str(row.get("repo") or "") not in occupied
-    ]
-    if raw_issues or occupied:
+
+    def _unoccupied(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [row for row in rows if str(row.get("repo") or "") not in occupied]
+
+    if raw_issues:
+        # Fresh leftover list this pass — occupancy filters only (#1017).
+        leftover_issues = _unoccupied(raw_issues)
         leftover = len(leftover_issues)
     else:
-        leftover = int(issues_r.get("leftover") or 0)
+        # Empty/missing leftover_issues. Occupancy or skip must not cold-wipe
+        # prior non-occupied fuel from the receipt (#1067).
+        prior = _unoccupied(_prior_leftover_issues(remaining))
+        if prior:
+            leftover_issues = prior
+            leftover = len(leftover_issues)
+        else:
+            leftover_issues = []
+            try:
+                leftover = int(
+                    remaining.get("leftover")
+                    or issues_r.get("leftover")
+                    or 0
+                )
+            except (TypeError, ValueError):
+                leftover = 0
+            # Explicit empty list without prior fuel: trust zero.
+            if not occupied and "leftover_issues" in issues_r:
+                leftover = 0
     out = {**remaining, "leftover": leftover}
     if leftover_issues:
         out["leftover_issues"] = leftover_issues
+    else:
+        out.pop("leftover_issues", None)
     if str(issues_r.get("route") or "") == "skip" and issues_r.get("issue") is not None:
         out["skipped_issue"] = issues_r.get("issue")
         out["skipped_repo"] = issues_r.get("repo")
@@ -185,9 +217,24 @@ def run_record_pass(
     overflow = leftover_overflowed(leftover, tick, working, prs, issues, begin)
     outcome = classify_outcome(prs=prs, issues=issues, working=working, tick=tick)
     started = occupancy_started(issues=issues, working=working, tick=tick)
+    seed = _small_remaining(tick, overflow=overflow)
+    # compute_health rebuilds remaining without leftover; seed from last-pass
+    # so occupancy-without-relist cannot cold-wipe catalog memory (#1067).
+    if "leftover_issues" not in seed and "leftover" not in seed:
+        try:
+            from lokay.pass_receipt import read_pass_receipt
+
+            prior = read_pass_receipt(state_path=_state_path(begin, pass_dir))
+        except Exception:
+            prior = None
+        prior_rem = prior.get("remaining") if isinstance(prior, dict) else None
+        if isinstance(prior_rem, dict):
+            for key in ("leftover", "leftover_issues"):
+                if key in prior_rem and key not in seed:
+                    seed[key] = prior_rem[key]
     remaining = _issues_leftover_remaining(
         issues,
-        _small_remaining(tick, overflow=overflow),
+        seed,
         working=working,
     )
     if started:
