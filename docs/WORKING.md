@@ -210,8 +210,8 @@ restarts immediately; idle 0 waits the 60s StartInterval. Classified
 `preflight_failed` is a gate and must exit 0 so the interval applies. Plist
 `StartInterval=60` and crash KeepAlive are host `--install` setup
 (`plutil`, not a per-tick rewrite). Missing plists stay missing. The
-LaunchAgent shell leases `lokay.lock` and execs `lokay-daemon`; idle TTL
-and host-ff live in `factory_pass` (`host_ff` then `factory_begin_host_gate` begin|restart, then begin only on begin). Same serial lokay (K=1), same lock —
+LaunchAgent shell leases `lokay.lock` and execs `lokay-daemon`;
+host-ff lives in `factory_pass` (`host_ff` then `factory_begin_host_gate` begin|restart, then begin only on begin). Same serial lokay (K=1), same lock —
 not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 
@@ -327,7 +327,7 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   sqlite or overwrite a sibling materialized package. The journal is a pass
   trace, not world history. Product recovery stays on `state.jsonl`.
   Over-cap is fail-closed if Fala cannot maintain the file.
-  After each factory pass, leftover closeout parks leftover `work:ready` /
+  In the CLI product budget, after each factory pass, leftover closeout parks leftover `work:ready` /
   `ai:ready` on GitHub-CLOSED lokay issues. That is not a second hunt through
   every lokay PR; GitHub CLOSED is enough. Lokay repo count never fail-closes
   prepare. Candidate overflow parks the first authored handful and leftover-
@@ -343,29 +343,12 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Empty leftover-closeout host is not applied.
   Leftover-closeout rate limit does not stamp empty.
   Pytest must not skip leftover GitHub lists using the lokay stamp.
-  After a complete empty lokay survey (no open AI PRs, inbox, or ready), skip
-  those GitHub lists for 120s without refreshing the stamp.
-  Inbox rate limit does not stamp empty. A live lokay with
-  that fresh stamp and an idle last-pass still hosts `factory_pass`;
-  `classify_factory_idle` exits authored idle. Missing stamp, occupied
-  last-pass, or pytest always hosts the rest of the pass. When the stamp
-  expires, the same idle lokay cheap-probes those three GitHub lists inside
-  Fala. An empty probe refreshes the stamp and idles; probe failure or
-  remaining work hosts. Leftover closeout is the authored `leftover_closeout`
-  path after a hosted product pass. Idle CLASSIFY_CAP skips no-issue leftovers so
-  Fala cannot starve lokay issues. Idle CLASSIFY_CAP skips dirty-real leftovers
-  so KEEP cannot starve lokay issues. Harvest leftovers are not lokay issues.
-  Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers
-  cannot freeze lokay porcelain. Idle KEEP-only leftovers still write the
-  over-cap stamp. Idle worktree removal requires healthy. Classification and
-  KEEP stamping do not. Hosted worktree removal also requires healthy; hosted
-  KEEP classification does not. Idle over-cap skip outlives leftover-probe.
-  Nested clones are not lokay leftover
-  worktrees. Lokay worktrees keep a .git file. Pytest must not skip GitHub surveys
-  using the lokay stamp.
-  Leftover closeout stays the authored `leftover_closeout` path after a
-  hosted product pass. The LaunchAgent shell does not leftover-probe or
-  idle-skip. Host-ff and cheap lokay-list probes run only inside Fala.
+  Legacy survey children retain the 120s empty-survey cache helpers.
+  They do not supply an early idle route to the current department parent.
+  The live `factory_pass` starts with `host_ff`, then the host gate and
+  department nest. The shell does not idle-skip or run leftover probes.
+  `leftover_closeout` belongs to the explicit CLI `product_pass_budget`,
+  not the daemon parent. Tests must not use the operator's survey stamps.
   After an empty leftover in-flight cache probe (`ai:in-progress` /
   `ai:pr-open` / `ai:ci-waiting` / `ai:repairing`), skip those GitHub lists
   for 300s without refreshing the stamp.

@@ -1,16 +1,28 @@
 # Lokay
 
-Lokay continuously delivers work across configured GitHub repositories: select then **serial** `issue_to_pr` (ticket after ticket; default K=1) with a real configured coding executor. Housecleaning (survey, triage, close-out, leftover reaps) runs only on a pass with no selected work.
+Lokay continuously delivers work across configured GitHub repositories through five departments composed by Fala. Implementation is **serial** `issue_to_pr` (ticket after ticket; default K=1), with a real configured coding executor. Done means quality code merged to `main`, not merely a started worker.
 
 ## What one tick does
 
-1. Opens the pass and selects one implementable catalog row from the cheap prior catalog / live occupancy (`select_implement` after `factory_begin`).
-2. When `select_implement.route == selected`, runs the contradiction gate and detached `issue_to_pr` (`queue_conflict` → `dispatch_implement`), then health and the last-pass receipt. Surveys, triage, close-out, occupancy refresh, and leftover reaps do not run in that pass — they must not consume the short pass ceiling before start or the receipt.
-    3. When no row is selected, housecleans: surveys every enabled repository for inbox issues, open catalog issues (human stops exclude; `work:ready` / `ai:ready` are not a gate), and open `ai/fix/*` pull requests; triages undecided issues through `issue_triage`; applies per-repo PR-first close-out (conflicts closed and re-readied, failed work enters `pr_repair`, approved mergeable work enters `pr_triage`); reaps leftover in-flight cache, over-budget plan-only, occupancy, and leftover worktrees.
-4. After a skip, the department nest returns to "is there a row?" on a visible edge. Two implementable rows in one budget do not wait for the next daemon tick. The parent does not unroll 1..8 slots.
-5. Reports truthful health. Remaining work without progress is not reported as idle; waiting and survey errors remain distinct outcomes. Never a second AI PR in the same repo. Serial by design (`limits.max_issue_to_pr_per_pass`, default **1**).
+`daemon_cycle` chooses recovery XOR one `factory_pass`. The factory starts with
+`host_ff` → `factory_begin_host_gate` → `factory_begin` (on the begin route).
+The parent selects and conditionally runs these departments in authored order:
 
-The top-level Lokay runs the parent `factory_pass` Fala. Catalog surveys, planning, closeout, dispatch and recovery are authored paths or nested authored paths. Parent and child runs use separate journals.
+1. `run_self_repair_department`: repairs a confirmed factory stall; off when the recovery gate excludes it. Repair and product work are exclusive.
+2. `run_issue_triage_department`: lists and triages intentional issues, marks decisions and handles bounded split/intake work. It does not start coding.
+3. `run_executor_department`: selects executable work and dispatches the child `issue_to_pr`, up to the serial budget. This is where implementation lives; `select_implement` is not the first step of the parent.
+4. `run_pr_triage_department`: checks and reviews existing PRs, then waits, requests repair, or merges eligible quality code.
+5. `run_pr_repair_department`: invokes `pr_repair` only for the preceding PR-triage repair verdict, without starting another merge process inside that department.
+
+`record_pass` collects department results, then `factory_pass_terminal` returns
+the receipt. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
+prerequisite for departments or the receipt. A started worker is occupancy;
+only a published PR or merge is delivery. Remaining work is not silently idle.
+
+`product_entry` / `product_pass_budget` are the separate CLI multi-pass entry,
+including `leftover_closeout`; they are not the LaunchAgent tick. Parent and
+child runs use separate journals. CLI availability alone does not make an old
+survey/plan path part of the live department spine; see `docs/UNIX.md`.
 
 ## Architecture
 

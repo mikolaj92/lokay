@@ -30,39 +30,25 @@ starts a second repair through the five departments in that same cycle. The daem
 carrier preflight. Fala owns product/recovery order. Every node above is a
 separate Unix process returning one JSON envelope. A product run that
 actually publishes or merges work records no systemic stall fingerprint.
-Idle TTL lives in `factory_pass` as `classify_factory_idle`. Compose and the
-LaunchAgent shell cannot decide that a tick does not run. A fresh empty-survey
-stamp still hosts Fala and exits the authored idle route. Missing stamp hosts
-the rest of the pass. Leftover closeout remains the authored
-`leftover_closeout` path after a hosted product pass — not a bash skip.
-Idle CLASSIFY_CAP skips no-issue leftovers so Fala cannot starve lokay issues.
-Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve lokay issues.
-Harvest leftovers are not lokay issues. Idle CLASSIFY_CAP reaps empty
-no-issue leftovers so harvest leftovers cannot freeze lokay porcelain.
-Idle KEEP-only leftovers still write the over-cap stamp.
-Idle worktree removal requires healthy. Classification and KEEP stamping do not. Hosted worktree removal also requires healthy; hosted KEEP classification does not.
-Idle over-cap skip outlives leftover-probe.
-Nested clones are not lokay leftover
-worktrees. Lokay worktrees keep a .git file.
-`uv.lock`-only is not real uncommitted content. After the
-stamp expires, the authored idle atom cheap-probes lokay PR and open-issue
-lists. An empty probe refreshes the stamp and exits idle inside Fala. Probe
-failure or remaining work hosts the rest of `factory_pass`. Missing stamp,
-occupied last-pass, or pytest always hosts. `scripts/lokay-service.sh`
-is OS only: lock, exec `lokay-daemon`, logs, bootstrap incident if exec
-fails. It bounds the lock-owning `lokay-daemon` wait (default 180s) and
-signals only that session so nested Fala cannot hold `lokay.lock` past the
-pass ceiling. Detached `issue_to_pr` sessions are not signalled. Inner
-`compose_daemon_cycle` SIGALRM is not the lock release: native
-`host_run_package` swallows it. The caretaker may write a small
-`last-pass.json` with `health=pass_ceiling` when it kills the lock owner.
-It does not idle-skip, host-ff, or rewrite the LaunchAgent plist
-on each tick. Plist `StartInterval=60` and crash KeepAlive
-(`SuccessfulExit=false`) are host `--install` setup. Classified
-`preflight_failed` exits 0 so KeepAlive waits the interval; it is a
-gate, not a crash. Busy lock is an OS
-lease and may skip exec. Host-ff runs only as the second `factory_pass`
-atom after idle classify routes `host`.
+There is no parent idle-TTL node in the current package. Legacy survey
+children still use `survey_ttl` cache helpers; that does not author an early
+exit from the live `factory_pass`. Neither compose nor the caretaker shell
+adds an idle-skip before Fala.
+
+#### Entry layers and host binding
+
+| Entry | Authored scope |
+| --- | --- |
+| `daemon_cycle` | Recovery XOR one `factory_pass`; LaunchAgent tick. |
+| `factory_pass` | `host_ff` first, host gate, workspace, five departments, receipt and terminal; cleanup sibling. |
+| `product_entry` / `product_pass_budget` | Explicit CLI multi-pass budget, currently eight authored slots, each composing factory work and `leftover_closeout`. Not the daemon spine. |
+
+`scripts/lokay-service.sh` owns the OS lock, exec, logs and bounded daemon
+wait (default 180s). It signals the lock-owning session, not detached
+`issue_to_pr` sessions, and may record `health=pass_ceiling`. Busy lock can
+skip exec; this is a lease, not product routing. It does not host-ff or
+rewrite the LaunchAgent plist on each tick. Host-ff is the first
+`factory_pass` atom; the following host gate chooses begin or restart.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
 durable host may chdir into `vendor/sqlite.fire` for dylib load; organs must not
@@ -122,7 +108,7 @@ position must not turn it into a dependency of product or the terminal.
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
 | lokay Fala journals | every live `state.sqlite` under `~/.lokay/fala/<path>/` is maintained through `fala.maintain_journal` at a 64 MiB ceiling; heartbeat `created` leftovers are finalized then deleted through Fala APIs first, capped at eight rows per journal per tick. `daemon_entry` / `daemon_cycle` / `factory_pass` use a fresh wrapper sqlite per tick and prune old wrapper dirs; they do not reopen the shared lokay journals. Each host file contains only the requested `path_id`, not all 946 effectors. Recovery stays on `state.jsonl`. Nested children never share the tree-root sqlite or overwrite a sibling materialized package. Over-cap is fail-closed if Fala cannot maintain the file |
 | lokay activity | each live lokay organ atom writes `activity.json` beside `state.jsonl` (`path`, `atom`, `work_id`, `transitions`). `daemon_entry` resets the checkpoint at the start of a tick so `transitions` do not accumulate across heartbeats. Ceiling receipts resume from that file. `status_snapshot` and `live=false` organs never write it. Status stays read-only. A missing file is `ceiling_stalled`, not a crash |
-| leftover closeout | after each factory pass, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED lokay issues. No 30-slot unroll. Lokay repo count never fail-closes prepare. Candidate overflow parks the first authored handful and leftover-skips the rest; it does not fail the pass. Do not paginate every lokay PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the lokay stamp. |
+| leftover closeout (CLI product budget only) | after each factory pass in `product_pass_budget`, one in-process catalog atom parks leftover `work:ready`/`ai:ready` on GitHub-CLOSED lokay issues. No 30-slot unroll. Lokay repo count never fail-closes prepare. Candidate overflow parks the first authored handful and leftover-skips the rest; it does not fail the pass. Do not paginate every lokay PR to prove a closer. After an empty leftover, skip those GitHub lists for 300s. Fresh leftover skip does not require healthy. Fresh leftover-closeout skip is not applied. Leftover-closeout skip reports planned=not live. Leftover-closeout skip reports probe_failed. Hosted leftover parks still do. Unhealthy leftover-closeout still lists GitHub. Unhealthy leftover-closeout parks are planned. Hosted leftover-closeout reports applied. Empty leftover-closeout host is not applied. Leftover-closeout rate limit does not stamp empty. Pytest must not skip leftover GitHub lists using the lokay stamp. |
 
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in
