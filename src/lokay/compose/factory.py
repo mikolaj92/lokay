@@ -29,7 +29,12 @@ def compose_factory_pass(
     live: bool,
     db_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Run one parent Fala pass; child workflow paths use another journal."""
+    """Run one parent Fala pass; child workflow paths use another journal.
+
+    Live passes harvest detached children first (lokay#1063). factory_begin
+    no longer conducts harvest; without this pre-pass call, #1062 fail-closed
+    classify never runs and ok:true no_delivery tickets relaunch forever.
+    """
     if live and _offline():
         # Fail closed: a production --live lokay must not skip Fala.
         return err(
@@ -50,6 +55,12 @@ def compose_factory_pass(
             "kind": "factory_pass",
             "engine": "fala",
         }
+    if live:
+        # Sibling of slim factory_begin: persist fail-closed / miss-N before
+        # leftover selection and implementation dispatch (lokay#1063).
+        from lokay.child_harvest import harvest_idle_lokay_stuck
+
+        harvest_idle_lokay_stuck(config_path=config_path, live=True)
     parent_db = Path(db_path) if db_path else wrapper_journal_dir("factory_pass")
     result = run_path(
         path_id="factory_pass",
