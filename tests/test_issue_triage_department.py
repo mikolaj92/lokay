@@ -49,7 +49,7 @@ def test_sieve_routes_do_skip_park_human_split_intake() -> None:
             "triage": {"decision": {"verdict": "skip", "reason": "intake_superseded"}},
         },
         {"route": "issue"},
-    )["route"] == "intake"
+    )["route"] == "skip"
 
 
 def test_sieve_ready_route_is_do_without_triage() -> None:
@@ -124,7 +124,7 @@ def test_department_graph_has_no_launch() -> None:
     assert "issues_launch_pr" not in row
     assert "select_issue_executor" not in row
     assert "run_issue_sieve_split" in row
-    assert "run_issue_sieve_intake" in row
+    assert "run_issue_sieve_intake" not in row
     assert "select_issue_sieve" in row
 
 
@@ -134,10 +134,5 @@ def test_sieve_row_skips_split_and_intake_unless_selected() -> None:
         "upstream": "select_issue_sieve",
         "path": "route",
         "equals": "split",
-    }
-    assert by_id["run_issue_sieve_intake"]["when"] == {
-        "upstream": "select_issue_sieve",
-        "path": "route",
-        "equals": "intake",
     }
     assert by_id["issues_run_triage"]["when"]["equals"] == "issue"

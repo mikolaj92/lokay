@@ -144,13 +144,6 @@ def test_prepare_fails_closed_when_catalog_exceeds_authored_slots(tmp_path):
     assert out["error"] == "ready survey catalog exceeds authored slots"
 
 
-def test_survey_ready_subflow_uses_handful_of_ticks():
-    from lokay.proc.survey_ready_subflow import run
-    import inspect
-
-    source = inspect.getsource(run)
-    assert "max_ticks=16" in source
-    assert "max_ticks=64" not in source
 
 
 def test_catalog_skip_does_not_list(tmp_path, monkeypatch):

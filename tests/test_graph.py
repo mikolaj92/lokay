@@ -188,75 +188,12 @@ def test_ready_hygiene_path_is_a_handful_of_effectors():
     assert not any(node["id"].endswith("_1") or node["id"].endswith("_30") for node in path["nodes"])
 
 
-def test_survey_inbox_path_is_a_handful_of_effectors():
-    path = next(p for p in describe_package()["paths"] if p["id"] == "survey_inbox")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_inbox_survey",
-        "inbox_survey_catalog",
-        "update_inbox_survey_stamp",
-    ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("classify_inbox_repo_")
-        or node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
 
 
-def test_survey_ready_path_is_a_handful_of_effectors():
-    path = next(p for p in describe_package()["paths"] if p["id"] == "survey_ready")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_ready_survey",
-        "ready_survey_catalog",
-        "update_ready_survey_stamp",
-    ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("classify_ready_repo_")
-        or node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
 
 
-def test_reap_over_budget_path_is_a_handful_of_effectors():
-    path = next(p for p in describe_package()["paths"] if p["id"] == "reap_over_budget")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_over_budget_reap",
-        "over_budget_catalog",
-        "summarize_over_budget_reap",
-    ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("select_budget_receipt_")
-        or node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
 
 
-def test_plan_pass_path_is_a_handful_of_effectors():
-    path = next(p for p in describe_package()["paths"] if p["id"] == "plan_pass")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_pass_plan",
-        "plan_catalog",
-        "persist_pass_plan",
-        "summarize_pass_plan",
-    ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("select_plan_repo_")
-        or node["id"].startswith("build_repo_plan_fragment_")
-        or node["id"].startswith("record_repo_plan_fragment_")
-        or node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
 
 
 def test_select_implement_path_is_a_handful_of_effectors():
@@ -282,48 +219,8 @@ def test_select_implement_path_is_a_handful_of_effectors():
     )
 
 
-def test_refresh_occupancy_path_is_a_handful_of_effectors():
-    path = next(p for p in describe_package()["paths"] if p["id"] == "refresh_occupancy")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_occupancy_refresh",
-        "occupancy_catalog",
-        "persist_occupancy_refresh",
-        "summarize_occupancy_refresh",
-    ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("select_live_receipt_")
-        or node["id"].startswith("inspect_live_receipt_")
-        or node["id"].startswith("select_occupancy_repo_")
-        or node["id"].startswith("list_occupancy_pull_requests_")
-        or node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
 
 
-def test_reap_stale_implementing_path_is_a_handful_of_effectors():
-    path = next(
-        p for p in describe_package()["paths"] if p["id"] == "reap_stale_implementing"
-    )
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids == [
-        "prepare_stale_implementing_reap",
-        "stale_implementing_catalog",
-        "persist_stale_implementing_reap",
-        "summarize_stale_implementing_reap",
-    ]
-    assert len(ids) < 8
-    assert not any(
-        node["id"].startswith("select_stale_repo_")
-        or node["id"].startswith("list_stale_repo_")
-        or node["id"].startswith("select_stale_candidate_")
-        or node["id"].startswith("restore_stale_issue_ready_")
-        or         node["id"].endswith("_1")
-        or node["id"].endswith("_30")
-        for node in path["nodes"]
-    )
 
 
 def test_stale_worktree_reap_path_is_a_handful_of_effectors():
@@ -437,45 +334,8 @@ def test_leftover_closeout_path_is_a_handful_of_effectors():
     )
 
 
-def test_closeout_prs_mermaid_owns_authored_slots():
-    mermaid = (Path(__file__).resolve().parents[1] / "README.md").read_text(
-        encoding="utf-8"
-    )
-    section = mermaid.split("### Domknięcie PR-ów")[1].split("### ")[0]
-    for name in (
-        "PrepareCloseout",
-        "SelectCloseoutSlot",
-        "RunCloseoutPR",
-        "RecordCloseoutSlot",
-        "ReduceCloseout",
-        "PersistCloseout",
-        "SummarizeCloseout",
-    ):
-        assert name in section
-    assert "CloseoutCatalog" not in section
 
 
-def test_closeout_prs_owns_authored_repo_slots():
-    path = next(p for p in describe_package()["paths"] if p["id"] == "closeout_prs")
-    ids = [node["id"] for node in path["nodes"]]
-    assert ids[0] == "prepare_pr_closeout"
-    assert ids[-2] == "persist_pr_closeout"
-    assert ids[-1] == "summarize_pr_closeout"
-    assert "closeout_catalog" not in ids
-    assert [f"select_pr_closeout_slot_{n}" for n in range(1, 31)] == [
-        node for node in ids if node.startswith("select_pr_closeout_slot_")
-    ]
-    assert [f"run_pr_closeout_slot_{n}" for n in range(1, 31)] == [
-        node for node in ids if node.startswith("run_pr_closeout_slot_")
-    ]
-    by_id = {node["id"]: node for node in path["nodes"]}
-    assert by_id["run_pr_closeout_slot_1"]["when"] == {
-        "upstream": "select_pr_closeout_slot_1",
-        "path": "route",
-        "equals": "closeout",
-    }
-    assert by_id["reduce_pr_closeout"]["conduction"][-1] == "record_pr_closeout_slot_30"
-    assert by_id["persist_pr_closeout"]["conduction"] == ["reduce_pr_closeout"]
 
 
 def test_factory_pass_issues_do_not_wait_on_cleanup():

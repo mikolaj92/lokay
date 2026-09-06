@@ -121,7 +121,7 @@ def test_already_ready_sieve_row_skips_triage():
     assert status["issues_run_triage"] == "skipped"
     assert status["select_issue_sieve"] == "succeeded"
     assert status["run_issue_sieve_split"] == "skipped"
-    assert status["run_issue_sieve_intake"] == "skipped"
+    assert "run_issue_sieve_intake" not in status
     assert status["summarize_issue_sieve_row"] == "succeeded"
 
 
@@ -130,7 +130,7 @@ def test_empty_sieve_row_still_reaches_receipt():
     assert status["issues_run_triage"] == "skipped"
     assert status["select_issue_sieve"] == "succeeded"
     assert status["run_issue_sieve_split"] == "skipped"
-    assert status["run_issue_sieve_intake"] == "skipped"
+    assert "run_issue_sieve_intake" not in status
     assert status["summarize_issue_sieve_row"] == "succeeded"
 
 

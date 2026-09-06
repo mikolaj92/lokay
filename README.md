@@ -19,6 +19,10 @@ the receipt. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
 prerequisite for departments or the receipt. A started worker is occupancy;
 only a published PR or merge is delivery. Remaining work is not silently idle.
 
+`executor_rows` and `product_pass_budget` use native Fala bounded templates.
+The first slot is explicit (no previous receipt); slots 2–8 share one template.
+Expansion preserves the serial graph, gates and receipts; default K=1 is unchanged.
+
 `product_entry` / `product_pass_budget` are the separate CLI multi-pass entry,
 including `leftover_closeout`; they are not the LaunchAgent tick. Parent and
 child runs use separate journals. CLI availability alone does not make an old
@@ -163,22 +167,7 @@ harvest skip would eat the factory. No `when` / idle on these leaves.
 | `persist_factory_tick` | leaf:persist_factory_tick | LEAF |
 | `harvest_factory_children` | child:child_harvest | child Fala, off this path |
 
-### Przegląd gotowych issue — `survey_ready`
 
-```mermaid
-stateDiagram-v2
-    [*] --> PrepareReadySurvey
-    PrepareReadySurvey --> ReadySurveyCatalog
-    ReadySurveyCatalog --> UpdateReadySurveyStamp
-    UpdateReadySurveyStamp --> ReadySurveyResult
-    ReadySurveyResult --> [*]
-```
-
-Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, hot/cold), jeden atom
-katalogu, który w procesie listuje / klasyfikuje / parkuje zablokowane issue
-i zapisuje remaining, oraz efekt stamp. Nie ma 30-slotowego rozwinięcia Fali.
-`work:ready` / `ai:ready` nie są bramką. Overflow katalogu jest fail-closed.
-Conduction niesie kwit; remaining liczy się z wylistowanych wierszy w procesie.
 
 ### Uruchomienie triage — `triage_dispatch`
 
@@ -240,48 +229,9 @@ lock bez zgadywania PID. Zajęty lock przy starcie wraca do kolejki, nie do
 bounded failure.
 Każdy węzeł wykonuje jeden odczyt faktu, jedną mutację albo jedną redukcję stanu.
 
-### Odzyskanie konfliktującego PR — `resolve_conflicts`
 
-```mermaid
-stateDiagram-v2
-    [*] --> SelectConflictingPullRequest
-    SelectConflictingPullRequest --> ConflictResolutionResult: brak konfliktu
-    SelectConflictingPullRequest --> CloseConflictingPullRequest: CONFLICTING / DIRTY
-    CloseConflictingPullRequest --> RecordConflictCloseFailure: zamknięcie zawiodło
-    CloseConflictingPullRequest --> ResolveConflictIssue: PR zamknięty / dry-run
-    ResolveConflictIssue --> RecordConflictResolution: brak issue w branch
-    ResolveConflictIssue --> ClearConflictStuckLedger: znaleziono issue
-    ClearConflictStuckLedger --> ReadyIssueAfterConflict
-    ReadyIssueAfterConflict --> RecordConflictResolution
-    RecordConflictCloseFailure --> ConflictResolutionResult
-    RecordConflictResolution --> ConflictResolutionResult
-    ConflictResolutionResult --> [*]
-```
 
-Pod-Fala wybiera najwyżej jeden konfliktujący PR w jednym pass. Wybór, zamknięcie
-PR, wyprowadzenie numeru issue, wyczyszczenie ledgera, przywrócenie `ready` oraz
-materializacja stanu są oddzielnymi procesami. Fala prowadzi każdą gałąź;
-żaden proces nie iteruje po repozytoriach ani PR-ach i nie łączy kilku efektów.
 
-### Plan przebiegu — `plan_pass`
-
-```mermaid
-stateDiagram-v2
-    [*] --> PreparePassPlan
-    PreparePassPlan --> PlanCatalog
-    PlanCatalog --> PersistPassPlan
-    PersistPassPlan --> SummarizePassPlan
-    SummarizePassPlan --> PassPlanResult
-    PassPlanResult --> [*]
-```
-
-Pod-Fala ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
-w procesie buduje fragmenty planu i redukuje globalny budżet triage, persist
-oraz summarize. Nie ma 30-slotowego rozwinięcia Fali. Overflow katalogu jest
-fail-closed. Jeden czysty proces nadal buduje fragment jednego repozytorium
-na podstawie survey, stuck ledgera, budżetu i PR-first; atom katalogu składa
-je w procesie. Osobny efekt zapisuje plan oraz akcje wyjaśniające odrzucone
-cele.
 
 ### Bezpośrednie wejście Lokaya — `product_entry`
 
@@ -669,11 +619,11 @@ stateDiagram-v2
     ProductBudgetResult --> [*]
 ```
 
-`survey_prs` używa teraz bounded materialization Fali: authored TOML zawiera
-jeden `pr_survey_repo_slot` z `max_items = 30` i `serial = true`, podczas gdy
-canonical expanded golden nadal pokazuje 124 jawne węzły oraz każdą legalną
-krawędź. Runtime nie rekonstruuje ich Pythonową pętlą; Python jedynie redukuje
-wyniki już zmaterializowanych procesów.
+`executor_rows` i `product_pass_budget` używają bounded materialization
+Fali (`serial = true`, maksymalnie osiem slotów). Pierwszy slot jest jawnym
+prefiksem bez poprzedniego receiptu; pozostałe instancje powstają z jednego
+szablonu. Porównanie canonical expanded graph zachowuje węzły, bramki i
+krawędzie. Python redukuje wyniki, nie rozwija ani nie prowadzi procesu.
 
 Fala rozwija do ośmiu kolejnych, jawnych slotów `factory_pass`. Każdy slot ma
 osobny leftover-closeout effect i czysty evaluator porównujący fizyczny wynik
@@ -718,28 +668,7 @@ atom katalogu, który w procesie listuje / klasyfikuje / zdejmuje osierocone
 katalogu lub kandydatów jest fail-closed. Rate limit nie udaje pustej sondy
 i nie zapisuje empty stamp.
 
-### Przegląd pull requestów — `survey_prs`
 
-```mermaid
-stateDiagram-v2
-    [*] --> PreparePRSurvey
-    PreparePRSurvey --> SelectPRRepoSlot
-    SelectPRRepoSlot --> ListRepoPRs: aktywne repo
-    SelectPRRepoSlot --> RecordPRRepoResult: cold / poza mini-scope / pusty slot / recent-empty
-    ListRepoPRs --> ClassifyRepoPRs
-    ClassifyRepoPRs --> RecordPRRepoResult
-    RecordPRRepoResult --> SelectPRRepoSlot: następny jawny slot
-    RecordPRRepoResult --> ReducePRSurvey: ostatni slot
-    ReducePRSurvey --> PersistPRSurvey
-    PersistPRSurvey --> UpdatePRSurveyStamp
-    UpdatePRSurveyStamp --> PRSurveyResult
-    PRSurveyResult --> [*]
-```
-
-Pod-Fala rozwija katalog do 30 jawnych slotów. Listing GitHub i klasyfikacja
-manual/actionable są osobnymi procesami jednego repo. Repo-local reaction,
-katalogowa redukcja, persist i efekt TTL są rozdzielone. Failed listing
-pozostaje `probe_failed`; przekroczenie authored katalogu kończy się fail-closed.
 
 ### Recenzja i merge PR-ów — `pr_triage_department`
 
@@ -762,76 +691,9 @@ Rodzic `factory_pass` po tym werdykcie może uruchomić osobny dział
 `summarize_pr_triage_department` jest liściem. Pusta lista pomija dziecko i nie
 psuje passu. Nie ma 30-slotowego katalogu ani leftover overflow.
 
-### Domknięcie PR-ów — `closeout_prs` i `closeout_pr`
 
-```mermaid
-stateDiagram-v2
-    [*] --> PrepareCloseout
-    PrepareCloseout --> SelectCloseoutSlot
-    SelectCloseoutSlot --> RunCloseoutPR: closeout
-    SelectCloseoutSlot --> RecordCloseoutSlot: empty / needs_human
-    RunCloseoutPR --> RecordCloseoutSlot
-    RecordCloseoutSlot --> SelectCloseoutSlot: następny jawny slot
-    RecordCloseoutSlot --> ReduceCloseout: ostatni slot
-    ReduceCloseout --> PersistCloseout
-    PersistCloseout --> SummarizeCloseout
-    SummarizeCloseout --> CloseoutResult
-    CloseoutResult --> [*]
-```
 
-Fala rozwija jawne sloty repozytoriów. Każdy slot wybiera najwyżej jeden
-AI PR i gnieździ pod-Falę `closeout_pr`. Python nie prowadzi pętli i nie
-uruchamia dzieci. Overflow katalogu i naruszenie inwariantu jednego otwartego
-AI PR na repo są fail-closed. Wspólny budżet napraw zostaje seryjny między
-repozytoriami.
 
-```mermaid
-stateDiagram-v2
-    [*] --> InspectPRIssue
-    InspectPRIssue --> GetPRIssue: branch wiąże issue
-    InspectPRIssue --> StabilizePRIssue: brak issue
-    GetPRIssue --> StabilizePRIssue
-    StabilizePRIssue --> ParkClosedPRIssue: issue zamknięte
-    StabilizePRIssue --> ClassifyPRGate: issue otwarte / nieznane
-    ParkClosedPRIssue --> FinalizeCloseoutPR
-    ClassifyPRGate --> FinalizeCloseoutPR: manual / konflikt
-    ClassifyPRGate --> ReadPRChecks: kwalifikowany PR
-    ReadPRChecks --> RoutePRChecks
-    RoutePRChecks --> RepairPR: repair
-    RoutePRChecks --> FinalizeCloseoutPR: wait / skip
-    RoutePRChecks --> TriagePR: merge candidate
-    TriagePR --> ClassifyTriageOutcome
-    ClassifyTriageOutcome --> RepairPR: request_changes
-    ClassifyTriageOutcome --> ParkDeliveredIssue: merged
-    ClassifyTriageOutcome --> FinalizeCloseoutPR: waiting / needs_human
-    RepairPR --> FinalizeCloseoutPR
-    ParkDeliveredIssue --> FinalizeCloseoutPR
-    FinalizeCloseoutPR --> CloseoutPRResult
-    CloseoutPRResult --> [*]
-```
-
-Każdy kwalifikowany PR uruchamia tę samą pod-Falę `closeout_pr`. Odczyt
-issue, checks, routing, naprawa, SHA-bound triage/merge i parkowanie są
-osobnymi procesami jednego PR.
-
-### Przegląd inboxu — `survey_inbox`
-
-```mermaid
-stateDiagram-v2
-    [*] --> PrepareInboxSurvey
-    PrepareInboxSurvey --> InboxSurveyCatalog
-    InboxSurveyCatalog --> UpdateInboxSurveyStamp
-    UpdateInboxSurveyStamp --> InboxSurveyResult
-    InboxSurveyResult --> [*]
-```
-
-Pod-Fala ma trzy kroki: przygotowanie (TTL, katalog, hot/cold), jeden atom
-katalogu, który w procesie listuje / klasyfikuje undecided issue i zapisuje
-`remaining_inbox` z wylistowanych wierszy, oraz efekt stamp. Nie ma
-30-slotowego rozwinięcia Fali. Etykiety bez `ai:ready` / `ai:blocked` /
-`ai:needs-feedback` nadal liczą się jako inbox. Overflow katalogu jest
-fail-closed. Błąd listingu pozostaje jawnym `probe_failed` i nie udaje
-pustego inboxu. Conduction niesie kwit, nie listy issue.
 
 ### Walidacja self-repair — `self_repair_validate`
 
@@ -896,68 +758,11 @@ decyzję routingu oraz efekty remove/create. Nieczytelna własność, plan-only,
 nieznany commit i dirty work poza aktualnym `origin/main` kończą się
 fail-closed bez usuwania dowodów.
 
-### Ograniczenie czasu implementacji — `reap_over_budget`
 
-```mermaid
-stateDiagram-v2
-    [*] --> PrepareOverBudgetReap
-    PrepareOverBudgetReap --> OverBudgetCatalog
-    OverBudgetCatalog --> SummarizeOverBudgetReap
-    SummarizeOverBudgetReap --> OverBudgetResult
-    OverBudgetResult --> [*]
-```
 
-Pod-Fala ma trzy kroki: przygotowanie receiptów, jeden atom katalogu, który
-w procesie inspect / harvest / reap i redukuje wynik, oraz summarize. Nie ma
-723-slotowego rozwinięcia Fali. Harvest realnego diffu pozostaje łańcuchem
-`commit → push → PR` wewnątrz atomu katalogu. Niepewny diff zachowuje żywego
-codera fail-closed. Tylko plan-only lub zamknięte issue prowadzi do terminacji.
-Zapis receiptu, stuck ledger i parkowanie są oddzielnymi efektami wywoływanymi
-w procesie.
 
-### Odzyskanie porzuconych etapów implementacji — `reap_stale_implementing`
 
-```mermaid
-stateDiagram-v2
-    [*] --> PrepareStaleImplementingReap
-    PrepareStaleImplementingReap --> StaleImplementingCatalog
-    StaleImplementingCatalog --> PersistStaleImplementingReap
-    PersistStaleImplementingReap --> SummarizeStaleImplementingReap
-    SummarizeStaleImplementingReap --> StaleImplementingResult
-    StaleImplementingResult --> [*]
-```
 
-Pod-Fala ma cztery kroki: przygotowanie (TTL, katalog, zakres), jeden atom
-katalogu, który w procesie listuje leftover ledger labels, przywraca
-`ai:ready` i aktualizuje stempel, persist oraz summarize. Nie ma 30-slotowego
-rozwinięcia Fali. Świeży pusty stempel, probe i mutacje zostają wewnątrz
-atomu katalogu, nie osobnymi krawędziami Fali. Overflow katalogu lub
-kandydatów jest fail-closed. Rate limit nie udaje pustej sondy i nie zapisuje
-empty stamp.
-
-### Odświeżenie zajętości repozytoriów — `refresh_occupancy`
-
-```mermaid
-stateDiagram-v2
-    [*] --> PrepareOccupancyRefresh
-    PrepareOccupancyRefresh --> OccupancyCatalog
-    OccupancyCatalog --> PersistOccupancyRefresh
-    PersistOccupancyRefresh --> SummarizeOccupancyRefresh
-    SummarizeOccupancyRefresh --> OccupancyRefreshResult
-    OccupancyRefreshResult --> [*]
-```
-
-Pod-Fala ma cztery kroki: przygotowanie receiptów i katalogu, jeden atom
-katalogu, który w procesie czyści martwe receipty, odczytuje żywe issue,
-terminuje zamknięte workery i odświeża snapshoty PR, persist oraz summarize.
-Nie ma 30-slotowego rozwinięcia Fali. Żywy pid przy zamkniętym zgłoszeniu
-nie zajmuje repo — ta sama reguła co `repo_mutex._issue_is_closed`.
-Żywy pid przy leftover / cudzym `.lokay/localize.json` też nie zajmuje —
-to samo sito co `issue_from_localize_payload` (#878). Nieczytelny plik
-albo nieznana ścieżka kopii zostaje zajęta fail-closed. Niepewny odczyt
-issue zachowuje zajętość fail-closed. Nieczytelny receipt nie zajmuje
-całego katalogu, ale pozostaje jawnym faktem diagnostycznym.
-Overflow receiptów lub repozytoriów jest fail-closed.
 
 ### Wybór repozytorium do implementacji — `select_implement`
 
@@ -1058,6 +863,38 @@ sklasyfikowany `route=failed`, nie abort passu. Działy nie czekają na
 sukces sprzątania. `record_pass` też nie. Leftover work copies nie
 zjadają issue-to-PR.
 
+### Domknięcie pojedynczego PR — `closeout_pr`
+
+```mermaid
+stateDiagram-v2
+    [*] --> InspectPRIssue
+    InspectPRIssue --> GetPRIssue: branch wiąże issue
+    InspectPRIssue --> StabilizePRIssue: brak issue
+    GetPRIssue --> StabilizePRIssue
+    StabilizePRIssue --> ParkClosedPRIssue: issue zamknięte
+    StabilizePRIssue --> ClassifyPRGate: issue otwarte / nieznane
+    ParkClosedPRIssue --> FinalizeCloseoutPR
+    ClassifyPRGate --> FinalizeCloseoutPR: manual / konflikt
+    ClassifyPRGate --> ReadPRChecks: kwalifikowany PR
+    ReadPRChecks --> RoutePRChecks
+    RoutePRChecks --> RepairPR: repair
+    RoutePRChecks --> FinalizeCloseoutPR: wait / skip
+    RoutePRChecks --> TriagePR: merge candidate
+    TriagePR --> ClassifyTriageOutcome
+    ClassifyTriageOutcome --> RepairPR: request_changes
+    ClassifyTriageOutcome --> ParkDeliveredIssue: merged
+    ClassifyTriageOutcome --> FinalizeCloseoutPR: waiting / needs_human
+    RepairPR --> FinalizeCloseoutPR
+    ParkDeliveredIssue --> FinalizeCloseoutPR
+    FinalizeCloseoutPR --> CloseoutPRResult
+    CloseoutPRResult --> [*]
+```
+
+Każdy kwalifikowany PR uruchamia tę samą pod-Falę `closeout_pr`. Odczyt
+issue, checks, routing, naprawa, SHA-bound triage/merge i parkowanie są
+osobnymi procesami jednego PR.
+
+
 ### Triage issue — `issue_triage_department`
 
 ```mermaid
@@ -1107,14 +944,15 @@ stateDiagram-v2
     SelectNextIssue --> SelectIssueSieve: brak / strop
     IssuesRunTriage --> SelectIssueSieve
     SelectIssueSieve --> RunIssueSieveSplit: split
-    SelectIssueSieve --> RunIssueSieveIntake: intake
     SelectIssueSieve --> SummarizeIssueSieveRow
     RunIssueSieveSplit --> SummarizeIssueSieveRow
-    RunIssueSieveIntake --> SummarizeIssueSieveRow
     SummarizeIssueSieveRow --> [*]
 ```
 
-Jedno pytanie, jeden werdykt triage. `select_next_issue` tylko odpowiada czy
+Jedno pytanie, jeden werdykt triage. Nie ma drugiego intake po werdykcie:
+hard facts → agent tylko przy niepewności → walidacja/evidence → publish.
+Shape i named paths są dowodami tej ścieżki, nie konkurencyjnym READY/CLOSE.
+`select_next_issue` tylko odpowiada czy
 jest wiersz. Wiersz z `ai:ready` albo `work:ready` to `route=ready`: sito
 (`IssuesRunTriage`) się nie odpala, `SelectIssueSieve` od razu daje `do` /
 `already_ready`. Puste przypisanie albo sam lokaj wolno wziąć. Ktokolwiek inny
@@ -1633,19 +1471,11 @@ kontraktu. Aktualny audyt:
 | `PrTriageDepartment` | `pr_triage_department` | PR triage: list, checks, review, feedback, merge. Verdict only |
 | `FactoryBegin` | `factory_begin` | krótka sonda hosta, katalog i workspace passu |
 | `ChildHarvest` | `child_harvest` | prowadzi lokalne child facts, jawne redukcje, 30 repo-slotów CLOSED i cleanup |
-| `ReadySurvey` | `survey_ready` | listuje i klasyfikuje gotowe issue jednym atomem katalogu |
 | `TriageDispatch` | `triage_dispatch` | wybiera i uruchamia najwyżej jedno issue inbox |
 | `ImplementationDispatch` | `implementation_dispatch` | wybiera i uruchamia najwyżej jeden gotowy ticket |
-| `ConflictResolution` | `resolve_conflicts` | zamyka najwyżej jeden konfliktujący PR i ponownie ustawia issue jako ready |
 | `ImplementationSelection` | `select_implement` | jeden atom katalogu: kwalifikacja repo do issue_to_pr |
-| `PassPlan` | `plan_pass` | jeden atom katalogu: fragmenty planu i budżet triage |
-| `OccupancyRefresh` | `refresh_occupancy` | jeden atom katalogu: żywe receipty i snapshoty PR |
-| `StaleImplementingReap` | `reap_stale_implementing` | jeden atom katalogu: odzysk porzuconych etapów |
-| `OverBudgetReap` | `reap_over_budget` | jeden atom katalogu: harvest albo plan-only reap |
 | `SelfRepairPrepare` | `self_repair_prepare` | przygotowuje lub bezpiecznie wznawia izolowany worktree przez pod-Falę |
 | `SelfRepairValidate` | `self_repair_validate` | waliduje exact candidate, testy i diff przez pod-Falę |
-| `InboxSurvey` | `survey_inbox` | przegląda inbox pełnego katalogu jednym atomem katalogu |
-| `PRSurvey` | `survey_prs` | przegląda PR-y pełnego katalogu przez jawne sloty repozytoriów |
 | `ProductPassBudget` | `product_pass_budget` | prowadzi bounded serię passów i terminale bez Pythonowej pętli |
 | `LocalizeExecution` | `localize_execution` | prowadzi existing/hints/fallback/agent JSON/retry/write i terminal |
 | `SelfRepairEntry` | `self_repair_entry` | prowadzi preconditions, events, istniejącą self_repair pod-Falę i restart terminal |
@@ -1662,7 +1492,6 @@ kontraktu. Aktualny audyt:
 | `TestLocalExecution` | `test_local_execution` | prowadzi deklarację, cache, full/scoped test i terminal |
 | `ReadyHygiene` | `ready_hygiene` | usuwa osierocone ready labels przez jeden atom katalogu |
 | `LeftoverCloseout` | `leftover_closeout` | jeden atom katalogu: CLOSED ready labels |
-| `CloseoutPRs` | `closeout_prs` | authored repo slots, one `closeout_pr` child per slot, persist |
 | `CloseoutPR` | `closeout_pr` | prowadzi checks, repair, triage/merge i parkowanie jednego PR |
 | `QueueConflict` | `queue_conflict` | jeden zamknięty werdykt agenta przed implementacją |
 | `StaleWorktreeHygiene` | `stale_worktree_reap` | jeden atom katalogu: klasyfikacja, reclaim dysku, TTL GC archiwów `.lokay-preserved`; live i2pr issue-scoped |

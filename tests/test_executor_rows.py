@@ -211,6 +211,10 @@ def test_package_owns_authored_executor_slots():
         )
     )
     path = next(row for row in package["correlation_paths"] if row["id"] == "executor_rows")
+    import json
+
+    expanded = json.loads((Path(__file__).resolve().parents[1] / "fala/lokay.expanded.golden.json").read_text())
+    path = next(row for row in expanded["correlation_paths"] if row["id"] == "executor_rows")
     ids = [str(node["id"]) for node in path["effectors"]]
     assert ids[0] == "prepare_executor_rows"
     assert ids[-1] == "select_executor_result"

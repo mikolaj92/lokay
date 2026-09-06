@@ -9,8 +9,7 @@ from typing import Any
 import pytest
 
 from lokay.passkit import io as pass_io
-from lokay.proc import detach_issue_to_pr, refresh_occupancy
-from lokay.proc.closeout_prs import run_closeout_prs
+from lokay.proc import detach_issue_to_pr
 from lokay.proc.implementation_selection_catalog import run as _catalog
 from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 from lokay.proc.persist_implementation_selection import persist as _persist_selection

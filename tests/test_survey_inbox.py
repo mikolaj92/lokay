@@ -44,12 +44,6 @@ def test_catalog_overflow_is_fail_closed(tmp_path):
     assert prepare(pass_dir=str(pd), slot_count=30)["ok"] is False
 
 
-def test_survey_inbox_subflow_uses_handful_of_ticks():
-    from lokay.proc.survey_inbox_subflow import run
-    import inspect
-
-    source = inspect.getsource(run)
-    assert "max_ticks=16" in source
 
 
 def test_catalog_counts_labeled_undecided_as_remaining_inbox(tmp_path, monkeypatch):

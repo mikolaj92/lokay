@@ -6,12 +6,6 @@ from lokay.proc.reduce_occupancy_facts import reduce_state as reduce_facts
 from lokay.proc.reduce_occupancy_refresh import reduce_state
 
 
-def test_refresh_occupancy_subflow_uses_handful_of_ticks():
-    from lokay.proc.refresh_occupancy_subflow import run
-
-    source = inspect.getsource(run)
-    assert "max_ticks=16" in source
-    assert "max_ticks=512" not in source
 
 
 def test_catalog_fail_closed_when_prepare_failed():

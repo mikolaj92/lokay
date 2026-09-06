@@ -30,7 +30,7 @@ def test_materialize_preserves_authored_templates(tmp_path: Path):
 
     source = find_default_package()
     authored = tomllib.loads(source.read_text().replace("PLACEHOLDER_PROJECT", str(tmp_path.resolve())))
-    for path_id in ("survey_prs", "daemon_cycle"):
+    for path_id in ("executor_rows", "product_pass_budget", "daemon_cycle"):
         dest = tmp_path / f"{path_id}.toml"
         _materialize_package(source, dest, project=tmp_path, path_id=path_id)
         package = tomllib.loads(dest.read_text())

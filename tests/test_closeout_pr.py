@@ -71,12 +71,6 @@ def test_checks_route_repairs_once():
     )
 
 
-def test_closeout_prs_subflow_has_slot_budget():
-    import inspect
-    from lokay.proc.closeout_prs_subflow import run
-
-    source = inspect.getsource(run)
-    assert "max_ticks=512" in source
 
 
 def test_closeout_catalog_python_does_not_nest_children():
@@ -87,10 +81,7 @@ def test_closeout_catalog_python_does_not_nest_children():
     )
     assert "for slot in range" not in src
     assert "while " not in src
-    organ = (root / "src" / "lokay" / "organ" / "pr_closeout_boundary.py").read_text(
-        encoding="utf-8"
-    )
-    assert "for slot in range" not in organ
+    assert not (root / "src/lokay/organ/pr_closeout_boundary.py").exists()
 
 
 def test_nested_closeout_failure_is_recorded_failed(monkeypatch):
@@ -208,7 +199,8 @@ def test_closeout_reducer_removes_merged_pr():
 def test_cli_surface_remains_wired():
     root = Path(__file__).resolve().parents[1]
     text = (root / "pyproject.toml").read_text()
-    assert "lokay-closeout-pr" in text and "lokay-closeout-prs" in text
+    assert "lokay-closeout-pr =" in text
+    assert "lokay-closeout-prs =" not in text
     assert "lokay-dispatch-closeout" not in text
     assert not (root / "src" / "lokay" / "proc" / "dispatch_closeout.py").exists()
 

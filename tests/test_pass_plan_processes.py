@@ -3,13 +3,6 @@
 from lokay.passkit import io as pass_io
 
 
-def test_plan_pass_subflow_uses_handful_of_ticks():
-    from lokay.proc.plan_pass_subflow import run
-    import inspect
-
-    source = inspect.getsource(run)
-    assert "max_ticks=16" in source
-    assert "max_ticks=64" not in source
 
 
 def test_reduce_honors_global_triage_budget():

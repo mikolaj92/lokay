@@ -134,12 +134,6 @@ def test_catalog_empty_receipts_skip_physical_effects(monkeypatch):
     assert out["reaped_count"] == 0 and out["kept"] == [] and not called
 
 
-def test_reap_over_budget_subflow_uses_handful_of_ticks():
-    from lokay.proc.reap_over_budget_subflow import run
-    import inspect
-
-    source = inspect.getsource(run)
-    assert "max_ticks=16" in source
 
 
 def test_prepare_overflow_is_fail_closed(monkeypatch):

@@ -164,30 +164,13 @@ grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
 
 
-### `closeout_prs` (catalog AI PR closeout)
+### PR closeout ownership
 
-Authored repository slots. Each slot selects at most one open AI PR and
-nests child Fala `closeout_pr`. Python does not loop and does not launch
-children. Overflow and multiple-open-AI-PR are fail-closed. Serial repair
-budget is carried across slots.
-
-```text
-prepare_pr_closeout
-  → select_pr_closeout_slot_N
-    → run_pr_closeout_slot_N     when route=closeout
-      → record_pr_closeout_slot_N
-        → reduce_pr_closeout
-          → persist_pr_closeout
-            → summarize_pr_closeout
-```
-
-`lokay-dispatch-closeout` is removed. `closeout_prs` is its own authored
-path. Parent `factory_pass` conducts five departments and does not hide
-closeout order in Python. `recovery_factory` hosts one `factory_pass`.
-`product_entry` / `product_pass_budget` remain CLI multi-pass wrappers,
-not the 180s heartbeat. `leftover_catalog` stays one in-process catalog
-atom: park CLOSED-ready labels, not AI-PR closeout order.
-
+The retired `closeout_prs` catalog path is removed. Live `pr_triage_department`
+and `pr_repair_department` own fleet PR decisions and repairs. The single-PR
+`closeout_pr` child remains for existing-PR delivery and the explicit CLI.
+`product_entry` / `product_pass_budget` are CLI multi-pass wrappers, not the
+heartbeat. `leftover_catalog` only parks CLOSED-ready labels.
 ### `pr_triage_department` (PR sieve)
 
 Two small blocks plus graph. List, checks, review, feedback, merge-commit.
@@ -490,9 +473,8 @@ the diff to the builder plan. The plan stays builder evidence only.
 Config: `merge.require_llm_review` (default true), `merge.require_checks` (default false).
 Env: `LOKAY_REQUIRE_LLM_REVIEW`, `LOKAY_REQUIRE_CHECKS`, `LOKAY_MERGE_ENABLED`.
 
-`resolve_conflicts` handles **merge conflicts**: `mergeable=CONFLICTING|DIRTY`
-→ `lokay-pr-close` + re-label linked issue `ai:ready` so the next pass re-runs
-`issue_to_pr` from current main (one stuck conflict must not freeze the lokay).
+The retired `resolve_conflicts` fleet path is removed; PR decisions belong
+to the live triage and repair departments, not a second catalog pass.
 
 - **conduction** edges = dependencies (Fala will not ready a node until upstream succeeded).
 - **push** / **pr_merge** / **pr_create** also fail closed in the organ unless `test_local` conduction is ok (skip / `no_python_test_suite` counts). `pr_create` additionally requires a successful `push`. `push` / `pr_create` also require `assert_real_diff`: a diff that is only `.lokay/approach.md` / `.lokay/localize.json` is not progress and never opens a PR.

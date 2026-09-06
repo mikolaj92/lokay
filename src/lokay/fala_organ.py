@@ -27,7 +27,6 @@ from lokay.organ.common import (  # noqa: F401
     _require_test_local,
     _test_local_ok,
 )
-from lokay.organ.conflict_resolution_boundary import handle_conflict_resolution
 from lokay.organ.daemon_entry_boundary import handle_daemon_entry
 from lokay.organ.factory import handle_factory
 from lokay.organ.factory_begin_boundary import handle_factory_begin
@@ -36,7 +35,6 @@ from lokay.organ.implementation_dispatch_boundary import handle_implementation_d
 from lokay.organ.implementation_selection_boundary import (
     handle_implementation_selection,
 )
-from lokay.organ.inbox_survey_boundary import handle_inbox_survey
 from lokay.organ.intake_check_boundary import handle_intake_check
 from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.issue_triage_boundary import handle_issue_triage
@@ -48,15 +46,10 @@ from lokay.organ.issues_boundary import handle_issues
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
 from lokay.organ.localize_boundary import handle_localize
-from lokay.organ.occupancy_refresh_boundary import handle_occupancy_refresh
-from lokay.organ.over_budget_boundary import handle_over_budget
-from lokay.organ.pass_plan_boundary import handle_pass_plan
 from lokay.organ.plan_issue_boundary import handle_plan_issue
-from lokay.organ.pr_closeout_boundary import handle_pr_closeout
 from lokay.organ.pr_create_boundary import handle_pr_create
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
-from lokay.organ.pr_survey_boundary import handle_pr_survey
 from lokay.organ.product_budget_boundary import handle_product_budget
 from lokay.organ.product_entry_boundary import handle_product_entry
 from lokay.organ.publication import handle_publication
@@ -73,10 +66,8 @@ from lokay.organ.self_repair_entry_boundary import handle_self_repair_entry
 from lokay.organ.self_repair_prepare_boundary import handle_self_repair_prepare
 from lokay.organ.self_repair_validate_boundary import handle_self_repair_validate
 from lokay.organ.stage_label_boundary import handle_stage_label
-from lokay.organ.stale_implementing_boundary import handle_stale_implementing
 from lokay.organ.stale_worktree_boundary import handle_stale_worktree
 from lokay.organ.status_boundary import handle_status
-from lokay.organ.survey_ready_boundary import handle_survey_ready
 from lokay.organ.test_local_boundary import handle_test_local
 from lokay.organ.triage_dispatch_boundary import handle_triage_dispatch
 
@@ -188,12 +179,10 @@ def _handle(
         handle_pr_triage_department,
         handle_self_repair,
         handle_stale_worktree,
-        handle_survey_ready,
         handle_triage_dispatch,
         handle_review_boundary,
         handle_coding_boundary,
         handle_child_harvest,
-        handle_conflict_resolution,
         handle_repair_boundary,
         handle_issue_split,
         handle_implementation_dispatch,
@@ -207,16 +196,9 @@ def _handle(
         handle_publication,
         handle_queue_conflict,
         handle_pr_finalize,
-        handle_pass_plan,
-        handle_occupancy_refresh,
-        handle_stale_implementing,
-        handle_over_budget,
         handle_self_repair_prepare,
         handle_self_repair_validate,
         handle_self_repair_activate,
-        handle_inbox_survey,
-        handle_pr_closeout,
-        handle_pr_survey,
         handle_ready_hygiene,
         handle_product_budget,
         handle_product_entry,

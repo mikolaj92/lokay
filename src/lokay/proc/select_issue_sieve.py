@@ -1,4 +1,4 @@
-"""Sieve verdict only: do / skip / park / human / split / intake. Never launch."""
+"""Sieve verdict only: do / skip / park / human / split. Never launch."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from lokay.proc.select_issue_do import leftover_of
 from lokay.proc.walk_issue_leftover import consumes, row_is_ready
 
 _SPLIT_MARKERS = ("split", "issue_split", "multi_epic", "oversized")
-_INTAKE_MARKERS = ("intake", "superseded", "duplicate_pr", "shape")
 _PARK = frozenset({"close", "blocked", "mark", "park"})
 
 
@@ -27,11 +26,13 @@ def classify_sieve(triage_run: Mapping[str, Any], picked: Mapping[str, Any]) -> 
     reason = str(
         decision.get("reason") or result.get("reason") or sito.get("reason") or ""
     )
+    if verdict in _PARK:
+        return ok(route="park", reason=reason or verdict, verdict=verdict)
+    if verdict == "ready":
+        return ok(route="do", reason=reason or "ready", verdict=verdict)
     token = f"{verdict} {reason}".lower()
     if any(marker in token for marker in _SPLIT_MARKERS):
         return ok(route="split", reason=reason or "issue_split", verdict=verdict)
-    if any(marker in token for marker in _INTAKE_MARKERS):
-        return ok(route="intake", reason=reason or "intake", verdict=verdict)
     if sito.get("route") == "ready" or verdict == "ready":
         return ok(route="do", reason=reason or "ready", verdict="ready")
     if verdict in _PARK or reason in _PARK:

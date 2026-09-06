@@ -70,6 +70,52 @@ of “issue → done”.
 **Exceptional work:** edit the graph — only when the *process* itself must change,
 and document why in `docs/GRAPH.md` / this file.
 
+## Entropy: reduce uncertainty, then conduct effects
+
+An agent **minimizes entropy**: uncertain evidence becomes a validated,
+closed-schema decision or scoped code artifact. Known hard facts terminate
+before inference. Fala owns validation, bounded retry/evidence requests,
+publication, labels, lists, gates and merge. No agent substitutes for listing,
+`host_ff`, merging or `resolve_issue_hard_facts`.
+
+Issue triage has one decision boundary: hard facts → agent only if needed →
+validation/evidence → publish. `issue_sieve_row` consumes that decision; words
+such as superseded, duplicate or shape do not trigger a second intake engine.
+`intake_check_execution` remains an explicit named-check CLI/dispatch capability,
+not a competing READY/CLOSE after triage. Shape and named-path evidence belong
+inside the existing triage evidence branch (#1001).
+
+The allowlist names actual organ bindings, not suffixes or vendor harnesses.
+Code workers return a transport envelope and scoped worktree changes; those
+still require real diff, local verification and publication gates.
+
+| Binding | Class | Uncertainty → bounded result |
+| --- | --- | --- |
+| `issue_triage_agent` | entropy | Issue and hard facts → triage decision |
+| `issue_triage_retry_agent` | entropy | Invalid triage and feedback → corrected decision |
+| `issue_evidence_agent` | entropy | Requested evidence → triage decision |
+| `run_localization_agent` | entropy | Issue and tree → edit-path proposal |
+| `retry_localization_agent` | entropy | Rejected paths → corrected proposal |
+| `run_relocalization_agent` | entropy | Existing diff and scope → scope reconciliation |
+| `retry_relocalization_agent` | entropy | Reconciliation feedback → corrected proposal |
+| `queue_conflict_agent` | entropy | Unresolved overlap → reconciliation decision |
+| `queue_conflict_retry_agent` | entropy | Invalid reconciliation → corrected decision |
+| `run_agent` | entropy | Localized issue or PR repair → scoped code changes |
+| `coding_retry_agent` | entropy | Coding feedback → corrected changes |
+| `evidence_coding_agent` | entropy | Requested coding evidence → scoped changes |
+| `repair_agent` | entropy | Failed local tests → scoped repair |
+| `pr_repair_retry_agent` | entropy | Failed repair contract → corrected changes |
+| `evidence_repair_agent` | entropy | Requested repair evidence → scoped changes |
+| `pr_test_repair_agent` | entropy | PR test failure → scoped repair |
+| `pr_review_agent` | entropy | Exact SHA and evidence → review verdict |
+| `pr_review_retry_agent` | entropy | Invalid review → corrected verdict |
+| `evidence_review_agent` | entropy | SHA-bound evidence → review verdict |
+| `self_repair_run_agent` | entropy | Factory incident and scope → candidate code repair |
+
+Campaign: bounded authoring #996, retired surfaces #998, removed Python survey
+chain #999, semantic contracts #1000, single triage boundary #1001. Fala remains
+the process, not a worker prompt or a Python sequence.
+
 ## Atom contract (universal)
 
 - One process = one job.
