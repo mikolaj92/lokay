@@ -1063,7 +1063,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "pr_repair"
 title = "PR repair"
-description = "Explicit Fala-owned repair JSON, one invalid retry, one closed evidence round, and one test-repair round. Parent enforces per-PR lifetime K via durable receipt (default K=1 from limits.max_repairs_per_tick); exhausted → fail_closed park, no next-tick repair loop."
+description = "Explicit Fala-owned repair JSON, one invalid retry, one closed evidence round, and one test-repair round. Parent enforces per-PR lifetime K via durable receipt (default K=1 from limits.max_repairs_per_tick); exhausted -> fail_closed park, no next-tick repair loop."
 
 [[correlation_paths.effectors]]
 id = "pr_checks"
@@ -4244,7 +4244,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_sieve_row"
 title = "One issue sieve row"
-description = "Select, one triage verdict, optional split. Published verdict final — no second intake. Zero needs_human. Never launch issue_to_pr."
+description = "Select, one triage verdict, optional split. Published verdict final -- no second intake. Zero needs_human. Never launch issue_to_pr."
 
 [[correlation_paths.effectors]]
 id = "select_next_issue"
