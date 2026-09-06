@@ -99,10 +99,10 @@ def test_executor_switch_is_independent_of_sieves() -> None:
     assert select_pr_triage(enabled=True)["route"] == "run"
 
 
-def test_pr_triage_switch_does_not_start_repair() -> None:
+def test_pr_triage_switch_does_not_start_repair(tmp_path) -> None:
     assert select_pr_triage(enabled=True)["route"] == "run"
     assert select_pr_triage(enabled=False)["reason"] == "pr_triage_disabled"
-    assert select_pr_repair({}, enabled=True, triage_ran=True) == {
+    assert select_pr_repair({}, enabled=True, triage_ran=True, state_dir=tmp_path) == {
         "ok": True,
         "route": "skip",
         "reason": "no_triage_verdict",
@@ -111,14 +111,16 @@ def test_pr_triage_switch_does_not_start_repair() -> None:
         {"triage": {"repairable": True}, "verdict": "repair", "repo": "o/r", "pr": 9},
         enabled=True,
         triage_ran=True,
+        state_dir=tmp_path,
     )["route"] == "repair"
 
 
-def test_pr_repair_disabled_leaves_sieve() -> None:
+def test_pr_repair_disabled_leaves_sieve(tmp_path) -> None:
     out = select_pr_repair(
         {"triage": {"repairable": True}},
         enabled=False,
         triage_ran=False,
+        state_dir=tmp_path,
     )
     assert out["route"] == "skip"
     assert out["reason"] == "pr_repair_disabled"

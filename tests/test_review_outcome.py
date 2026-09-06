@@ -44,19 +44,33 @@ def test_pr_outcome_handler_routes_reused_request_changes(monkeypatch):
     assert out["route"] == "repair"
 
 
-def test_parent_pr_repair_slot_forwards_review(monkeypatch):
+def test_parent_pr_repair_slot_forwards_review(monkeypatch, tmp_path):
     from lokay.proc import run_parent_pr_repair_subflow as module
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"""mode: dry-run
+state:
+  path: {tmp_path / "state.jsonl"}
+repos:
+  - name: a/b
+    clone_path: {tmp_path / "r"}
+    enabled: true
+""",
+        encoding="utf-8",
+    )
     calls = []
     monkeypatch.setattr(module, "compose_pr_repair", lambda **kwargs: calls.append(kwargs) or {"ok": True})
     review = {"decision": {"verdict": "request_changes"}, "head_sha": "abc"}
     out = module.run(
         {"repo": "a/b", "pr": 7, "branch": "ai/fix/7-x", "review": review},
-        config_path="cfg",
+        config_path=str(cfg),
         live=True,
     )
     assert out["route"] == "completed"
+    assert out["attempts"] == 1
+    assert out["parked"] is True
     assert calls == [{
-        "config_path": "cfg", "repo": "a/b", "pr_number": 7,
+        "config_path": str(cfg), "repo": "a/b", "pr_number": 7,
         "branch": "ai/fix/7-x", "review": review, "live": True,
     }]
 
