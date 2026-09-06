@@ -365,3 +365,80 @@ def test_missing_native_finalize_stops_reclaim_after_one_try(tmp_path: Path, mon
     assert db.exists()
     assert calls == ["lokay-old-0"]
 
+
+def test_self_repair_incomplete_runs_finalized_without_delete(tmp_path: Path, monkeypatch):
+    """self_repair_validate created/running become timed_out evidence; not deleted."""
+    from lokay.fala_journal import (
+        maintain_lokay_fala_journals,
+        reclaim_self_repair_incomplete_journals,
+    )
+
+    home = tmp_path / "home"
+    validate_db = _write_db(
+        home / ".lokay" / "fala" / "self_repair_validate" / "state.sqlite", size=80
+    )
+    i2pr = _write_db(
+        home / ".lokay" / "fala" / "i2pr" / "mikolaj92__lokay__9" / "state.sqlite",
+        size=80,
+    )
+    heartbeat = _write_db(
+        home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80
+    )
+    calls: list[tuple[str, str, str]] = []
+
+    def list_runs(db_path, **_kwargs):
+        path = Path(db_path)
+        if path == validate_db:
+            return [
+                {"id": "sr-created", "status": "created"},
+                {"id": "sr-running", "status": "running"},
+                {"id": "sr-done", "status": "completed"},
+            ]
+        if path == heartbeat:
+            return [{"id": "hb-created", "status": "created"}]
+        if path == i2pr:
+            return [{"id": "i2pr-created", "status": "created"}]
+        return []
+
+    def finalize_run(db_path, *, run_id, status, reason=None):
+        calls.append(("finalize", run_id, str(reason or "")))
+        assert status == "timed_out"
+
+    def delete_terminal_run(db_path, run_id):
+        calls.append(("delete", run_id, ""))
+        return {"ok": True}
+
+    maintain_calls = _capture_maintain(monkeypatch)
+    monkeypatch.setattr("fala.list_runs", list_runs)
+    monkeypatch.setattr("fala.finalize_run", finalize_run)
+    monkeypatch.setattr("fala.delete_terminal_run", delete_terminal_run)
+
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
+    assert out["ok"] is True
+    maintained = {Path(row["path"]) for row in out["maintained"]}
+    assert validate_db in maintained
+    assert heartbeat in maintained
+    assert i2pr in maintained
+
+    validate_row = next(row for row in out["maintained"] if Path(row["path"]) == validate_db)
+    assert validate_row["reclaimed_created"] == 2
+    heartbeat_row = next(row for row in out["maintained"] if Path(row["path"]) == heartbeat)
+    assert heartbeat_row["reclaimed_created"] == 1
+
+    assert ("finalize", "sr-created", "self_repair_reclaim") in calls
+    assert ("finalize", "sr-running", "self_repair_reclaim") in calls
+    assert ("delete", "sr-created", "") not in calls
+    assert ("delete", "sr-running", "") not in calls
+    assert ("finalize", "hb-created", "heartbeat_reclaim") in calls
+    assert ("delete", "hb-created", "") in calls
+    assert not any(run_id.startswith("i2pr") for _, run_id, _ in calls)
+
+    # Public reclaim path also covers self_repair journals only.
+    calls.clear()
+    public = reclaim_self_repair_incomplete_journals(home=home)
+    assert public["ok"] is True
+    assert any(Path(row["path"]) == validate_db for row in public["reclaimed"])
+    assert ("finalize", "sr-created", "self_repair_reclaim") in calls
+    assert ("delete", "sr-created", "") not in calls
+    assert not any(run_id.startswith("hb-") or run_id.startswith("i2pr") for _, run_id, _ in calls)
+    assert maintain_calls  # maintain still invoked for over-cap journals

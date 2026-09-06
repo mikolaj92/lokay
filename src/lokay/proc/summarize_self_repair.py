@@ -23,4 +23,7 @@ def summarize(*, preflight: dict, push: dict, activate: dict, close: dict) -> di
         result.update(ok=True, reason="published_push_kept_dirty_tree")
     elif not result["validated"] or not result["restart_required"]:
         result.update(ok=False, error="self-repair did not validate activated main")
-    return {"ok": True, "result": result}
+    else:
+        result.update(ok=True)
+    terminal = "OK" if result.get("ok") is True else "failed"
+    return {"ok": True, "terminal": terminal, "result": result}

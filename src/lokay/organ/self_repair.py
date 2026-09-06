@@ -12,6 +12,28 @@ from lokay.prompts import (
 )
 
 
+def _fail_closed_skip(*, reason: str, **extra: Any) -> dict[str, Any]:
+    """ok=True skipped envelope so organ_envelope never aborts the path."""
+    out: dict[str, Any] = {
+        "ok": True,
+        "skipped": True,
+        "route": "fail_closed",
+        "reason": reason,
+    }
+    out.update(extra)
+    return out
+
+
+def _reclaim_validate_journal_soft() -> None:
+    """Reap incomplete self_repair journals after validate; never raise."""
+    try:
+        from lokay.fala_journal import reclaim_self_repair_incomplete_journals
+
+        reclaim_self_repair_incomplete_journals()
+    except Exception:
+        return
+
+
 def handle_self_repair(
     atom: str,
     inputs: dict[str, Any],
@@ -106,12 +128,37 @@ def handle_self_repair(
         base_sha = str(prepared.get("base_sha") or "")
         fingerprint = str(inputs.get("fingerprint") or "")
         assert worktree and base_sha and fingerprint and committed.get("commit")
-        return run(
-            worktree=worktree,
-            base_sha=base_sha,
-            expected_subject=f"self-repair: {fingerprint}",
-            expected_commit=str(committed["commit"]),
-        )
+        try:
+            result = run(
+                worktree=worktree,
+                base_sha=base_sha,
+                expected_subject=f"self-repair: {fingerprint}",
+                expected_commit=str(committed["commit"]),
+            )
+        finally:
+            _reclaim_validate_journal_soft()
+        if not isinstance(result, dict):
+            return _fail_closed_skip(
+                reason="validate_non_dict",
+                validated=False,
+                error="self_repair_validate returned non-dict",
+            )
+        if result.get("validated") is not True:
+            reason = str(
+                result.get("reason")
+                or result.get("error")
+                or result.get("route")
+                or "not_validated"
+            )
+            return {
+                "ok": True,
+                "validated": False,
+                "route": "fail_closed",
+                "reason": reason,
+                "error": result.get("error") or reason,
+                "commit": result.get("commit") or committed.get("commit"),
+            }
+        return result
 
     if atom == "self_repair_commit":
         prepared = up.get("self_repair_prepare", {})
@@ -157,13 +204,23 @@ def handle_self_repair(
         base_sha = str(prepared.get("base_sha") or "")
         expected_commit = str(committed.get("commit") or "")
         validated_commit = str(validated.get("commit") or "")
-        assert (
-            worktree
-            and base_sha
-            and expected_commit
-            and validated_commit == expected_commit
-            and validated.get("validated") is True
-        )
+        if (
+            not worktree
+            or not base_sha
+            or not expected_commit
+            or validated_commit != expected_commit
+            or validated.get("validated") is not True
+        ):
+            reason = (
+                "not_validated"
+                if validated.get("validated") is not True
+                else "commit_mismatch"
+            )
+            return _fail_closed_skip(
+                reason=reason,
+                pushed=False,
+                commit=expected_commit or validated_commit or None,
+            )
         return _run_atom_main(
             self_repair_push_main.main,
             [
@@ -181,12 +238,16 @@ def handle_self_repair(
 
     if atom == "self_repair_activate":
         prepared = up.get("self_repair_prepare", {})
-        commit = str(
-            up.get("self_repair_push_main", {}).get("commit")
-            or prepared.get("commit")
-            or ""
+        pushed = up.get("self_repair_push_main", {})
+        commit = str(pushed.get("commit") or prepared.get("commit") or "")
+        fail_closed = pushed.get("route") == "fail_closed" or (
+            pushed.get("skipped") and pushed.get("reason") != "already_on_main"
         )
-        assert commit
+        if fail_closed or not commit:
+            return _fail_closed_skip(
+                reason=str(pushed.get("reason") or "missing_commit"),
+                commit=commit or None,
+            )
         from lokay.proc.self_repair_activate_subflow import run
 
         return run(
@@ -200,15 +261,38 @@ def handle_self_repair(
         commit = str(activated.get("commit") or "")
         project = str(activated.get("path") or "")
         config_path = str(inputs.get("config_path") or inputs.get("config") or "")
-        assert commit and project and config_path
+        if (
+            activated.get("skipped")
+            or activated.get("route") == "fail_closed"
+            or not commit
+            or not project
+            or not config_path
+        ):
+            return _fail_closed_skip(
+                reason=str(activated.get("reason") or "activate_skipped"),
+                commit=commit or None,
+                validated=False,
+            )
         return _run_atom_main(
             self_repair_preflight.main,
             ["--config", config_path, "--project", project, "--commit", commit],
         )
 
     if atom == "self_repair_close":
-        commit = str(up.get("self_repair_preflight", {}).get("commit") or "")
-        assert issue_number is not None and commit
+        preflight = up.get("self_repair_preflight", {})
+        commit = str(preflight.get("commit") or "")
+        if (
+            issue_number is None
+            or not commit
+            or preflight.get("skipped")
+            or preflight.get("route") == "fail_closed"
+            or preflight.get("validated") is False
+        ):
+            return _fail_closed_skip(
+                reason=str(preflight.get("reason") or "preflight_skipped"),
+                closed=False,
+                commit=commit or None,
+            )
         return _run_atom_main(
             self_repair_close.main,
             [*cfg, *live, "--issue", str(issue_number), "--commit", commit],
