@@ -730,7 +730,12 @@ def harvest_fail_closed_children(
 
 
 def harvest_idle_lokay_stuck(*, config_path: str | None, live: bool = True) -> None:
-    """Idle daemon_cycle skip still harvests lokay stuck. OSError cannot stall."""
+    """Harvest fail-closed / miss-N children and persist stuck.
+
+    Used before each live factory_pass (lokay#1063) so slim factory_begin
+    still gets dead-pid fail-closed without nesting child Fala on begin.
+    OSError cannot stall the caller.
+    """
     from argparse import Namespace
 
     from lokay.proc._common import load_cfg
