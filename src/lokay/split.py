@@ -1,7 +1,7 @@
 """Deterministic auto-split of oversized issues into bounded child issues.
 
 Pure rules — no coding harness. Fail closed when parts cannot be extracted:
-callers apply NEEDS_HUMAN instead of inventing work.
+callers park (factory fail-closed) instead of inventing work. Zero needs_human.
 """
 
 from __future__ import annotations
@@ -10,6 +10,11 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from lokay.host_ops import (
+    HOST_OPS_UNPARK_CRITERION,
+    host_ops_child_body,
+    line_is_host_ops_only,
+)
 from lokay.issue_checkboxes import is_bug_issue, iter_work_checkboxes
 from lokay.models import Issue
 
@@ -134,6 +139,24 @@ def _inventory_slices(parent: Issue) -> list[ChildSpec]:
     ]
 
 
+def _is_host_ops_split(reason: str) -> bool:
+    token = (reason or "").lower()
+    return "host_ops" in token
+
+
+def _host_ops_child(parent: Issue) -> ChildSpec:
+    return ChildSpec(
+        title=_clip_title("Host/ops evidence (not coding)"),
+        body=host_ops_child_body(parent),
+        source="host_ops",
+    )
+
+
+def _filter_code_children(children: list[ChildSpec]) -> list[ChildSpec]:
+    """Drop host-ops-only checkbox/heading lines from coding children."""
+    return [c for c in children if not line_is_host_ops_only(c.title)]
+
+
 def plan_split(
     issue: Issue,
     *,
@@ -146,11 +169,43 @@ def plan_split(
         return None
 
     cap = max(MIN_CHILDREN, min(int(max_children), MAX_CHILDREN))
+    host_ops = _is_host_ops_split(reason)
+
     candidates = _from_checkboxes(issue)
-    if len(candidates) < MIN_CHILDREN:
+    if len(candidates) < MIN_CHILDREN and not host_ops:
         candidates = _from_numbered(issue)
-    if len(candidates) < MIN_CHILDREN:
+    if len(candidates) < MIN_CHILDREN and not host_ops:
         candidates = _from_headings(issue)
+    if host_ops:
+        # Prefer code-only children; always add one deterministic host/ops child.
+        code = _filter_code_children(candidates)
+        if not code:
+            # Try numbered/headings for a code slice before fail-closed.
+            for extra in (_from_numbered(issue), _from_headings(issue)):
+                code = _filter_code_children(extra)
+                if code:
+                    break
+        host_child = _host_ops_child(issue)
+        # Reserve one slot for host/ops; keep code slices in the rest.
+        code_cap = max(0, cap - 1)
+        merged = list(code[:code_cap]) + [host_child]
+        if len(merged) < MIN_CHILDREN:
+            return None
+        children = tuple(merged[:cap])
+        return SplitPlan(
+            reason=reason,
+            children=children,
+            demote_parent=True,
+            close_parent=True,
+            detail={
+                "extracted": len(children),
+                "cap": cap,
+                "parent": f"{issue.repo}#{issue.number}",
+                "host_ops": True,
+                "auto_unpark": HOST_OPS_UNPARK_CRITERION,
+            },
+        )
+
     if len(candidates) < MIN_CHILDREN and reason in {
         "inventory_everything",
         "multi_epic_blob",
