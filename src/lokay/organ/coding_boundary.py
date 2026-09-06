@@ -224,11 +224,13 @@ def handle_coding_boundary(
     if atom == "close_existing_delivery":
         from lokay.proc.close_existing_delivery import close
 
+        resolved = up.get("resolve_existing_delivery") or {}
         return close(
             repo=ctx["repo"],
             issue=int(ctx["issue_number"]),
             config_path=inputs.get("config_path") or inputs.get("config"),
             live=bool(inputs.get("live")),
+            pr=resolved.get("pr"),
         )
     if atom == "issue_to_pr_subflow":
         from lokay.proc.issue_to_pr_subflow import invoke
