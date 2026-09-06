@@ -425,6 +425,7 @@ Semantic remainder is one structured executor call; invalid JSON gets one retry;
 a second evidence request parks fail-closed. A close verdict marks; it does not close
 GitHub. Own-work closeout after merge stays in `pr_triage` (`close_issue`).
 Oversized / multi-epic parks with `issue_split` reason; sieve auto-splits.
+Host-ops monolith (live fleet/host evidence + code) → park `host_ops_issue_split` (sieve split) or pure host-ops → park `host_ops`; never coding monolith.
 Zero `needs_human`. The executor department launches `issue_to_pr` only after a do mark.
 
 ### `pr_repair` (red checks on open ai/fix PR)

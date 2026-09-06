@@ -6,13 +6,18 @@ from lokay.split import plan_split, validate_split_plan
 
 
 def plan(*, issue_data: dict, reason: str) -> dict:
-    value = plan_split(Issue.from_dict(issue_data), reason=reason or "agent_split")
+    split_reason = reason or "agent_split"
+    value = plan_split(Issue.from_dict(issue_data), reason=split_reason)
     if value is None:
+        # Host-ops monolith without extractable code+ops children → park host_ops.
+        park_reason = (
+            "host_ops" if "host_ops" in split_reason.lower() else "split_impossible"
+        )
         return {
             "ok": True,
             "route": "park",
-            "reason": "split_impossible",
-            "decision": {"verdict": "park", "reason": "split_impossible"},
+            "reason": park_reason,
+            "decision": {"verdict": "park", "reason": park_reason},
             "child_count": 0,
         }
     data = value.to_dict()
