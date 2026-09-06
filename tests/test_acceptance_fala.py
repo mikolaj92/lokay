@@ -15,4 +15,5 @@ def test_acceptance_is_authored_before_builder_and_verified_before_push():
     assert 'prepare_acceptance' in builder['conduction']
     assert 'verify_acceptance' in push['conduction']
     assert verify['when']=={'upstream':'finalize_local_tests','path':'route','equals':'publish'}
+    assert push['when']=={'upstream':'verify_acceptance','path':'route','equals':'publish'}
     assert prepare['capability']=='acceptance_write' and builder['capability']!='acceptance_write'

@@ -10,6 +10,7 @@ from lokay.models import Issue
 from lokay.organ.common import (
     _issue_no_longer_open,
     _issue_raw,
+    _require_acceptance,
     _require_push,
     _require_real_diff,
     _require_test_local,
@@ -166,6 +167,9 @@ def handle_publication(
         refused = _require_real_diff(up)
         if refused is not None:
             return refused
+        refused = _require_acceptance(up)
+        if refused is not None:
+            return refused
         committed = next(
             (
                 (up.get(name) or {}).get("committed")
@@ -217,6 +221,9 @@ def handle_publication(
         if refused is not None:
             return refused
         refused = _require_push(up)
+        if refused is not None:
+            return refused
+        refused = _require_acceptance(up)
         if refused is not None:
             return refused
         branch = str(up.get("make_branch", {}).get("branch") or "")

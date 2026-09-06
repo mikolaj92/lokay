@@ -616,7 +616,7 @@ def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
     }
     assert repair_by["repair_agent"]["conduction"] == ["prepare_local_repair_request"]
     assert by_id["push"]["when"] == {
-        "upstream": "finalize_local_tests",
+        "upstream": "verify_acceptance",
         "path": "route",
         "equals": "publish",
     }
