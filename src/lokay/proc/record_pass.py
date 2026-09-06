@@ -106,17 +106,50 @@ def _state_path(begin: dict[str, Any], pass_dir: str) -> Path:
     return Path.home() / ".lokay" / "state.jsonl"
 
 
-def _issues_leftover_remaining(
-    issues: dict[str, Any] | None, remaining: dict[str, Any]
-) -> dict[str, Any]:
-    """Skip / triage_not_done must not wipe leftover. Count stays on last-pass."""
+def _occupied_repos_for_leftover(
+    working: dict[str, Any] | None, issues: dict[str, Any] | None
+) -> set[str]:
+    """Repos with a live i2pr must not appear as leftover ready (#1017)."""
+    working = _blob(working)
+    occupied = {
+        str(name)
+        for name in list(working.get("occupied_repos") or [])
+        + list(working.get("live_issue_to_pr_repos") or [])
+        if name
+    }
     issues_r = _result(issues)
-    leftover_issues = [
+    if str(issues_r.get("launched") or issues_r.get("route") or "") in {
+        "started",
+        "busy",
+    }:
+        repo = str(issues_r.get("repo") or "")
+        if repo:
+            occupied.add(repo)
+    return occupied
+
+
+def _issues_leftover_remaining(
+    issues: dict[str, Any] | None,
+    remaining: dict[str, Any],
+    *,
+    working: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Skip / triage_not_done must not wipe leftover. Count stays on last-pass.
+
+    Live issue_to_pr occupancy removes that repo from leftover ready (#1017).
+    """
+    issues_r = _result(issues)
+    occupied = _occupied_repos_for_leftover(working, issues)
+    raw_issues = [
         row for row in list(issues_r.get("leftover_issues") or []) if isinstance(row, dict)
     ]
-    leftover = int(issues_r.get("leftover") or 0)
-    if leftover_issues:
-        leftover = max(leftover, len(leftover_issues))
+    leftover_issues = [
+        row for row in raw_issues if str(row.get("repo") or "") not in occupied
+    ]
+    if raw_issues or occupied:
+        leftover = len(leftover_issues)
+    else:
+        leftover = int(issues_r.get("leftover") or 0)
     out = {**remaining, "leftover": leftover}
     if leftover_issues:
         out["leftover_issues"] = leftover_issues
@@ -153,7 +186,9 @@ def run_record_pass(
     outcome = classify_outcome(prs=prs, issues=issues, working=working, tick=tick)
     started = occupancy_started(issues=issues, working=working, tick=tick)
     remaining = _issues_leftover_remaining(
-        issues, _small_remaining(tick, overflow=overflow)
+        issues,
+        _small_remaining(tick, overflow=overflow),
+        working=working,
     )
     if started:
         remaining = {**remaining, "issue_to_pr_started": started}
