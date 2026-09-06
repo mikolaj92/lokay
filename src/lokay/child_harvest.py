@@ -240,7 +240,15 @@ def _walk_text(value: Any, chunks: list[str], *, depth: int = 0) -> None:
 
 
 def _classify(event: dict[str, Any] | None) -> str | None:
-    if not event or event.get("ok") is not False:
+    if not event:
+        return None
+    # lokay#1061: authored summarize_issue_to_pr may end ok:true with
+    # delivered:false / reason=no_delivery and no PR. That is a terminal
+    # undelivered child — fail-close as no_pr (like vanished dead-pid), not
+    # silent reap, so the single product slot is not monopolized forever.
+    if event.get("ok") is not False:
+        if event.get("delivered") is False and _as_int(event.get("pr")) is None:
+            return "no_pr"
         return None
     reason = event.get("reason")
     known = FAIL_CLOSED | MISS_REASONS
