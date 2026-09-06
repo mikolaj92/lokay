@@ -91,13 +91,17 @@ def test_verify_supplement_rejects_changed_sha(monkeypatch):
     assert out["expected_sha"] == "old" and out["actual_sha"] == "new"
 
 
-def test_missing_selected_evidence_routes_human_without_agent(monkeypatch):
+def test_missing_selected_evidence_routes_fail_closed_without_agent(monkeypatch):
     from lokay.organ.review_boundary import handle_review_boundary
     ctx={"repo":"a/b","pr_number":7,"branch":"b","live":True}
+    monkeypatch.setattr(
+        "lokay.proc.collect_review_changed_files.collect",
+        lambda **_k: {"ok": True, "collected": False, "reason": "unavailable"},
+    )
     up={
         "collect_pr_review_evidence":{"evidence":{"head_sha":"abc"}},
-        "select_pr_review":{"route":"evidence","evidence_kind":"changed_files"},
-        "collect_review_changed_files":{"ok":True,"collected":False,"reason":"unavailable"},
+        "select_pr_review":{"ok":True,"route":"evidence","evidence_kind":"changed_files"},
     }
-    out=handle_review_boundary("verify_review_evidence_sha",{},up,ctx)
-    assert out == {"ok":True,"route":"fail_closed","reason":"requested_review_evidence_unavailable"}
+    out=handle_review_boundary("review_evidence_catalog",{},up,ctx)
+    assert out["ok"] is True and out["route"] == "fail_closed"
+    assert out["reason"] == "unavailable"
