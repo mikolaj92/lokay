@@ -285,8 +285,7 @@ def handle_coding_boundary(
 
         first = up.get("validate_repair_result") or {}
         prompt = (
-            "Your previous local-repair response JSON was invalid. Return ONLY the required closed coding JSON object with verdict=implemented. Never needs_human / human / manual. Validator feedback: %s
-Invalid response: %s"
+            "Your previous local-repair response JSON was invalid. Return ONLY the required closed coding JSON object with verdict=implemented. Never needs_human / human / manual. Validator feedback: %s\nInvalid response: %s"
             % (
                 first.get("validation_error") or "invalid JSON",
                 first.get("agent_stdout_tail") or "",
