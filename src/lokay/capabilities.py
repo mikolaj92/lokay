@@ -1,6 +1,8 @@
 """Stable role capabilities independent of the selected harness."""
 from __future__ import annotations
 
+import os
+from importlib.resources import files
 from typing import Mapping
 
 ROLE_CAPABILITIES = {
@@ -13,8 +15,9 @@ ROLE_CAPABILITIES = {
     "pr_effect": {"pr.create"},
 }
 
-# Narrow GitHub identity for harnesses (builder/reviewer). Keep inherit_env=False;
-# do not pass orchestration tokens beyond gh CLI identity.
+_AGENT_ROLES = frozenset({"builder", "reviewer"})
+
+# Coding/review harnesses must not receive GitHub identity (#1008 was a bandage).
 _GITHUB_CREDENTIAL_KEYS = (
     "GH_TOKEN",
     "GITHUB_TOKEN",
@@ -22,19 +25,31 @@ _GITHUB_CREDENTIAL_KEYS = (
     "GH_ENTERPRISE_TOKEN",
 )
 
-_AGENT_ROLES = frozenset({"builder", "reviewer"})
+
+def _deny_bin_dir() -> str:
+    return str(files("lokay").joinpath("data", "deny-bin"))
+
+
+def coding_path(ambient_path: str) -> str:
+    """Prepend deny-bin so `gh` resolves to a fail-closed stub in coding slots."""
+    deny = _deny_bin_dir()
+    path = (ambient_path or "").strip()
+    if not path:
+        return deny
+    return f"{deny}{os.pathsep}{path}"
 
 
 def executor_environment(role: str, ambient: Mapping[str, str]) -> dict[str, str]:
     caps = ROLE_CAPABILITIES.get(role, set())
     out: dict[str, str] = {}
-    if ambient.get("PATH"):
-        out["PATH"] = ambient["PATH"]
     if role in _AGENT_ROLES:
+        out["PATH"] = coding_path(ambient.get("PATH", ""))
+        # Explicitly do not forward GitHub credentials into the harness.
         for key in _GITHUB_CREDENTIAL_KEYS:
-            value = ambient.get(key)
-            if value:
-                out[key] = value
+            out.pop(key, None)
+    else:
+        if ambient.get("PATH"):
+            out["PATH"] = ambient["PATH"]
     out["LOKAY_CAPABILITIES"] = ",".join(sorted(caps))
     return out
 

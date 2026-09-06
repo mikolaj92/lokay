@@ -34,3 +34,19 @@ def test_repair_and_resume_prompts_ban_product_gh_path():
     resume = timeout_resume_prompt(repo="a/b", branch="x", timeout_seconds=10)
     assert "take_issue" in repair and "AGENTS.md" in repair
     assert "take_issue" in resume and "AGENTS.md" in resume
+
+
+def test_issue_fix_prompt_inlines_body_without_github_url():
+    issue = Issue(
+        repo="mikolaj92/Temida",
+        number=5682,
+        title="fix hermes",
+        body="full body text here",
+        url="https://github.com/mikolaj92/Temida/issues/5682",
+        labels=[],
+        assignees=[],
+    )
+    text = issue_fix_prompt(issue, branch="ai/fix/5682-x")
+    assert "full body text here" in text
+    assert "Issue URL:" not in text
+    assert "https://github.com/mikolaj92/Temida/issues/5682" not in text

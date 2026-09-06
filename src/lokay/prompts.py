@@ -51,7 +51,6 @@ def issue_fix_prompt(
         issue_number=issue.number,
         repo=issue.repo,
         branch=branch,
-        issue_url=issue.url,
         scope=scope,
         stay=stay,
         untrusted_issue=untrusted,
@@ -66,7 +65,6 @@ def self_repair_prompt(*, issue: Issue, fingerprint: str, evidence: str = "") ->
         fingerprint=fingerprint,
         repo=issue.repo,
         issue_number=issue.number,
-        issue_url=issue.url,
         evidence=evidence[:6000] or "(preflight findings only)",
         untrusted_issue=untrusted,
     )

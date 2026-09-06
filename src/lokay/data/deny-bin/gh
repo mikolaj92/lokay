@@ -1,0 +1,4 @@
+#!/bin/sh
+# Lokay coding/review slot: GitHub CLI is owned by factory atoms, not the agent.
+echo "lokay: gh is forbidden in the coding slot (factory owns claim/publish)" >&2
+exit 77
