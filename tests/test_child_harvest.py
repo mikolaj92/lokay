@@ -64,6 +64,143 @@ def test_dead_pid_fail_closed_reason_is_excluded(tmp_path: Path):
     assert row.get("reason") == "local_repair_exhausted"
 
 
+
+def test_dead_implementing_receipt_is_stamped_reaped(tmp_path: Path):
+    """Dead pid + state=implementing must leave reaped terminal, not implementing."""
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    receipt = cycle / "a__b-7.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "detached": True,
+                "pid": 999_999_999,
+                "repo": "a/b",
+                "issue": 7,
+                "launch_id": "launch-7",
+                "state": "implementing",
+            }
+        ),
+        encoding="utf-8",
+    )
+    _event(state, repo="a/b", issue=7, ok=False, reason="local_repair_exhausted")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    row = json.loads(receipt.read_text(encoding="utf-8"))
+    assert row.get("reaped") is True
+    assert row.get("ok") is False
+    assert row.get("state") != "implementing"
+    assert "state" not in row
+    assert row.get("reason") == "local_repair_exhausted"
+    assert row.get("repo") == "a/b"
+    assert row.get("issue") == 7
+    assert row.get("pid") == 999_999_999
+    assert row.get("launch_id") == "launch-7"
+    assert 7 in excluded_numbers(stuck, "a/b")
+
+
+def test_live_pid_implementing_receipt_unchanged(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    receipt = cycle / "a__b-7.json"
+    payload = {
+        "ok": True,
+        "detached": True,
+        "pid": 42,
+        "repo": "a/b",
+        "issue": 7,
+        "launch_id": "launch-live",
+        "state": "implementing",
+    }
+    receipt.write_text(json.dumps(payload), encoding="utf-8")
+    _event(state, repo="a/b", issue=7, ok=False, reason="local_repair_exhausted")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda pid: int(pid) == 42,
+        coding_live=lambda _issue: False,
+    )
+    assert json.loads(receipt.read_text(encoding="utf-8")) == payload
+    assert excluded_numbers(stuck, "a/b") == set()
+
+
+def test_dead_pid_with_pr_is_stamped_closeout(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    receipt = cycle / "a__b-3.json"
+    receipt.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "detached": True,
+                "pid": 1,
+                "repo": "a/b",
+                "issue": 3,
+                "pr": 88,
+                "state": "implementing",
+                "launch_id": "launch-pr",
+            }
+        ),
+        encoding="utf-8",
+    )
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    row = json.loads(receipt.read_text(encoding="utf-8"))
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert row.get("reaped") is True
+    assert row.get("ok") is False
+    assert row.get("reason") == "closeout"
+    assert row.get("state") != "implementing"
+    assert "state" not in row
+    assert row.get("pr") == 88
+
+
+def test_coding_live_skips_stamp_even_when_wrapper_dead(tmp_path: Path):
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    receipt = cycle / "a__b-7.json"
+    payload = {
+        "ok": True,
+        "detached": True,
+        "pid": 1,
+        "repo": "a/b",
+        "issue": 7,
+        "state": "implementing",
+    }
+    receipt.write_text(json.dumps(payload), encoding="utf-8")
+    _event(state, repo="a/b", issue=7, ok=False, reason="local_repair_exhausted")
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda issue: int(issue) == 7,
+    )
+    assert json.loads(receipt.read_text(encoding="utf-8")) == payload
+    assert excluded_numbers(stuck, "a/b") == set()
+
+
 def test_live_pid_does_not_block_even_with_fail_event(tmp_path: Path):
     cycle = tmp_path / "cycle"
     cycle.mkdir()
@@ -401,7 +538,8 @@ def test_dead_pid_with_pr_on_receipt_is_not_blocked(tmp_path: Path):
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
-    (cycle / "a__b-3.json").write_text(
+    receipt = cycle / "a__b-3.json"
+    receipt.write_text(
         json.dumps(
             {
                 "ok": True,
@@ -420,8 +558,13 @@ def test_dead_pid_with_pr_on_receipt_is_not_blocked(tmp_path: Path):
         state_path=state,
         cycle_dir=cycle,
         is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
     )
     assert excluded_numbers(stuck, "a/b") == set()
+    row = json.loads(receipt.read_text(encoding="utf-8"))
+    assert row.get("reaped") is True
+    assert row.get("reason") == "closeout"
+    assert row.get("ok") is False
 
 
 def test_worktree_add_failed_error_is_fail_closed(tmp_path: Path):

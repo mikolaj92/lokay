@@ -19,7 +19,9 @@ def collect(config: dict, scope: dict, ledger: dict) -> dict:
             except (OSError, json.JSONDecodeError):
                 continue
             if isinstance(data, dict):
-                receipts.append(data)
+                row = dict(data)
+                row["_path"] = str(path)
+                receipts.append(row)
     events, history = _index_issue_to_pr_log(state)
     return {
         "ok": True,

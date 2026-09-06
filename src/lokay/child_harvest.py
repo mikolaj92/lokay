@@ -14,7 +14,11 @@ from typing import Any, Callable
 
 from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.factory_scope import factory_repo, scoped_repos
-from lokay.proc.detach_issue_to_pr import is_live_issue_to_pr_pid
+from lokay.proc.detach_issue_to_pr import (
+    coding_live_for_issue,
+    is_live_issue_to_pr_pid,
+)
+from lokay.proc.stamp_reaped_receipt import stamp_receipt_file
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import (
     clear_issue,
@@ -519,12 +523,34 @@ def _drop_out_of_scope_stuck_rows(
             clear_issue(stuck, repo, issue)
 
 
+
+def _delivery_reap_reason(
+    data: dict[str, Any], event: dict[str, Any] | None
+) -> str | None:
+    """Terminal closeout when a dead child already delivered a PR."""
+    receipt_pr = _as_int(data.get("pr"))
+    event_pr = _as_int((event or {}).get("pr")) if event else None
+    if receipt_pr or event_pr:
+        return "closeout"
+    if _event_delivered(event):
+        return "delivered"
+    return None
+
+
+def _stamp_dead_cycle_receipt(
+    path: Path, data: dict[str, Any], *, reason: str
+) -> None:
+    """Terminalize one dead-pid cycle receipt (not implementing)."""
+    stamp_receipt_file(path, data, reason=reason)
+
+
 def harvest_fail_closed_children(
     stuck: dict[str, Any],
     *,
     state_path: Path,
     cycle_dir: Path | None = None,
     is_live: Callable[[int], bool] | None = None,
+    coding_live: Callable[[int], bool] | None = None,
     home: Path | None = None,
     repos: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -542,6 +568,7 @@ def harvest_fail_closed_children(
     if home is None:
         home_root = isolated_home
     check = is_live or is_live_issue_to_pr_pid
+    coding_check = coding_live or coding_live_for_issue
     events, history = _index_issue_to_pr_log(state_path)
     if root.is_dir():
         for path in sorted(root.glob("*.json")):
@@ -563,6 +590,9 @@ def harvest_fail_closed_children(
             pid = _as_int(data.get("pid"))
             if pid is not None and check(pid):
                 continue
+            # Same occupancy gate: orphan coder still owns the ticket.
+            if coding_check(issue):
+                continue
 
             event = events.get((repo, issue))
             reason = _classify(event)
@@ -577,15 +607,17 @@ def harvest_fail_closed_children(
                     reason = receipt_reason
                     event = event or {"ok": False, "reason": reason}
             if not reason:
-                receipt_pr = _as_int(data.get("pr"))
-                event_pr = _as_int((event or {}).get("pr")) if event else None
-                if receipt_pr or event_pr or _event_delivered(event):
+                delivery_reason = _delivery_reap_reason(data, event)
+                if delivery_reason is not None:
                     # Delivery already happened. Drop a stale vanished row.
                     _clear_stale_no_pr(stuck, repo, issue)
+                    _stamp_dead_cycle_receipt(path, data, reason=delivery_reason)
                     continue
                 # Vanished: dead child, no PR, no journal event.
                 # An unknown ok=False is not no_pr.
                 if event is not None:
+                    # Still clear the implementing lie on a dead pid.
+                    _stamp_dead_cycle_receipt(path, data, reason="reaped")
                     continue
                 reason = "no_pr"
                 event = {
@@ -599,20 +631,21 @@ def harvest_fail_closed_children(
 
             if reason in FAIL_CLOSED:
                 # Crash / red-recheck stays buried. Do not increment a corpse.
-                if is_blocked_in_ledger(stuck, repo, issue):
-                    continue
-                row = record_failure(
-                    stuck,
-                    repo=repo,
-                    number=issue,
-                    error=error or reason,
-                    max_failures=1,
-                )
-                row["blocked"] = True
-                row["reason"] = reason
+                if not is_blocked_in_ledger(stuck, repo, issue):
+                    row = record_failure(
+                        stuck,
+                        repo=repo,
+                        number=issue,
+                        error=error or reason,
+                        max_failures=1,
+                    )
+                    row["blocked"] = True
+                    row["reason"] = reason
+                _stamp_dead_cycle_receipt(path, data, reason=str(reason))
                 continue
 
             if reason not in MISS_REASONS:
+                _stamp_dead_cycle_receipt(path, data, reason=str(reason or "reaped"))
                 continue
             miss_reason, miss_runs = _trailing_miss_runs(
                 history.get((repo, issue)) or []
@@ -632,6 +665,7 @@ def harvest_fail_closed_children(
                 miss_runs=miss_runs,
                 error=error or counted,
             )
+            _stamp_dead_cycle_receipt(path, data, reason=str(counted))
 
     # Receipts can be pruned and stuck.json can be overwritten mid-pass.
     # Re-apply terminal plan_only from the journal so the lokay cannot loop

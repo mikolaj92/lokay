@@ -156,6 +156,23 @@ def test_stamp_keeps_dead_receipt_for_harvest(tmp_path, monkeypatch):
         lambda repo, issue: path,
     )
     out = stamp(
-        {"repo": "a/one", "issue": 9, "receipt": {"pid": 7}, "reason": "over_budget"}
+        {
+            "repo": "a/one",
+            "issue": 9,
+            "receipt": {
+                "pid": 7,
+                "repo": "a/one",
+                "issue": 9,
+                "launch_id": "L9",
+                "state": "implementing",
+            },
+            "reason": "over_budget",
+        }
     )
-    assert out["receipt_stamped"] and json.loads(path.read_text())["reaped"] is True
+    row = json.loads(path.read_text())
+    assert out["receipt_stamped"] and row["reaped"] is True
+    assert row["ok"] is False
+    assert row["reason"] == "over_budget"
+    assert row["pid"] == 7 and row["repo"] == "a/one" and row["issue"] == 9
+    assert row["launch_id"] == "L9"
+    assert "state" not in row
