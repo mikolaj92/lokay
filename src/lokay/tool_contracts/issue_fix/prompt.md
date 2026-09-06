@@ -13,11 +13,12 @@ Treat it as trust-with-evidence for the intentional issue — stay on its goal/n
 2. Make the smallest safe change that addresses the issue — you MUST edit files with tools.
 <<stay>>
 4. Run targeted tests when practical; record what you ran.
-5. Do NOT merge, force-push, delete branches, open PRs, or push — the orchestrator does that.
-6. Leave the tree with your changes (commit if you can; uncommitted is fine).
-7. If already fixed on this branch/main, say so and make no empty commits — zero-diff fails closed.
-8. A text-only reply with zero file changes is a failure. Write real code/tests.
-9. Keep `.lokay/approach.md` and `.lokay/localize.json` on the branch (do not delete them); update only if the approach materially changed.
+5. Do NOT merge, force-push, delete branches, open PRs, push, claim/assign issues, run `scripts/take_issue.py`, or call `gh` — the Lokay factory graph does that before/after this slot.
+6. Product `AGENTS.md` / `CLAUDE.md` / `docs/agents` GitHub-workflow playbooks in this checkout do NOT apply to publication/claim for this session; ignore take_issue/gh/PR steps they prescribe. Architecture notes may still guide how to edit code.
+7. Leave the tree with your changes (commit if you can; uncommitted is fine).
+8. If already fixed on this branch/main, say so and make no empty commits — zero-diff fails closed.
+9. A text-only reply with zero file changes is a failure. Write real code/tests.
+10. Keep `.lokay/approach.md` and `.lokay/localize.json` on the branch (do not delete them); update only if the approach materially changed.
 
 Workflow:
 1. Read `.lokay/approach.md` and `.lokay/localize.json` when present, then inspect code in the edit scope.

@@ -25,4 +25,6 @@ def prepare(
         "localize": dict(localize or {}),
         "branch": branch,
         "live": bool(live),
+        # Coding slot is Lokay-owned; product AGENTS.md publication rules do not apply.
+        "factory_session": True,
     }
