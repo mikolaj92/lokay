@@ -69,6 +69,16 @@ export LOKAY_MODE="${LOKAY_MODE:-live}"
 export LOKAY_EXECUTOR_ENABLED="${LOKAY_EXECUTOR_ENABLED:-1}"
 export LOKAY_MERGE_ENABLED="${LOKAY_MERGE_ENABLED:-1}"
 
+# Coding harness ambient (agent.py inherit_env=False) only sees executor_environment().
+# LaunchAgent plist must not embed tokens; mint GH_TOKEN from gh keyring when missing.
+if [[ -z "${GH_TOKEN:-}" ]] && command -v gh >/dev/null 2>&1; then
+  _tok="$(gh auth token 2>/dev/null || true)"
+  if [[ -n "${_tok}" ]]; then
+    export GH_TOKEN="${_tok}"
+  fi
+  unset _tok
+fi
+
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="${LOG_DIR}/lokay-${STAMP}.log"
 LATEST="${LOG_DIR}/lokay-latest.log"
