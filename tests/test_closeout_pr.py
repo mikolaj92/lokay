@@ -81,7 +81,8 @@ def test_closeout_catalog_python_does_not_nest_children():
     )
     assert "for slot in range" not in src
     assert "while " not in src
-    assert not (root / "src/lokay/organ/pr_closeout_boundary.py").exists()
+    organ = (root / "src/lokay/organ/pr_closeout_boundary.py").read_text()
+    assert "select_pr_closeout_slot_" not in organ
 
 
 def test_nested_closeout_failure_is_recorded_failed(monkeypatch):

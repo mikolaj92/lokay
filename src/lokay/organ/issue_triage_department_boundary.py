@@ -1,4 +1,4 @@
-"""Fala bindings for the issue_triage department (sieve + split + intake)."""
+"""Fala bindings for the issue_triage department (sieve + split)."""
 
 from typing import Any
 
