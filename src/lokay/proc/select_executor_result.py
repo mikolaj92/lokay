@@ -18,33 +18,68 @@ def select(prepared: dict, rows: list[dict]) -> dict:
                 break
     if chosen is None:
         last = prepared.get("last") if isinstance(prepared.get("last"), dict) else {}
-        leftover_issues = list(last.get("leftover_issues") or [])
-        leftover = int(last.get("leftover") or len(leftover_issues) or 0)
+        leftover_issues = list(
+            prepared.get("leftover_issues")
+            if "leftover_issues" in prepared
+            else last.get("leftover_issues")
+            or []
+        )
+        leftover = int(
+            prepared.get("leftover")
+            if "leftover" in prepared
+            else last.get("leftover")
+            or len(leftover_issues)
+            or 0
+        )
         spent = int(prepared.get("spent") or 0)
         chosen = {
             "ok": True,
-            "route": "cap" if leftover > 0 else "idle",
+            "route": "cap" if leftover > 0 or spent > 0 else "idle",
             "spent": spent,
             "leftover": leftover,
-            "leftover_issues": leftover_issues,
             "result": last,
         }
+        # Cap/empty slots never ran select_next_issue — keep prepared fuel (#1071).
+        if leftover_issues:
+            chosen["leftover_issues"] = leftover_issues
+        elif "leftover_issues" in prepared:
+            chosen["leftover_issues"] = []
     result = dict(chosen.get("result") or {})
     launched = launched or (
         "started" if launched_of({"result": result}) else result.get("launched")
     )
+    leftover_issues = list(
+        chosen.get("leftover_issues")
+        if "leftover_issues" in chosen
+        else result.get("leftover_issues")
+        if "leftover_issues" in result
+        else prepared.get("leftover_issues")
+        if "leftover_issues" in prepared
+        else []
+    )
+    leftover = int(
+        chosen.get("leftover")
+        if chosen.get("leftover") is not None
+        else result.get("leftover")
+        if result.get("leftover") is not None
+        else prepared.get("leftover")
+        or len(leftover_issues)
+        or 0
+    )
     result.update(
         launched=launched,
-        leftover=int(chosen.get("leftover") or result.get("leftover") or 0),
-        leftover_issues=list(
-            chosen.get("leftover_issues") or result.get("leftover_issues") or []
-        ),
+        leftover=leftover,
         rows=int(chosen.get("slot") or chosen.get("spent") or result.get("rows") or 0),
         spent=int(chosen.get("spent") or 0),
         budget=int(prepared.get("cap") or prepared.get("budget") or chosen.get("budget") or 0),
         stop=chosen.get("route"),
         department="executor",
     )
+    # Do not force leftover_issues=[] — omit so record_pass can keep prior (#1067).
+    if leftover_issues:
+        result["leftover_issues"] = leftover_issues
+    else:
+        result.pop("leftover_issues", None)
     return {
         "ok": True,
         "route": str(chosen.get("route") or "idle"),

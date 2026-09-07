@@ -46,7 +46,7 @@ def test_occupancy_without_leftover_key_keeps_prior():
     assert remaining["leftover_issues"][0]["issue"] == 160
 
 
-def test_fresh_list_all_occupied_still_zeros_ready_leftover():
+def test_fresh_list_all_occupied_keeps_prior_other_repos():
     remaining = _issues_leftover_remaining(
         {
             "result": {
@@ -57,8 +57,8 @@ def test_fresh_list_all_occupied_still_zeros_ready_leftover():
         {"leftover": 9, "leftover_issues": [{"repo": "mikolaj92/Docxtor", "issue": 160}]},
         working={"occupied_repos": ["mikolaj92/Fala"]},
     )
-    assert remaining["leftover"] == 0
-    assert "leftover_issues" not in remaining
+    assert remaining["leftover"] == 1
+    assert remaining["leftover_issues"] == [{"repo": "mikolaj92/Docxtor", "issue": 160}]
 
 
 def test_record_pass_seeds_from_last_pass_under_occupancy(tmp_path: Path):
@@ -131,3 +131,72 @@ def test_last_pass_with_leftover_is_not_empty_idle():
         )
         is True
     )
+
+def test_tick_leftover_zero_still_reseeds_leftover_issues(tmp_path: Path):
+    state = tmp_path / "state.jsonl"
+    write_pass_receipt(
+        {
+            "kind": "pass_receipt",
+            "remaining": {
+                "leftover": 2,
+                "leftover_issues": [
+                    {"repo": "mikolaj92/takt", "issue": 43},
+                    {"repo": "mikolaj92/takt", "issue": 44},
+                ],
+            },
+        },
+        state_path=state,
+    )
+    pass_dir = tmp_path / "factory-pass-2"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {"state_path": str(state), "live": True, "config_path": "x"},
+    )
+    # Stale tick leftover:0 without leftover_issues must not block reseed (#1071).
+    pass_io.write_json(
+        pass_io.tick_path(pass_dir),
+        {"remaining": {"leftover": 0}, "health": "hosted", "idle": False},
+    )
+    pass_io.write_json(
+        pass_io.working_path(pass_dir),
+        {"occupied_repos": ["mikolaj92/my-usermanager"]},
+    )
+    out = run_record_pass(
+        pass_dir=str(pass_dir),
+        issues={"result": {"route": "idle", "leftover": 0, "leftover_issues": []}},
+    )
+    rem = out["result"]["remaining"]
+    assert rem["leftover"] == 2
+    assert rem["leftover_issues"][0]["issue"] == 43
+
+
+def test_select_executor_result_cap_keeps_prepared_leftover():
+    from lokay.proc.select_executor_result import select
+
+    out = select(
+        {
+            "last": {},
+            "spent": 1,
+            "cap": 1,
+            "budget": 0,
+            "leftover": 2,
+            "leftover_issues": [
+                {"repo": "mikolaj92/takt", "issue": 43},
+                {"repo": "mikolaj92/takt", "issue": 44},
+            ],
+        },
+        rows=[{"ok": True, "route": "empty", "slot": 1}],
+    )
+    assert out["route"] == "cap"
+    assert out["result"]["leftover"] == 2
+    assert out["result"]["leftover_issues"][0]["issue"] == 43
+
+
+def test_select_executor_result_omits_empty_leftover_issues():
+    from lokay.proc.select_executor_result import select
+
+    out = select({"last": {}, "spent": 0, "cap": 1, "budget": 1}, rows=[])
+    assert "leftover_issues" not in out["result"]
+    assert out["result"]["leftover"] == 0
+
