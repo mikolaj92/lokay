@@ -243,9 +243,9 @@ def test_decide_intake_blocks_preflight_incident(tmp_path: Path):
     hit = check_preflight_incident(issue)
     assert hit.verdict == "blocked"
     d = decide_intake(issue, clone_path=tmp_path, state="OPEN")
-    assert d.decision == "blocked"
+    assert d.decision == "skip"
     assert d.implementable is False
-    assert d.add_labels == ("ai:frozen",)
+    assert d.add_labels == ()
     assert "ai:blocked" not in d.add_labels
     assert "work:ready" in d.remove_labels
 
@@ -297,7 +297,7 @@ def test_decide_intake_never_ready_on_inconclusive(tmp_path: Path):
         ),
         clone_path=None,
     )
-    assert d.decision == "park"
+    assert d.decision == "skip"
     assert d.implementable is False
 
 
@@ -375,7 +375,9 @@ def test_should_run_intake_ready_and_candidates():
 
 
 def test_should_run_intake_skips_parked_blocked_undecided():
-    assert _gate(issue_labels=["frozen"]) == (False, "parked_frozen")
+    # Stale frozen is not a park gate — re-enters as undecided await triage.
+    assert _gate(issue_labels=["frozen"]) == (False, "undecided_await_triage")
+    assert _gate(issue_labels=["ai:tracker"]) == (False, "parked_tracker")
     assert _gate(issue_labels=["ai:blocked"]) == (False, "blocked")
     # Stale needs-feedback is not a human skip-gate (re-enters undecided).
     assert _gate(issue_labels=["ai:needs-feedback"]) == (False, "undecided_await_triage")

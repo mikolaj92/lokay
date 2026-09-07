@@ -1,8 +1,8 @@
-"""Read-only residual survey of stale human-mailbox labels.
+"""Read-only residual survey of stale limbo labels.
 
-Not a process path. Lokay never stamps `ai:needs-feedback` / `ai:blocked`
-anymore — this CLI only lists leftovers (and needs-review PRs) for operators.
-Factory stops use `ai:frozen` + structured reason.
+Not a process path. Lokay never stamps `ai:needs-feedback` / `ai:blocked` /
+`ai:frozen` anymore — this CLI only lists leftovers (and needs-review PRs)
+for operators. Fail paths are skip / split / close — never limbo stamps.
 """
 
 from __future__ import annotations
@@ -73,7 +73,8 @@ def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict
         lokay_blocked=False,
         note=(
             "Read-only residual survey — not a process path. "
-            "Factory never stamps ai:needs-feedback / ai:blocked; machine stops use ai:frozen."
+            "Factory never stamps ai:needs-feedback / ai:blocked / ai:frozen; "
+            "fail → skip / split / close."
         ),
         count=len(items),
         items=items,

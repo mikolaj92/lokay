@@ -120,6 +120,7 @@ def _mark_from_labels(labels: list[str]) -> str | None:
     have = set(labels)
     if "ai:ready" in have:
         return "ready"
+    # Stale frozen/park labels are read-compat only; factory no longer stamps them.
     if "ai:park" in have or "ai:frozen" in have:
         return "park"
     if "ai:blocked" in have:
@@ -221,7 +222,7 @@ class GitHubTasks:
             getattr(self._config, "needs_feedback_label", None) or "ai:needs-feedback"
         )
         frozen = "ai:frozen"
-        drop = {ready, "work:ready", blocked, human, "ai:park", frozen}
+        drop = {ready, "work:ready", blocked, human, "ai:park", frozen, "frozen"}
         have = set(current.labels)
         remove = [label for label in current.labels if label in drop]
         if remove:
@@ -231,23 +232,19 @@ class GitHubTasks:
         add: list[str] = []
         if token == "ready":
             add.append(ready)
-        else:
-            # park / blocked → machine stop; never human mailbox
-            add.append(frozen)
+        # park / blocked → strip limbo only; never stamp ai:frozen
         add = [label for label in add if label not in (have - set(remove))]
         if add:
             add_issue_labels(
                 self._runner, self.target, identity.number, add, live=self._live
             )
         out = self.get(identity) or current
-        # Park / ready / blocked stay open. This plugin has no close.
+        # ready / park / blocked stay open. This plugin has no close.
         out.mark = token
         out.state = "OPEN"
         labels = [label for label in out.labels if label not in drop]
         if token == "ready":
             labels.append(ready)
-        else:
-            labels.append(frozen)
         out.labels = labels
         return out
 

@@ -31,11 +31,11 @@ def test_sieve_routes_do_skip_park_split_intake() -> None:
     assert classify_sieve(
         {"route": "completed", "triage": {"decision": {"verdict": "close"}}},
         {"route": "issue"},
-    )["route"] == "park"
+    )["route"] == "skip"
     assert classify_sieve(
         {"route": "completed", "triage": {"decision": {"verdict": "park"}}},
         {"route": "issue"},
-    )["route"] == "park"
+    )["route"] == "skip"
     assert classify_sieve(
         {
             "route": "completed",

@@ -140,7 +140,7 @@ def test_cooldown_expired_creates_once(monkeypatch, tmp_path):
             R.stdout = json.dumps({"state": "CLOSED"})
             return R()
         if argv[:3] == ["gh", "issue", "create"]:
-            assert "--label" in argv and "ai:frozen" in argv and "ai:blocked" not in argv
+            assert "ai:frozen" not in argv and "ai:blocked" not in argv
             R.stdout = "https://github.com/mikolaj92/lokay/issues/22\n"
             return R()
         return R()
@@ -170,7 +170,7 @@ def test_incident_repo_is_configurable(monkeypatch, tmp_path):
             R.stdout = "[]"
             return R()
         if argv[:3] == ["gh", "issue", "create"]:
-            assert "--label" in argv and "ai:frozen" in argv and "ai:blocked" not in argv
+            assert "ai:frozen" not in argv and "ai:blocked" not in argv
             R.stdout = "https://github.com/acme/ops/issues/3\n"
             return R()
         return R()

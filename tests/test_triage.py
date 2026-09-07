@@ -38,9 +38,10 @@ def test_is_undecided():
     assert not is_undecided(["ai:pr-open"])
     assert not is_undecided(["ai:ci-waiting"])
     assert not is_undecided(["ai:repairing"])
-    assert not is_undecided(["frozen"])
-    assert is_parked(["frozen"])
-    assert is_parked(["ai:frozen"])
+    assert is_undecided(["frozen"])  # stale limbo re-enters
+    assert not is_parked(["frozen"])
+    assert not is_parked(["ai:frozen"])
+    assert is_parked(["ai:tracker"])
     assert not is_parked(["bug"])
     assert is_open_work_issue([]) is True
     assert is_open_work_issue(["work:ready"]) is True
@@ -48,10 +49,11 @@ def test_is_undecided():
     assert is_open_work_issue(["ai:needs-feedback"]) is False
 
 
-def test_decide_skip_frozen():
+def test_decide_stale_frozen_reenters_not_park_skip():
     d = decide_issue(_issue(labels=["frozen", "enhancement"]))
-    assert d.decision == "skip"
-    assert d.reason == "parked_frozen"
+    # Stale limbo is not parked_tracker; normal triage applies (ready if shape ok).
+    assert d.reason != "parked_tracker"
+    assert d.decision in {"ready", "skip", "split", "out_of_scope"}
 
 
 def test_decide_ready():
@@ -68,9 +70,9 @@ def test_decide_preflight_incident_is_blocked():
             body="<!-- lokay-preflight:acae6d25447dc85e -->\nBounded checks failed: fala_smoke",
         )
     )
-    assert d.decision == "blocked"
+    assert d.decision == "skip"
     assert d.reason == "preflight_incident"
-    assert d.add_labels == ("ai:frozen",)
+    assert d.add_labels == ()
     assert "ai:blocked" not in d.add_labels
     assert "work:ready" not in d.add_labels
     assert "ai:ready" not in d.add_labels
@@ -78,17 +80,17 @@ def test_decide_preflight_incident_is_blocked():
 
 def test_decide_title_short():
     d = decide_issue(_issue(title="fix"))
-    assert d.decision == "park"
+    assert d.decision == "skip"
     assert d.reason == "title_too_short"
-    assert d.add_labels == ("ai:frozen",)
+    assert d.add_labels == ()
     assert "ai:needs-feedback" not in d.add_labels
 
 
 def test_decide_body_short():
     d = decide_issue(_issue(body="too short"))
-    assert d.decision == "park"
+    assert d.decision == "skip"
     assert d.reason == "body_too_short"
-    assert d.add_labels == ("ai:frozen",)
+    assert d.add_labels == ()
 
 
 def test_decide_oos_title_marker():

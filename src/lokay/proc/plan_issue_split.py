@@ -9,7 +9,7 @@ def plan(*, issue_data: dict, reason: str) -> dict:
     split_reason = reason or "agent_split"
     value = plan_split(Issue.from_dict(issue_data), reason=split_reason)
     if value is None:
-        # Host-ops monolith without extractable code+ops children → park host_ops.
+        # Host-ops monolith without extractable code+ops children → skip (no limbo).
         park_reason = (
             "host_ops" if "host_ops" in split_reason.lower() else "split_impossible"
         )

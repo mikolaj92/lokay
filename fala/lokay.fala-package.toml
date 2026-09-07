@@ -864,7 +864,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_triage"
 title = "Issue triage sito"
-description = "Sito only: do / skip / close / park. Not implement. Factory park/fail is machine stop (ai:frozen); never ai:needs-feedback or ai:blocked. issue_split is a later child."
+description = "Sito only: ready / skip / split / close. Not implement. Never stamp ai:frozen / needs-feedback / blocked. Fail -> skip (no stamp) or split or last-resort close. issue_split is a later child."
 
 [[correlation_paths.effectors]]
 id = "get_issue"
@@ -1051,7 +1051,7 @@ retry_policy = "none"
 id = "apply_issue_manual"
 capability = "lokay_atom"
 conduction = ["get_issue", "finalize_issue_triage", "select_triage_leaf", "select_park_stop"]
-when = { upstream = "select_park_stop", path = "route", equals = "park" }
+when = { upstream = "select_park_stop", path = "route", equals = "skip" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "apply_issue_manual" }
 retry_policy = "none"
@@ -1157,7 +1157,7 @@ retry_policy = "none"
 id = "apply_issue_manual"
 capability = "lokay_atom"
 conduction = ["get_issue", "plan_issue_split", "select_park_stop"]
-when = { upstream = "select_park_stop", path = "route", equals = "park" }
+when = { upstream = "select_park_stop", path = "route", equals = "skip" }
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "apply_issue_manual" }
 retry_policy = "none"

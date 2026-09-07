@@ -123,14 +123,12 @@ class AzureTasks:
             "ai:needs-feedback",
             "ai:park",
             "ai:frozen",
+            "frozen",
         }
         labels = [tag for tag in current.tags if tag not in drop]
         if token == "ready":
             labels.append("ai:ready")
-        elif token == "park":
-            labels.extend(["ai:frozen", "ai:park"])
-        else:
-            labels.append("ai:frozen")
+        # park / blocked → strip limbo only; never stamp ai:frozen
         try:
             item = self._client.set_tags(identity.number, labels)
         except KeyError as exc:

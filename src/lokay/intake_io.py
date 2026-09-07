@@ -172,7 +172,7 @@ def covering_ai_prs(
     return uniq
 
 
-FORBIDDEN_PROCESS_STAMPS = frozenset({"ai:needs-feedback", "ai:blocked"})
+FORBIDDEN_PROCESS_STAMPS = frozenset({"ai:needs-feedback", "ai:blocked", "ai:frozen"})
 
 
 def _sanitize_add_labels(labels: tuple[str, ...] | list[str]) -> list[str]:
@@ -195,9 +195,9 @@ def apply_intake(
     Close of a still-open issue is refused (label/comment only).
     Already-closed is the only exception, same as apply_issue_close.
     """
-    if not live or decision.decision == "skip":
+    if not live:
         return False
-    if decision.decision == "blocked":
+    if decision.decision in {"skip", "blocked", "park"}:
         applied = False
         if decision.remove_labels:
             to_remove = [x for x in decision.remove_labels if x in (issue.labels or [])]

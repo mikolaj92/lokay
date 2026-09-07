@@ -17,7 +17,7 @@ def test_invalid_json_gets_one_retry_then_park():
     first=validate_output("not json"); assert first["route"] == "retry"
     retry=validate_output("still invalid")
     out=select_initial({"route":"agent"},first,retry)
-    assert out["decision"]["verdict"] == "park"
+    assert out["decision"]["verdict"] == "skip"
 
 def test_closed_schema_rejects_unknown_and_non_scalar_evidence_request():
     out=validate_output('{"verdict":"ready","route":"merge"}')
@@ -31,12 +31,13 @@ def test_evidence_request_routes_directly_and_second_request_is_terminal():
     assert selected["route"] == "evidence" and selected["evidence_kind"] == "named_paths"
     again=validate_output('{"verdict":"needs_evidence","evidence_kind":"repo_shape","evidence":[]}')
     final=select_evidence(selected,again)
-    assert final["decision"] == {"verdict":"park","reason":"issue_evidence_exhausted"}
+    assert final["decision"] == {"verdict":"skip","reason":"issue_evidence_exhausted"}
 
 
-def test_agent_split_is_not_a_sito_verdict():
+def test_agent_split_is_valid_sito_verdict():
     out=validate_output('{"verdict":"split","reason":"too_large"}')
-    assert out["route"] == "retry" and "verdict" in out["validation_error"]
+    assert out["route"] == "valid"
+    assert out["decision"]["verdict"] == "split"
 
 
 def test_skip_leaf_records_nie_without_mutation():

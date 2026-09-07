@@ -170,7 +170,7 @@ def test_contract_park_is_factory_terminal_only(tmp_path: Path):
         ),
         clone_path=None,
     )
-    assert d.decision == "park"
+    assert d.decision == "skip"
     assert d.implementable is False
     assert d.reason.startswith("inconclusive_")
 

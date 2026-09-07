@@ -213,10 +213,10 @@ def test_sito_parks_foreign_open_task_and_does_not_close():
     out = sito_park(source, identity, "foreign_assignee")
     assert out.state == "OPEN"
     assert out.mark == "park"
-    assert "ai:frozen" in out.labels
+    assert "ai:frozen" not in out.labels
     assert "ai:blocked" not in out.labels
     assert "ai:ready" not in out.labels
-    assert any("Parked" in body for body in out.comments)
+    assert any("Skipped" in body for body in out.comments)
     assert source.get(identity).state != "CLOSED"
     assert [task.number for task in source.list_open()] == [42]
 

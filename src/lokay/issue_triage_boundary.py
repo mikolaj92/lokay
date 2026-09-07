@@ -18,7 +18,7 @@ from lokay.models import Issue
 from lokay.pr_review import extract_json_object, PrReviewError
 from lokay.triage import is_parked, is_undecided
 
-VERDICTS = frozenset({"ready", "close", "needs_evidence", "park"})
+VERDICTS = frozenset({"ready", "close", "needs_evidence", "park", "skip", "split"})
 EVIDENCE_KINDS = frozenset({"repo_shape", "named_paths", "linked_prs", "covering_prs"})
 _FIELDS = frozenset({"verdict", "reason", "evidence", "evidence_kind", "summary"})
 
@@ -35,8 +35,9 @@ def resolve_candidate(
     needs_feedback_label: str,
 ) -> dict[str, Any]:
     labels = list(issue.get("labels") or [])
+    # ai:frozen is not a queue skip — only auto-split tracker parents are parked.
     if is_parked(labels):
-        return {"ok": True, "route": "skip", "reason": "parked_frozen"}
+        return {"ok": True, "route": "skip", "reason": "parked_tracker"}
     if not is_undecided(
         labels,
         ready_label=ready_label,
@@ -92,7 +93,7 @@ def resolve_hard_facts(
 
 
 def _host_ops_hard_fact(issue: Issue) -> dict[str, str] | None:
-    """Park/split live host-ops before the agent; never ready, never human."""
+    """Monolith -> park+host_ops_issue_split (sieve auto-splits); pure host-ops -> skip."""
     if issue_is_host_ops_monolith(issue):
         return {
             "verdict": "park",
@@ -101,7 +102,7 @@ def _host_ops_hard_fact(issue: Issue) -> dict[str, str] | None:
         }
     if issue_requests_host_ops(issue):
         return {
-            "verdict": "park",
+            "verdict": "skip",
             "reason": "host_ops",
             "summary": HOST_OPS_UNPARK_CRITERION,
         }
@@ -169,7 +170,7 @@ def select_initial(
             "route": "publish",
             "evidence_kind": "none",
             "decision": {
-                "verdict": "park",
+                "verdict": "skip",
                 "reason": "invalid_triage_json_exhausted",
             },
         }
@@ -197,7 +198,7 @@ def select_evidence(
             "ok": True,
             "route": "publish",
             "decision": {
-                "verdict": "park",
+                "verdict": "skip",
                 "reason": "issue_evidence_exhausted",
             },
         }
