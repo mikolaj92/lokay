@@ -26,6 +26,21 @@ def run_compute_health(*, pass_dir: str) -> dict[str, Any]:
         stuck=working.get("stuck") or begin.get("stuck"),
         branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
     )
+    from lokay.proc.leftover_ready_contract import classify_leftover_ready_contract
+
+    contract = classify_leftover_ready_contract(working)
+    if contract.get("route") == "contract_broken":
+        actions = list(working.get("actions") or [])
+        actions.append(
+            {
+                "step": "leftover_ready_contract_broken",
+                "reason": contract.get("reason"),
+                "error": contract.get("error"),
+                "leftover_ready": contract.get("leftover_ready"),
+            }
+        )
+        working = {**working, "actions": actions}
+        pass_io.write_json(pass_io.working_path(pass_dir), working)
     inbox_by_repo = dict(working.get("inbox_by_repo") or {})
     pr_survey_failed = set(working.get("pr_survey_failed") or [])
     inbox_survey_failed = set(working.get("inbox_survey_failed") or [])

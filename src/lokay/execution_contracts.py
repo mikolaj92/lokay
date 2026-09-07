@@ -1,9 +1,9 @@
 """Shared execution constants that are not organ or proc policy."""
 
-CATALOG_SLOT_COUNT = 30
+CATALOG_SLOT_COUNT = 32
 
 ISSUE_SIEVE_SLOT_COUNT = 5
 
 EXECUTOR_SLOT_COUNT = 8
 
-CLOSEOUT_SLOT_COUNT = 30
+CLOSEOUT_SLOT_COUNT = 32

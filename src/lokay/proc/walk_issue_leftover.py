@@ -69,6 +69,13 @@ def keep(rows: list | None, picked: dict | None) -> list[dict]:
     return leftover if seen else listed
 
 
+def ready_first(rows: list[dict] | None) -> list[dict]:
+    """Dual-ready / ai:ready wins. Unlabeled leftover must not starve issue→PR."""
+    listed = [dict(row) for row in list(rows or []) if isinstance(row, dict)]
+    ready = [row for row in listed if row_is_ready(row)]
+    return ready or listed
+
+
 def product_first(rows: list[dict] | None, *, self_id: str = "") -> list[dict]:
     """Product wins. Lokay oil is not the product slot while product remains."""
     listed = [dict(row) for row in list(rows or []) if isinstance(row, dict)]
@@ -117,10 +124,14 @@ def queue(
     live = {identity(row): row for row in live_rows}
     if leftover:
         kept = [live[key] for row in leftover if (key := identity(row)) in live]
-        product = product_first(kept)
-        candidates = product if product else (product_first(live_rows) or kept)
+        # Ready labels win over unlabeled leftover; product still beats oil.
+        ranked = product_first(ready_first(kept))
+        candidates = ranked if ranked else product_first(ready_first(live_rows) or kept)
         return unoccupied(ownable(candidates, lokay_login), occupied)
     return unoccupied(
-        ownable(product_first(after(listed_rows, last) or live_rows), lokay_login),
+        ownable(
+            product_first(ready_first(after(listed_rows, last) or live_rows)),
+            lokay_login,
+        ),
         occupied,
     )

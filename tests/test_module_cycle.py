@@ -43,7 +43,7 @@ def test_atom_runtime_and_execution_contracts_are_neutral():
     from lokay.atom_runtime import run_atom_main
     from lokay.execution_contracts import CATALOG_SLOT_COUNT
 
-    assert CATALOG_SLOT_COUNT == 30
+    assert CATALOG_SLOT_COUNT == 32
     assert callable(run_atom_main)
     runtime_imports = _imports(ROOT / "atom_runtime.py")
     contract_imports = _imports(ROOT / "execution_contracts.py")
