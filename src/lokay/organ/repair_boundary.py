@@ -7,6 +7,8 @@ from lokay.config import load_config
 
 _ATOMS = frozenset(
     {
+        "admit_pr_repair",
+        "probe_pr_state",
         "validate_initial_repair",
         "pr_repair_retry_agent",
         "validate_repair_retry",
@@ -40,6 +42,16 @@ def handle_repair_boundary(
 ) -> dict[str, Any] | None:
     if atom not in _ATOMS:
         return None
+    if atom in {"admit_pr_repair", "probe_pr_state"}:
+        from lokay.proc.admit_pr_repair import admit_live
+        from lokay.proc.probe_pr_state import probe as probe_pr
+
+        repo = str(inputs.get("repo") or ctx.get("repo") or "")
+        pr = int(inputs.get("pr") or inputs.get("pr_number") or ctx.get("pr_number") or 0)
+        live = bool(inputs.get("live"))
+        if atom == "probe_pr_state":
+            return probe_pr(repo=repo, pr=pr, live=live)
+        return admit_live(repo=repo, pr=pr, live=live)
     worktree = Path(str((up.get("worktree_add") or {}).get("worktree") or ""))
     cfg = load_config(inputs.get("config_path") or inputs.get("config"))
     live = bool(inputs.get("live"))
@@ -126,6 +138,7 @@ def handle_repair_boundary(
             repo=repo,
             pr=pr,
             branch=str(inputs.get("branch") or ""),
+            admit=up.get("admit_pr_repair") or {},
         )
     if atom in {"pr_repair_fail_closed", "pr_repair_terminal"}:
         from lokay.proc.repair_terminal import terminal

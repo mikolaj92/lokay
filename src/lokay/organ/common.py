@@ -205,6 +205,72 @@ def _issue_no_longer_open(
     issue = viewed.get("issue")
     return _closed_issue_payload(issue if isinstance(issue, dict) else None)
 
+
+def _merged_pr_payload(probe: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Refuse envelope when a probed PR is MERGED (or CLOSED). None = still open."""
+    if not isinstance(probe, dict) or not probe:
+        return None
+    route = str(probe.get("route") or "")
+    state = str(probe.get("state") or "").upper()
+    merged = bool(probe.get("merged")) or route == "merged" or state == "MERGED"
+    if merged:
+        reason = "pr_already_merged"
+        state_out = "MERGED"
+    elif route == "closed" or state == "CLOSED":
+        reason = "pr_closed"
+        state_out = "CLOSED"
+    else:
+        return None
+    return {
+        "ok": False,
+        "error": f"refusing: PR {probe.get('repo') or ''}#{probe.get('pr') or ''} is {state_out}",
+        "reason": reason,
+        "pr_state": state_out,
+        "pr": probe.get("pr"),
+        "repo": probe.get("repo"),
+        "route": "skip",
+    }
+
+
+def _pr_already_merged(
+    up: dict[str, dict[str, Any]],
+    *,
+    cfg: list[str] | None = None,
+    live: list[str] | None = None,
+    repo: str = "",
+    pr_number: int | None = None,
+    run=None,
+    probe_main=None,
+) -> dict[str, Any] | None:
+    """Stop pr_repair mutations when the target PR is already MERGED.
+
+    Admission can race with Alfred merge. Re-view live before mutating atoms.
+    Gh flake stays fail-open (same as ``_issue_no_longer_open``).
+    """
+    for key in ("admit_pr_repair", "probe_pr_state"):
+        blob = up.get(key) or {}
+        if isinstance(blob, dict) and blob:
+            refused = _merged_pr_payload(blob)
+            if refused is not None:
+                return refused
+    if live is None or "--live" not in live:
+        return None
+    if not repo or pr_number is None or run is None or probe_main is None:
+        return None
+    try:
+        viewed = run(
+            probe_main,
+            [*(cfg or []), *live, "--repo", str(repo), "--pr", str(pr_number)],
+        )
+    except Exception:
+        return None
+    if not isinstance(viewed, dict):
+        return None
+    if viewed.get("ok") is False:
+        return None  # fail-open on probe hard-fail
+    return _merged_pr_payload(viewed)
+
+
 def _finalize_local_tests_ok(finalized: dict[str, Any] | None) -> bool:
     """Closed publish verdict from finalize_local_tests."""
     if not isinstance(finalized, dict) or not finalized:

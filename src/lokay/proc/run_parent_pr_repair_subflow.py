@@ -35,6 +35,27 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
         )
     except Exception as exc:  # noqa: BLE001 — stamp then surface
         result = {"ok": False, "error": str(exc), "terminal": "compose_error"}
+    nested = result.get("result") if isinstance(result.get("result"), Mapping) else {}
+    skipped = bool(result.get("skipped") or (nested or {}).get("skipped"))
+    if skipped:
+        receipt = pr_repair_receipts.read(
+            str(selected["repo"]),
+            int(selected["pr"]),
+            state_dir=state_dir,
+        )
+        return {
+            "ok": True,
+            "route": "skip",
+            "reason": str(
+                result.get("reason")
+                or (nested or {}).get("reason")
+                or "pr_already_merged"
+            ),
+            "repair": result,
+            "attempts": int(receipt.get("attempts") or 0),
+            "budget": int(receipt.get("budget") or budget),
+            "parked": bool(receipt.get("parked")),
+        }
     head_sha, terminal = _repair_meta(result)
     receipt = pr_repair_receipts.stamp(
         str(selected["repo"]),

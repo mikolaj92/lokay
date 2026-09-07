@@ -102,7 +102,7 @@ position must not turn it into a dependency of product or the terminal.
 | `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, park. One triage boundary after hard_facts — never a second intake engine. Stops at `limits.max_triage_per_tick`, publishes leftover, then yields to executor. Zero `ai/fix`. Zero `needs_human`. Foreign assignee still skipped. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Child Fala `pr_triage_department`: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. |
-| `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict from `run_pr_triage_department`. Conducts from the sieve run plus the PR-triage switch. Not started from inside `pr_triage_department`. Disabled skip leaves published feedback and does not touch the branch. Per-PR lifetime K (default 1, from `limits.max_repairs_per_tick`) is enforced via a durable `pr-repair-receipts` receipt: after budget stop select returns `fail_closed` / `pr_repair_budget_exhausted` (park-by-factory); next tick does not invoke repair again. Zero `needs_human`. |
+| `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict from `run_pr_triage_department`. Conducts from the sieve run plus the PR-triage switch. Not started from inside `pr_triage_department`. Disabled skip leaves published feedback and does not touch the branch. **MERGED (or CLOSED) target PR:** compose/`admit_pr_repair` fail-closed skip (`pr_already_merged`) — does not start Fala repair and does not consume the per-PR receipt; mid-flight organ re-probe refuses mutating atoms. Per-PR lifetime K (default 1, from `limits.max_repairs_per_tick`) is enforced via a durable `pr-repair-receipts` receipt: after budget stop select returns `fail_closed` / `pr_repair_budget_exhausted` (park-by-factory); next tick does not invoke repair again. Zero `needs_human`. |
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots` (oldest first). Catalog composes `overflow_bound` or `apply_slot`. Summarize composes `persist_result` and `prune_preserved_worktree_archives` (TTL GC of `.lokay-preserved`). Overflow bounds one pass to authored slots; a failed removal advances that candidate behind the oldest remainder, so it never pins the four slots forever. Archive TTL GC uses the same four-slot bound. A later pass continues the remainder. Classified REMOVE reclaims disk after registry detach (not archive-only). KEEP live i2pr is issue-scoped (repo+issue), not repo-scoped; also `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. Never unlink Fala sqlite/WAL. Do not raise the 180s ceiling. Tests use tmp dirs only. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. A detached `launched=started` worker is occupancy (`remaining.issue_to_pr_started`), not `new_pr`. Moving forward stays a published PR or a merge. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. A this-tick idle/progress receipt is kept by `write_pass_ceiling_receipt`; the 180s watchdog does not erase it. |
 | `factory_pass_terminal` | lift `record_pass.result` so `normalize_path_result` sees one authored tick. Does not wait on leftover work-copy cleanup. |
@@ -432,19 +432,21 @@ Zero `needs_human`. The executor department launches `issue_to_pr` only after a 
 
 Repair coding slots (`run_agent` + `run_coding_retry_agent` / evidence / test-repair) use the same builder deny-bin `gh` PATH and `FACTORY_WORKFLOW_BOUNDARY` as coding; product AGENTS.md publication rules are superseded.
 
-Parent department lifetime K=1 is enforced with a durable receipt under the config state dir (`pr-repair-receipts/<owner>__<repo>__<pr>.json`, else `~/.lokay/pr-repair-receipts`). Each compose attempt stamps `attempts`; when `attempts >= budget` (default `limits.max_repairs_per_tick` = 1) select returns `fail_closed` / `pr_repair_budget_exhausted` and parks — no next-tick repair limbo when non-test CI stays red. Fleet `max_repairs_per_tick` remains the per-tick cap; the receipt is the per-PR lifetime gate.
+Parent department lifetime K=1 is enforced with a durable receipt under the config state dir (`pr-repair-receipts/<owner>__<repo>__<pr>.json`, else `~/.lokay/pr-repair-receipts`). Each compose attempt stamps `attempts`; when `attempts >= budget` (default `limits.max_repairs_per_tick` = 1) select returns `fail_closed` / `pr_repair_budget_exhausted` and parks — no next-tick repair limbo when non-test CI stays red. Fleet `max_repairs_per_tick` remains the per-tick cap; the receipt is the per-PR lifetime gate. Admission skip for an already-MERGED PR does not stamp attempts.
 
 ```text
-pr_checks
-  └─→ stage_repairing   ← no-op on labels: keep ai:ready
-        └─→ worktree_add          ready → localize / run_agent
-                                  missing → summarize (no product)
-              └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
-                    └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
-                          └─→ commit_all
-                                └─→ test_local   ← local pytest; skip if no suite
-                                      └─→ assert_real_diff
-                                            └─→ push   ← published tip; never rebase (force-push forbidden)
+admit_pr_repair   ← probe state/mergedAt (path-visible); compose skips run_path on MERGED/CLOSED
+  └─→ pr_checks
+        └─→ stage_repairing   ← no-op on labels: keep ai:ready
+              └─→ worktree_add          ready → localize / run_agent
+                                        missing → summarize (no product)
+                    └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
+                          └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
+                                └─→ commit_all
+                                      └─→ test_local   ← local pytest; skip if no suite
+                                            └─→ assert_real_diff
+                                                  └─→ push   ← published tip; never rebase (force-push forbidden)
+# Mid-flight organ: mutating atoms re-probe; MERGED refuses (reason=pr_already_merged).
 ```
 
 ### `pr_triage` (sieve / merge policy → close issue)

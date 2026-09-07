@@ -45,7 +45,9 @@ def test_factory_repo_runs_fala_and_propagates_review(
         review={"verdict": "request_changes", "blocking": ["test"]},
     )
 
-    assert out == {"ok": True, "kind": "pr_repair", "engine": "fala", "planned": True}
+    assert out["ok"] is True and out["kind"] == "pr_repair" and out["engine"] == "fala"
+    assert out["planned"] is True
+    assert out["admit"]["route"] == "open"
     assert seen == {
         "path_id": "pr_repair",
         "repo": "mikolaj92/lokay",

@@ -5,7 +5,8 @@ from test_issue_triage_fala import run_graph, base_effector
 
 
 def defaults():
-    return """if a=='worktree_add':v.update(route='ready')
+    return """if a=='admit_pr_repair':v.update(route='open')
+if a=='worktree_add':v.update(route='ready')
 if a=='localize':v.update(route='ready')
 if a=='select_evidence_repair':v['route']='not_applicable'
 if a=='select_repair_test_recheck':v['route']='not_applicable'"""
@@ -111,3 +112,22 @@ if a=='finalize_repair_tests':v['route']='terminal'""" % str(agent))
         and st["push"] == "skipped"
         and agent.exists()
     )
+
+
+
+def test_admit_pr_repair_runs_before_worktree(tmp_path):
+    """Path exposes admit_pr_repair; compose/organ fail-closed MERGED (#1073)."""
+    body = base_effector(defaults() + """
+if a=='validate_initial_repair':v.update(route='valid',decision={'verdict':'repaired'})
+if a=='select_initial_repair':v.update(route='repaired',evidence_kind='none',decision={'verdict':'repaired'})
+if a=='finalize_repair_result':v.update(route='repaired',decision={'verdict':'repaired'})
+if a=='test_local':v.update(tested=True)
+if a=='select_repair_test':v['route']='pass'
+if a=='select_test_repair_result':v['route']='not_applicable'
+if a=='finalize_repair_tests':v['route']='publish'
+""")
+    result = run_graph(tmp_path, body, "repair-admit", path_id="pr_repair")
+    st = {k: x["status"] for k, x in result["effector_results"].items()}
+    assert st["admit_pr_repair"] == "succeeded"
+    assert st["worktree_add"] == "succeeded"
+    assert st["push"] == "succeeded"
