@@ -640,6 +640,11 @@ def harvest_fail_closed_children(
                 error = str(event.get("error") or event.get("reason") or reason)
 
             if reason in FAIL_CLOSED:
+                # lokay#1084: already-reaped corpse must not renew cooldown.
+                # One FAIL_CLOSED stamp → one penalty; expired cooldown leaves
+                # the ticket takeable until a *new* issue→PR run writes a fresh receipt.
+                if data.get("reaped"):
+                    continue
                 # Verify / no_pr: local cooldown only (lokay#1082). Never eternal bury.
                 if not is_blocked_in_ledger(stuck, repo, issue):
                     # All FAIL_CLOSED get expiring cooldown — zero permanent limbo.

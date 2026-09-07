@@ -81,6 +81,9 @@ def reconcile(facts: dict) -> dict:
             }
         error = str((event or {}).get("error") or (event or {}).get("reason") or reason)
         if reason in FAIL_CLOSED:
+            # lokay#1084: reaped receipt already paid its one cooldown — do not roll.
+            if data.get("reaped"):
+                continue
             if not is_blocked_in_ledger(stuck, repo, issue):
                 record_failure(
                     stuck,
