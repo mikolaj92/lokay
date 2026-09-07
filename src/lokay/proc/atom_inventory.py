@@ -16,6 +16,16 @@ def inventory(package: Path, source: Path) -> dict:
     sites: dict[str, list[dict]] = {}
     for file in sorted(source.rglob('*.py')):
         tree = ast.parse(file.read_text(), filename=str(file))
+        constants = {}
+        for statement in tree.body:
+            if isinstance(statement, ast.Assign) and len(statement.targets) == 1:
+                target = statement.targets[0]
+                value = statement.value
+                if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id == 'frozenset' and len(value.args) == 1 and not value.keywords:
+                    value = value.args[0]
+                if isinstance(target, ast.Name) and isinstance(value, (ast.Set, ast.Tuple, ast.List)):
+                    if all(isinstance(item, ast.Constant) and isinstance(item.value, str) for item in value.elts):
+                        constants[target.id] = value
         for node in ast.walk(tree):
             if not isinstance(node, ast.Compare):
                 continue
@@ -23,7 +33,10 @@ def inventory(package: Path, source: Path) -> dict:
                 continue
             if len(node.ops) != 1 or not isinstance(node.ops[0], (ast.Eq, ast.NotEq, ast.In, ast.NotIn)):
                 continue
-            for value in ast.walk(node.comparators[0]):
+            compared = node.comparators[0]
+            if isinstance(compared, ast.Name):
+                compared = constants.get(compared.id, compared)
+            for value in ast.walk(compared):
                 if isinstance(value, ast.Constant) and isinstance(value.value, str):
                     site = {'file': str(file.relative_to(source)), 'line': node.lineno}
                     if site not in sites.setdefault(value.value, []):

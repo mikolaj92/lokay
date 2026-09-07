@@ -27,6 +27,19 @@ config = {atom = "missing"}
     assert report['nodes'][1]['sites'] == []
 
 
+def test_inventory_resolves_literal_owned_set_without_import(tmp_path):
+    from lokay.proc.atom_inventory import inventory
+
+    package = tmp_path / 'graph.toml'
+    package.write_text('[[correlation_paths]]\nid="p"\n[[correlation_paths.effectors]]\nid="x"\nconfig={atom="owned"}\n')
+    source = tmp_path / 'src'
+    source.mkdir()
+    (source / 'handler.py').write_text('OWNED = frozenset({"owned"})\nraise RuntimeError("must not import")\ndef handle(atom):\n    if atom not in OWNED:\n        return None\n')
+    row = inventory(package, source)['nodes'][0]
+    assert row['resolution'] == 'candidate'
+    assert row['sites'] == [{'file': 'handler.py', 'line': 4}]
+
+
 def test_missing_package_returns_json_error(tmp_path, capsys):
     from lokay.proc.atom_inventory import main
 
