@@ -14,6 +14,7 @@ def inventory(package: Path, source: Path) -> dict:
         raise ValueError('source directory does not exist')
     manifest = tomllib.loads(package.read_text(encoding='utf-8'))
     sites: dict[str, list[dict]] = {}
+    prefixes: list[tuple[str, dict]] = []
     for file in sorted(source.rglob('*.py')):
         tree = ast.parse(file.read_text(), filename=str(file))
         constants = {}
@@ -27,6 +28,12 @@ def inventory(package: Path, source: Path) -> dict:
                     if all(isinstance(item, ast.Constant) and isinstance(item.value, str) for item in value.elts):
                         constants[target.id] = value
         for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                owner = node.func.value
+                if isinstance(owner, ast.Name) and owner.id == 'atom' and node.func.attr == 'startswith' and len(node.args) == 1:
+                    prefix = node.args[0]
+                    if isinstance(prefix, ast.Constant) and isinstance(prefix.value, str):
+                        prefixes.append((prefix.value, {'file': str(file.relative_to(source)), 'line': node.lineno}))
             if not isinstance(node, ast.Compare):
                 continue
             if not isinstance(node.left, ast.Name) or node.left.id != 'atom':
@@ -45,7 +52,11 @@ def inventory(package: Path, source: Path) -> dict:
     for path in manifest.get('correlation_paths', []):
         for effector in path.get('effectors', []):
             atom = effector.get('config', {}).get('atom')
-            candidates = sites.get(atom, []) if isinstance(atom, str) else []
+            candidates = list(sites.get(atom, [])) if isinstance(atom, str) else []
+            if isinstance(atom, str):
+                for prefix, site in prefixes:
+                    if atom.startswith(prefix) and site not in candidates:
+                        candidates.append(site)
             rows.append({'path': path['id'], 'effector': effector['id'], 'atom': atom,
                          'resolution': 'candidate' if candidates else 'unresolved',
                          'sites': candidates})

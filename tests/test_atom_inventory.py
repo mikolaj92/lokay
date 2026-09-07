@@ -40,6 +40,19 @@ def test_inventory_resolves_literal_owned_set_without_import(tmp_path):
     assert row['sites'] == [{'file': 'handler.py', 'line': 4}]
 
 
+def test_prefix_candidates_are_visible_not_proven(tmp_path):
+    from lokay.proc.atom_inventory import inventory
+
+    package = tmp_path / 'graph.toml'
+    package.write_text('[[correlation_paths]]\nid="p"\n[[correlation_paths.effectors]]\nid="x"\nconfig={atom="slot_1"}\n')
+    source = tmp_path / 'src'
+    source.mkdir()
+    (source / 'handler.py').write_text('def handle(atom):\n    if atom.startswith("slot_"):\n        return {}\n')
+    row = inventory(package, source)['nodes'][0]
+    assert row['resolution'] == 'candidate'
+    assert row['sites'] == [{'file': 'handler.py', 'line': 2}]
+
+
 def test_missing_package_returns_json_error(tmp_path, capsys):
     from lokay.proc.atom_inventory import main
 
