@@ -38,3 +38,19 @@ def test_identity_changes_with_implementation():
         return 2
 
     assert implementation_identity(first)['code_sha256'] != implementation_identity(second)['code_sha256']
+
+
+def test_organ_metadata_pins_binding_and_attempt_without_inputs():
+    from lokay.fala_organ import organ_envelope
+    from lokay.execution_provenance import implementation_identity
+    from lokay.organ.map_repo import handle_map_repo
+
+    evidence = implementation_identity(handle_map_repo)
+    evidence["binding"] = "map_repo"
+    evidence["attempt"] = "run-9"
+    envelope = organ_envelope("map_repo", {"ok": True, "skipped": True, "reason": "empty"})
+    metadata = {"implementation": evidence}
+    assert metadata["implementation"]["binding"] == "map_repo"
+    assert metadata["implementation"]["attempt"] == "run-9"
+    assert "token" not in str(metadata)
+    assert envelope["atom"] == "map_repo"
