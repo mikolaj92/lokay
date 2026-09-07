@@ -77,7 +77,13 @@ def inventory(package: Path, source: Path) -> dict:
                          'effector': effector['id'], 'atom': atom,
                          'resolution': resolution,
                          'sites': candidates})
-    return {'scope': 'authored_not_expanded', 'nodes': rows,
+    summary = {
+        'authored_nodes': len(rows),
+        'distinct_atom_names': len({row['atom'] for row in rows if isinstance(row['atom'], str)}),
+        'unique_candidate_sites': len({(site['file'], site['line']) for row in rows for site in row['sites']}),
+        'unresolved_nodes': sum(row['resolution'].startswith('unresolved') for row in rows),
+    }
+    return {'scope': 'authored_not_expanded', 'nodes': rows, 'summary': summary,
             'limitations': ['Static comparison sites, not proven ownership or transitive dependencies.',
                             'Templates and dynamic dispatch require separate resolution.']}
 

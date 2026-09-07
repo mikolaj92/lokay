@@ -1561,6 +1561,7 @@ kontraktu. Aktualny audyt:
 - [`docs/UNIX.md`](docs/UNIX.md) — process boundaries and JSON envelopes
 - [`docs/NO_STUBS.md`](docs/NO_STUBS.md) — real-agent requirement
 - [`docs/HTMX.md`](docs/HTMX.md), [`docs/ALPINE.md`](docs/ALPINE.md), [`docs/PLATFORM_UI.md`](docs/PLATFORM_UI.md) — UI boundaries
+- [`docs/ATOM_INVENTORY.md`](docs/ATOM_INVENTORY.md) — read-only authored graph-to-source inventory
 - [`repos.mikolaj92.yaml`](repos.mikolaj92.yaml) — managed repository inventory
 
 

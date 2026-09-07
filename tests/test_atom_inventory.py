@@ -99,3 +99,19 @@ def test_templates_are_visible_without_claiming_expanded_bindings(tmp_path):
     assert row['atom'] == 'run_${index}'
     assert row['resolution'] == 'unresolved_template'
     assert row['sites'] == [{'file': 'handler.py', 'line': 3}]
+
+
+def test_repeated_authored_nodes_are_not_distinct_implementations(tmp_path):
+    from lokay.proc.atom_inventory import inventory
+
+    package = tmp_path / 'graph.toml'
+    package.write_text('[[correlation_paths]]\nid="p"\n[[correlation_paths.effectors]]\nid="a"\nconfig={atom="same"}\n[[correlation_paths.effectors]]\nid="b"\nconfig={atom="same"}\n')
+    source = tmp_path / 'src'
+    source.mkdir()
+    (source / 'handler.py').write_text('def handle(atom):\n    if atom == "same":\n        return {}\n')
+    report = inventory(package, source)
+    assert len(report['nodes']) == 2
+    assert report['summary']['distinct_atom_names'] == 1
+    assert report['summary']['authored_nodes'] == 2
+    assert report['summary']['unique_candidate_sites'] == 1
+    assert 'proven_implementations' not in report['summary']
