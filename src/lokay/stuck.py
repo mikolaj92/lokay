@@ -1,15 +1,32 @@
 """Stuck-issue ledger: one failing ready issue must not block the lokay.
 
-Persists failure counts next to state.jsonl so subsequent ticks skip
-(local cooldown / self_repair — never ai:frozen limbo) for issues that keep failing.
+Persists failure counts next to state.jsonl so subsequent ticks apply a
+*local cooldown* (never ai:frozen / eternal stuck limbo) for issues that
+keep failing. Dark factory legal exits remain ready | split | skip |
+close+reason — verify / no_pr failures must not permanently bury OPEN ready.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+
+# Local cooldown for verify / no_delivery / no_pr fail-closed rows.
+# Never a permanent ledger bury (lokay#1082).
+TRANSIENT_LEDGER_REASONS = frozenset(
+    {
+        "no_pr",
+        "local_repair_exhausted",
+        "test_local_recheck_failed",
+        "test_local_failed",
+        "test_local_missing",
+        "repair_agent_failed",
+    }
+)
+TRANSIENT_COOLDOWN_SECONDS = 300
 
 
 def stuck_path_for(state_path: Path) -> Path:
@@ -19,6 +36,46 @@ def stuck_path_for(state_path: Path) -> Path:
 
 def issue_key(repo: str, number: int) -> str:
     return f"{repo}#{int(number)}"
+
+
+def is_transient_ledger_reason(reason: str | None) -> bool:
+    return str(reason or "").strip() in TRANSIENT_LEDGER_REASONS
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_ts(raw: Any) -> datetime | None:
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def block_active(row: dict[str, Any] | None, *, now: datetime | None = None) -> bool:
+    """True only while a blocked stamp is still within its local cooldown.
+
+    Legacy transient rows (no_pr / verify) written as eternal ``blocked:true``
+    without ``cooldown_until`` are inactive — they must not exclude OPEN ready.
+    Non-transient terminal miss rows without cooldown stay active (bound skip).
+    """
+    if not isinstance(row, dict) or not row.get("blocked"):
+        return False
+    reason = str(row.get("reason") or "")
+    cooldown_until = _parse_ts(row.get("cooldown_until"))
+    if cooldown_until is not None:
+        stamp = now or _utcnow()
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return cooldown_until > stamp
+    # Legacy eternal transient limbo → treat as expired (auto-clear path).
+    if is_transient_ledger_reason(reason):
+        return False
+    return True
 
 
 def load_stuck(path: Path) -> dict[str, Any]:
@@ -37,6 +94,7 @@ def load_stuck(path: Path) -> dict[str, Any]:
 
 
 def save_stuck(path: Path, data: dict[str, Any]) -> None:
+    """Persist ledger. Never immortalize expired / legacy-transient blocked rows."""
     path.parent.mkdir(parents=True, exist_ok=True)
     on_disk = load_stuck(path)
     on_disk_issues = on_disk.get("issues")
@@ -49,7 +107,7 @@ def save_stuck(path: Path, data: dict[str, Any]) -> None:
             if key not in incoming_issues
             and key not in cleared
             and isinstance(row, dict)
-            and row.get("blocked") is True
+            and block_active(row)
         }
         if blocked_not_incoming:
             data = {
@@ -62,10 +120,31 @@ def save_stuck(path: Path, data: dict[str, Any]) -> None:
             for key, row in on_disk_issues.items()
             if key not in cleared
             and isinstance(row, dict)
-            and row.get("blocked") is True
+            and block_active(row)
         }
         if blocked_on_disk:
             data = {**data, "issues": blocked_on_disk}
+    # Drop inactive blocked stamps so dark factory cannot re-bury via merge.
+    issues = data.get("issues")
+    if isinstance(issues, dict):
+        for key, row in list(issues.items()):
+            if not isinstance(row, dict) or not row.get("blocked"):
+                continue
+            if block_active(row):
+                continue
+            if is_transient_ledger_reason(str(row.get("reason") or "")):
+                issues.pop(key, None)
+                cleared_list = data.setdefault("cleared", [])
+                if key not in cleared_list:
+                    cleared_list.append(key)
+            else:
+                # Expired explicit cooldown on a non-transient row: clear flag.
+                row = dict(row)
+                row.pop("blocked", None)
+                row.pop("blocked_ts", None)
+                row.pop("cooldown_until", None)
+                row.pop("cooldown_seconds", None)
+                issues[key] = row
     persist = {key: value for key, value in data.items() if key != "cleared"}
     path.write_text(json.dumps(persist, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
@@ -76,24 +155,39 @@ def failure_count(data: dict[str, Any], repo: str, number: int) -> int:
 
 
 def is_blocked_in_ledger(data: dict[str, Any], repo: str, number: int) -> bool:
-    row = (data.get("issues") or {}).get(issue_key(repo, number)) or {}
-    return bool(row.get("blocked"))
+    key = issue_key(repo, number)
+    row = (data.get("issues") or {}).get(key) or {}
+    if not isinstance(row, dict):
+        return False
+    if block_active(row):
+        return True
+    # Auto-clear inactive transient limbo so survey sees OPEN ready again.
+    if row.get("blocked") and is_transient_ledger_reason(str(row.get("reason") or "")):
+        clear_issue(data, repo, number)
+    return False
 
 
 def excluded_numbers(data: dict[str, Any], repo: str) -> set[int]:
-    """Issue numbers for this repo that should be skipped (blocked or over threshold)."""
+    """Issue numbers for this repo that should be skipped (active cooldown only)."""
     out: set[int] = set()
     prefix = f"{repo}#"
-    for key, row in (data.get("issues") or {}).items():
+    for key, row in list((data.get("issues") or {}).items()):
         if not str(key).startswith(prefix):
             continue
         if not isinstance(row, dict):
             continue
-        if row.get("blocked"):
+        if block_active(row):
             try:
                 out.add(int(str(key).split("#", 1)[1]))
             except ValueError:
                 continue
+            continue
+        if row.get("blocked") and is_transient_ledger_reason(str(row.get("reason") or "")):
+            try:
+                number = int(str(key).split("#", 1)[1])
+            except ValueError:
+                continue
+            clear_issue(data, repo, number)
     return out
 
 
@@ -104,18 +198,35 @@ def record_failure(
     number: int,
     error: str = "",
     max_failures: int = 2,
+    reason: str = "",
+    cooldown_seconds: int | None = None,
 ) -> dict[str, Any]:
-    """Increment failure count. Returns the updated row; sets blocked when over threshold."""
+    """Increment failure count. Optional local cooldown — never eternal limbo for transient reasons."""
     issues = data.setdefault("issues", {})
     key = issue_key(repo, number)
     row = dict(issues.get(key) or {})
     row["failures"] = int(row.get("failures") or 0) + 1
     row["last_error"] = (error or "")[:500]
-    row["last_ts"] = datetime.now(timezone.utc).isoformat()
+    now = _utcnow()
+    row["last_ts"] = now.isoformat()
+    stamped_reason = str(reason or row.get("reason") or "").strip()
+    if stamped_reason:
+        row["reason"] = stamped_reason
     should_block = row["failures"] >= max(1, int(max_failures))
     if should_block:
         row["blocked"] = True
         row["blocked_ts"] = row["last_ts"]
+        cd = cooldown_seconds
+        if cd is None and is_transient_ledger_reason(stamped_reason):
+            cd = TRANSIENT_COOLDOWN_SECONDS
+        if cd is not None:
+            seconds = max(1, int(cd))
+            row["cooldown_seconds"] = seconds
+            row["cooldown_until"] = (now + timedelta(seconds=seconds)).isoformat()
+        else:
+            # Non-transient terminal skip: no cooldown_until (bound miss).
+            row.pop("cooldown_until", None)
+            row.pop("cooldown_seconds", None)
     issues[key] = row
     return row
 
