@@ -63,11 +63,31 @@ def prepare(
             "budget": cap,
             "slot_count": int(slot_count),
         }
-    return {
+    last = last if isinstance(last, dict) else {}
+    # Cap/occupancy may make every slot empty so select_next_issue never runs.
+    # Still walk listed leftover for the receipt (#1071 / extend #1067).
+    from lokay.proc.select_next_issue import select as select_issue
+
+    fuel = select_issue(listed if isinstance(listed, dict) else {}, last)
+    leftover_issues = [
+        dict(row)
+        for row in list(fuel.get("leftover_issues") or [])
+        if isinstance(row, dict)
+    ]
+    # Selected ready row is also fuel when launch budget is already spent.
+    if remaining == 0 and str(fuel.get("route") or "") in {"ready", "issue"}:
+        head = {
+            key: fuel.get(key)
+            for key in ("repo", "issue", "title", "labels", "assignees")
+            if fuel.get(key) is not None
+        }
+        if head.get("repo") is not None and head.get("issue") is not None:
+            leftover_issues = [head, *leftover_issues]
+    out = {
         "ok": True,
         "route": "run",
         "listed": listed,
-        "last": last if isinstance(last, dict) else {},
+        "last": last,
         "pass_dir": pass_dir,
         "budget": remaining,
         "cap": cap,
@@ -75,4 +95,14 @@ def prepare(
         "spent": spent,
         "live": live,
         "config_path": config_path or "",
+        "leftover": len(leftover_issues)
+        if leftover_issues
+        else int(fuel.get("leftover") or last.get("leftover") or 0),
     }
+    if leftover_issues:
+        out["leftover_issues"] = leftover_issues
+    elif "leftover_issues" in fuel:
+        # Explicit empty from select (picked last row): keep the key only when
+        # select emitted it; occupied/none omits the key for record_pass (#1067).
+        out["leftover_issues"] = []
+    return out

@@ -156,14 +156,22 @@ def _issues_leftover_remaining(
     def _unoccupied(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [row for row in rows if str(row.get("repo") or "") not in occupied]
 
+    prior = _unoccupied(_prior_leftover_issues(remaining))
     if raw_issues:
         # Fresh leftover list this pass — occupancy filters only (#1017).
         leftover_issues = _unoccupied(raw_issues)
-        leftover = len(leftover_issues)
+        if leftover_issues:
+            leftover = len(leftover_issues)
+        elif prior:
+            # Occupancy emptied the fresh list; keep non-occupied prior fuel
+            # (#1071). Ready occupancy must not cold-wipe other repos.
+            leftover_issues = prior
+            leftover = len(leftover_issues)
+        else:
+            leftover = 0
     else:
         # Empty/missing leftover_issues. Occupancy or skip must not cold-wipe
         # prior non-occupied fuel from the receipt (#1067).
-        prior = _unoccupied(_prior_leftover_issues(remaining))
         if prior:
             leftover_issues = prior
             leftover = len(leftover_issues)
@@ -220,7 +228,8 @@ def run_record_pass(
     seed = _small_remaining(tick, overflow=overflow)
     # compute_health rebuilds remaining without leftover; seed from last-pass
     # so occupancy-without-relist cannot cold-wipe catalog memory (#1067).
-    if "leftover_issues" not in seed and "leftover" not in seed:
+    # leftover:0 alone must not block leftover_issues reseeding (#1071).
+    if "leftover_issues" not in seed:
         try:
             from lokay.pass_receipt import read_pass_receipt
 
@@ -229,9 +238,10 @@ def run_record_pass(
             prior = None
         prior_rem = prior.get("remaining") if isinstance(prior, dict) else None
         if isinstance(prior_rem, dict):
-            for key in ("leftover", "leftover_issues"):
-                if key in prior_rem and key not in seed:
-                    seed[key] = prior_rem[key]
+            if "leftover_issues" in prior_rem:
+                seed["leftover_issues"] = prior_rem["leftover_issues"]
+            if "leftover" not in seed and "leftover" in prior_rem:
+                seed["leftover"] = prior_rem["leftover"]
     remaining = _issues_leftover_remaining(
         issues,
         seed,
