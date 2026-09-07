@@ -103,6 +103,7 @@ still require real diff, local verification and publication gates.
 | `queue_conflict_retry_agent` | entropy | Invalid reconciliation → corrected decision |
 | `run_agent` | entropy | Localized issue or PR repair → scoped code changes |
 | `coding_retry_agent` | entropy | Coding feedback → corrected changes |
+| `local_repair_retry_agent` | entropy | Invalid local repair result and validator feedback → corrected coding result |
 | `evidence_coding_agent` | entropy | Requested coding evidence → scoped changes |
 | `repair_agent` | entropy | Failed local tests → scoped repair |
 | `pr_repair_retry_agent` | entropy | Failed repair contract → corrected changes |

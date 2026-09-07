@@ -293,12 +293,12 @@ def handle_coding_boundary(
         from lokay.proc.run_coding_retry_agent import run
 
         first = up.get("validate_repair_result") or {}
-        prompt = (
-            "Your previous local-repair response JSON was invalid. Return ONLY the required closed coding JSON object with verdict=implemented. Never needs_human / human / manual. Validator feedback: %s\nInvalid response: %s"
-            % (
-                first.get("validation_error") or "invalid JSON",
-                first.get("agent_stdout_tail") or "",
-            )
+        from lokay.tool_contracts import render_contract
+
+        prompt = render_contract(
+            "local_repair_retry",
+            feedback=first.get("validation_error") or "invalid JSON",
+            response=first.get("agent_stdout_tail") or "",
         )
         return run(
             cfg=load_config(inputs.get("config_path") or inputs.get("config")),
