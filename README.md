@@ -1352,7 +1352,10 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> PrepareRepairWorktree
+    [*] --> AdmitPrRepair
+    AdmitPrRepair --> SkipMerged: MERGED / CLOSED
+    SkipMerged --> [*]
+    AdmitPrRepair --> PrepareRepairWorktree: OPEN
     PrepareRepairWorktree --> CollectRepairEvidence
     CollectRepairEvidence --> RepairAgent
     RepairAgent --> ValidateRepairResult

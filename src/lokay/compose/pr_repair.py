@@ -9,6 +9,7 @@ from lokay.config import load_config
 from lokay.envelope import emit_exit
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
+from lokay.proc.admit_pr_repair import admit_live
 from lokay.state import append_event
 
 
@@ -28,11 +29,40 @@ def compose_pr_repair(
     if not branch:
         return {"ok": False, "error": "branch required for pr_repair"}
 
+    admitted = admit_live(repo=repo, pr=pr_number, live=live)
+    if str(admitted.get("route") or "") != "open":
+        reason = str(admitted.get("reason") or "pr_already_merged")
+        result = {
+            "ok": True,
+            "kind": "pr_repair",
+            "engine": "admit",
+            "planned": not live,
+            "skipped": True,
+            "reason": reason,
+            "admit": admitted,
+            "result": {
+                "repo": repo,
+                "pr": pr_number,
+                "branch": branch,
+                "repaired": False,
+                "published": False,
+                "terminal": reason,
+                "reason": reason,
+                "skipped": True,
+                "head_sha": "",
+            },
+        }
+        try:
+            append_event(load_config(config_path).state_path, result)
+        except Exception:
+            pass
+        return result
+
     result = run_path(
         path_id="pr_repair", repo=repo, pr=pr_number, branch=branch,
         config_path=config_path, live=live, package_path=package_path, extra_inputs={"review": review or {}},
     )
-    result.update(kind="pr_repair", engine="fala", planned=not live)
+    result.update(kind="pr_repair", engine="fala", planned=not live, admit=admitted)
     try:
         append_event(load_config(config_path).state_path, result)
     except Exception:

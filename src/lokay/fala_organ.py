@@ -22,6 +22,7 @@ from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.organ.common import (  # noqa: F401
     _conduction_values,
     _issue_no_longer_open,
+    _pr_already_merged,
     _require_push,
     _require_real_diff,
     _require_test_local,
@@ -168,6 +169,23 @@ def _handle(
         )
         if refused is not None:
             refused.setdefault("issue", ctx["issue_number"])
+            refused.setdefault("repo", ctx["repo"])
+            return refused
+
+    if atom in _MUTATING_ATOMS and ctx["pr_number"] is not None:
+        from lokay.proc import probe_pr_state
+
+        refused = _pr_already_merged(
+            up,
+            cfg=ctx["cfg"],
+            live=ctx["live"],
+            repo=ctx["repo"],
+            pr_number=ctx["pr_number"],
+            run=_run_atom_main,
+            probe_main=probe_pr_state.main,
+        )
+        if refused is not None:
+            refused.setdefault("pr", ctx["pr_number"])
             refused.setdefault("repo", ctx["repo"])
             return refused
 
