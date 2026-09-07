@@ -2,7 +2,8 @@
 
 Not a second journal. Receipts live in ``~/.lokay/cycle/*.json``; the child's
 result is already in ``state.jsonl`` (compose) or the Fala i2pr sqlite (read
-only). Fail-closed reasons skip the next survey via ``stuck.json``.
+only). Fail-closed verify / no_pr reasons apply a *local cooldown* in
+``stuck.json`` (auto-clears) — never eternal limbo against OPEN ready.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from lokay.proc.detach_issue_to_pr import (
 from lokay.proc.stamp_reaped_receipt import stamp_receipt_file
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import (
+    TRANSIENT_COOLDOWN_SECONDS,
     clear_issue,
     is_blocked_in_ledger,
     issue_key,
@@ -568,7 +570,7 @@ def harvest_fail_closed_children(
     fail-closed (no_pr): a vanished child is not a silent retry. Product misses
     (plan_only / zero_diff / push_failed) count unique run_ids and only
     leave the slot after N; harvest does not CLOSE the issue. A stale
-    blocked miss row below N is reconciled (reopened); crash rows stay buried.
+    blocked miss row below N is reconciled (reopened); verify/no_pr use cooldown.
     """
     home_root = Path(home) if home is not None else Path.home()
     default_cycle, isolated_home = _isolated_lokay_roots(state_path, home_root)
@@ -638,17 +640,18 @@ def harvest_fail_closed_children(
                 error = str(event.get("error") or event.get("reason") or reason)
 
             if reason in FAIL_CLOSED:
-                # Crash / red-recheck stays buried. Do not increment a corpse.
+                # Verify / no_pr: local cooldown only (lokay#1082). Never eternal bury.
                 if not is_blocked_in_ledger(stuck, repo, issue):
-                    row = record_failure(
+                    # All FAIL_CLOSED get expiring cooldown — zero permanent limbo.
+                    record_failure(
                         stuck,
                         repo=repo,
                         number=issue,
                         error=error or reason,
                         max_failures=1,
+                        reason=str(reason),
+                        cooldown_seconds=TRANSIENT_COOLDOWN_SECONDS,
                     )
-                    row["blocked"] = True
-                    row["reason"] = reason
                 _stamp_dead_cycle_receipt(path, data, reason=str(reason))
                 continue
 

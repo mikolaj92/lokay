@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import signal
-from typing import Any
+from typing import Any, Mapping
 
 from lokay.envelope import err, lokay_glance
 from lokay.fala_journal import maintain_lokay_fala_journals, wrapper_journal_dir
@@ -81,13 +82,42 @@ class _PassCeiling(BaseException):
     """Interrupt orchestration without terminating its detached workers."""
 
 
+
+DEFAULT_PASS_CEILING_SECONDS = 2400.0
+
+
+def resolve_pass_ceiling_seconds(
+    explicit: float | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> float:
+    """Same ceiling as LaunchAgent / lokay-service.sh (default 2400, never silent 180)."""
+    if explicit is not None:
+        try:
+            value = float(explicit)
+        except (TypeError, ValueError):
+            value = DEFAULT_PASS_CEILING_SECONDS
+        return max(0.001, value)
+    source = env if env is not None else os.environ
+    raw = str(source.get("LOKAY_PASS_CEILING_SECONDS") or "").strip()
+    if not raw:
+        return DEFAULT_PASS_CEILING_SECONDS
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_PASS_CEILING_SECONDS
+    if value < 0.001:
+        return DEFAULT_PASS_CEILING_SECONDS
+    return value
+
+
 def compose_daemon_cycle(
     *,
     config_path: str,
     max_passes: int = 8,
-    pass_ceiling_seconds: float = 180,
+    pass_ceiling_seconds: float | None = None,
 ) -> dict[str, Any]:
-    ceiling = max(0.001, float(pass_ceiling_seconds))
+    ceiling = resolve_pass_ceiling_seconds(pass_ceiling_seconds)
     previous_handler = signal.getsignal(signal.SIGALRM)
     ceiling_expired = False
 

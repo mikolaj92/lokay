@@ -52,7 +52,9 @@ seed must leave the slot so the next designed issue can land. A stale
 `stuck.json` row below its miss bound for `plan_only` / `zero_diff` /
 `push_failed` is reconciled from the journal — harvest reopens the slot until
 unique-run N. At/above its bound it is terminal and is not refreshed by a dead
-receipt or old journal event. Crash / red-recheck rows stay buried. Tests and
+receipt or old journal event. Verify / no_pr / local-repair fail-closed rows
+use a local cooldown with auto-clear — never eternal stuck limbo against OPEN
+ready (CEO: ready|split|skip|close+reason). Tests and
 pass health are not a representation of whether the lokay works. Merges of
 intended issues are.
 

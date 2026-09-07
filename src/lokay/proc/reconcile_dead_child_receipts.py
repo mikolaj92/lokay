@@ -18,7 +18,11 @@ from lokay.proc.detach_issue_to_pr import (
     coding_live_for_issue,
     is_live_issue_to_pr_pid,
 )
-from lokay.stuck import is_blocked_in_ledger, record_failure
+from lokay.stuck import (
+    TRANSIENT_COOLDOWN_SECONDS,
+    is_blocked_in_ledger,
+    record_failure,
+)
 
 
 def reconcile(facts: dict) -> dict:
@@ -78,10 +82,15 @@ def reconcile(facts: dict) -> dict:
         error = str((event or {}).get("error") or (event or {}).get("reason") or reason)
         if reason in FAIL_CLOSED:
             if not is_blocked_in_ledger(stuck, repo, issue):
-                row = record_failure(
-                    stuck, repo=repo, number=issue, error=error or reason, max_failures=1
+                record_failure(
+                    stuck,
+                    repo=repo,
+                    number=issue,
+                    error=error or reason,
+                    max_failures=1,
+                    reason=str(reason),
+                    cooldown_seconds=TRANSIENT_COOLDOWN_SECONDS,
                 )
-                row.update(blocked=True, reason=reason)
             _stamp_dead_cycle_receipt(path, data, reason=str(reason))
             continue
         if reason not in MISS_REASONS:

@@ -517,7 +517,7 @@ def test_ok_true_without_pr_is_not_no_pr(tmp_path: Path):
 
 
 def test_ok_true_no_delivery_dead_pid_is_fail_closed(tmp_path: Path):
-    """lokay#1061: ok:true + delivered:false + no_delivery blocks, not silent-reap."""
+    """lokay#1061+#1082: no_delivery reaps + local cooldown, not eternal limbo."""
     cycle = tmp_path / "cycle"
     cycle.mkdir()
     state = tmp_path / "state.jsonl"
@@ -551,6 +551,7 @@ def test_ok_true_no_delivery_dead_pid_is_fail_closed(tmp_path: Path):
     row = stuck["issues"]["a/b#5637"]
     assert row.get("blocked") is True
     assert row.get("reason") == "no_pr"
+    assert row.get("cooldown_until"), "verify/no_pr must carry expiring cooldown"
     stamped = json.loads(receipt.read_text(encoding="utf-8"))
     assert stamped.get("reaped") is True
     assert stamped.get("reason") == "no_pr"

@@ -185,3 +185,97 @@ def test_select_all_excluded(monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert out["selected"] is None
     assert out["reason"] == "all_excluded"
+
+
+def test_transient_no_pr_legacy_limbo_is_not_excluded():
+    """lokay#1082: eternal blocked no_pr must not exclude OPEN ready."""
+    from lokay.stuck import excluded_numbers, is_blocked_in_ledger
+
+    data = {
+        "issues": {
+            "a/b#5714": {
+                "failures": 1,
+                "blocked": True,
+                "reason": "no_pr",
+                "last_error": "issue_to_pr produced no PR",
+            }
+        }
+    }
+    assert is_blocked_in_ledger(data, "a/b", 5714) is False
+    assert excluded_numbers(data, "a/b") == set()
+    assert "a/b#5714" not in (data.get("issues") or {})
+
+
+def test_verify_fail_cooldown_expires(monkeypatch):
+    """Local cooldown auto-clears; never permanent verify limbo."""
+    from datetime import datetime, timedelta, timezone
+
+    import lokay.stuck as stuck_mod
+    from lokay.stuck import (
+        TRANSIENT_COOLDOWN_SECONDS,
+        excluded_numbers,
+        is_blocked_in_ledger,
+        record_failure,
+    )
+
+    fixed = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(stuck_mod, "_utcnow", lambda: fixed)
+    data = {"issues": {}}
+    row = record_failure(
+        data,
+        repo="a/b",
+        number=9,
+        error="test_local_failed",
+        max_failures=1,
+        reason="test_local_failed",
+        cooldown_seconds=TRANSIENT_COOLDOWN_SECONDS,
+    )
+    assert row.get("blocked") is True
+    assert row.get("cooldown_until")
+    assert is_blocked_in_ledger(data, "a/b", 9) is True
+    assert 9 in excluded_numbers(data, "a/b")
+
+    monkeypatch.setattr(
+        stuck_mod,
+        "_utcnow",
+        lambda: fixed + timedelta(seconds=TRANSIENT_COOLDOWN_SECONDS + 1),
+    )
+    assert is_blocked_in_ledger(data, "a/b", 9) is False
+    assert excluded_numbers(data, "a/b") == set()
+
+
+def test_save_stuck_does_not_immortalize_legacy_transient_limbo(tmp_path: Path):
+    """save_stuck must not revive eternal no_pr / verify blocked rows."""
+    path = tmp_path / "stuck.json"
+    path.write_text(
+        json.dumps(
+            {
+                "issues": {
+                    "a/b#1": {"failures": 1, "blocked": True, "reason": "no_pr"},
+                    "a/b#2": {"failures": 3, "blocked": True, "reason": "plan_only"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    save_stuck(path, {"issues": {}})
+    saved = load_stuck(path)
+    assert "a/b#1" not in saved["issues"]
+    assert saved["issues"]["a/b#2"]["blocked"] is True
+
+
+def test_record_failure_transient_sets_cooldown_until():
+    from lokay.stuck import TRANSIENT_COOLDOWN_SECONDS, record_failure
+
+    data = {"issues": {}}
+    row = record_failure(
+        data,
+        repo="x/y",
+        number=3,
+        error="no_pr",
+        max_failures=1,
+        reason="no_pr",
+    )
+    assert row["blocked"] is True
+    assert row["cooldown_seconds"] == TRANSIENT_COOLDOWN_SECONDS
+    assert row.get("cooldown_until")
