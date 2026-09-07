@@ -61,28 +61,9 @@ def handle_coding_boundary(
     if not owns(atom):
         return None
     if atom == "prepare_coding_request":
-        from lokay.proc.prepare_coding_request import prepare
+        from lokay.organ.coding_request import prepare_request
 
-        return prepare(
-            worktree=_worktree_path(up, inputs),
-            repo=str(ctx.get("repo") or inputs.get("repo") or ""),
-            issue=ctx.get("issue_number")
-            if ctx.get("issue_number") is not None
-            else inputs.get("issue"),
-            issue_raw=_issue_raw(up, inputs),
-            localize=dict(inputs.get("localize") or up.get("localize") or {}),
-            branch=str(
-                (up.get("make_branch") or {}).get("branch")
-                or inputs.get("branch")
-                or ""
-            ),
-            live=bool(inputs.get("live")),
-            repo_map=str(
-                (inputs.get("map_repo") or {}).get("map")
-                or (up.get("map_repo") or {}).get("map")
-                or ""
-            ),
-        )
+        return prepare_request(inputs, up, ctx)
     if atom == "coding_execution":
         from lokay.proc.coding_execution_subflow import run
 
