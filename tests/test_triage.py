@@ -217,10 +217,12 @@ def test_issue_triage_path_in_package():
         "validate_issue_evidence",
         "select_issue_evidence",
         "finalize_issue_triage",
+        "select_triage_leaf",
         "apply_issue_blocked",
         "apply_issue_mark",
         "apply_issue_ready",
         "apply_issue_skip",
+        "select_park_stop",
         "apply_issue_manual",
         "summarize_issue_triage",
     ]
@@ -229,11 +231,11 @@ def test_issue_triage_path_in_package():
     linked = path["nodes"][2]
     assert "resolve_issue_candidate" in linked["conduction"]
     skip = next(node for node in path["nodes"] if node["id"] == "apply_issue_skip")
-    assert "finalize_issue_triage" in skip["conduction"]
+    assert "select_triage_leaf" in skip["conduction"]
     mark = next(node for node in path["nodes"] if node["id"] == "apply_issue_mark")
     assert mark["when"] == {
-        "upstream": "finalize_issue_triage",
-        "path": "decision.verdict",
+        "upstream": "select_triage_leaf",
+        "path": "route",
         "equals": "close",
     }
     assert all(node["id"] != "apply_issue_close" for node in path["nodes"])

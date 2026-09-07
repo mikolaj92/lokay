@@ -24,6 +24,8 @@ OWNED = frozenset(
         "validate_issue_evidence",
         "select_issue_evidence",
         "finalize_issue_triage",
+        "select_triage_leaf",
+        "select_park_stop",
         "apply_issue_ready",
         "apply_issue_skip",
         "apply_issue_blocked",
@@ -211,8 +213,33 @@ def handle_issue_triage(
         return finalize(
             up.get("select_issue_triage") or {}, up.get("select_issue_evidence") or {}
         )
+    if atom == "select_triage_leaf":
+        from lokay.proc.select_triage_leaf import select
+
+        return select(final=up.get("finalize_issue_triage") or {})
+    if atom == "select_park_stop":
+        from lokay.proc.select_park_stop import select
+
+        decision = dict(
+            (up.get("select_triage_leaf") or {}).get("decision")
+            or (up.get("plan_issue_split") or {}).get("decision")
+            or (up.get("finalize_issue_triage") or {}).get("decision")
+            or {}
+        )
+        if not decision and (up.get("plan_issue_split") or {}).get("route") == "park":
+            plan = up.get("plan_issue_split") or {}
+            decision = {
+                "verdict": "park",
+                "reason": str(plan.get("reason") or "park"),
+            }
+        return select(
+            decision=decision,
+            needs_feedback_label=cfg.needs_feedback_label,
+        )
     decision = dict(
-        (up.get("plan_issue_split") or {}).get("decision")
+        (up.get("select_park_stop") or {}).get("decision")
+        or (up.get("select_triage_leaf") or {}).get("decision")
+        or (up.get("plan_issue_split") or {}).get("decision")
         or (up.get("finalize_issue_triage") or {}).get("decision")
         or {}
     )
@@ -287,5 +314,6 @@ def handle_issue_triage(
             issue=number,
             decision=decision,
             live=mutate,
+            park_stop=up.get("select_park_stop") or {},
         )
     return None
