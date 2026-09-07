@@ -122,6 +122,7 @@ def _handle(
     up: dict[str, dict[str, Any]],
     *,
     process_id: str | None = None,
+    provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from lokay.activity import record_atom_start
     from lokay.organ.common import _cfg_flags, _live_flags
@@ -241,6 +242,10 @@ def _handle(
     ):
         result = handler(atom, inputs, up, ctx)
         if result is not None:
+            if provenance is not None:
+                from lokay.execution_provenance import implementation_identity
+
+                provenance.update(implementation_identity(handler))
             return result
     raise ValueError(f"unknown atom: {atom!r}")
 
@@ -303,13 +308,18 @@ def main() -> int:
                 continue
             inputs.setdefault(key, value)
         up = _conduction_values(manifest)
+        provenance: dict[str, Any] = {}
         result = _handle(
             atom,
             inputs,
             up,
             process_id=str(manifest.get("process_id") or "") or None,
+            provenance=provenance,
         )
-        return sdk.output(values=organ_envelope(atom, result))
+        return sdk.output(
+            values=organ_envelope(atom, result),
+            metadata={"implementation": provenance},
+        )
 
     return sdk.run_manifest_effector(handler)
 
