@@ -557,6 +557,142 @@ def test_ok_true_no_delivery_dead_pid_is_fail_closed(tmp_path: Path):
     assert stamped.get("reason") == "no_pr"
 
 
+
+def test_reaped_fail_closed_receipt_does_not_renew_cooldown(tmp_path: Path, monkeypatch):
+    """lokay#1084: same dead receipt must not roll a fresh 5min cooldown forever."""
+    from datetime import datetime, timedelta, timezone
+
+    import lokay.stuck as stuck_mod
+    from lokay.stuck import TRANSIENT_COOLDOWN_SECONDS, is_blocked_in_ledger
+
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    receipt = cycle / "a__b-5714.json"
+    _receipt(receipt, repo="a/b", issue=5714, pid=42)
+    with state.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "issue_to_pr",
+                    "repo": "a/b",
+                    "issue": 5714,
+                    "ok": True,
+                    "delivered": False,
+                    "stopped": True,
+                    "reason": "no_delivery",
+                    "run_id": "temida-5714",
+                }
+            )
+            + "\n"
+        )
+
+    fixed = datetime(2026, 9, 7, 17, 40, tzinfo=timezone.utc)
+    monkeypatch.setattr(stuck_mod, "_utcnow", lambda: fixed)
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    assert 5714 in excluded_numbers(stuck, "a/b")
+    first_until = stuck["issues"]["a/b#5714"]["cooldown_until"]
+    stamped = json.loads(receipt.read_text(encoding="utf-8"))
+    assert stamped.get("reaped") is True
+    assert stamped.get("reason") == "no_pr"
+
+    # Cooldown still active — second harvest must not rewrite cooldown_until.
+    monkeypatch.setattr(
+        stuck_mod, "_utcnow", lambda: fixed + timedelta(seconds=60)
+    )
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    assert stuck["issues"]["a/b#5714"]["cooldown_until"] == first_until
+
+    # After expiry the corpse stays reaped; harvest must not re-penalize.
+    monkeypatch.setattr(
+        stuck_mod,
+        "_utcnow",
+        lambda: fixed + timedelta(seconds=TRANSIENT_COOLDOWN_SECONDS + 1),
+    )
+    assert is_blocked_in_ledger(stuck, "a/b", 5714) is False
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert "a/b#5714" not in (stuck.get("issues") or {})
+
+
+def test_condition_not_met_corpse_does_not_roll_cooldown(tmp_path: Path, monkeypatch):
+    """lokay#1084: condition_not_met delivered:false corpses must not loop cooldown."""
+    from datetime import datetime, timedelta, timezone
+
+    import lokay.stuck as stuck_mod
+    from lokay.stuck import TRANSIENT_COOLDOWN_SECONDS, is_blocked_in_ledger
+
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    state = tmp_path / "state.jsonl"
+    receipt = cycle / "a__b-88.json"
+    _receipt(receipt, repo="a/b", issue=88, pid=77)
+    with state.open("a", encoding="utf-8") as fh:
+        fh.write(
+            json.dumps(
+                {
+                    "kind": "issue_to_pr",
+                    "repo": "a/b",
+                    "issue": 88,
+                    "ok": True,
+                    "delivered": False,
+                    "stopped": True,
+                    "reason": "condition_not_met",
+                    "run_id": "cnm-88",
+                }
+            )
+            + "\n"
+        )
+
+    fixed = datetime(2026, 9, 7, 17, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(stuck_mod, "_utcnow", lambda: fixed)
+    stuck = {"issues": {}}
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    stamped = json.loads(receipt.read_text(encoding="utf-8"))
+    assert stamped.get("reaped") is True
+    # First harvest may apply a one-shot cooldown (no_pr via delivered:false).
+    monkeypatch.setattr(
+        stuck_mod,
+        "_utcnow",
+        lambda: fixed + timedelta(seconds=TRANSIENT_COOLDOWN_SECONDS + 5),
+    )
+    is_blocked_in_ledger(stuck, "a/b", 88)  # clear expired transient if any
+    harvest_fail_closed_children(
+        stuck,
+        state_path=state,
+        cycle_dir=cycle,
+        is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
+    )
+    assert excluded_numbers(stuck, "a/b") == set()
+    assert not (stuck.get("issues") or {}).get("a/b#88", {}).get("blocked")
+
+
 def test_ok_true_delivered_true_with_pr_is_not_blocked(tmp_path: Path):
     """Regression #1061: true delivery still clears and does not fail-close."""
     cycle = tmp_path / "cycle"
