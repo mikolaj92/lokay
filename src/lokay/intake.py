@@ -1,4 +1,4 @@
-"""Deterministic issue intake: CLOSE | READY | SPLIT | PARK.
+"""Deterministic issue intake: CLOSE | READY | SPLIT | SKIP.
 
 Cheap, testable checks that harden inbox triage before `ai:ready` sticks
 eligible for `issue_to_pr`. Pure rules first; no coding harness.
@@ -9,8 +9,9 @@ human gates. CLOSE / SPLIT / READY+implement are the default exits.
 CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
 bias toward distrusting every ticket. Foreign objections to the lokay's
 essence (what Lokay is) CLOSE; operational reports (hangs / does not work as
-described) stay. PARK is a machine stop (ai:frozen) after rules fail closed —
-never a human mailbox, never the escape hatch for oversized work that can be auto-split.
+described) stay. Former PARK is skip (no limbo label) after rules fail closed —
+never ai:frozen / needs-feedback / blocked; never the escape hatch for oversized
+work that can be auto-split. Legal exits: ready | split | skip | close.
 """
 
 from __future__ import annotations
@@ -23,13 +24,13 @@ from typing import Any, Iterable
 from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY
-from lokay.triage import MACHINE_PARK_LABEL, is_parked, is_preflight_incident, is_undecided
+from lokay.triage import is_parked, is_preflight_incident, is_undecided
 
 # --- Verdicts for one check ---
 PASS = "pass"
 CLOSE = "close"
 SPLIT = "split"
-PARK = "park"  # factory park; human is not a state
+PARK = "park"  # legacy check token; aggregate maps to skip
 INCONCLUSIVE = "inconclusive"
 BLOCKED = "blocked"
 
@@ -643,14 +644,14 @@ def aggregate_intake(
     blocked_hit = next((c for c in checked if c.verdict == BLOCKED), None)
     if blocked_hit is not None:
         return IntakeDecision(
-            decision="blocked",
+            decision="skip",
             reason=blocked_hit.reason,
             checks=checked,
-            add_labels=(MACHINE_PARK_LABEL,),
-            remove_labels=(ready_label, LABEL_WORK_READY, needs_feedback_label),
+            add_labels=(),
+            remove_labels=(ready_label, LABEL_WORK_READY, needs_feedback_label, "ai:frozen", "ai:blocked"),
             comment=(
-                "Parked (factory): lokay preflight incident. Self-repair owns this, "
-                "not issue_to_pr."
+                "Skipped (factory): lokay preflight incident. Self-repair owns this, "
+                "not issue_to_pr. No limbo label."
             ),
             implementable=False,
         )
@@ -688,11 +689,11 @@ def aggregate_intake(
     park_hit = next((c for c in checked if c.verdict == PARK), None)
     if park_hit is not None:
         return IntakeDecision(
-            decision="park",
+            decision="skip",
             reason=park_hit.reason,
             checks=checked,
-            add_labels=(MACHINE_PARK_LABEL,),
-            remove_labels=(ready_label, needs_feedback_label),
+            add_labels=(),
+            remove_labels=(ready_label, needs_feedback_label, "ai:frozen", "ai:blocked"),
             comment=_park_comment(park_hit),
             implementable=False,
         )
@@ -702,14 +703,14 @@ def aggregate_intake(
         # Fail closed: do not READY when evidence is missing.
         hit = inconclusive[0]
         return IntakeDecision(
-            decision="park",
+            decision="skip",
             reason=f"inconclusive_{hit.reason}",
             checks=checked,
-            add_labels=(MACHINE_PARK_LABEL,),
-            remove_labels=(ready_label, needs_feedback_label),
+            add_labels=(),
+            remove_labels=(ready_label, needs_feedback_label, "ai:frozen", "ai:blocked"),
             comment=(
-                f"Parked (factory): intake check incomplete ({hit.check}: {hit.reason}). "
-                "Structured fail — clarify paths or ensure clone is available."
+                f"Skipped (factory): intake check incomplete ({hit.check}: {hit.reason}). "
+                "No limbo label — clarify paths or ensure clone is available."
             ),
             implementable=False,
         )
@@ -771,8 +772,8 @@ def _split_comment(hit: CheckResult) -> str:
 
 def _park_comment(hit: CheckResult) -> str:
     return (
-        f"Parked (factory): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
-        "Structured fail — clarify a single implementable ask or split."
+        f"Skipped (factory): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
+        "No limbo label — clarify a single implementable ask, split, or leave open."
     )
 
 
@@ -787,7 +788,7 @@ def should_run_intake(
 ) -> tuple[bool, str]:
     """Intake runs for ready/split candidates; skips parked / undecided / human-parked."""
     if is_parked(issue_labels):
-        return False, "parked_frozen"
+        return False, "parked_tracker"
     labels = set(issue_labels)
     if ready_label in labels:
         return True, "already_ready"

@@ -1,4 +1,4 @@
-"""Admit factory park as a machine stop — never the human needs-feedback mailbox."""
+"""Admit former park as skip — never stamp a limbo label on the issue."""
 
 from __future__ import annotations
 
@@ -12,30 +12,34 @@ def select(
     decision: dict,
     needs_feedback_label: str = "ai:needs-feedback",
 ) -> dict:
-    """Pick park labels. Structured fail stays machine-side (ai:frozen)."""
+    """Map park verdict to skip with zero labels (no ai:frozen limbo).
+
+    Dark factory legal exits: ready | split | skip | close. Local retry/cooldown
+    lives in factory state — never a durable GitHub process label.
+    """
     payload = dict(decision or {})
     verdict = str(payload.get("verdict") or "").strip().lower()
     if verdict != "park":
         return {"ok": True, "route": "not_applicable", "reason": "not_park"}
     reason = str(payload.get("reason") or "park")
     summary = str(payload.get("summary") or "")
-    labels = [MACHINE_PARK_LABEL]
     human = str(needs_feedback_label or "ai:needs-feedback")
-    if human in labels:
+    # Refuse any path that would stamp limbo (frozen / human mailbox).
+    if human == MACHINE_PARK_LABEL:
         return {
             "ok": False,
             "route": "fail",
-            "reason": "refusing_human_mailbox_park",
+            "reason": "refusing_limbo_park",
             "labels": [],
         }
     return {
         "ok": True,
-        "route": "park",
-        "labels": labels,
+        "route": "skip",
+        "labels": [],
         "reason": reason,
         "summary": summary,
         "decision": {
-            "verdict": "park",
+            "verdict": "skip",
             "reason": reason,
             "summary": summary,
         },

@@ -1,7 +1,7 @@
 """Task consumption contract. One plugin: list, get, comment, mark.
 
 Identity is plugin + target + number. Zero PR, clone, git, merge.
-Sito parks a foreign open task; it does not close it.
+Sito skip/close paths never stamp limbo labels (ai:frozen / needs-feedback / blocked).
 """
 
 from __future__ import annotations
@@ -79,11 +79,13 @@ def _require_mark(kind: str) -> str:
 
 
 def sito_park(source: Tasks, identity: TaskId, reason: str) -> Task:
-    """Park a sito close verdict. Comment and mark; never close."""
-    source.comment(identity, f"Parked: {reason}")
+    """Skip a sito close verdict without limbo stamps. Comment; never close."""
+    source.comment(identity, f"Skipped: {reason}. No limbo label.")
     task = source.mark(identity, "park")
     if str(task.state or "").upper() == "CLOSED":
         raise RuntimeError("sito must not close an open task")
+    if "ai:frozen" in task.labels:
+        raise RuntimeError("sito must not stamp ai:frozen")
     return task
 
 
@@ -168,17 +170,22 @@ class MemoryTasks:
                 f"task not found: {identity.plugin}+{identity.target}+{identity.number}"
             )
         token = _require_mark(kind)
-        # Park / ready / blocked stay open. This source has no close.
+        # ready stays open with ready label. park/blocked → strip limbo, no stamp.
         task.mark = token
         task.state = "OPEN"
-        drop = {"ai:ready", "work:ready", "ai:blocked", "ai:needs-feedback", "ai:park"}
+        drop = {
+            "ai:ready",
+            "work:ready",
+            "ai:blocked",
+            "ai:needs-feedback",
+            "ai:park",
+            "ai:frozen",
+            "frozen",
+        }
         labels = [label for label in task.labels if label not in drop]
         if token == "ready":
             if "ai:ready" not in labels:
                 labels.append("ai:ready")
-        else:
-            # park / blocked → machine stop; never human mailbox
-            if "ai:frozen" not in labels:
-                labels.append("ai:frozen")
+        # park / blocked: no durable process label (skip semantics)
         task.labels = labels
         return task

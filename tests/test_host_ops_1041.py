@@ -123,13 +123,13 @@ def test_hard_facts_pure_host_ops_parks_not_do():
         data, {"route": "evaluate"}, {"merged_prs": []}, {"covering_prs": []}
     )
     assert out["route"] == "terminal"
-    assert out["decision"]["verdict"] == "park"
+    assert out["decision"]["verdict"] == "skip"
     assert out["decision"]["reason"] == "host_ops"
     assert HOST_OPS_UNPARK_CRITERION in (out["decision"].get("summary") or "")
     sieve = classify_sieve(
         {"triage": {"decision": out["decision"]}}, {"route": "issue"}
     )
-    assert sieve["route"] == "park"
+    assert sieve["route"] == "skip"
     assert sieve["route"] != "do"
 
 

@@ -10,16 +10,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.mark.parametrize(('verdict', 'reason', 'route'), [
-    ('close', 'superseded', 'park'),
-    ('close', 'superseded_oversized_split', 'park'),
-    ('blocked', 'duplicate_pr_split', 'park'),
+    ('close', 'superseded', 'skip'),
+    ('close', 'superseded_oversized_split', 'skip'),
+    ('blocked', 'duplicate_pr_split', 'skip'),
     ('ready', 'shape_verified_split', 'do'),
-    ('blocked', 'duplicate_pr', 'park'),
+    ('blocked', 'duplicate_pr', 'skip'),
     ('ready', 'shape_verified', 'do'),
     ('skip', 'intake_superseded', 'skip'),
-    ('park', 'shape_uncertain', 'park'),
+    ('park', 'shape_uncertain', 'skip'),
     ('park', 'issue_split', 'split'),
-    ('needs_human', 'czlowiek', 'park'),
+    ('needs_human', 'czlowiek', 'skip'),
 ])
 def test_terminal_verdict_is_not_rerouted_by_intake_words(verdict, reason, route):
     out = classify_sieve({'triage': {'decision': {'verdict': verdict, 'reason': reason}}}, {})
@@ -40,10 +40,10 @@ def test_issue_triage_prompt_has_zero_needs_human():
     low = text.lower()
     assert "needs_human" not in low
     assert "człowiek" not in text and "czlowiek" not in low
-    assert "park" in low
+    assert "skip" in low or "park" in low
     assert "never ask for a person" in low or "zero human" in low or "never invent a human" in low
-
-    assert 'fail-closed' in text.lower() or 'fail closed' in text.lower() or 'park' in text
+    assert "ai:frozen" not in low or "not invent" in low or "do not invent" in low
+    assert 'fail-closed' in text.lower() or 'fail closed' in text.lower() or 'skip' in text
 
 
 def test_issue_triage_schema_excludes_needs_human():
@@ -52,4 +52,4 @@ def test_issue_triage_schema_excludes_needs_human():
 
     assert 'needs_human' not in SCHEMA
     assert 'needs_human' not in VERDICTS
-    assert VERDICTS == frozenset({'ready', 'close', 'needs_evidence', 'park'})
+    assert VERDICTS == frozenset({'ready', 'close', 'needs_evidence', 'park', 'skip', 'split'})

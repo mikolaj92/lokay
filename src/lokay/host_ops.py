@@ -109,8 +109,8 @@ def host_ops_child_body(parent: Issue, *, criterion: str = HOST_OPS_UNPARK_CRITE
         "This is NOT a coding slot — do not route to issue_to_pr / ai/fix.\n\n"
         "## Done means\n"
         f"- [ ] {criterion}\n"
-        "- [ ] Park with `ai:frozen` until evidence exists "
-        "(factory park; zero needs_human)\n\n"
+        "- [ ] Keep parent skipped (no limbo label) until evidence exists "
+        "(factory skip; zero needs_human)\n\n"
         f"## Parent\nSplit from {parent_ref}: {parent.title}\n"
         f"\n<!-- lokay-host-ops:{criterion} -->\n"
     )

@@ -99,7 +99,7 @@ position must not turn it into a dependency of product or the terminal.
 | `factory_begin_host_gate` | Succeeds with `route=begin` or `route=restart`. Restart means host-ff moved HEAD under this process. Never `ok=false`: a failed gate still unblocks product children in Fala. |
 | `factory_begin` | NODE child Fala of named LEAF agents: host-alive probe, catalog, pass workspace. `when` gate `route=begin`. Always writes `pass_dir` when the host probe routes `up`. No idle on these leaves. Empty surveys do not skip PRs or issues. Lease, fat preflight, harvest (`child_harvest`), and four terminals are off this path. |
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only on a confirmed stall (`did_not_move`). Same exclusions as `select_repair_route`: leftover skip, empty survey, occupied, idle, pass_ceiling, waiting. One pass is oil XOR product (product wins). Body is child Fala `self_repair_department`. Off never touches lokay main. |
-| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, park. One triage boundary after hard_facts — never a second intake engine. Factory park / fail uses `ai:frozen` (never `ai:needs-feedback` / `ai:blocked`). Stops at `limits.max_triage_per_tick`, publishes leftover, then yields to executor. Zero `ai/fix`. Zero `needs_human`. Foreign assignee still skipped. |
+| `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Child Fala `issue_triage_department`: marks, split, skip. One triage boundary after hard_facts — never a second intake engine. Legal exits: ready→implement | split | skip (no stamp) | close+reason (last resort). Never stamp `ai:frozen` / `ai:needs-feedback` / `ai:blocked`. Stops at `limits.max_triage_per_tick`, publishes leftover, then yields to executor. Zero `ai/fix`. Zero `needs_human`. Foreign assignee still skipped. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Child Fala `executor_department`: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
 | `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Child Fala `pr_triage_department`: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. |
 | `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Existing `pr_repair` after a repair verdict from `run_pr_triage_department`. Conducts from the sieve run plus the PR-triage switch. Not started from inside `pr_triage_department`. Disabled skip leaves published feedback and does not touch the branch. **MERGED (or CLOSED) target PR:** compose/`admit_pr_repair` fail-closed skip (`pr_already_merged`) — does not start Fala repair and does not consume the per-PR receipt; mid-flight organ re-probe refuses mutating atoms. Per-PR lifetime K (default 1, from `limits.max_repairs_per_tick`) is enforced via a durable `pr-repair-receipts` receipt: after budget stop select returns `fail_closed` / `pr_repair_budget_exhausted` (park-by-factory); next tick does not invoke repair again. Zero `needs_human`. |
@@ -113,9 +113,9 @@ position must not turn it into a dependency of product or the terminal.
 **Trust intentional issues:** fleet flow assumes issues from the repo owner /
 configured assignee are purposeful. Do not invent new human-approval gates in
 the pass spine. Intake `CLOSE` remains a sito verdict for clear obsolete /
-wrong-shape / superseded cases only — it parks (`ai:frozen`), it does not
-close GitHub. Never bias toward “distrust every ticket.” Goal:
-human writes issue → lokay delivers.
+wrong-shape / harmful cases only — last-resort close with explanation, or
+skip (no limbo stamp) when close is refused. Never `ai:frozen`. Never bias
+toward “distrust every ticket.” Goal: human writes issue → lokay delivers.
 
 ### `factory_begin` (child)
 
@@ -237,7 +237,7 @@ push/activate/preflight/close and still reaches `summarize_self_repair` as
 terminal failed (incident left open); incomplete self-repair journal runs are
 finalized as timeout evidence and kept.
 
-### `issue_triage_department` (sieve + split + park)
+### `issue_triage_department` (sieve + split + skip)
 
 Two small blocks plus graph. Zero code. Zero PR. Parent
 `run_issue_triage_department` invokes this child. Foreign assignees stay
@@ -269,7 +269,7 @@ finished rows.
 select_next_issue             route=ready when the row already has ai:ready
                               or work:ready — skips issue triage
   → issues_run_triage         when route=issue
-    → select_issue_sieve      do / skip / park / split
+    → select_issue_sieve      do / skip / split
                               (published triage verdict is final — no second
                               intake_check / run_issue_sieve_intake)
                               route=ready is do / already_ready without a
@@ -401,10 +401,10 @@ fails closed. Not an embedding service and not a second planner.
 
 ### `issue_triage` (triage child of `issue_triage_department`)
 
-Child of `issue_triage_department`. Triage only: **robić / nie / oznaczyć / człowiek**.
-Not implement. Triage must not close someone else's issue. Verdict `close`
-parks (`apply_issue_mark`: `ai:frozen` + comment). `issue_split` is a later
-child Fala, not an exit here.
+Child of `issue_triage_department`. Triage only: **ready / skip / split / close**.
+Not implement. Legal exits: ready→implement | split | skip (no stamp, stays in
+queue) | close+reason (last resort). Never stamp `ai:frozen` / needs-feedback /
+blocked. `issue_split` is a later child Fala when shape is oversized.
 
 ```text
 get_issue
@@ -416,24 +416,22 @@ get_issue
               └─→ issue_triage_agent → validate → one retry → one evidence round
                     → finalize
                       → select_triage_leaf   ← explicit ok|fail apply admission
-                          ├─→ apply_issue_ready     robić
-                          ├─→ apply_issue_skip      nie
-                          ├─→ apply_issue_blocked   nie (preflight → ai:frozen)
-                          ├─→ apply_issue_mark      zamknąć → park ai:frozen (no close_issue)
-                          └─→ select_park_stop      machine stop (ai:frozen; never needs-feedback/blocked)
-                                └─→ apply_issue_manual    park (factory; zero human mailbox)
+                          ├─→ apply_issue_ready     ready→implement
+                          ├─→ apply_issue_skip      skip (no stamp)
+                          ├─→ apply_issue_blocked   preflight → skip (strip ready; no limbo)
+                          ├─→ apply_issue_mark      close verdict → skip (no limbo) or last-resort close
+                          └─→ select_park_stop      former park → skip (labels=[])
+                                └─→ apply_issue_manual    skip receipt comment; never ai:frozen
 ```
 
 Hard facts stay deterministic (still-open, superseded/merged PR, duplicate AI PR).
 Semantic remainder is one structured executor call; invalid JSON gets one retry;
-a second evidence request parks fail-closed with `ai:frozen` (not `ai:needs-feedback`).
-A close verdict marks; it does not close GitHub. Own-work closeout after merge stays in
-`pr_triage` (`close_issue`). Oversized / multi-epic parks with `issue_split` reason;
-sieve auto-splits. Host-ops monolith (live fleet/host evidence + code) → park
-`host_ops_issue_split` (sieve split) or pure host-ops → park `host_ops` via
-`select_park_stop` → `ai:frozen`; never coding monolith; never human mailbox.
-Short title/body (`decide_issue`) is a structured fail → park `ai:frozen` (or split
-when oversized) — never `ai:needs-feedback` / `ai:blocked`. Zero `needs_human`.
+exhausted evidence / invalid JSON → skip (no stamp), not limbo. Close is last-resort
+with explanation; otherwise skip leaves the issue OPEN in queue. Own-work closeout
+after merge stays in `pr_triage` (`close_issue`). Oversized / multi-epic → split.
+Host-ops monolith → split `host_ops_issue_split`; pure host-ops → skip `host_ops`
+(no `ai:frozen`). Short title/body (`decide_issue`) → skip (no stamp). Zero
+`needs_human`. Never `ai:frozen` / `ai:needs-feedback` / `ai:blocked` as process state.
 The executor department launches `issue_to_pr` only after a do mark.
 
 ### `pr_repair` (red checks on open ai/fix PR)

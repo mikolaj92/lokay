@@ -1,4 +1,4 @@
-"""Contract fixtures for park ≠ needs-feedback triage micro-nodes."""
+"""Contract fixtures: former park → skip, never limbo stamps."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ from types import SimpleNamespace
 
 from lokay.models import Issue
 from lokay.proc.apply_issue_manual import apply as apply_manual
-from lokay.proc.select_park_stop import MACHINE_PARK_LABEL, select as select_park_stop
+from lokay.proc.select_park_stop import select as select_park_stop
 from lokay.proc.select_triage_leaf import select as select_triage_leaf
 from lokay.triage import decide_issue
+
+LIMBO = frozenset({"ai:frozen", "ai:needs-feedback", "ai:blocked"})
 
 
 def _issue(**kwargs) -> Issue:
@@ -44,7 +46,7 @@ def test_select_triage_leaf_fails_unknown_verdict():
     assert out["reason"] == "unknown_triage_verdict"
 
 
-def test_select_park_stop_machine_frozen_never_needs_feedback():
+def test_select_park_stop_maps_park_to_skip_no_labels():
     cases = (
         {"verdict": "park", "reason": "invalid_triage_json_exhausted"},
         {"verdict": "park", "reason": "host_ops", "summary": "unpark when ops ready"},
@@ -54,9 +56,9 @@ def test_select_park_stop_machine_frozen_never_needs_feedback():
     for decision in cases:
         out = select_park_stop(decision=decision)
         assert out["ok"] is True
-        assert out["route"] == "park"
-        assert out["labels"] == [MACHINE_PARK_LABEL]
-        assert "ai:needs-feedback" not in out["labels"]
+        assert out["route"] == "skip"
+        assert out["labels"] == []
+        assert LIMBO.isdisjoint(out["labels"])
         assert out["reason"] == decision["reason"]
 
 
@@ -65,17 +67,12 @@ def test_select_park_stop_not_applicable_outside_park():
     assert out == {"ok": True, "route": "not_applicable", "reason": "not_park"}
 
 
-def test_apply_manual_stamps_frozen_not_needs_feedback(monkeypatch):
-    labeled: list[list[str]] = []
+def test_apply_manual_skip_no_frozen_stamp(monkeypatch):
     comments: list[str] = []
-
-    def _labels(runner, repo, issue, labels, *, live):
-        labeled.append(list(labels))
 
     def _comment(runner, repo, issue, note, *, live):
         comments.append(note)
 
-    monkeypatch.setattr("lokay.proc.apply_issue_manual.add_issue_labels", _labels)
     monkeypatch.setattr("lokay.proc.apply_issue_manual.comment_issue", _comment)
     cfg = SimpleNamespace(needs_feedback_label="ai:needs-feedback")
     stop = select_park_stop(
@@ -91,24 +88,20 @@ def test_apply_manual_stamps_frozen_not_needs_feedback(monkeypatch):
         park_stop=stop,
     )
     assert out["ok"] is True
-    assert out["labels"] == ["ai:frozen"]
-    assert labeled == [["ai:frozen"]]
+    assert out["route"] == "skip"
+    assert out["labels"] == []
     assert "invalid_triage_json_exhausted" in comments[0]
     assert "ai:needs-feedback" not in "".join(comments)
+    assert "ai:frozen" not in "".join(comments)
 
 
-def test_apply_manual_host_ops_frozen_with_structured_reason(monkeypatch):
-    labeled: list[list[str]] = []
+def test_apply_manual_host_ops_skip_no_stamp(monkeypatch):
     comments: list[str] = []
 
-    def _labels(runner, repo, issue, labels, *, live):
-        labeled.append(list(labels))
-
-    def _comment(runner, repo, issue, note, *, live):
-        comments.append(note)
-
-    monkeypatch.setattr("lokay.proc.apply_issue_manual.add_issue_labels", _labels)
-    monkeypatch.setattr("lokay.proc.apply_issue_manual.comment_issue", _comment)
+    monkeypatch.setattr(
+        "lokay.proc.apply_issue_manual.comment_issue",
+        lambda *a, **k: comments.append(a[3]),
+    )
     cfg = SimpleNamespace(needs_feedback_label="ai:needs-feedback")
     decision = {
         "verdict": "park",
@@ -125,10 +118,8 @@ def test_apply_manual_host_ops_frozen_with_structured_reason(monkeypatch):
         live=True,
         park_stop=stop,
     )
-    assert out["labels"] == ["ai:frozen"]
-    assert labeled == [["ai:frozen"]]
+    assert out["labels"] == []
     assert "host_ops" in comments[0]
-    assert "ai:needs-feedback" not in "".join(comments)
 
 
 def test_apply_manual_refuses_when_park_stop_not_admitted():
@@ -145,14 +136,13 @@ def test_apply_manual_refuses_when_park_stop_not_admitted():
     assert out["error"] == "park_stop_not_admitted"
 
 
-def test_decide_issue_short_title_body_parks_frozen_not_needs_feedback():
+def test_decide_issue_short_title_body_skips_no_limbo():
     short_title = decide_issue(_issue(title="fix"))
-    assert short_title.decision == "park"
+    assert short_title.decision == "skip"
     assert short_title.reason == "title_too_short"
-    assert short_title.add_labels == ("ai:frozen",)
-    assert "ai:needs-feedback" not in short_title.add_labels
+    assert short_title.add_labels == ()
+    assert LIMBO.isdisjoint(short_title.add_labels)
     short_body = decide_issue(_issue(body="too short"))
-    assert short_body.decision == "park"
+    assert short_body.decision == "skip"
     assert short_body.reason == "body_too_short"
-    assert short_body.add_labels == ("ai:frozen",)
-    assert "ai:needs-feedback" not in short_body.add_labels
+    assert short_body.add_labels == ()

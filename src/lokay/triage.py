@@ -55,7 +55,7 @@ MAX_CHECKBOXES = 5
 class TriageDecision:
     """Result of pure triage for one issue."""
 
-    decision: str  # ready | park | split | out_of_scope | blocked | skip
+    decision: str  # ready | skip | split | out_of_scope | blocked
     reason: str
     add_labels: tuple[str, ...] = ()
     close: bool = False
@@ -65,10 +65,12 @@ class TriageDecision:
         return asdict(self)
 
 
-# Parking labels: not inbox, not implementable (factory keeps lokaying elsewhere).
-# ai:tracker = auto-split parent; lokay continues other work (machine park only).
-MACHINE_PARK_LABEL = "ai:frozen"
-PARK_LABELS = frozenset({"frozen", MACHINE_PARK_LABEL, "ai:tracker"})
+# Tracker = auto-split parent; lokay continues other work.
+# ai:frozen / needs-feedback / blocked are NOT durable process state — stale
+# limbo labels re-enter triage. Legal exits: ready | split | skip | close.
+MACHINE_PARK_LABEL = "ai:frozen"  # legacy name; never stamp on issues
+PARK_LABELS = frozenset({"ai:tracker"})
+LIMBO_LABELS = frozenset({"frozen", "ai:frozen", "ai:needs-feedback", "ai:blocked"})
 
 
 def decision_labels(
@@ -80,10 +82,10 @@ def decision_labels(
 ) -> frozenset[str]:
     """Labels that mean the issue already left the undecided inbox.
 
-    Stale human-mailbox labels (blocked / needs-feedback) are *not* permanent
-    decisions — they re-enter triage so the factory can park them as ai:frozen.
+    Stale limbo labels (frozen / blocked / needs-feedback) are *not* permanent
+    decisions — they re-enter triage so the factory can skip/split/close.
     """
-    # Params kept for call-site compat; human mailbox is not a decided state.
+    # Params kept for call-site compat; limbo is not a decided state.
     _ = (blocked_label, needs_feedback_label)
     # Leftover in-flight cache must not bounce the issue back into inbox.
     return frozenset({ready_label}) | frozenset(park_labels) | LEDGER_ACTIVE_LABELS
@@ -107,7 +109,7 @@ def is_undecided(
 
 
 def is_parked(labels: Iterable[str], *, park_labels: Iterable[str] = PARK_LABELS) -> bool:
-    """True when issue is intentionally parked (frozen) — skip implement."""
+    """True when issue is an auto-split tracker parent — skip implement."""
     return bool(set(labels) & frozenset(park_labels))
 
 
@@ -203,7 +205,7 @@ def decide_issue(
     if is_parked(labels):
         return TriageDecision(
             decision="skip",
-            reason="parked_frozen",
+            reason="parked_tracker",
         )
     if not is_undecided(
         labels,
@@ -222,12 +224,12 @@ def decide_issue(
 
     if is_preflight_incident(title=title, body=body):
         return TriageDecision(
-            decision="blocked",
+            decision="skip",
             reason="preflight_incident",
-            add_labels=(MACHINE_PARK_LABEL,),
+            add_labels=(),
             comment=(
-                "Parked (factory): lokay preflight incident. Self-repair owns this, "
-                "not issue_to_pr."
+                "Skipped (factory): lokay preflight incident. Self-repair owns this, "
+                "not issue_to_pr. No limbo label — issue stays open in queue."
             ),
         )
 
@@ -245,23 +247,23 @@ def decide_issue(
 
     if len(title) < MIN_TITLE_LEN:
         return TriageDecision(
-            decision="park",
+            decision="skip",
             reason="title_too_short",
-            add_labels=(MACHINE_PARK_LABEL,),
+            add_labels=(),
             comment=(
-                f"Parked (factory): title shorter than {MIN_TITLE_LEN} chars. "
-                "Structured fail — expand the ask or split into implementable children."
+                f"Skipped (factory): title shorter than {MIN_TITLE_LEN} chars. "
+                "No limbo label — expand the ask, split, or leave open for later."
             ),
         )
 
     if len(body) < MIN_BODY_LEN:
         return TriageDecision(
-            decision="park",
+            decision="skip",
             reason="body_too_short",
-            add_labels=(MACHINE_PARK_LABEL,),
+            add_labels=(),
             comment=(
-                f"Parked (factory): body shorter than {MIN_BODY_LEN} chars. "
-                "Structured fail — add acceptance criteria / expected behavior, or split."
+                f"Skipped (factory): body shorter than {MIN_BODY_LEN} chars. "
+                "No limbo label — add acceptance criteria, split, or leave open for later."
             ),
         )
 

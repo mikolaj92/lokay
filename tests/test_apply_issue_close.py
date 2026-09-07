@@ -71,7 +71,7 @@ def test_apply_issue_close_refuses_obsolete_even_when_planned(monkeypatch):
     assert calls == []
 
 
-def test_apply_issue_mark_parks_without_closing(monkeypatch):
+def test_apply_issue_mark_skips_without_closing(monkeypatch):
     calls: list[tuple] = []
     issue = SimpleNamespace(
         repo="mikolaj92/Temida",
@@ -111,18 +111,16 @@ def test_apply_issue_mark_parks_without_closing(monkeypatch):
         decision={"verdict": "close", "reason": "obsolete_argus_flow_assumption"},
         live=True,
     )
-    assert out == {
-        "ok": True,
-        "applied": True,
-        "verdict": "close",
-        "marked": True,
-        "reason": "obsolete_argus_flow_assumption",
-    }
+    assert out["ok"] is True
+    assert out["applied"] is True
+    assert out["verdict"] == "skip"
+    assert out["skipped"] is True
+    assert out["reason"] == "obsolete_argus_flow_assumption"
+    assert out["labels"] == []
     assert ("remove", ["ai:ready"]) in calls
-    assert ("add", ["ai:frozen"]) in calls
-    assert ("add", ["ai:blocked"]) not in calls
+    assert all(not (item[0] == "add" and "ai:frozen" in item[1]) for item in calls)
     assert any(
-        item[0] == "comment" and "Parked" in item[1] and "Closed" not in item[1]
+        item[0] == "comment" and "Skipped" in item[1] and "Closed" not in item[1]
         for item in calls
     )
     assert all(item[0] != "close" for item in calls)
