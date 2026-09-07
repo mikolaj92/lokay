@@ -13,7 +13,7 @@ def test_hard_duplicate_closes_before_agent():
     out=resolve_hard_facts(issue(),{"route":"evaluate"},{"merged_prs":[]},{"covering_prs":[{"number":9,"state":"OPEN"}]})
     assert out["route"] == "terminal" and out["decision"]["verdict"] == "close"
 
-def test_invalid_json_gets_one_retry_then_human():
+def test_invalid_json_gets_one_retry_then_park():
     first=validate_output("not json"); assert first["route"] == "retry"
     retry=validate_output("still invalid")
     out=select_initial({"route":"agent"},first,retry)

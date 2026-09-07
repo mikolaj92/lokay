@@ -29,6 +29,7 @@ if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decisi
 if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'ready'}
+if a=='select_triage_leaf':v.update(route='ready',decision={'verdict':'ready'})
 if a=='apply_issue_ready':Path(%r).write_text('ran')
 if a in {'apply_issue_mark','apply_issue_blocked','apply_issue_manual','apply_issue_skip'}:Path(%r).write_text(a)"""%(str(ready),str(wrong)))
     result=run_graph(tmp_path,body,"ready"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
@@ -48,6 +49,7 @@ if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decisi
 if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'close'}
+if a=='select_triage_leaf':v.update(route='close',decision={'verdict':'close'})
 if a=='apply_issue_mark':Path(%r).write_text('ran')"""%(str(retry),str(mark)))
     result=run_graph(tmp_path,body,"retry"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
     assert statuses['issue_triage_retry_agent']=='succeeded' and statuses['apply_issue_mark']=='succeeded'
@@ -67,7 +69,8 @@ if a=='verify_issue_evidence':v.update(route='agent',additional_evidence={})
 if a=='issue_evidence_agent':Path(%r).write_text('ran')
 if a=='validate_issue_evidence':v.update(route='valid',decision={'verdict':'ready'})
 if a=='select_issue_evidence':v.update(route='publish',decision={'verdict':'ready'})
-if a=='finalize_issue_triage':v['decision']={'verdict':'ready'}"""%(str(chosen),str(wrong),str(agent)))
+if a=='finalize_issue_triage':v['decision']={'verdict':'ready'}
+if a=='select_triage_leaf':v.update(route='ready',decision={'verdict':'ready'})"""%(str(chosen),str(wrong),str(agent)))
     result=run_graph(tmp_path,body,"evidence"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
     assert statuses['collect_issue_named_paths']=='succeeded' and statuses['collect_issue_repo_shape']=='skipped'
     assert chosen.exists() and agent.exists() and not wrong.exists()
@@ -83,6 +86,7 @@ if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decisi
 if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'split','reason':'multi_epic_blob'}
+if a=='select_triage_leaf':v.update(route='fail',decision={'verdict':'split','reason':'multi_epic_blob'})
 if a=='plan_issue_split':v.update(route='children',child_1='present',child_2='present',child_3='absent',child_4='absent',child_5='absent',plan={})
 if a=='create_issue_split_child_1':Path(%r).write_text('ran');v['child']={'number':10}
 if a=='create_issue_split_child_2':Path(%r).write_text('ran');v['child']={'number':11}
@@ -104,6 +108,7 @@ if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decisi
 if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'blocked','reason':'preflight_incident'}
+if a=='select_triage_leaf':v.update(route='blocked',decision={'verdict':'blocked','reason':'preflight_incident'})
 if a=='apply_issue_blocked':Path(%r).write_text('ran')
 if a in {'apply_issue_ready','apply_issue_mark','apply_issue_manual','apply_issue_skip'}:Path(%r).write_text(a)"""%(str(blocked),str(wrong)))
     result=run_graph(tmp_path,body,"blocked"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
@@ -120,6 +125,7 @@ if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decisi
 if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'skip','reason':'already_decided'}
+if a=='select_triage_leaf':v.update(route='skip',decision={'verdict':'skip','reason':'already_decided'})
 if a=='apply_issue_skip':Path(%r).write_text('ran')
 if a in {'apply_issue_ready','apply_issue_mark','apply_issue_blocked','apply_issue_manual'}:Path(%r).write_text(a)"""%(str(skip),str(wrong)))
     result=run_graph(tmp_path,body,"skip"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
@@ -138,6 +144,7 @@ if a=='select_issue_triage':v.update(route='publish',evidence_kind='none',decisi
 if a=='verify_issue_evidence':v['route']='not_applicable'
 if a=='select_issue_evidence':v['route']='not_applicable'
 if a=='finalize_issue_triage':v['decision']={'verdict':'close','reason':'obsolete_argus_flow_assumption'}
+if a=='select_triage_leaf':v.update(route='close',decision={'verdict':'close','reason':'obsolete_argus_flow_assumption'})
 if a=='apply_issue_mark':Path(%r).write_text('ran')
 if a=='apply_issue_close':Path(%r).write_text('closed')"""%(str(mark),str(closed)))
     result=run_graph(tmp_path,body,"temida-4995"); statuses={k:v['status'] for k,v in result['effector_results'].items()}
