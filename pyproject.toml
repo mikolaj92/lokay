@@ -22,6 +22,7 @@ app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.
 kofte = { git = "https://github.com/mikolaj92/Kofte.git", rev = "cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" }
 
 [project.scripts]
+lokay-atom-inventory = "lokay.proc.atom_inventory:main"
 lokay = "lokay.cli:main"
 # Atomic processes (one job each)
 lokay-list-issues = "lokay.proc.list_issues:main"
