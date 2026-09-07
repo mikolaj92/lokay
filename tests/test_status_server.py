@@ -56,3 +56,18 @@ def test_dashboard_uses_product_shell_platform_assets_and_server_html(
     health = client.get("/health")
     assert health.status_code == 200
     assert health.json()["health"] == "local"
+
+
+def test_transport_errors_and_health_after_error(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    with TestClient(create_app(config_path=str(_config(tmp_path)))) as client:
+        missing = client.get("/does-not-exist")
+        assert missing.status_code == 404
+        assert missing.json() == {"detail": "Not Found"}
+        rejected = client.post("/health", json={"retry": True})
+        assert rejected.status_code == 405
+        assert rejected.headers["allow"] == "GET"
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.headers["content-type"] == "application/json"
+        assert health.json()["health"] == "local"
