@@ -115,3 +115,22 @@ def test_repeated_authored_nodes_are_not_distinct_implementations(tmp_path):
     assert report['summary']['authored_nodes'] == 2
     assert report['summary']['unique_candidate_sites'] == 1
     assert 'proven_implementations' not in report['summary']
+
+
+def test_inventory_never_executes_source_or_mutates_inputs(tmp_path):
+    from lokay.proc.atom_inventory import inventory
+
+    source = tmp_path / 'src'
+    source.mkdir()
+    marker = tmp_path / 'effect'
+    handler = source / 'handler.py'
+    handler.write_text(f'from pathlib import Path\nPath({str(marker)!r}).write_text("effect")\ndef handle(atom):\n    if atom == "read":\n        raise RuntimeError("must not call")\n')
+    package = tmp_path / 'graph.toml'
+    package.write_text('[[correlation_paths]]\nid="p"\n[[correlation_paths.effectors]]\nid="read"\nconfig={atom="read"}\n')
+    before = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    first = inventory(package, source)
+    second = inventory(package, source)
+    assert first == second
+    assert first['nodes'][0]['resolution'] == 'candidate'
+    assert not marker.exists()
+    assert {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()} == before
