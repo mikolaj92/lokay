@@ -77,6 +77,11 @@ def handle_coding_boundary(
                 or ""
             ),
             live=bool(inputs.get("live")),
+            repo_map=str(
+                (inputs.get("map_repo") or {}).get("map")
+                or (up.get("map_repo") or {}).get("map")
+                or ""
+            ),
         )
     if atom == "coding_execution":
         from lokay.proc.coding_execution_subflow import run
@@ -100,6 +105,7 @@ def handle_coding_boundary(
                     or inputs.get("branch")
                     or ""
                 ),
+                "map_repo": dict(up.get("map_repo") or inputs.get("map_repo") or {}),
             },
         )
     if atom == "coding_execution_terminal":

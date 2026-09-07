@@ -109,6 +109,7 @@ def handle_issue_triage(
             hard_facts=hard,
             clone_path=clone,
             live=live,
+            repo_map=str((up.get("map_repo") or {}).get("map") or ""),
         )
     if atom == "issue_triage_retry_agent":
         from lokay.proc.run_issue_triage_retry_agent import run
@@ -122,6 +123,7 @@ def handle_issue_triage(
             feedback=up.get("validate_issue_triage") or {},
             clone_path=clone,
             live=live,
+            repo_map=str((up.get("map_repo") or {}).get("map") or ""),
         )
     if atom == "verify_issue_evidence":
         selected = up.get("select_issue_triage") or {}
@@ -164,6 +166,7 @@ def handle_issue_triage(
             additional=additional,
             clone_path=clone,
             live=live,
+            repo_map=str((up.get("map_repo") or {}).get("map") or ""),
         )
     if atom in {
         "validate_issue_triage",

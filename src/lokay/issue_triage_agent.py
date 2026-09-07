@@ -15,7 +15,12 @@ SCHEMA = """{
 }"""
 
 
-def prompt(issue_data: dict, hard_facts: dict, additional: dict | None = None) -> str:
+def prompt(
+    issue_data: dict,
+    hard_facts: dict,
+    additional: dict | None = None,
+    repo_map: str = "",
+) -> str:
     issue = Issue.from_dict(issue_data)
     evidence_round = ""
     if additional is not None:
@@ -28,6 +33,7 @@ def prompt(issue_data: dict, hard_facts: dict, additional: dict | None = None) -
         "issue_triage",
         schema=SCHEMA,
         hard_facts=json.dumps(hard_facts, ensure_ascii=False, sort_keys=True)[:8000],
+        repo_map=repo_map or "",
         untrusted_issue=untrusted_issue_block(issue.title, issue.body),
         evidence_round=evidence_round,
     )

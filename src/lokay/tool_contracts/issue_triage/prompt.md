@@ -15,6 +15,9 @@ Rules:
 Hard physical facts:
 <<hard_facts>>
 
+Repo map (what exists in the checkout; empty if ripwire is unavailable):
+<<repo_map>>
+
 <<untrusted_issue>>
 
 <<evidence_round>>

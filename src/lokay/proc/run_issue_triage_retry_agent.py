@@ -16,9 +16,10 @@ def run(
     feedback: dict,
     clone_path,
     live: bool,
+    repo_map: str = "",
 ) -> dict:
     text = (
-        prompt(issue_data, hard_facts)
+        prompt(issue_data, hard_facts, repo_map=repo_map or "")
         + "\n\n"
         + validation_feedback_prompt(
             str(feedback.get("validation_error") or "invalid output"),

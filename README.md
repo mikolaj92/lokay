@@ -1036,7 +1036,8 @@ stateDiagram-v2
     CollectLinkedPullRequests --> CollectCoveringPullRequests
     CollectCoveringPullRequests --> ResolveHardFacts
     ResolveHardFacts --> SitoDecision: wynik fizyczny oznaczyć / nie
-    ResolveHardFacts --> TriageAgent: potrzebna ocena semantyczna
+    ResolveHardFacts --> MapRepo: potrzebna ocena semantyczna
+    MapRepo --> TriageAgent
     TriageAgent --> ValidateTriageResult
     ValidateTriageResult --> TriageRetryAgent: invalid JSON + informacja zwrotna
     TriageRetryAgent --> ValidateTriageRetry
@@ -1194,8 +1195,9 @@ stateDiagram-v2
     RecheckDelivery --> NoEffect: wznowiona gałąź ma kod celu
     RecheckDelivery --> PrepareBranch: brak dostawy
     PrepareBranch --> PrepareWorktree
-    PrepareWorktree --> PlanIssue: ready
+    PrepareWorktree --> MapRepo: ready
     PrepareWorktree --> DeliveryResult: missing
+    MapRepo --> PlanIssue
     PlanIssue --> Localize
     Localize --> PrepareAcceptance: ready
     PrepareAcceptance --> CodingExecution: immutable digest
@@ -1503,7 +1505,7 @@ kontraktu. Aktualny audyt:
 | `ChaosAcceptance` | `factory_pass` → `executor_row` / `issue_to_pr` → `pr_triage` / `pr_repair` | kolejne passy z kill/resume, red/repair, request_changes, rebase i confirmed merge; Done dopiero po close |
 | `CrossRepoReleaseTrain` | `cross_repo_release_train` | potwierdzony source release, ordered consumer cursor i najwyżej jeden jawny efekt |
 | `ImplementIssue` | `issue_to_pr` | jawny gate faktów issue i istniejącej dostawy |
-| `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, plan, localize, kod, test, PR |
+| `ImplementIssueDelivery` | `issue_to_pr_delivery` | cienki przewodnik: gałąź, mapa repo, plan, localize, kod, test, PR |
 | `CodingExecution` | `coding_execution` | jeden wynik kodowania: retry JSON, jedna runda dowodu, terminal; nested fire to classified failed |
 | `LocalRepairExecution` | `local_repair_execution` | jedna naprawa z logu testu i recheck |
 | `ReviewPullRequest` | `pr_triage` | sito: merge, feedback „popraw”, dowody albo terminal ręczny; bez executora |

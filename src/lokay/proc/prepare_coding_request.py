@@ -10,6 +10,7 @@ def prepare(
     localize: dict,
     branch: str,
     live: bool,
+    repo_map: str = "",
 ) -> dict:
     raw = dict(issue_raw or {})
     if issue is not None:
@@ -25,6 +26,7 @@ def prepare(
         "localize": dict(localize or {}),
         "branch": branch,
         "live": bool(live),
+        "repo_map": str(repo_map or ""),
         # Coding slot is Lokay-owned; product AGENTS.md publication rules do not apply.
         "factory_session": True,
     }

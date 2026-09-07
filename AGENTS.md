@@ -80,6 +80,7 @@ into a worker prompt, Python composer, UI, or vendor harness.
 - Coding slot: `lokay-run-agent` via `executor.command` / `executor.args` (any real harness; current example is `pi` + `omniroute/pi`). Swap is config, not a product change. See `docs/PROCESS.md`.
 - Scope: `repos.mikolaj92.yaml` (managed repos).
 - Continuous lokay: LaunchAgent `ai.mikolaj.lokay` → `scripts/lokay-service.sh`.
+- Optional repo map: atom `map_repo` (`ripwire` on PATH via mise `github:redhat-et/ripwire`). Runs before triage agent and before plan/localize/coding. Empty map is fine.
 
 ## Verify
 

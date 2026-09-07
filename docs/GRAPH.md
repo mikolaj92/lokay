@@ -353,24 +353,25 @@ get_issue
   ├─→ assign_issue
   ├─→ stage_implementing   ← no-op on labels: keep ai:ready, strip leftover cache
   └─→ make_branch
-        └─→ worktree_add          ready → plan / localize / coding
+        └─→ worktree_add          ready → map / plan / localize / coding
                                   missing → summarize (no product). Never ok=false:
                                   a failed worktree still unblocks localize in Fala.
-              └─→ plan_issue   ← when worktree route=ready; grandchild Fala plan_issue_execution
-                    └─→ localize     ← when worktree route=ready; grandchild Fala localize_execution.
-                                       Never ok=false: empty/timeout is route=empty.
-                          └─→ coding_execution  ← when localize route=ready; child Fala: run_agent + one JSON retry + one evidence round
-                                └─→ commit_all
-                                      └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
-                                            └─→ test_local_execution   ← grandchild Fala; skip if no suite
-                                            ├─ (red, recorded) → local_repair_execution   ← child Fala: K=1 patch + one JSON retry then fail_closed; zero needs_human
-                                            ├─ (select_local_test skip) → miss repair; delivery still writes a route
-                                            └─→ assert_real_diff ← refuse plan/localize-only diffs
-                                                  └─→ push            ← only after green / honest skip
-                                                        └─→ pr_create   ← grandchild Fala; only after successful push
-                                                              └─→ stage_pr_open   ← no-op on labels: keep ai:ready
-                                                                    └─→ list_prs
-                                                                          └─→ pr_label
+              └─→ map_repo    ← inspect checkout (ripwire) when worktree route=ready. Empty is fine.
+                    └─→ plan_issue   ← when worktree route=ready; grandchild Fala plan_issue_execution
+                          └─→ localize     ← when worktree route=ready; grandchild Fala localize_execution.
+                                             Never ok=false: empty/timeout is route=empty.
+                                └─→ coding_execution  ← when localize route=ready; child Fala: run_agent + one JSON retry + one evidence round
+                                      └─→ commit_all
+                                            └─→ rebase_onto_base  ← fetch + rebase onto origin/main; conflict = fail closed
+                                                  └─→ test_local_execution   ← grandchild Fala; skip if no suite
+                                                  ├─ (red, recorded) → local_repair_execution   ← child Fala: K=1 patch + one JSON retry then fail_closed; zero needs_human
+                                                  ├─ (select_local_test skip) → miss repair; delivery still writes a route
+                                                  └─→ assert_real_diff ← refuse plan/localize-only diffs
+                                                        └─→ push            ← only after green / honest skip
+                                                              └─→ pr_create   ← grandchild Fala; only after successful push
+                                                                    └─→ stage_pr_open   ← no-op on labels: keep ai:ready
+                                                                          └─→ list_prs
+                                                                                └─→ pr_label
 ```
 
 Delivery is not a god path. Grandchildren that already have their own Fala
@@ -394,7 +395,7 @@ localize executor and start `run_agent`. A leftover inherited from main
 (other issue in `worktree`, missing issue id) is not a sieve. A same-issue
 path list with a missing file or non-path token is also not a sieve —
 discard and run **deterministic** localize (structure/grep + plan seed).
-Happy path before coding is `plan_issue` (deterministic) + `localize`
+Happy path before coding is `map_repo` (optional ripwire) + `plan_issue` (deterministic) + `localize`
 (deterministic) — fewer than two LLM calls (#1032). Empty after validation
 fails closed. Not an embedding service and not a second planner.
 
@@ -411,8 +412,9 @@ get_issue
     → collect linked/covering PRs
       → resolve_issue_hard_facts
         ├─→ terminal triage (close / skip / blocked)
-        └─→ issue_triage_agent → validate → one retry → one evidence round
-              → finalize
+        └─→ map_repo  ← inspect checkout (ripwire). Empty is fine.
+              └─→ issue_triage_agent → validate → one retry → one evidence round
+                    → finalize
                 ├─→ apply_issue_ready     robić
                 ├─→ apply_issue_skip      nie
                 ├─→ apply_issue_blocked   nie (preflight incident leaf)
@@ -438,14 +440,15 @@ Parent department lifetime K=1 is enforced with a durable receipt under the conf
 admit_pr_repair   ← probe state/mergedAt (path-visible); compose skips run_path on MERGED/CLOSED
   └─→ pr_checks
         └─→ stage_repairing   ← no-op on labels: keep ai:ready
-              └─→ worktree_add          ready → localize / run_agent
+              └─→ worktree_add          ready → map / localize / run_agent
                                         missing → summarize (no product)
-                    └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
-                          └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
-                                └─→ commit_all
-                                      └─→ test_local   ← local pytest; skip if no suite
-                                            └─→ assert_real_diff
-                                                  └─→ push   ← published tip; never rebase (force-push forbidden)
+                    └─→ map_repo    ← inspect checkout (ripwire) when worktree route=ready. Empty is fine.
+                          └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
+                                └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
+                                      └─→ commit_all
+                                            └─→ test_local   ← local pytest; skip if no suite
+                                                  └─→ assert_real_diff
+                                                        └─→ push   ← published tip; never rebase (force-push forbidden)
 # Mid-flight organ: mutating atoms re-probe; MERGED refuses (reason=pr_already_merged).
 ```
 
@@ -506,7 +509,7 @@ to the live triage and repair departments, not a second catalog pass.
 - **run_agent** is the only non-deterministic coding slot — external harness via `executor.command`/`args` (no vendor hardcode). See [`NO_STUBS.md`](NO_STUBS.md). For a seed classified separately as unbounded collection work, this slot receives a collector boundary: make only the bounded bootstrap patch; the deployed collector starts durably in the background after merge. Pi and the lokay do not populate collection data or wait for completion.
 - **plan_issue** is deterministic evidence before that coding slot.
 - **localize** proposes paths immediately before the coding slot (serial path:
-  `worktree_add` `route=ready` → `plan_issue` → `localize` → `coding_execution`). Deterministic
+  `worktree_add` `route=ready` → `map_repo` → `plan_issue` → `localize` → `coding_execution`). Deterministic
   happy path (#1032); no localization LLM before `run_agent`. Existing
   `.lokay/localize.json` paths skip the localize executor only when they
   belong to this issue number. Live mode may call the

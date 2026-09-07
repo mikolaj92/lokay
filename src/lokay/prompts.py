@@ -38,7 +38,7 @@ Localization evidence: read `.lokay/localize.json` if present.
 
 
 def issue_fix_prompt(
-    issue: Issue, *, branch: str, paths: Iterable[str] | None = None
+    issue: Issue, *, branch: str, paths: Iterable[str] | None = None, repo_map: str = ""
 ) -> str:
     """Harness-agnostic goal: implement the issue in this worktree.
 
@@ -53,6 +53,7 @@ def issue_fix_prompt(
         branch=branch,
         scope=scope,
         stay=stay,
+        repo_map=repo_map or "",
         untrusted_issue=untrusted,
     )
 

@@ -119,7 +119,14 @@ def handle_implement(
                     "plan": up.get("plan_issue") or {},
                     "checks_text": checks_text,
                     "review": inputs.get("review") or {},
-                    "extra_paths": list(inputs.get("extra_paths") or []),
+                    "extra_paths": list(
+                        dict.fromkeys(
+                            [
+                                *list(inputs.get("extra_paths") or []),
+                                *list((up.get("map_repo") or {}).get("paths") or []),
+                            ]
+                        )
+                    ),
                     "max_paths": int(inputs.get("max_paths") or 40),
                     "rel_path": str(inputs.get("rel_path") or ".lokay/localize.json"),
                 },

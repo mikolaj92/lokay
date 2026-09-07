@@ -310,6 +310,7 @@ def test_issue_triage_path_includes_intake_and_split():
         "collect_issue_linked_prs",
         "collect_issue_covering_prs",
         "resolve_issue_hard_facts",
+        "map_repo",
         "issue_triage_agent",
         "validate_issue_triage",
         "issue_triage_retry_agent",

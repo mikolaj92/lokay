@@ -110,7 +110,16 @@ def handle_agent(
             issue_raw = _issue_raw(up, inputs)
             issue = Issue.from_dict(issue_raw) if issue_raw else None
             assert issue is not None
-            prompt = issue_fix_prompt(issue, branch=branch, paths=paths)
+            prompt = issue_fix_prompt(
+                issue,
+                branch=branch,
+                paths=paths,
+                repo_map=str(
+                    (up.get("prepare_coding_request") or {}).get("repo_map")
+                    or (up.get("map_repo") or {}).get("map")
+                    or ""
+                ),
+            )
         with tempfile.NamedTemporaryFile(
             "w", suffix=".md", delete=False, encoding="utf-8"
         ) as fh:

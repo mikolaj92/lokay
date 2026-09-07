@@ -47,6 +47,7 @@ from lokay.organ.issues_boundary import handle_issues
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
 from lokay.organ.localize_boundary import handle_localize
+from lokay.organ.map_repo import handle_map_repo
 from lokay.organ.plan_issue_boundary import handle_plan_issue
 from lokay.organ.pr_closeout_boundary import handle_pr_closeout
 from lokay.organ.pr_create_boundary import handle_pr_create
@@ -225,6 +226,7 @@ def _handle(
         handle_test_local,
         handle_leftover_closeout,
         handle_factory_begin,
+        handle_map_repo,
         handle_localize,
         handle_relocalize,
         handle_status,

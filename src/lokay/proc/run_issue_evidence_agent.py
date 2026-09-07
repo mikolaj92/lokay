@@ -15,12 +15,13 @@ def run(
     additional: dict,
     clone_path,
     live: bool,
+    repo_map: str = "",
 ) -> dict:
     return execute(
         cfg=cfg,
         repo=repo,
         issue=issue,
         clone_path=clone_path,
-        prompt=prompt(issue_data, hard_facts, additional),
+        prompt=prompt(issue_data, hard_facts, additional, repo_map=repo_map or ""),
         live=live,
     )

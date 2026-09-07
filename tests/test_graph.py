@@ -572,7 +572,7 @@ def test_describe_issue_to_pr_graph():
 def test_issue_to_pr_plan_issue_before_run_agent():
     by_id = {n["id"]: n for n in _issue_delivery_path()["nodes"]}
     assert "plan_issue" in by_id["localize"]["conduction"]
-    assert {"plan_issue", "localize", "worktree_add"} <= set(
+    assert {"plan_issue", "localize", "worktree_add", "map_repo"} <= set(
         by_id["coding_execution"]["conduction"]
     )
     assert "coding_execution" not in by_id["plan_issue"]["conduction"]
@@ -581,6 +581,10 @@ def test_issue_to_pr_plan_issue_before_run_agent():
         "path": "route",
         "equals": "ready",
     }
+    assert by_id["map_repo"]["when"] == ready
+    assert "worktree_add" in by_id["map_repo"]["conduction"]
+    assert "map_repo" in by_id["plan_issue"]["conduction"]
+    assert "map_repo" in by_id["localize"]["conduction"]
     assert by_id["plan_issue"]["when"] == ready
     assert by_id["localize"]["when"] == ready
     assert by_id["coding_execution"]["when"] == {
@@ -588,6 +592,20 @@ def test_issue_to_pr_plan_issue_before_run_agent():
         "path": "route",
         "equals": "ready",
     }
+
+
+def test_issue_triage_maps_repo_before_agent():
+    from lokay.graph_run import describe_package
+
+    path = next(p for p in describe_package()["paths"] if p["id"] == "issue_triage")
+    by_id = {n["id"]: n for n in path["nodes"]}
+    assert path["nodes"][path["nodes"].index(by_id["map_repo"])]["id"] == "map_repo"
+    assert path["nodes"].index(by_id["map_repo"]) < path["nodes"].index(
+        by_id["issue_triage_agent"]
+    )
+    assert "map_repo" in by_id["issue_triage_agent"]["conduction"]
+    assert "map_repo" in by_id["issue_triage_retry_agent"]["conduction"]
+    assert "map_repo" in by_id["issue_evidence_agent"]["conduction"]
 
 
 def test_issue_to_pr_routes_coding_and_test_decisions_in_fala():
