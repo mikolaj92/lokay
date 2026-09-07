@@ -55,7 +55,7 @@ MAX_CHECKBOXES = 5
 class TriageDecision:
     """Result of pure triage for one issue."""
 
-    decision: str  # ready | needs_feedback | split | out_of_scope | blocked | skip
+    decision: str  # ready | park | split | out_of_scope | blocked | skip
     reason: str
     add_labels: tuple[str, ...] = ()
     close: bool = False
@@ -66,8 +66,9 @@ class TriageDecision:
 
 
 # Parking labels: not inbox, not implementable (factory keeps lokaying elsewhere).
-# ai:tracker = auto-split parent; lokay continues other work (human mailbox only).
-PARK_LABELS = frozenset({"frozen", "ai:frozen", "ai:tracker"})
+# ai:tracker = auto-split parent; lokay continues other work (machine park only).
+MACHINE_PARK_LABEL = "ai:frozen"
+PARK_LABELS = frozenset({"frozen", MACHINE_PARK_LABEL, "ai:tracker"})
 
 
 def decision_labels(
@@ -77,13 +78,15 @@ def decision_labels(
     needs_feedback_label: str = "ai:needs-feedback",
     park_labels: Iterable[str] = PARK_LABELS,
 ) -> frozenset[str]:
-    """Labels that mean the issue already left the undecided inbox."""
+    """Labels that mean the issue already left the undecided inbox.
+
+    Stale human-mailbox labels (blocked / needs-feedback) are *not* permanent
+    decisions — they re-enter triage so the factory can park them as ai:frozen.
+    """
+    # Params kept for call-site compat; human mailbox is not a decided state.
+    _ = (blocked_label, needs_feedback_label)
     # Leftover in-flight cache must not bounce the issue back into inbox.
-    return (
-        frozenset({ready_label, blocked_label, needs_feedback_label})
-        | frozenset(park_labels)
-        | LEDGER_ACTIVE_LABELS
-    )
+    return frozenset({ready_label}) | frozenset(park_labels) | LEDGER_ACTIVE_LABELS
 
 
 def is_undecided(
@@ -221,9 +224,9 @@ def decide_issue(
         return TriageDecision(
             decision="blocked",
             reason="preflight_incident",
-            add_labels=(blocked_label,),
+            add_labels=(MACHINE_PARK_LABEL,),
             comment=(
-                "Blocked: lokay preflight incident. Self-repair owns this, "
+                "Parked (factory): lokay preflight incident. Self-repair owns this, "
                 "not issue_to_pr."
             ),
         )
@@ -242,23 +245,23 @@ def decide_issue(
 
     if len(title) < MIN_TITLE_LEN:
         return TriageDecision(
-            decision="needs_feedback",
+            decision="park",
             reason="title_too_short",
-            add_labels=(needs_feedback_label,),
+            add_labels=(MACHINE_PARK_LABEL,),
             comment=(
-                f"Needs feedback: title shorter than {MIN_TITLE_LEN} chars. "
-                "Please expand the ask so it can be implemented."
+                f"Parked (factory): title shorter than {MIN_TITLE_LEN} chars. "
+                "Structured fail — expand the ask or split into implementable children."
             ),
         )
 
     if len(body) < MIN_BODY_LEN:
         return TriageDecision(
-            decision="needs_feedback",
+            decision="park",
             reason="body_too_short",
-            add_labels=(needs_feedback_label,),
+            add_labels=(MACHINE_PARK_LABEL,),
             comment=(
-                f"Needs feedback: body shorter than {MIN_BODY_LEN} chars. "
-                "Add acceptance criteria / expected behavior."
+                f"Parked (factory): body shorter than {MIN_BODY_LEN} chars. "
+                "Structured fail — add acceptance criteria / expected behavior, or split."
             ),
         )
 
@@ -266,7 +269,7 @@ def decide_issue(
     # "epic" only in TITLE means the whole issue is an epic tracker.
     # Body phrases like "Parent epic" / "child of epic" must NOT block implementable issues
     # (Pad Audit wave: 362 false needs-feedback from "## Parent epic" footers).
-    # Oversized work → SPLIT (auto child issues), not needs-feedback brake.
+    # Oversized work → SPLIT (auto child issues), not human-mailbox brake.
     # A bug is one symptom / one fix — never an epic of template checkboxes.
     title_is_epic = bool(re.search(r"\bepic\b", title.lower()))
     if (boxes > MAX_CHECKBOXES and not is_bug_issue(issue)) or title_is_epic:

@@ -85,6 +85,7 @@ def handle_implementation_dispatch(
     if atom == "label_blocked_dispatch":
         from lokay.proc._common import load_cfg, mutations_allowed, runner
         from lokay.gh_issues import add_issue_labels
+        from lokay.triage import MACHINE_PARK_LABEL
         import argparse
 
         failure = up.get("select_dispatch_outcome") or {}
@@ -94,7 +95,7 @@ def handle_implementation_dispatch(
             runner(),
             str(failure["repo"]),
             int(failure["issue"]),
-            [str(cfg.blocked_label)],
+            [MACHINE_PARK_LABEL],
             live=live,
         )
         return {
@@ -102,7 +103,7 @@ def handle_implementation_dispatch(
             "applied": live,
             "repo": failure["repo"],
             "issue": failure["issue"],
-            "labels": [cfg.blocked_label],
+            "labels": [MACHINE_PARK_LABEL],
         }
     if atom == "persist_blocked_dispatch":
         from lokay.proc.persist_blocked_dispatch import apply

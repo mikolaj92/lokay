@@ -120,9 +120,10 @@ def _mark_from_labels(labels: list[str]) -> str | None:
     have = set(labels)
     if "ai:ready" in have:
         return "ready"
-    if "ai:park" in have:
+    if "ai:park" in have or "ai:frozen" in have:
         return "park"
     if "ai:blocked" in have:
+        # Stale human-mailbox label — read compat only.
         return "blocked"
     if "work:ready" in have:
         return "ready"
@@ -216,7 +217,11 @@ class GitHubTasks:
             )
         ready = str(getattr(self._config, "ready_label", None) or "ai:ready")
         blocked = str(getattr(self._config, "blocked_label", None) or "ai:blocked")
-        drop = {ready, "work:ready", blocked, "ai:park"}
+        human = str(
+            getattr(self._config, "needs_feedback_label", None) or "ai:needs-feedback"
+        )
+        frozen = "ai:frozen"
+        drop = {ready, "work:ready", blocked, human, "ai:park", frozen}
         have = set(current.labels)
         remove = [label for label in current.labels if label in drop]
         if remove:
@@ -227,7 +232,8 @@ class GitHubTasks:
         if token == "ready":
             add.append(ready)
         else:
-            add.append(blocked)
+            # park / blocked → machine stop; never human mailbox
+            add.append(frozen)
         add = [label for label in add if label not in (have - set(remove))]
         if add:
             add_issue_labels(
@@ -241,7 +247,7 @@ class GitHubTasks:
         if token == "ready":
             labels.append(ready)
         else:
-            labels.append(blocked)
+            labels.append(frozen)
         out.labels = labels
         return out
 

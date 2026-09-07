@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-MACHINE_PARK_LABEL = "ai:frozen"
+from lokay.triage import MACHINE_PARK_LABEL
+
+__all__ = ["MACHINE_PARK_LABEL", "select"]
 
 
 def select(

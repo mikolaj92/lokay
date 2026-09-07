@@ -63,9 +63,10 @@ class AzureTasks:
         mark = None
         if "ai:ready" in labels:
             mark = "ready"
-        elif "ai:park" in labels:
+        elif "ai:park" in labels or "ai:frozen" in labels:
             mark = "park"
         elif "ai:blocked" in labels:
+            # Stale human-mailbox label — treat as blocked for read compat.
             mark = "blocked"
         return Task(
             plugin=self.plugin,
@@ -115,14 +116,21 @@ class AzureTasks:
             raise KeyError(
                 f"task not found: {identity.plugin}+{identity.target}+{identity.number}"
             )
-        drop = {"ai:ready", "work:ready", "ai:blocked", "ai:park"}
+        drop = {
+            "ai:ready",
+            "work:ready",
+            "ai:blocked",
+            "ai:needs-feedback",
+            "ai:park",
+            "ai:frozen",
+        }
         labels = [tag for tag in current.tags if tag not in drop]
         if token == "ready":
             labels.append("ai:ready")
         elif token == "park":
-            labels.extend(["ai:blocked", "ai:park"])
+            labels.extend(["ai:frozen", "ai:park"])
         else:
-            labels.append("ai:blocked")
+            labels.append("ai:frozen")
         try:
             item = self._client.set_tags(identity.number, labels)
         except KeyError as exc:

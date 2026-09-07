@@ -171,12 +171,14 @@ class MemoryTasks:
         # Park / ready / blocked stay open. This source has no close.
         task.mark = token
         task.state = "OPEN"
-        labels = [label for label in task.labels if label not in {"ai:ready", "work:ready"}]
+        drop = {"ai:ready", "work:ready", "ai:blocked", "ai:needs-feedback", "ai:park"}
+        labels = [label for label in task.labels if label not in drop]
         if token == "ready":
             if "ai:ready" not in labels:
                 labels.append("ai:ready")
         else:
-            if "ai:blocked" not in labels:
-                labels.append("ai:blocked")
+            # park / blocked → machine stop; never human mailbox
+            if "ai:frozen" not in labels:
+                labels.append("ai:frozen")
         task.labels = labels
         return task

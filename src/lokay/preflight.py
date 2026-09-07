@@ -1066,7 +1066,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
                 "--body",
                 f"{marker}\nBounded checks failed: {summary}",
                 "--label",
-                "ai:blocked",
+                "ai:frozen",
             ],
             capture_output=True,
             text=True,

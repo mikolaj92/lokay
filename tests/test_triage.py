@@ -31,8 +31,9 @@ def test_is_undecided():
     assert is_undecided([])
     assert is_undecided(["bug"])
     assert not is_undecided(["ai:ready"])
-    assert not is_undecided(["ai:blocked"])
-    assert not is_undecided(["ai:needs-feedback"])
+    # Stale human-mailbox labels re-enter triage (not permanent decisions).
+    assert is_undecided(["ai:blocked"])
+    assert is_undecided(["ai:needs-feedback"])
     assert not is_undecided(["ai:in-progress"])
     assert not is_undecided(["ai:pr-open"])
     assert not is_undecided(["ai:ci-waiting"])
@@ -69,22 +70,25 @@ def test_decide_preflight_incident_is_blocked():
     )
     assert d.decision == "blocked"
     assert d.reason == "preflight_incident"
-    assert "ai:blocked" in d.add_labels
+    assert d.add_labels == ("ai:frozen",)
+    assert "ai:blocked" not in d.add_labels
     assert "work:ready" not in d.add_labels
     assert "ai:ready" not in d.add_labels
 
 
 def test_decide_title_short():
     d = decide_issue(_issue(title="fix"))
-    assert d.decision == "needs_feedback"
+    assert d.decision == "park"
     assert d.reason == "title_too_short"
-    assert "ai:needs-feedback" in d.add_labels
+    assert d.add_labels == ("ai:frozen",)
+    assert "ai:needs-feedback" not in d.add_labels
 
 
 def test_decide_body_short():
     d = decide_issue(_issue(body="too short"))
-    assert d.decision == "needs_feedback"
+    assert d.decision == "park"
     assert d.reason == "body_too_short"
+    assert d.add_labels == ("ai:frozen",)
 
 
 def test_decide_oos_title_marker():
@@ -148,7 +152,7 @@ Fail closed knowledge endpoints on timeout.
 
 
 def test_decide_ready_with_parent_epic_footer():
-    """Body 'Parent epic' must not force needs_feedback (only title epic does)."""
+    """Body 'Parent epic' must not force park/split (only title epic does)."""
     body = """## Goal
 Adopt full Basecoat + HTMX + Alpine stack via product_shell.
 

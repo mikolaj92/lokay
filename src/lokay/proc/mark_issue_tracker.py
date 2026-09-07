@@ -10,7 +10,7 @@ def apply(
     if not live:
         return {"ok": True, "planned": True}
     have = set(issue_data.get("labels") or [])
-    remove = [x for x in (cfg.ready_label, cfg.needs_feedback_label) if x in have]
+    remove = [x for x in (cfg.ready_label, cfg.needs_feedback_label, cfg.blocked_label) if x in have]
     if remove:
         remove_issue_labels(runner, repo, issue, remove, live=True)
     add_issue_labels(

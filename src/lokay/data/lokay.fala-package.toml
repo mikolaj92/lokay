@@ -864,7 +864,7 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "issue_triage"
 title = "Issue triage sito"
-description = "Sito only: do / skip / close / park. Not implement. Factory park is machine stop (ai:frozen), not needs-feedback. issue_split is a later child."
+description = "Sito only: do / skip / close / park. Not implement. Factory park/fail is machine stop (ai:frozen); never ai:needs-feedback or ai:blocked. issue_split is a later child."
 
 [[correlation_paths.effectors]]
 id = "get_issue"

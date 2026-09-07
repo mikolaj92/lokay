@@ -9,8 +9,8 @@ human gates. CLOSE / SPLIT / READY+implement are the default exits.
 CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
 bias toward distrusting every ticket. Foreign objections to the lokay's
 essence (what Lokay is) CLOSE; operational reports (hangs / does not work as
-described) stay. PARK is a rare residual after rules fail closed —
-never the escape hatch for oversized work that can be auto-split.
+described) stay. PARK is a machine stop (ai:frozen) after rules fail closed —
+never a human mailbox, never the escape hatch for oversized work that can be auto-split.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from typing import Any, Iterable
 from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY
-from lokay.triage import is_parked, is_preflight_incident, is_undecided
+from lokay.triage import MACHINE_PARK_LABEL, is_parked, is_preflight_incident, is_undecided
 
 # --- Verdicts for one check ---
 PASS = "pass"
@@ -646,10 +646,10 @@ def aggregate_intake(
             decision="blocked",
             reason=blocked_hit.reason,
             checks=checked,
-            add_labels=("ai:blocked",),
-            remove_labels=(ready_label, LABEL_WORK_READY),
+            add_labels=(MACHINE_PARK_LABEL,),
+            remove_labels=(ready_label, LABEL_WORK_READY, needs_feedback_label),
             comment=(
-                "Blocked: lokay preflight incident. Self-repair owns this, "
+                "Parked (factory): lokay preflight incident. Self-repair owns this, "
                 "not issue_to_pr."
             ),
             implementable=False,
@@ -691,8 +691,8 @@ def aggregate_intake(
             decision="park",
             reason=park_hit.reason,
             checks=checked,
-            add_labels=(needs_feedback_label,),
-            remove_labels=(ready_label,),
+            add_labels=(MACHINE_PARK_LABEL,),
+            remove_labels=(ready_label, needs_feedback_label),
             comment=_park_comment(park_hit),
             implementable=False,
         )
@@ -705,11 +705,11 @@ def aggregate_intake(
             decision="park",
             reason=f"inconclusive_{hit.reason}",
             checks=checked,
-            add_labels=(needs_feedback_label,),
-            remove_labels=(ready_label,),
+            add_labels=(MACHINE_PARK_LABEL,),
+            remove_labels=(ready_label, needs_feedback_label),
             comment=(
-                f"Needs feedback: intake check incomplete ({hit.check}: {hit.reason}). "
-                "Clarify paths or ensure clone is available, then drop this label."
+                f"Parked (factory): intake check incomplete ({hit.check}: {hit.reason}). "
+                "Structured fail — clarify paths or ensure clone is available."
             ),
             implementable=False,
         )
@@ -771,8 +771,8 @@ def _split_comment(hit: CheckResult) -> str:
 
 def _park_comment(hit: CheckResult) -> str:
     return (
-        f"Needs feedback (rare): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
-        "Clarify a single implementable ask, then remove this label."
+        f"Parked (factory): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
+        "Structured fail — clarify a single implementable ask or split."
     )
 
 
@@ -798,8 +798,8 @@ def should_run_intake(
         return True, "triage_ready_candidate"
     if blocked_label in labels:
         return False, "blocked"
-    if needs_feedback_label in labels:
-        return False, "needs_feedback"
+    # Stale needs-feedback is not a human skip-gate; re-triage/intake may strip it.
+    _ = needs_feedback_label
     # Undecided inbox: triage_issue should have run first in issue_triage.
     # If somehow still undecided, skip (do not READY from intake alone).
     if is_undecided(
