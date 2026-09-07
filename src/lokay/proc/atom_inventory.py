@@ -57,8 +57,20 @@ def inventory(package: Path, source: Path) -> dict:
                 for prefix, site in prefixes:
                     if atom.startswith(prefix) and site not in candidates:
                         candidates.append(site)
+            resolution = 'candidate' if candidates else 'unresolved'
+            command = effector.get('adapter', {}).get('command', [])
+            if atom is None and isinstance(command, list) and '-m' in command:
+                index = command.index('-m') + 1
+                module = command[index] if index < len(command) else ''
+                if isinstance(module, str) and module.startswith('lokay.'):
+                    parts = module.split('.')
+                    if all(part.isidentifier() for part in parts):
+                        relative = Path(*parts[1:]).with_suffix('.py')
+                        if (source / relative).is_file():
+                            candidates = [{'file': str(relative), 'line': 1}]
+                            resolution = 'direct_module'
             rows.append({'path': path['id'], 'effector': effector['id'], 'atom': atom,
-                         'resolution': 'candidate' if candidates else 'unresolved',
+                         'resolution': resolution,
                          'sites': candidates})
     return {'scope': 'authored_not_expanded', 'nodes': rows,
             'limitations': ['Static comparison sites, not proven ownership or transitive dependencies.',

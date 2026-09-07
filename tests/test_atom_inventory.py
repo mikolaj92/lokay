@@ -53,6 +53,19 @@ def test_prefix_candidates_are_visible_not_proven(tmp_path):
     assert row['sites'] == [{'file': 'handler.py', 'line': 2}]
 
 
+def test_direct_module_binding_is_not_missing_atom(tmp_path):
+    from lokay.proc.atom_inventory import inventory
+
+    package = tmp_path / 'graph.toml'
+    package.write_text('[[correlation_paths]]\nid="p"\n[[correlation_paths.effectors]]\nid="x"\nadapter={kind="subprocess", command=["uv", "run", "python", "-m", "lokay.proc.inspect"]}\n')
+    source = tmp_path / 'lokay'
+    (source / 'proc').mkdir(parents=True)
+    (source / 'proc/inspect.py').write_text('raise RuntimeError("do not execute")\n')
+    row = inventory(package, source)['nodes'][0]
+    assert row['resolution'] == 'direct_module'
+    assert row['sites'] == [{'file': 'proc/inspect.py', 'line': 1}]
+
+
 def test_missing_package_returns_json_error(tmp_path, capsys):
     from lokay.proc.atom_inventory import main
 
