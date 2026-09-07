@@ -83,7 +83,15 @@ title = "Lokay factory pass"
 description = "Parent conducts five named departments with on/off switches, then receipt. Clean is a sibling child. Failed clean is a classified route, not process.failed."
 
 [[correlation_paths.effectors]]
+id = "harvest_factory_children"
+capability = "lokay_atom"
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
+config = { atom = "harvest_factory_children" }
+retry_policy = "none"
+
+[[correlation_paths.effectors]]
 id = "host_ff"
+conduction = ["harvest_factory_children"]
 capability = "lokay_atom"
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 300, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "host_ff" }

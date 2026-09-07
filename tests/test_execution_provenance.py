@@ -54,3 +54,22 @@ def test_organ_metadata_pins_binding_and_attempt_without_inputs():
     assert metadata["implementation"]["attempt"] == "run-9"
     assert "token" not in str(metadata)
     assert envelope["atom"] == "map_repo"
+
+
+def test_checkout_change_after_execution_does_not_mutate_recorded_provenance(tmp_path):
+    import importlib.util
+    from lokay.execution_provenance import implementation_identity
+
+    file_a = tmp_path / "handler_v1.py"
+    file_a.write_text("def run():\n    return 'v1'\n")
+    spec_a = importlib.util.spec_from_file_location("mod_v1", file_a)
+    mod_a = importlib.util.module_from_spec(spec_a)
+    spec_a.loader.exec_module(mod_a)
+
+    recorded = implementation_identity(mod_a.run)
+    file_a.write_text("def run():\n    return 'v2_modified'\n")
+
+    current_on_disk_code = file_a.read_text()
+    assert recorded["symbol"] == "mod_v1:run"
+    assert "v2_modified" not in str(recorded)
+    assert len(recorded["code_sha256"]) == 64

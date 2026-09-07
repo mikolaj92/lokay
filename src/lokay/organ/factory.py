@@ -109,6 +109,15 @@ def handle_factory(
 
         return terminal(up.get("record_pass") or {})
 
+    if atom == "harvest_factory_children":
+        from lokay.proc.harvest_factory_children import harvest
+
+        return harvest(
+            config={"state_path": str(inputs.get("state_path") or "") or None},
+            scope={"config_path": str(inputs.get("config_path") or "") or None},
+            ledger={},
+        )
+
     if atom == "host_ff":
         from lokay.git_host_ff import snapshot_process_head
 

@@ -100,7 +100,8 @@ stateDiagram-v2
     SelectRepairRoute --> FactoryPass: factory route / unconfirmed stall
     SelectRepairRoute --> SelfRepair: same failure in 4 of 5 distinct pass receipts
     SelfRepair --> [*]: failed / restart required; next heartbeat starts a fresh cycle
-    FactoryPass --> HostFF
+    FactoryPass --> HarvestFactoryChildren
+    HarvestFactoryChildren --> HostFF
     HostFF --> FactoryBeginHostGate
     FactoryBeginHostGate --> FactoryBegin: begin
     FactoryBeginHostGate --> RecordPass: restart

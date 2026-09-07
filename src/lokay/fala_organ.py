@@ -200,6 +200,7 @@ ORGAN_BINDINGS: tuple[Binding, ...] = (
     Binding('factory_begin_host_gate', handle_factory),
     Binding('factory_pass_terminal', handle_factory),
     Binding('factory_tick', handle_factory),
+    Binding('harvest_factory_children', handle_factory),
     Binding('host_ff', handle_factory),
     Binding('queue_conflict', handle_factory),
     Binding('ready_hygiene', handle_factory),
