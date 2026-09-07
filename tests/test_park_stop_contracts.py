@@ -145,12 +145,14 @@ def test_apply_manual_refuses_when_park_stop_not_admitted():
     assert out["error"] == "park_stop_not_admitted"
 
 
-def test_decide_issue_still_needs_feedback_for_short_title_body():
+def test_decide_issue_short_title_body_parks_frozen_not_needs_feedback():
     short_title = decide_issue(_issue(title="fix"))
-    assert short_title.decision == "needs_feedback"
+    assert short_title.decision == "park"
     assert short_title.reason == "title_too_short"
-    assert short_title.add_labels == ("ai:needs-feedback",)
+    assert short_title.add_labels == ("ai:frozen",)
+    assert "ai:needs-feedback" not in short_title.add_labels
     short_body = decide_issue(_issue(body="too short"))
-    assert short_body.decision == "needs_feedback"
+    assert short_body.decision == "park"
     assert short_body.reason == "body_too_short"
-    assert short_body.add_labels == ("ai:needs-feedback",)
+    assert short_body.add_labels == ("ai:frozen",)
+    assert "ai:needs-feedback" not in short_body.add_labels

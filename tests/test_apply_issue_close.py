@@ -119,7 +119,8 @@ def test_apply_issue_mark_parks_without_closing(monkeypatch):
         "reason": "obsolete_argus_flow_assumption",
     }
     assert ("remove", ["ai:ready"]) in calls
-    assert ("add", ["ai:blocked"]) in calls
+    assert ("add", ["ai:frozen"]) in calls
+    assert ("add", ["ai:blocked"]) not in calls
     assert any(
         item[0] == "comment" and "Parked" in item[1] and "Closed" not in item[1]
         for item in calls
@@ -300,8 +301,10 @@ def test_temida_4995_graph_does_not_close_on_obsolete_verdict():
     nodes = {n["id"]: n for n in path["nodes"]}
     assert "apply_issue_close" not in nodes
     mark = nodes["apply_issue_mark"]
-    assert mark["when"]["upstream"] == "finalize_issue_triage"
-    assert mark["when"]["path"] == "decision.verdict"
-    assert mark["when"]["equals"] == "close"
+    assert mark["when"] == {
+        "upstream": "select_triage_leaf",
+        "path": "route",
+        "equals": "close",
+    }
     prs = next(p for p in describe_package()["paths"] if p["id"] == "pr_triage")
     assert any(n["id"] == "close_issue" for n in prs["nodes"])

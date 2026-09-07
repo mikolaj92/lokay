@@ -177,14 +177,16 @@ def test_apply_intake_blocked_demotes_ready():
     decision = IntakeDecision(
         decision="blocked",
         reason="preflight_incident",
-        add_labels=("ai:blocked",),
+        add_labels=("ai:frozen",),
         remove_labels=("ai:ready", "work:ready"),
-        comment="Blocked: lokay preflight incident.",
+        comment="Parked (factory): lokay preflight incident.",
     )
     runner = _FakeRunner()
     assert apply_intake(runner, cfg, "a/b", 12, issue, decision, live=True) is True
     joined = [" ".join(c) for c in runner.calls]
-    assert any("--add-label ai:blocked" in j for j in joined)
+    assert any("--add-label ai:frozen" in j for j in joined)
+    assert not any("--add-label ai:blocked" in j for j in joined)
+    assert not any("--add-label ai:needs-feedback" in j for j in joined)
     assert any("--remove-label ai:ready" in j for j in joined)
     assert any("--remove-label work:ready" in j for j in joined)
 

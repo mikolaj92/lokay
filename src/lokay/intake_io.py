@@ -172,6 +172,14 @@ def covering_ai_prs(
     return uniq
 
 
+FORBIDDEN_PROCESS_STAMPS = frozenset({"ai:needs-feedback", "ai:blocked"})
+
+
+def _sanitize_add_labels(labels: tuple[str, ...] | list[str]) -> list[str]:
+    """Factory apply never stamps human-mailbox labels."""
+    return [x for x in labels if x and x not in FORBIDDEN_PROCESS_STAMPS]
+
+
 def apply_intake(
     runner: Runner,
     cfg: Config,
@@ -197,7 +205,7 @@ def apply_intake(
                 remove_issue_labels(runner, repo, issue_number, to_remove, live=True)
                 applied = True
         if decision.add_labels:
-            add_issue_labels(runner, repo, issue_number, list(decision.add_labels), live=True)
+            add_issue_labels(runner, repo, issue_number, _sanitize_add_labels(decision.add_labels), live=True)
             applied = True
         if decision.comment:
             comment_issue(runner, repo, issue_number, decision.comment, live=True)
@@ -228,7 +236,7 @@ def apply_intake(
         if to_remove:
             remove_issue_labels(runner, repo, issue_number, to_remove, live=True)
     if decision.add_labels:
-        add_issue_labels(runner, repo, issue_number, list(decision.add_labels), live=True)
+        add_issue_labels(runner, repo, issue_number, _sanitize_add_labels(decision.add_labels), live=True)
     if decision.comment:
         comment_issue(runner, repo, issue_number, decision.comment, live=True)
     if decision.close and (issue.state or "OPEN").strip().upper() == "CLOSED":

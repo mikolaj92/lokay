@@ -1,7 +1,7 @@
 """Stuck-issue ledger: one failing ready issue must not block the lokay.
 
 Persists failure counts next to state.jsonl so subsequent ticks skip
-(and eventually label ai:blocked) issues that keep failing.
+(and eventually park ai:frozen) issues that keep failing.
 """
 
 from __future__ import annotations

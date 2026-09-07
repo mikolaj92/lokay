@@ -167,7 +167,7 @@ def build_parser() -> argparse.ArgumentParser:
     st_mode.add_argument(
         "--human",
         action="store_true",
-        help="residual human mailbox (needs-feedback / needs-review); lokay is not stuck",
+        help="read-only residual survey of stale needs-feedback / needs-review (not a process path)",
     )
     st.add_argument(
         "--preflight",

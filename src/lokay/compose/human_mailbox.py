@@ -1,8 +1,8 @@
-"""Residual human mailbox survey (exception reporting, not a lokay brake).
+"""Read-only residual survey of stale human-mailbox labels.
 
-Lists issues labeled needs-feedback and PRs labeled needs-review for the Lokay
-mini lokay repository. Presence of these items does **not** mean the lokay is stuck —
-humans are a mailbox for rare residuals while other work continues.
+Not a process path. Lokay never stamps `ai:needs-feedback` / `ai:blocked`
+anymore — this CLI only lists leftovers (and needs-review PRs) for operators.
+Factory stops use `ai:frozen` + structured reason.
 """
 
 from __future__ import annotations
@@ -72,8 +72,8 @@ def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict
         config=str(cfg.config_path),
         lokay_blocked=False,
         note=(
-            "Human queue is exception reporting only — lokay continues other repos. "
-            "NEEDS_HUMAN / ai:needs-feedback must stay rare."
+            "Read-only residual survey — not a process path. "
+            "Factory never stamps ai:needs-feedback / ai:blocked; machine stops use ai:frozen."
         ),
         count=len(items),
         items=items,
