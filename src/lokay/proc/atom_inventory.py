@@ -49,7 +49,9 @@ def inventory(package: Path, source: Path) -> dict:
                     if site not in sites.setdefault(value.value, []):
                         sites[value.value].append(site)
     rows = []
-    for path in manifest.get('correlation_paths', []):
+    authored = [('correlation_path', path) for path in manifest.get('correlation_paths', [])]
+    authored.extend(('path_template', path) for path in manifest.get('path_templates', []))
+    for authored_kind, path in authored:
         for effector in path.get('effectors', []):
             atom = effector.get('config', {}).get('atom')
             candidates = list(sites.get(atom, [])) if isinstance(atom, str) else []
@@ -69,7 +71,10 @@ def inventory(package: Path, source: Path) -> dict:
                         if (source / relative).is_file():
                             candidates = [{'file': str(relative), 'line': 1}]
                             resolution = 'direct_module'
-            rows.append({'path': path['id'], 'effector': effector['id'], 'atom': atom,
+            if authored_kind == 'path_template':
+                resolution = 'unresolved_template'
+            rows.append({'path': path['id'], 'authored_kind': authored_kind,
+                         'effector': effector['id'], 'atom': atom,
                          'resolution': resolution,
                          'sites': candidates})
     return {'scope': 'authored_not_expanded', 'nodes': rows,

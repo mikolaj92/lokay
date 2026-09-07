@@ -82,3 +82,20 @@ def test_missing_source_is_not_a_successful_empty_scan(tmp_path):
     package.write_text('correlation_paths = []')
     with pytest.raises(ValueError, match='source directory'):
         inventory(package, tmp_path / 'absent')
+
+
+def test_templates_are_visible_without_claiming_expanded_bindings(tmp_path):
+    from lokay.proc.atom_inventory import inventory
+
+    package = tmp_path / 'graph.toml'
+    package.write_text('[[path_templates]]\nid="slot"\n[[path_templates.effectors]]\nid="run_${index}"\nconfig={atom="run_${index}"}\n')
+    source = tmp_path / 'src'
+    source.mkdir()
+    (source / 'handler.py').write_text('raise RuntimeError("must not execute")\ndef handle(atom):\n    if atom.startswith("run_"):\n        return {}\n')
+    report = inventory(package, source)
+    row = report['nodes'][0]
+    assert row['path'] == 'slot'
+    assert row['authored_kind'] == 'path_template'
+    assert row['atom'] == 'run_${index}'
+    assert row['resolution'] == 'unresolved_template'
+    assert row['sites'] == [{'file': 'handler.py', 'line': 3}]
