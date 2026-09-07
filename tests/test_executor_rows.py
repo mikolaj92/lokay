@@ -73,6 +73,14 @@ def test_prepare_consumes_global_budget_for_live_detached_worker(
     assert out["cap"] == 1
     assert out["budget"] == 0
     assert out["spent"] == 1
+    assert out["leftover"] == 2
+    assert {row["issue"] for row in out["leftover_issues"]} == {2, 3}
+    slot = select_slot(out, {}, slot=1)
+    assert slot["route"] == "empty"
+    terminal = select_result(out, [slot])
+    assert terminal["route"] == "cap"
+    assert terminal["result"]["leftover"] == 2
+    assert {row["issue"] for row in terminal["result"]["leftover_issues"]} == {2, 3}
 
 
 def test_prepare_fail_closed_when_budget_exceeds_slots(tmp_path: Path):
