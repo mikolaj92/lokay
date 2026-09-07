@@ -135,3 +135,75 @@ def test_finalize_writes_digest_before_stripping(tmp_path: Path):
     digest = (tmp_path / DIGEST_NAME).read_text(encoding="utf-8")
     assert "dirty" in digest.lower() or "host" in digest.lower()
     assert "host_ff" in digest
+
+
+def test_explain_failure_distinguishes_local_upstream_and_unknown():
+    from lokay.fail_digest import explain_failure
+
+    # Local defect
+    local_env = {
+        "ok": False,
+        "path_id": "factory_pass",
+        "steps": [{"step": "host_ff", "status": "failed", "error": "refusing host-ff: checkout is dirty"}],
+        "provenance": {"symbol": "lokay.git_host_ff:main", "code_sha256": "a" * 64, "binding": "host_ff"},
+    }
+    rep_local = explain_failure(local_env)
+    assert rep_local["classification"] == "local_contract_defect"
+    assert rep_local["failed_contract"] == "host_ff"
+    assert rep_local["source_identity"]["code_sha256"] == "a" * 64
+
+    # Upstream defect
+    upstream_env = {
+        "ok": False,
+        "path_id": "factory_pass",
+        "steps": [{"step": "factory_begin_host_gate", "status": "failed", "error": "upstream host_ff failed"}],
+        "conduction": ["host_ff"],
+    }
+    rep_upstream = explain_failure(upstream_env)
+    assert rep_upstream["classification"] == "upstream_defect"
+    assert rep_upstream["upstream_refs"] == ["host_ff"]
+
+    # Unknown cause
+    unknown_env = {"ok": False}
+    rep_unknown = explain_failure(unknown_env)
+    assert rep_unknown["classification"] == "unknown_cause"
+
+
+def test_explain_failure_uses_execution_provenance_not_current_head(tmp_path):
+    import importlib.util
+    from lokay.execution_provenance import implementation_identity
+    from lokay.fail_digest import explain_failure
+
+    file_a = tmp_path / "handler.py"
+    file_a.write_text("def handle(): return 1\n")
+    spec = importlib.util.spec_from_file_location("mod_v1", file_a)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    history_identity = implementation_identity(mod.handle)
+    file_a.write_text("def handle(): return 2\n")  # mutate HEAD file
+
+    env = {
+        "ok": False,
+        "path_id": "test_path",
+        "provenance": history_identity,
+        "steps": [{"step": "test_atom", "status": "failed", "error": "fault"}],
+    }
+    report = explain_failure(env)
+    assert report["source_identity"]["code_sha256"] == history_identity["code_sha256"]
+    assert "return 2" not in str(report)
+
+
+def test_digest_includes_explain_details_without_executing_effects():
+    from lokay.fail_digest import build_digest
+
+    env = {
+        "ok": False,
+        "path_id": "factory_pass",
+        "run_id": "run-123",
+        "provenance": {"symbol": "lokay.organ.factory:handle_factory", "code_sha256": "b" * 64},
+        "steps": [{"step": "host_ff", "status": "failed", "error": "dirty checkout"}],
+    }
+    digest = build_digest(env)
+    assert "host_ff" in digest
+    assert "lokay.organ.factory:handle_factory" in digest

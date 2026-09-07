@@ -73,6 +73,67 @@ def write_digest(state_dir: Path | str | None, envelope: Any) -> Path | None:
         return None
 
 
+def explain_failure(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Build a read-only failure inspection report from execution evidence.
+
+    Distinguishes local contract defect, upstream defect, and unknown cause.
+    Uses execution-time provenance (code_sha256), not current checkout HEAD.
+    Never executes effects, runs retries, or publishes secrets.
+    """
+    if not isinstance(envelope, dict):
+        return {
+            "ok": False,
+            "classification": "unknown_cause",
+            "failed_contract": "unknown",
+            "source_identity": None,
+            "upstream_refs": [],
+            "error": "envelope is not a dict",
+        }
+
+    path_id = _first_str(envelope, "path_id") or _nested_path_id(envelope) or "unknown"
+    failed_step = _failed_step(envelope) or {}
+    atom = _atom_of(envelope) or _first_str(failed_step, "step") or _first_str(failed_step, "atom") or "unknown"
+
+    fala = _as_dict(envelope.get("fala")) or {}
+    effectors = _as_dict(fala.get("effector_results")) or {}
+    failed_effector_res = _as_dict(effectors.get(atom)) or {}
+    meta = _as_dict(failed_effector_res.get("metadata")) or _as_dict(envelope.get("metadata")) or {}
+    provenance = _as_dict(meta.get("implementation")) or _as_dict(envelope.get("provenance")) or {}
+
+    source_identity = None
+    if provenance and "symbol" in provenance:
+        source_identity = {
+            "symbol": str(provenance.get("symbol")),
+            "code_sha256": str(provenance.get("code_sha256")),
+            "python_cache_tag": str(provenance.get("python_cache_tag") or ""),
+            "binding": str(provenance.get("binding") or ""),
+            "attempt": str(provenance.get("attempt") or ""),
+        }
+
+    upstream_refs = []
+    conduction = failed_effector_res.get("conduction") or envelope.get("conduction")
+    if isinstance(conduction, list):
+        upstream_refs = [str(x) for x in conduction]
+
+    error_msg = _short_message(envelope)
+
+    classification = "local_contract_defect"
+    if upstream_refs and any(ref in error_msg for ref in upstream_refs) or "upstream" in error_msg.lower():
+        classification = "upstream_defect"
+    elif error_msg == _INSUFFICIENT or not error_msg:
+        classification = "unknown_cause"
+
+    return {
+        "ok": True,
+        "path_id": path_id,
+        "failed_contract": atom,
+        "classification": classification,
+        "source_identity": source_identity,
+        "upstream_refs": upstream_refs,
+        "error": error_msg,
+    }
+
+
 def _build_digest(envelope: Any) -> str:
     if not isinstance(envelope, dict):
         return (
@@ -83,14 +144,15 @@ def _build_digest(envelope: Any) -> str:
             "  - re-run with structured Fala output; digest needs an ok:false envelope\n"
         )
 
-    path_id = _first_str(envelope, "path_id") or _nested_path_id(envelope) or "?"
+    explanation = explain_failure(envelope)
+    path_id = explanation.get("path_id") or "?"
     run_id = _first_str(envelope, "run_id") or "?"
-    atom = _atom_of(envelope) or "?"
+    atom = explanation.get("failed_contract") or "?"
     health = _first_str(envelope, "health") or "?"
     reason = _first_str(envelope, "reason") or ""
     code = _error_code(envelope)
     exit_info = _exit_signal(envelope)
-    message = _short_message(envelope)
+    message = explanation.get("error") or ""
     next_lines = _next_steps(envelope, message)
 
     lines = [
@@ -101,6 +163,11 @@ def _build_digest(envelope: Any) -> str:
         f"- run_id: {run_id}",
         f"- health: {health}" + (f" reason={reason}" if reason else ""),
     ]
+    source_id = explanation.get("source_identity")
+    if source_id and isinstance(source_id, dict):
+        lines.append(f"- source identity: {source_id.get('symbol')} ({source_id.get('code_sha256', '')[:8]})")
+    if explanation.get("classification"):
+        lines.append(f"- classification: {explanation.get('classification')}")
     if code:
         lines.append(f"- error.code: {code}")
     if exit_info:
