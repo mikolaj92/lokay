@@ -1,4 +1,4 @@
-"""One job: prune old `.lokay-preserved` archives under the managed worktree root.
+"""One job: classify old `.lokay-preserved` archives without erasing recovery.
 
 Never touches Fala sqlite/WAL. Never walks outside managed_root. Tests must
 pass a tmp managed_root — never the operator lokay root by accident.
@@ -14,7 +14,7 @@ from typing import Any
 from lokay.git_worktree import _is_quarantine_name, reclaim_preserved_archive
 from lokay.proc.stale_worktree_catalog import SLOTS as ARCHIVE_GC_SLOTS
 
-# Disk crisis on Temida leftovers: one hour is enough for operator recovery.
+# Age selects inspection candidates only, never deletion permission.
 PRESERVED_ARCHIVE_TTL_SECONDS = 3600
 
 def _is_operator_lokay_worktrees(root: Path) -> bool:
@@ -71,7 +71,7 @@ def prune(
     now: float | None = None,
     ttl: int | None = None,
 ) -> dict[str, Any]:
-    """Reclaim expired `.lokay-preserved` archives. Dry-run when live is false."""
+    """List expired archives; retain them without completion evidence."""
     root = Path(managed_root).expanduser()
     limit = PRESERVED_ARCHIVE_TTL_SECONDS if ttl is None else ttl
     if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_worktrees(root):
@@ -94,25 +94,10 @@ def prune(
             "candidate_count": len(expired),
             "ttl_seconds": limit,
         }
-    pruned: list[str] = []
-    failed: list[dict[str, str]] = []
-    for path in expired:
-        out = reclaim_preserved_archive(path, managed_root=root)
-        if out.get("ok") and (out.get("reclaimed") or out.get("already_gone")):
-            pruned.append(str(path))
-        else:
-            failed.append(
-                {
-                    "path": str(path),
-                    "error": str(out.get("error") or "reclaim_failed"),
-                }
-            )
+    # These archives can come from failed registry pruning or interrupted
+    # preservation. A TTL is not permission to destroy the recovery copy.
     return {
-        "ok": True,
-        "planned": False,
-        "pruned": pruned,
-        "failed": failed,
-        "pruned_count": len(pruned),
-        "failed_count": len(failed),
-        "ttl_seconds": limit,
+        "ok": True, "planned": False, "pruned": [], "pruned_count": 0,
+        "retained": [str(path) for path in expired],
+        "reason": "completion_evidence_required", "ttl_seconds": limit,
     }

@@ -36,8 +36,9 @@ def test_prune_live_reclaims_expired_tmp_only(tmp_path):
     os.utime(old, (now - PRESERVED_ARCHIVE_TTL_SECONDS - 1, now - PRESERVED_ARCHIVE_TTL_SECONDS - 1))
     out = prune(managed_root=tmp_path, live=True, now=now)
     assert out["ok"] is True
-    assert out["pruned_count"] == 1
-    assert not old.exists()
+    assert out["pruned_count"] == 0
+    assert out["retained"] == [str(old)]
+    assert old.exists()
 
 
 def test_prune_planned_does_not_delete(tmp_path):
@@ -101,5 +102,6 @@ def test_prune_bounds_expired_archives_to_authored_slots(tmp_path):
 
     assert len(list_expired_archives(tmp_path, now=now)) == SLOTS
     out = prune(managed_root=tmp_path, live=True, now=now)
-    assert out["pruned_count"] == SLOTS
-    assert sum(path.exists() for path in archives) == 2
+    assert out["pruned_count"] == 0
+    assert len(out["retained"]) == SLOTS
+    assert sum(path.exists() for path in archives) == SLOTS + 2

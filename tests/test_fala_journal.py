@@ -56,8 +56,8 @@ def test_over_cap_journal_uses_fala_maintain_not_rename(tmp_path: Path, monkeypa
             "db_path": db,
             "older_than_days": 0,
             "keep_last": 1,
-            "vacuum": True,
-            "dry_run": False,
+            "vacuum": False,
+            "dry_run": True,
         }
     ]
     assert wal.exists()
@@ -249,8 +249,8 @@ def test_docs_do_not_claim_rotate_only_covers_daemon_cycle_factory():
 
 
 
-def test_created_zombie_runs_are_finalized_and_reclaimed(tmp_path: Path, monkeypatch):
-    """SIGKILL after upsert_run leaves status=created. Maintain must reclaim them."""
+def test_created_runs_are_preserved_without_worker_lease_evidence(tmp_path: Path, monkeypatch):
+    """Created also describes live children, not only SIGKILL leftovers."""
     home = tmp_path / "home"
     db = _write_db(home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80)
     i2pr = _write_db(
@@ -288,13 +288,8 @@ def test_created_zombie_runs_are_finalized_and_reclaimed(tmp_path: Path, monkeyp
     assert out["ok"] is True
     assert {Path(row["path"]) for row in out["maintained"]} == {db, i2pr}
     heartbeat = next(row for row in out["maintained"] if Path(row["path"]) == db)
-    assert heartbeat["reclaimed_created"] == 2
-    assert calls == [
-        ("finalize", "lokay-old-1"),
-        ("delete", "lokay-old-1"),
-        ("finalize", "lokay-old-2"),
-        ("delete", "lokay-old-2"),
-    ]
+    assert heartbeat["reclaimed_created"] == 0
+    assert calls == []
     assert {call["db_path"] for call in maintain_calls} == {db, i2pr}
 
 
@@ -315,7 +310,7 @@ def test_invalid_status_journal_does_not_fail_the_lokay(tmp_path: Path, monkeypa
     assert calls and calls[0]["db_path"] == db
 
 
-def test_created_reclaim_is_capped_per_journal(tmp_path: Path, monkeypatch):
+def test_created_runs_are_not_finalized_by_volume(tmp_path: Path, monkeypatch):
     """Hundreds of created leftovers drain across ticks, not in one 180s maintain."""
     home = tmp_path / "home"
     db = _write_db(home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80)
@@ -338,11 +333,11 @@ def test_created_reclaim_is_capped_per_journal(tmp_path: Path, monkeypatch):
     out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     heartbeat = next(row for row in out["maintained"] if Path(row["path"]) == db)
-    assert heartbeat["reclaimed_created"] == 8
-    assert calls == [f"lokay-old-{i}" for i in range(8)]
+    assert heartbeat["reclaimed_created"] == 0
+    assert calls == []
 
 
-def test_missing_native_finalize_stops_reclaim_after_one_try(tmp_path: Path, monkeypatch):
+def test_maintenance_never_calls_native_finalize_without_ownership(tmp_path: Path, monkeypatch):
     """Fala 0.7.31 has no native transition_run. Do not loop 822 AttributeErrors."""
     home = tmp_path / "home"
     db = _write_db(home / ".lokay" / "fala" / "daemon-entry" / "state.sqlite", size=80)
@@ -363,11 +358,11 @@ def test_missing_native_finalize_stops_reclaim_after_one_try(tmp_path: Path, mon
     out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert db.exists()
-    assert calls == ["lokay-old-0"]
+    assert calls == []
 
 
-def test_self_repair_incomplete_runs_finalized_without_delete(tmp_path: Path, monkeypatch):
-    """self_repair_validate created/running become timed_out evidence; not deleted."""
+def test_self_repair_incomplete_runs_keep_their_original_status(tmp_path: Path, monkeypatch):
+    """A maintenance pass cannot synthesize a self-repair timeout."""
     from lokay.fala_journal import (
         maintain_lokay_fala_journals,
         reclaim_self_repair_incomplete_journals,
@@ -421,24 +416,10 @@ def test_self_repair_incomplete_runs_finalized_without_delete(tmp_path: Path, mo
     assert i2pr in maintained
 
     validate_row = next(row for row in out["maintained"] if Path(row["path"]) == validate_db)
-    assert validate_row["reclaimed_created"] == 2
-    heartbeat_row = next(row for row in out["maintained"] if Path(row["path"]) == heartbeat)
-    assert heartbeat_row["reclaimed_created"] == 1
-
-    assert ("finalize", "sr-created", "self_repair_reclaim") in calls
-    assert ("finalize", "sr-running", "self_repair_reclaim") in calls
-    assert ("delete", "sr-created", "") not in calls
-    assert ("delete", "sr-running", "") not in calls
-    assert ("finalize", "hb-created", "heartbeat_reclaim") in calls
-    assert ("delete", "hb-created", "") in calls
-    assert not any(run_id.startswith("i2pr") for _, run_id, _ in calls)
-
-    # Public reclaim path also covers self_repair journals only.
-    calls.clear()
+    assert validate_row["reclaimed_created"] == 0
+    assert calls == []
     public = reclaim_self_repair_incomplete_journals(home=home)
     assert public["ok"] is True
-    assert any(Path(row["path"]) == validate_db for row in public["reclaimed"])
-    assert ("finalize", "sr-created", "self_repair_reclaim") in calls
-    assert ("delete", "sr-created", "") not in calls
-    assert not any(run_id.startswith("hb-") or run_id.startswith("i2pr") for _, run_id, _ in calls)
-    assert maintain_calls  # maintain still invoked for over-cap journals
+    assert public["reclaimed"] == []
+    assert calls == []
+    assert all(call["dry_run"] is True for call in maintain_calls)

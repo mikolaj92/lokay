@@ -43,10 +43,9 @@ def test_wrapper_journal_prunes_old_dirs(tmp_path: Path):
     kept = wrapper_journal_dir("daemon_cycle", home=home)
     remaining = {p.name for p in root.iterdir() if p.is_dir()}
     assert kept.name in remaining
-    # keep the new dir plus one previous newest leftover
-    assert len(remaining) <= 3
-    assert "daemon-cycle-old-0" not in remaining
-    assert "daemon-cycle-old-1" not in remaining
+    # Fresh wrapper allocation is not completion evidence for older runs.
+    assert len(remaining) == 5
+    assert all(path.name in remaining for path in old)
 
 
 def test_daemon_entry_and_cycle_use_wrapper_journals():

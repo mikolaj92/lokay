@@ -25,61 +25,39 @@ def _is_quarantine_name(name: str) -> bool:
 
 
 def reclaim_preserved_archive(archive: Path, *, managed_root: Path) -> dict[str, Any]:
-    """Free bytes for one `.lokay-preserved` archive under managed_root.
+    """Remove only an empty archive via a pinned non-symlink parent.
 
-    Lexical non-symlink child only. Never unlinks Fala sqlite/WAL. Returns
-    ``ok`` + ``reclaimed``; fail-closed leaves the archive in place.
+    Git history cannot prove ignored files, late writes or recovery data are
+    disposable. Nonempty archives stay intact until content-level delivery and
+    writer/dependency evidence exists. rmdir atomically refuses late content.
     """
-    if archive.is_symlink() or not _is_quarantine_name(archive.name):
-        return {
-            "ok": False,
-            "reclaimed": False,
-            "error": "refusing non-archive or symlink reclaim path",
-        }
+    refused = {"ok": False, "reclaimed": False, "preserved_path": str(archive)}
+    if not _is_quarantine_name(archive.name):
+        return {**refused, "error": "refusing non-archive reclaim path"}
     try:
         root_names = _absolute_posix_names(managed_root)
-        archive_names = _absolute_posix_names(archive)
-    except ValueError:
-        return {
-            "ok": False,
-            "reclaimed": False,
-            "error": "archive path is outside managed root",
-        }
-    if archive_names[: len(root_names)] != root_names or len(archive_names) <= len(
-        root_names
-    ):
-        return {
-            "ok": False,
-            "reclaimed": False,
-            "error": "archive path is outside managed root",
-        }
-    joined = "/".join(archive_names).lower()
-    if joined.endswith((".sqlite", ".sqlite-wal", ".sqlite-shm")) or "/fala/" in (
-        f"/{joined}/"
-    ):
-        return {
-            "ok": False,
-            "reclaimed": False,
-            "error": "refusing Fala sqlite/WAL path",
-        }
+        names = _absolute_posix_names(archive)
+        if names[:len(root_names)] != root_names or len(names) <= len(root_names):
+            return {**refused, "error": "archive path is outside managed root"}
+        if "fala" in names:
+            return {**refused, "error": "refusing Fala journal path"}
+        parent_fd = _walk_nofollow(names[:-1])
+    except (OSError, ValueError) as exc:
+        return {**refused, "error": f"cannot pin archive parent: {exc}"}
     try:
-        if not archive.exists():
+        entry = _pinned_entry(parent_fd, archive.name)
+        if entry is None:
             return {"ok": True, "reclaimed": False, "already_gone": True}
-        if archive.is_symlink() or not archive.is_dir():
-            return {
-                "ok": False,
-                "reclaimed": False,
-                "error": "refusing non-directory reclaim path",
-            }
-        shutil.rmtree(archive)
-    except OSError as exc:
-        return {
-            "ok": False,
-            "reclaimed": False,
-            "preserved_path": str(archive),
-            "error": f"cannot reclaim preserved archive: {exc}",
-        }
-    return {"ok": True, "reclaimed": True, "preserved_path": str(archive)}
+        if not stat.S_ISDIR(entry.st_mode):
+            return {**refused, "error": "refusing non-directory or symlink archive"}
+        try:
+            os.rmdir(archive.name, dir_fd=parent_fd)
+        except OSError as exc:
+            return {**refused, "reason": "completion_evidence_required",
+                    "error": f"archive retained; empty-only reclaim: {exc}"}
+        return {"ok": True, "reclaimed": True, "preserved_path": str(archive)}
+    finally:
+        os.close(parent_fd)
 
 
 def _is_nested_clone(path: Path) -> bool:
@@ -298,25 +276,6 @@ def worktree_owned_by_clone(
     return _clone_lists_worktree(runner, clone, worktree)
 
 
-def _is_orphaned_git_worktree(worktree: Path, clone: Path) -> bool:
-    """Return True if worktree has a missing/broken gitdir pointer or non-existent git target."""
-    if not clone.exists():
-        return True
-    git_file = worktree / ".git"
-    if not git_file.exists():
-        return True
-    if git_file.is_file():
-        try:
-            content = git_file.read_text(encoding="utf-8").strip()
-            if content.startswith("gitdir: "):
-                target = Path(content.split("gitdir: ", 1)[1].strip())
-                if not target.exists():
-                    return True
-        except OSError:
-            return True
-    return False
-
-
 def remove_worktree(
     runner: Runner,
     clone: Path,
@@ -428,38 +387,32 @@ def remove_worktree(
                 "error": "worktree path changed before preservation",
             }
         owned = _clone_lists_worktree(runner, clone, worktree)
-        is_orphaned = False
         if owned is not True:
-            if owned is False and _is_orphaned_git_worktree(worktree, clone):
-                is_orphaned = True
-            else:
-                return {
-                    "ok": False,
-                    "removed": False,
-                    "error": (
-                        "cannot confirm worktree ownership before preservation"
-                        if owned is None
-                        else "worktree is not owned by canonical clone"
-                    ),
-                }
+            return {
+                "ok": False, "removed": False,
+                "error": "cannot confirm worktree ownership before preservation"
+                if owned is None else "worktree is not owned by canonical clone",
+            }
         try:
             uncommitted = classify_changed_paths(
                 list_uncommitted_paths(runner, worktree)
             )
         except Exception as exc:  # noqa: BLE001
-            if is_orphaned:
-                uncommitted = "clean"
-            else:
-                return {
-                    "ok": False,
-                    "removed": False,
-                    "error": f"cannot inspect worktree before preservation: {exc}",
-                }
+            return {
+                "ok": False, "removed": False,
+                "error": f"cannot inspect worktree before preservation: {exc}",
+            }
         if uncommitted == "real":
             return {
                 "ok": False,
                 "removed": False,
                 "error": "worktree gained uncommitted real content before preservation",
+            }
+        ahead = _rev_count(runner, worktree, "origin/main..HEAD")
+        if ahead is None or ahead != 0:
+            return {
+                "ok": False, "removed": False,
+                "error": "cannot prove worktree commits are delivered to origin/main",
             }
         # Path-based Git queries may have raced an ancestor swap. Only the exact
         # directory inspected through the still-reachable pinned parent may move.
@@ -556,7 +509,7 @@ def remove_worktree(
                 "preserved_path": str(archive),
                 "error": "worktree path changed during preservation",
             }
-        if clone.exists() and clone.is_dir() and not is_orphaned:
+        if clone.exists() and clone.is_dir():
             pruned = runner.run(
                 git_spec(
                     ["worktree", "prune", "--expire", "now"],
@@ -733,17 +686,10 @@ def ensure_worktree(
 ) -> Path:
     """Ensure a worktree for *branch*.
 
-    When ``reset_to_base`` is True (issue_to_pr re-implement path):
-
-    * KEEP any staged, unstaged, or untracked real implementation change
-      (timeout leftover), regardless of published/behind history. Also keep an
-      unpublished corner that is ahead of and contains ``origin/<base>``.
-    * RESET (``-B`` from ``origin/<base>`` + best-effort remote delete) when
-      ``origin/<branch>`` exists — including a closed CONFLICTING tip that
-      matches HEAD. Replaying those commits just republishes the same dirty
-      PR. Also reset when ahead is 0 and the tree is clean, or when ahead of
-      base and behind ``origin/<branch>`` (NFF reuse). Never force-push.
-    * Fail closed if ahead cannot be measured. Do not ``rm -rf``.
+    Reset only a clean corner whose commits are already on origin/<base>.
+    Preserve real uncommitted content and any commits ahead of base, even if
+    main or the branch remote has advanced. Age/divergence is not delivery.
+    Unknown ahead state fails closed. Never force-push.
     """
     worktree = worktree_dir(config, repo, branch)
     if not live:
@@ -793,23 +739,10 @@ def ensure_worktree(
                 # staged, unstaged, or untracked implementation changes.
                 return worktree
             if ahead > 0:
-                behind = _behind_own_remote(runner, worktree, clone, branch)
-                if behind is None:
-                    # Never pushed. KEEP only when the leftover is already
-                    # on current origin/<base>. Stale unpublished commits
-                    # (behind main) are a rebase_conflict loop waiting to
-                    # happen — RESET and re-implement.
-                    behind_main = _rev_count(
-                        runner, worktree, f"HEAD..origin/{base}"
-                    )
-                    if behind_main is None:
-                        raise RuntimeError(
-                            f"cannot measure behind vs origin/{base}"
-                        )
-                    if behind_main == 0:
-                        return worktree
-                # origin/<branch> exists, or unpublished-but-stale vs main.
-                # Fall through and recreate from origin/<base>.
+                # Divergence, a closed PR, or a newer remote branch does not
+                # prove these commits are disposable. Resume existing work;
+                # integration/rebase remains the delivery graph's job.
+                return worktree
             removed = remove_worktree(
                 runner,
                 clone,

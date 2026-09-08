@@ -202,8 +202,7 @@ def test_reset_to_base_keeps_unpublished_ahead(tmp_path):
     assert any(call[1:4] == ["rev-list", "--count", "origin/main..HEAD"] for call in runner.calls)
 
 
-def test_reset_to_base_rewrites_unpublished_behind_main(tmp_path):
-    """rebase_conflict leftover: never pushed, but origin/main moved → RESET."""
+def test_reset_to_base_preserves_unpublished_behind_main(tmp_path):
     branch = "ai/fix/142-prompt"
     cfg, repo, wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="5")
@@ -213,12 +212,11 @@ def test_reset_to_base_rewrites_unpublished_behind_main(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
-    assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
 
 
-def test_reset_to_base_rewrites_published_even_if_current(tmp_path):
-    """Closed CONFLICTING tip matches HEAD: KEEP would republish the same dirty PR."""
+def test_reset_to_base_preserves_published_even_if_current(tmp_path):
     branch = "ai/fix/142-prompt"
     cfg, repo, wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="8")
@@ -227,9 +225,9 @@ def test_reset_to_base_rewrites_published_even_if_current(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
-    assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
-    assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
+    assert not any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
 
 def test_reset_to_base_rewrites_when_ahead_zero(tmp_path):
@@ -245,8 +243,7 @@ def test_reset_to_base_rewrites_when_ahead_zero(tmp_path):
     assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
 
-def test_reset_to_base_rewrites_when_ahead_but_behind_own_remote(tmp_path):
-    """NFF reuse: unpublished vs main AND behind origin/<branch> → new corner."""
+def test_reset_to_base_preserves_when_ahead_but_behind_own_remote(tmp_path):
     branch = "ai/fix/86-nff"
     cfg, repo, wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="11")
@@ -255,9 +252,9 @@ def test_reset_to_base_rewrites_when_ahead_but_behind_own_remote(tmp_path):
         runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
     )
     assert path == wt
-    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
-    assert any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
-    assert any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "add"] and "-B" in call for call in runner.calls)
+    assert not any(call[1:4] == ["push", "origin", "--delete"] for call in runner.calls)
 
 
 def test_reset_to_base_keeps_dirty_real_tree_when_unpublished_behind_main(tmp_path):
@@ -307,7 +304,7 @@ def test_reset_to_base_keeps_dirty_real_tree(tmp_path):
     assert not any(call[1] == "add" for call in runner.calls)
 
 
-def test_reset_to_base_resets_plan_only_uncommitted_evidence(tmp_path):
+def test_reset_to_base_preserves_plan_only_uncommitted_evidence(tmp_path):
     branch = "ai/fix/142-prompt"
     cfg, repo, wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="8")
@@ -319,7 +316,7 @@ def test_reset_to_base_resets_plan_only_uncommitted_evidence(tmp_path):
     )
 
     assert path == wt
-    assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
+    assert not any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
 
 
 def test_reset_to_base_fails_closed_when_uncommitted_state_is_unreadable(tmp_path):
@@ -354,8 +351,8 @@ def test_reset_to_base_fail_closed_when_ahead_unreadable(tmp_path):
     assert not any(call[1] == "add" for call in runner.calls)
 
 
-def test_reset_to_base_fail_closed_when_branch_fetch_flakes(tmp_path):
-    """Network flake is not 'unpublished' — do not KEEP a maybe-published tip."""
+def test_reset_to_base_keeps_ahead_tip_without_branch_fetch(tmp_path):
+    """Keeping ahead work needs no branch fetch or destructive reset."""
     branch = "ai/fix/142-prompt"
     cfg, repo, _wt = _cfg_repo(tmp_path, branch)
     runner = _ResetRunner(ahead="8")
@@ -372,10 +369,9 @@ def test_reset_to_base_fail_closed_when_branch_fetch_flakes(tmp_path):
         return orig_run(spec, live=live)
 
     runner.run = run  # type: ignore[method-assign]
-    with pytest.raises(RuntimeError, match="origin/"):
-        ensure_worktree(
-            runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
-        )
+    assert ensure_worktree(
+        runner, cfg, repo, branch, live=True, base="main", reset_to_base=True
+    ) == _wt
     assert not any(call[1] == "remove" for call in runner.calls)
     assert not any(call[1] == "add" for call in runner.calls)
 
@@ -487,7 +483,7 @@ def test_remove_worktree_already_gone(tmp_path):
 
 
 
-def test_remove_worktree_reclaims_bytes_after_registry_prune(tmp_path):
+def test_remove_worktree_retains_snapshot_after_registry_prune(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
     corner = tmp_path / "corner"
@@ -499,11 +495,12 @@ def test_remove_worktree_reclaims_bytes_after_registry_prune(tmp_path):
 
     assert out["ok"] is True
     assert out["removed"] is True
-    assert out["reclaimed"] is True
+    assert out["reclaimed"] is False
     assert not corner.exists()
-    assert not (tmp_path / ".corner.lokay-preserved").exists()
     assert any(call[1:3] == ["worktree", "prune"] for call in runner.calls)
     assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
+    assert (Path(out["preserved_path"]) / "tracked.txt").read_text() == "preserve snapshot\n"
+
 
 def test_remove_worktree_uses_next_archive_name_without_overwriting_old_archive(tmp_path):
     clone = tmp_path / "clone"
@@ -519,11 +516,10 @@ def test_remove_worktree_uses_next_archive_name_without_overwriting_old_archive(
 
     assert out["ok"] is True
     assert out["removed"] is True
-    assert out["reclaimed"] is True
-    # Prior archive is untouched; this remove's archive is reclaimed.
+    assert out["reclaimed"] is False
     assert (old_archive / "valuable").read_text(encoding="utf-8") == "keep\n"
-    assert not (tmp_path / ".corner-2.lokay-preserved").exists()
     assert not corner.exists()
+    assert (Path(out["preserved_path"]) / "snapshot.txt").read_text() == "new snapshot\n"
 
 
 def test_remove_worktree_restores_path_when_registry_prune_fails(tmp_path):
@@ -855,7 +851,7 @@ def test_remove_registered_worktree_preserves_ignored_user_data(tmp_path):
     assert important.read_text(encoding="utf-8") == "do not delete\n"
 
 
-def test_remove_worktree_reclaims_uv_lock_only_dirt(tmp_path):
+def test_remove_worktree_retains_lock_dirt_without_remote_evidence(tmp_path):
     """uv.lock-only is not real uncommitted content."""
     import subprocess
 
@@ -889,14 +885,14 @@ def test_remove_worktree_reclaims_uv_lock_only_dirt(tmp_path):
         managed_root=managed,
     )
 
-    assert out["ok"] is True
-    assert out["removed"] is True
-    assert out["reclaimed"] is True
-    assert not corner.exists()
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert "cannot prove" in out["error"]
+    assert corner.exists()
     assert not corner.with_name(f".{corner.name}.lokay-preserved").exists()
 
 
-def test_remove_worktree_reclaims_after_late_content_during_prune(tmp_path):
+def test_remove_worktree_preserves_late_content_during_prune(tmp_path):
     clone = tmp_path / "clone"
     clone.mkdir()
     managed = tmp_path / "managed"
@@ -934,9 +930,9 @@ def test_remove_worktree_reclaims_after_late_content_during_prune(tmp_path):
 
     assert out["ok"] is True
     assert out["removed"] is True
-    assert out["reclaimed"] is True
-    assert not (managed / ".corner.lokay-preserved").exists()
+    assert out["reclaimed"] is False
     assert not any(call[1:3] == ["worktree", "remove"] for call in runner.calls)
+    assert (Path(out["preserved_path"]) / "late.txt").read_text() == "late work\n"
 
 
 def test_remove_worktree_rejects_ancestor_symlink_alias_without_git(tmp_path):
@@ -979,7 +975,7 @@ def test_list_uncommitted_paths_fails_closed_on_warning_only_ignored_query(tmp_p
         list_uncommitted_paths(WarningIgnored(), tmp_path)
 
 
-def test_remove_worktree_native_late_ignored_file_is_reclaimed(tmp_path):
+def test_remove_worktree_native_missing_remote_proof_blocks_prune(tmp_path):
     import subprocess
 
     clone = tmp_path / "clone"
@@ -1013,19 +1009,11 @@ def test_remove_worktree_native_late_ignored_file_is_reclaimed(tmp_path):
 
     out = remove_worktree(Inject(), clone, corner, managed_root=managed)
 
-    assert out["ok"] is True
-    assert out["removed"] is True
-    assert out["reclaimed"] is True
-    assert not corner.exists()
+    assert out["ok"] is False
+    assert out["removed"] is False
+    assert "cannot prove" in out["error"]
+    assert corner.exists()
     assert not corner.with_name(f".{corner.name}.lokay-preserved").exists()
-    listed = subprocess.run(
-        ["git", "worktree", "list", "--porcelain"],
-        cwd=clone,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
-    assert str(corner.resolve()) not in listed
 
 
 def test_iter_worktrees_excludes_only_preserved_namespace(tmp_path):
