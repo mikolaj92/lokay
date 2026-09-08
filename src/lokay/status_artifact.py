@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import uuid
 from typing import Any
 import json
 import math
@@ -11,6 +12,17 @@ MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024
 
 class SnapshotUnavailable(ValueError):
     """No usable dashboard artifact is available."""
+
+
+def write_snapshot(path: Path, data: dict[str, Any]) -> Path:
+    """Atomically write a validated dashboard snapshot JSON."""
+    target = Path(path).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.tmp.{uuid.uuid4().hex[:8]}")
+    payload = json.dumps(data, indent=2, ensure_ascii=False)
+    tmp.write_text(payload, encoding="utf-8")
+    tmp.replace(target)
+    return target
 
 
 def read_snapshot(path: Path, *, max_age: float = 120, now: datetime | None = None) -> dict[str, Any]:

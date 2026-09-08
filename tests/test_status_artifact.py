@@ -76,3 +76,14 @@ def test_nested_template_inputs_are_validated(tmp_path, changes):
     path.write_text(json.dumps(data))
     with pytest.raises(status_artifact.SnapshotUnavailable):
         status_artifact.read_snapshot(path)
+
+
+def test_write_snapshot_is_atomic(tmp_path):
+    now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    data = snapshot(now)
+    target = tmp_path / "published.json"
+    written = status_artifact.write_snapshot(target, data)
+    assert written == target
+    assert target.is_file()
+    read_back = status_artifact.read_snapshot(target, now=now)
+    assert read_back["status"] == data["status"]

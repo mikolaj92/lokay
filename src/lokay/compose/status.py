@@ -30,7 +30,15 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--full", action="store_true")
     mode.add_argument("--human", action="store_true")
     p.add_argument("--preflight", action="store_true")
+    p.add_argument("--publish-snapshot", type=Path, help="Atomically write dashboard snapshot JSON")
     args = p.parse_args(argv)
+    if args.publish_snapshot:
+        from lokay.status_dashboard import dashboard_snapshot
+        from lokay.status_artifact import write_snapshot
+
+        data = dashboard_snapshot(args.config)
+        published = write_snapshot(args.publish_snapshot, data)
+        return emit_exit({"ok": True, "published": str(published), "generated_at": data.get("generated_at")})
     return emit_exit(
         compose_status(
             config_path=args.config,
