@@ -41,57 +41,77 @@ def _semantic_traces(value: Any):
             yield from _semantic_traces(child)
 
 
+class _Window:
+    """Accumulate one time window without retaining source events."""
+
+    def __init__(self, since: datetime) -> None:
+        self.since = since
+        self.by_repo: dict[str, Counter[str]] = defaultdict(Counter)
+        self.semantic: dict[str, Counter[str]] = defaultdict(Counter)
+        self.durations: dict[str, list[float]] = defaultdict(list)
+        self.events = 0
+
+    def add(self, row: dict[str, Any], traces: list[dict[str, Any]]) -> None:
+        self.events += 1
+        repo = str(row.get("repo") or "unknown")
+        kind = str(row.get("kind") or "unknown")
+        if kind == "issue_to_pr":
+            self.by_repo[repo]["starts"] += 1
+            if row.get("pr"):
+                self.by_repo[repo]["prs"] += 1
+            if not row.get("ok", False):
+                self.by_repo[repo]["failures"] += 1
+            reason = str(row.get("reason") or (row.get("error") or {}).get("code") or "")
+            if reason:
+                self.by_repo[repo][reason] += 1
+        if kind == "pr_triage" and row.get("ok") and row.get("merged"):
+            self.by_repo[repo]["merges"] += 1
+        for trace in traces:
+            skind = str(trace.get("kind") or "unknown")
+            self.semantic[skind][f"{trace.get('source', 'unknown')}:{trace.get('status', 'unknown')}"] += 1
+            if isinstance(trace.get("duration_ms"), (int, float)):
+                self.durations[skind].append(float(trace["duration_ms"]))
+
+    def report(self, path: Path) -> dict[str, Any]:
+        return {
+            "since": self.since.isoformat(),
+            "state_path": str(path),
+            "events": self.events,
+            "by_repo": {repo: dict(counts) for repo, counts in sorted(self.by_repo.items())},
+            "semantic": {
+                kind: {
+                    "outcomes": dict(counts),
+                    "average_duration_ms": round(sum(self.durations[kind]) / len(self.durations[kind])) if self.durations[kind] else 0,
+                }
+                for kind, counts in sorted(self.semantic.items())
+            },
+            "note": "Local failures/traces come from state.jsonl; GitHub is the production source for merged delivery.",
+        }
+
+
+def build_reports(path: Path, *, windows: dict[str, datetime]) -> dict[str, dict[str, Any]]:
+    """Read the complete history once for all windows; timestamps need not be ordered."""
+    accumulators = {label: _Window(since) for label, since in windows.items()}
+    if path.is_file() and accumulators:
+        with path.open(encoding="utf-8", errors="ignore") as lines:
+            for line in lines:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                stamp = _ts(row.get("ts"))
+                if stamp is None:
+                    continue
+                matching = [window for window in accumulators.values() if stamp >= window.since]
+                if matching:
+                    traces = list(_semantic_traces(row))
+                    for window in matching:
+                        window.add(row, traces)
+    return {label: window.report(path) for label, window in accumulators.items()}
+
+
 def build_report(path: Path, *, since: datetime) -> dict[str, Any]:
-    by_repo: dict[str, Counter[str]] = defaultdict(Counter)
-    semantic: dict[str, Counter[str]] = defaultdict(Counter)
-    durations: dict[str, list[float]] = defaultdict(list)
-    events = 0
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            stamp = _ts(row.get("ts"))
-            if stamp is None or stamp < since:
-                continue
-            events += 1
-            repo = str(row.get("repo") or "unknown")
-            kind = str(row.get("kind") or "unknown")
-            if kind == "issue_to_pr":
-                by_repo[repo]["starts"] += 1
-                if row.get("pr"):
-                    by_repo[repo]["prs"] += 1
-                if not row.get("ok", False):
-                    by_repo[repo]["failures"] += 1
-                reason = str(row.get("reason") or (row.get("error") or {}).get("code") or "")
-                if reason:
-                    by_repo[repo][reason] += 1
-            # A successful pr_triage merge is durable local delivery evidence.
-            if kind == "pr_triage" and row.get("ok") and row.get("merged"):
-                by_repo[repo]["merges"] += 1
-            # Factory actions (queue/intake) are not appended individually;
-            # their durable pass workspace is summarized in state elsewhere.
-            # Issue-to-PR embeds localize traces inside the Fala result.
-            for trace in _semantic_traces(row):
-                skind = str(trace.get("kind") or "unknown")
-                semantic[skind][f"{trace.get('source', 'unknown')}:{trace.get('status', 'unknown')}"] += 1
-                if isinstance(trace.get("duration_ms"), (int, float)):
-                    durations[skind].append(float(trace["duration_ms"]))
-    return {
-        "since": since.isoformat(),
-        "state_path": str(path),
-        "events": events,
-        "by_repo": {repo: dict(counts) for repo, counts in sorted(by_repo.items())},
-        "semantic": {
-            kind: {
-                "outcomes": dict(counts),
-                "average_duration_ms": round(sum(durations[kind]) / len(durations[kind])) if durations[kind] else 0,
-            }
-            for kind, counts in sorted(semantic.items())
-        },
-        "note": "Local failures/traces come from state.jsonl; GitHub is the production source for merged delivery.",
-    }
+    return build_reports(path, windows={"single": since})["single"]
 
 
 def main(argv: list[str] | None = None) -> int:

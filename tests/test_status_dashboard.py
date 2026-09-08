@@ -137,3 +137,29 @@ state:
     assert data["health"]["code"] == "waiting"
     assert data["health"]["label"] != "Lokay pracuje"
     assert data["health"]["label"] == "Oczekiwanie na zewnętrzny wynik"
+
+
+def test_dashboard_yield_reads_history_once(tmp_path, monkeypatch):
+    config = _config(tmp_path)
+    monkeypatch.setenv("LOKAY_OFFLINE", "1")
+    from lokay import status_dashboard
+
+    # Keep the native status path out of this yield-only read-count assertion.
+    status = status_dashboard.compose_status(config_path=str(config), survey=False)
+    monkeypatch.setattr(status_dashboard, "compose_status", lambda **kwargs: status)
+    history = tmp_path / "state.jsonl"
+    original_open = Path.open
+    reads = []
+
+    def count_open(self, *args, **kwargs):
+        if self == history:
+            reads.append(self)
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", count_open)
+    data = dashboard_snapshot(str(config))
+
+    assert reads == [history]
+    for label in ("1h", "24h", "7d"):
+        assert data["throughput"][label]["starts"] == 1
+        assert data["throughput"][label]["merges"] == 1

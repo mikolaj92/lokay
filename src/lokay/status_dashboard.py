@@ -9,7 +9,7 @@ from typing import Any
 from lokay.compose.status import compose_status
 from lokay.config import load_config
 from lokay.pass_history import read_pass_history
-from lokay.proc.yield_report import build_report
+from lokay.proc.yield_report import build_reports
 
 
 def _counts(report: dict[str, Any]) -> dict[str, int]:
@@ -72,8 +72,10 @@ def dashboard_snapshot(config_path: str | None, *, history_limit: int = 50) -> d
         ("24h", timedelta(hours=24)),
         ("7d", timedelta(days=7)),
     )
-    for label, delta in windows_spec:
-        report = build_report(cfg.state_path, since=now - delta)
+    reports = build_reports(
+        cfg.state_path, windows={label: now - delta for label, delta in windows_spec}
+    )
+    for label, report in reports.items():
         windows[label] = {**_counts(report), "events": int(report.get("events") or 0)}
     catalog = [
         {
