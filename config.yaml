@@ -3,6 +3,11 @@
 
 mode: live
 
+repos:
+  - name: mikolaj92/Temida
+    clone_path: ~/Developer/OSS/Temida
+    enabled: false
+
 repos_file: repos.mikolaj92.yaml
 
 github:

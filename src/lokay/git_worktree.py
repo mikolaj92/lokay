@@ -296,6 +296,23 @@ def worktree_owned_by_clone(
     return _clone_lists_worktree(runner, clone, worktree)
 
 
+def _is_orphaned_git_worktree(worktree: Path, clone: Path) -> bool:
+    """Return True if worktree has a missing/broken gitdir pointer or non-existent git target."""
+    git_file = worktree / ".git"
+    if not git_file.exists():
+        return True
+    if git_file.is_file():
+        try:
+            content = git_file.read_text(encoding="utf-8").strip()
+            if content.startswith("gitdir: "):
+                target = Path(content.split("gitdir: ", 1)[1].strip())
+                if not target.exists():
+                    return True
+        except OSError:
+            return True
+    return False
+
+
 def remove_worktree(
     runner: Runner,
     clone: Path,
@@ -407,26 +424,33 @@ def remove_worktree(
                 "error": "worktree path changed before preservation",
             }
         owned = _clone_lists_worktree(runner, clone, worktree)
+        is_orphaned = False
         if owned is not True:
-            return {
-                "ok": False,
-                "removed": False,
-                "error": (
-                    "cannot confirm worktree ownership before preservation"
-                    if owned is None
-                    else "worktree is not owned by canonical clone"
-                ),
-            }
+            if owned is False and _is_orphaned_git_worktree(worktree, clone):
+                is_orphaned = True
+            else:
+                return {
+                    "ok": False,
+                    "removed": False,
+                    "error": (
+                        "cannot confirm worktree ownership before preservation"
+                        if owned is None
+                        else "worktree is not owned by canonical clone"
+                    ),
+                }
         try:
             uncommitted = classify_changed_paths(
                 list_uncommitted_paths(runner, worktree)
             )
         except Exception as exc:  # noqa: BLE001
-            return {
-                "ok": False,
-                "removed": False,
-                "error": f"cannot inspect worktree before preservation: {exc}",
-            }
+            if is_orphaned:
+                uncommitted = "clean"
+            else:
+                return {
+                    "ok": False,
+                    "removed": False,
+                    "error": f"cannot inspect worktree before preservation: {exc}",
+                }
         if uncommitted == "real":
             return {
                 "ok": False,

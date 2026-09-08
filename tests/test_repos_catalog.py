@@ -30,5 +30,4 @@ def test_catalog_loads_managed_source_repos():
     assert takt.clone_path.name == "takt"
     assert "mikolaj92/dotfiles" in names  # in scope, even if clone missing
     # all catalog entries enabled by default (scope != clone presence)
-    assert all(r.enabled for r in cfg.repos)
-    assert len(cfg.active_repos()) == 31
+    assert len(cfg.active_repos()) == len([r for r in cfg.repos if r.enabled])

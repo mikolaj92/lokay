@@ -105,9 +105,17 @@ class Config:
         return self.mode == "live"
 
 
+    disabled_repos: list[str] = field(default_factory=list)
+
     def active_repos(self) -> list[RepoConfig]:
         """Enabled repos only (lokay / tick iterate these)."""
-        return [r for r in self.repos if r.enabled]
+        disabled_env = {
+            s.strip()
+            for s in os.environ.get("LOKAY_DISABLED_REPOS", "").split(",")
+            if s.strip()
+        }
+        disabled_set = set(self.disabled_repos) | disabled_env
+        return [r for r in self.repos if r.enabled and r.name not in disabled_set]
 
     def review_style_for(self, repo: str) -> str:
         return next(
@@ -361,6 +369,7 @@ def load_config(path: str | Path | None = None) -> Config:
         branch_prefix=str(gh.get("branch_prefix", "ai/fix")),
         pr_labels=list(gh.get("pr_labels") or ["ai:generated", "ai:pr-opened"]),
         repos=repos,
+        disabled_repos=[str(x).strip() for x in list(data.get("disabled_repos") or []) if str(x).strip()],
         executor_enabled=_yaml_bool(
             ex.get("enabled", False), False, field="executor.enabled"
         ),
