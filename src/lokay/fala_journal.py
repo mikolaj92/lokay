@@ -81,14 +81,19 @@ def maintain_lokay_fala_journals(
         result = _maintain_sqlite(db, min_bytes=ceiling, keep=retained)
         if result is not None:
             maintained.append(result)
+    lokay_home = (home or Path.home()) / ".lokay"
     pruned = prune_stale_fala_journals(root)
+    pruned_logs = prune_stale_logs(lokay_home / "logs")
+    pruned_tmp = prune_stale_tmp_dirs(lokay_home)
     from lokay.state_compact import compact_state
-    state_path = (home or Path.home()) / ".lokay" / "state.jsonl"
+    state_path = lokay_home / "state.jsonl"
     compacted = compact_state(state_path)
     return {
         "ok": True,
         "maintained": maintained,
         "pruned_journals": pruned,
+        "pruned_logs": pruned_logs,
+        "pruned_tmp": pruned_tmp,
         "compacted_state": compacted,
     }
 
@@ -113,6 +118,66 @@ def prune_stale_fala_journals(
         for child in children:
             if not child.is_dir() or child.is_symlink():
                 continue
+            try:
+                mtime = child.stat().st_mtime
+            except OSError:
+                continue
+            if mtime < cutoff:
+                s = sum(
+                    f.stat().st_size
+                    for f in child.rglob("*")
+                    if f.is_file() and not f.is_symlink()
+                )
+                shutil.rmtree(child, ignore_errors=True)
+                pruned_count += 1
+                freed_bytes += s
+    return {"pruned_count": pruned_count, "freed_bytes": freed_bytes}
+
+
+def prune_stale_logs(
+    logs_dir: Path, *, max_age_days: float = 7.0, now: float | None = None
+) -> dict[str, Any]:
+    """Prune dated log files in logs_dir older than max_age_days."""
+    if not logs_dir.is_dir():
+        return {"pruned_count": 0, "freed_bytes": 0}
+    cutoff = (now if now is not None else time.time()) - (max_age_days * 86400)
+    pruned_count = 0
+    freed_bytes = 0
+    for child in logs_dir.glob("lokay-20*.log"):
+        if not child.is_file() or child.is_symlink():
+            continue
+        try:
+            mtime = child.stat().st_mtime
+            s = child.stat().st_size
+        except OSError:
+            continue
+        if mtime < cutoff:
+            try:
+                os.remove(child)
+                pruned_count += 1
+                freed_bytes += s
+            except OSError:
+                pass
+    return {"pruned_count": pruned_count, "freed_bytes": freed_bytes}
+
+
+def prune_stale_tmp_dirs(
+    lokay_home: Path, *, max_age_days: float = 3.0, now: float | None = None
+) -> dict[str, Any]:
+    """Prune leftover tmp/backup directories under ~/.lokay older than max_age_days."""
+    if not lokay_home.is_dir():
+        return {"pruned_count": 0, "freed_bytes": 0}
+    cutoff = (now if now is not None else time.time()) - (max_age_days * 86400)
+    pruned_count = 0
+    freed_bytes = 0
+    for child in lokay_home.iterdir():
+        if not child.is_dir() or child.is_symlink():
+            continue
+        if (
+            child.name.startswith("tmp_")
+            or child.name.startswith("deploy-backup")
+            or child.name == "fala-cut"
+        ):
             try:
                 mtime = child.stat().st_mtime
             except OSError:

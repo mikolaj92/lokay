@@ -52,6 +52,7 @@ if ! mkdir -p "${LOG_DIR}"; then
   bootstrap_incident "log_directory"
   exit 73
 fi
+find "${LOG_DIR}" -name "lokay-20*.log" -type f -mtime +7 -delete 2>/dev/null || true
 if ! command -v uv >/dev/null 2>&1; then
   bootstrap_incident "uv_unavailable"
   exit 69

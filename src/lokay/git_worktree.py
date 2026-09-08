@@ -253,6 +253,8 @@ def _clone_lists_worktree(runner: Runner, clone: Path, worktree: Path) -> bool |
     unquoted; require complete records and at least the clone's main worktree
     rather than treating empty/truncated stdout as confirmed absence.
     """
+    if not clone.exists() or not clone.is_dir():
+        return False
     listed = runner.run(
         git_spec(["worktree", "list", "--porcelain", "-z"], cwd=clone, timeout_seconds=60),
         live=True,
@@ -298,6 +300,8 @@ def worktree_owned_by_clone(
 
 def _is_orphaned_git_worktree(worktree: Path, clone: Path) -> bool:
     """Return True if worktree has a missing/broken gitdir pointer or non-existent git target."""
+    if not clone.exists():
+        return True
     git_file = worktree / ".git"
     if not git_file.exists():
         return True
@@ -552,38 +556,39 @@ def remove_worktree(
                 "preserved_path": str(archive),
                 "error": "worktree path changed during preservation",
             }
-        pruned = runner.run(
-            git_spec(
-                ["worktree", "prune", "--expire", "now"],
-                cwd=clone,
-                timeout_seconds=60,
-            ),
-            live=True,
-        )
-        if (
-            pruned.returncode != 0
-            or (pruned.stderr or "").strip()
-            or (pruned.stdout or "").strip()
-        ):
-            detail = (pruned.stderr or pruned.stdout or "").strip()
-            return {
-                "ok": False,
-                "removed": False,
-                "preserved_path": str(archive),
-                "error": detail or "git refused worktree registry prune",
-            }
-        still_owned = _clone_lists_worktree(runner, clone, worktree)
-        if still_owned is not False:
-            return {
-                "ok": False,
-                "removed": False,
-                "preserved_path": str(archive),
-                "error": (
-                    "cannot confirm worktree ownership after registry prune"
-                    if still_owned is None
-                    else "git still owns worktree after registry prune"
+        if clone.exists() and clone.is_dir() and not is_orphaned:
+            pruned = runner.run(
+                git_spec(
+                    ["worktree", "prune", "--expire", "now"],
+                    cwd=clone,
+                    timeout_seconds=60,
                 ),
-            }
+                live=True,
+            )
+            if (
+                pruned.returncode != 0
+                or (pruned.stderr or "").strip()
+                or (pruned.stdout or "").strip()
+            ):
+                detail = (pruned.stderr or pruned.stdout or "").strip()
+                return {
+                    "ok": False,
+                    "removed": False,
+                    "preserved_path": str(archive),
+                    "error": detail or "git refused worktree registry prune",
+                }
+            still_owned = _clone_lists_worktree(runner, clone, worktree)
+            if still_owned is not False:
+                return {
+                    "ok": False,
+                    "removed": False,
+                    "preserved_path": str(archive),
+                    "error": (
+                        "cannot confirm worktree ownership after registry prune"
+                        if still_owned is None
+                        else "git still owns worktree after registry prune"
+                    ),
+                }
         reclaimed = reclaim_preserved_archive(archive, managed_root=managed_root)
         if reclaimed.get("ok") and reclaimed.get("reclaimed"):
             return {
