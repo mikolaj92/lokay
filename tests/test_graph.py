@@ -11,6 +11,7 @@ from lokay.graph_run import (
 )
 
 FACTORY_CHILDREN = (
+    "harvest_factory_children",
     "host_ff",
     "factory_begin_host_gate",
     "factory_begin",

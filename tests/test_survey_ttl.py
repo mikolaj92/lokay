@@ -274,7 +274,7 @@ def test_lokay_survey_probe_human_stops_are_empty() -> None:
             return _gh_ok(
                 '[{"number":1,"state":"OPEN","labels":[{"name":"ai:blocked"}]},'
                 '{"number":2,"state":"OPEN","labels":[{"name":"ai:needs-feedback"}]},'
-                '{"number":3,"state":"OPEN","labels":[{"name":"frozen"}]}]'
+                '{"number":3,"state":"OPEN","labels":[{"name":"ai:tracker"}]}]'
             )
         return _gh_ok("[]")
 

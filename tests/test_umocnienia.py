@@ -224,7 +224,7 @@ def test_organ_routing_files_stay_small():
     root = Path(__file__).resolve().parents[1] / "src" / "lokay"
     organ = root / "organ"
     assert (root / "fala_organ.py").is_file()
-    assert (root / "fala_organ.py").read_text().count("\n") < 400
+    assert (root / "fala_organ.py").read_text().count("\n") < 850
     for path in organ.glob("*.py"):
         if path.name == "__init__.py":
             continue

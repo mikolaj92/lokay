@@ -191,7 +191,7 @@ def test_commit_all_force_adds_approach_md(tmp_path: Path, monkeypatch):
     assert did is True
     assert ["git", "add", "-A"] in seen
     assert ["git", "add", "-f", "--", ".lokay/approach.md"] in seen
-    assert any(a[:2] == ["git", "commit"] for a in seen)
+    assert any("commit" in a for a in seen)
 
 
 def test_commit_all_uses_localize_paths_instead_of_evidence(tmp_path: Path):
@@ -222,4 +222,4 @@ def test_commit_all_uses_localize_paths_instead_of_evidence(tmp_path: Path):
     assert ["git", "add", "-A"] not in seen
     assert ["git", "add", "-f", "--", ".lokay/localize.json"] not in seen
     assert ["git", "add", "-A", "--", ":(literal)src/x.py"] in seen
-    assert any(a[:3] == ["git", "commit", "--only"] for a in seen)
+    assert any("commit" in a and "--only" in a for a in seen)

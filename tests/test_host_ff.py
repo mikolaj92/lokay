@@ -393,7 +393,8 @@ def test_factory_pass_starts_with_begin_then_product_children():
     desc = describe_package()
     path = next(p for p in desc["paths"] if p["id"] == "factory_pass")
     ids = [n["id"] for n in path["nodes"]]
-    assert ids[:4] == [
+    assert ids[:5] == [
+        "harvest_factory_children",
         "host_ff",
         "factory_begin_host_gate",
         "factory_begin",

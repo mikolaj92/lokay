@@ -58,7 +58,7 @@ def test_labels_are_not_a_gate():
     out = select(
         _listed(
             {"repo": "o/r", "issue": 7, "title": "plain", "labels": []},
-            {"repo": "o/r", "issue": 8, "title": "ready", "labels": ["work:ready", "ai:ready"]},
+            {"repo": "o/r", "issue": 8, "title": "second plain", "labels": []},
         )
     )
     assert out["route"] == "issue"

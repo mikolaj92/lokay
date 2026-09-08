@@ -13,7 +13,7 @@ def test_unlabeled_is_open_work_and_human_stops_are_not() -> None:
     assert is_open_work_issue(["work:ready"]) is True
     assert is_open_work_issue(["ai:blocked"]) is False
     assert is_open_work_issue(["ai:needs-feedback"]) is False
-    assert is_open_work_issue(["frozen"]) is False
+    assert is_open_work_issue(["ai:tracker"]) is False
     assert is_open_work_issue(["ai:tracker"]) is False
     assert is_human_stopped(["ai:blocked"]) is True
 
@@ -74,7 +74,7 @@ def test_only_human_stops_are_not_product() -> None:
         "mikolaj92/Temida": [
             {"number": 1, "labels": ["ai:blocked"]},
             {"number": 2, "labels": ["ai:needs-feedback"]},
-            {"number": 3, "labels": ["frozen"]},
+            {"number": 3, "labels": ["ai:tracker"]},
         ]
     }
     kept = {

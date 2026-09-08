@@ -346,6 +346,8 @@ def test_pr_merge_skipped_suite_still_merges(tmp_path, monkeypatch):
 
     def fake_run(main, argv):
         called.append((main, argv))
+        if main.__module__ == "lokay.proc.probe_pr_state":
+            return {"ok": True, "merged": False, "state": "OPEN"}
         return {"ok": True, "merged": True}
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)

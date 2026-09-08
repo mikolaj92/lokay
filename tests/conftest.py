@@ -14,14 +14,11 @@ _LOKAY_LEASE_KEYS = (
 
 
 @pytest.fixture(autouse=True)
-def _isolate_lokay_health_lease() -> None:
+def _isolate_lokay_health_lease(monkeypatch: pytest.MonkeyPatch) -> None:
     # Inherited lokay lease makes factory_begin skip patched run_preflight
     # and fail-close against the host lock (health=preflight_failed).
     for key in _LOKAY_LEASE_KEYS:
-        os.environ.pop(key, None)
-    yield
-    for key in _LOKAY_LEASE_KEYS:
-        os.environ.pop(key, None)
+        monkeypatch.delenv(key, raising=False)
 
 
 

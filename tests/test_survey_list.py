@@ -159,7 +159,7 @@ def test_list_ready_keeps_unlabeled_and_excludes_human_stops(tmp_path):
             _issue_row(1),
             _issue_row(2, "ai:blocked"),
             _issue_row(3, "ai:needs-feedback"),
-            _issue_row(4, "frozen"),
+            _issue_row(4, "ai:tracker"),
             _issue_row(5, "ai:tracker"),
             _issue_row(6, "ai:ready"),
         ]

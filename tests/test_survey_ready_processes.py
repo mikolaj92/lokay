@@ -77,7 +77,7 @@ def test_classify_excludes_human_stops_and_keeps_unlabeled(tmp_path):
                 {"number": 1, "labels": []},
                 {"number": 2, "labels": ["ai:blocked"]},
                 {"number": 3, "labels": ["ai:needs-feedback"]},
-                {"number": 4, "labels": ["frozen"]},
+                {"number": 4, "labels": ["ai:tracker"]},
                 {"number": 5, "labels": ["ai:ready"]},
             ],
         },
