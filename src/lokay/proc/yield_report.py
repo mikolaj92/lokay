@@ -41,56 +41,43 @@ def _semantic_traces(value: Any):
             yield from _semantic_traces(child)
 
 
-def build_report(path: Path, *, since: datetime, chunk_size: int = 1024 * 1024) -> dict[str, Any]:
+def build_report(path: Path, *, since: datetime) -> dict[str, Any]:
     by_repo: dict[str, Counter[str]] = defaultdict(Counter)
     semantic: dict[str, Counter[str]] = defaultdict(Counter)
     durations: dict[str, list[float]] = defaultdict(list)
     events = 0
     if path.is_file():
-        file_size = path.stat().st_size
-        curr_pos = file_size
-        remainder = b""
-        stop = False
-        with open(path, "rb") as f:
-            while curr_pos > 0 and not stop:
-                read_size = min(chunk_size, curr_pos)
-                curr_pos -= read_size
-                f.seek(curr_pos)
-                chunk = f.read(read_size) + remainder
-                lines = chunk.split(b"\n")
-                remainder = lines[0]
-                for line_bytes in reversed(lines[1:]):
-                    if not line_bytes.strip():
-                        continue
-                    try:
-                        row = json.loads(line_bytes.decode("utf-8", errors="ignore"))
-                    except json.JSONDecodeError:
-                        continue
-                    stamp = _ts(row.get("ts"))
-                    if stamp is not None and stamp < since:
-                        stop = True
-                        break
-                    if stamp is None or stamp < since:
-                        continue
-                    events += 1
-                    repo = str(row.get("repo") or "unknown")
-                    kind = str(row.get("kind") or "unknown")
-                    if kind == "issue_to_pr":
-                        by_repo[repo]["starts"] += 1
-                        if row.get("pr"):
-                            by_repo[repo]["prs"] += 1
-                        if not row.get("ok", False):
-                            by_repo[repo]["failures"] += 1
-                        reason = str(row.get("reason") or (row.get("error") or {}).get("code") or "")
-                        if reason:
-                            by_repo[repo][reason] += 1
-                    if kind == "pr_triage" and row.get("ok") and row.get("merged"):
-                        by_repo[repo]["merges"] += 1
-                    for trace in _semantic_traces(row):
-                        skind = str(trace.get("kind") or "unknown")
-                        semantic[skind][f"{trace.get('source', 'unknown')}:{trace.get('status', 'unknown')}"] += 1
-                        if isinstance(trace.get("duration_ms"), (int, float)):
-                            durations[skind].append(float(trace["duration_ms"]))
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            stamp = _ts(row.get("ts"))
+            if stamp is None or stamp < since:
+                continue
+            events += 1
+            repo = str(row.get("repo") or "unknown")
+            kind = str(row.get("kind") or "unknown")
+            if kind == "issue_to_pr":
+                by_repo[repo]["starts"] += 1
+                if row.get("pr"):
+                    by_repo[repo]["prs"] += 1
+                if not row.get("ok", False):
+                    by_repo[repo]["failures"] += 1
+                reason = str(row.get("reason") or (row.get("error") or {}).get("code") or "")
+                if reason:
+                    by_repo[repo][reason] += 1
+            # A successful pr_triage merge is durable local delivery evidence.
+            if kind == "pr_triage" and row.get("ok") and row.get("merged"):
+                by_repo[repo]["merges"] += 1
+            # Factory actions (queue/intake) are not appended individually;
+            # their durable pass workspace is summarized in state elsewhere.
+            # Issue-to-PR embeds localize traces inside the Fala result.
+            for trace in _semantic_traces(row):
+                skind = str(trace.get("kind") or "unknown")
+                semantic[skind][f"{trace.get('source', 'unknown')}:{trace.get('status', 'unknown')}"] += 1
+                if isinstance(trace.get("duration_ms"), (int, float)):
+                    durations[skind].append(float(trace["duration_ms"]))
     return {
         "since": since.isoformat(),
         "state_path": str(path),

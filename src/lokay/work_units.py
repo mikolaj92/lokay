@@ -97,20 +97,11 @@ def _project(event: dict[str, Any]) -> dict[str, Any]:
     return projected
 
 
-def project_work_units(state_path: Path, max_tail_bytes: int = 4 * 1024 * 1024) -> list[dict[str, Any]]:
+def project_work_units(state_path: Path) -> list[dict[str, Any]]:
     """Fold issue-to-PR events by stable identity; delivery is monotonic."""
     units: dict[str, dict[str, Any]] = {}
     try:
-        path = Path(state_path)
-        size = path.stat().st_size
-        if size > max_tail_bytes:
-            with open(path, "rb") as f:
-                f.seek(size - max_tail_bytes)
-                f.readline()  # align newline
-                chunk = f.read().decode("utf-8", errors="ignore")
-            lines = chunk.splitlines()
-        else:
-            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        lines = Path(state_path).read_text(encoding="utf-8").splitlines()
     except (FileNotFoundError, OSError):
         return []
     for line in lines:
