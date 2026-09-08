@@ -4,6 +4,18 @@ from pathlib import Path
 from lokay.status_dashboard import dashboard_snapshot
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_status_journal(tmp_path, monkeypatch):
+    # Exercise real Fala without writing the live operator's journal.
+    monkeypatch.setattr(
+        "lokay.graph_run.path_journal_dir",
+        lambda path_id, *args, **kwargs: tmp_path / "fala" / path_id,
+    )
+
+
 def _config(tmp_path: Path) -> Path:
     clone = tmp_path / "clone"
     clone.mkdir()

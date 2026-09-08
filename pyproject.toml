@@ -23,6 +23,7 @@ kofte = { git = "https://github.com/mikolaj92/Kofte.git", rev = "cc5674bf6c8d06b
 
 [project.scripts]
 lokay-atom-inventory = "lokay.proc.atom_inventory:main"
+lokay-readme-check = "lokay.readme_state_machine:main"
 lokay = "lokay.cli:main"
 # Atomic processes (one job each)
 lokay-list-issues = "lokay.proc.list_issues:main"

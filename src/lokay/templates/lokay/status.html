@@ -4,6 +4,7 @@
 {% block content %}
 <section class="app-page" aria-labelledby="status-title">
   {% set status = data.status %}
+  {% set needs_attention = data.health.needs_attention or data.snapshot_stale %}
   {% set remaining = (status.last_pass or {}).remaining or {} %}
   <header class="app-header">
     <div>
@@ -14,11 +15,16 @@
     <a class="btn" data-variant="outline" href="/" hx-get="/" hx-target="#main-content" hx-select="#main-content" hx-swap="outerHTML">Odśwież</a>
   </header>
 
+  {% if data.snapshot_stale %}
+  <p role="alert">Dane są nieaktualne. Wiek snapshotu: {{ data.snapshot_age_seconds | int }} s.
+    Odświeżenie strony odczytuje plik; nie uruchamia obliczeń statusu.</p>
+  {% endif %}
+
   <div class="app-card-grid">
     <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Ukończone zadania w ostatniej godzinie</p><p class="text-2xl font-semibold">{{ data.kpis.issues_per_hour }}</p><p class="text-sm text-muted-foreground">Zadanie liczymy po scaleniu jego pull requestu</p></div></article>
     <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Otwarte zadania do wykonania</p><p class="text-2xl font-semibold">{{ data.kpis.open_issues }}</p><p class="text-sm text-muted-foreground">{{ data.backlog.inbox }} czeka na przygotowanie · {{ data.backlog.ready }} gotowych</p></div></article>
     <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Nowe pull requesty w ostatniej godzinie</p><p class="text-2xl font-semibold">{{ data.kpis.prs_per_hour }}</p><p class="text-sm text-muted-foreground">Rozpoczęte zadania: {{ data.kpis.starts_per_hour }}</p></div></article>
-    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Stan Lokaya</p><p class="text-2xl font-semibold">{{ data.health.label }}</p><span class="badge" data-variant="{{ 'destructive' if data.health.needs_attention else 'default' }}">{{ 'wymaga uwagi' if data.health.needs_attention else 'działa prawidłowo' }}</span></div></article>
+    <article class="card"><div class="app-stack app-stack--tight"><p class="text-sm text-muted-foreground">Stan Lokaya</p><p class="text-2xl font-semibold">{{ data.health.label }}</p><span class="badge" data-variant="{{ 'destructive' if needs_attention else 'default' }}">{{ 'brak aktualnych danych' if data.snapshot_stale else ('wymaga uwagi' if needs_attention else 'działa prawidłowo') }}</span></div></article>
   </div>
 
   <article class="card app-stack app-stack--tight" aria-labelledby="backlog-title">

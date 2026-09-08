@@ -436,6 +436,34 @@ dostępnego snapshotu, a nie synchroniczny pass. Żaden node nie tworzy locka an
 nie zapisuje receiptu, etykiety lub innego stanu domenowego. Dashboard i CLI
 czytają ten sam zamknięty wynik.
 
+#### HTTP: odczyt przygotowanego snapshotu (tryb `--snapshot`)
+
+```mermaid
+stateDiagram-v2
+    [*] --> HttpRequest
+    HttpRequest --> ReadDashboardArtifact: --snapshot PATH
+    ReadDashboardArtifact --> SnapshotUnavailable: brak / błędny format / zbyt duży plik
+    ReadDashboardArtifact --> ClassifySnapshotAge: poprawny snapshot
+    ClassifySnapshotAge --> RenderSnapshot: aktualny
+    ClassifySnapshotAge --> RenderStaleSnapshot: starszy niż --max-snapshot-age
+    SnapshotUnavailable --> [*]: HTTP 503; bez uruchamiania Fala
+    RenderSnapshot --> [*]: HTTP 200
+    RenderStaleSnapshot --> [*]: HTTP 200; jawny wiek i ok=false w /health
+```
+
+Opcjonalny `lokay-status-server --snapshot PATH` czyta gotowy JSON modelu
+`dashboard_snapshot`. W tym trybie żądanie nigdy nie uruchamia obliczeń ani
+pod-Fala, również przy braku lub uszkodzeniu pliku. Nieaktualny snapshot
+pozostaje dostępny z ostrzeżeniem; `/health` nie ogłasza go zdrowym.
+`--max-snapshot-age` określa dopuszczalny wiek w sekundach (domyślnie 120).
+Limit artefaktu wynosi 8 MiB; przekroczenie odrzuca cały plik, nie obcina
+historii. `generated_at` oznacza czas danych, nie czas odczytu HTTP.
+
+To granica odczytu, nie nowy wykonawca procesu. Przygotowanie i atomowa
+publikacja artefaktu wymagają osobnego producenta korzystającego z istniejącego
+statusu Fala. Bez `--snapshot` serwer nadal używa dotychczasowego odczytu
+synchronicznego. Ten tryb zgodności nie spełnia jeszcze celu czasu HTTP z #1097.
+
 ### Aktywacja dokładnej samonaprawy — `self_repair_activate_execution`
 
 ```mermaid

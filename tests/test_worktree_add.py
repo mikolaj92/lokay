@@ -82,7 +82,12 @@ def test_factory_repo_still_creates_worktree(config_path, tmp_path, monkeypatch,
     assert "skipped" not in payload
 
 
-def test_missing_clone_is_classified_ready_route(config_path, capsys):
+def test_missing_clone_is_classified_ready_route(config_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        worktree_add,
+        "mutations_allowed",
+        lambda *, live_flag, cfg: live_flag and cfg.mode == "live",
+    )
     code = worktree_add.main(
         [
             "--config",
