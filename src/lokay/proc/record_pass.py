@@ -217,6 +217,7 @@ def run_record_pass(
     prs: dict[str, Any] | None = None,
     issues: dict[str, Any] | None = None,
     leftover: dict[str, Any] | None = None,
+    host_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     disk_begin = _read_optional(pass_io.begin_path(pass_dir)) if pass_dir else {}
     tick = _read_optional(pass_io.tick_path(pass_dir)) if pass_dir else {}
@@ -289,6 +290,11 @@ def run_record_pass(
         "remaining": remaining,
         _OVERFLOW: overflow,
     }
+    from lokay.host_gate import stopped
+
+    stop = stopped(host_gate or {})
+    receipt.update(stop)
+    result.update(stop)
     try:
         state_path = _state_path(begin, pass_dir)
         written = write_pass_receipt(receipt, state_path=state_path)
@@ -299,7 +305,12 @@ def run_record_pass(
             pass_io.write_json(pass_io.tick_path(pass_dir), payload)
     except OSError as exc:
         result["pass_receipt_error"] = str(exc)
-    return ok(pass_dir=pass_dir, outcome=outcome, tick=result, result=result)
+    out = ok(pass_dir=pass_dir, outcome=receipt["outcome"], tick=result, result=result)
+    if stop:
+        # Recording succeeded; the host failure/restart remains visible to
+        # native graph consumers without turning this recording atom failed.
+        out.update({key: value for key, value in stop.items() if key != "ok"})
+    return out
 
 
 def record(
@@ -309,6 +320,7 @@ def record(
     prs: dict[str, Any] | None = None,
     issues: dict[str, Any] | None = None,
     leftover: dict[str, Any] | None = None,
+    host_gate: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return run_record_pass(
         pass_dir=pass_dir,
@@ -316,6 +328,7 @@ def record(
         prs=prs,
         issues=issues,
         leftover=leftover,
+        host_gate=host_gate,
     )
 
 

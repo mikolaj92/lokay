@@ -25,7 +25,15 @@ def select(prepared: dict, rows: list[dict]) -> dict:
             "leftover_issues": leftover_issues,
             "result": last,
         }
+    from lokay.sieve_decision import collect, decision_of
+
+    decisions = [
+        decision for row in rows
+        if row.get("route") in {"continue", "idle", "cap"}
+        if (decision := decision_of(row.get("result") or {})) is not None
+    ]
     result = dict(chosen.get("result") or {})
+    result["decisions"] = collect(prepared.get("decisions") or [], decisions)
     result.update(
         launched=None,
         leftover=int(chosen.get("leftover") or result.get("leftover") or 0),

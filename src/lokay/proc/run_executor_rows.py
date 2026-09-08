@@ -25,7 +25,11 @@ def run(
     pass_dir: str,
     budget: int | None = None,
     last: dict | None = None,
+    triage: dict | None = None,
 ) -> dict:
+    from lokay.sieve_decision import attach
+
+    listed = attach(listed, triage or {})
     last = seed_queue(last)
     cap = budget_of(config_path=config_path, live=live, budget=budget)
     out = run_path(

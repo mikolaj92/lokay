@@ -371,7 +371,7 @@ def test_factory_begin_host_gate_refuses_in_cycle_update():
     from lokay.proc.gate_factory_begin_host import gate
 
     out = gate(
-        {"updated": True, "head": "a", "origin_main": "b"}, live=True, checkout=""
+        {"ok": True, "updated": True, "head": "a", "origin_main": "b"}, live=True, checkout=""
     )
     assert out["ok"] is True and out["route"] == "restart"
     assert out["reason"] == "host_updated"
@@ -380,7 +380,7 @@ def test_factory_begin_host_gate_refuses_in_cycle_update():
 def test_factory_begin_host_gate_continues_current():
     from lokay.proc.gate_factory_begin_host import gate
 
-    assert gate({"updated": False}, live=True, checkout="")["route"] == "begin"
+    assert gate({"ok": True, "updated": False}, live=True, checkout="")["route"] == "begin"
 
 
 def test_factory_begin_planned_ignores_host_updated():

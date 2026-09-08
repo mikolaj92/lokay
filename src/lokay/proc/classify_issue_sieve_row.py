@@ -4,7 +4,7 @@ from lokay.proc.classify_issue_row import classify as classify_row
 from lokay.proc.prepare_issue_sieve import write_cursor
 
 
-def classify(selected: dict, row: dict, *, prepared: dict) -> dict:
+def classify(selected: dict, row: dict, *, prepared: dict, previous: dict | None = None) -> dict:
     slot = int(selected.get("slot") or 0)
     if str(selected.get("route") or "") != "run":
         return {"ok": True, "route": "empty", "slot": slot}
@@ -28,9 +28,13 @@ def classify(selected: dict, row: dict, *, prepared: dict) -> dict:
         "leftover": leftover,
         "leftover_issues": leftover_issues,
     }
+    from lokay.sieve_decision import collect
+
+    decisions = collect(prepared.get("decisions") or [],
+                        (previous or {}).get("decisions") or [], [result])
     write_cursor(
         str(prepared.get("pass_dir") or ""),
-        {"last": last, "spent": spent, "route": decision.get("route")},
+        {"last": last, "spent": spent, "route": decision.get("route"), "decisions": decisions},
     )
     return {
         "ok": True,
@@ -41,6 +45,7 @@ def classify(selected: dict, row: dict, *, prepared: dict) -> dict:
         "leftover": leftover,
         "leftover_issues": leftover_issues,
         "result": last,
+        "decisions": decisions,
         "department": "issue_triage",
         "launched": None,
     }

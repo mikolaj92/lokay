@@ -104,13 +104,17 @@ stateDiagram-v2
     HarvestFactoryChildren --> HostFF
     HostFF --> FactoryBeginHostGate
     FactoryBeginHostGate --> FactoryBegin: begin
-    FactoryBeginHostGate --> RecordPass: restart
+    FactoryBeginHostGate --> RecordPass: restart / blocked host sync
     FactoryBegin --> ReapStaleWorktrees
     FactoryBegin --> SelectSelfRepairDepartment
     SelectSelfRepairDepartment --> RunSelfRepairDepartment: confirmed 4-of-5 stall
     SelectSelfRepairDepartment --> SelectIssueTriageDepartment
     SelectIssueTriageDepartment --> RunIssueTriageDepartment
     SelectIssueTriageDepartment --> SelectExecutorDepartment
+    RunIssueTriageDepartment --> SelectExecutorDepartment: completed sieve or explicit skip
+    RunIssueTriageDepartment --> RunExecutorDepartment: issue-bound decisions
+    FactoryBegin --> RunIssueTriageDepartment: pass directory
+    FactoryBegin --> RunExecutorDepartment: same pass directory
     SelectExecutorDepartment --> RunExecutorDepartment
     SelectExecutorDepartment --> SelectPrTriageDepartment
     SelectPrTriageDepartment --> RunPrTriageDepartment
@@ -944,10 +948,13 @@ Tick daemona nie jest tą pętlą.
 stateDiagram-v2
     [*] --> PrepareIssueSieve
     PrepareIssueSieve --> SelectIssueSieveSlot
+    PrepareIssueSieve --> RunIssueSieveRow: prepared queue and resume cursor
     SelectIssueSieveSlot --> RunIssueSieveRow: run
     SelectIssueSieveSlot --> SelectIssueSieveResult: empty / exhausted
     RunIssueSieveRow --> ClassifyIssueSieveRow
     ClassifyIssueSieveRow --> SelectIssueSieveSlot: continue i następny jawny slot
+    ClassifyIssueSieveRow --> RunIssueSieveRow: previous cursor to next slot only
+    ClassifyIssueSieveRow --> ClassifyIssueSieveRow: accumulated decisions to next slot only
     ClassifyIssueSieveRow --> SelectIssueSieveResult: idle
     ClassifyIssueSieveRow --> SelectIssueSieveResult: cap
     SelectIssueSieveResult --> IssueSieveRowsResult
@@ -1011,10 +1018,13 @@ Nie jest triage. Nie scala. Python nie prowadzi pętli wierszy.
 stateDiagram-v2
     [*] --> PrepareExecutorRows
     PrepareExecutorRows --> SelectExecutorSlot
+    PrepareExecutorRows --> RunExecutorRow: prepared queue and resume cursor
     SelectExecutorSlot --> RunExecutorRow: run
     SelectExecutorSlot --> SelectExecutorResult: empty / exhausted
     RunExecutorRow --> ClassifyExecutorRow
     ClassifyExecutorRow --> SelectExecutorSlot: continue i następny jawny slot
+    ClassifyExecutorRow --> RunExecutorRow: previous cursor to next slot only
+    ClassifyExecutorRow --> ClassifyExecutorRow: spent budget to next slot only
     ClassifyExecutorRow --> SelectExecutorResult: idle
     ClassifyExecutorRow --> SelectExecutorResult: cap
     SelectExecutorResult --> ExecutorRowsResult
@@ -1044,8 +1054,11 @@ stateDiagram-v2
     SummarizeExecutorRow --> [*]
 ```
 
-Jedno pytanie, jeden `issue_to_pr`. Ready leftover staje się `do` bez triage
-w tym wierszu. Żywy receipt zajmuje całe repo: nie jest takeable, leftover
+Jedno pytanie, jeden `issue_to_pr`. Wynik sita przekazuje wszystkie decyzje
+`repo` + `issue` + `route` + `reason` do executora przez Fala conduction.
+Executor łączy je ze świeżą listą otwartych issue; nie odtwarza zamkniętych
+zgłoszeń. Jawny skip ma pierwszeństwo przed starą etykietą ready.
+Ready leftover staje się `do` bez ponownego triage w tym wierszu. Żywy receipt zajmuje całe repo: nie jest takeable, leftover
 idzie dalej. Nieudany launch nie nadpisuje `route` kandydata i zjada to
 repo z leftover, żeby nest nie kręcił 180s. Wyłączony dział nie spełnia
 `when` launch. Po executorze rodzic nadal robi PR triage.

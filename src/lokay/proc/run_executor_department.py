@@ -9,6 +9,7 @@ def run(
     config_path: str | None,
     live: bool,
     triage_ran: bool = False,
+    triage: dict | None = None,
 ) -> dict:
     del triage_ran  # sieve is a sibling department; this slot always codes
     return run_path(
@@ -16,5 +17,5 @@ def run(
         repo="local/executor-department",
         config_path=config_path,
         live=live,
-        extra_inputs={"pass_dir": pass_dir},
+        extra_inputs={"pass_dir": pass_dir, "triage": triage or {}},
     )

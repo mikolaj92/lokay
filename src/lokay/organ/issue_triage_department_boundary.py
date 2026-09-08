@@ -71,6 +71,7 @@ def handle_issue_triage_department(
             up.get(f"select_issue_sieve_slot_{slot}") or {},
             up.get(f"run_issue_sieve_row_{slot}") or {},
             prepared=up.get("prepare_issue_sieve") or {},
+            previous=up.get(f"classify_issue_sieve_row_{slot-1}") or {},
         )
     if atom == "select_issue_sieve_result":
         from lokay.execution_contracts import ISSUE_SIEVE_SLOT_COUNT

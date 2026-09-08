@@ -107,6 +107,7 @@ def handle_executor_department(
             pass_dir=pass_dir,
             budget=int(budget) if budget is not None else None,
             last=_last_of(inputs),
+            triage=inputs.get("triage") or {},
         )
     if atom == "summarize_executor_row":
         from lokay.proc.summarize_executor_row import summarize

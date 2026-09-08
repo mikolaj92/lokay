@@ -64,6 +64,7 @@ def prepare(
         "route": "run",
         "listed": listed,
         "last": last if isinstance(last, dict) else {},
+        "decisions": list(cursor.get("decisions") or []),
         "pass_dir": pass_dir,
         "budget": remaining,
         "cap": cap,

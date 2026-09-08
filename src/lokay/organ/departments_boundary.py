@@ -18,15 +18,10 @@ def _department_enabled(config: str | None, name: str) -> bool:
         return True
 
 
-def _host_restart(up: dict[str, dict[str, Any]]) -> bool:
-    gate = up.get("factory_begin_host_gate") or {}
-    return str(gate.get("route") or "") == "restart"
+def _host_stop(up: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    from lokay.host_gate import stopped
 
-
-def _skip_host_updated() -> dict[str, Any]:
-    from lokay.envelope import ok
-
-    return ok(route="skip", reason="host_updated", health="host_updated")
+    return stopped(up.get("factory_begin_host_gate") or {})
 
 
 def handle_departments(
@@ -38,8 +33,8 @@ def handle_departments(
     config = str(inputs.get("config_path") or "") or None
     live = bool(inputs.get("live"))
     if atom == "select_self_repair_department":
-        if _host_restart(up):
-            return _skip_host_updated()
+        if stop := _host_stop(up):
+            return {**stop, "ok": True, "route": "skip"}
         from lokay.pass_receipt import read_pass_receipt
         from lokay.proc.last_pass_moving import classify as classify_moving
         from lokay.proc.leftover_skip import classify as classify_leftover
@@ -75,8 +70,8 @@ def handle_departments(
 
         return run(up.get("open_self_repair_incident") or {}, config_path=config)
     if atom == "select_issue_triage_department":
-        if _host_restart(up):
-            return _skip_host_updated()
+        if stop := _host_stop(up):
+            return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_issue_triage_department import select
 
         return select(enabled=_department_enabled(config, "issue_triage"))
@@ -85,8 +80,8 @@ def handle_departments(
 
         return run(pass_dir=_pass_dir(up), config_path=config, live=live)
     if atom == "select_executor_department":
-        if _host_restart(up):
-            return _skip_host_updated()
+        if stop := _host_stop(up):
+            return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_executor_department import select
 
         return select(enabled=_department_enabled(config, "executor"))
@@ -99,10 +94,11 @@ def handle_departments(
             config_path=config,
             live=live,
             triage_ran=str(select.get("route") or "") == "run",
+            triage=(up.get("run_issue_triage_department") or {}).get("result") or {},
         )
     if atom == "select_pr_triage_department":
-        if _host_restart(up):
-            return _skip_host_updated()
+        if stop := _host_stop(up):
+            return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_pr_triage_department import select
 
         return select(enabled=_department_enabled(config, "pr_triage"))
@@ -111,8 +107,8 @@ def handle_departments(
 
         return run(pass_dir=_pass_dir(up), config_path=config, live=live)
     if atom == "select_pr_repair_department":
-        if _host_restart(up):
-            return _skip_host_updated()
+        if stop := _host_stop(up):
+            return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_pr_repair_department import select
 
         select_pr = up.get("select_pr_triage_department") or {}

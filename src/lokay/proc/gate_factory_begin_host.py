@@ -1,8 +1,9 @@
 """Refuse a product pass when host fast-forward requires a process restart.
 
-Always succeeds. Fala unblocks children of a failed atom, so `ok=false`
-cannot stop departments. `route=begin` continues; `route=restart` is
-host_updated. Selects skip in Python; factory_begin has `when` begin.
+Always succeeds as a routing atom. Fala unblocks children of failed atoms,
+so failure or missing sync evidence selects `blocked`, not `begin`.
+`restart` means host_updated. Departments skip both stopped routes;
+record_pass persists the gate health before reporting the result.
 """
 
 from pathlib import Path
@@ -12,6 +13,12 @@ from lokay.git_host_ff import process_head_moved
 def gate(host: dict, *, live: bool, checkout: str) -> dict:
     if not live:
         return {"ok": True, "route": "begin"}
+    if host.get("ok") is not True:
+        return {
+            "ok": True, "route": "blocked", "health": "host_behind",
+            "reason": str(host.get("reason") or "host_sync_missing"),
+            "error": str(host.get("error") or "host sync did not succeed"),
+        }
     if host.get("updated") is True:
         return {
             "ok": True,

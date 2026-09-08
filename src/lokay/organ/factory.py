@@ -235,6 +235,11 @@ def handle_factory(
     if atom == "record_pass":
         begin = up.get("factory_begin") or {}
         gate = up.get("factory_begin_host_gate") or {}
+        if not begin.get("state_path") and inputs.get("config_path"):
+            from lokay.config import load_config
+
+            begin = {**begin, "state_path": str(load_config(inputs["config_path"]).state_path)}
+        begin = {"live": bool(inputs.get("live")), "config_path": inputs.get("config_path"), **begin}
         out = record_pass.record(
             pass_dir=str(begin.get("pass_dir") or ""),
             begin=begin,
@@ -245,23 +250,8 @@ def handle_factory(
             or up.get("run_issue_triage_department")
             or {},
             leftover=up.get("leftover_catalog") or up.get("leftover") or {},
+            host_gate=gate,
         )
-        if str(gate.get("route") or "") == "restart":
-            result = dict(out.get("result") or {})
-            result.update(
-                health="host_updated",
-                reason="host_updated",
-                restart_required=True,
-                idle=False,
-            )
-            out = {
-                **out,
-                "health": "host_updated",
-                "reason": "host_updated",
-                "restart_required": True,
-                "result": result,
-                "tick": {**(out.get("tick") or {}), **result},
-            }
         return out
 
     if atom == "compact_state":
