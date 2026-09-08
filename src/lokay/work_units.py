@@ -101,26 +101,26 @@ def project_work_units(state_path: Path) -> list[dict[str, Any]]:
     """Fold issue-to-PR events by stable identity; delivery is monotonic."""
     units: dict[str, dict[str, Any]] = {}
     try:
-        lines = Path(state_path).read_text(encoding="utf-8").splitlines()
-    except (FileNotFoundError, OSError):
+        with Path(state_path).open(encoding="utf-8") as lines:
+            for line in lines:
+                try:
+                    event = json.loads(line)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if not isinstance(event, dict) or event.get("kind") != "issue_to_pr":
+                    continue
+                repo = str(event.get("repo") or "").strip()
+                issue = _as_issue(event.get("issue"))
+                if not repo or issue is None:
+                    continue
+                event = {**event, "repo": repo, "issue": issue}
+                key = work_id(repo, issue)
+                previous = units.get(key)
+                candidate = _project(event)
+                if previous is None or candidate["delivered"] or not previous["delivered"]:
+                    units[key] = candidate
+    except OSError:
         return []
-    for line in lines:
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict) or event.get("kind") != "issue_to_pr":
-            continue
-        repo = str(event.get("repo") or "").strip()
-        issue = _as_issue(event.get("issue"))
-        if not repo or issue is None:
-            continue
-        event = {**event, "repo": repo, "issue": issue}
-        key = work_id(repo, issue)
-        previous = units.get(key)
-        candidate = _project(event)
-        if previous is None or candidate["delivered"] or not previous["delivered"]:
-            units[key] = candidate
     return list(units.values())
 
 

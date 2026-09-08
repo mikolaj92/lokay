@@ -48,3 +48,39 @@ def test_yield_does_not_assume_timestamp_order(tmp_path):
 
     assert report["events"] == 2
     assert report["by_repo"]["a/b"]["starts"] == 2
+
+
+def test_work_units_stream_complete_history_without_read_text(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    path = tmp_path / "state.jsonl"
+    rows = [
+        {"kind": "issue_to_pr", "repo": "a/b", "issue": 1,
+         "delivered": True, "pr": 11},
+        {"kind": "issue_to_pr", "repo": "a/b", "issue": 2,
+         "delivered": False, "work_state": "coding"},
+        {"kind": "issue_to_pr", "repo": "a/b", "issue": 1,
+         "delivered": False, "stopped": True},
+    ]
+    # Also cover malformed records and an unterminated final JSONL record.
+    path.write_text("broken\n[]\n" + "\n".join(json.dumps(row) for row in rows))
+    original_open = Path.open
+    opened = []
+
+    def counted_open(self, *args, **kwargs):
+        opened.append(self)
+        return original_open(self, *args, **kwargs)
+
+    def forbidden_read_text(*args, **kwargs):
+        raise AssertionError("work-unit history must be streamed")
+
+    monkeypatch.setattr(Path, "open", counted_open)
+    monkeypatch.setattr(Path, "read_text", forbidden_read_text)
+
+    assert project_work_units(path) == [
+        {"work_id": "a/b#1", "repo": "a/b", "issue": 1,
+         "state": "delivered", "delivered": True, "pr": 11},
+        {"work_id": "a/b#2", "repo": "a/b", "issue": 2,
+         "state": "coding", "delivered": False},
+    ]
+    assert opened == [path]
