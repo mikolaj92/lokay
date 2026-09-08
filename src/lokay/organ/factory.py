@@ -113,8 +113,15 @@ def handle_factory(
         from lokay.proc.harvest_factory_children import harvest
 
         return harvest(
-            config={"state_path": str(inputs.get("state_path") or "") or None},
-            scope={"config_path": str(inputs.get("config_path") or "") or None},
+            config={
+                "state_path": str(inputs.get("state_path") or "") or None,
+                "config_path": str(inputs.get("config_path") or "") or None,
+                "live": bool(inputs.get("live", True)),
+            },
+            scope={
+                "config_path": str(inputs.get("config_path") or "") or None,
+                "repos": list(inputs.get("repos") or []),
+            },
             ledger={},
         )
 
