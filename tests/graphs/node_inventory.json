@@ -1,0 +1,389 @@
+{
+  "authority": "fala/lokay.expanded.golden.json",
+  "extra_node_suites": [],
+  "missing_node_suites": [],
+  "missing_output_schema": [],
+  "package": "fala/lokay.fala-package.toml",
+  "paths": [
+    {
+      "conduction_edges": 9,
+      "mismatches": [],
+      "node_suites": 6,
+      "nodes": 6,
+      "path": "daemon_cycle",
+      "when_branches": 3
+    },
+    {
+      "conduction_edges": 43,
+      "mismatches": [],
+      "node_suites": 17,
+      "nodes": 17,
+      "path": "factory_pass",
+      "when_branches": 6
+    },
+    {
+      "conduction_edges": 17,
+      "mismatches": [],
+      "node_suites": 9,
+      "nodes": 9,
+      "path": "issue_to_pr",
+      "when_branches": 3
+    },
+    {
+      "conduction_edges": 147,
+      "mismatches": [],
+      "node_suites": 38,
+      "nodes": 38,
+      "path": "issue_to_pr_delivery",
+      "when_branches": 26
+    },
+    {
+      "conduction_edges": 31,
+      "mismatches": [],
+      "node_suites": 16,
+      "nodes": 16,
+      "path": "coding_execution",
+      "when_branches": 9
+    },
+    {
+      "conduction_edges": 23,
+      "mismatches": [],
+      "node_suites": 11,
+      "nodes": 11,
+      "path": "local_repair_execution",
+      "when_branches": 5
+    },
+    {
+      "conduction_edges": 71,
+      "mismatches": [],
+      "node_suites": 26,
+      "nodes": 26,
+      "path": "issue_triage",
+      "when_branches": 15
+    },
+    {
+      "conduction_edges": 42,
+      "mismatches": [],
+      "node_suites": 13,
+      "nodes": 13,
+      "path": "issue_split",
+      "when_branches": 10
+    },
+    {
+      "conduction_edges": 95,
+      "mismatches": [],
+      "node_suites": 38,
+      "nodes": 38,
+      "path": "pr_repair",
+      "when_branches": 28
+    },
+    {
+      "conduction_edges": 75,
+      "mismatches": [],
+      "node_suites": 27,
+      "nodes": 27,
+      "path": "pr_triage",
+      "when_branches": 18
+    },
+    {
+      "conduction_edges": 15,
+      "mismatches": [],
+      "node_suites": 9,
+      "nodes": 9,
+      "path": "self_repair",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 3,
+      "mismatches": [],
+      "node_suites": 3,
+      "nodes": 3,
+      "path": "stale_worktree_reap",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 42,
+      "mismatches": [],
+      "node_suites": 20,
+      "nodes": 20,
+      "path": "implementation_dispatch",
+      "when_branches": 12
+    },
+    {
+      "conduction_edges": 8,
+      "mismatches": [],
+      "node_suites": 7,
+      "nodes": 7,
+      "path": "triage_dispatch",
+      "when_branches": 2
+    },
+    {
+      "conduction_edges": 23,
+      "mismatches": [],
+      "node_suites": 14,
+      "nodes": 14,
+      "path": "queue_conflict",
+      "when_branches": 5
+    },
+    {
+      "conduction_edges": 3,
+      "mismatches": [],
+      "node_suites": 4,
+      "nodes": 4,
+      "path": "select_implement",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 48,
+      "mismatches": [],
+      "node_suites": 27,
+      "nodes": 27,
+      "path": "self_repair_prepare",
+      "when_branches": 12
+    },
+    {
+      "conduction_edges": 18,
+      "mismatches": [],
+      "node_suites": 16,
+      "nodes": 16,
+      "path": "self_repair_validate",
+      "when_branches": 11
+    },
+    {
+      "conduction_edges": 38,
+      "mismatches": [],
+      "node_suites": 18,
+      "nodes": 18,
+      "path": "closeout_pr",
+      "when_branches": 6
+    },
+    {
+      "conduction_edges": 2,
+      "mismatches": [],
+      "node_suites": 3,
+      "nodes": 3,
+      "path": "ready_hygiene",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 143,
+      "mismatches": [],
+      "node_suites": 74,
+      "nodes": 74,
+      "path": "product_pass_budget",
+      "when_branches": 16
+    },
+    {
+      "conduction_edges": 46,
+      "mismatches": [],
+      "node_suites": 14,
+      "nodes": 14,
+      "path": "test_local_execution",
+      "when_branches": 6
+    },
+    {
+      "conduction_edges": 2,
+      "mismatches": [],
+      "node_suites": 3,
+      "nodes": 3,
+      "path": "leftover_closeout",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 27,
+      "mismatches": [],
+      "node_suites": 14,
+      "nodes": 14,
+      "path": "factory_begin",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 33,
+      "mismatches": [],
+      "node_suites": 15,
+      "nodes": 15,
+      "path": "localize_execution",
+      "when_branches": 2
+    },
+    {
+      "conduction_edges": 37,
+      "mismatches": [],
+      "node_suites": 18,
+      "nodes": 18,
+      "path": "relocalize_off_goal",
+      "when_branches": 4
+    },
+    {
+      "conduction_edges": 21,
+      "mismatches": [],
+      "node_suites": 10,
+      "nodes": 10,
+      "path": "assert_real_diff_execution",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 37,
+      "mismatches": [],
+      "node_suites": 14,
+      "nodes": 14,
+      "path": "self_repair_activate_execution",
+      "when_branches": 7
+    },
+    {
+      "conduction_edges": 20,
+      "mismatches": [],
+      "node_suites": 12,
+      "nodes": 12,
+      "path": "status_snapshot",
+      "when_branches": 1
+    },
+    {
+      "conduction_edges": 13,
+      "mismatches": [],
+      "node_suites": 7,
+      "nodes": 7,
+      "path": "pr_create_execution",
+      "when_branches": 2
+    },
+    {
+      "conduction_edges": 17,
+      "mismatches": [],
+      "node_suites": 8,
+      "nodes": 8,
+      "path": "stage_label_execution",
+      "when_branches": 2
+    },
+    {
+      "conduction_edges": 12,
+      "mismatches": [],
+      "node_suites": 6,
+      "nodes": 6,
+      "path": "plan_issue_execution",
+      "when_branches": 1
+    },
+    {
+      "conduction_edges": 36,
+      "mismatches": [],
+      "node_suites": 14,
+      "nodes": 14,
+      "path": "intake_check_execution",
+      "when_branches": 8
+    },
+    {
+      "conduction_edges": 5,
+      "mismatches": [],
+      "node_suites": 4,
+      "nodes": 4,
+      "path": "daemon_entry",
+      "when_branches": 2
+    },
+    {
+      "conduction_edges": 22,
+      "mismatches": [],
+      "node_suites": 11,
+      "nodes": 11,
+      "path": "self_repair_entry",
+      "when_branches": 5
+    },
+    {
+      "conduction_edges": 9,
+      "mismatches": [],
+      "node_suites": 10,
+      "nodes": 10,
+      "path": "child_harvest",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 3,
+      "mismatches": [],
+      "node_suites": 3,
+      "nodes": 3,
+      "path": "product_entry",
+      "when_branches": 1
+    },
+    {
+      "conduction_edges": 1,
+      "mismatches": [],
+      "node_suites": 2,
+      "nodes": 2,
+      "path": "self_repair_department",
+      "when_branches": 1
+    },
+    {
+      "conduction_edges": 3,
+      "mismatches": [],
+      "node_suites": 3,
+      "nodes": 3,
+      "path": "issue_triage_department",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 8,
+      "mismatches": [],
+      "node_suites": 5,
+      "nodes": 5,
+      "path": "issue_sieve_row",
+      "when_branches": 2
+    },
+    {
+      "conduction_edges": 48,
+      "mismatches": [],
+      "node_suites": 17,
+      "nodes": 17,
+      "path": "issue_sieve_rows",
+      "when_branches": 5
+    },
+    {
+      "conduction_edges": 3,
+      "mismatches": [],
+      "node_suites": 3,
+      "nodes": 3,
+      "path": "executor_department",
+      "when_branches": 0
+    },
+    {
+      "conduction_edges": 78,
+      "mismatches": [],
+      "node_suites": 26,
+      "nodes": 26,
+      "path": "executor_rows",
+      "when_branches": 8
+    },
+    {
+      "conduction_edges": 7,
+      "mismatches": [],
+      "node_suites": 5,
+      "nodes": 5,
+      "path": "executor_row",
+      "when_branches": 1
+    },
+    {
+      "conduction_edges": 7,
+      "mismatches": [],
+      "node_suites": 5,
+      "nodes": 5,
+      "path": "pr_triage_department",
+      "when_branches": 1
+    },
+    {
+      "conduction_edges": 0,
+      "mismatches": [],
+      "node_suites": 1,
+      "nodes": 1,
+      "path": "cross_repo_release_train",
+      "when_branches": 0
+    }
+  ],
+  "totals": {
+    "authored_conduction_edges": 1170,
+    "authored_effectors_missing_schema": 0,
+    "authored_effectors_with_schema": 554,
+    "authored_nodes": 526,
+    "authored_when_branches": 222,
+    "conduction_edges": 1391,
+    "expanded_nodes": 626,
+    "node_suites": 626,
+    "paths": 46,
+    "when_branches": 246
+  }
+}

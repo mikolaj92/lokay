@@ -5,12 +5,15 @@ Routing lives in ``lokay.organ.*`` (one job family per module).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
 from fala import sdk
+from fala.fep import build_result
 from lokay.atom_runtime import (  # noqa: F401 — tests patch these names
     branch_ahead_of_upstream,
     run_atom_main as _run_atom_main,
@@ -754,6 +757,33 @@ def organ_envelope(atom: str, result: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
+def _fep_request(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Create the FEP request represented by Fala's filesystem manifest.
+
+    Fala transports the request to subprocesses as an adapter manifest for
+    compatibility with non-Python effectors. The Python organ emits a FEP/1
+    result, so it restores the request identity from that transport data.
+    """
+    request: dict[str, Any] = {
+        "protocol": "fala-effector/1",
+        "message_kind": "effector.request",
+        "run_id": str(os.environ.get("FALA_RUN_ID") or manifest.get("run_id") or "run"),
+        "process_id": str(manifest.get("process_id") or ""),
+        "execution_id": str(manifest.get("execution_id") or ""),
+        "attempt": int(manifest.get("attempt") or 1),
+        "impulse_id": str(manifest.get("impulse_id") or ""),
+        "process_fingerprint": "process:lokay-organ",
+        "path_digest": "path:lokay-organ",
+        "capability": "lokay_atom",
+        "input": dict(manifest.get("input") or {}),
+        "config": dict(manifest.get("config") or {}),
+        "output_contract_ref": "schema:lokay-atom",
+    }
+    body = json.dumps(request, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    request["message_id"] = "msg:sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
+    return request
+
+
 def main() -> int:
     _ensure_project_cwd()
 
@@ -786,7 +816,23 @@ def main() -> int:
             metadata={"implementation": provenance},
         )
 
-    return sdk.run_manifest_effector(handler)
+    try:
+        manifest = sdk.load_manifest()
+        output = handler(manifest)
+        request = _fep_request(manifest)
+        sdk.write_result(
+            build_result(
+                request,
+                values=output.get("values"),
+                associations=output.get("associations"),
+                reactions=output.get("reactions"),
+                metadata=output.get("metadata"),
+            )
+        )
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

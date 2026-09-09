@@ -928,3 +928,32 @@ def test_organ_envelope_still_raises_on_not_ok():
     with pytest.raises(RuntimeError) as caught:
         organ_envelope("run_agent", {"ok": False, "status": "failed", "error": "agent failed"})
     assert "agent failed" in str(caught.value)
+
+
+def test_fep_request_reconstructs_adapter_identity():
+    from fala.fep import build_result, validate
+
+    manifest = {
+        "protocol_version": 1,
+        "run_id": "run-1",
+        "process_id": "classify",
+        "execution_id": "run-1:classify",
+        "attempt": 2,
+        "impulse_id": "impulse-1",
+        "input": {"conduction": {"source": {"route": "ready"}}},
+        "config": {"atom": "classify"},
+    }
+    request = fala_organ._fep_request(manifest)
+    assert request["protocol"] == "fala-effector/1"
+    assert request["message_kind"] == "effector.request"
+    assert request["execution_id"] == manifest["execution_id"]
+    assert request["attempt"] == manifest["attempt"]
+    result = build_result(request, values={"ok": True, "atom": "classify"})
+    assert validate(result, "effector.result")["request_id"] == request["message_id"]
+
+
+def test_fep_request_message_id_is_stable():
+    manifest = {"process_id": "atom", "execution_id": "run:atom", "attempt": 1}
+    first = fala_organ._fep_request(manifest)
+    second = fala_organ._fep_request(dict(reversed(manifest.items())))
+    assert first == second
