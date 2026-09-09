@@ -31,9 +31,18 @@ def collect(*groups: list[dict]) -> list[SieveDecision]:
     return list(decisions.values())
 
 
+def _decision_rows(triage: dict) -> list:
+    """Decisions may sit flat or under the nest ``result`` (#1105 handoff)."""
+    rows = list(triage.get("decisions") or [])
+    inner = triage.get("result")
+    if isinstance(inner, dict):
+        rows = list(inner.get("decisions") or []) + rows
+    return rows
+
+
 def attach(listed: dict, triage: dict) -> dict:
     decisions = {}
-    for raw in triage.get("decisions") or []:
+    for raw in _decision_rows(triage):
         decision = decision_of(raw)
         if decision:
             decisions[(decision["repo"], decision["issue"])] = decision

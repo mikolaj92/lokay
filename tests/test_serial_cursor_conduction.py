@@ -89,3 +89,48 @@ else:
     assert statuses['run_executor_row_4'] == 'skipped'
     cursor = json.loads((tmp_path / 'executor-rows.json').read_text())
     assert cursor['spent'] == 2
+
+
+def test_executor_row_consumes_bound_skip_decision(tmp_path):
+    # Nested department receipt carries decisions under ``result``. The row
+    # must consume the bound skip so the next slot sees the next issue.
+    body = base_effector(
+        """from unittest.mock import patch
+from lokay.organ.common import _conduction_values
+from lokay.organ.executor_department_boundary import handle_executor_department
+from lokay.proc.select_next_issue import select
+pd = Path(%r)
+count = %r
+issues = [{"repo": "o/r", "issue": n, "labels": []} for n in range(1, count + 2)]
+listed = {"ok": True, "issues": issues, "count": len(issues), "overflow": False}
+decisions = [{"repo": "o/r", "issue": n, "route": "skip", "reason": "host_ops"}
+             for n in range(1, count + 1)]
+triage = {"ok": True, "department": "issue_triage", "result": {"decisions": decisions}}
+inputs = {"listed": listed, "last": {}, "pass_dir": str(pd), "live": False,
+          "budget": count, "triage": triage}
+up = _conduction_values(m)
+
+def consume(**kwargs):
+    picked = select(kwargs["listed"], kwargs["last"], occupied=set())
+    remaining = picked["leftover_issues"]
+    (pd / ("picked-" + str(kwargs["slot"]))).write_text(json.dumps(picked))
+    return {"ok": True, "result": {"repo": picked["repo"], "issue": picked["issue"],
+            "route": "skip", "reason": "host_ops", "launched": None,
+            "leftover": len(remaining), "leftover_issues": remaining}}
+
+if a == "prepare_executor_rows":
+    v.update(ok=True, route="run", listed=listed, last={}, budget=count, cap=count,
+              spent=0, slot_count=count, pass_dir=str(pd), live=False,
+              leftover=len(issues), leftover_issues=issues)
+else:
+    with patch("lokay.proc.run_executor_row.run", side_effect=consume):
+        result = handle_executor_department(a, inputs, up, {})
+    assert result is not None, a
+    v.update(result)
+""" % (str(tmp_path), 8)
+    )
+    result = run_graph(tmp_path, body, "nested-handoff", path_id="executor_rows")
+    failed = {k: v for k, v in result["effector_results"].items() if v["status"] == "failed"}
+    assert not failed, failed
+    picked = [json.loads((tmp_path / f"picked-{n}").read_text())["issue"] for n in range(1, 9)]
+    assert picked == list(range(1, 9))
