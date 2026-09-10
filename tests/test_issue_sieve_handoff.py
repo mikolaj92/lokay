@@ -78,9 +78,10 @@ def test_authored_parent_conducts_completed_sieve_to_executor(monkeypatch):
     def capture(**kwargs):
         captured.update(kwargs)
         return {'ok': True}
-    monkeypatch.setattr('lokay.proc.run_executor_department.run_path', capture)
+    monkeypatch.setattr('lokay.proc.agent_executor_department.run', capture)
     handle_departments('run_executor_department', {'live': False}, up, {})
-    assert captured['extra_inputs'] == {'pass_dir': '/pass', 'triage': outputs['run_issue_triage_department']['result']}
+    assert captured['pass_dir'] == '/pass'
+    assert captured['triage'] == outputs['run_issue_triage_department']['result']
 
 
 def test_sieve_resume_retains_decisions_from_earlier_slots(tmp_path):

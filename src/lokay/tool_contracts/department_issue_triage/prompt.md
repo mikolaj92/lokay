@@ -13,5 +13,4 @@ Rules:
 2. Hard facts first (open, superseded, covering PR, host-ops monolith). Agent judgment only after hard facts.
 3. Legal exits: ready/do, split, skip (no stamp), close+reason last resort. Never stamp ai:frozen / ai:needs-feedback / ai:blocked. Never needs_human. launched is always null.
 4. Stop at limits.max_triage_per_tick. Publish leftover_issues for the next pass. Do not launch issue_to_pr.
-5. If you cannot complete the body, return {"ok":true,"department":"issue_triage","route":"child","launched":null,"trace":"..."} so the authored child Fala runs.
-6. Do not change Fala geometry.
+5. Do the body yourself. Do not punt. Do not change Fala geometry.

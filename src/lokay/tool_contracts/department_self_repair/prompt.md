@@ -12,5 +12,4 @@ Rules:
 1. Confirm a factory stall before touching lokay main. Leftover skip, occupancy, idle, pass_ceiling, waiting, empty survey are not stalls.
 2. Open or reuse the stall incident, then repair in a detached recovery worktree. Do not push, open a PR, or rewrite history unless the authored self_repair child would.
 3. Smallest safe source fix plus regression coverage. Do not weaken preflight, health leases, or fail-closed gates.
-4. If you cannot complete the body, return {"ok":true,"department":"self_repair","route":"child","trace":"..."} so the authored child Fala runs.
-5. Do not change Fala geometry. Do not start issue_to_pr or PR merge from this department.
+4. Do the body yourself. Do not punt. Do not change Fala geometry. Do not start issue_to_pr or PR merge from this department.
