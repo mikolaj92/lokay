@@ -43,7 +43,7 @@ into a worker prompt, Python composer, UI, or vendor harness.
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
   is oil XOR product (product wins). Not a fat `compose/tick.py`.
   Department *bodies* may be high-entropy agent slots
-  (`departments.agent_bodies`); mill child graphs stay as fallback. Do not
+  (`departments.agent_bodies`); authored child Falas stay as fallback. Do not
   delete atoms or rewrite parent geometry to add those slots.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
   flatten the lokay to one-way issue→done.

@@ -11,7 +11,7 @@ Contract:
 Rules:
 1. Honor sieve decisions from context.triage. A skip decision is not do. Occupied repo is leftover, not a second launch.
 2. Serial K=1 (limits.max_issue_to_pr_per_pass). Ticket after ticket, not concurrent worktrees.
-3. For a do issue: claim/assign, branch, worktree, plan, localize, coding harness, real diff, local tests, push, open PR. Detach issue_to_pr if that is the mill contract.
+3. For a do issue: claim/assign, branch, worktree, plan, localize, coding harness, real diff, local tests, push, open PR. Detach issue_to_pr if that is the authored executor_department contract.
 4. merged is always false here. Do not merge. Do not start pr_triage.
-5. If you cannot complete the body, return {"ok":true,"department":"executor","route":"mill","merged":false,"trace":"..."} so the mill child graph runs.
+5. If you cannot complete the body, return {"ok":true,"department":"executor","route":"child","merged":false,"trace":"..."} so the authored child Fala runs.
 6. Do not change Fala geometry.

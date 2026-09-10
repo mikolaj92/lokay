@@ -10,7 +10,7 @@ from lokay.proc.department_agent_runtime import (
 )
 
 
-def mill(*, config_path: str | None) -> dict:
+def child_graph(*, config_path: str | None) -> dict:
     return run_path(
         path_id="self_repair_department",
         repo="__self_repair_department__",
@@ -24,17 +24,17 @@ def mill(*, config_path: str | None) -> dict:
 def run(*, config_path: str | None = None) -> dict:
     cfg = load_department_cfg(config_path)
 
-    def mill_body() -> dict:
-        return mill(config_path=config_path)
+    def child_body() -> dict:
+        return child_graph(config_path=config_path)
 
     if cfg is None:
-        return {**mill_body(), "body": "mill"}
+        return {**child_body(), "body": "child"}
     live = bool(cfg.live and cfg.executor_enabled)
     return execute_department_agent(
         "self_repair",
         cfg=cfg,
         live=live,
         prompt=prompt_for("self_repair", config_path=config_path),
-        mill=mill_body,
+        child=child_body,
         require_healthy=False,
     )

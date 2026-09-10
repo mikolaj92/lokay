@@ -13,5 +13,5 @@ Rules:
 2. MERGED or CLOSED target PR: skip with pr_already_merged. Do not consume the per-PR receipt.
 3. Lifetime K (limits.max_repairs_per_tick, default 1) via durable pr-repair-receipts. After budget, fail_closed / pr_repair_budget_exhausted.
 4. Repair in the existing worktree/branch: tests, review comments, push. Do not merge from this department. Zero needs_human.
-5. If you cannot complete the body, return {"ok":true,"route":"mill","trace":"..."} so the mill child graph runs.
+5. If you cannot complete the body, return {"ok":true,"route":"child","trace":"..."} so the authored child Fala runs.
 6. Do not change Fala geometry.

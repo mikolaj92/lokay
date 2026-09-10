@@ -10,7 +10,7 @@ from lokay.proc.department_agent_runtime import (
 )
 
 
-def mill(
+def child_graph(
     *,
     pass_dir: str,
     config_path: str | None,
@@ -37,8 +37,8 @@ def run(
     del triage_ran  # sieve is a sibling department; this slot always codes
     cfg = load_department_cfg(config_path)
 
-    def mill_body() -> dict:
-        return mill(
+    def child_body() -> dict:
+        return child_graph(
             pass_dir=pass_dir,
             config_path=config_path,
             live=live,
@@ -46,7 +46,7 @@ def run(
         )
 
     if cfg is None:
-        return {**mill_body(), "body": "mill"}
+        return {**child_body(), "body": "child"}
     return execute_department_agent(
         "executor",
         cfg=cfg,
@@ -58,6 +58,6 @@ def run(
             live=live,
             triage=triage or {},
         ),
-        mill=mill_body,
+        child=child_body,
         pass_dir=pass_dir,
     )

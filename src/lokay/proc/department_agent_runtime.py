@@ -1,7 +1,8 @@
-"""High-entropy department body: one agent slot, mill child as fallback.
+"""High-entropy department body: one agent slot, authored child as fallback.
 
-The parent Fala graph and mill child graphs stay. This runtime only replaces
-the department body. Invalid or refused agent output falls back to the mill.
+The parent Fala graph and department child paths stay. This runtime only
+replaces the department body. Invalid or refused agent output falls back to
+the authored child Fala.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from lokay.pr_review import PrReviewError, extract_json_object
 from lokay.proc._common import agent_execute_allowed, runner, semantic_agent_allowed
 from lokay.tool_contracts import render_contract
 
-Mill = Callable[[], dict[str, Any]]
+ChildGraph = Callable[[], dict[str, Any]]
 
 DEPARTMENTS = (
     "self_repair",
@@ -82,7 +83,7 @@ def normalize(department: str, payload: Mapping[str, Any]) -> dict[str, Any] | N
     data = _as_dict(payload)
     if data.get("ok") is not True:
         return None
-    if str(data.get("route") or "") == "mill":
+    if str(data.get("route") or "") == "child":
         return None
     required = _REQUIRED[department]
     missing = [key for key in required if key not in data]
@@ -134,21 +135,21 @@ def execute_department_agent(
     cfg: Config,
     live: bool,
     prompt: str,
-    mill: Mill,
+    child: ChildGraph,
     pass_dir: str = "",
     timeout_seconds: int | None = None,
     require_healthy: bool = True,
 ) -> dict[str, Any]:
-    """Run one department agent. Mill on refuse, timeout, or invalid JSON."""
+    """Run one department agent. Authored child on refuse, timeout, or invalid JSON."""
     if not agent_bodies_enabled(cfg) or not department_enabled(cfg, department):
-        return {**mill(), "body": "mill"}
+        return {**child(), "body": "child"}
     allowed = (
         agent_execute_allowed(cfg, live_flag=live)
         if require_healthy
         else semantic_agent_allowed(cfg, live_flag=live)
     )
     if not allowed:
-        return {**mill(), "body": "mill"}
+        return {**child(), "body": "child"}
     worktree = worktree_for(cfg, pass_dir=pass_dir)
     timeout = timeout_seconds if timeout_seconds is not None else int(cfg.timeout_seconds)
     result = run_agent(
@@ -162,28 +163,28 @@ def execute_department_agent(
         attach_collector_boundary=department in _CODING,
     )
     if result.get("timed_out") or result.get("status") != "completed":
-        mill_out = mill()
+        child_out = child()
         return {
-            **mill_out,
-            "body": "mill",
+            **child_out,
+            "body": "child",
             "agent_status": str(result.get("status") or "failed"),
             "agent_timed_out": bool(result.get("timed_out")),
         }
     try:
         parsed = extract_json_object(str(result.get("stdout_tail") or ""))
     except PrReviewError:
-        mill_out = mill()
+        child_out = child()
         return {
-            **mill_out,
-            "body": "mill",
+            **child_out,
+            "body": "child",
             "agent_status": "invalid_json",
         }
     normalized = normalize(department, parsed)
     if normalized is None:
-        mill_out = mill()
+        child_out = child()
         return {
-            **mill_out,
-            "body": "mill",
+            **child_out,
+            "body": "child",
             "agent_status": "invalid_contract",
         }
     normalized["agent"] = {

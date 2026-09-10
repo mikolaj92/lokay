@@ -87,9 +87,9 @@ evidence belong inside the existing triage evidence branch (#1001). Published
 verdicts are park / ready / close / skip / split only — zero `needs_human`.
 
 Parent department *bodies* start high-entropy (`departments.agent_bodies`,
-default on). The five `run_*_department` slots keep their mill child graphs
+default on). The five `run_*_department` slots keep their authored child Falas
 and envelopes; the agent must describe inner steps in `trace` and may return
-`route=mill` to run the authored child. Deterministic atoms replace pieces
+`route=child` to run the authored child. Deterministic atoms replace pieces
 later, one contract at a time. The graph geometry does not change.
 
 The allowlist names actual organ bindings, not suffixes or vendor harnesses.
@@ -98,11 +98,11 @@ still require real diff, local verification and publication gates.
 
 | Binding | Class | Uncertainty → bounded result |
 | --- | --- | --- |
-| `run_self_repair_department` | entropy (body) | Stall facts → mill envelope; mill child is fallback |
-| `run_issue_triage_department` | entropy (body) | Open issues → sieve envelope; mill child is fallback |
-| `run_executor_department` | entropy (body) | Do-row → open PR occupancy; mill child is fallback |
-| `run_pr_triage_department` | entropy (body) | Open PRs → merge/feedback/repair verdict; mill child is fallback |
-| `run_pr_repair_department` | entropy (body) | Repair verdict → repaired branch; mill child is fallback |
+| `run_self_repair_department` | entropy (body) | Stall facts → department envelope; authored child is fallback |
+| `run_issue_triage_department` | entropy (body) | Open issues → sieve envelope; authored child is fallback |
+| `run_executor_department` | entropy (body) | Do-row → open PR occupancy; authored child is fallback |
+| `run_pr_triage_department` | entropy (body) | Open PRs → merge/feedback/repair verdict; authored child is fallback |
+| `run_pr_repair_department` | entropy (body) | Repair verdict → repaired branch; authored child is fallback |
 | `issue_triage_agent` | entropy | Issue and hard facts → triage decision |
 | `issue_triage_retry_agent` | entropy | Invalid triage and feedback → corrected decision |
 | `issue_evidence_agent` | entropy | Requested evidence → triage decision |

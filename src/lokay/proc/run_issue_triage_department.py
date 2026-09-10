@@ -10,7 +10,7 @@ from lokay.proc.department_agent_runtime import (
 )
 
 
-def mill(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
+def child_graph(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
     return run_path(
         path_id="issue_triage_department",
         repo="local/issue-triage-department",
@@ -23,11 +23,11 @@ def mill(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
 def run(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
     cfg = load_department_cfg(config_path)
 
-    def mill_body() -> dict:
-        return mill(pass_dir=pass_dir, config_path=config_path, live=live)
+    def child_body() -> dict:
+        return child_graph(pass_dir=pass_dir, config_path=config_path, live=live)
 
     if cfg is None:
-        return {**mill_body(), "body": "mill"}
+        return {**child_body(), "body": "child"}
     return execute_department_agent(
         "issue_triage",
         cfg=cfg,
@@ -38,6 +38,6 @@ def run(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
             config_path=config_path,
             live=live,
         ),
-        mill=mill_body,
+        child=child_body,
         pass_dir=pass_dir,
     )

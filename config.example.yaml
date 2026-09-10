@@ -40,7 +40,7 @@ departments:
   executor: true
   pr_triage: true
   pr_repair: true
-  # High-entropy department bodies (agent) first; mill child graphs stay as fallback.
+  # High-entropy department bodies (agent) first; authored child Falas stay as fallback.
   # Env: LOKAY_DEPARTMENT_AGENT_BODIES=1|0
   agent_bodies: true
 

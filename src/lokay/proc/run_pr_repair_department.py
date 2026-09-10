@@ -13,7 +13,7 @@ from lokay.proc.department_agent_runtime import (
 from lokay.proc.run_parent_pr_repair_subflow import run as run_repair
 
 
-def mill(selected: Mapping[str, Any], *, config_path: str | None, live: bool) -> dict[str, Any]:
+def child_graph(selected: Mapping[str, Any], *, config_path: str | None, live: bool) -> dict[str, Any]:
     route = str(selected.get("route") or "")
     if route == "fail_closed":
         return ok(
@@ -38,19 +38,19 @@ def run(
     config_path: str | None,
     live: bool,
 ) -> dict[str, Any]:
-    def mill_body() -> dict[str, Any]:
-        return mill(selected, config_path=config_path, live=live)
+    def child_body() -> dict[str, Any]:
+        return child_graph(selected, config_path=config_path, live=live)
 
     route = str(selected.get("route") or "")
     if route in {"fail_closed", ""} or route != "repair":
-        return {**mill_body(), "body": "mill"}
+        return {**child_body(), "body": "child"}
     cfg = load_department_cfg(config_path)
     if cfg is None:
-        return {**mill_body(), "body": "mill"}
+        return {**child_body(), "body": "child"}
     return execute_department_agent(
         "pr_repair",
         cfg=cfg,
         live=live,
         prompt=prompt_for("pr_repair", selected=dict(selected), live=live),
-        mill=mill_body,
+        child=child_body,
     )

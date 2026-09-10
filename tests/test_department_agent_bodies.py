@@ -1,4 +1,4 @@
-"""Department bodies: high-entropy agent slots with mill child fallback."""
+"""Department bodies: high-entropy agent slots with authored child fallback."""
 
 from __future__ import annotations
 
@@ -105,14 +105,14 @@ def test_missing_trace_is_not_a_body():
     )
 
 
-def test_route_mill_is_not_a_body():
+def test_route_child_is_not_a_body():
     assert (
         normalize(
             "issue_triage",
             {
                 "ok": True,
                 "department": "issue_triage",
-                "route": "mill",
+                "route": "child",
                 "launched": None,
                 "trace": "cannot list issues",
             },
@@ -170,21 +170,21 @@ def test_valid_agent_json_is_the_body(monkeypatch, tmp_path: Path):
         "lokay.proc.department_agent_runtime.agent_execute_allowed",
         lambda *_a, **_k: True,
     )
-    mill_calls = {"n": 0}
+    child_calls = {"n": 0}
 
-    def mill() -> dict:
-        mill_calls["n"] += 1
-        raise AssertionError("mill must not run when the agent envelope is valid")
+    def child() -> dict:
+        child_calls["n"] += 1
+        raise AssertionError("authored child must not run when the agent envelope is valid")
 
     out = execute_department_agent(
         "issue_triage",
         cfg=_cfg(),
         live=True,
         prompt="x",
-        mill=mill,
+        child=child,
         pass_dir=str(tmp_path),
     )
-    assert mill_calls["n"] == 0
+    assert child_calls["n"] == 0
     assert out["body"] == "agent"
     assert out["route"] == "idle"
     assert out["launched"] is None
@@ -193,7 +193,7 @@ def test_valid_agent_json_is_the_body(monkeypatch, tmp_path: Path):
     assert "github.read" in runner.specs[0].env["LOKAY_CAPABILITIES"]
 
 
-def test_invalid_json_falls_back_to_mill(monkeypatch, tmp_path: Path):
+def test_invalid_json_falls_back_to_child(monkeypatch, tmp_path: Path):
     runner = _FakeRunner("not json")
     monkeypatch.setattr(
         "lokay.proc.department_agent_runtime.runner", lambda _cfg=None: runner
@@ -207,15 +207,15 @@ def test_invalid_json_falls_back_to_mill(monkeypatch, tmp_path: Path):
         cfg=_cfg(),
         live=True,
         prompt="x",
-        mill=lambda: {"ok": True, "route": "idle", "department": "issue_triage"},
+        child=lambda: {"ok": True, "route": "idle", "department": "issue_triage"},
         pass_dir=str(tmp_path),
     )
-    assert out["body"] == "mill"
+    assert out["body"] == "child"
     assert out["agent_status"] == "invalid_json"
     assert out["route"] == "idle"
 
 
-def test_timeout_falls_back_to_mill(monkeypatch, tmp_path: Path):
+def test_timeout_falls_back_to_child(monkeypatch, tmp_path: Path):
     runner = _FakeRunner("", timed_out=True, returncode=124)
     monkeypatch.setattr(
         "lokay.proc.department_agent_runtime.runner", lambda _cfg=None: runner
@@ -229,24 +229,24 @@ def test_timeout_falls_back_to_mill(monkeypatch, tmp_path: Path):
         cfg=_cfg(),
         live=True,
         prompt="x",
-        mill=lambda: {"ok": True, "route": "idle", "merged": False},
+        child=lambda: {"ok": True, "route": "idle", "merged": False},
         pass_dir=str(tmp_path),
     )
-    assert out["body"] == "mill"
+    assert out["body"] == "child"
     assert out["agent_timed_out"] is True
 
 
-def test_disabled_agent_bodies_call_mill(monkeypatch):
+def test_disabled_agent_bodies_call_child(monkeypatch):
     monkeypatch.setattr(
         "lokay.proc.run_issue_triage_department.run_path",
         lambda **kwargs: {"ok": True, "path": kwargs["path_id"]},
     )
     out = run_issue_triage(pass_dir="/pass", config_path=None, live=False)
-    assert out["body"] == "mill"
+    assert out["body"] == "child"
     assert out["path"] == "issue_triage_department"
 
 
-def test_wrappers_keep_mill_child_ids(monkeypatch):
+def test_wrappers_keep_child_path_ids(monkeypatch):
     seen: list[str] = []
 
     def capture(**kwargs):
@@ -284,7 +284,7 @@ def test_pr_repair_fail_closed_does_not_start_agent():
         live=False,
     )
     assert out["route"] == "fail_closed"
-    assert out["body"] == "mill"
+    assert out["body"] == "child"
     assert "needs_human" not in out
 
 

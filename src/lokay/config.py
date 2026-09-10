@@ -98,7 +98,7 @@ class Config:
     department_executor: bool = True
     department_pr_triage: bool = True
     department_pr_repair: bool = True
-    # High-entropy department bodies. Mill child graphs stay as fallback.
+    # High-entropy department bodies. Authored child Falas stay as fallback.
     department_agent_bodies: bool = True
     config_path: Path | None = None
 

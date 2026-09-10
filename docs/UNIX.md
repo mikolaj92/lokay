@@ -90,7 +90,7 @@ independent and tested, not a second parent spine.
 
 **Factory-pass law:** the parent conducts five departments, not a Python
 select-first/houseclean-otherwise loop. Each department is a child Fala;
-the live body may be a high-entropy agent slot with that mill child as
+the live body may be a high-entropy agent slot with that authored child as
 fallback. CLI wrappers only enter graphs. `compose/tick.py` must not become a fleet
 scheduler. Removing old-spine surfaces must preserve required domain jobs
 under the appropriate department, not create another CLI org chart.
