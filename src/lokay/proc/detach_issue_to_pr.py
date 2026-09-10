@@ -9,6 +9,7 @@ from lokay.proc.issue_delivery_process import (
     is_live_issue_to_pr_pid,
     pid_is_alive,
     terminate_issue_to_pr_pid,
+    terminate_orphan_coders_for_issue,
     wrapper_has_coding_descendant,
 )
 from lokay.proc.issue_delivery_occupancy import (
@@ -30,6 +31,7 @@ __all__ = [
     "is_live_issue_to_pr_pid",
     "pid_is_alive",
     "terminate_issue_to_pr_pid",
+    "terminate_orphan_coders_for_issue",
     "wrapper_has_coding_descendant",
     "clear_dead_issue_to_pr_receipts",
     "clear_issue_to_pr_receipt",

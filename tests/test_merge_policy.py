@@ -76,11 +76,22 @@ def _review(
         (
             {
                 "merge_enabled": True,
+                "require_checks": True,
                 "checks": {"status": "failed"},
                 "review": _review("approve"),
             },
             "repair",
             "checks_failed",
+        ),
+        (
+            {
+                "merge_enabled": True,
+                "require_checks": False,
+                "checks": {"status": "failed"},
+                "review": _review("approve"),
+            },
+            "merge",
+            "approve_green",
         ),
         (
             {

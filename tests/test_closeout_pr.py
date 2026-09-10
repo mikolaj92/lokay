@@ -59,7 +59,16 @@ def test_checks_route_repairs_once():
     from lokay.proc.route_closeout_checks import route
     from lokay.proc.authorize_closeout_repair import authorize
 
-    item = _selected() | {"pr_number": 7, "head": "ai/fix/7-x"}
+    item = _selected() | {
+        "pr_number": 7,
+        "head": "ai/fix/7-x",
+        "policy": {
+            "merge_enabled": True,
+            "require_checks": True,
+            "executor_enabled": True,
+            "branch_prefix": "ai/fix/",
+        },
+    }
     routed = route(
         {"inspected": item},
         {"route": "route", "checks": {"ok": True, "status": "failed"}},

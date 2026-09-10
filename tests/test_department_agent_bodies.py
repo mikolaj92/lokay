@@ -55,6 +55,34 @@ def test_pr_triage_prompt_merges_green_before_red_repair():
     assert "Prefer this over any red PR" in text
     assert "pr_repair_budget_exhausted" in text
     assert "Do not pick the same red PR every pass" in text
+    assert "require_checks=false" in text
+    assert "UNSTABLE" in text
+    assert "no checks" in text.lower() or "no-checks" in text.lower()
+
+
+def test_pr_triage_agent_timeout_falls_back_to_child(monkeypatch, tmp_path: Path):
+    from lokay.proc.agent_pr_triage_department import run as agent_pr_triage
+
+    monkeypatch.setattr(
+        "lokay.proc.run_pr_triage_department.execute_department_agent",
+        lambda *a, **k: {
+            "ok": True,
+            "body": "child",
+            "department": "pr_triage",
+            "route": "pr",
+            "verdict": "merge",
+            "repair_started": False,
+            "trace": "authored child merged MERGEABLE no-checks PR",
+        },
+    )
+    monkeypatch.setattr(
+        "lokay.proc.run_pr_triage_department.load_department_cfg",
+        lambda _p: _cfg(),
+    )
+    out = agent_pr_triage(pass_dir=str(tmp_path), config_path="/cfg.yaml", live=True)
+    assert out["body"] == "child"
+    assert out["verdict"] == "merge"
+    assert out["ok"] is True
 
 
 def test_issue_triage_prompt_do_is_shippable():

@@ -1,69 +1,9 @@
-"""Experiment: pr_triage body is one agent call. Child Fala stays unused."""
+"""Live parent slot: pr_triage agent with authored child Fala fallback."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from lokay.agent import AgentError, run_agent
-from lokay.config import load_config
-from lokay.pr_review import PrReviewError, extract_json_object
-from lokay.proc._common import runner
-from lokay.tool_contracts import render_contract
+from lokay.proc.run_pr_triage_department import run as run_slot
 
 
 def run(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
-    cfg = load_config(config_path)
-    prompt = render_contract(
-        "department_pr_triage",
-        context=json.dumps(
-            {"pass_dir": pass_dir, "config_path": config_path, "live": live},
-            ensure_ascii=False,
-            default=str,
-        ),
-    )
-    worktree = Path(pass_dir).expanduser() if pass_dir else Path(__file__).resolve().parents[3]
-    if not worktree.is_dir():
-        worktree = Path(__file__).resolve().parents[3]
-    try:
-        result = run_agent(
-            runner(cfg),
-            cfg,
-            worktree=worktree,
-            prompt=prompt,
-            execute=True,
-            session_kind="department-pr-triage",
-            timeout_seconds=int(cfg.timeout_seconds),
-            attach_collector_boundary=False,
-        )
-    except AgentError as exc:
-        return {
-            "ok": False,
-            "department": "pr_triage",
-            "error": str(exc),
-            "body": "agent",
-            "repair_started": False,
-        }
-    if result.get("timed_out") or result.get("status") != "completed":
-        return {
-            "ok": False,
-            "department": "pr_triage",
-            "error": "agent_did_not_complete",
-            "status": result.get("status"),
-            "timed_out": bool(result.get("timed_out")),
-            "body": "agent",
-            "repair_started": False,
-        }
-    try:
-        parsed = extract_json_object(str(result.get("stdout_tail") or ""))
-    except PrReviewError as exc:
-        return {
-            "ok": False,
-            "department": "pr_triage",
-            "error": str(exc),
-            "body": "agent",
-            "repair_started": False,
-        }
-    parsed["body"] = "agent"
-    parsed["repair_started"] = False
-    return parsed
+    return run_slot(pass_dir=pass_dir, config_path=config_path, live=live)

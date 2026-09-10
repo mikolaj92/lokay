@@ -11,8 +11,52 @@ def test_under_budget_routes_keep(monkeypatch):
         "lokay.proc.check_receipt_budget.check_pi_budget",
         lambda pid, budget: {"over_budget": False, "elapsed_s": 12},
     )
-    out = check({"pid": 7}, {"closed": False}, budget_s=480)
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.coding_live_for_issue",
+        lambda _issue: True,
+    )
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.pid_is_alive",
+        lambda _pid: True,
+    )
+    out = check({"pid": 7, "issue": 38}, {"closed": False}, budget_s=480)
     assert out["route"] == "keep" and out["elapsed_s"] == 12
+
+
+def test_dead_wrapper_with_orphan_coder_inspects(monkeypatch):
+    from lokay.proc.check_receipt_budget import check
+
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.check_pi_budget",
+        lambda pid, budget: {"over_budget": False, "elapsed_s": 0},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.coding_live_for_issue",
+        lambda issue: issue == 38,
+    )
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.pid_is_alive",
+        lambda _pid: False,
+    )
+    out = check({"pid": 6159, "issue": 38}, {"closed": False}, budget_s=1800)
+    assert out["route"] == "inspect_coder"
+    assert out["over_budget"] is True
+
+
+def test_inspect_coder_sees_orphan_after_wrapper_died(monkeypatch):
+    from lokay.proc.inspect_budget_coder import inspect
+
+    monkeypatch.setattr(
+        "lokay.proc.inspect_budget_coder.wrapper_has_coding_descendant",
+        lambda _pid: False,
+    )
+    monkeypatch.setattr(
+        "lokay.proc.inspect_budget_coder.coding_live_for_issue",
+        lambda issue: issue == 38,
+    )
+    out = inspect({"pid": 6159, "issue": 38, "route": "inspect_coder"})
+    assert out["coder_live"] is True
+    assert out["route"] == "reap"
 
 
 def test_closed_issue_routes_reap_even_under_budget(monkeypatch):

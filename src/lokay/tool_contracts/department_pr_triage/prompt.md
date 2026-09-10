@@ -12,13 +12,13 @@ Contract:
 
 Work:
 1. `gh pr list` for configured repos, branch prefix `ai/fix` (or config `branch_prefix`). If none: `route=none`, `verdict=none`.
-2. For **each** open PR this pass: `gh pr checks` / `gh pr view`. Classify green / pending / red. Do not stop at the first row.
+2. For **each** open PR this pass: `gh pr checks` / `gh pr view`. Classify green / pending / red. Do not stop at the first row. Read `merge.require_checks` and `merge.require_llm_review` from config / context.
 3. Order (Done first):
-   - quality + green checks → `gh pr merge` onto default (`verdict=merge`). That is Done. Prefer this over any red PR.
+   - MERGEABLE quality PR: green checks, **or** no checks (`gh pr checks` "no checks reported"), **or** GitHub `UNSTABLE` while `require_checks=false` → `gh pr merge` onto default (`verdict=merge`). That is Done. Prefer this over any red PR. Occupancy with an already-open covering PR is this department, not `executor`.
    - checks pending → waiting, not merge.
    - quality fail, checks green → comments (`verdict=feedback`), no merge.
-   - red checks: if this PR is parked / `pr_repair_budget_exhausted`, **skip it this pass** and take the next PR. Else `verdict=repair` (parent may start `pr_repair`). `repair_started=false`. No merge.
-4. Never start `pr_repair`. Never merge red tests. Never treat `health=hosted` or agent-ok as Done.
+   - red checks **when `require_checks=true`**: if this PR is parked / `pr_repair_budget_exhausted`, **skip it this pass** and take the next PR. Else `verdict=repair` (parent may start `pr_repair`). `repair_started=false`. No merge. UNSTABLE / failing remote Actions is not a gate when `require_checks=false`.
+4. Never start `pr_repair`. Never merge a CONFLICTING / DIRTY PR. Never treat `health=hosted` or agent-ok as Done.
 5. Do not pick the same red PR every pass while a green mergeable PR exists.
 
 Do not change Fala geometry.

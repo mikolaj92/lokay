@@ -273,6 +273,7 @@ def test_soft_merge_policy_reasons_never_become_stall_evidence(tmp_path):
     assert pending.action == "waiting" and pending.reason == "checks_pending"
     repair = decide_auto_merge(
         merge_enabled=True,
+        require_checks=True,
         checks={"status": "failed"},
         review={"merge_ok": True, "decision": {"verdict": "approve", "secrets": False}},
     )

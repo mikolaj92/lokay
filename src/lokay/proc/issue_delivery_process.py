@@ -145,8 +145,7 @@ def wrapper_has_coding_descendant(
     return False
 
 
-def coding_live_for_issue(issue: int) -> bool:
-    """Orphan coder still writing this ticket after the wrapper died."""
+def _coder_pids_for_issue(issue: int) -> list[int]:
     needle = f"implement GitHub issue #{int(issue)}"
     try:
         done = subprocess.run(
@@ -157,8 +156,32 @@ def coding_live_for_issue(issue: int) -> bool:
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return False
-    return bool((done.stdout or "").strip())
+        return []
+    out: list[int] = []
+    for line in (done.stdout or "").splitlines():
+        try:
+            pid = int(line.strip())
+        except ValueError:
+            continue
+        if pid > 0:
+            out.append(pid)
+    return out
+
+
+def coding_live_for_issue(issue: int) -> bool:
+    """Orphan coder still writing this ticket after the wrapper died."""
+    return bool(_coder_pids_for_issue(issue))
+
+
+def terminate_orphan_coders_for_issue(
+    issue: int, *, timeout_seconds: float = 5.0
+) -> bool:
+    """Kill leftover implement sessions after the wrapper PID is gone."""
+    killed = False
+    for pid in _coder_pids_for_issue(issue):
+        if terminate_issue_to_pr_pid(pid, timeout_seconds=timeout_seconds):
+            killed = True
+    return killed
 
 
 def is_live_issue_to_pr_pid(pid: int) -> bool:

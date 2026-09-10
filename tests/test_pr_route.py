@@ -41,11 +41,23 @@ def test_transient_checks_route_wait_not_repair():
 
 
 def test_failed_routes_repair():
-    out = run_pr_route(checks={"status": "failed"}, merge_enabled=True)
+    out = run_pr_route(
+        checks={"status": "failed"}, merge_enabled=True, require_checks=True
+    )
     assert out["ok"] is True
     assert out["route"] == "repair"
     assert out["reason"] == "checks_failed"
     assert out["repairable"] is True
+
+
+def test_failed_without_require_checks_merges():
+    out = run_pr_route(
+        checks={"status": "failed"},
+        merge_enabled=True,
+        require_checks=False,
+    )
+    assert out["ok"] is True
+    assert out["route"] == "merge"
 
 
 def test_merge_disabled_routes_wait():
@@ -79,7 +91,9 @@ def test_pending_still_waits_when_merge_disabled():
 
 
 def test_failed_still_repairs_when_merge_disabled():
-    out = run_pr_route(checks={"status": "failed"}, merge_enabled=False)
+    out = run_pr_route(
+        checks={"status": "failed"}, merge_enabled=False, require_checks=True
+    )
     assert out["route"] == "repair"
     assert out["reason"] == "checks_failed"
 

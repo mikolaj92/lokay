@@ -7,8 +7,13 @@ def test_green_checks_route_to_review():
 
 
 def test_failed_checks_route_to_repair():
-    out = classify({"status": "failed"})
+    out = classify({"status": "failed", "require_checks": True})
     assert out["route"] == "repair" and out["repairable"] is True
+
+
+def test_unstable_without_require_checks_reviews():
+    out = classify({"status": "failed", "require_checks": False})
+    assert out["route"] == "review"
 
 
 def test_pending_and_offline_wait():

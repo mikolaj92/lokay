@@ -123,7 +123,10 @@ def _checks_mergeable(
     if status == "pending":
         return False, "checks_pending", "waiting"
     if status == "failed":
-        return False, "checks_failed", "repair"
+        if require_checks:
+            return False, "checks_failed", "repair"
+        # Local trust: remote UNSTABLE is not a merge gate.
+        return True, None, None
     if status == "none":
         if require_checks and not checks.get("merge_ok"):
             return False, "checks_none_require_checks", "waiting"

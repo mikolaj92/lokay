@@ -18,7 +18,9 @@ def classify(checks: Mapping[str, Any]) -> dict[str, Any]:
     ):
         return ok(route="review", reason="checks_green")
     if status == "failed":
-        return ok(route="repair", reason="checks_failed", repairable=True)
+        if checks.get("require_checks"):
+            return ok(route="repair", reason="checks_failed", repairable=True)
+        return ok(route="review", reason="checks_unstable_not_required")
     if status == "pending":
         return ok(route="wait", reason="checks_pending", waiting=True)
     if status == "none":
