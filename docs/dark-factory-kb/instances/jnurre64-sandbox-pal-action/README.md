@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Sandbox Pal / claude-agent-dispatch (`jnurre64/sandbox-pal-action`)
 
 Reusable **label-driven** dispatch: etykieta `agent` odpala FSM (triage → plan HITL → implement TDD → adversarial review → PR → revision → cleanup). Agent-pipeline na GHA + Claude Code / Codex, bez SaaS.

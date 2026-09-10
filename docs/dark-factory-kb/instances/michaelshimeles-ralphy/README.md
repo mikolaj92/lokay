@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Ralphy
 
 **Repo:** [michaelshimeles/ralphy](https://github.com/michaelshimeles/ralphy) · ★2969 · TypeScript (+ bash) · npm `ralphy-cli` · MIT-like (brak SPDX w API)

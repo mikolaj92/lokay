@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Agent Ready Gate (`agentlane/agent-ready`)
 
 Marketplace Action + CLI/MCP/SDK: **Definition-of-Ready** przed agentem. Lintuje ticket (AC, repo target, risk, ambiguous verbs…), komentuje issue i przełącza label `agent-ready` — dopiero wtedy drugi workflow dispatchuje coding agenta.

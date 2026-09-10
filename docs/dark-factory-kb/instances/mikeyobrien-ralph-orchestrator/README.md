@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Ralph Orchestrator
 
 **Repo:** [mikeyobrien/ralph-orchestrator](https://github.com/mikeyobrien/ralph-orchestrator) · ★3132 · Rust (+ TS dashboard) · MIT · CLI `ralph` / npm `@ralph-orchestrator/ralph-cli`

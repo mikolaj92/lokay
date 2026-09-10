@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # chippingway/orchestrator (ex `geserdugarov/agent-orchestrator`)
 
 Lokalny orchestrator, który polluje open issues, prowadzi je etykietami `workflow:*`, odpala CLI agentów (Claude/Codex) w izolowanym git worktree, otwiera PR, robi niezależny review pass i pinguje HITL do ręcznego merge. Klepacz ticket→PR ze state machine w samym issue (label + pinned JSON comment).

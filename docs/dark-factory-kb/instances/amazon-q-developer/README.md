@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Amazon Q Developer (GitHub / GitLab)
 
 **Confidence: 86** — klasyczny label klepacz: `Amazon Q development agent` lub `/q dev` → PR; osobny review agent; merge ludzki.

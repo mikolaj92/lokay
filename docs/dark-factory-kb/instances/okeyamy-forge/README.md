@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Forge (OkeyAmy)
 
 **Repo:** [OkeyAmy/forge](https://github.com/OkeyAmy/forge) · ★5 · Rust · Docker-first · license NOASSERTION

@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # Qoder AI Employees / QoderWake — Chiny (Alibaba)
 
 **Produkt:** [QoderWake](https://docs.qoder.com/qoderwake/overview) · Enterprise [AI Employees](https://docs.qoder.com/enterprise/solutions/ai-employees) · demo OSS [blue199288/order-coupon-devops-demo](https://github.com/blue199288/order-coupon-devops-demo) (★1)

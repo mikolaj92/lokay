@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # shipshitdev/skills — label dispatch (`dispatch:claude` / `dispatch:codex`)
 
 Marketplace skilli + gotowe GitHub Actions, które po etykiecie **`dispatch:claude`** (lub **`dispatch:codex`**) odpalaają autonomiczny loop: claim → branch → implement (TDD) → qa-reviewer → PR → kolumna Human Review. Historycznie gate nazywał się `ready-for-agent` / `ready-for-codex`; obecny kontrakt to `dispatch:*`.

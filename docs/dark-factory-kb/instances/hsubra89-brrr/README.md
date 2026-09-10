@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # hsubra89/brrr
 
 **Confidence: 84** — Rust CLI „ralph loop”: label (GH/Linear) → worktree → choose/implement/review → PR; agent-agnostic (Claude/Codex/OpenCode).

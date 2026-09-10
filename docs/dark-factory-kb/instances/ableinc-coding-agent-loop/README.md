@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # ableinc/coding-agent-loop
 
 **Confidence: 88** — czysta mrówka Go: label → plan HITL → worktree → testy → draft PR; harness (nie model) własnie git/GitHub; nigdy nie merguje.

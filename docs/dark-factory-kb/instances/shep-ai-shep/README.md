@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # shep-ai/shep (`@shepai/cli`)
 
 **Confidence: 86** — lokalny npx daemon + worktree fleet: opis → (opcjonalne spec gates) → agent → commit/push/CI-fix → draft PR; merge tylko z flagą.

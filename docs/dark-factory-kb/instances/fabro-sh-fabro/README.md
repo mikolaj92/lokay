@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # fabro-sh/fabro
 
 **Confidence: 80** — „software factory” z DOT/graph + sandboxes; HITL gates — real mill, nie czysty głupi klepacz.

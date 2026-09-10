@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # AI-SDLC Framework (`ai-sdlc-framework/ai-sdlc`)
 
 Decision Engine + autonomiczny orchestrator: operator domyka **Definition-of-Ready**, `cli-orchestrator tick` chodzi po grafie zależności, dispatchuje subagentów w worktree, 3 reviewerów cross-harness, DSSE attestation → **PR otwiera się sam**.

@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # JP Explaza `ai-implement` — klon label→PR (poza Solvio/JBS)
 
 **Źródło:** [Zenn / エクスプラザ tsucchi](https://zenn.dev/explaza/articles/f4bc2027530ffa) · 2026-03 · Asana→n8n→Issue→claude-code-action→Draft PR

@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Trismegistus (`tmg`)
 
 **Repo:** [jessekaff/trismegistus](https://github.com/jessekaff/trismegistus) · ★0 · TypeScript · MIT · CLI `tmg`

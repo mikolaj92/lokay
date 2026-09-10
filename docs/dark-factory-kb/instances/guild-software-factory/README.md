@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Guild Software Factory
 
 **Confidence: 90** — komercyjny klepacz (plan→implement→review→handoff), jawny brak auto-merge; metryki własne vendora, nie L5.

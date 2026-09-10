@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Coder Tasks (label → workspace agent → PR)
 
 **Confidence: 80** — jasny klepacz `coder` label → Action → Task/Claude Code → PR; self-hosted CDE. Uwaga: Tasks → ESR / zastępowane przez Coder Agents (2026).

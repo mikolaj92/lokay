@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Finn-loop
 
 **Repo:** [finna/Finn-loop](https://github.com/finna/Finn-loop) · ★306 · JS (Claude Code skills) · MIT

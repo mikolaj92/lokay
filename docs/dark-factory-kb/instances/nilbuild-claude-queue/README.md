@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # claude-queue (`nilbuild/claude-queue`)
 
 CLI klepacz: bierze open issues (opcjonalnie filtrowane `--label`), odpala Claude Code jedno po drugim, oznacza `claude-queue:in-progress|solved|failed` i zbiera zmiany w PR (domyślnie branch dzienny). Prostszy niż fabryka — nocny batch ticket→PR na lokalnej maszynie.

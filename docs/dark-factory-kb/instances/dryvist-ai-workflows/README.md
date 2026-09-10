@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # dryvist/ai-workflows (+ wzorzec `ai:ready`)
 
 Biblioteka reusable GitHub Actions (`workflow_call`) do AI-ops: triage, sweeper, CI-fix, a w ścieżce klepacza — `cc-issue-resolver` oraz konsumenci z etykietą **`ai:ready`**, którzy odpalaają Claude/Codex albo przypisują Copilot Coding Agent. To nie L5 fabryka produktu, tylko importowalne mrówki ticket→PR / ticket→fix.

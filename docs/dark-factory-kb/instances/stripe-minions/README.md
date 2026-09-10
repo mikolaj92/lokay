@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # Stripe Minions
 
 **Confidence: 92** — oficjalne eseje Stripe.dev (UX + architektura); brak publicznego repo; metryki własne Stripe (~1300 merged PR/tydzień, zero human-written code, human review).

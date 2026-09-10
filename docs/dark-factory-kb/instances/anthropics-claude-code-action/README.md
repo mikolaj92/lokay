@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # anthropics/claude-code-action
 
 **Confidence: 92** — oficjalny label/automation → branch/PR; budulec klepacza w Actions.

@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Ramp Inspect
 
 **Confidence: 91** — oficjalny eng blog Ramp + szczegółowy „paste this into an agent” spec; brak publicznego repo Inspect; harness OpenCode OSS.

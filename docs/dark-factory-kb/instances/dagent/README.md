@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # DAGent
 
 **Repo:** [rkaliupin/DAGent](https://github.com/rkaliupin/DAGent) · ★0 · TypeScript · autonomous-factory

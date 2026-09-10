@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # OvernightAgent (`oa`)
 
 **Repo:** [a20185/OvernightAgent](https://github.com/a20185/OvernightAgent) · ★1 · TypeScript (pnpm monorepo) · MIT · CLI `oa`

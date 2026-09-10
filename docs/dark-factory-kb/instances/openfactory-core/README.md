@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # openfactory-core (OpenFactory Digital)
 
 **Repo:** [Open-Factory-Digital/openfactory-core](https://github.com/Open-Factory-Digital/openfactory-core) · ★4 · Python · Apache-2.0
