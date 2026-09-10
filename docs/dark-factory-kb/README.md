@@ -28,6 +28,7 @@ spec/harness/politykę; maszyna dowozi PR-y.
 | [MAZUR_AUTONOM.md](./MAZUR_AUTONOM.md) | Mazur autonom ↔ harness |
 | [STRATEGY_AGENT_FIRST.md](./STRATEGY_AGENT_FIRST.md) | Teza: najpierw działający mill agentowy |
 | [KLEPACZ.md](./KLEPACZ.md) | **Kanon:** ticket-to-PR / klepacz, nie L5 |
+| [WORKING_KLEPACZ_GRAPH.md](./WORKING_KLEPACZ_GRAPH.md) | Dzialajacy cienki graf + pewniaczki + SO |
 | [commercial/](./commercial/) | Produkty zamknięte / SaaS |
 | [oss/](./oss/) | Open source i projekty „dosłownie dark factory” |
 | [emerging/](./emerging/) | Sąsiednie / emerging |
