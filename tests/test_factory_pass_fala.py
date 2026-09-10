@@ -54,9 +54,10 @@ if a in {{{kids}}}:v.update(ok=True)"""
 def _require_fala_host():
     pytest.importorskip("fala")
     try:
-        from fala._build import ensure_process_host_library
+        from fala._build import ensure_native, ensure_process_host_library
 
         ensure_process_host_library()
+        ensure_native()
     except Exception as exc:
         pytest.skip(f"fala host unavailable: {exc}")
 

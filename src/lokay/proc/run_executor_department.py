@@ -1,6 +1,29 @@
 """Parent slot: executor_department. Code and PR. Not sieve. Not merge."""
 
+from __future__ import annotations
+
 from lokay.graph_run import run_path
+from lokay.proc.department_agent_runtime import (
+    execute_department_agent,
+    load_department_cfg,
+    prompt_for,
+)
+
+
+def mill(
+    *,
+    pass_dir: str,
+    config_path: str | None,
+    live: bool,
+    triage: dict | None = None,
+) -> dict:
+    return run_path(
+        path_id="executor_department",
+        repo="local/executor-department",
+        config_path=config_path,
+        live=live,
+        extra_inputs={"pass_dir": pass_dir, "triage": triage or {}},
+    )
 
 
 def run(
@@ -12,10 +35,29 @@ def run(
     triage: dict | None = None,
 ) -> dict:
     del triage_ran  # sieve is a sibling department; this slot always codes
-    return run_path(
-        path_id="executor_department",
-        repo="local/executor-department",
-        config_path=config_path,
+    cfg = load_department_cfg(config_path)
+
+    def mill_body() -> dict:
+        return mill(
+            pass_dir=pass_dir,
+            config_path=config_path,
+            live=live,
+            triage=triage,
+        )
+
+    if cfg is None:
+        return {**mill_body(), "body": "mill"}
+    return execute_department_agent(
+        "executor",
+        cfg=cfg,
         live=live,
-        extra_inputs={"pass_dir": pass_dir, "triage": triage or {}},
+        prompt=prompt_for(
+            "executor",
+            pass_dir=pass_dir,
+            config_path=config_path,
+            live=live,
+            triage=triage or {},
+        ),
+        mill=mill_body,
+        pass_dir=pass_dir,
     )

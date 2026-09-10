@@ -92,6 +92,13 @@ def run_overridden_path(
     import pytest
 
     pytest.importorskip("fala")
+    try:
+        from fala._build import ensure_native, ensure_process_host_library
+
+        ensure_process_host_library()
+        ensure_native()
+    except Exception as exc:
+        pytest.skip(f"fala host unavailable: {exc}")
     root = Path(__file__).resolve().parents[2]
     work = Path(tmp_path) / run_id
     work.mkdir(parents=True, exist_ok=True)

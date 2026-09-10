@@ -17,7 +17,7 @@ dependencies = [
 dev = ["pytest>=8.0", "httpx2>=2.12.0"]
 
 [tool.uv.sources]
-fala = { git = "https://github.com/mikolaj92/Fala.git", tag = "v0.8.0" }
+fala = { git = "https://github.com/mikolaj92/Fala.git", rev = "ddd5b801ddaf257953aef859a7bc3fb508363c07" }
 app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.22" }
 kofte = { git = "https://github.com/mikolaj92/Kofte.git", rev = "cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" }
 

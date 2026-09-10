@@ -242,7 +242,13 @@ def run_agent(
 
     timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
     from lokay.capabilities import executor_environment
-    capability_env = executor_environment("reviewer" if session_kind.startswith("review") else "builder", os.environ)
+    if str(session_kind).startswith("department"):
+        role = "department"
+    elif str(session_kind).startswith("review"):
+        role = "reviewer"
+    else:
+        role = "builder"
+    capability_env = executor_environment(role, os.environ)
     capability_env["LOKAY_HEALTH_LEASE"] = ""
     result = runner.run(
         CommandSpec(

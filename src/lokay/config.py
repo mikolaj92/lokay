@@ -98,6 +98,8 @@ class Config:
     department_executor: bool = True
     department_pr_triage: bool = True
     department_pr_repair: bool = True
+    # High-entropy department bodies. Mill child graphs stay as fallback.
+    department_agent_bodies: bool = True
     config_path: Path | None = None
 
     @property
@@ -315,6 +317,7 @@ def apply_env_overrides(cfg: Config) -> Config:
         ("LOKAY_DEPARTMENT_EXECUTOR", "department_executor"),
         ("LOKAY_DEPARTMENT_PR_TRIAGE", "department_pr_triage"),
         ("LOKAY_DEPARTMENT_PR_REPAIR", "department_pr_repair"),
+        ("LOKAY_DEPARTMENT_AGENT_BODIES", "department_agent_bodies"),
     ):
         flag = _env_truthy(env_name)
         if flag is not None:
@@ -431,6 +434,11 @@ def load_config(path: str | Path | None = None) -> Config:
             (data.get("departments") or {}).get("pr_repair", True),
             True,
             field="departments.pr_repair",
+        ),
+        department_agent_bodies=_yaml_bool(
+            (data.get("departments") or {}).get("agent_bodies", True),
+            True,
+            field="departments.agent_bodies",
         ),
         config_path=cfg_path,
     )

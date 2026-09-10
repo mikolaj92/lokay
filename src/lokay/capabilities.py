@@ -8,6 +8,16 @@ from typing import Mapping
 ROLE_CAPABILITIES = {
     "builder": {"code.write"},
     "reviewer": {"evidence.read", "verdict.propose"},
+    "department": {
+        "github.read",
+        "github.write",
+        "git.write",
+        "code.write",
+        "pr.create",
+        "pr.merge",
+        "issue.close",
+        "verdict.propose",
+    },
     "acceptance_effect": {"acceptance.write"},
     "push_effect": {"git.push"},
     "merge_effect": {"pr.merge"},
@@ -16,6 +26,34 @@ ROLE_CAPABILITIES = {
 }
 
 _AGENT_ROLES = frozenset({"builder", "reviewer"})
+_DEPARTMENT_ENV_KEYS = frozenset({
+    "PATH",
+    "HOME",
+    "USER",
+    "SHELL",
+    "TMPDIR",
+    "LANG",
+    "TERM",
+    "GH_TOKEN",
+    "GH_HOST",
+    "GH_CONFIG_DIR",
+    "GH_ENTERPRISE_TOKEN",
+    "GITHUB_TOKEN",
+    "XDG_CONFIG_HOME",
+    "SSH_AUTH_SOCK",
+    "LOKAY_CONFIG",
+    "LOKAY_ROOT",
+    "LOKAY_AGENT",
+})
+_DEPARTMENT_ENV_PREFIXES = (
+    "GH_",
+    "GITHUB_",
+    "OMNIROUTE_",
+    "PI_",
+    "OPENAI_",
+    "ANTHROPIC_",
+    "XAI_",
+)
 
 
 def _deny_bin_dir() -> str:
@@ -41,7 +79,13 @@ def executor_environment(role: str, ambient: Mapping[str, str]) -> dict[str, str
     """
     caps = ROLE_CAPABILITIES.get(role, set())
     out: dict[str, str] = {}
-    if role in _AGENT_ROLES:
+    if role == "department":
+        for key, value in ambient.items():
+            if not value:
+                continue
+            if key in _DEPARTMENT_ENV_KEYS or key.startswith(_DEPARTMENT_ENV_PREFIXES):
+                out[key] = value
+    elif role in _AGENT_ROLES:
         out["PATH"] = coding_path(ambient.get("PATH", ""))
     else:
         if ambient.get("PATH"):
