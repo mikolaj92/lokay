@@ -32,6 +32,7 @@ spec/harness/politykę; maszyna dowozi PR-y.
 | [oss/](./oss/) | Open source i projekty „dosłownie dark factory” |
 | [emerging/](./emerging/) | Sąsiednie / emerging |
 | [github-shake/](./github-shake/) | Fale GitHub search (WAVE1 mills = 28 repos) |
+| [instances/](./instances/) | Karty instalacji: graf + confidence + linki |
 
 ## Najbliżej prawdziwej dark factory (skrót)
 
