@@ -43,3 +43,8 @@ Zebrane 2026-09-10 na potrzeby `docs/dark-factory-kb` w mikolaj92/lokay.
 - https://github.com/RobotSail/remote-factory
 - https://github.com/eLh0m3r0/Genesis-Factory
 - https://github.com/ntholm86/evo-releases
+
+## Klepacz / label-triggered
+
+- https://github.com/berenddeboer/ready-for-agent
+- https://www.npmjs.com/package/ready-for-agent
