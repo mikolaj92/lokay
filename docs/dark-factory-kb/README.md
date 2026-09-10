@@ -28,6 +28,7 @@ spec/harness/politykę; maszyna dowozi PR-y.
 | [commercial/](./commercial/) | Produkty zamknięte / SaaS |
 | [oss/](./oss/) | Open source i projekty „dosłownie dark factory” |
 | [emerging/](./emerging/) | Sąsiednie / emerging |
+| [github-shake/](./github-shake/) | Fale GitHub search (WAVE1 mills = 28 repos) |
 
 ## Najbliżej prawdziwej dark factory (skrót)
 
