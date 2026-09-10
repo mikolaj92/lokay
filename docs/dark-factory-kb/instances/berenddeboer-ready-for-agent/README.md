@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # ready-for-agent
 
 **Confidence: 95** — najbliższy kanonowi KLEPACZ: zdejmuje babysitting issue→merged PR, nie L5.

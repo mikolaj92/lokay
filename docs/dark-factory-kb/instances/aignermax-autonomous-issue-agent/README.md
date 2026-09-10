@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # aignermax/autonomous-issue-agent — EU (Monachium)
 
 **Repo:** [aignermax/autonomous-issue-agent](https://github.com/aignermax/autonomous-issue-agent) · ★1 · Claude Code headless · autor: Max Aigner (Munich / Akhetonics)

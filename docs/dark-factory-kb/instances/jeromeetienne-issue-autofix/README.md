@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # jeromeetienne/issue_autofix — EU (Francja)
 
 **Repo:** [jeromeetienne/issue_autofix](https://github.com/jeromeetienne/issue_autofix) · ★1 · Claude Code **plugin** · autor: Jerome Etienne (France)

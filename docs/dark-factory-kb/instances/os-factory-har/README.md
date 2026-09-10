@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # HAR (os-factory)
 
 **Repo:** [os-factory/har](https://github.com/os-factory/har) · ★88 · TypeScript · Apache-2.0 · npm `@osfactory/har` · docs harproject.dev

@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # eugeneorlov/noxdev (`@eugene218/noxdev`)
 
 **Confidence: 80** — overnight Node CLI: TASKS.md → Docker + worktree + Claude Code → commit → morning review/dashboard; nie label-GitHub, ale lokalny harness ticket→diff.

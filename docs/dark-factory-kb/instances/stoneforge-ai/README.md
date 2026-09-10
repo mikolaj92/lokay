@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # Stoneforge (DEV.to + OSS)
 
 **Confidence: 84** — publiczne repo `stoneforge-ai/stoneforge` + esej DEV.to; early experimental; auto-merge steward (ryzyko).

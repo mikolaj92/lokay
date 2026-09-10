@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Junior
 
 **Repo:** [JHostalek/junior](https://github.com/JHostalek/junior) · ★6 · TypeScript (Bun binary) · MIT · brew `jhostalek/tap/junior`

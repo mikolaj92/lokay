@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # dagain (`knot0-com/dagain`)
 
 CLI: **DAG work graph** w SQLite — planer / executor / verifier / integrator jako węzły z runnerami Codex, Claude Code lub Gemini. Cel (`--goal`) → graf → równolegli workers (+ opcjonalne worktrees) → checkpoint `needs_human`.

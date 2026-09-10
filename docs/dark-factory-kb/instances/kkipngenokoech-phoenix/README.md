@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # PhoenixGitHub (`kkipngenokoech/phoenix`)
 
 Watcher + wieloagentowy pipeline LLM, który bierze issue z etykietą `ai:ready` (lub `ai:revise`), przechodzi plan → kod → testy → PR i synchronizuje stan przez etykiety GitHub. To klasyczny klepacz ticket→PR, nie fabryka całego produktu.

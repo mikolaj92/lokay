@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Agent Forge (Minions)
 
 **Repo:** [salehaiftikharr/agent-forge](https://github.com/salehaiftikharr/agent-forge) · ★0 · TypeScript · MIT · CLI `forge`

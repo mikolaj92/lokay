@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Three-Body Agent (`a7t-ai/three-body-agent`)
 
 Autonomiczny pipeline na GitHub Actions + Claude Code CLI: bierze issue z boardu Projects V2 (`Todo`), implementuje, naprawia własne CI, merguje zielone PR-y i synchronizuje kolumny — bez frameworka (tylko `gh`/`jq`/`curl` + prompty).

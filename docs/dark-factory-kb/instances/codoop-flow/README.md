@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # codoop-flow — CN / OSS ticket pipeline
 
 **Repo:** [Codoop/codoop-flow](https://github.com/Codoop/codoop-flow) · ★5 · MIT · README EN+ZH · plugin Codex/Claude/Cursor

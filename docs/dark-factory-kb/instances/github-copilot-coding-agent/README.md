@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # GitHub Copilot coding / cloud agent
 
 **Confidence: 88** — assign/label/automation → ephemeral Actions env → draft PR; agent nie merguje; kanoniczny klepacz BigCo.

@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # sortie-ai/sortie
 
 **Confidence: 90** — single-binary Go orchestrator: tracker-agnostic + agent-agnostic; `WORKFLOW.md` + label `agent-ready` → workspace → agent → hooks (commit/PR); stall/retry/SQLite.

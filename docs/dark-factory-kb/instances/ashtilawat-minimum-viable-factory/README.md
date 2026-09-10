@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # ashtilawat/minimum-viable-factory
 
 **Repo:** [ashtilawat/minimum-viable-factory](https://github.com/ashtilawat/minimum-viable-factory) · ★40 · Python · LangGraph + Claude Code

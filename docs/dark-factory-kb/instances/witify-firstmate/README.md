@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # witify-firstmate
 
 **Confidence: 82** — npx daemon Linear→PR: `ready-for-agent` → worktree + `claude -p /implement` → PR; harness własnie side-effecty (Linear/git/PR), LLM tylko kod.

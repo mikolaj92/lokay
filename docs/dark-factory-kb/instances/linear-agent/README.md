@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Linear Agent — coding sessions
 
 **Confidence: 87** — tracker-native ticket→PR; triage automation zdejmuje limbo assign; merge nadal ludzki (z Diffs w Linear).

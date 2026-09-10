@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # CodeBuddy NPC (CNB harness) — Chiny · pogłębione
 
 **Produkt:** [CodeBuddy NPC](https://www.codebuddy.cn/npc/) · Tencent Cloud / CNB (`cnb.cool`) · NPC repo [npc/CodeBuddy](https://cnb.cool/npc/CodeBuddy) · docs [NPC](https://docs.cnb.cool/en/build/npc.html)

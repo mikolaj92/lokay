@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # addyosmani/factory
 
 **Repo:** [addyosmani/factory](https://github.com/addyosmani/factory) · ★179 · Shell / Claude Code + Codex skills · MIT

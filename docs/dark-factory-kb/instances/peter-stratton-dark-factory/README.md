@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # peter-stratton/dark-factory (`godark`)
 
 **Confidence: 90** — pełny mill issue→PR→merge z adversarial review; bliżej harness+klepacz niż L5 banku, ale ma escalate `needs-human-review`.

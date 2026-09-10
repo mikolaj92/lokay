@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # vsavkin — Software Factory as Workflow (DEV.to)
 
 **Confidence: 78** — szczegółowy esej architektury na DEV.to (Victor Savkin / Nx); factory = skrypt na prymitywach; Polygraph = meta-harness (produkt), nie publiczny ticket mill OSS.

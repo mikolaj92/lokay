@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # autonomous-sdlc (`bitbitcodes/autonomous-sdlc`)
 
 Bootstrap **52 agentów** (1 orchestrator + 12 stage + 39 sub) do `.sdlc/` w dowolnym repo: wklejasz spec/JIRA/PRD do `sdlc.orchestrator` → 13 faz z quality gates aż do kodu produkcyjnego (i retirement).

@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Google Jules
 
 **Confidence: 84** — async session → plan (±approve) → GCP VM → AUTO_CREATE_PR; klepacz z jawnym stanem sesji, nie L5.

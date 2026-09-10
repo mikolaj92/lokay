@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Leesumok/plug-and-play-actions — Korea DIY
 
 **Repo:** [Leesumok/plug-and-play-actions](https://github.com/Leesumok/plug-and-play-actions) · ★0 · szablon GHA · autor Leesumok (KR)

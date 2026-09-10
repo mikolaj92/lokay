@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # thegpvc/gp-foundry
 
 **Confidence: 88** — klepacz + crew w GitHub Actions; graf DOT = deterministyczny kręgosłup.

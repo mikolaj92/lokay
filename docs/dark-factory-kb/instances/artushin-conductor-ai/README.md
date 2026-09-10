@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Conductor (`artushin/conductor-ai` / `devinrosen/conductor-ai`)
 
 Local-first multi-repo orchestrator (Rust + SQLite): worktrees, sync ticketów GitHub/Jira, workflow DSL `.wf`, Claude w tmux. Wbudowany przykład: **`conductor workflow run ticket-to-pr … --input ticket_id=N`**.

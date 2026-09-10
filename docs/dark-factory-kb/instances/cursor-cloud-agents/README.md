@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Cursor Cloud Agents (background as mill)
 
 **Confidence: 85** — równoległe VM→PR; silny mill gdy podpięty Linear/GH/`@cursor`; domyślnie prompt/API, nie czysta etykieta — klepacz z harnessem Temporal, nie L5.

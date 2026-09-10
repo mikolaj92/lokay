@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # Uber Software Factory
 
 **Confidence: 88** — talk AI Engineer 2026 + blogi Uber/port; brak publicznego repo factory; platforma (6 bloków) + managed agents (m.in. Minion — **≠ Stripe Minions**).

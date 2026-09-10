@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # JP label auto-fix (Claude Code × GHA)
 
 **Confidence: 82** — japońskie DIY klepacze: etykieta → worktree/runner → Claude Code → PR; pełny kod w artykułach; nie produkt SaaS, nie L5.

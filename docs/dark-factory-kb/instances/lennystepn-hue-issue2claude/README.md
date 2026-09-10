@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Issue2Claude (`lennystepn-hue/issue2claude`)
 
 GitHub Action / Marketplace: dodajesz etykietę `claude-ready` na issue, Claude Code analizuje repo, implementuje, robi auto-review i otwiera PR. Komentarze `claude-fix` / `claude-retry` / `claude-rebase` domykają pętlę feedbacku — czysty klepacz label→PR.

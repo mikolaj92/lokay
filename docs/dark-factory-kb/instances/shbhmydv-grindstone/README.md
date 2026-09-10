@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Grindstone (`shbhmydv/Grindstone`)
 
 Epoch-based deep-work orchestrator: dajesz **job spec**, stateless planner proponuje epoki (1–8 disjoint tasks), workers w throwaway worktrees, critic PASS/RETRY/ESCALATE, state machine aż **`done_when` exit 0**.

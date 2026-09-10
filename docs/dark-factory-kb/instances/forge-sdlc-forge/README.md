@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # Forge SDLC
 
 **Repo:** [forge-sdlc/forge](https://github.com/forge-sdlc/forge) · ★20 · Python 3.11+ · MIT · LangGraph / Deep Agents

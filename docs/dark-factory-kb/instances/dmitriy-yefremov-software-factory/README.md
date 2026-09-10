@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # dmitriy-yefremov/software-factory
 
 **Repo:** [dmitriy-yefremov/software-factory](https://github.com/dmitriy-yefremov/software-factory) · ★0 · JS/TS · fork-and-own template

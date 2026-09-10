@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # PrismConductor (`darkshade9/prismconductor`)
 
 Desktop (Wails) kanban: agreguje GitHub Issues z wielu workspace → pipeline **TODO → PLAN → IN_PROGRESS → REVIEW → DONE**. Skills `conductor-plan` → `conductor-execute` → `conductor-close`; poller wykrywa PR/CI/konflikty i self-heal.

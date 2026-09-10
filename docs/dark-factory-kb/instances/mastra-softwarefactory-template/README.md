@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # mastra softwarefactory-template
 
 **Repo:** [mastra-ai/softwarefactory-template](https://github.com/mastra-ai/softwarefactory-template) · ★39 · TypeScript · Mastra Factory

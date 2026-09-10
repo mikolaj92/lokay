@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # TASKS.md
 
 **Repo:** [tasksmd/tasks.md](https://github.com/tasksmd/tasks.md) · ★8 · TypeScript · MIT · `@tasks-md/cli`, parser, lint, `tasks-mcp`

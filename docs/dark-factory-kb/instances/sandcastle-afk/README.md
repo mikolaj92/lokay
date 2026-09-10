@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Sandcastle (AFK loops)
 
 **Confidence: 93** — publiczne repo `mattpocock/sandcastle` + eseje/wideo „AFK software factory”; biblioteka orkiestracji, nie SaaS.

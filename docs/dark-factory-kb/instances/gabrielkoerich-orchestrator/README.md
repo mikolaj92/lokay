@@ -1,3 +1,4 @@
+<!-- spine: spine_hybrid -->
 # gabrielkoerich/orchestrator
 
 **Confidence: 87** — lokalny CLI/daemon (brew): GitHub Issue labels = stan; LLM router → worktree + tmux (claude/codex/opencode) → commit/PR `Closes #N`.

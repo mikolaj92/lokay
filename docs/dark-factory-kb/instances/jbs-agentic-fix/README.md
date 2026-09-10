@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # JBS Agentic DevOps (`agentic-fix` label)
 
 Wzorzec z **JBS Tech Blog** (日本ビジネスシステムズ): Issue + etykieta **`agentic-fix`** → GHA + Claude Code (Microsoft Foundry) → fix + testy → retry ≤3 → PR do `devops`, potem promocja `devops → dev → main` z HITL na każdym stopniu.

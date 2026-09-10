@@ -1,3 +1,4 @@
+<!-- spine: spine_agent_loop -->
 # Open Ralph Wiggum
 
 **Repo:** [Th0rgal/open-ralph-wiggum](https://github.com/Th0rgal/open-ralph-wiggum) · ★1885 · TypeScript (Bun) · MIT · CLI `ralph`

@@ -1,3 +1,4 @@
+<!-- spine: spine_deterministic -->
 # elasticclaw
 
 **Repo:** [elasticclaw/elasticclaw](https://github.com/elasticclaw/elasticclaw) · ★40 · Go · Apache-2.0 · docs: elasticclaw.ai
