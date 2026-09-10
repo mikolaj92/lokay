@@ -45,23 +45,23 @@ Primary: https://github.com/openai/codex README; cloud at chatgpt.com/codex
 ## Pattern that works (all of the above)
 
 1. **Pick one ticket.** Do not re-sieve the whole catalog inside the coder.
-2. **One sandbox / one branch.** Occupied repo → skip, do not launch a second.
-3. **Coder opens a PR. Coder does not merge.**
-4. **Review is a different session** (comments, CI, quality). Merge is a gate after that.
-5. **Repair is the same branch**, triggered by red checks or review comments.
-6. **Watchdog** is retry / "fix this CI" / session restart — not a second product graph.
+2. **One sandbox / one branch.** Occupied repo with a live launch → skip, do not launch a second. Occupancy with **no covering PR** and a dead wrapper is that ticket: finish the PR, do not return `busy`.
+3. **Coder opens a PR. Coder does not merge.** `route=busy` is occupancy in progress, not the slot finishing.
+4. **Review is a different session** (comments, CI, quality). Merge is a gate after that. Prefer a green mergeable PR over classifying a red PR as `repair` and stopping.
+5. **Repair is the same branch**, triggered by red checks or review comments. A parked / budget-exhausted PR is skipped this pass so another PR can merge.
+6. **Watchdog** is retry / "fix this CI" / session restart — not a second product graph, and not a rewrite of lokay for leftover/occupancy/`pass_ceiling`.
 
 ## Map onto Lokay's five departments
 
 | Department | Working analogue | This slot does | This slot never does |
 |---|---|---|---|
-| `issue_triage` | Claude issue auto-triage + Copilot "is this assignable?" | List open intentional issues, skip occupied/foreign/covering-PR, pick up to cap, leftover the rest | Code, branch, PR, `issue_to_pr` |
-| `executor` | Copilot assign / Claude implement / skill issue→PR | One `do` issue → worktree → diff → tests → push → open PR | Merge, second occupancy, sieve |
-| `pr_triage` | Claude PR review + Copilot "human reviewer" | List `ai/fix` PRs, checks, review, merge only if quality+green | Start `pr_repair`, invent a fourth verdict |
+| `issue_triage` | Claude issue auto-triage + Copilot "is this assignable?" | List open intentional issues, skip occupied/foreign/covering-PR, pick shippable `do` up to cap, leftover the rest | Code, branch, PR, `issue_to_pr` |
+| `executor` | Copilot assign / Claude implement / skill issue→PR | One issue → worktree → diff → tests → push → open PR. Finish occupancy that has no PR | Merge, second occupancy, sieve, `busy` as success without a PR |
+| `pr_triage` | Claude PR review + Copilot "human reviewer" | List `ai/fix` PRs, checks, review, merge quality+green first | Start `pr_repair`, invent a fourth verdict, loop the same red PR while a green one exists |
 | `pr_repair` | `@copilot` on PR / "Fix with Copilot" | Same branch, fix red checks or review comments, push | Merge, new ticket |
-| `self_repair` | Session retry / watchdog on the factory itself | Only a stall of **lokay** (not leftover/occupancy/idle) | Product `issue_to_pr`, PR merge |
+| `self_repair` | Session retry / watchdog on the factory itself | Only a stall of **lokay** (not leftover/occupancy/idle/`pass_ceiling`) | Product `issue_to_pr`, PR merge, occupancy-without-PR as a lokay rewrite |
 
-Lokay Done = merge to `main`. That is the one place we differ from Copilot/Claude stock: `pr_triage` may merge. The executor still must not.
+Lokay Done = merge to `main`. That is the one place we differ from Copilot/Claude stock: `pr_triage` may merge. The executor still must not. A valid JSON envelope with `outcome=none` is not Done.
 
 ## What we will not copy from unused child Falas
 

@@ -43,6 +43,27 @@ def test_five_department_contracts_exist():
         assert "Fala geometry" in text
 
 
+def test_executor_prompt_finishes_occupancy_without_pr():
+    text = prompt_for("executor", pass_dir="/pass")
+    assert "no covering open PR" in text
+    assert "Do **not** return `busy` here" in text
+    assert "not Done" in text
+
+
+def test_pr_triage_prompt_merges_green_before_red_repair():
+    text = prompt_for("pr_triage", pass_dir="/pass")
+    assert "Prefer this over any red PR" in text
+    assert "pr_repair_budget_exhausted" in text
+    assert "Do not pick the same red PR every pass" in text
+
+
+def test_issue_triage_prompt_do_is_shippable():
+    text = prompt_for("issue_triage", pass_dir="/pass")
+    assert "shippable" in text
+    assert "covering_pr" in text
+    assert "Leftover is the queue, not the product" in text
+
+
 def test_issue_triage_normalizes_launched_null():
     out = normalize(
         "issue_triage",
