@@ -1,25 +1,78 @@
-# Factory.ai (factory.ai)
+# Factory.ai (Droids / Missions / Software Factory)
 
-**Archetype:** Issue→PR mill → org software factory (C→E)  
-**Closest dark-factory claim among commercial platforms.**
+**Typ:** zamknięty platform (agent-native SDLC)  
+**Producent:** Factory  
+**Rola:** świadomie „software factory” — sygnały → plan → multi-agent Missions → validate → ship; spektrum autonomii
 
-## URLs
-- https://factory.ai/
-- https://factory.ai/product/droids
-- https://factory.ai/product/missions
-- https://factory.ai/news/software-factory — “Factory 2.0: From coding agents to software factories”
-- https://factory.ai/news/missions-architecture — How Missions work
-- https://factory.ai/news/series-c — $150M Series C, ~$1.5B valuation (Khosla-led; Sequoia, Blackstone, Insight, …)
+## Architektura
 
-## Mechanism notes
-- **Droids:** Autonomous coding agents — plan, write, test, ship; surfaces: terminal, IDE, browser, Slack, CLI. “One prompt to PR.” Model-routing across Claude/GPT/Gemini/etc. Explicit permission / autonomy dials (supervised → autonomous).
-- **Missions:** Multi-agent, multi-day orchestration. Decompose goal → features → milestones; spawn fresh-context workers per feature (tests-first then implement); validators (scrutiny + user-testing black-box); orchestrator opens fix features until milestone validation passes. Parallel Droids; multi-repo migrations called out.
-- **Software factory loop (vendor thesis):** external signals (bugs, chat, feedback, requirements) → triage/plan → build/test/review/secure/ship → monitor → more signals. Layers: simple Droids/skills → Automations → remote Droid Computers → Missions.
-- **Headless:** `droid exec` for pipeline automation; Factory Desktop for local system access.
-- **Enterprise posture:** Named customers in Series C note (Nvidia, Adobe, EY, Palo Alto Networks, Adyen). Governance / agent-readiness measurement emphasized in roadmap.
+```
+Signals (bugs, Linear/Jira, feedback, requirements)
+    → triage / plan (Coordinator / Orchestrator)
+    → Context (Autowiki index, memory, skills, MCP)
+    → Execution: Droids (code/test/review/docs/knowledge) w sandbox
+    → Missions: validation contract → milestones → features
+         Worker (TDD: tests first) → Scrutiny validator → User-testing validator
+         → fix features loop aż milestone pass
+    → Code Review / Droid Shield / policy
+    → PR / deploy hooks
+    → monitoring → nowe signals
+```
 
-## Dark-factory distance
-**Near the commercial frontier of E.** Product language matches org mills (signals→ship loop, multi-agent validation, headless). Still typically human-gated for high-risk merge/deploy; autonomy is configurable, not absolute.
+### Missions (rdzeń długiego autonomicznego runu)
+1. Orchestrator definiuje **validation contract** (behavioral assertions) **zanim** features.
+2. Features claim assertions; grupowane w milestones.
+3. Programmatic runner spawnuje **worker per feature** ze **świeżym kontekstem**; TDD.
+4. **Scrutiny validators** — jakość trajektorii + knowledge updates do shared state.
+5. **User-testing validators** — black-box vs contract.
+6. Orchestrator tworzy fix features na luki → re-validate.
 
-## Polish (1–2 zdania)
-Factory buduje platformę „software factory”: Droids jako jednostki wykonawcze + Missions jako długotrwała orkiestracja multi-agent. Najbliższy komercyjny odpowiednik wewnętrznych młynów typu Stripe/Uber — z dialem autonomii zamiast „tylko IDE”.
+Źródło: [factory.ai/news/missions-architecture](https://factory.ai/news/missions-architecture), [docs.factory.ai Missions](https://docs.factory.ai/cli/features/missions)
+
+### Spektrum autonomii (Factory 2.0)
+- Simple Droid / skills — krótkie, mierzalne taski
+- Automations — recurring shared objective + memory
+- Droid Computers — remote/persistent long-running
+- Missions — multi-agent hours/days
+
+Źródło: [factory.ai/news/software-factory](https://factory.ai/news/software-factory)
+
+### Warstwy „software factory architecture”
+Specification → context resolution → execution → review/policy → deploy/monitor.  
+Code Review scoring vs policy; LLM safety; secret detection (Droid Shield).
+
+## Human gates
+| Gate | Opis |
+|------|------|
+| Mission plan collaborate | Conversation → features/milestones; approve przed Mission Control |
+| Mission Control intervene | Monitor + ręczne wejście |
+| Code Review / merge | Policy + człowiek |
+| Agent Readiness | Organizacja decyduje poziom autonomii per proces |
+
+## Eval / CI
+- Dwupoziomowe TDD: feature tests + mission-level behavioral contract.
+- Adversarial validators (scrutiny + user-testing).
+- Droid CLI headless w CI (`droid exec` / mission paths w docs).
+- Shared agent core: security finding informuje review, incident ↔ PR.
+
+## Multi-agent vs single
+**Explicit multi-agent:** coordinator + specialized droids; Missions = orchestrator/workers/validators. Najbliższy marketingowi „software factory” wśród vendorów.
+
+## Failure / retry
+- Milestone fail → fix features → re-validate loop.
+- Shared state artifacts (contract, feature list, research notes) — nie jeden kontekst LLM.
+- Fresh worker context ogranicza contamination.
+
+## Czego NIE automatyzuje
+- Ambiguous product decisions bez planu
+- Pełny lights-out bez Agent Readiness / policy
+- Zastąpienie org process (ticket hygiene nadal krytyczna)
+
+## Open-source vs closed
+**Closed** platform. Public blogs + docs/CLI; model-agnostic / BYOK w opisach.
+
+## Kluczowe URL-e
+- https://factory.ai/news/software-factory
+- https://factory.ai/news/missions-architecture
+- https://docs.factory.ai/cli/features/missions
+- https://factory.com/articles/what-is-a-software-factory-architecture

@@ -22,6 +22,9 @@ spec/harness/politykę; maszyna dowozi PR-y.
 | [COMPARE.md](./COMPARE.md) | Macierz porównawcza |
 | [LOKAY_LENS.md](./LOKAY_LENS.md) | Obserwacje względem Lokaya (bez recepty przepisania) |
 | [SOURCES.md](./SOURCES.md) | Bibliografia URL |
+| [CURSOR_SELF_DRIVING.md](./CURSOR_SELF_DRIVING.md) | Cursor: recursive planners (self-driving) |
+| [MAZUR_AUTONOM.md](./MAZUR_AUTONOM.md) | Mazur autonom ↔ harness |
+| [STRATEGY_AGENT_FIRST.md](./STRATEGY_AGENT_FIRST.md) | Teza: najpierw działający mill agentowy |
 | [commercial/](./commercial/) | Produkty zamknięte / SaaS |
 | [oss/](./oss/) | Open source i projekty „dosłownie dark factory” |
 | [emerging/](./emerging/) | Sąsiednie / emerging |
