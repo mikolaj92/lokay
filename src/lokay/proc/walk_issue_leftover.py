@@ -1,7 +1,7 @@
 """Authored leftover walk. Consume only on authored skip; else keep the row."""
 
 from lokay.proc.classify_issue_assignee import lokay_of, takeable
-from lokay.proc.pass_lane import is_oil_repo, self_repo
+from lokay.proc.pass_lane import is_self_repo, self_repo
 
 CONSUME = frozenset(
     {
@@ -77,13 +77,13 @@ def ready_first(rows: list[dict] | None) -> list[dict]:
 
 
 def product_first(rows: list[dict] | None, *, self_id: str = "") -> list[dict]:
-    """Product wins. Lokay oil is not the product slot while product remains."""
+    """Product wins. The self lokay repo is not the product slot while product remains."""
     listed = [dict(row) for row in list(rows or []) if isinstance(row, dict)]
     owner = self_id or self_repo()
     product = [
         row
         for row in listed
-        if not is_oil_repo(str(row.get("repo") or ""), self_id=owner)
+        if not is_self_repo(str(row.get("repo") or ""), self_id=owner)
     ]
     return product or listed
 
@@ -109,7 +109,7 @@ def queue(
     lokay: str = "",
     occupied=None,
 ) -> list[dict]:
-    """Leftover listed issues stay the queue. Oil yields to live product.
+    """Leftover listed issues stay the queue. Self-repo yields to live product.
 
     Foreign-owned rows (anyone besides the lokay) are not the consumption
     queue. They stay on the listed page; selection walks past them.
@@ -124,7 +124,7 @@ def queue(
     live = {identity(row): row for row in live_rows}
     if leftover:
         kept = [live[key] for row in leftover if (key := identity(row)) in live]
-        # Ready labels win over unlabeled leftover; product still beats oil.
+        # Ready labels win over unlabeled leftover; product still beats the self repo.
         ranked = product_first(ready_first(kept))
         candidates = ranked if ranked else product_first(ready_first(live_rows) or kept)
         return unoccupied(ownable(candidates, lokay_login), occupied)

@@ -64,7 +64,7 @@ def test_catalog_counts_labeled_undecided_as_remaining_inbox(tmp_path, monkeypat
             {"number": 4973, "labels": ["bug"]},
             {"number": 4969, "labels": ["work:ready"]},
         ],
-        "mikolaj92/Fala": [{"number": 176, "labels": ["oil"]}],
+        "mikolaj92/Fala": [{"number": 176, "labels": ["docs"]}],
     }
 
     def fake_fetch(selected, **kwargs):

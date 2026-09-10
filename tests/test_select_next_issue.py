@@ -112,9 +112,9 @@ def test_row_cannot_overwrite_route():
     assert out["issue"] == 1
 
 
-def test_does_not_pick_lokay_oil_as_the_product_slot():
+def test_does_not_pick_lokay_self_as_the_product_slot():
     listed = _listed(
-        {"repo": "mikolaj92/lokay", "issue": 848, "title": "oil"},
+        {"repo": "mikolaj92/lokay", "issue": 848, "title": "self-repair stall"},
         {"repo": "Temida/Temida", "issue": 5001, "title": "product"},
     )
     first = select(listed)

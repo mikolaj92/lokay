@@ -1,7 +1,7 @@
 """Authorize the self_repair department after last-pass motion + leftover + switch.
 
-One pass is oil XOR product (product wins). Idle, pass_ceiling, occupied,
-leftover skip, and empty survey are not stalls. Only confirmed 4-of-5 starts oil.
+One pass is self XOR product (product wins). Idle, pass_ceiling, occupied,
+leftover skip, and empty survey are not stalls. Only confirmed 4-of-5 starts self_repair.
 The exclusions match select_repair_route.
 """
 

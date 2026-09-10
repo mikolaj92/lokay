@@ -66,9 +66,9 @@ def test_keep_starts_at_the_pick():
     assert [row["issue"] for row in keep(rows, rows[0])] == [5001, 4999, 4997]
 
 
-def test_oil_yields_to_product_in_queue():
+def test_self_repo_yields_to_product_in_queue():
     listed = [
-        {"repo": "mikolaj92/lokay", "issue": 848, "title": "oil"},
+        {"repo": "mikolaj92/lokay", "issue": 848, "title": "self-repair stall"},
         _ready(5001),
     ]
     last = {

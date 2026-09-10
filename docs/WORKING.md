@@ -300,10 +300,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   `reap_stale_worktrees` is a sibling child from `factory_begin`. Failed
   leftover-work-copy cleanup is a classified route, not `process.failed`;
   departments and `record_pass` do not wait on it.
-  One pass is oil XOR product (product wins). Last-pass receipt includes
-  `lane: product | oil | idle`. The self_repair department skips on idle,
+  One pass is self XOR product (product wins). Last-pass receipt includes
+  `lane: product | self | idle`. The self_repair department skips on idle,
   pass_ceiling, occupied, leftover skip, and empty survey; only a stall
-  (`did_not_move`) starts oil.
+  (`did_not_move`) starts self_repair.
   `factory_begin` opens a pass workspace after a short host-alive probe.
   Empty survey snapshots do not idle or skip PRs and issues. Launchd does not exec
   `lokay-daemon` while `lokay.lock` is held; `LOKAY_PROCESS_HEAD`

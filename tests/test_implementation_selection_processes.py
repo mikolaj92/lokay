@@ -120,8 +120,8 @@ def test_prepare_and_slot_are_bounded(tmp_path):
     )
 
 
-def test_oil_stays_eligible_when_product_queue(tmp_path):
-    """Product preference is reduce's job; inspect must not hard-skip oil."""
+def test_self_stays_eligible_when_product_queue(tmp_path):
+    """Product preference is reduce's job; inspect must not hard-skip the self repo."""
     from lokay.proc.inspect_implementation_eligibility import inspect
     from lokay.proc.prepare_implementation_selection import prepare
 
@@ -152,7 +152,7 @@ def test_oil_stays_eligible_when_product_queue(tmp_path):
         },
     )
     prepared = prepare(pass_dir=str(path), slot_count=30)
-    oil = inspect(
+    self_row = inspect(
         pass_dir=str(path),
         prepared=prepared,
         selected={"repo": "mikolaj92/lokay", "slot": 1},
@@ -162,7 +162,7 @@ def test_oil_stays_eligible_when_product_queue(tmp_path):
         prepared=prepared,
         selected={"repo": "a/product", "slot": 2},
     )
-    assert oil["route"] == "eligible"
+    assert self_row["route"] == "eligible"
     assert product["route"] == "eligible"
     assert prepared["product_queue"] is True
 
@@ -211,7 +211,7 @@ def _self() -> str:
     return "mikolaj92/lokay"
 
 
-def test_reduce_product_and_oil_selects_product():
+def test_reduce_product_and_self_selects_product():
     from lokay.proc.reduce_implementation_selection import reduce_state
 
     out = reduce_state(
@@ -237,7 +237,7 @@ def test_reduce_product_and_oil_selects_product():
     assert out["clean_repos"] == ["a/product"] and out["lane"] == "product"
 
 
-def test_reduce_oil_only_selects_oil():
+def test_reduce_self_only_selects_self():
     from lokay.proc.reduce_implementation_selection import reduce_state
 
     out = reduce_state(
@@ -254,7 +254,7 @@ def test_reduce_oil_only_selects_oil():
             "ready_by_repo": {_self(): [{"number": 1}]},
         },
     )
-    assert out["clean_repos"] == [_self()] and out["lane"] == "oil"
+    assert out["clean_repos"] == [_self()] and out["lane"] == "self"
 
 
 def test_reduce_empty_is_idle():
@@ -341,7 +341,7 @@ def test_inbox_only_unlabeled_eligibility_does_not_require_work_ready(tmp_path):
     assert prepared["product_queue"] is True
 
 
-def test_reduce_falls_through_to_oil_when_product_queue_but_none_eligible():
+def test_reduce_falls_through_to_self_when_product_queue_but_none_eligible():
     """product_queue without eligible product must not leave clean empty (#883)."""
     from lokay.proc.reduce_implementation_selection import reduce_state
 
@@ -365,5 +365,5 @@ def test_reduce_falls_through_to_oil_when_product_queue_but_none_eligible():
             },
         },
     )
-    assert out["clean_repos"] == [_self()] and out["lane"] == "oil"
+    assert out["clean_repos"] == [_self()] and out["lane"] == "self"
     assert out["product_queue"] is True

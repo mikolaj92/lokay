@@ -967,7 +967,7 @@ ponownego skanowania skończonych wierszy. Budżet to `limits.max_triage_per_tic
 nie większy niż authored sloty. Po `cap` leftover zostaje, rodzic idzie do
 executora, a następny pass kontynuuje sito. Leftover jest zjadane tylko przy
 authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
-adapter fail zostawia wiersz. Oil lokay nie zajmuje product slotu. Cudzy
+adapter fail zostawia wiersz. Ticket na samym Lokayu nie zajmuje product slotu. Cudzy
 assignee nie jest zadaniem lokaja.
 
 ### Jeden wiersz triage — `issue_sieve_row`

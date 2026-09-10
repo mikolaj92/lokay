@@ -41,7 +41,7 @@ into a worker prompt, Python composer, UI, or vendor harness.
   Failed leftover-work-copy cleanup is a classified route, not
   `process.failed`. Departments and `record_pass` do not conduct from cleanup.
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
-  is oil XOR product (product wins). Not a fat `compose/tick.py`.
+  is self XOR product (product wins). Not a fat `compose/tick.py`.
   Department *bodies* may be high-entropy agent slots
   (`departments.agent_bodies`); authored child Falas stay as fallback. Do not
   delete atoms or rewrite parent geometry to add those slots.

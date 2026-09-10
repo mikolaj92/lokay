@@ -1,8 +1,8 @@
-"""Classify one factory-pass candidate as product, oil, or idle.
+"""Classify one factory-pass candidate as product, self, or idle.
 
-Oil is the canonical self lokay (config ``incident_repo``, default
+Self is the canonical lokay repo (config ``incident_repo``, default
 ``mikolaj92/lokay``). Product is every other catalog repo. One pass is
-oil XOR product; product wins when any product open issue or product
+self XOR product; product wins when any product open issue or product
 AI PR exists. ``work:ready`` / ``ai:ready`` are not admission gates.
 """
 
@@ -13,7 +13,7 @@ from typing import Any
 from lokay.passkit.support import is_manual_pr
 
 DEFAULT_SELF_REPO = "mikolaj92/lokay"
-LANES = frozenset({"product", "oil", "idle"})
+LANES = frozenset({"product", "self", "idle"})
 
 
 def self_repo(*sources: dict[str, Any] | None) -> str:
@@ -28,12 +28,12 @@ def self_repo(*sources: dict[str, Any] | None) -> str:
     return DEFAULT_SELF_REPO
 
 
-def is_oil_repo(repo: str, *, self_id: str) -> bool:
+def is_self_repo(repo: str, *, self_id: str) -> bool:
     return bool(repo) and str(repo).strip() == str(self_id).strip()
 
 
 def classify_repo_lane(repo: str, *, self_id: str) -> str:
-    return "oil" if is_oil_repo(repo, self_id=self_id) else "product"
+    return "self" if is_self_repo(repo, self_id=self_id) else "product"
 
 
 def _ready_rows(ready_by_repo: dict[str, Any] | None) -> dict[str, list[Any]]:
@@ -72,25 +72,25 @@ def product_candidates(
 ) -> bool:
     """True when a product open issue or product AI PR is waiting."""
     for repo in _ready_rows(ready_by_repo):
-        if not is_oil_repo(repo, self_id=self_id):
+        if not is_self_repo(repo, self_id=self_id):
             return True
     for repo in _actionable_prs(prs_by_repo):
-        if not is_oil_repo(repo, self_id=self_id):
+        if not is_self_repo(repo, self_id=self_id):
             return True
     return False
 
 
-def oil_candidates(
+def self_candidates(
     *,
     ready_by_repo: dict[str, Any] | None = None,
     prs_by_repo: dict[str, Any] | None = None,
     self_id: str,
 ) -> bool:
     for repo in _ready_rows(ready_by_repo):
-        if is_oil_repo(repo, self_id=self_id):
+        if is_self_repo(repo, self_id=self_id):
             return True
     for repo in _actionable_prs(prs_by_repo):
-        if is_oil_repo(repo, self_id=self_id):
+        if is_self_repo(repo, self_id=self_id):
             return True
     return False
 
@@ -103,7 +103,7 @@ def classify_pass_lane(
     clean_repos: list[str] | None = None,
     selected_repo: str = "",
 ) -> str:
-    """Receipt lane: product wins, then oil, then idle."""
+    """Receipt lane: product wins, then self, then idle."""
     chosen = str(selected_repo or "").strip()
     if not chosen:
         for repo in list(clean_repos or []):
@@ -117,8 +117,8 @@ def classify_pass_lane(
         ready_by_repo=ready_by_repo, prs_by_repo=prs_by_repo, self_id=self_id
     ):
         return "product"
-    if oil_candidates(
+    if self_candidates(
         ready_by_repo=ready_by_repo, prs_by_repo=prs_by_repo, self_id=self_id
     ):
-        return "oil"
+        return "self"
     return "idle"

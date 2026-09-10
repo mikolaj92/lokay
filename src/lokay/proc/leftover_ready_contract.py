@@ -78,7 +78,7 @@ def explicit_skip_reason(working: dict[str, Any] | None) -> str | None:
             "skip_issue_to_pr_survey_failed",
             "skip_ready_agent_disabled",
             "skip_issue_to_pr_outside_mini_scope",
-            "skip_oil_product_lane",
+            "skip_self_product_lane",
             "skip_ready_survey_recent_empty",
         }:
             return reason or step

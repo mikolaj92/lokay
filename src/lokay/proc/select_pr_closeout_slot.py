@@ -1,6 +1,6 @@
 """Select exactly one AI PR for one authored repository slot."""
 
-from lokay.proc.pass_lane import is_oil_repo, product_candidates, self_repo
+from lokay.proc.pass_lane import is_self_repo, product_candidates, self_repo
 
 
 def select(prepared: dict, previous: dict, *, slot: int) -> dict:
@@ -23,7 +23,7 @@ def select(prepared: dict, previous: dict, *, slot: int) -> dict:
         prs_by_repo=prepared.get("prs_by_repo"),
         self_id=self_id,
     )
-    if product_queue and is_oil_repo(repo, self_id=self_id):
+    if product_queue and is_self_repo(repo, self_id=self_id):
         return {
             "ok": True,
             "route": "empty",

@@ -399,7 +399,7 @@ def test_daemon_cycle_pass_ceiling_writes_receipt(monkeypatch, tmp_path):
                         {"number": 4973, "labels": ["bug"]},
                         {"number": 4969, "labels": ["work:ready"]},
                     ],
-                    "mikolaj92/Fala": [{"number": 176, "labels": ["oil"]}],
+                    "mikolaj92/Fala": [{"number": 176, "labels": ["docs"]}],
                 },
                 "ready_by_repo": {
                     "mikolaj92/Temida": [{"number": 4968, "labels": ["ai:ready"]}]

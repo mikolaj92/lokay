@@ -1,4 +1,4 @@
-"""Oil XOR product: product wins when any product candidate exists."""
+"""Self XOR product: product wins when any product candidate exists."""
 
 from lokay.proc.pass_lane import classify_pass_lane, product_candidates, self_repo
 
@@ -28,7 +28,7 @@ def test_product_candidates_from_ready_or_pr() -> None:
     )
 
 
-def test_lane_product_oil_idle() -> None:
+def test_lane_product_self_idle() -> None:
     self_id = "mikolaj92/lokay"
     assert (
         classify_pass_lane(
@@ -44,7 +44,7 @@ def test_lane_product_oil_idle() -> None:
             ready_by_repo={self_id: [{"number": 2}]},
             selected_repo=self_id,
         )
-        == "oil"
+        == "self"
     )
     assert classify_pass_lane(self_id=self_id) == "idle"
 
@@ -59,12 +59,12 @@ def test_unlabeled_product_issue_is_product() -> None:
     )
 
 
-def test_unlabeled_self_issue_empty_product_is_oil() -> None:
+def test_unlabeled_self_issue_empty_product_is_self() -> None:
     self_id = "mikolaj92/lokay"
     assert (
         classify_pass_lane(
             self_id=self_id,
             ready_by_repo={self_id: [{"number": 786, "labels": []}]},
         )
-        == "oil"
+        == "self"
     )

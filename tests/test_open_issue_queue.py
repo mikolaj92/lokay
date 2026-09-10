@@ -89,11 +89,11 @@ def test_empty_catalog_is_idle() -> None:
     assert classify_pass_lane(self_id="mikolaj92/lokay") == "idle"
 
 
-def test_unlabeled_self_issue_empty_product_is_oil() -> None:
+def test_unlabeled_self_issue_empty_product_is_self() -> None:
     self_id = "mikolaj92/lokay"
     ready = {self_id: [{"number": 786, "labels": []}]}
     assert product_candidates(ready_by_repo=ready, self_id=self_id) is False
-    assert classify_pass_lane(self_id=self_id, ready_by_repo=ready) == "oil"
+    assert classify_pass_lane(self_id=self_id, ready_by_repo=ready) == "self"
 
 
 def _gh_ok(stdout: str):

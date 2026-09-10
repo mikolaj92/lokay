@@ -132,7 +132,7 @@ def test_closeout_catalog_overflow_fails_closed(tmp_path):
     assert prepare(pass_dir=str(pd), slot_count=30)["ok"] is False
 
 
-def test_oil_closeout_empty_when_product_queue():
+def test_self_closeout_empty_when_product_queue():
     from lokay.proc.select_pr_closeout_slot import select
 
     prepared = {
@@ -146,9 +146,9 @@ def test_oil_closeout_empty_when_product_queue():
         "product_queue": True,
         "repair_budget": 1,
     }
-    oil = select(prepared, {}, slot=1)
+    chosen = select(prepared, {}, slot=1)
     product = select(prepared, {}, slot=2)
-    assert oil["route"] == "empty" and oil["reason"] == "product_lane"
+    assert chosen["route"] == "empty" and chosen["reason"] == "product_lane"
     assert product["route"] == "closeout" and product["repo"] == "a/product"
 
 
