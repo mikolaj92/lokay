@@ -33,3 +33,13 @@ Zebrane 2026-09-10 na potrzeby `docs/dark-factory-kb` w mikolaj92/lokay.
 
 - https://github.com/anthropics/claude-code-action
 - https://github.com/anthropics/claude-code-action/blob/main/docs/custom-automations.md
+
+## Cursor / Mazur / agent-first mills
+
+- https://cursor.com/blog/self-driving-codebases
+- http://autonom.edu.pl
+- https://en.wikipedia.org/wiki/Marian_Mazur
+- https://github.com/Tanush1912/ouroboros
+- https://github.com/RobotSail/remote-factory
+- https://github.com/eLh0m3r0/Genesis-Factory
+- https://github.com/ntholm86/evo-releases
