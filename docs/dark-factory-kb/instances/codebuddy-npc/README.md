@@ -1,47 +1,49 @@
-# CodeBuddy NPC (CNB harness) — Chiny
+# CodeBuddy NPC (CNB harness) — Chiny · pogłębione
 
-**Produkt:** [CodeBuddy NPC](https://www.codebuddy.cn/npc/) · Tencent Cloud / CNB (`cnb.cool`) · nie czysty publiczny mill-repo
+**Produkt:** [CodeBuddy NPC](https://www.codebuddy.cn/npc/) · Tencent Cloud / CNB (`cnb.cool`) · NPC repo [npc/CodeBuddy](https://cnb.cool/npc/CodeBuddy) · docs [NPC](https://docs.cnb.cool/en/build/npc.html)
 
 ## Co to jest
 
-Chiński Cloud Agent na platformie CNB: ticket/Issue → autonomiczny plan → kod → PR → preview → CI feedback → fix. NPC = „AI pracownik w repo”, nie autocomplete. Multi-NPC team (funkcja / review / progress). Osobno: CodeBuddy CLI w GitLab CI (`@codebuddy` → MR w sandboxie) oraz `cnbcool/code-review` na PR.
+Chiński Cloud Agent na CNB: `@CodeBuddy` w Issue/PR → pipeline `issue.comment@npc` / `pull_request.comment@npc` → plan → kod → PR → preview → CI → self-fix. NPC = „AI pracownik w repo”. Multi-NPC Team (dev / review / progress). Work Mode + `CNB_TOKEN` = push/PR. Modele: deepseek-v4, glm-5.x, kimi-k3, hy4. Osobno: CodeBuddy CLI w GitLab CI; `cnbcool/code-review`. **Octop** (TencentCloud/Octop ★1.1k) = self-hosted assistant runtime z ACP do CodeBuddy — **nie** ticket mill (odrzucony wave G).
 
-> Trae / Qoder: widoczne harnessy community (`trae-harness`, `QoderAI/better-harness`) to **ewaluacja/ulepszanie agent workflow**, nie ticket→PR mill. Do klepacza kwalifikuje się głównie **CodeBuddy NPC + CNB**.
+> Trae SOLO / Qoder Quest = IDE autonomy, nie kolejka ticket→PR. **QoderWake AI Employees** = osobna karta (`../qoder-ai-employees/`). Community `trae-harness` / `QoderAI/better-harness` = ewaluacja, nie mill.
 
 ## Graf
 
 ```mermaid
 flowchart TD
-  Iss[CNB Issue / @NPC assignment] --> Ctx[Autonomous context: repo · logs · pipeline]
-  Ctx --> Plan[Plan rozwiązania]
+  Ment["@CodeBuddy w Issue/PR comment"] --> Ev[CNB event issue.comment@npc / PR.comment@npc]
+  Ev --> Pipe[Pipeline w repo celu — default lub PR branch]
+  Pipe --> Ctx[Autonomous context: Issue · repo · logs · pipeline]
+  Ctx --> Plan[Plan]
   Plan --> Code[Kod + commit]
   Code --> PR[PR + preview env]
   PR --> CI{CI / review}
   CI -->|fail| Fix[Self-correct from CI/comments]
   Fix --> PR
   CI -->|ok| Acc[Human acceptance]
+  Team[NPC Team roles] -.-> Pipe
 ```
 
 ## Co / gdzie / jak
 
 | Warstwa | Mechanizm |
 |---------|-----------|
-| **Trigger** | Przypisanie / @mention NPC na CNB; GitLab: Issue/MR/`@codebuddy` |
-| **Stan** | Platforma CNB (Issue, pipeline, artefakty) — zamknięty ekosystem |
-| **Role** | Single NPC lub NPC Team (funkcje + review + PM) |
-| **Sandbox** | Cloud jobs CNB / GitLab CI container z network/FS limits |
-| **Testy** | Pipeline CNB; preview przed merge |
-| **Merge** | Człowiek akceptuje; NPC nie zastępuje approval |
-
-Non-US, ticket→PR, ale **vendor lock CNB** — nie da się „forknąć młyna” jak robotsix.
+| **Trigger** | `@CodeBuddy` / custom NPC; limity: ~100 comment triggers, concurrency cap |
+| **Stan** | CNB Issue/PR/pipeline/artefakty („development memory”) |
+| **Role** | Built-in CodeBuddy + custom NPCs; team SOPs/Skills |
+| **Sandbox** | CNB cloud jobs / GitLab CI container |
+| **Testy** | Pipeline + preview; auto-fix build failures |
+| **Merge** | Człowiek; NPC nie zastępuje approval |
 
 ## Confidence
 
-**55 / 100** — silny marketing + artykuły (2026-07 NPC); brak otwartego orchestratora do audytu; kształt klepacza wiarygodny z docs/CI, nie z OSS dogfood.
+**68 / 100** — (↑ z 55) oficjalne CNB docs eventów + publiczne npc/CodeBuddy + artykuły 2026-07; nadal brak otwartego orchestratora poza platformą CNB.
 
 ## Linki
 
 - https://www.codebuddy.cn/npc/
-- GitLab CI docs: `@tencent-ai/codebuddy-code` (cdn/jsdelivr docs)
-- https://developer.cloud.tencent.com/article/2736592 (CNB AI code review)
-- Qoder (nie mill): https://github.com/QoderAI/better-harness
+- https://docs.cnb.cool/en/build/npc.html
+- https://cnb.cool/npc/CodeBuddy
+- https://developer.cloud.tencent.com/article/2736592
+- Octop (nie mill): https://github.com/TencentCloud/Octop
