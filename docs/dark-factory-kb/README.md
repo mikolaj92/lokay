@@ -1,7 +1,9 @@
 # Dark factory — baza wiedzy
 
 Zbiór notatek o tym, jak inni budują **dark AI software factory**:
-issue / sygnał → kod → test → PR → (auto)merge, z minimalnym limbo człowieka.
+issue / sygnał → kod → test → PR → (auto)merge.
+
+**Uwaga nazewnicza:** to jest pętla **klepacza** (ticket-to-PR), nie Shapiro-L5 „cały produkt z spec”. Patrz [KLEPACZ.md](./KLEPACZ.md).
 
 Metafora z produkcji: [lights-out manufacturing](https://en.wikipedia.org/wiki/Lights_out_%28manufacturing%29) —
 fabryka działa bez ciągłej obecności operatora. W softwarze: człowiek pisze
@@ -25,6 +27,7 @@ spec/harness/politykę; maszyna dowozi PR-y.
 | [CURSOR_SELF_DRIVING.md](./CURSOR_SELF_DRIVING.md) | Cursor: recursive planners (self-driving) |
 | [MAZUR_AUTONOM.md](./MAZUR_AUTONOM.md) | Mazur autonom ↔ harness |
 | [STRATEGY_AGENT_FIRST.md](./STRATEGY_AGENT_FIRST.md) | Teza: najpierw działający mill agentowy |
+| [KLEPACZ.md](./KLEPACZ.md) | **Kanon:** ticket-to-PR / klepacz, nie L5 |
 | [commercial/](./commercial/) | Produkty zamknięte / SaaS |
 | [oss/](./oss/) | Open source i projekty „dosłownie dark factory” |
 | [emerging/](./emerging/) | Sąsiednie / emerging |
