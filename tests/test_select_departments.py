@@ -75,6 +75,16 @@ def test_self_repair_only_when_last_pass_did_not_move() -> None:
         moved_forward=False,
         receipt={
             **stall,
+            "health": "host_behind",
+            "reason": "host_sync_missing",
+            "error": "host sync did not succeed",
+        },
+    ) == {"ok": True, "route": "skip", "reason": "host_behind"}
+    assert select_self_repair(
+        enabled=True,
+        moved_forward=False,
+        receipt={
+            **stall,
             "health": "stall",
             "remaining": {"inbox": 0, "ready": 0, "issue_to_pr_started": 1},
         },

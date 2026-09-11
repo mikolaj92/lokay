@@ -61,7 +61,7 @@ whether the last receipt published a new PR or merged. `select_repair_route`
 composes that leaf with leftover skip (`leftover_overflow`, 200>30), empty
 survey, stale / missing receipt, occupied / in-flight `issue_to_pr`, and
 soft lokay health (`waiting`, `repairing`, `idle`, `progress`, `offline`,
-`overlap`, `hosted`). Those exclusions route `factory` and never start
+`overlap`, `hosted`, `host_updated`, `host_behind`). Those exclusions route `factory` and never start
 `recovery_run_self_repair`. `recovery_incident` runs only when the last
 receipt did not move and the existing pass-history.jsonl confirms 4-of-5
 from passes newer than the latest self-repair attempt in the Fala journal;
@@ -79,6 +79,7 @@ flowchart TD
     host_ff --> factory_begin_host_gate
     factory_begin_host_gate -- begin --> factory_begin
     factory_begin_host_gate -- restart --> record_pass
+    factory_begin_host_gate -- blocked --> record_pass
     factory_begin --> select_self_repair_department --> run_self_repair_department
     select_self_repair_department --> select_issue_triage_department --> run_issue_triage_department
     select_issue_triage_department --> select_executor_department --> run_executor_department

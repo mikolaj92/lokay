@@ -274,7 +274,8 @@ Product lokay time wins over emergency recovery.
 - lokay `health=waiting` (pending CI, merge-disarmed green, review limbo, only
   manual/`ai:needs-review` PRs)
 - lokay `health=repairing` (active repair / request_changes cycle)
-- other honest soft outcomes (`idle`, `progress`, `offline`, `overlap`)
+- other honest soft outcomes (`idle`, `progress`, `offline`, `overlap`,
+  `host_updated`, `host_behind`)
 - per-event `pr_repair` / `issue_to_pr` / `pr_triage` failures while the lokay
   envelope itself is still a soft wait above
 

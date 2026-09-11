@@ -133,6 +133,21 @@ def test_hosted_workspace_is_not_a_stall():
     assert out["route"] == "factory" and out["reason"] == "hosted"
 
 
+def test_host_behind_is_not_a_stall():
+    history = [
+        _receipt(
+            ts=f"2026-09-11T07:16:0{n}Z",
+            health="host_behind",
+            reason="host_sync_missing",
+            error="host sync did not succeed",
+        )
+        for n in range(5, 0, -1)
+    ]
+    out = classify(history[0], history=history)
+    assert out["route"] == "factory" and out["reason"] == "host_behind"
+    assert out["fingerprint"] is None
+
+
 def test_did_not_move_starts_repair():
     history = [_receipt(ts=f"2026-09-06T00:00:0{n}Z", error="no product delivery")
                for n in range(5, 0, -1)]

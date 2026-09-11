@@ -157,6 +157,23 @@ def test_evaluate_lokay_stop_host_updated_is_soft_stop():
     assert decision["health"] == "host_updated"
 
 
+def test_host_behind_is_not_stall_fingerprint(tmp_path):
+    state = tmp_path / "state.jsonl"
+    state.write_text("", encoding="utf-8")
+    row = observe_run(
+        state_path=state,
+        state_offset=0,
+        lokay={
+            "ok": False,
+            "health": "host_behind",
+            "reason": "host_sync_missing",
+            "error": "host sync did not succeed",
+            "progress": 0,
+        },
+    )
+    assert row["fingerprint"] is None
+
+
 def test_host_updated_is_not_stall_fingerprint(tmp_path):
     state = tmp_path / "state.jsonl"
     state.write_text("", encoding="utf-8")
