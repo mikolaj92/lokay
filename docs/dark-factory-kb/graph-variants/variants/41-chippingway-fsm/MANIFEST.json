@@ -1,0 +1,147 @@
+{
+  "slug": "41-chippingway-fsm",
+  "persona": "chippingway-fsm compose — workflow:* label + pinned JSON FSM on issue; local orchestrator advances stages; agents fill worktree slots only",
+  "approach": "compose_chippingway_fsm",
+  "confidence": 85,
+  "inspired_by": [
+    "chippingway/orchestrator",
+    "dark-factory-kb/instances/chippingway-orchestrator",
+    "geserdugarov/agent-orchestrator",
+    "09-label-fsm",
+    "11-planner-coder",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md"
+  ],
+  "reused_patterns": [
+    "workflow_star_label_fsm",
+    "pinned_json_comment_state",
+    "local_orchestrator_poll_advance",
+    "decompose_ready_implement_pipeline",
+    "git_worktree_isolation",
+    "dev_agent_claude_review_codex",
+    "validate_fix_documenting_loop",
+    "hitl_ping_human_merge",
+    "paused_question_escape",
+    "max_added_lines_conflict_rounds",
+    "agents_fill_slots_never_route",
+    "det_majority_orchestrator_owns_fsm",
+    "meat_equals_ai_same_slot",
+    "not_l5"
+  ],
+  "label_vocabulary": [
+    "workflow:decomposing",
+    "workflow:ready",
+    "workflow:implementing",
+    "workflow:validating",
+    "workflow:fixing",
+    "workflow:documenting",
+    "workflow:in_review",
+    "workflow:paused",
+    "workflow:question",
+    "workflow:done"
+  ],
+  "pinned_json_schema": {
+    "stage": "string matching workflow:*",
+    "issue_id": "number",
+    "worktree": "path|null",
+    "branch": "string|null",
+    "pr_url": "string|null",
+    "conflict_rounds": "number",
+    "added_lines": "number",
+    "agents": {
+      "decompose": "claude|remap",
+      "dev": "claude|remap",
+      "review": "codex|remap"
+    },
+    "updated_at": "iso8601"
+  },
+  "fsm_stages": [
+    "decomposing",
+    "ready",
+    "implementing",
+    "validating",
+    "fixing",
+    "documenting",
+    "in_review",
+    "paused",
+    "question",
+    "done"
+  ],
+  "agent_roles": [
+    "DecomposeAgent",
+    "DevAgent",
+    "ReviewAgent"
+  ],
+  "invariants": [
+    "orchestrator_owns_label_and_pinned_json",
+    "only_orchestrator_flips_workflow_labels",
+    "pinned_json_mirrors_active_stage",
+    "one_active_workflow_stage_label_mutex",
+    "agents_fill_slots_never_route",
+    "agent_does_not_pick_unlabeled_work",
+    "poll_open_issues_is_det_intake",
+    "worktree_isolation_per_issue",
+    "coder_ceiling_is_pr_plus_validating",
+    "merge_is_human_hitl_only",
+    "max_conflict_rounds_circuit_breaker",
+    "oversized_returns_to_decomposing",
+    "paused_question_human_escape",
+    "meat_equals_ai_same_slot",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "executor": "local_orchestrator_daemon",
+  "triggers": [
+    "poll:open_issues_~60s",
+    "label:workflow:*",
+    "cli:run.sh",
+    "human:paused|question"
+  ],
+  "agent_runtime": [
+    "DEV_AGENT",
+    "REVIEW_AGENT",
+    "DECOMPOSE_AGENT",
+    "claude_cli",
+    "codex_cli"
+  ],
+  "sandbox": {
+    "runner": "local_linux_host",
+    "worktree": true,
+    "isolation": "git_worktree",
+    "auth": "host_cli_logins",
+    "danger_mode": "skip_permissions_host_is_boundary"
+  },
+  "limits": {
+    "MAX_ADDED_LINES": true,
+    "MAX_CONFLICT_ROUNDS": true,
+    "oversized_to": "workflow:decomposing"
+  },
+  "subgraphs": [
+    "subgraph-label-pinned-fsm.md",
+    "subgraph-decompose-ready.md",
+    "subgraph-worktree-implement.md",
+    "subgraph-validate-fix.md",
+    "subgraph-hitl-merge.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-label-pinned-fsm.md",
+      "subgraph-decompose-ready.md",
+      "subgraph-worktree-implement.md",
+      "subgraph-validate-fix.md",
+      "subgraph-hitl-merge.md"
+    ],
+    "trigger": "poll open issues ~60s | workflow:* label",
+    "state_store": "github_issue_workflow_labels + pinned_json_comment",
+    "advance_authority": "local_orchestrator_DET_only",
+    "agent_seat": "Decompose_Dev_Review_leaves",
+    "spine": "orchestrator_label_pinned_JSON_FSM",
+    "sandbox": "git_worktree_per_issue",
+    "coder_ceiling": "open PR + workflow:validating",
+    "escape": "workflow:paused | workflow:question | HITL",
+    "merge_authority": "human_HITL_ping_only"
+  }
+}

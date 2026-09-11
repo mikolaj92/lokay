@@ -1,0 +1,104 @@
+{
+  "slug": "32-mastra-hybrid",
+  "persona": "mastra-hybrid — staged intake/triage/plan/review gates mixed with free sandbox build (Mastra Factory)",
+  "approach": "hybrid",
+  "confidence": 70,
+  "inspired_by": [
+    "mastra-ai/softwarefactory-template",
+    "mastra.ai/factory",
+    "factory.mastra.ai",
+    "Mastra Factory staged automation (intake→triage→planning→building→review→done)",
+    "dark-factory-kb/instances/mastra-softwarefactory-template (spine_hybrid)",
+    "SPINE_INDEX spine_hybrid",
+    "KLEPACZ.md",
+    "SOUL.md"
+  ],
+  "hybrid": {
+    "label_honest": true,
+    "staged_half": "explicit stage gates: intake → triage → planning → review → completion (DET transitions + HITL)",
+    "free_half": "Building stage = free sandbox agent session (persistent coding agent, tools in sandbox) — not a micro-DET script leaf",
+    "why_not_compose_pure": "Unlike ElasticClaw/Fabro (0-token hub owns every next hop), Mastra Factory mixes measurable stage gates with a freer build session inside the sandbox",
+    "why_not_agent_loop": "Agent does not pick next factory stage or merge; humans/gates advance triage/plan/review",
+    "spine_class": "spine_hybrid"
+  },
+  "shape_map": {
+    "Mdiamond": "intake_start",
+    "Msquare": "completion_done",
+    "parallelogram": "DET_sync_checks_open_pr",
+    "diamond": "DET_stage_gate_or_checks",
+    "box": "free_sandbox_build_session",
+    "hexagon": "HITL_triage_plan_merge",
+    "tab": "optional_plan_or_review_SO"
+  },
+  "fixed_pipeline": [
+    "intake_sync",
+    "triage_plan_gates",
+    "sandbox_build",
+    "review_complete"
+  ],
+  "mastra_factory": {
+    "orchestrator": "Mastra Factory Server + typed rules / stage machine (UI board)",
+    "stages": [
+      "Intake",
+      "Triage",
+      "Planning",
+      "Building",
+      "Review",
+      "Done"
+    ],
+    "sandbox_providers": [
+      "mastra_platform_sandboxes",
+      "FACTORY_SANDBOX_PROVIDER=local"
+    ],
+    "llm_placement": "triage assist + plan draft + free build session + optional separate review session — never sole merge authority",
+    "human_gates": [
+      "triage_answers",
+      "plan_approve_or_edit",
+      "pr_merge"
+    ],
+    "coder_ceiling": "open_pr / Review station — human merges",
+    "optional_goal_mode": "/goal via subagents — out of default klepacz map; default = staged gates",
+    "platform_note": "template may push Mastra platform; --no-platform / local sandbox OK for klepacz host"
+  },
+  "invariants": [
+    "approach_is_hybrid_not_pure_compose",
+    "stage_gates_are_explicit_and_reversible",
+    "free_sandbox_only_in_building",
+    "agent_does_not_advance_stage_past_human_gates",
+    "triage_and_plan_are_hitl_gates",
+    "review_session_separate_from_build_session",
+    "coder_ceiling_is_open_pr",
+    "human_owns_merge",
+    "one_work_item_one_sandbox_session",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5",
+    "not_god_agent_router"
+  ],
+  "merge_policy": [
+    "Off",
+    "Classify",
+    "Always"
+  ],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-intake-sync.md",
+    "subgraph-triage-plan-gates.md",
+    "subgraph-sandbox-build.md",
+    "subgraph-review-complete.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-intake-sync.md",
+      "subgraph-triage-plan-gates.md",
+      "subgraph-sandbox-build.md",
+      "subgraph-review-complete.md"
+    ],
+    "trigger": "GitHub|Linear sync → Intake board / Investigate",
+    "spine": "hybrid_staged_gates_plus_free_sandbox",
+    "agent_seat": "free_sandbox_build_session",
+    "coder_ceiling": "open_pr",
+    "merge_authority": "human_in_Review"
+  }
+}

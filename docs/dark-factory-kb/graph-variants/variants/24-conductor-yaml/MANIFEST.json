@@ -1,0 +1,55 @@
+{
+  "slug": "24-conductor-yaml",
+  "persona": "conductor-yaml compose — Microsoft Conductor: YAML workflow + Jinja routes = 0-token orchestration; type:agent only as leaf",
+  "approach": "compose",
+  "confidence": 92,
+  "inspired_by": [
+    "microsoft/conductor",
+    "MS Conductor YAML + Jinja routes (0-token orchestration)",
+    "WAVE3_DETERMINISTIC Conductor (MS) row",
+    "dark-factory-kb/instances/microsoft-conductor",
+    "Copilot SDK / Anthropic leaf sessions"
+  ],
+  "shape_map": {
+    "Mdiamond": "start_workflow_yaml",
+    "Msquare": "terminate_done",
+    "parallelogram": "DET_script_set_mcp",
+    "diamond": "Jinja_route_first_match",
+    "box": "type_agent_leaf",
+    "hexagon": "human_gate"
+  },
+  "fixed_pipeline": [
+    "yaml_spine",
+    "jinja_routes",
+    "agent_leaf",
+    "script_hitl"
+  ],
+  "conductor": {
+    "orchestrator": "YAML workflow body + Jinja route expressions",
+    "orchestration_tokens": 0,
+    "route_rule": "first matching Jinja condition wins",
+    "llm_placement": "steps with type: agent only — isolated sessions",
+    "agent_free_steps": ["script", "set", "mcp", "terminate", "route", "human_gate"],
+    "not": "artushin/conductor-ai (Rust/tmux)"
+  },
+  "invariants": [
+    "orchestration_is_zero_token",
+    "yaml_plus_jinja_own_next_step",
+    "type_agent_only_as_leaf",
+    "no_llm_as_router",
+    "script_set_mcp_human_gate_without_model",
+    "first_matching_jinja_wins",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_artushin_conductor_ai"
+  ],
+  "subgraphs": [
+    "subgraph-yaml-spine.md",
+    "subgraph-jinja-routes.md",
+    "subgraph-agent-leaf.md",
+    "subgraph-script-hitl.md"
+  ]
+}

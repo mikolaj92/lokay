@@ -1,0 +1,74 @@
+{
+  "slug": "22-copilot-cloud",
+  "persona": "copilot-cloud-reuse — issue→draft PR on ephemeral host; K=1; coder never merges",
+  "approach": "reuse_ready",
+  "confidence": 91,
+  "inspired_by": [
+    "GitHub Copilot coding agent (cloud / ephemeral host)",
+    "berenddeboer/ready-for-agent",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "05-ready-for-agent-reuse",
+    "12-serial-k1",
+    "13-merge-policy"
+  ],
+  "reused_patterns": [
+    "label_or_assign_start",
+    "ephemeral_host_sandbox",
+    "fresh_clone_not_dirty_worktree",
+    "agent_leaf_structured",
+    "draft_pr_ceiling",
+    "coder_never_merges",
+    "merge_policy_off_classify_always",
+    "one_ticket_one_host_k1"
+  ],
+  "k1": {
+    "tickets_per_pass": 1,
+    "hosts_per_ticket": 1,
+    "prs_per_ticket": 1,
+    "pr_state": "draft",
+    "parallel": false
+  },
+  "host": {
+    "kind": "ephemeral_cloud",
+    "lifecycle": "spin_up → clone → implement → push → tear_down",
+    "persistence": "none_after_draft_pr",
+    "shared_dirty_tree": false
+  },
+  "invariants": [
+    "issue_or_assign_is_start_not_chat",
+    "agent_does_not_pick_work",
+    "one_ticket_one_ephemeral_host_k1",
+    "coder_ceiling_is_draft_pr",
+    "coder_never_merges",
+    "merge_is_policy_or_human_not_cloud_coder",
+    "ephemeral_host_torn_down_after_ship",
+    "det_majority_agent_only_leaves",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-issue-trigger.md",
+    "subgraph-ephemeral-host.md",
+    "subgraph-cloud-coder.md",
+    "subgraph-draft-pr-ceiling.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-issue-trigger.md",
+      "subgraph-ephemeral-host.md",
+      "subgraph-cloud-coder.md",
+      "subgraph-draft-pr-ceiling.md"
+    ],
+    "trigger": "label:ready-for-agent OR assign:copilot",
+    "sandbox": "ephemeral_cloud_host",
+    "agent_seat": "leaf_SO_on_ephemeral_host",
+    "coder_ceiling": "draft_pr",
+    "merge_authority": "DET_merge_policy_or_human",
+    "concurrency": "serial_k1"
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "slug": "42-forge-stations",
+  "persona": "forge-stations compose — LangGraph typed stations (plan/impl/CI/review); agent fills a station, never routes between stages",
+  "approach": "compose",
+  "confidence": 82,
+  "inspired_by": [
+    "forge-sdlc/forge",
+    "dark-factory-kb/instances/forge-sdlc-forge",
+    "SPINE_INDEX spine_deterministic — LangGraph typed stations; agent does not route between stages",
+    "LangGraph workflow checkpoints + external-effect journal",
+    "klepacz SOUL ticket→PR"
+  ],
+  "shape_map": {
+    "Mdiamond": "jira_or_label_trigger",
+    "Msquare": "done_jira_summary",
+    "parallelogram": "DET_station_advance",
+    "diamond": "DET_gate_or_ci",
+    "box": "AGENT_inside_typed_station",
+    "hexagon": "HITL_plan_or_pr_review"
+  },
+  "fixed_pipeline": [
+    "station_spine",
+    "plan_station",
+    "impl_station",
+    "ci_repair_station",
+    "review_station"
+  ],
+  "typed_stations": [
+    "plan",
+    "impl",
+    "ci",
+    "review"
+  ],
+  "forge_sdlc": {
+    "orchestrator": "LangGraph StateGraph — typed station enum owns next edge",
+    "checkpoint": "LangGraph workflow checkpoints + journal of external effects",
+    "llm_placement": "inside current station node only — never graph router",
+    "sandbox": "ephemeral Podman per repo, scoped access",
+    "trigger": "Jira/GitHub webhooks; labels/comments",
+    "merge": "always human PR review before merge",
+    "obs": ["Prometheus", "Langfuse", "Grafana"],
+    "not": [
+      "agent choosing next station",
+      "one fat prompt mill",
+      "L5 lights-out"
+    ]
+  },
+  "llm_slots": [
+    "plan_artifacts",
+    "implement_in_station",
+    "ci_repair_patch",
+    "pr_review_critique"
+  ],
+  "det_only": [
+    "webhook_intake",
+    "station_advance",
+    "checkpoint_persist",
+    "podman_spawn",
+    "commit_push_open_pr",
+    "ci_poll",
+    "jira_update",
+    "merge_policy"
+  ],
+  "invariants": [
+    "langgraph_typed_stations_own_edges",
+    "no_agent_routing_between_stations",
+    "agent_fills_current_station_only",
+    "plan_requires_human_approve",
+    "impl_runs_in_ephemeral_podman",
+    "ci_repair_is_bounded_loop",
+    "human_pr_review_before_merge",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "fail_closed_no_limbo",
+    "structured_output_on_every_slot",
+    "merge_policy_off_classify_always",
+    "not_l5"
+  ],
+  "budgets": {
+    "ci_repair_n": 3,
+    "occupancy_k": 1,
+    "cross_repo_plan_ok": true
+  },
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-station-spine.md",
+    "subgraph-plan-station.md",
+    "subgraph-impl-station.md",
+    "subgraph-ci-review-station.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-station-spine.md",
+      "subgraph-plan-station.md",
+      "subgraph-impl-station.md",
+      "subgraph-ci-review-station.md"
+    ],
+    "phase_machine": "plan→impl→ci→review",
+    "orchestrator": "LangGraph_DET_typed_stations",
+    "react": false,
+    "ticket_to_pr": true
+  }
+}
