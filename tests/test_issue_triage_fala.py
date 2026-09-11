@@ -19,13 +19,11 @@ def run_graph(tmp_path, body: str, run_id: str, path_id: str = "issue_triage"):
 def base_effector(extra: str) -> str:
     """Build a FEP/1 subprocess effector from Fala's adapter manifest."""
     return (
-        "import hashlib,json,os\nfrom pathlib import Path\n"
-        "from fala.fep import build_result\n"
-        "from fala.sdk import load_manifest, write_result\n"
+        "import json\n"
+        "from pathlib import Path\n"
+        "from fala.sdk import load_manifest, output, write_result\n"
         "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
-        "req={'protocol':'fala-effector/1','message_kind':'effector.request','run_id':os.environ.get('RUN_ID','run'),'process_id':m['process_id'],'execution_id':m['execution_id'],'attempt':m['attempt'],'impulse_id':m.get('impulse_id',''),'process_fingerprint':'process:test','path_digest':'path:test','capability':'lokay_atom','input':m.get('input') or {},'config':m.get('config') or {},'output_contract_ref':'schema:test'}\n"
-        "body=json.dumps(req,ensure_ascii=False,separators=(',',':'),sort_keys=True); req['message_id']='msg:sha256:'+hashlib.sha256(body.encode()).hexdigest()\n"
         "if a=='plan_issue_split':v.update(route='not_applicable',child_1='absent',child_2='absent',child_3='absent',child_4='absent',child_5='absent')\n"
         + extra
-        + "\nwrite_result(build_result(req, values=v))\n"
+        + "\nwrite_result(output(values=v))\n"
     )

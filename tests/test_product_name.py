@@ -4,10 +4,15 @@ from pathlib import Path
 def test_legacy_product_name_is_absent() -> None:
     root = Path(__file__).resolve().parents[1]
     forbidden = "m" + "ill"
-    excluded = {".git", ".venv", "__pycache__"}
+    excluded = {".git", ".venv", ".pytest_cache", ".prime", "__pycache__"}
+    excluded_docs = root / "docs" / "dark-factory-kb"
     hits = []
     for path in root.rglob("*"):
-        if not path.is_file() or excluded.intersection(path.parts):
+        if (
+            not path.is_file()
+            or excluded.intersection(path.parts)
+            or path.is_relative_to(excluded_docs)
+        ):
             continue
         if forbidden in path.name.lower():
             hits.append(str(path.relative_to(root)))

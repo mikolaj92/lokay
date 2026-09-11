@@ -8,12 +8,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
 from fala import sdk
-from fala.fep import build_result
 from lokay.atom_runtime import (  # noqa: F401 — tests patch these names
     branch_ahead_of_upstream,
     run_atom_main as _run_atom_main,
@@ -771,7 +769,7 @@ def _fep_request(manifest: dict[str, Any]) -> dict[str, Any]:
         "process_id": str(manifest.get("process_id") or ""),
         "execution_id": str(manifest.get("execution_id") or ""),
         "attempt": int(manifest.get("attempt") or 1),
-        "impulse_id": str(manifest.get("impulse_id") or ""),
+        "impulse_id": str(manifest.get("impulse_id") or "impulse:lokay-organ"),
         "process_fingerprint": "process:lokay-organ",
         "path_digest": "path:lokay-organ",
         "capability": "lokay_atom",
@@ -816,23 +814,7 @@ def main() -> int:
             metadata={"implementation": provenance},
         )
 
-    try:
-        manifest = sdk.load_manifest()
-        output = handler(manifest)
-        request = _fep_request(manifest)
-        sdk.write_result(
-            build_result(
-                request,
-                values=output.get("values"),
-                associations=output.get("associations"),
-                reactions=output.get("reactions"),
-                metadata=output.get("metadata"),
-            )
-        )
-    except Exception as exc:
-        print(str(exc), file=sys.stderr)
-        return 1
-    return 0
+    return sdk.run_manifest_effector(handler)
 
 
 if __name__ == "__main__":

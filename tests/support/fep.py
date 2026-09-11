@@ -16,7 +16,7 @@ def request_from_adapter_manifest(manifest: Mapping[str, Any], *, run_id: str = 
         "process_id": str(manifest["process_id"]),
         "execution_id": str(manifest["execution_id"]),
         "attempt": int(manifest["attempt"]),
-        "impulse_id": str(manifest.get("impulse_id", "")),
+        "impulse_id": str(manifest.get("impulse_id") or "impulse:test"),
         "process_fingerprint": "process:test",
         "path_digest": "path:test",
         "capability": "lokay_atom",

@@ -23,10 +23,9 @@ _INHERIT = (
 def effector_source(values_path: Path, ran_path: Path) -> str:
     """Return a FEP/1 organ that publishes JSON values and logs ran ids."""
     return (
-        "import hashlib, json\n"
+        "import json\n"
         "from pathlib import Path\n"
-        "from fala.fep import build_result\n"
-        "from fala.sdk import load_manifest, write_result\n"
+        "from fala.sdk import load_manifest, output, write_result\n"
         f"VALUES = json.loads(Path({json.dumps(str(values_path))}).read_text())\n"
         f"RAN = {json.dumps(str(ran_path))}\n"
         "m = load_manifest()\n"
@@ -38,16 +37,7 @@ def effector_source(values_path: Path, ran_path: Path) -> str:
         "    extra = VALUES.get(key)\n"
         "    if extra: v.update(extra)\n"
         "Path(RAN).open('a').write(short + chr(10))\n"
-        "req = {'protocol': 'fala-effector/1', 'message_kind': 'effector.request', "
-        "'run_id': str(m.get('run_id') or 'run'), 'process_id': m['process_id'], "
-        "'execution_id': m['execution_id'], 'attempt': m['attempt'], "
-        "'impulse_id': m.get('impulse_id', ''), 'process_fingerprint': 'process:test', "
-        "'path_digest': 'path:test', 'capability': 'lokay_atom', "
-        "'input': m.get('input') or {}, 'config': m.get('config') or {}, "
-        "'output_contract_ref': 'schema:test'}\n"
-        "body = json.dumps(req, ensure_ascii=False, separators=(',', ':'), sort_keys=True)\n"
-        "req['message_id'] = 'msg:sha256:' + hashlib.sha256(body.encode()).hexdigest()\n"
-        "write_result(build_result(req, values=v))\n"
+        "write_result(output(values=v))\n"
     )
 
 
