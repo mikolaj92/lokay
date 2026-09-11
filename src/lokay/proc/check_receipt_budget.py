@@ -16,14 +16,17 @@ def check(selected: dict, issue_state: dict, *, budget_s: int) -> dict:
         wrapper_dead = not pid_is_alive(int(selected["pid"]))
         if issue > 0 and wrapper_dead and coding_live_for_issue(issue):
             over_budget = True
+    covering = bool(issue_state.get("covering"))
+    done = bool(issue_state.get("closed") or covering)
     return {
         **selected,
         "closed": bool(issue_state.get("closed")),
+        "covering": covering,
         "elapsed_s": float(result.get("elapsed_s") or 0),
         "over_budget": over_budget,
         "route": (
             "reap"
-            if issue_state.get("closed")
+            if done
             else "inspect_coder" if over_budget else "keep"
         ),
     }

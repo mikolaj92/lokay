@@ -8,6 +8,8 @@ def select(selected: dict, issue: dict, budget: dict, coder: dict, diff: dict) -
         return {**budget, "route": "keep"}
     if budget.get("closed"):
         return {**budget, "route": "reap", "reason": "issue_closed"}
+    if budget.get("covering"):
+        return {**budget, "route": "reap", "reason": "covering_pr"}
     if coder.get("route") == "reap":
         return {**coder, "route": "reap", "reason": "over_budget"}
     return dict(

@@ -19,10 +19,13 @@ def _one_receipt(
         return record(selected, {}, {}, {})
     inspected = inspect(selected, config_path=config_path, live=live)
     terminated = {}
-    if inspected.get("route") == "closed":
+    # CLOSED issue or covering OPEN PR: coding slot is done. Kill leftover
+    # wrapper; leftover covering PR belongs to pr_triage, not occupancy.
+    done = inspected.get("route") in {"closed", "covering"}
+    if done:
         terminated = terminate(inspected)
     outcome = inspected
-    if inspected.get("route") == "closed":
+    if done:
         outcome = {
             **inspected,
             "route": "terminated" if terminated.get("terminated") else "keep",
