@@ -1,0 +1,100 @@
+{
+  "slug": "38-dryvist-gha",
+  "persona": "dryvist-gha compose — reusable GHA workflow_call library: ai:ready → fixed resolver/assign steps; agents are leaves (Claude/Codex/Copilot)",
+  "approach": "compose",
+  "confidence": 88,
+  "inspired_by": [
+    "dryvist/ai-workflows",
+    "dryvist/ai-assistant-instructions",
+    "cc-issue-resolver.yml",
+    "issue-backlog-sweep.yml",
+    "tofu-proxmox issue-auto-resolve.yml",
+    "copilot-issue-resolve.yml",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "23-claude-action",
+    "29-codex-auto",
+    "05-ready-for-agent-reuse"
+  ],
+  "reused_patterns": [
+    "ai_ready_label_contract",
+    "reusable_workflow_call",
+    "fixed_resolver_steps",
+    "fixed_copilot_assign_steps",
+    "gh_action_ai_agent_env_fork",
+    "issue_backlog_sweep_optional",
+    "draft_pr_coder_ceiling",
+    "optional_ai_merge_gate",
+    "det_majority_agent_only_leaves",
+    "merge_policy_off_default"
+  ],
+  "invariants": [
+    "ai_ready_is_start_not_chat_pick",
+    "workflow_call_spine_is_fixed_det",
+    "resolver_or_assign_selected_by_config_not_llm",
+    "cc_issue_resolver_is_leaf_not_orchestrator",
+    "copilot_assign_is_det_label_flip",
+    "coder_ceiling_is_draft_pr",
+    "agent_does_not_pick_work",
+    "agent_does_not_route_graph",
+    "det_majority_agent_only_leaves",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": [
+    "Off",
+    "Classify",
+    "Always"
+  ],
+  "default_merge_policy": "Off",
+  "trigger": {
+    "events": [
+      "issues.labeled (ai:ready)",
+      "issues.opened (optional cc-issue-resolver direct)",
+      "schedule (issue-backlog-sweep → ai:ready)",
+      "workflow_call (from consumer repos)"
+    ],
+    "label_examples": [
+      "ai:ready",
+      "ai:assigned"
+    ]
+  },
+  "branch_convention": "resolver / agent default (draft PR)",
+  "gha_library": "dryvist/ai-workflows",
+  "reusable_workflows": [
+    "cc-issue-resolver.yml",
+    "run-ai-agent adapter",
+    "issue-backlog-sweep.yml",
+    "_ai-merge-gate.yml (optional)"
+  ],
+  "agent_fork": {
+    "env": "GH_ACTION_AI_AGENT",
+    "paths": [
+      "claude",
+      "codex",
+      "copilot_assign"
+    ]
+  },
+  "subgraphs": [
+    "subgraph-ai-ready.md",
+    "subgraph-workflow-call.md",
+    "subgraph-resolver-leaf.md",
+    "subgraph-assign-copilot.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-ai-ready.md",
+      "subgraph-workflow-call.md",
+      "subgraph-resolver-leaf.md",
+      "subgraph-assign-copilot.md"
+    ],
+    "trigger": "ai:ready|sweep|workflow_call → GHA",
+    "spine": "reusable_workflow_call_fixed_steps",
+    "agent_seat": "resolver_leaf_or_copilot_assign",
+    "fork": "GH_ACTION_AI_AGENT|Copilot config DET",
+    "coder_ceiling": "draft_pr",
+    "merge_authority": "human_or_optional_ai_merge_gate"
+  }
+}

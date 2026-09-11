@@ -1,0 +1,32 @@
+{
+  "slug": "49-windmill-flow",
+  "persona": "windmill-flow compose — Windmill scripts/flows as DET atoms; LLM only in typed script leaves; approval HITL; open PR ceiling",
+  "approach": "compose",
+  "confidence": 86,
+  "inspired_by": [
+    "Windmill flows/scripts",
+    "Windmill approval steps",
+    "klepacz SOUL ticket→PR",
+    "47-prefect-flow"
+  ],
+  "subgraphs": [
+    "subgraph-flow-modules.md",
+    "subgraph-script-leaves.md",
+    "subgraph-approval-hitl.md",
+    "subgraph-pr-ceiling.md"
+  ],
+  "default_merge_policy": "Off",
+  "merge_policy": [
+    "Off",
+    "Classify",
+    "Always"
+  ],
+  "invariants": [
+    "flow_owns_topology",
+    "llm_only_typed_script_leaves",
+    "approval_is_hitl_not_llm_judge",
+    "coder_ceiling_open_pr",
+    "not_l5",
+    "det_majority"
+  ]
+}

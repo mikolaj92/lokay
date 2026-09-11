@@ -1,0 +1,60 @@
+{
+  "slug": "28-fabro-dot",
+  "persona": "fabro-dot compose — fabro.sh: Graphviz DOT workflow owns next-node; agents only as sandbox leaves",
+  "approach": "compose",
+  "confidence": 91,
+  "inspired_by": [
+    "fabro.sh",
+    "docs.fabro.sh — DOT language / stages-and-nodes / how-fabro-works",
+    "Fabro digraph .fabro workflows",
+    "Fabro sandboxes: docker | local | daytona",
+    "WAVE3_DETERMINISTIC Fabro row (if present)"
+  ],
+  "shape_map": {
+    "Mdiamond": "start",
+    "Msquare": "exit",
+    "box": "agent_sandbox_leaf",
+    "tab": "prompt_oneshot_leaf",
+    "parallelogram": "DET_command_script",
+    "diamond": "DET_conditional_route",
+    "hexagon": "HITL_human_gate",
+    "component": "parallel_fan_out_optional",
+    "tripleoctagon": "parallel_fan_in_optional"
+  },
+  "fixed_pipeline": [
+    "dot_spine",
+    "engine_routes",
+    "sandbox_agent",
+    "cmd_hitl"
+  ],
+  "fabro": {
+    "orchestrator": "fabro run digraph — engine edge selection (condition / label / weight)",
+    "orchestration_tokens": 0,
+    "route_rule": "engine evaluates outgoing edges; LLM does not pick next node",
+    "llm_placement": "shape=box (agent) and shape=tab (prompt) only — tools run inside sandbox",
+    "sandbox_providers": ["docker", "local", "daytona"],
+    "agent_free_steps": ["command", "conditional", "human", "wait", "parallel", "start", "exit"],
+    "file_ext": ".fabro"
+  },
+  "invariants": [
+    "dot_graph_owns_next_node",
+    "fabro_engine_selects_edges",
+    "agents_only_in_sandbox_leaves",
+    "no_llm_as_router",
+    "no_fat_orchestrator_tool_calling",
+    "command_and_conditional_without_model",
+    "human_gate_is_hexagon_not_llm",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_attractor_pipeline_runner_alias"
+  ],
+  "subgraphs": [
+    "subgraph-dot-spine.md",
+    "subgraph-engine-routes.md",
+    "subgraph-sandbox-agent.md",
+    "subgraph-cmd-hitl.md"
+  ]
+}

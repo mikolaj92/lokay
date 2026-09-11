@@ -1,0 +1,77 @@
+{
+  "slug": "30-dagent-dag",
+  "persona": "dagent-dag compose — explicit TypeScript DAG watchdog; LLM only in specialist nodes; DET push/poll-ci/heal → create-pr",
+  "approach": "compose",
+  "confidence": 88,
+  "inspired_by": [
+    "rkaliupin/DAGent",
+    "tools/autonomous-factory (DAGent)",
+    "Stripe Minions (reference pattern in DAGent README)",
+    "Microsoft APM (.apm/apm.yml)",
+    "dark-factory-kb/instances/dagent",
+    "KLEPACZ.md",
+    "SOUL.md"
+  ],
+  "shape_map": {
+    "Mdiamond": "pipeline_init_spec",
+    "Msquare": "pr_open_done",
+    "parallelogram": "DET_watchdog_shell_ci",
+    "diamond": "DET_dag_ready_or_gate",
+    "box": "LLM_specialist_node_only",
+    "hexagon": "HITL_human_pr_review"
+  },
+  "fixed_pipeline": [
+    "watchdog_dag",
+    "specialist_llm",
+    "verify_heal",
+    "pr_ceiling"
+  ],
+  "dagent": {
+    "orchestrator": "TypeScript while + explicit DAG (watchdog getNextAvailable)",
+    "state": "_STATE.json + DAG readiness",
+    "trigger": "_SPEC.md / ticket bind → pipeline:init (klepacz: labeled issue or spec file)",
+    "llm_placement": "specialist agent nodes only — never watchdog / push / poll-ci",
+    "det_shell": ["push-code", "poll-ci", "integration-test", "live-ui Playwright"],
+    "recovery": "TriageDiagnostic + reset ≤5 circuit breaker",
+    "coder_ceiling": "create-pr — zero auto-merge",
+    "portability_note": "engine pattern from autonomous-factory; strip Azure/DevContainer theatre for klepacz host"
+  },
+  "invariants": [
+    "typescript_dag_watchdog_is_deterministic",
+    "llm_only_in_specialist_nodes",
+    "no_llm_in_watchdog_or_shell_bypass",
+    "getNextAvailable_owns_batch_scheduling",
+    "state_json_is_source_of_truth",
+    "push_poll_ci_are_det",
+    "triage_reset_bounded_max_5",
+    "coder_ceiling_is_create_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_or_spec_one_pr",
+    "merge_policy_off_default_human_review",
+    "no_fat_orchestrator_tool_calling",
+    "meat_equals_ai_same_role",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-watchdog-dag.md",
+    "subgraph-specialist-llm.md",
+    "subgraph-verify-heal.md",
+    "subgraph-pr-ceiling.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-watchdog-dag.md",
+      "subgraph-specialist-llm.md",
+      "subgraph-verify-heal.md",
+      "subgraph-pr-ceiling.md"
+    ],
+    "trigger": "_SPEC.md|labeled ticket → pipeline:init",
+    "spine": "typescript_while_dag_watchdog",
+    "agent_seat": "specialist_nodes_only",
+    "coder_ceiling": "create_pr",
+    "merge_authority": "human_pr_review_MergePolicy_Off"
+  }
+}

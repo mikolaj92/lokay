@@ -1,0 +1,79 @@
+{
+  "slug": "36-knot-dag",
+  "persona": "knot-dag compose — SQLite DAG executor owns plan/execute/verify; agents are runners (propose-only); fresh packets; HITL checkpoint → PR",
+  "approach": "compose",
+  "confidence": 85,
+  "inspired_by": [
+    "knot0-com/dagain",
+    "https://knot0.com/writing/dagain",
+    "dark-factory-kb/instances/knot0-com-dagain",
+    "spine_deterministic: SQLite DAG executor owns plan/execute/verify; agents are runners",
+    "KLEPACZ.md",
+    "SOUL.md"
+  ],
+  "shape_map": {
+    "Mdiamond": "dagain_init_goal_or_ticket",
+    "Msquare": "session_done_pr_open",
+    "parallelogram": "DET_sqlite_supervisor_apply",
+    "diamond": "DET_ready_deps_or_checkpoint",
+    "box": "AGENT_runner_fresh_packet",
+    "hexagon": "HITL_needs_human_checkpoint"
+  },
+  "fixed_pipeline": [
+    "sqlite_dag",
+    "runner_agents",
+    "plan_execute_verify",
+    "checkpoint_pr"
+  ],
+  "dagain": {
+    "orchestrator": "SQLite DAG supervisor / executor (owns schedule + apply)",
+    "state": ".dagain/state.sqlite — nodes, deps, kv_latest, kv_history, mailbox",
+    "trigger": "labeled ready-for-agent → goal bind (klepacz bridge) OR dagain init --goal",
+    "llm_placement": "runners only — plan/executor/verifier/integrator roles; never supervisor apply",
+    "agent_contract": "propose structured next (setStatus/addNodes); supervisor applies",
+    "context_model": "fresh packet per node (goal + deps artefacts) — no long transcript as SoT",
+    "recovery": "node retry policy → escalate to nearest plan → root; circuit via checkpoint",
+    "parallelism": "workers N + optional git worktrees; deps respected",
+    "coder_ceiling": "integrator / create-pr node — zero auto-merge default",
+    "portability_note": "engine pattern from knot0 dagain; map goal→ticket, integrator→PR for klepacz host"
+  },
+  "invariants": [
+    "sqlite_dag_is_source_of_truth",
+    "supervisor_owns_plan_execute_verify_loop",
+    "agents_are_runners_not_orchestrators",
+    "runners_propose_supervisor_applies",
+    "fresh_packet_per_node",
+    "no_llm_in_supervisor_scheduler",
+    "no_agent_mutates_graph_directly",
+    "retry_then_escalate_to_plan",
+    "needs_human_checkpoint_is_hitl",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_or_goal_one_pr",
+    "merge_policy_off_default_human_review",
+    "meat_equals_ai_same_runner_seat",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-sqlite-dag.md",
+    "subgraph-runner-agents.md",
+    "subgraph-plan-execute-verify.md",
+    "subgraph-checkpoint-pr.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-sqlite-dag.md",
+      "subgraph-runner-agents.md",
+      "subgraph-plan-execute-verify.md",
+      "subgraph-checkpoint-pr.md"
+    ],
+    "trigger": "labeled ticket|goal → dagain init / bind → SQLite nodes",
+    "spine": "sqlite_dag_supervisor",
+    "agent_seat": "runners_propose_only",
+    "coder_ceiling": "create_pr_or_integrator",
+    "merge_authority": "human_checkpoint_MergePolicy_Off"
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "slug": "39-luminik-pipeline",
+  "persona": "luminik-pipeline compose — fixed plan→approve→build→review→fix→ship; lib/merge_gate.py = one fail-closed predicate (not a persona); Claude/Codex/OpenCode only in role slots",
+  "approach": "compose",
+  "confidence": 80,
+  "inspired_by": [
+    "luminik-io/alfred",
+    "dark-factory-kb/instances/luminik-io-alfred",
+    "SPINE_INDEX spine_deterministic — Fixed plan→approve→build→review→fix→ship; merge_gate.py predicate",
+    "alfred docs/MERGE_GATE.md — GitHub-native enforcement, SHA-guarded squash",
+    "KLEPACZ.md / SOUL.md ticket→PR",
+    "17-opa-merge-gate (DET merge authority dual — here predicate is Python code, not Rego)"
+  ],
+  "fixed_pipeline": [
+    "plan",
+    "approve",
+    "build",
+    "review",
+    "fix",
+    "ship"
+  ],
+  "llm_slots": [
+    "plan_drake",
+    "build_lucius_worktree",
+    "review_adversarial",
+    "fix_findings"
+  ],
+  "det_only": [
+    "preflight_claim",
+    "stage_machine_advance",
+    "approval_gate_hitl_or_code",
+    "worktree_lock",
+    "engine_route_claude_codex_opencode",
+    "open_pr_ship",
+    "merge_gate_py_predicate",
+    "squash_merge_sha_guarded"
+  ],
+  "alfred": {
+    "spine": "python_stage_machine",
+    "stages": "plan→approve→build→review→fix→ship",
+    "merge_authority": "lib/merge_gate.py",
+    "merge_style": "fail_closed_sha_guarded_squash",
+    "roles": {
+      "plan": "Drake (LLM leaf)",
+      "build": "Lucius worktree (LLM leaf)",
+      "review": "adversarial independent (LLM leaf)",
+      "fix": "fix findings (LLM leaf)"
+    },
+    "engines": ["Claude", "Codex", "OpenCode"],
+    "engine_routing": "DET code",
+    "not_persona": "merge_gate is a predicate, never a named agent role"
+  },
+  "invariants": [
+    "fixed_stages_plan_approve_build_review_fix_ship",
+    "no_llm_stage_router",
+    "llm_only_in_role_slots",
+    "approve_is_hitl_or_code_gate",
+    "build_in_isolated_worktree",
+    "reviewer_separate_from_builder",
+    "fix_loops_to_review_not_ship",
+    "ship_opens_pr_before_merge_gate",
+    "merge_gate_py_sole_predicate",
+    "merge_gate_fail_closed",
+    "sha_guarded_squash_only",
+    "github_native_enforcement_boundary",
+    "mutable_bot_comment_never_sufficient",
+    "coder_ceiling_is_open_pr_then_gate",
+    "one_ticket_one_worktree_one_pr",
+    "not_l5",
+    "not_dot_gha_compile"
+  ],
+  "merge_gate": {
+    "module": "lib/merge_gate.py",
+    "cli": ["alfred pr check", "alfred pr merge"],
+    "fail_closed": true,
+    "mutation": "gh pr merge --squash --match-head-commit",
+    "predicates": [
+      "pr_open",
+      "no_changes_requested_or_review_required",
+      "min_exact_head_approvals",
+      "zero_unresolved_review_threads",
+      "base_requires_thread_resolution",
+      "mergeStateStatus_CLEAN",
+      "mergeable_MERGEABLE",
+      "no_failing_check_runs",
+      "required_external_reviews_exact_head_or_empty"
+    ],
+    "env_knobs": [
+      "ALFRED_MERGE_REQUIRE_APPROVAL",
+      "ALFRED_MERGE_MIN_APPROVALS",
+      "ALFRED_MERGE_REQUIRED_EXTERNAL_REVIEWS"
+    ]
+  },
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-stage-spine.md",
+    "subgraph-plan-approve.md",
+    "subgraph-build-review-fix.md",
+    "subgraph-ship-merge-gate.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "slug": "39-luminik-pipeline",
+    "chain": [
+      "subgraph-stage-spine.md",
+      "subgraph-plan-approve.md",
+      "subgraph-build-review-fix.md",
+      "subgraph-ship-merge-gate.md"
+    ],
+    "phase_machine": "plan→approve→build→review→fix→ship",
+    "orchestrator": "DET_python_stage_machine",
+    "agent_seat": "role_leaf_per_stage",
+    "merge_authority": "DET_merge_gate_py",
+    "llm_merge": false,
+    "react": false
+  }
+}

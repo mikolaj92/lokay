@@ -1,0 +1,90 @@
+{
+  "slug": "26-holdout-oracle",
+  "persona": "holdout-oracle compose — sealed holdout suite grades via exit codes + JSON receipt; agent fills implement leaf only; no LLM-judge",
+  "approach": "compose",
+  "confidence": 90,
+  "inspired_by": [
+    "SWE-bench / sealed private tests",
+    "holdout oracle evaluation harness",
+    "OpenAutoCoder/Agentless validate-as-DET",
+    "klepacz SOUL ticket→PR",
+    "07-agentless-phases",
+    "25-jnurre-tdd AGENT_TEST_COMMAND gate"
+  ],
+  "fixed_pipeline": [
+    "seal_pack",
+    "implement_leaf",
+    "grade_oracle",
+    "ship_pr"
+  ],
+  "llm_slots": [
+    "implement_leaf"
+  ],
+  "det_only": [
+    "pick_one_labeled",
+    "worktree_add",
+    "split_public_vs_holdout",
+    "seal_holdout_tests",
+    "pack_public_context",
+    "apply_patch_sandbox",
+    "run_public_smoke",
+    "run_sealed_oracle",
+    "parse_grade_json",
+    "exit_code_gate",
+    "commit",
+    "push",
+    "open_pr",
+    "merge_policy",
+    "write_grade_receipt"
+  ],
+  "grading": {
+    "mode": "sealed_holdout_oracle",
+    "signals": ["exit_code", "grade.json"],
+    "forbidden": ["llm_judge", "vibe_check", "model_self_score"],
+    "pass_rule": "exit_code==0 && grade.json.pass==true",
+    "agent_visibility": "public_pack_only"
+  },
+  "invariants": [
+    "agent_fills_implement_leaf_only",
+    "holdout_tests_sealed_from_agent",
+    "grading_is_exit_code_and_json",
+    "no_llm_judge",
+    "no_react_orchestrator",
+    "no_agent_routing",
+    "public_smoke_optional_holdout_authoritative",
+    "coder_ceiling_is_open_pr",
+    "one_ticket_one_pr",
+    "fail_closed_no_limbo",
+    "structured_output_on_implement_leaf",
+    "meat_equals_ai_same_slot",
+    "not_l5"
+  ],
+  "budgets": {
+    "implement_attempts": 2,
+    "occupancy_k": 1,
+    "local_public_repair": 1
+  },
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-seal-pack.md",
+    "subgraph-implement-leaf.md",
+    "subgraph-grade-oracle.md",
+    "subgraph-ship-pr.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-seal-pack.md",
+      "subgraph-implement-leaf.md",
+      "subgraph-grade-oracle.md",
+      "subgraph-ship-pr.md"
+    ],
+    "phase_machine": "seal_pack→implement_leaf→grade_oracle→ship_pr",
+    "orchestrator": "DET_only",
+    "react": false,
+    "agent_seat": "implement_leaf_only",
+    "grader": "sealed_oracle_exit_json",
+    "ticket_to_pr": true
+  }
+}

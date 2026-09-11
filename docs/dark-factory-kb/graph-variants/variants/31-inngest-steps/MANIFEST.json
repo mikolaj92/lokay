@@ -1,0 +1,64 @@
+{
+  "slug": "31-inngest-steps",
+  "persona": "inngest-steps compose — Inngest event + createFunction; DET step.run spine; LLM inside one step.run, never graph router",
+  "approach": "compose",
+  "confidence": 93,
+  "inspired_by": [
+    "Inngest step functions (step.run)",
+    "Inngest step.waitForEvent / step.sleep",
+    "Inngest event-driven createFunction",
+    "Inngest step memoization + per-step retries",
+    "15-durable-steps (Temporal dual — this variant is Inngest-only)",
+    "WAVE3_DETERMINISTIC Inngest row"
+  ],
+  "shape_map": {
+    "Mdiamond": "event_trigger",
+    "Msquare": "done",
+    "parallelogram": "DET_step_run",
+    "diamond": "DET_condition_budget",
+    "box": "LLM_inside_one_step_run",
+    "hexagon": "HITL_waitForEvent"
+  },
+  "fixed_pipeline": [
+    "event_fn",
+    "step_run_det",
+    "step_run_llm",
+    "wait_merge"
+  ],
+  "inngest": {
+    "orchestrator": "inngest.createFunction({ id }, { event }, async ({ event, step }) => …)",
+    "checkpoint": "step memoization (named step.run ids)",
+    "retry_unit": "failed step.run only",
+    "llm_placement": "inside one step.run — not function body router",
+    "hitl": ["step.waitForEvent", "step.sendEvent for signals"],
+    "primitives": [
+      "step.run",
+      "step.waitForEvent",
+      "step.sleep",
+      "step.sleepUntil",
+      "step.sendEvent",
+      "step.invoke"
+    ]
+  },
+  "invariants": [
+    "function_body_is_deterministic_control_flow",
+    "no_llm_in_function_body",
+    "llm_inside_one_step_run_only",
+    "retries_are_step_scoped",
+    "step_memo_is_source_of_truth",
+    "event_starts_run_not_chat_pick",
+    "no_agent_routing",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_alias_of_15_temporal_dual"
+  ],
+  "subgraphs": [
+    "subgraph-event-fn.md",
+    "subgraph-step-run-det.md",
+    "subgraph-step-run-llm.md",
+    "subgraph-wait-merge.md"
+  ]
+}

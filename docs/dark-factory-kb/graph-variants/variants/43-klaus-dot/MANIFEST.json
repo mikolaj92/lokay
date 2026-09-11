@@ -1,0 +1,99 @@
+{
+  "slug": "43-klaus-dot",
+  "persona": "klaus-dot compose — klaus run on .dot; runtime fixed graph (sprint-plan may emit DOT, runner never invents edges)",
+  "approach": "compose",
+  "confidence": 81,
+  "inspired_by": [
+    "arikWaisman/klaus",
+    "dark-factory-kb/instances/arikwaisman-klaus",
+    "SPINE_INDEX spine_deterministic — klaus run on .dot; runtime fixed graph",
+    "plan-and-execute.dot (Plan→Review HITL→Implement→Test/Lint→Fix)",
+    "Attractor-style DOT shapes in TypeScript factory",
+    "klepacz SOUL ticket→PR"
+  ],
+  "shape_map": {
+    "Mdiamond": "start",
+    "Msquare": "end",
+    "box": "LLM_leaf_plan_implement_fix",
+    "parallelogram": "DET_shell_test_lint",
+    "diamond": "DET_check_results",
+    "hexagon": "HITL_review_plan"
+  },
+  "fixed_pipeline": [
+    "dot_runtime",
+    "plan_hitl",
+    "impl_test_fix",
+    "klepacz_ceiling"
+  ],
+  "klaus": {
+    "orchestrator": "klaus run pipelines/*.dot — TS factory walks fixed digraph",
+    "orchestration_tokens": 0,
+    "route_rule": "edges in .dot own next node; LLM does not pick transitions",
+    "llm_placement": "Plan / Implement / Fix box nodes only",
+    "shell_nodes": ["Test", "Lint", "tool_command"],
+    "hitl": "Review hexagon after Plan",
+    "file_ext": ".dot",
+    "canonical_pipeline": "plan-and-execute.dot",
+    "sprint_plan_skill": "may *generate* DOT offline; runtime still loads a fixed file — never live graph mutation by agent"
+  },
+  "llm_slots": [
+    "plan",
+    "implement",
+    "fix"
+  ],
+  "det_only": [
+    "klaus_run_load_dot",
+    "validate_shape_allowlist",
+    "walk_edges",
+    "test_shell",
+    "lint_shell",
+    "check_results_diamond",
+    "pick_labeled_issue",
+    "worktree_git_pr",
+    "merge_policy"
+  ],
+  "invariants": [
+    "klaus_run_on_dot",
+    "runtime_graph_is_fixed",
+    "sprint_plan_may_emit_dot_but_not_mutate_runtime",
+    "no_llm_as_router",
+    "no_fat_orchestrator_tool_calling",
+    "plan_requires_hitl_review",
+    "test_lint_are_shell_code",
+    "fix_loop_is_bounded",
+    "check_results_is_det_diamond",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "structured_output_on_every_box",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_fabro_alias",
+    "not_attractor_pipeline_runner_alias"
+  ],
+  "budgets": {
+    "fix_loop_n": 3,
+    "occupancy_k": 1
+  },
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-dot-runtime.md",
+    "subgraph-plan-hitl.md",
+    "subgraph-impl-test-fix.md",
+    "subgraph-klepacz-ceiling.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-dot-runtime.md",
+      "subgraph-plan-hitl.md",
+      "subgraph-impl-test-fix.md",
+      "subgraph-klepacz-ceiling.md"
+    ],
+    "phase_machine": "plan→hitl→implement→test/lint→fix→check→pr",
+    "orchestrator": "klaus_run_DET_dot_walk",
+    "react": false,
+    "ticket_to_pr": true
+  }
+}
