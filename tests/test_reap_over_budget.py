@@ -70,6 +70,54 @@ def test_closed_issue_routes_reap_even_under_budget(monkeypatch):
     assert out["route"] == "reap" and out["closed"] is True
 
 
+def test_covering_pr_routes_reap_even_under_budget(monkeypatch):
+    from lokay.proc.check_receipt_budget import check
+    from lokay.proc.select_budget_receipt_route import select
+
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.check_pi_budget",
+        lambda pid, budget: {"over_budget": False, "elapsed_s": 12},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.check_receipt_budget.pid_is_alive",
+        lambda _pid: True,
+    )
+    checked = check(
+        {"pid": 7, "issue": 38},
+        {"closed": False, "covering": True},
+        budget_s=480,
+    )
+    assert checked["route"] == "reap" and checked["covering"] is True
+    routed = select(
+        {"route": "receipt"},
+        {"covering": True},
+        checked,
+        {},
+        {},
+    )
+    assert routed["route"] == "reap" and routed["reason"] == "covering_pr"
+
+
+def test_inspect_open_issue_with_covering_pr(monkeypatch):
+    from lokay.proc.inspect_budget_issue_state import inspect
+
+    monkeypatch.setattr(
+        "lokay.proc.inspect_budget_issue_state.run_proc",
+        lambda *_a, **_k: {"ok": True, "issue": {"state": "OPEN"}},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.inspect_budget_issue_state.find_covering",
+        lambda *_a, **_k: {
+            "ok": True,
+            "route": "existing",
+            "pull": {"number": 53, "state": "open"},
+        },
+    )
+    out = inspect({"pid": 7, "repo": "a/one", "issue": 38}, config_path=None, live=True)
+    assert out["route"] == "covering" and out["covering"] is True
+    assert out["covering_pr"]["number"] == 53
+
+
 def test_unknown_coder_diff_keeps_fail_closed(monkeypatch):
     from lokay.proc.inspect_budget_coder_diff import inspect
 

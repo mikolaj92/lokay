@@ -116,6 +116,113 @@ def test_catalog_empty_skips_physical_effects(tmp_path, monkeypatch):
     assert out["ok"] is True and not called
 
 
+def test_catalog_covering_open_pr_is_not_occupied(tmp_path, monkeypatch):
+    from lokay.passkit import io as pass_io
+    from lokay.proc.occupancy_catalog import run
+
+    killed = []
+    cleared = []
+    monkeypatch.setattr(
+        "lokay.proc.inspect_live_receipt_issue.inspect",
+        lambda selected, **_k: {
+            "ok": True,
+            "route": "covering",
+            "repo": "a/one",
+            "issue": 2,
+            "receipt": selected["receipt"],
+            "covering_pr": {"number": 9, "state": "open"},
+        },
+    )
+    monkeypatch.setattr(
+        "lokay.proc.terminate_closed_issue_worker.os.kill",
+        lambda pid, sig: killed.append((pid, sig)),
+    )
+    monkeypatch.setattr(
+        "lokay.proc.clear_closed_issue_receipt.clear_issue_to_pr_receipt",
+        lambda row: not cleared.append(row),
+    )
+    path = tmp_path / "pass"
+    path.mkdir()
+    pass_io.write_json(pass_io.begin_path(path), {"repos": ["a/one"]})
+    pass_io.write_json(
+        pass_io.working_path(path),
+        {
+            "actions": [],
+            "prs_by_repo": {},
+            "pr_survey_failed": [],
+            "ready_by_repo": {},
+        },
+    )
+    out = run(
+        {
+            "ok": True,
+            "merged": [],
+            "receipts": [{"repo": "a/one", "issue": 2, "pid": 9}],
+            "repos": ["a/one"],
+        },
+        pass_dir=str(path),
+        config_path=None,
+        live=True,
+    )
+    assert out["ok"] is True
+    assert out["state"]["occupied_repos"] == []
+    assert out["state"]["issue_to_pr_started"] == 0
+    assert out["state"]["cleared_issue_to_pr_receipts"] == [
+        {"repo": "a/one", "issue": 2}
+    ]
+    assert killed == [(9, __import__("signal").SIGTERM)]
+    assert cleared == [{"repo": "a/one", "issue": 2, "pid": 9}]
+
+
+def test_inspect_open_issue_with_covering_pr_is_covering(monkeypatch):
+    from lokay.proc.inspect_live_receipt_issue import inspect
+
+    monkeypatch.setattr(
+        "lokay.proc.inspect_live_receipt_issue.run_proc",
+        lambda *_a, **_k: {"ok": True, "issue": {"state": "OPEN"}},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.inspect_live_receipt_issue.find_covering",
+        lambda request, **_k: {
+            "ok": True,
+            "route": "existing",
+            "pull": {"number": 53, "state": "open"},
+        },
+    )
+    out = inspect(
+        {"receipt": {"repo": "a/one", "issue": 2, "pid": 9}},
+        config_path=None,
+        live=True,
+    )
+    assert out["route"] == "covering"
+    assert out["covering_pr"]["number"] == 53
+
+
+def test_inspect_covering_probe_failed_stays_occupied(monkeypatch):
+    from lokay.proc.inspect_live_receipt_issue import inspect
+
+    monkeypatch.setattr(
+        "lokay.proc.inspect_live_receipt_issue.run_proc",
+        lambda *_a, **_k: {"ok": True, "issue": {"state": "OPEN"}},
+    )
+    monkeypatch.setattr(
+        "lokay.proc.inspect_live_receipt_issue.find_covering",
+        lambda request, **_k: {
+            "ok": True,
+            "route": "terminal",
+            "reason": "covering_pr_probe_failed",
+            "pull": None,
+        },
+    )
+    out = inspect(
+        {"receipt": {"repo": "a/one", "issue": 2, "pid": 9}},
+        config_path=None,
+        live=True,
+    )
+    assert out["route"] == "occupied"
+    assert out["covering_probe_failed"] is True
+
+
 def test_closed_receipt_is_cleared_not_occupied():
     out = reduce_facts(
         prepared={"merged": [], "receipt_state_unknown": False},
