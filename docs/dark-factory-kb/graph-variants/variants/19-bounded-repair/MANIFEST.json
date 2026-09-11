@@ -1,0 +1,107 @@
+{
+  "slug": "19-bounded-repair",
+  "persona": "bounded-escape pessimistic — hard N on repair_code and pr_repair; exhaust → skip with receipt, never limbo stamp",
+  "approach": "from_scratch",
+  "confidence": 90,
+  "focus": "bounded_repair_loops",
+  "soul_alignment": [
+    "automate_babysitting",
+    "DET_plus_AGENT_SO",
+    "humans_for_architecture_and_QA",
+    "no_limbo_labels",
+    "subgraphs_not_monolith",
+    "not_L5",
+    "bounded_retries_then_escape"
+  ],
+  "budgets": {
+    "repair_code_n": 2,
+    "pr_repair_n": 2,
+    "occupancy_k": 1,
+    "hitl_ping_max": 1
+  },
+  "loops": [
+    {
+      "name": "repair_code",
+      "trigger": "local_test_red",
+      "counter": "repair_code_used",
+      "max": "budgets.repair_code_n",
+      "exhausted_reason": "local_test_red_exhausted"
+    },
+    {
+      "name": "pr_repair",
+      "trigger": "review_verdict_changes",
+      "counter": "pr_repair_used",
+      "max": "budgets.pr_repair_n",
+      "exhausted_reason": "pr_repair_exhausted"
+    }
+  ],
+  "fail_closed_defaults": [
+    "underspecified_ticket",
+    "dirty_worktree",
+    "implement_ok_false",
+    "local_test_red_after_N",
+    "pr_repair_after_N",
+    "review_reject",
+    "ci_red",
+    "merge_blocked",
+    "high_risk_never_Always"
+  ],
+  "forbidden_labels": [
+    "ai:deferred",
+    "ai:limbo",
+    "needs-human-maybe",
+    "workflow:limbo",
+    "waiting-forever"
+  ],
+  "subgraphs": [
+    "subgraph-intake.md",
+    "subgraph-repair-code.md",
+    "subgraph-pr-repair.md",
+    "subgraph-skip-escape.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-intake.md",
+      "subgraph-repair-code.md",
+      "subgraph-pr-repair.md"
+    ],
+    "escape": "subgraph-skip-escape.md",
+    "on_budget_exhausted": "skip_with_receipt"
+  },
+  "invariants": [
+    "repair_code_max_N",
+    "pr_repair_max_N",
+    "counters_are_DET",
+    "no_agent_budget_reset",
+    "no_limbo_labels",
+    "skip_writes_receipt_not_stamp",
+    "never_open_PR_on_local_red",
+    "pr_repair_same_branch_same_PR",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "MergePolicy_Off_default",
+    "never_LLM_merge",
+    "CI_oracle_not_overridable_by_agent",
+    "reject_skips_pr_repair_budget"
+  ],
+  "llm_slots": [
+    "implement",
+    "repair_code",
+    "critical_review",
+    "pr_repair"
+  ],
+  "det_only": [
+    "pick_one_labeled",
+    "worktree_branch",
+    "run_tests",
+    "budget_counters",
+    "commit",
+    "push",
+    "open_pr",
+    "ci_wait_reassert",
+    "merge_policy",
+    "skip_receipt",
+    "hitl_ping"
+  ]
+}

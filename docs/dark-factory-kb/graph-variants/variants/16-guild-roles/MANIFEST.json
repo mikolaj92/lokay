@@ -1,0 +1,27 @@
+{
+  "slug": "16-guild-roles",
+  "persona": "guild-roles compose — Dispatcher→Planner→Implementer→Reviewer; draft PR; humans own outcome",
+  "approach": "compose",
+  "confidence": 86,
+  "inspired_by": "Guild.ai Software Factory",
+  "fixed_pipeline": [
+    "dispatch",
+    "planner",
+    "implementer",
+    "reviewer",
+    "human_outcome"
+  ],
+  "invariants": [
+    "implementer_ceiling_is_draft_pr",
+    "reviewer_separate_from_implementer",
+    "factory_does_not_self_merge",
+    "humans_own_outcome",
+    "no_agent_routing"
+  ],
+  "subgraphs": [
+    "subgraph-dispatch.md",
+    "subgraph-planner.md",
+    "subgraph-implementer.md",
+    "subgraph-reviewer.md"
+  ]
+}

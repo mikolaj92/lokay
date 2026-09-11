@@ -1,0 +1,73 @@
+{
+  "slug": "07-agentless-phases",
+  "persona": "agentless-deterministic — fixed localize→repair→validate; LLM only in slots; zero ReAct orchestrator",
+  "approach": "compose",
+  "confidence": 92,
+  "inspired_by": [
+    "OpenAutoCoder/Agentless",
+    "arXiv 2407.01489 Demystifying LLM-based Software Engineering Agents",
+    "P1.1 Deterministic Pipeline (Agentless-style)",
+    "klepacz SOUL ticket→PR"
+  ],
+  "fixed_pipeline": [
+    "localize",
+    "repair",
+    "validate"
+  ],
+  "llm_slots": [
+    "localize_hierarchy",
+    "repair_samples",
+    "pr_review"
+  ],
+  "det_only": [
+    "pick_one_labeled",
+    "worktree_add",
+    "repo_skeleton_index",
+    "context_pack",
+    "patch_normalize",
+    "sandbox_apply",
+    "run_tests",
+    "rank_select",
+    "commit",
+    "push",
+    "open_pr",
+    "merge_policy"
+  ],
+  "invariants": [
+    "fixed_phases_localize_repair_validate",
+    "llm_only_in_slots",
+    "no_react_orchestrator",
+    "no_fat_tool_loop",
+    "no_agent_routing",
+    "validation_is_det_tests",
+    "multi_sample_repair_det_select",
+    "submit_means_open_pr",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_repair",
+    "one_ticket_one_pr",
+    "fail_closed_no_limbo",
+    "structured_output_on_every_slot"
+  ],
+  "budgets": {
+    "repair_samples_n": 5,
+    "validate_reenter_repair": 1,
+    "occupancy_k": 1
+  },
+  "subgraphs": [
+    "subgraph-localize.md",
+    "subgraph-repair.md",
+    "subgraph-validate.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-localize.md",
+      "subgraph-repair.md",
+      "subgraph-validate.md"
+    ],
+    "phase_machine": "localize→repair→validate",
+    "orchestrator": "DET_only",
+    "react": false,
+    "ticket_to_pr": true
+  }
+}

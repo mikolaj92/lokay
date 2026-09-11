@@ -1,0 +1,49 @@
+{
+  "slug": "05-ready-for-agent-reuse",
+  "persona": "reuse-ready maximal fidelity to berenddeboer/ready-for-agent + KLEPACZ.md canon",
+  "approach": "reuse_ready",
+  "confidence": 94,
+  "inspired_by": [
+    "berenddeboer/ready-for-agent",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md"
+  ],
+  "reused_patterns": [
+    "label_start",
+    "fresh_worktree",
+    "agent_leaf_structured",
+    "merge_policy_off_classify_always"
+  ],
+  "invariants": [
+    "label_is_start_not_chat",
+    "agent_does_not_pick_work",
+    "one_ticket_one_worktree_k1",
+    "coder_ceiling_is_open_pr",
+    "merge_is_policy_not_agent",
+    "det_majority_agent_only_leaves",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-label-start.md",
+    "subgraph-worktree.md",
+    "subgraph-agent-leaf.md",
+    "subgraph-merge-policy.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-label-start.md",
+      "subgraph-worktree.md",
+      "subgraph-agent-leaf.md",
+      "subgraph-merge-policy.md"
+    ],
+    "trigger": "label:ready-for-agent",
+    "sandbox": "fresh_worktree",
+    "agent_seat": "leaf_SO_only",
+    "merge_authority": "DET_merge_policy"
+  }
+}

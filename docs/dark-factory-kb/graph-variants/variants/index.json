@@ -1,0 +1,438 @@
+[
+  {
+    "dir": "01-pragmatic-thin",
+    "slug": "01-pragmatic-thin",
+    "persona": "pragmatic minimalist — thinnest path that still ships ticket→PR→review→merge",
+    "approach": "from_scratch",
+    "confidence": 82,
+    "subgraphs": [
+      "subgraph-implement.md",
+      "subgraph-intake.md",
+      "subgraph-review-merge.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-implement.md",
+      "subgraph-intake.md",
+      "subgraph-review-merge.md"
+    ]
+  },
+  {
+    "dir": "02-optimistic-full",
+    "slug": "02-optimistic-full",
+    "persona": "optimistic — assume labels, CI, and humans cooperate; richer but modular subgraphs",
+    "approach": "from_scratch",
+    "confidence": 86,
+    "subgraphs": [
+      "subgraph-ci-trust.md",
+      "subgraph-implement-ship.md",
+      "subgraph-label-intake.md",
+      "subgraph-plan-enrich.md",
+      "subgraph-post-merge.md",
+      "subgraph-review-merge.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-ci-trust.md",
+      "subgraph-implement-ship.md",
+      "subgraph-label-intake.md",
+      "subgraph-plan-enrich.md",
+      "subgraph-post-merge.md",
+      "subgraph-review-merge.md"
+    ]
+  },
+  {
+    "dir": "03-pessimistic-gates",
+    "slug": "03-pessimistic-gates",
+    "persona": "pessimistic — fail-closed everywhere; assume flaky CI, dirty worktrees, stuck PRs, missing labels",
+    "approach": "from_scratch",
+    "confidence": 88,
+    "subgraphs": [
+      "subgraph-ci-babysit.md",
+      "subgraph-failure-escape.md",
+      "subgraph-preflight.md",
+      "subgraph-review-merge.md",
+      "subgraph-ship.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-ci-babysit.md",
+      "subgraph-failure-escape.md",
+      "subgraph-preflight.md",
+      "subgraph-review-merge.md",
+      "subgraph-ship.md"
+    ]
+  },
+  {
+    "dir": "04-cynical-cuts",
+    "slug": "04-cynical-cuts",
+    "persona": "cynical — delete half the nodes others invent; if a step doesn't move a PR, cut it",
+    "approach": "from_scratch",
+    "confidence": 91,
+    "subgraphs": [
+      "subgraph-code-to-pr.md",
+      "subgraph-gate.md",
+      "subgraph-pick.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-code-to-pr.md",
+      "subgraph-gate.md",
+      "subgraph-pick.md"
+    ]
+  },
+  {
+    "dir": "05-ready-for-agent-reuse",
+    "slug": "05-ready-for-agent-reuse",
+    "persona": "reuse-ready maximal fidelity to berenddeboer/ready-for-agent + KLEPACZ.md canon",
+    "approach": "reuse_ready",
+    "confidence": 94,
+    "subgraphs": [
+      "subgraph-agent-leaf.md",
+      "subgraph-label-start.md",
+      "subgraph-merge-policy.md",
+      "subgraph-worktree.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-agent-leaf.md",
+      "subgraph-label-start.md",
+      "subgraph-merge-policy.md",
+      "subgraph-worktree.md"
+    ]
+  },
+  {
+    "dir": "06-deerflow-borrow",
+    "slug": "06-deerflow-borrow",
+    "persona": "deerflow-borrower compose — zapożycza pewniaczki ByteDance DeerFlow GitHub-channel do klepacza; DET majority; AGENT tylko liść",
+    "approach": "compose_borrow",
+    "confidence": 90,
+    "subgraphs": [
+      "subgraph-agent-leaf-gh.md",
+      "subgraph-busy-buffer.md",
+      "subgraph-merge-policy-det.md",
+      "subgraph-uuid5-threads.md",
+      "subgraph-webhook-ff.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-agent-leaf-gh.md",
+      "subgraph-busy-buffer.md",
+      "subgraph-merge-policy-det.md",
+      "subgraph-uuid5-threads.md",
+      "subgraph-webhook-ff.md"
+    ]
+  },
+  {
+    "dir": "07-agentless-phases",
+    "slug": "07-agentless-phases",
+    "persona": "agentless-deterministic — fixed localize→repair→validate; LLM only in slots; zero ReAct orchestrator",
+    "approach": "compose",
+    "confidence": 92,
+    "subgraphs": [
+      "subgraph-localize.md",
+      "subgraph-repair.md",
+      "subgraph-validate.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-localize.md",
+      "subgraph-repair.md",
+      "subgraph-validate.md"
+    ]
+  },
+  {
+    "dir": "08-fala-native",
+    "slug": "08-fala-native",
+    "persona": "fala-unix-atoms — many tiny Unix atoms ok|fail; pod-Fala for conditional subprocesses; LLM only structured-output leaves",
+    "approach": "from_scratch",
+    "confidence": 91,
+    "subgraphs": [
+      "subgraph-implement-test.md",
+      "subgraph-pick.md",
+      "subgraph-plan-so.md",
+      "subgraph-pr.md",
+      "subgraph-review-merge.md",
+      "subgraph-worktree.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-implement-test.md",
+      "subgraph-pick.md",
+      "subgraph-plan-so.md",
+      "subgraph-pr.md",
+      "subgraph-review-merge.md",
+      "subgraph-worktree.md"
+    ]
+  },
+  {
+    "dir": "09-label-fsm",
+    "slug": "09-label-fsm",
+    "persona": "label-fsm-compose — stages as GitHub labels; GHA/scripts advance; agents fill slots only",
+    "approach": "compose_label_fsm",
+    "confidence": 90,
+    "subgraphs": [
+      "subgraph-implement-validate.md",
+      "subgraph-label-spine.md",
+      "subgraph-merge-escape.md",
+      "subgraph-review-fix.md",
+      "subgraph-triage-plan.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-implement-validate.md",
+      "subgraph-label-spine.md",
+      "subgraph-merge-escape.md",
+      "subgraph-review-fix.md",
+      "subgraph-triage-plan.md"
+    ]
+  },
+  {
+    "dir": "10-human-amplify",
+    "slug": "10-human-amplify",
+    "persona": "human-amplify — human engineer + QA strategist at center; DET babysitting; explicit HUMAN arch gate + periodic QA audit",
+    "approach": "from_scratch",
+    "confidence": 90,
+    "subgraphs": [
+      "subgraph-arch-gate.md",
+      "subgraph-babysit.md",
+      "subgraph-qa-audit.md",
+      "subgraph-review-merge.md",
+      "subgraph-ship.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-arch-gate.md",
+      "subgraph-babysit.md",
+      "subgraph-qa-audit.md",
+      "subgraph-review-merge.md",
+      "subgraph-ship.md"
+    ]
+  },
+  {
+    "dir": "11-planner-coder",
+    "slug": "11-planner-coder",
+    "persona": "dual-light-agents — plan-only SO + implement SO; optional task-breakdown; all git/PR DET",
+    "approach": "from_scratch",
+    "confidence": 87,
+    "subgraphs": [
+      "subgraph-git-pr.md",
+      "subgraph-implement.md",
+      "subgraph-intake.md",
+      "subgraph-plan.md",
+      "subgraph-review-merge.md",
+      "subgraph-task-breakdown.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-git-pr.md",
+      "subgraph-implement.md",
+      "subgraph-intake.md",
+      "subgraph-plan.md",
+      "subgraph-review-merge.md",
+      "subgraph-task-breakdown.md"
+    ]
+  },
+  {
+    "dir": "12-serial-k1",
+    "slug": "12-serial-k1",
+    "persona": "serial-strict — hard K=1: one ticket, one worktree, one PR; occupancy DET only; no catalog seeding mid-flight",
+    "approach": "from_scratch",
+    "confidence": 93,
+    "subgraphs": [
+      "subgraph-claim-k1.md",
+      "subgraph-implement-one-pr.md",
+      "subgraph-occupancy-det.md",
+      "subgraph-review-merge.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-claim-k1.md",
+      "subgraph-implement-one-pr.md",
+      "subgraph-occupancy-det.md",
+      "subgraph-review-merge.md"
+    ]
+  },
+  {
+    "dir": "13-merge-policy",
+    "slug": "13-merge-policy",
+    "persona": "merge-policy-first — reuse ready-for-agent Merge Policy Off|Classify|Always as the star; coder never merges; classify AGENT SO only when Classify",
+    "approach": "reuse_ready",
+    "confidence": 93,
+    "subgraphs": [
+      "subgraph-classify-so.md",
+      "subgraph-coder-ceiling.md",
+      "subgraph-policy-star.md",
+      "subgraph-verdict-exec.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-classify-so.md",
+      "subgraph-coder-ceiling.md",
+      "subgraph-policy-star.md",
+      "subgraph-verdict-exec.md"
+    ]
+  },
+  {
+    "dir": "14-dot-pipeline",
+    "slug": "14-dot-pipeline",
+    "persona": "dot-pipeline compose — blueprint.dot is the program; PipelineRunner walks; LLM fills box nodes only",
+    "approach": "compose",
+    "confidence": 90,
+    "subgraphs": [
+      "subgraph-blueprint.md",
+      "subgraph-box-llm.md",
+      "subgraph-det-walk.md",
+      "subgraph-hitl-exit.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-blueprint.md",
+      "subgraph-box-llm.md",
+      "subgraph-det-walk.md",
+      "subgraph-hitl-exit.md"
+    ]
+  },
+  {
+    "dir": "15-durable-steps",
+    "slug": "15-durable-steps",
+    "persona": "durable-steps compose — Temporal/Inngest: DET Workflow + step/Activity retries; LLM inside one step, never the router",
+    "approach": "compose",
+    "confidence": 92,
+    "subgraphs": [
+      "subgraph-det-steps.md",
+      "subgraph-hitl-wait.md",
+      "subgraph-llm-activity.md",
+      "subgraph-workflow-spine.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-det-steps.md",
+      "subgraph-hitl-wait.md",
+      "subgraph-llm-activity.md",
+      "subgraph-workflow-spine.md"
+    ]
+  },
+  {
+    "dir": "16-guild-roles",
+    "slug": "16-guild-roles",
+    "persona": "guild-roles compose — Dispatcher→Planner→Implementer→Reviewer; draft PR; humans own outcome",
+    "approach": "compose",
+    "confidence": 86,
+    "subgraphs": [
+      "subgraph-dispatch.md",
+      "subgraph-implementer.md",
+      "subgraph-planner.md",
+      "subgraph-reviewer.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-dispatch.md",
+      "subgraph-implementer.md",
+      "subgraph-planner.md",
+      "subgraph-reviewer.md"
+    ]
+  },
+  {
+    "dir": "17-opa-merge-gate",
+    "slug": "17-opa-merge-gate",
+    "persona": "policy-as-code cynic — Rego/Conftest holds the merge button; LLM judges are optional noise, never the verdict",
+    "approach": "from_scratch",
+    "confidence": 90,
+    "subgraphs": [
+      "subgraph-opa-merge-gate.md",
+      "subgraph-optional-review-so.md",
+      "subgraph-ticket-to-pr.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-opa-merge-gate.md",
+      "subgraph-optional-review-so.md",
+      "subgraph-ticket-to-pr.md"
+    ]
+  },
+  {
+    "dir": "18-script-intake",
+    "slug": "18-script-intake",
+    "persona": "script-first pragmatic — intake = pure scripts (list → filter labeled → pick one); agent never chooses work; optional tiny plan only after pick",
+    "approach": "from_scratch",
+    "confidence": 88,
+    "subgraphs": [
+      "subgraph-implement-ship.md",
+      "subgraph-optional-plan.md",
+      "subgraph-review-merge.md",
+      "subgraph-script-intake.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-implement-ship.md",
+      "subgraph-optional-plan.md",
+      "subgraph-review-merge.md",
+      "subgraph-script-intake.md"
+    ]
+  },
+  {
+    "dir": "19-bounded-repair",
+    "slug": "19-bounded-repair",
+    "persona": "bounded-escape pessimistic — hard N on repair_code and pr_repair; exhaust → skip with receipt, never limbo stamp",
+    "approach": "from_scratch",
+    "confidence": 90,
+    "subgraphs": [
+      "subgraph-intake.md",
+      "subgraph-pr-repair.md",
+      "subgraph-repair-code.md",
+      "subgraph-skip-escape.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-intake.md",
+      "subgraph-pr-repair.md",
+      "subgraph-repair-code.md",
+      "subgraph-skip-escape.md"
+    ]
+  },
+  {
+    "dir": "20-from-zero",
+    "slug": "20-from-zero",
+    "persona": "blank-slate optimistic clarity — fresh stages from SOUL only; no mill names; human energy for architecture & QA",
+    "approach": "from_scratch",
+    "confidence": 88,
+    "subgraphs": [
+      "subgraph-critical-review.md",
+      "subgraph-git-pr.md",
+      "subgraph-implement.md",
+      "subgraph-merge-human.md",
+      "subgraph-pm-next.md",
+      "subgraph-ticket.md"
+    ],
+    "files": [
+      "MANIFEST.json",
+      "README.md",
+      "subgraph-critical-review.md",
+      "subgraph-git-pr.md",
+      "subgraph-implement.md",
+      "subgraph-merge-human.md",
+      "subgraph-pm-next.md",
+      "subgraph-ticket.md"
+    ]
+  }
+]
