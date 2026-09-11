@@ -1,0 +1,56 @@
+{
+  "slug": "08-fala-native",
+  "persona": "fala-unix-atoms — many tiny Unix atoms ok|fail; pod-Fala for conditional subprocesses; LLM only structured-output leaves",
+  "approach": "from_scratch",
+  "confidence": 91,
+  "inspired_by": [
+    "Fala correlation_paths + when=",
+    "Fala nested subprocess + separate journal (pod-Fala)",
+    "WORKING_KLEPACZ_GRAPH.md thin spine",
+    "lokay.fala_organ ok|fail atoms"
+  ],
+  "fixed_pipeline": [
+    "pick",
+    "worktree",
+    "plan_so",
+    "implement_so",
+    "test_det",
+    "pr",
+    "review_so",
+    "merge_policy"
+  ],
+  "atom_contract": {
+    "shape": "subprocess argv → JSON result",
+    "success": "{ \"ok\": true, ... }",
+    "failure": "{ \"ok\": false, \"reason\": \"enum\" }",
+    "llm_leaves_only": ["plan_issue", "implement", "pr_review"]
+  },
+  "pod_fala": {
+    "role": "conditional subprocesses with separate journal",
+    "examples": [
+      "occupancy_branch",
+      "test_repair_loop",
+      "merge_policy_off_classify_always"
+    ]
+  },
+  "invariants": [
+    "graph_is_fala_package",
+    "every_det_is_unix_atom_ok_fail",
+    "llm_only_structured_output_leaves",
+    "no_agent_routing_or_fat_tool_calling",
+    "conditionals_via_when_or_pod_fala",
+    "child_fala_separate_journal",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always"
+  ],
+  "subgraphs": [
+    "subgraph-pick.md",
+    "subgraph-worktree.md",
+    "subgraph-plan-so.md",
+    "subgraph-implement-test.md",
+    "subgraph-pr.md",
+    "subgraph-review-merge.md"
+  ]
+}

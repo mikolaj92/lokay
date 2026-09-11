@@ -1,0 +1,25 @@
+{
+  "slug": "04-cynical-cuts",
+  "persona": "cynical — delete half the nodes others invent; if a step doesn't move a PR, cut it",
+  "approach": "from_scratch",
+  "confidence": 91,
+  "cut_rule": "no_pr_progress → delete",
+  "subgraphs": [
+    "subgraph-pick.md",
+    "subgraph-code-to-pr.md",
+    "subgraph-gate.md"
+  ],
+  "explicitly_cut": [
+    "plan_issue leaf",
+    "normalize_ticket ceremony",
+    "ensure_clean_workspace theatre",
+    "multi-commit loop as product",
+    "pr_repair subgraph",
+    "QA-strategy as separate AGENT node",
+    "branch cleanup as first-class step",
+    "occupancy/orphan/defer FSM",
+    "self_repair / leftover / pass_ceiling",
+    "dual survey / ready sieve",
+    "human architecture stage per ticket"
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "slug": "02-optimistic-full",
+  "persona": "optimistic — assume labels, CI, and humans cooperate; richer but modular subgraphs",
+  "approach": "from_scratch",
+  "confidence": 86,
+  "soul_alignment": [
+    "free_humans_from_babysitting",
+    "DET_majority",
+    "agent_high_entropy_only",
+    "subgraphs_not_monolith",
+    "not_L5",
+    "meat_equals_ai_same_role",
+    "reviewer_separate_from_implementer"
+  ],
+  "optimistic_assumptions": [
+    "labels_present_and_sticky",
+    "humans_keep_acceptance_honest",
+    "CI_mostly_green",
+    "one_flaky_nudge_enough",
+    "reviewer_cooperates",
+    "Classify_Always_ok_when_low_risk"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Classify",
+  "subgraphs": [
+    "subgraph-label-intake.md",
+    "subgraph-plan-enrich.md",
+    "subgraph-implement-ship.md",
+    "subgraph-ci-trust.md",
+    "subgraph-review-merge.md",
+    "subgraph-post-merge.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-label-intake.md",
+      "subgraph-plan-enrich.md",
+      "subgraph-implement-ship.md",
+      "subgraph-ci-trust.md",
+      "subgraph-review-merge.md",
+      "subgraph-post-merge.md"
+    ],
+    "loops": {
+      "ci_red_after_nudge": "subgraph-implement-ship.md",
+      "review_changes_requested": "subgraph-implement-ship.md"
+    },
+    "idle": "label_intake_none_labeled",
+    "trigger": "label:ready-for-agent",
+    "agent_seats": ["plan_enrich", "implement", "critical_review"],
+    "merge_authority": "DET_merge_policy"
+  },
+  "invariants": [
+    "label_is_start_not_chat",
+    "DET_majority_agent_only_entropy_leaves",
+    "plan_writes_no_product_code",
+    "coder_ceiling_is_open_pr",
+    "CI_oracle_not_overridable_by_agent",
+    "reviewer_separate_from_implementer",
+    "never_LLM_merge",
+    "one_ticket_one_pr",
+    "subgraphs_not_monolith",
+    "not_L5",
+    "no_limbo_labels"
+  ]
+}

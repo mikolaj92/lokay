@@ -1,0 +1,73 @@
+{
+  "slug": "10-human-amplify",
+  "persona": "human-amplify — human engineer + QA strategist at center; DET babysitting; explicit HUMAN arch gate + periodic QA audit",
+  "approach": "from_scratch",
+  "confidence": 90,
+  "soul_alignment": [
+    "automate_babysitting",
+    "DET_plus_AGENT_SO",
+    "humans_for_architecture_and_QA",
+    "explicit_human_arch_gate",
+    "periodic_qa_audit",
+    "no_limbo_labels",
+    "subgraphs_not_monolith",
+    "not_L5",
+    "meat_equiv_AI_in_AGENT_seats"
+  ],
+  "human_centers": [
+    "engineer_architecture_gate",
+    "qa_strategist_periodic_audit"
+  ],
+  "automated": [
+    "dirty_worktree_check",
+    "label_recheck",
+    "stuck_pr_survey",
+    "ci_poll_and_flaky_rerun",
+    "branch_commit_push_open_pr",
+    "merge_policy_application"
+  ],
+  "fail_closed_defaults": [
+    "dirty_worktree",
+    "missing_label",
+    "stuck_pr",
+    "ci_timeout",
+    "ci_red_after_rerun_budget",
+    "arch_touch_without_human_approve",
+    "high_risk_never_Always",
+    "qa_audit_overdue_blocks_celebrate"
+  ],
+  "subgraphs": [
+    "subgraph-babysit.md",
+    "subgraph-ship.md",
+    "subgraph-arch-gate.md",
+    "subgraph-review-merge.md",
+    "subgraph-qa-audit.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-babysit.md",
+      "subgraph-ship.md",
+      "subgraph-arch-gate.md",
+      "subgraph-review-merge.md",
+      "subgraph-qa-audit.md"
+    ],
+    "human_gates": [
+      "subgraph-arch-gate.md",
+      "subgraph-qa-audit.md"
+    ]
+  },
+  "invariants": [
+    "DET_owns_babysitting",
+    "arch_touch_requires_HUMAN_gate",
+    "qa_audit_on_cadence_not_optional_fluff",
+    "AGENT_SO_only_implement_and_review",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "MergePolicy_Off_default",
+    "never_LLM_merge",
+    "no_limbo_labels",
+    "escape_writes_receipt_not_label",
+    "HUMAN_seats_stay_human"
+  ]
+}
