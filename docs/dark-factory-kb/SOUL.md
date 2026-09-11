@@ -74,3 +74,7 @@ Technicznie: zmergowane `ai/fix` na tipie hosta w sensownym oknie czasu — nie 
 - `KLEPACZ.md` — kanon nazwy i ram (ready-for-agent, Merge Off|Classify|Always)
 - `WORKING_KLEPACZ_GRAPH.md` — cienki design wdrożeniowy
 - `graph-variants/` — wiele wersji grafu/podgrafów (eksploracja → potem składanie)
+
+## Prawo nazwy (CEO 2026-09-11)
+
+Nie ma **milla / młyna** jako nazwy własnej. To jest **Lokaj** (butler) — pomaga, klepie ticket→PR. „Mill” to było potknięcie językowe; w docs i mowie mówimy **Lokaj / lokaj**. (Obcy research może nadal pisać „coding mill” o cudzych systemach — to nie nasza marka.)
