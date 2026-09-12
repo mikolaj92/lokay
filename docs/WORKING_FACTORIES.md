@@ -1,6 +1,6 @@
 # Working agent factories → five Lokay departments
 
-Sources, not invention. Reverse-engineer from these, not from unused child Falas.
+Sources, not invention. The five department bodies are authored child Falas; agents stay leaves inside those children.
 
 ## What actually ships (2025–2026)
 
@@ -63,6 +63,6 @@ Primary: https://github.com/openai/codex README; cloud at chatgpt.com/codex
 
 Lokay Done = merge to `main`. That is the one place we differ from Copilot/Claude stock: `pr_triage` may merge. The executor still must not. A valid JSON envelope with `outcome=none` is not Done.
 
-## What we will not copy from unused child Falas
+## What we will not copy from other factories
 
-The authored children (`issue_sieve_rows`, `issue_to_pr_delivery`, `pr_triage`, `pr_repair`, `self_repair`) stay on disk unused. Reverse-engineering starts from the table above, then we put back only the atoms that a working agent still needs (cap, leftover, occupancy K=1, `launched=null`, `merged=false`, `repair_started=false`).
+The authored children (`issue_sieve_rows`, `issue_to_pr_delivery`, `pr_triage`, `pr_repair`, `self_repair`) are the live department bodies. Other factories inform occupancy and merge-is-not-the-coder. They do not replace those children with five department-wide agents.

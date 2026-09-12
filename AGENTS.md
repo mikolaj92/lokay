@@ -42,10 +42,9 @@ into a worker prompt, Python composer, UI, or vendor harness.
   `process.failed`. Departments and `record_pass` do not conduct from cleanup.
   Idle TTL is the first authored atom; compose never skips `run_path`. One pass
   is self XOR product (product wins). Not a fat `compose/tick.py`.
-  Mechanical department bodies are authored children (`self_repair`,
-  `issue_triage`, `pr_triage`). High-entropy slots stay `executor` and
-  `pr_repair` (`departments.agent_bodies`); authored children stay as
-  fallback. Do not delete atoms or rewrite parent geometry to add those slots.
+  Department bodies are authored children. High-entropy agents stay inside
+  those children (`coding_execution` / `pr_review_agent` / `pr_repair` leaf).
+  Do not delete atoms or rewrite parent geometry to add department-agent slots.
 - Graph may **return** across passes (repair / re-ready / re-survey). Do not
   flatten the lokay to one-way issue→done.
 - **Serial by design.** Default `limits.max_issue_to_pr_per_pass` is **1**

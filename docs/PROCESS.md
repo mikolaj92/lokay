@@ -86,10 +86,10 @@ capability, not a competing READY/CLOSE after triage. Shape and named-path
 evidence belong inside the existing triage evidence branch (#1001). Published
 verdicts are park / ready / close / skip / split only — zero `needs_human`.
 
-Parent department *bodies* are authored child Falas for mechanical work
-(`self_repair`, `issue_triage`, `pr_triage`). High-entropy slots stay
-`executor` and `pr_repair` (`departments.agent_bodies`); those still fall
-back to the authored child. The graph geometry does not change.
+Parent department *bodies* are authored child Falas. High-entropy work stays
+inside those children (`coding_execution`, `pr_review_agent`, `pr_repair`
+repair agent). Department-wide agent slots are not the live bodies. The graph
+geometry does not change.
 
 The allowlist names actual organ bindings, not suffixes or vendor harnesses.
 Code workers return a transport envelope and scoped worktree changes; those
@@ -99,9 +99,9 @@ still require real diff, local verification and publication gates.
 | --- | --- | --- |
 | `run_self_repair_department` | authored child | Stall facts → `self_repair_department` |
 | `run_issue_triage_department` | authored child | Open issues → `issue_triage_department` |
-| `run_executor_department` | entropy (body) | Do-row → open PR occupancy; authored child is fallback |
+| `run_executor_department` | authored child | Do-row → `executor_department`; coding agent is a leaf inside `issue_to_pr` |
 | `run_pr_triage_department` | authored child | Open PRs → `pr_triage` merge/feedback/repair; `pr_merge`/`close_issue` stay atoms |
-| `run_pr_repair_department` | entropy (body) | Repair verdict → repaired branch; authored child is fallback |
+| `run_pr_repair_department` | authored child | Repair verdict → `pr_repair` child; repair agent is a leaf, not the department body |
 | `issue_triage_agent` | entropy | Issue and hard facts → triage decision |
 | `issue_triage_retry_agent` | entropy | Invalid triage and feedback → corrected decision |
 | `issue_evidence_agent` | entropy | Requested evidence → triage decision |

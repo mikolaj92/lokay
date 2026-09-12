@@ -1,8 +1,8 @@
 # Lokay — propozycja hybrydowych ciał grafu (Werdykt D)
 
-Status: częściowo wdrożone. Mechaniczne ciała (`self_repair`, `issue_triage`,
-`pr_triage`) są authored child. `executor` i `pr_repair` zostają high-entropy
-z fallbackiem child. Parent geometry bez zmian.
+Status: ciała działów wróciły do authored children. Agenci zostają liśćmi
+wewnątrz childy (`coding_execution`, `pr_review_agent`, repair agent).
+Parent geometry bez zmian.
 
 ## Rzut złożony: ten sam obiekt
 
@@ -27,14 +27,14 @@ uruchamiane przez wrappery `src/lokay/proc/run_*_department.py` i pozostają w
 | --- | --- | --- | --- |
 | `self_repair` | `departments_boundary` woła `run_self_repair_department.run` → `run_path("self_repair_department")`. | `self_repair_department` → `self_repair`; stall gate i detached repair są opisane w `docs/GRAPH.md`. | Authored child. Watchdog nie jest piątym kapeluszem agenta; selektor parenta już ogranicza wejście do potwierdzonego stall (`did_not_move`). |
 | `issue_triage` | `departments_boundary` woła `run_issue_triage_department.run` → `run_path("issue_triage_department")`. | `issue_triage_department` → `issue_sieve_rows` / `issue_sieve_row`; hard facts, covering PR, occupancy, foreign, cap i leftover są atomami. | Authored child z semantycznym agentem dopiero po `hard_facts`; nie agent działu i nie drugi intake. |
-| `executor` | `departments_boundary` woła `run_executor_department.run`; agent body przez `execute_department_agent`; przy odmowie/timeout/niepoprawnym kontrakcie fallback do authored childa. | `executor_department` → `executor_rows` → `executor_row` → `issue_to_pr`. | Zostawić agenta jako ciało wysokiej entropii; deterministyczne bramki nadal poza nim, executor nie merge’uje. |
+| `executor` | `departments_boundary` woła `run_executor_department.run` → `run_path("executor_department")`. Agent kodowania jest liściem `coding_execution`, nie ciałem działu. | `executor_department` → `executor_rows` → `executor_row` → `issue_to_pr`. | Authored child; deterministyczne bramki poza agentem, executor nie merge’uje. |
 | `pr_triage` | `departments_boundary` woła `run_pr_triage_department.run` → `run_path("pr_triage_department")`. Merge/close zostają atomami childa. | `pr_triage_department` → `pr_triage`; child ma `pr_checks`, klasyfikację, review/validate, `pr_merge` i `close_issue`. | Authored child: atomy zachowują bramkę merge i close; opcjonalny `pr_review_agent` zostaje wyłącznie liściem review. |
-| `pr_repair` | `departments_boundary` woła `run_pr_repair_department.run`; agent przez `execute_department_agent` dla verdictu `repair`; fallback child obsługuje `pr_repair`. | `pr_repair` → test lokalny, diff i push na tej samej gałęzi, z budżetem napraw. | Zostawić agenta jako ciało naprawy; merge pozostaje osobnym atomem w `pr_triage`, nie w repair. |
+| `pr_repair` | `departments_boundary` woła `run_pr_repair_department.run` → child `pr_repair`. Agent naprawy jest liściem childa, nie ciałem działu. | `pr_repair` → test lokalny, diff i push na tej samej gałęzi, z budżetem napraw. | Zostawić agenta jako ciało naprawy; merge pozostaje osobnym atomem w `pr_triage`, nie w repair. |
 
-Ważne rozróżnienie: „authored child na dysku” nie oznacza „martwy”. Dla
-`executor` i `pr_repair` jest fallbackiem kontrolowanym przez runtime. Dla
-`self_repair`, `issue_triage` i `pr_triage` jest ciałem live. Agent nie może
-zastąpić efektora `pr_merge` ani `close_issue` samym polem `verdict`.
+Ważne rozróżnienie: „authored child na dysku” nie oznacza „martwy”. Pięć
+działów woła child Fala jako ciało live. Agenci zostają liśćmi wewnątrz
+tych dzieci. Agent nie może zastąpić efektora `pr_merge` ani `close_issue`
+samym polem `verdict`.
 
 ## Kolejność wycinek — najpierw odzyskać merge + close
 

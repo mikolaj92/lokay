@@ -3,11 +3,6 @@
 from __future__ import annotations
 
 from lokay.graph_run import run_path
-from lokay.proc.department_agent_runtime import (
-    execute_department_agent,
-    load_department_cfg,
-    prompt_for,
-)
 
 
 def child_graph(
@@ -35,29 +30,12 @@ def run(
     triage: dict | None = None,
 ) -> dict:
     del triage_ran  # sieve is a sibling department; this slot always codes
-    cfg = load_department_cfg(config_path)
-
-    def child_body() -> dict:
-        return child_graph(
+    return {
+        **child_graph(
             pass_dir=pass_dir,
             config_path=config_path,
             live=live,
             triage=triage,
-        )
-
-    if cfg is None:
-        return {**child_body(), "body": "child"}
-    return execute_department_agent(
-        "executor",
-        cfg=cfg,
-        live=live,
-        prompt=prompt_for(
-            "executor",
-            pass_dir=pass_dir,
-            config_path=config_path,
-            live=live,
-            triage=triage or {},
         ),
-        child=child_body,
-        pass_dir=pass_dir,
-    )
+        "body": "child",
+    }
