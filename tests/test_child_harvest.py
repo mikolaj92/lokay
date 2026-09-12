@@ -748,6 +748,7 @@ def test_dead_pid_without_event_or_reason_is_fail_closed(tmp_path: Path):
         state_path=state,
         cycle_dir=cycle,
         is_live=lambda _pid: False,
+        coding_live=lambda _issue: False,
     )
     assert 3 in excluded_numbers(stuck, "a/b")
     assert stuck["issues"]["a/b#3"].get("reason") == "no_pr"

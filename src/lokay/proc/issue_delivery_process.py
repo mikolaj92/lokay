@@ -1,7 +1,7 @@
 """Physical process liveness for detached issue delivery."""
 
 from __future__ import annotations
-import os, signal, subprocess, time
+import os, re, signal, subprocess, time
 from typing import Any
 
 
@@ -145,6 +145,13 @@ def wrapper_has_coding_descendant(
     return False
 
 
+def _coder_command_matches_issue(command: str, issue: int) -> bool:
+    """True only for this ticket. ``#3`` must not match live ``#39``."""
+    return bool(
+        re.search(rf"implement GitHub issue #{int(issue)}(?!\d)", command or "")
+    )
+
+
 def _coder_pids_for_issue(issue: int) -> list[int]:
     needle = f"implement GitHub issue #{int(issue)}"
     try:
@@ -163,7 +170,9 @@ def _coder_pids_for_issue(issue: int) -> list[int]:
             pid = int(line.strip())
         except ValueError:
             continue
-        if pid > 0:
+        if pid <= 0:
+            continue
+        if _coder_command_matches_issue(_pid_command(pid), issue):
             out.append(pid)
     return out
 
