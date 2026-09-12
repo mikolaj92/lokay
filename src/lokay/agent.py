@@ -242,9 +242,7 @@ def run_agent(
 
     timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
     from lokay.capabilities import executor_environment
-    if str(session_kind).startswith("department"):
-        role = "department"
-    elif str(session_kind).startswith("review"):
+    if str(session_kind).startswith("review"):
         role = "reviewer"
     else:
         role = "builder"

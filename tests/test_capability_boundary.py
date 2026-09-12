@@ -96,18 +96,3 @@ def test_coding_path_deny_bin_shadows_gh(tmp_path: Path, monkeypatch):
     assert deny_gh.stat().st_mode & 0o111
 
 
-def test_department_role_keeps_github_and_path_without_deny_bin():
-    env = executor_environment(
-        "department",
-        {
-            "GH_TOKEN": "secret",
-            "PATH": "/bin",
-            "HOME": "/tmp/home",
-        },
-    )
-    assert env["GH_TOKEN"] == "secret"
-    assert env["PATH"] == "/bin"
-    assert env["HOME"] == "/tmp/home"
-    caps = set(env["LOKAY_CAPABILITIES"].split(","))
-    assert {"github.read", "github.write", "pr.merge", "pr.create"} <= caps
-    assert coding_path("/bin") != env["PATH"]

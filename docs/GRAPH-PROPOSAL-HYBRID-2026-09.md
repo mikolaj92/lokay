@@ -17,13 +17,11 @@ jakościowy kod na `origin/main`, po merge i zamknięciu powiązanego issue.
 ## Stan live vs authored child
 
 Poniższy podział wynika z aktualnego kodu, nie z założenia. Live binding parenta
-jest w `src/lokay/organ/departments_boundary.py`; ustawienie ciał jest w
-`src/lokay/config.py` (`departments.agent_bodies`, domyślnie `true`) i w
-`src/lokay/proc/department_agent_runtime.py`. Authored child paths są
+jest w `src/lokay/organ/departments_boundary.py`. Authored child paths są
 uruchamiane przez wrappery `src/lokay/proc/run_*_department.py` i pozostają w
 `fala/lokay.fala-package.toml`.
 
-| Dział | Ciało teraz (live przy `agent_bodies=true`) | Authored child na dysku | Ciało proponowane — Werdykt D |
+| Dział | Ciało teraz (live) | Authored child | Werdykt D |
 | --- | --- | --- | --- |
 | `self_repair` | `departments_boundary` woła `run_self_repair_department.run` → `run_path("self_repair_department")`. | `self_repair_department` → `self_repair`; stall gate i detached repair są opisane w `docs/GRAPH.md`. | Authored child. Watchdog nie jest piątym kapeluszem agenta; selektor parenta już ogranicza wejście do potwierdzonego stall (`did_not_move`). |
 | `issue_triage` | `departments_boundary` woła `run_issue_triage_department.run` → `run_path("issue_triage_department")`. | `issue_triage_department` → `issue_sieve_rows` / `issue_sieve_row`; hard facts, covering PR, occupancy, foreign, cap i leftover są atomami. | Authored child z semantycznym agentem dopiero po `hard_facts`; nie agent działu i nie drugi intake. |
