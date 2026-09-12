@@ -58,7 +58,7 @@ def handle_departments(
             repair_started_at=read_started_at(),
         )
     if atom == "run_self_repair_department":
-        from lokay.proc.agent_self_repair_department import run
+        from lokay.proc.run_self_repair_department import run
 
         return run(config_path=config)
     if atom == "open_self_repair_incident":
@@ -76,7 +76,7 @@ def handle_departments(
 
         return select(enabled=_department_enabled(config, "issue_triage"))
     if atom == "run_issue_triage_department":
-        from lokay.proc.agent_issue_triage_department import run
+        from lokay.proc.run_issue_triage_department import run
 
         return run(pass_dir=_pass_dir(up), config_path=config, live=live)
     if atom == "select_executor_department":
@@ -86,7 +86,7 @@ def handle_departments(
 
         return select(enabled=_department_enabled(config, "executor"))
     if atom == "run_executor_department":
-        from lokay.proc.agent_executor_department import run
+        from lokay.proc.run_executor_department import run
 
         select = up.get("select_issue_triage_department") or {}
         return run(
@@ -103,7 +103,7 @@ def handle_departments(
 
         return select(enabled=_department_enabled(config, "pr_triage"))
     if atom == "run_pr_triage_department":
-        from lokay.proc.agent_pr_triage_department import run
+        from lokay.proc.run_pr_triage_department import run
 
         return run(pass_dir=_pass_dir(up), config_path=config, live=live)
     if atom == "select_pr_repair_department":
@@ -120,7 +120,7 @@ def handle_departments(
             config_path=config,
         )
     if atom == "run_pr_repair_department":
-        from lokay.proc.agent_pr_repair_department import run
+        from lokay.proc.run_pr_repair_department import run
 
         return run(
             up.get("select_pr_repair_department") or {},

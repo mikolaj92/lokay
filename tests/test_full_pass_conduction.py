@@ -50,7 +50,7 @@ def test_triage_decisions_reach_executor_rows_in_factory_pass(tmp_path):
         "run_issue_triage_department": triage_dept_output,
     }
 
-    with patch("lokay.proc.agent_executor_department.run", side_effect=fake_run_executor_rows):
+    with patch("lokay.proc.run_executor_department.run", side_effect=fake_run_executor_rows):
         res = handle_departments("run_executor_department", {"config_path": None, "live": False}, up, {})
 
     assert res is not None

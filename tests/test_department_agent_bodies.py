@@ -60,14 +60,14 @@ def test_pr_triage_prompt_merges_green_before_red_repair():
     assert "no checks" in text.lower() or "no-checks" in text.lower()
 
 
-def test_pr_triage_agent_timeout_falls_back_to_child(monkeypatch, tmp_path: Path):
+def test_pr_triage_live_body_is_authored_child(monkeypatch, tmp_path: Path):
     from lokay.proc.agent_pr_triage_department import run as agent_pr_triage
 
     monkeypatch.setattr(
-        "lokay.proc.run_pr_triage_department.execute_department_agent",
-        lambda *a, **k: {
+        "lokay.proc.run_pr_triage_department.run_path",
+        lambda **kwargs: {
             "ok": True,
-            "body": "child",
+            "path_id": kwargs["path_id"],
             "department": "pr_triage",
             "route": "pr",
             "verdict": "merge",
@@ -75,14 +75,28 @@ def test_pr_triage_agent_timeout_falls_back_to_child(monkeypatch, tmp_path: Path
             "trace": "authored child merged MERGEABLE no-checks PR",
         },
     )
-    monkeypatch.setattr(
-        "lokay.proc.run_pr_triage_department.load_department_cfg",
-        lambda _p: _cfg(),
-    )
     out = agent_pr_triage(pass_dir=str(tmp_path), config_path="/cfg.yaml", live=True)
     assert out["body"] == "child"
+    assert out["path_id"] == "pr_triage_department"
     assert out["verdict"] == "merge"
     assert out["ok"] is True
+
+
+def test_live_parent_binds_mechanical_departments_to_authored_children():
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src/lokay/organ/departments_boundary.py"
+    ).read_text(encoding="utf-8")
+    assert "agent_self_repair_department" not in source
+    assert "agent_issue_triage_department" not in source
+    assert "agent_pr_triage_department" not in source
+    assert "agent_executor_department" not in source
+    assert "agent_pr_repair_department" not in source
+    assert "run_self_repair_department" in source
+    assert "run_issue_triage_department" in source
+    assert "run_executor_department" in source
+    assert "run_pr_triage_department" in source
+    assert "run_pr_repair_department" in source
 
 
 def test_issue_triage_prompt_do_is_shippable():

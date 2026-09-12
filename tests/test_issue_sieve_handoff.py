@@ -78,7 +78,7 @@ def test_authored_parent_conducts_completed_sieve_to_executor(monkeypatch):
     def capture(**kwargs):
         captured.update(kwargs)
         return {'ok': True}
-    monkeypatch.setattr('lokay.proc.agent_executor_department.run', capture)
+    monkeypatch.setattr('lokay.proc.run_executor_department.run', capture)
     handle_departments('run_executor_department', {'live': False}, up, {})
     assert captured['pass_dir'] == '/pass'
     assert captured['triage'] == outputs['run_issue_triage_department']['result']
