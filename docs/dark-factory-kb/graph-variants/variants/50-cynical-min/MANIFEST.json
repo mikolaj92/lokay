@@ -1,0 +1,75 @@
+{
+  "slug": "50-cynical-min",
+  "persona": "cynical-min compose — absolute DET spine pick→worktree→implement leaf→test→draft PR→human merge; delete every optional stage; agents only implement SO; MergePolicy Off only",
+  "approach": "compose",
+  "confidence": 93,
+  "compose_style": "from_scratch_lean",
+  "cut_rule": "if_not_on_spine → delete",
+  "spine": [
+    "pick",
+    "worktree",
+    "implement_leaf",
+    "test",
+    "draft_pr",
+    "human_merge"
+  ],
+  "merge_policy": "Off",
+  "agents": ["implement_SO_only"],
+  "explicitly_cut_vs_04": [
+    "critical_review AGENT",
+    "CI wait gate node",
+    "MergePolicy Classify/Always knobs",
+    "gate changes→re-implement loop",
+    "bounded repair N=1 in implement leaf",
+    "acceptance/verify skip ceremony as product",
+    "pr_repair / QA-strategy / plan leaf (already cut in 04, stay cut)"
+  ],
+  "explicitly_cut": [
+    "plan_issue leaf",
+    "normalize_ticket ceremony",
+    "ensure_clean_workspace theatre",
+    "CI wait as graph node",
+    "critical_review AGENT",
+    "pr_repair subgraph",
+    "QA-strategy AGENT",
+    "MergePolicy Classify",
+    "MergePolicy Always",
+    "bounded_repair retry",
+    "occupancy/orphan/defer FSM",
+    "self_repair / leftover / pass_ceiling",
+    "dual survey / ready sieve",
+    "human architecture stage per ticket",
+    "branch cleanup as first-class step",
+    "multi-commit product loop"
+  ],
+  "subgraphs": [
+    "subgraph-pick-worktree.md",
+    "subgraph-implement-test.md",
+    "subgraph-draft-human-merge.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-pick-worktree.md",
+      "subgraph-implement-test.md",
+      "subgraph-draft-human-merge.md"
+    ],
+    "merge_authority": "human_only",
+    "llm_merge": false,
+    "agent_seats": 1
+  },
+  "invariants": [
+    "spine_only_six_steps",
+    "agents_only_implement_SO",
+    "merge_policy_off_hardcoded",
+    "no_review_agent",
+    "no_ci_wait_node",
+    "no_repair_loop",
+    "fail_closed_exit",
+    "one_ticket_one_worktree_one_draft_pr",
+    "human_merges",
+    "not_l5",
+    "meat_equiv_ai_same_implement_seat",
+    "distinct_from_04_cynical_cuts"
+  ]
+}

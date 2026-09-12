@@ -1,0 +1,37 @@
+{
+  "slug": "17-opa-merge-gate",
+  "persona": "policy-as-code cynic — Rego/Conftest holds the merge button; LLM judges are optional noise, never the verdict",
+  "approach": "from_scratch",
+  "confidence": 90,
+  "hard_rules": [
+    "merge_verdict = DET only (OPA / Conftest / Rego)",
+    "optional AGENT SO review is advisory — cannot authorize merge",
+    "never LLM merge",
+    "fail-closed on missing policy input or red CI"
+  ],
+  "stages": [
+    "pick_labeled",
+    "implement",
+    "test_commit_push",
+    "open_pr",
+    "optional_review_so",
+    "opa_input_pack",
+    "opa_conftest_verdict",
+    "merge_or_hold"
+  ],
+  "subgraphs": [
+    "subgraph-ticket-to-pr.md",
+    "subgraph-optional-review-so.md",
+    "subgraph-opa-merge-gate.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-ticket-to-pr.md",
+      "subgraph-optional-review-so.md",
+      "subgraph-opa-merge-gate.md"
+    ],
+    "merge_authority": "DET_OPA",
+    "llm_merge": false
+  }
+}

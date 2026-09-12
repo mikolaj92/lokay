@@ -1,0 +1,25 @@
+{
+  "slug": "20-from-zero",
+  "persona": "blank-slate optimistic clarity — fresh stages from SOUL only; no mill names; human energy for architecture & QA",
+  "approach": "from_scratch",
+  "confidence": 88,
+  "stages": [
+    "pm",
+    "next_job",
+    "ticket",
+    "implement",
+    "git",
+    "pr",
+    "critical_review",
+    "merge_or_fix",
+    "human_architecture_qa"
+  ],
+  "subgraphs": [
+    "subgraph-pm-next.md",
+    "subgraph-ticket.md",
+    "subgraph-implement.md",
+    "subgraph-git-pr.md",
+    "subgraph-critical-review.md",
+    "subgraph-merge-human.md"
+  ]
+}

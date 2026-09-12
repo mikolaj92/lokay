@@ -1,0 +1,55 @@
+{
+  "slug": "03-pessimistic-gates",
+  "persona": "pessimistic — fail-closed everywhere; assume flaky CI, dirty worktrees, stuck PRs, missing labels",
+  "approach": "from_scratch",
+  "confidence": 88,
+  "soul_alignment": [
+    "automate_babysitting",
+    "DET_plus_AGENT_SO",
+    "humans_for_architecture_and_QA",
+    "no_limbo_labels",
+    "subgraphs_not_monolith",
+    "not_L5"
+  ],
+  "fail_closed_defaults": [
+    "dirty_worktree",
+    "missing_label",
+    "underspecified_ticket",
+    "stuck_pr",
+    "ci_timeout",
+    "ci_red_after_rerun_budget",
+    "local_test_red_after_one_repair",
+    "review_reject",
+    "merge_blocked",
+    "high_risk_never_Always"
+  ],
+  "subgraphs": [
+    "subgraph-preflight.md",
+    "subgraph-ship.md",
+    "subgraph-ci-babysit.md",
+    "subgraph-review-merge.md",
+    "subgraph-failure-escape.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-preflight.md",
+      "subgraph-ship.md",
+      "subgraph-ci-babysit.md",
+      "subgraph-review-merge.md"
+    ],
+    "escape": "subgraph-failure-escape.md"
+  },
+  "invariants": [
+    "fail_closed_everywhere",
+    "no_limbo_labels",
+    "DET_owns_babysitting",
+    "AGENT_SO_only_implement_and_review",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "MergePolicy_Off_default",
+    "never_LLM_merge",
+    "CI_oracle_not_overridable_by_agent",
+    "escape_writes_receipt_not_label"
+  ]
+}

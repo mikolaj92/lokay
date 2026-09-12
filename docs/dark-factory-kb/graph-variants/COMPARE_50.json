@@ -1,0 +1,1049 @@
+[
+  {
+    "n": 1,
+    "slug": "pragmatic-thin",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 5,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 5,
+      "implementability": 5
+    },
+    "total": 39,
+    "tag": "keep",
+    "one_liner": "Prawie 1:1 z WORKING: cienki FSM label→PR→policy, SO-liście, bez tłuszczu.",
+    "borrow": [
+      "fixed thin spine 6–12 atoms",
+      "plan/implement/review SO contracts"
+    ]
+  },
+  {
+    "n": 2,
+    "slug": "optimistic-full",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 4,
+      "thinness": 2,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 31,
+    "tag": "borrow",
+    "one_liner": "Modułowe podgrafy i Classify-default — za bogaty na start, ale dobry katalog opcji.",
+    "borrow": [
+      "modular subgraph boundaries",
+      "post-merge receipt only as optional"
+    ]
+  },
+  {
+    "n": 3,
+    "slug": "pessimistic-gates",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 33,
+    "tag": "borrow",
+    "one_liner": "Fail-closed wszędzie i escape=receipt: wzorce bramek, nie cały gruby graf.",
+    "borrow": [
+      "fail-closed preflight",
+      "escape writes receipt not limbo label"
+    ]
+  },
+  {
+    "n": 4,
+    "slug": "cynical-cuts",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 5,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 5
+    },
+    "total": 35,
+    "tag": "keep",
+    "one_liner": "Cyniczne cięcia: jeśli węzeł nie przesuwa PR — wywal; blisko cienkiego spine.",
+    "borrow": [
+      "cut_rule no_pr_progress→delete",
+      "three-subgraph pick/code/gate"
+    ]
+  },
+  {
+    "n": 5,
+    "slug": "ready-for-agent-reuse",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 4,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 4
+    },
+    "total": 35,
+    "tag": "keep",
+    "one_liner": "Maksymalna wierność ready-for-agent: label start + MergePolicy Off|Classify|Always.",
+    "borrow": [
+      "label_is_start_not_chat",
+      "merge_policy Off|Classify|Always"
+    ]
+  },
+  {
+    "n": 6,
+    "slug": "deerflow-borrow",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 4,
+      "thinness": 2,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 2
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "DeerFlow webhook/UUID5 threads — ciekawe izolacje coder≠reviewer, za ciężkie na lokay teraz.",
+    "borrow": [
+      "uuid5 thread coder≠reviewer",
+      "busy follow-up buffer not silent drop"
+    ]
+  },
+  {
+    "n": 7,
+    "slug": "agentless-phases",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 32,
+    "tag": "borrow",
+    "one_liner": "Agentless localize→repair→validate: zero ReAct-routera; LLM tylko w slotach.",
+    "borrow": [
+      "fixed localize/repair/validate phases",
+      "multi-sample repair + DET rank_select"
+    ]
+  },
+  {
+    "n": 8,
+    "slug": "fala-native",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 5,
+      "implementability": 5
+    },
+    "total": 37,
+    "tag": "keep",
+    "one_liner": "Natywne Fala ok|fail atomy + pod-Fala — mapuje wprost na lokay #1138–#1141.",
+    "borrow": [
+      "unix atom ok|fail",
+      "pod-Fala for repair loops",
+      "when= conditionals"
+    ]
+  },
+  {
+    "n": 9,
+    "slug": "label-fsm",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 4
+    },
+    "total": 34,
+    "tag": "borrow",
+    "one_liner": "Label-FSM (workflow:*): GHA/skrypt flipuje etykiety; agent nigdy nie routuje — za dużo stanów na start.",
+    "borrow": [
+      "one active stage label mutex",
+      "escape to needs-human without limbo"
+    ]
+  },
+  {
+    "n": 10,
+    "slug": "human-amplify",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 4,
+      "thinness": 2,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 30,
+    "tag": "borrow",
+    "one_liner": "Człowiek w arch/QA na środku — zgodne z SOUL, ale dodaje bramki poza cienkim spine.",
+    "borrow": [
+      "explicit HUMAN arch gate on risky paths",
+      "periodic QA audit cadence"
+    ]
+  },
+  {
+    "n": 11,
+    "slug": "planner-coder",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 4,
+      "thinness": 3,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 5,
+      "implementability": 5
+    },
+    "total": 34,
+    "tag": "keep",
+    "one_liner": "Dual light agents plan+implement SO; git/PR zawsze DET — rdzeń WORKING.",
+    "borrow": [
+      "plan writes no product code",
+      "implement never opens PR"
+    ]
+  },
+  {
+    "n": 12,
+    "slug": "serial-k1",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 4,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 5
+    },
+    "total": 36,
+    "tag": "keep",
+    "one_liner": "Twarde K=1 occupancy DET: jeden ticket, jeden worktree, jeden PR — bez siewu katalogu.",
+    "borrow": [
+      "hard K=1 occupancy DET",
+      "no catalog seed mid-flight"
+    ]
+  },
+  {
+    "n": 13,
+    "slug": "merge-policy",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 4,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 4,
+      "implementability": 5
+    },
+    "total": 35,
+    "tag": "keep",
+    "one_liner": "MergePolicy jako gwiazda: coder nigdy nie merguje; Classify SO tylko gdy gałka=Classify.",
+    "borrow": [
+      "MergePolicy star Off|Classify|Always",
+      "classify SO gated by policy knob"
+    ]
+  },
+  {
+    "n": 14,
+    "slug": "dot-pipeline",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 2
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "blueprint.dot = program (Attractor) — silny DET, obcy runtime względem Fala.",
+    "borrow": [
+      "graph-is-code DOT walk",
+      "LLM fills box nodes only"
+    ]
+  },
+  {
+    "n": 15,
+    "slug": "durable-steps",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "Temporal/Inngest durable steps: workflow DET, LLM w Activity — za drogi stack na teraz.",
+    "borrow": [
+      "retries step-scoped not agent-budget",
+      "HITL wait as event not limbo label"
+    ]
+  },
+  {
+    "n": 16,
+    "slug": "guild-roles",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 3,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 2
+    },
+    "total": 24,
+    "tag": "inspire",
+    "one_liner": "Guild Dispatcher→Planner→Implementer→Reviewer — ładne role, za dużo orkiestracji.",
+    "borrow": [
+      "reviewer separate from implementer",
+      "humans own outcome / no self-merge"
+    ]
+  },
+  {
+    "n": 17,
+    "slug": "opa-merge-gate",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 3
+    },
+    "total": 30,
+    "tag": "borrow",
+    "one_liner": "OPA/Conftest trzyma merge — LLM review tylko doradczy; wzorzec dla Classify/Always.",
+    "borrow": [
+      "DET policy engine owns merge verdict",
+      "advisory review never authorizes merge"
+    ]
+  },
+  {
+    "n": 18,
+    "slug": "script-intake",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 4,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 4,
+      "implementability": 5
+    },
+    "total": 35,
+    "tag": "keep",
+    "one_liner": "Intake 100% skryptami list→filter→pick; zero LLM przed pick — kanon pick_one_labeled.",
+    "borrow": [
+      "intake 100% DET scripts",
+      "no LLM before pick / frozen issue id"
+    ]
+  },
+  {
+    "n": 19,
+    "slug": "bounded-repair",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 5,
+      "so_leaves": 5,
+      "implementability": 5
+    },
+    "total": 38,
+    "tag": "keep",
+    "one_liner": "Hard N na repair_code i pr_repair; po wyczerpaniu skip+receipt, zero limbo stamps.",
+    "borrow": [
+      "repair_code max N DET counter",
+      "pr_repair max N then skip receipt",
+      "forbidden limbo labels list"
+    ]
+  },
+  {
+    "n": 20,
+    "slug": "from-zero",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 3,
+      "thinness": 2,
+      "label_start": 2,
+      "coder_ceiling": 4,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 3
+    },
+    "total": 23,
+    "tag": "skip",
+    "one_liner": "Blank-slate z pm/next_job — pachnie chat-pickiem i PM-orkiestracją, nie label impulse.",
+    "borrow": []
+  },
+  {
+    "n": 21,
+    "slug": "ralph-loop",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 3,
+      "thinness": 2,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "Ralph continuous ticks do LOOP_COMPLETE — ryzyko pętli; soft_max DET ratuje, ale nie thin.",
+    "borrow": [
+      "soft_max_ticks DET escape",
+      "LOOP_COMPLETE from reviewer not implementer"
+    ]
+  },
+  {
+    "n": 22,
+    "slug": "copilot-cloud",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 4,
+      "thinness": 4,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 2
+    },
+    "total": 29,
+    "tag": "borrow",
+    "one_liner": "Copilot cloud: ephemeral host + draft PR ceiling — wzorzec K=1, nie runtime lokaya.",
+    "borrow": [
+      "draft PR coder ceiling",
+      "ephemeral host torn down after ship"
+    ]
+  },
+  {
+    "n": 23,
+    "slug": "claude-action",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 4,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 3
+    },
+    "total": 32,
+    "tag": "borrow",
+    "one_liner": "claude-code-action: label→fixed GHA→PR; agent = liść — wzorzec impulsu, nie Fala.",
+    "borrow": [
+      "fixed GHA steps as DET spine",
+      "branch claude/issue-N convention"
+    ]
+  },
+  {
+    "n": 24,
+    "slug": "conductor-yaml",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 27,
+    "tag": "inspire",
+    "one_liner": "MS Conductor YAML+Jinja 0-token orchestration — piękny DET, zero mapowania na Fala dziś.",
+    "borrow": [
+      "0-token YAML+Jinja routes",
+      "type:agent only as leaf"
+    ]
+  },
+  {
+    "n": 25,
+    "slug": "jnurre-tdd",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 33,
+    "tag": "borrow",
+    "one_liner": "jnurre TDD label-FSM + adversarial review + revision cap — pożycz bramkę testów i circuit breaker.",
+    "borrow": [
+      "AGENT_TEST_COMMAND gate before PR",
+      "revision_cap circuit breaker",
+      "plan HITL approve label"
+    ]
+  },
+  {
+    "n": 26,
+    "slug": "holdout-oracle",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 2
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "Sealed holdout oracle (exit code) — świetna idea QA, nie na cienki Lokaj teraz.",
+    "borrow": [
+      "grading is exit_code+JSON not LLM-judge",
+      "holdout sealed from agent"
+    ]
+  },
+  {
+    "n": 27,
+    "slug": "elasticclaw",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 27,
+    "tag": "inspire",
+    "one_liner": "ElasticClaw control plane + sandbox leaves — za dużo hub/YAML na lokay.",
+    "borrow": [
+      "scoped GH App not broad PAT",
+      "sandbox ephemeral cleanup"
+    ]
+  },
+  {
+    "n": 28,
+    "slug": "fabro-dot",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 2
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "fabro.sh DOT owns next-node — jak 14, obcy silnik.",
+    "borrow": [
+      "DOT owns next node",
+      "human gate as shape not LLM"
+    ]
+  },
+  {
+    "n": 29,
+    "slug": "codex-auto",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 4,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 3
+    },
+    "total": 32,
+    "tag": "borrow",
+    "one_liner": "codex exec w GHA jak 23 — label→DET harness→leaf→PR; ten sam wzorzec impulsu.",
+    "borrow": [
+      "codex CLI as leaf not orchestrator",
+      "branch codex/issue-N"
+    ]
+  },
+  {
+    "n": 30,
+    "slug": "dagent-dag",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 2
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "DAGent TS DAG watchdog — silny DET scheduler, osobny runtime.",
+    "borrow": [
+      "state.json source of truth",
+      "triage_reset bounded max 5"
+    ]
+  },
+  {
+    "n": 31,
+    "slug": "inngest-steps",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "Inngest step.run — durable DET; nie Fala; pożycz tylko ideę step-scoped retry.",
+    "borrow": [
+      "step memo source of truth",
+      "event starts run not chat"
+    ]
+  },
+  {
+    "n": 32,
+    "slug": "mastra-hybrid",
+    "scores": {
+      "soul_fit": 3,
+      "det_spine": 2,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 4,
+      "bounded_repair": 2,
+      "so_leaves": 2,
+      "implementability": 2
+    },
+    "total": 20,
+    "tag": "skip",
+    "one_liner": "Mastra hybrid free-sandbox build = agent dostaje luz w stacji — konflikt z det_spine/SOUL.",
+    "borrow": []
+  },
+  {
+    "n": 33,
+    "slug": "openfactory",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 27,
+    "tag": "inspire",
+    "one_liner": "OpenFactory Temporal-ish + adapter plane — L4 platforma, nie klepacz/Lokaj.",
+    "borrow": [
+      "box prove before agent spend",
+      "executor ≠ independent reviewer"
+    ]
+  },
+  {
+    "n": 34,
+    "slug": "jp-label-fix",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 3,
+      "implementability": 4
+    },
+    "total": 34,
+    "tag": "borrow",
+    "one_liner": "JP DIY label auto-fix: auto-fix→worktree→claude→PR + failed/done escape — praktyczne.",
+    "borrow": [
+      "escape labels done|failed not limbo",
+      "fresh worktree K=1 per issue"
+    ]
+  },
+  {
+    "n": 35,
+    "slug": "phoenix-fsm",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 4,
+      "thinness": 2,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 3,
+      "implementability": 2
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "Phoenix ai:* multi-agent (Planner/Coder/Tester/PR) — za dużo ról vs cienki klepacz.",
+    "borrow": [
+      "ai:ready / ai:revise impulse",
+      "auto_revise cap circuit breaker"
+    ]
+  },
+  {
+    "n": 36,
+    "slug": "knot-dag",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 3,
+      "implementability": 2
+    },
+    "total": 27,
+    "tag": "inspire",
+    "one_liner": "Knot SQLite DAG — supervisor owns plan/execute/verify; ciekawy, nie Fala.",
+    "borrow": [
+      "runners propose supervisor applies",
+      "fresh packet per node"
+    ]
+  },
+  {
+    "n": 37,
+    "slug": "hue-action",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 3,
+      "implementability": 3
+    },
+    "total": 32,
+    "tag": "borrow",
+    "one_liner": "issue2claude modes issue|fix|rebase — DET wybór trybu z eventu, nie z LLM.",
+    "borrow": [
+      "mode selected by event not LLM",
+      "fix/rebase as separate DET modes"
+    ]
+  },
+  {
+    "n": 38,
+    "slug": "dryvist-gha",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 3,
+      "implementability": 3
+    },
+    "total": 31,
+    "tag": "borrow",
+    "one_liner": "dryvist reusable workflow_call + ai:ready — biblioteka GHA, wzorzec kontraktu etykiety.",
+    "borrow": [
+      "ai:ready label contract",
+      "reusable workflow_call spine"
+    ]
+  },
+  {
+    "n": 39,
+    "slug": "luminik-pipeline",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 2
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "Alfred plan→…→ship + merge_gate.py fail-closed — dobry DET merge, gruby pipeline.",
+    "borrow": [
+      "merge_gate.py sole fail-closed predicate",
+      "SHA-guarded squash"
+    ]
+  },
+  {
+    "n": 40,
+    "slug": "ableinc-fsm",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 5,
+      "implementability": 4
+    },
+    "total": 34,
+    "tag": "borrow",
+    "one_liner": "ableinc Go harness + SQLite lease: LLM tylko plan/impl; draft PR never merge — blisko daemona.",
+    "borrow": [
+      "sqlite lease one issue per repo",
+      "LLM never push/open PR"
+    ]
+  },
+  {
+    "n": 41,
+    "slug": "chippingway-fsm",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 1,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 3,
+      "implementability": 2
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "chippingway workflow:* + pinned JSON — zbyt wiele stanów (decomposing…documenting).",
+    "borrow": [
+      "pinned JSON mirrors stage",
+      "max_conflict_rounds circuit breaker"
+    ]
+  },
+  {
+    "n": 42,
+    "slug": "forge-stations",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "LangGraph typed stations — agent fills station never routes; stack ≠ Fala.",
+    "borrow": [
+      "typed stations own edges",
+      "bounded CI repair loop"
+    ]
+  },
+  {
+    "n": 43,
+    "slug": "klaus-dot",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 2
+    },
+    "total": 30,
+    "tag": "inspire",
+    "one_liner": "klaus .dot runtime fixed — jak DOT rodzina; nie drop-in.",
+    "borrow": [
+      "runtime graph fixed (plan may emit but not mutate)",
+      "test/lint are shell diamonds"
+    ]
+  },
+  {
+    "n": 44,
+    "slug": "wf-dsl",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 27,
+    "tag": "inspire",
+    "one_liner": "conductor-ai .wf DSL + tmux Claude slots — obcy silnik, dobra izolacja slotów.",
+    "borrow": [
+      "wf DSL owns steps/gates",
+      "tmux slot returns SO not next step"
+    ]
+  },
+  {
+    "n": 45,
+    "slug": "gha-native",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 3,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 4,
+      "implementability": 3
+    },
+    "total": 30,
+    "tag": "borrow",
+    "one_liner": "GHA jobs needs+artifacts = program; slash/dispatch start słabszy niż czysta etykieta.",
+    "borrow": [
+      "jobs+artifacts handoff as DET spine",
+      "gh merge gated by MergePolicy"
+    ]
+  },
+  {
+    "n": 46,
+    "slug": "temporal-klepacz",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 4,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "Temporal Workflow-as-code + Signals HITL — top det_spine, dno implementability dla lokaya.",
+    "borrow": [
+      "continue-as-new per ticket",
+      "HITL via signals not limbo"
+    ]
+  },
+  {
+    "n": 47,
+    "slug": "prefect-flow",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 4,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 28,
+    "tag": "inspire",
+    "one_liner": "Prefect @flow/@task — jak Temporal rodzina; nie mapuje na Fala atoms wkrótce.",
+    "borrow": [
+      "Deployment from labeled issue",
+      "artifacts observability not router"
+    ]
+  },
+  {
+    "n": 48,
+    "slug": "dagster-assets",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 3,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 29,
+    "tag": "inspire",
+    "one_liner": "Dagster SDA ticket→PR + label sensors — piękny lineage, zły fit na Lokaj/Fala.",
+    "borrow": [
+      "sensor on GitHub labels",
+      "tests asset is DET not LLM-judge"
+    ]
+  },
+  {
+    "n": 49,
+    "slug": "windmill-flow",
+    "scores": {
+      "soul_fit": 4,
+      "det_spine": 5,
+      "thinness": 2,
+      "label_start": 3,
+      "coder_ceiling": 5,
+      "bounded_repair": 2,
+      "so_leaves": 4,
+      "implementability": 1
+    },
+    "total": 26,
+    "tag": "inspire",
+    "one_liner": "Windmill flows/scripts — DET atoms w obcym SaaS; niska implementability.",
+    "borrow": [
+      "approval HITL step",
+      "typed script leaves only"
+    ]
+  },
+  {
+    "n": 50,
+    "slug": "cynical-min",
+    "scores": {
+      "soul_fit": 5,
+      "det_spine": 5,
+      "thinness": 5,
+      "label_start": 5,
+      "coder_ceiling": 5,
+      "bounded_repair": 1,
+      "so_leaves": 3,
+      "implementability": 5
+    },
+    "total": 34,
+    "tag": "keep",
+    "one_liner": "Absolutne min: pick→worktree→implement→test→draft PR→human; MergePolicy Off only.",
+    "borrow": [
+      "six-step spine only",
+      "MergePolicy Off hardcoded for start"
+    ]
+  }
+]

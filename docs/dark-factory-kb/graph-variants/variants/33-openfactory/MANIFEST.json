@@ -1,0 +1,77 @@
+{
+  "slug": "33-openfactory",
+  "persona": "openfactory compose — Temporal-ish state machine owns next state; pluggable adapters (tracker/board/forge/CI/sandbox/notifier); coding agents are leaves behind agent adapter",
+  "approach": "compose",
+  "confidence": 85,
+  "inspired_by": [
+    "Open-Factory-Digital/openfactory-core",
+    "dark-factory-kb/instances/openfactory-core",
+    "SPINE_INDEX spine_deterministic — Temporal-ish + adapters; agents pluggable leaves",
+    "WAVE1_MILLS openfactory-core (D-spine Temporal + state machine; A = pluggable coding agents)",
+    "box prove before agent spend",
+    "15-durable-steps (Temporal dual — this variant is openfactory adapter-plane)",
+    "executor ≠ independent reviewer (other engine)"
+  ],
+  "shape_map": {
+    "Mdiamond": "ticket_pickup_start",
+    "Msquare": "done_pr_or_merged",
+    "parallelogram": "DET_adapter_call",
+    "diamond": "DET_state_transition_budget",
+    "box": "AGENT_adapter_leaf",
+    "hexagon": "HITL_or_merge_policy"
+  },
+  "fixed_pipeline": [
+    "temporal_spine",
+    "adapter_plane",
+    "agent_leaf",
+    "prove_review_merge"
+  ],
+  "openfactory": {
+    "control_plane": "worker + panel UI (:8787); Temporal-ish state machine",
+    "orchestrator": "deterministic FSM: size → box_prove → plan → agent → tests → review → merge_policy",
+    "checkpoint": "Temporal-ish run state / worker persistence",
+    "retry_unit": "failed state transition / activity only",
+    "llm_placement": "behind agent adapter leaf only — never FSM router",
+    "adapter_axes": [
+      "tracker",
+      "board",
+      "forge",
+      "ci",
+      "agent",
+      "sandbox",
+      "notifier"
+    ],
+    "agent_engines": ["Claude Code", "Codex", "Kimi", "OpenCode"],
+    "sandbox": "Docker compose worker; box prove before spend",
+    "roles": "executor ≠ reviewer (different engines)",
+    "vacuous_green": "no declared test command = hold, not pass",
+    "not": [
+      "numman-ali/openfactory SDLC Refinery",
+      "manufacturing Open Factory Digital",
+      "agent as FSM router"
+    ]
+  },
+  "invariants": [
+    "temporal_ish_fsm_owns_next_state",
+    "no_llm_in_state_machine_body",
+    "agents_only_behind_agent_adapter_leaf",
+    "adapters_are_pluggable_axes",
+    "box_prove_before_agent_spend",
+    "vacuous_green_refused",
+    "executor_ne_independent_reviewer",
+    "coder_ceiling_is_open_pr",
+    "one_ticket_one_run",
+    "merge_policy_off_classify_always",
+    "production_always_human_gate",
+    "not_l5",
+    "not_alias_of_numman_ali_openfactory"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-temporal-spine.md",
+    "subgraph-adapter-plane.md",
+    "subgraph-agent-leaf.md",
+    "subgraph-prove-review-merge.md"
+  ]
+}

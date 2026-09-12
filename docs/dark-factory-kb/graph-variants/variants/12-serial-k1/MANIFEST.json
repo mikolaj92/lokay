@@ -1,0 +1,68 @@
+{
+  "slug": "12-serial-k1",
+  "persona": "serial-strict — hard K=1: one ticket, one worktree, one PR; occupancy DET only; no catalog seeding mid-flight",
+  "approach": "from_scratch",
+  "confidence": 93,
+  "inspired_by": [
+    "SOUL.md DET spine ticket→PR",
+    "WORKING_KLEPACZ_GRAPH.md K=1 / one ticket one worktree",
+    "ready-for-agent fresh worktree occupancy",
+    "lokay serial issue_to_pr default K=1"
+  ],
+  "k1": {
+    "tickets_per_pass": 1,
+    "worktrees_per_ticket": 1,
+    "prs_per_ticket": 1,
+    "parallel": false,
+    "catalog_seed_mid_flight": false
+  },
+  "occupancy": {
+    "mode": "DET",
+    "states": ["free", "live", "dead_orphan"],
+    "on_live": "defer",
+    "on_dead_orphan": "finish_orphan_pr",
+    "on_free": "worktree_add"
+  },
+  "fixed_pipeline": [
+    "claim_k1",
+    "occupancy_det",
+    "implement_one_pr",
+    "review_merge"
+  ],
+  "invariants": [
+    "one_ticket_per_pass",
+    "one_worktree_per_ticket",
+    "one_pr_per_ticket",
+    "occupancy_is_det",
+    "no_catalog_seed_mid_flight",
+    "serial_not_parallel",
+    "coder_ceiling_is_open_pr",
+    "merge_policy_off_classify_always",
+    "det_majority_agent_only_leaves",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-claim-k1.md",
+    "subgraph-occupancy-det.md",
+    "subgraph-implement-one-pr.md",
+    "subgraph-review-merge.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-claim-k1.md",
+      "subgraph-occupancy-det.md",
+      "subgraph-implement-one-pr.md",
+      "subgraph-review-merge.md"
+    ],
+    "trigger": "label:ready-for-agent",
+    "sandbox": "single_fresh_worktree",
+    "agent_seat": "leaf_SO_only",
+    "merge_authority": "DET_merge_policy",
+    "concurrency": "serial_k1"
+  }
+}

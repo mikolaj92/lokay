@@ -1,0 +1,75 @@
+{
+  "slug": "48-dagster-assets",
+  "persona": "dagster-assets compose — Software-Defined Assets ticket→branch→diff→tests→PR; sensors on GitHub labels; LLM as op leaf only",
+  "approach": "compose",
+  "confidence": 91,
+  "inspired_by": [
+    "Dagster Software-Defined Assets (SDA)",
+    "Dagster @asset / @multi_asset dependency graph",
+    "Dagster Sensors (run_status / webhook / polling)",
+    "Dagster Ops as compute leaves under assets",
+    "Dagster asset materialization + AssetKey lineage",
+    "Dagster Jobs as asset selections",
+    "GitHub labels ready-for-agent / ai/in-progress / ai/pr-open",
+    "KLEPACZ.md Merge Off|Classify|Always",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "15-durable-steps",
+    "31-inngest-steps",
+    "09-label-fsm",
+    "SOUL.md deterministic spine + agent leaf"
+  ],
+  "shape_map": {
+    "Mdiamond": "github_label_sensor",
+    "Msquare": "done_pr_materialized",
+    "parallelogram": "DET_asset_materialize",
+    "diamond": "DET_asset_check_or_partition_gate",
+    "box": "LLM_op_leaf_under_asset",
+    "hexagon": "HITL_merge_policy"
+  },
+  "fixed_pipeline": [
+    "sensor_github_labels",
+    "sda_ticket_to_pr",
+    "llm_op_leaf",
+    "materialize_merge"
+  ],
+  "dagster": {
+    "orchestrator": "Definitions(assets=[…], sensors=[…], jobs=[…], resources=…)",
+    "graph_unit": "Software-Defined Asset (AssetKey + deps)",
+    "compute_unit": "op / @asset compute_fn",
+    "trigger": "Sensor on GitHub label events (or webhook → RunRequest)",
+    "lineage": "asset deps = ticket→branch→diff→tests→pr",
+    "llm_placement": "inside one op backing a leaf asset — never sensor or job router",
+    "hitl": ["sensor waits for review label / approval event", "merge_policy resource"],
+    "primitives": [
+      "@asset",
+      "@multi_asset",
+      "AssetIn / AssetOut",
+      "AssetCheck",
+      "Sensor / RunRequest",
+      "define_asset_job",
+      "AssetMaterialization",
+      "DagsterInstance / materialize"
+    ]
+  },
+  "invariants": [
+    "sensor_starts_run_not_chat_pick",
+    "sda_deps_are_fixed_spine",
+    "no_llm_in_sensor_or_job_selection",
+    "llm_only_inside_op_leaf",
+    "asset_keys_are_source_of_truth",
+    "materialization_is_checkpoint",
+    "coder_ceiling_is_open_pr_asset",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_partition_one_pr",
+    "merge_policy_off_classify_always",
+    "tests_asset_is_det_not_llm_judge",
+    "not_l5",
+    "meat_equiv_ai_same_asset_contract"
+  ],
+  "subgraphs": [
+    "subgraph-sensor-github-labels.md",
+    "subgraph-sda-ticket-to-pr.md",
+    "subgraph-llm-op-leaf.md",
+    "subgraph-materialize-merge.md"
+  ]
+}

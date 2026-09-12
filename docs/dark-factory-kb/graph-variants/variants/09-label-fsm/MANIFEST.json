@@ -1,0 +1,88 @@
+{
+  "slug": "09-label-fsm",
+  "persona": "label-fsm-compose — stages as GitHub labels; GHA/scripts advance; agents fill slots only",
+  "approach": "compose_label_fsm",
+  "confidence": 90,
+  "inspired_by": [
+    "thegpvc/gp-foundry",
+    "chippingway/orchestrator",
+    "jnurre64/sandbox-pal-action",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md"
+  ],
+  "reused_patterns": [
+    "label_as_fsm_state",
+    "gha_label_trigger_advance",
+    "agent_slot_structured_output",
+    "plan_hitl_approve_label",
+    "bounded_fix_via_labels",
+    "supervisor_cron_needs_human",
+    "merge_policy_not_persona"
+  ],
+  "label_vocabulary": [
+    "workflow:queued",
+    "workflow:planning",
+    "workflow:plan-approved",
+    "workflow:implementing",
+    "workflow:validating",
+    "workflow:fixing",
+    "workflow:pr-open",
+    "workflow:needs-human",
+    "workflow:done"
+  ],
+  "label_aliases": {
+    "agent": "workflow:queued",
+    "agent:implement": "workflow:implementing",
+    "agent:plan-approved": "workflow:plan-approved",
+    "agent:pr-open": "workflow:pr-open",
+    "agent:revision": "workflow:fixing",
+    "agent:needs-info": "workflow:needs-human",
+    "agent:review-unresolved": "workflow:needs-human"
+  },
+  "invariants": [
+    "one_active_stage_label_mutex",
+    "only_gha_or_script_flips_labels",
+    "agents_fill_slots_never_route",
+    "agent_does_not_pick_unlabeled_work",
+    "escape_edge_to_needs_human_required",
+    "fixer_cap_bounded",
+    "coder_ceiling_is_pr_open",
+    "merge_is_policy_not_agent",
+    "det_majority_agent_only_slots",
+    "meat_equals_ai_same_slot",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "executor": "github_actions",
+  "triggers": [
+    "issues:labeled",
+    "pull_request:review",
+    "schedule:supervisor_cron"
+  ],
+  "subgraphs": [
+    "subgraph-label-spine.md",
+    "subgraph-triage-plan.md",
+    "subgraph-implement-validate.md",
+    "subgraph-review-fix.md",
+    "subgraph-merge-escape.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-label-spine.md",
+      "subgraph-triage-plan.md",
+      "subgraph-implement-validate.md",
+      "subgraph-review-fix.md",
+      "subgraph-merge-escape.md"
+    ],
+    "trigger": "issues:labeled + supervisor cron",
+    "state_store": "github_issue_labels",
+    "advance_authority": "GHA_or_script_only",
+    "agent_seat": "SO_slots_only",
+    "sandbox": "fresh_worktree_k1",
+    "merge_authority": "DET_merge_policy",
+    "escape": "workflow:needs-human"
+  }
+}
