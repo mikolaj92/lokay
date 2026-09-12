@@ -19,7 +19,7 @@ def test_request_changes_runs_repair_branch_not_merge(tmp_path):
     effector.write_text(
         "from pathlib import Path\n"
         "from fala.sdk import load_manifest, output, write_result\n"
-        "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job); v={'ok':True,'atom':a}\n"
         "if a=='resolve_sha_review': v['route']='agent'\n"
         "if a=='review_evidence_catalog': v['route']='not_applicable'\n"
         "if a in {'validate_pr_review','validate_pr_review_retry'}: v.update(route='valid',decision={'verdict':'request_changes'})\n"
@@ -31,7 +31,7 @@ def test_request_changes_runs_repair_branch_not_merge(tmp_path):
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
         "if a=='pr_repair_verdict': v.update(route='repair',repairable=True)\n"
         "if a=='pr_merge': Path(" + repr(str(sentinel)) + ").write_text('ran')\n"
-        "write_result(output(values=v))\n",
+        "write_result(output(m, v))\n",
         encoding="utf-8",
     )
     package = tmp_path / "lokay.fala-package.toml"
@@ -75,7 +75,7 @@ def test_invalid_review_runs_one_retry_then_approve_branch(tmp_path):
     effector.write_text(
         "from pathlib import Path\n"
         "from fala.sdk import load_manifest, output, write_result\n"
-        "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job); v={'ok':True,'atom':a}\n"
         "if a=='resolve_sha_review': v['route']='agent'\n"
         "if a=='review_evidence_catalog': v['route']='not_applicable'\n"
         "if a=='validate_pr_review': v.update(route='retry',validation_error='bad json')\n"
@@ -88,7 +88,7 @@ def test_invalid_review_runs_one_retry_then_approve_branch(tmp_path):
         "if a=='review_repair_gate': v['route']='not_applicable'\n"
         "if a=='select_pr_triage_outcome': v['route']='merge'\n"
         "if a=='pr_merge': v['merged']=True; Path(" + repr(str(merge_sentinel)) + ").write_text('ran')\n"
-        "write_result(output(values=v))\n",
+        "write_result(output(m, v))\n",
         encoding="utf-8",
     )
     package = tmp_path / "lokay.fala-package.toml"
@@ -120,7 +120,7 @@ def test_cached_sha_verdict_skips_both_review_agents(tmp_path):
     effector.write_text(
         "import json,os\nfrom pathlib import Path\n"
         "from fala.sdk import load_manifest, output, write_result\n"
-        "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job); v={'ok':True,'atom':a}\n"
         "if a=='resolve_sha_review': v.update(route='cached',evidence_kind='none',decision={'verdict':'request_changes'},merge_ok=False)\n"
         "if a=='validate_pr_review': v['route']='not_applicable'\n"
         "if a=='review_evidence_catalog': v['route']='not_applicable'\n"
@@ -132,7 +132,7 @@ def test_cached_sha_verdict_skips_both_review_agents(tmp_path):
         "if a=='review_repair_gate': v['route']='repair'\n"
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
         "if a=='pr_repair_verdict': Path("+repr(str(repair_sentinel))+").write_text('ran')\n"
-        "write_result(output(values=v))\n",encoding='utf-8')
+        "write_result(output(m, v))\n",encoding='utf-8')
     package = _materialize_package(root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml", project=root, path_id="pr_triage")
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
     script="import fala,json,sys; print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id='pr_triage',run_id='cached',command_overrides=json.loads(sys.argv[3]),max_ticks=32)))"
@@ -156,7 +156,7 @@ def test_needs_evidence_runs_catalog_then_one_agent(tmp_path):
     effector.write_text(
         "import json,os\nfrom pathlib import Path\n"
         "from fala.sdk import load_manifest, output, write_result\n"
-        "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job); v={'ok':True,'atom':a}\n"
         "if a=='resolve_sha_review': v['route']='agent'\n"
         "if a=='validate_pr_review': v.update(route='valid',decision={'verdict':'needs_evidence','evidence_kind':'diff_tail'})\n"
         "if a=='select_pr_review': v.update(route='evidence',evidence_kind='diff_tail',decision={'verdict':'needs_evidence','evidence_kind':'diff_tail'})\n"
@@ -170,7 +170,7 @@ def test_needs_evidence_runs_catalog_then_one_agent(tmp_path):
         "if a=='review_repair_gate': v['route']='not_applicable'\n"
         "if a=='select_pr_triage_outcome': v['route']='merge'\n"
         "if a=='pr_merge': Path("+repr(str(merge_sentinel))+").write_text('ran')\n"
-        "write_result(output(values=v))\n",encoding='utf-8')
+        "write_result(output(m, v))\n",encoding='utf-8')
     package = _materialize_package(root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml", project=root, path_id="pr_triage")
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
     script="import fala,json,sys; print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id='pr_triage',run_id='evidence',command_overrides=json.loads(sys.argv[3]),max_ticks=64)))"
@@ -195,7 +195,7 @@ def test_red_checks_run_repair_node_not_review_or_merge(tmp_path):
     effector.write_text(
         "from pathlib import Path\n"
         "from fala.sdk import load_manifest, output, write_result\n"
-        "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job); v={'ok':True,'atom':a}\n"
         "if a=='classify_pr_triage_checks': v['route']='repair'\n"
         "if a=='select_pr_triage_outcome': v['route']='repair'\n"
         "if a=='resolve_sha_review': v['route']='not_applicable'\n"
@@ -207,7 +207,7 @@ def test_red_checks_run_repair_node_not_review_or_merge(tmp_path):
         "if a=='collect_pr_review_evidence': Path(" + repr(str(review_sentinel)) + ").write_text('ran')\n"
         "if a=='pr_merge': Path(" + repr(str(merge_sentinel)) + ").write_text('ran')\n"
         "if a=='pr_repair_verdict': Path(" + repr(str(repair_sentinel)) + ").write_text('ran')\n"
-        "write_result(output(values=v))\n",
+        "write_result(output(m, v))\n",
         encoding="utf-8",
     )
     package = tmp_path / "pkg.toml"

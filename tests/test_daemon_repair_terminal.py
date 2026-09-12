@@ -37,5 +37,5 @@ if a == 'summarize_daemon_cycle':
     nodes = result['effector_results']
     assert nodes['recovery_factory']['status'] == 'skipped'
     assert nodes['summarize_daemon_cycle']['status'] == 'succeeded'
-    outcome = nodes['summarize_daemon_cycle']['output']['values']['result']
+    outcome = nodes['summarize_daemon_cycle']['output']['payload']['result']
     assert outcome['health'] == ('self_repair_failed' if failed else 'self_repair_restart_required')

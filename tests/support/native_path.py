@@ -1,4 +1,4 @@
-"""Drive one authored path through Fala with a FEP/1 fixture organ."""
+"""Drive one authored path through Fala with a protocol/0.9 fixture organ."""
 from __future__ import annotations
 
 import json
@@ -21,7 +21,7 @@ _INHERIT = (
 
 
 def effector_source(values_path: Path, ran_path: Path) -> str:
-    """Return a FEP/1 organ that publishes JSON values and logs ran ids."""
+    """Return a Fala 0.9 organ that publishes JSON payload and logs ran ids."""
     return (
         "import json\n"
         "from pathlib import Path\n"
@@ -29,15 +29,15 @@ def effector_source(values_path: Path, ran_path: Path) -> str:
         f"VALUES = json.loads(Path({json.dumps(str(values_path))}).read_text())\n"
         f"RAN = {json.dumps(str(ran_path))}\n"
         "m = load_manifest()\n"
-        "pid = str(m.get('process_id') or '')\n"
-        "short = pid.split(':')[-1]\n"
-        "atom = str((m.get('config') or {}).get('atom') or short)\n"
+        "job = str(m.job or '')\n"
+        "short = job.split(':')[-1]\n"
+        "atom = str(dict(m.config).get('atom') or short)\n"
         "v = {'ok': True, 'atom': atom, 'route': 'fixture', 'effect': None}\n"
-        "for key in (pid, short, atom):\n"
+        "for key in (job, short, atom):\n"
         "    extra = VALUES.get(key)\n"
         "    if extra: v.update(extra)\n"
         "Path(RAN).open('a').write(short + chr(10))\n"
-        "write_result(output(values=v))\n"
+        "write_result(output(m, v))\n"
     )
 
 
@@ -78,7 +78,7 @@ def run_overridden_path(
     run_id: str,
     max_ticks: int = 256,
 ) -> dict[str, Any]:
-    """Drive one expanded path with command_overrides and a FEP/1 fixture organ."""
+    """Drive one expanded path with command_overrides and a Fala 0.9 fixture organ."""
     import pytest
 
     pytest.importorskip("fala")

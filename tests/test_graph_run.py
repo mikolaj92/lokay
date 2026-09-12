@@ -43,6 +43,39 @@ def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys)
     assert result["fala"]["last"] == dumped["last"]
 
 
+def test_normalize_path_result_unwraps_fala_0_9_result_payload():
+    from lokay.graph_run import normalize_path_result
+
+    out = normalize_path_result(
+        {
+            "ok": True,
+            "path_id": "issue_triage",
+            "fala": {
+                "run_status": "completed",
+                "effector_results": {
+                    "finalize_issue_triage": {
+                        "id": "issue_triage:finalize_issue_triage",
+                        "status": "succeeded",
+                        "output": {
+                            "protocol": "fala",
+                            "kind": "result",
+                            "payload": {"ok": True, "decision": {"verdict": "skip"}},
+                            "status": "ok",
+                        },
+                        "error": {},
+                    }
+                },
+            },
+        }
+    )
+    assert out["ok"] is True
+    item = out["terminal"]["finalize_issue_triage"]
+    assert item["ok"] is True
+    assert item["decision"] == {"verdict": "skip"}
+    assert "payload" not in item
+    assert "protocol" not in item
+
+
 def test_factory_pass_cleanup_process_failed_still_opens_a_pr():
     """Leftover work-copy process.failed is a classified route. Issues can PR."""
     from lokay.graph_run import normalize_path_result

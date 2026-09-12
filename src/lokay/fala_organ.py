@@ -5,7 +5,6 @@ Routing lives in ``lokay.organ.*`` (one job family per module).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -755,39 +754,26 @@ def organ_envelope(atom: str, result: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
-def _fep_request(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Create the FEP request represented by Fala's filesystem manifest.
+def _request_job(manifest: Any) -> str:
+    """Full Fala process id from a 0.9 Request (``path:atom``)."""
+    if hasattr(manifest, "job"):
+        return str(getattr(manifest, "job") or "")
+    if isinstance(manifest, dict):
+        return str(manifest.get("job") or manifest.get("process_id") or "")
+    return ""
 
-    Fala transports the request to subprocesses as an adapter manifest for
-    compatibility with non-Python effectors. The Python organ emits a FEP/1
-    result, so it restores the request identity from that transport data.
-    """
-    request: dict[str, Any] = {
-        "protocol": "fala-effector/1",
-        "message_kind": "effector.request",
-        "run_id": str(os.environ.get("FALA_RUN_ID") or manifest.get("run_id") or "run"),
-        "process_id": str(manifest.get("process_id") or ""),
-        "execution_id": str(manifest.get("execution_id") or ""),
-        "attempt": int(manifest.get("attempt") or 1),
-        "impulse_id": str(manifest.get("impulse_id") or "impulse:lokay-organ"),
-        "process_fingerprint": "process:lokay-organ",
-        "path_digest": "path:lokay-organ",
-        "capability": "lokay_atom",
-        "input": dict(manifest.get("input") or {}),
-        "config": dict(manifest.get("config") or {}),
-        "output_contract_ref": "schema:lokay-atom",
-    }
-    body = json.dumps(request, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    request["message_id"] = "msg:sha256:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
-    return request
+
+def _job_id(manifest: Any) -> str:
+    """Effector id from a Fala 0.9 Request (config.atom, else job)."""
+    return str(sdk.config(manifest).get("atom") or _request_job(manifest) or "")
 
 
 def main() -> int:
     _ensure_project_cwd()
 
-    def handler(manifest: dict[str, Any]) -> dict[str, Any]:
+    def handler(manifest: Any) -> Any:
         config = sdk.config(manifest)
-        atom = str(config.get("atom") or manifest.get("process_id") or "")
+        atom = _job_id(manifest)
         if not atom:
             raise RuntimeError("config.atom is required")
         if atom == "commit_all" and not os.environ.get("LOKAY_HEALTH_LEASE_PATH"):
@@ -806,13 +792,13 @@ def main() -> int:
             atom,
             inputs,
             up,
-            process_id=str(manifest.get("process_id") or "") or None,
+            process_id=_request_job(manifest) or atom,
             provenance=provenance,
         )
-        return sdk.output(
-            values=organ_envelope(atom, result),
-            metadata={"implementation": provenance},
-        )
+        payload = organ_envelope(atom, result)
+        if provenance:
+            payload = {**payload, "implementation": provenance}
+        return sdk.output(manifest, payload)
 
     return sdk.run_manifest_effector(handler)
 

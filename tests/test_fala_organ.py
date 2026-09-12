@@ -930,30 +930,35 @@ def test_organ_envelope_still_raises_on_not_ok():
     assert "agent failed" in str(caught.value)
 
 
-def test_fep_request_reconstructs_adapter_identity():
-    from fala.fep import build_result, validate
+def test_job_id_prefers_config_atom():
+    from fala.protocol import Request
 
-    manifest = {
-        "protocol_version": 1,
-        "run_id": "run-1",
-        "process_id": "classify",
-        "execution_id": "run-1:classify",
-        "attempt": 2,
-        "impulse_id": "impulse-1",
-        "input": {"conduction": {"source": {"route": "ready"}}},
-        "config": {"atom": "classify"},
-    }
-    request = fala_organ._fep_request(manifest)
-    assert request["protocol"] == "fala-effector/1"
-    assert request["message_kind"] == "effector.request"
-    assert request["execution_id"] == manifest["execution_id"]
-    assert request["attempt"] == manifest["attempt"]
-    result = build_result(request, values={"ok": True, "atom": "classify"})
-    assert validate(result, "effector.result")["request_id"] == request["message_id"]
+    request = Request(
+        sender="parent",
+        recipient="classify",
+        job="classify",
+        payload={"conduction": {"source": {"route": "ready"}}},
+        config={"atom": "classify", "attempt": 2},
+    )
+    assert fala_organ._job_id(request) == "classify"
+    result = fala_organ.sdk.output(request, {"ok": True, "atom": "classify"})
+    assert result.ref == request.id
+    assert result.status == "ok"
+    assert result.payload["atom"] == "classify"
 
 
-def test_fep_request_message_id_is_stable():
-    manifest = {"process_id": "atom", "execution_id": "run:atom", "attempt": 1}
-    first = fala_organ._fep_request(manifest)
-    second = fala_organ._fep_request(dict(reversed(manifest.items())))
-    assert first == second
+def test_job_id_falls_back_to_job_field():
+    from fala.protocol import Request
+
+    request = Request(
+        sender="parent",
+        recipient="atom",
+        job="atom",
+        payload={},
+        config={},
+    )
+    assert fala_organ._job_id(request) == "atom"
+    mapping = {"job": "factory_pass:atom", "config": {"atom": "atom"}}
+    assert fala_organ._job_id(mapping) == "atom"
+    assert fala_organ._request_job(mapping) == "factory_pass:atom"
+    assert fala_organ._request_job(request) == "atom"

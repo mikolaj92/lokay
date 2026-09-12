@@ -17,13 +17,13 @@ def run_graph(tmp_path, body: str, run_id: str, path_id: str = "issue_triage"):
     return json.loads(run.stdout.strip().splitlines()[-1])
 
 def base_effector(extra: str) -> str:
-    """Build a FEP/1 subprocess effector from Fala's adapter manifest."""
+    """Build a Fala 0.9 subprocess effector from the typed Request manifest."""
     return (
         "import json\n"
         "from pathlib import Path\n"
         "from fala.sdk import load_manifest, output, write_result\n"
-        "m=load_manifest(); a=(m.get('config') or {}).get('atom') or m.get('process_id'); v={'ok':True,'atom':a}\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job); v={'ok':True,'atom':a}\n"
         "if a=='plan_issue_split':v.update(route='not_applicable',child_1='absent',child_2='absent',child_3='absent',child_4='absent',child_5='absent')\n"
         + extra
-        + "\nwrite_result(output(values=v))\n"
+        + "\nwrite_result(output(m, v))\n"
     )

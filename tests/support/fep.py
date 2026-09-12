@@ -1,29 +1,30 @@
-"""Helpers for standalone FEP/1 subprocess fixtures."""
+"""Helpers for standalone Fala 0.9 subprocess fixtures."""
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any, Mapping
 
+from fala.protocol import Request, build_result, validate
 
-def request_from_adapter_manifest(manifest: Mapping[str, Any], *, run_id: str = "run") -> dict[str, Any]:
-    """Turn Fala's adapter manifest into the FEP request used by Python fixtures."""
-    request: dict[str, Any] = {
-        "protocol": "fala-effector/1",
-        "message_kind": "effector.request",
-        "run_id": run_id,
-        "process_id": str(manifest["process_id"]),
-        "execution_id": str(manifest["execution_id"]),
-        "attempt": int(manifest["attempt"]),
-        "impulse_id": str(manifest.get("impulse_id") or "impulse:test"),
-        "process_fingerprint": "process:test",
-        "path_digest": "path:test",
-        "capability": "lokay_atom",
-        "input": dict(manifest.get("input") or {}),
-        "config": dict(manifest.get("config") or {}),
-        "output_contract_ref": "schema:test",
-    }
-    body = json.dumps(request, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    request["message_id"] = "msg:sha256:" + hashlib.sha256(body.encode()).hexdigest()
-    return request
+
+def request_from_adapter_manifest(
+    manifest: Mapping[str, Any], *, run_id: str = "run"
+) -> Request:
+    """Turn a leftover adapter-shaped mapping into a typed Fala 0.9 Request."""
+    del run_id
+    job = str(manifest.get("job") or manifest.get("process_id") or "")
+    payload = dict(manifest.get("payload") or manifest.get("input") or {})
+    config = dict(manifest.get("config") or {})
+    return Request(
+        sender="parent",
+        recipient=job or "lokay-organ",
+        job=job or "lokay-organ",
+        payload=payload,
+        config=config,
+    )
+
+
+def result_for(request: Request, payload: Mapping[str, Any]):
+    """Typed result answering ``request``."""
+    result = build_result(request, payload=payload)
+    return validate(result, "result")

@@ -22,6 +22,9 @@ def _load(raw: str | None) -> dict[str, Any]:
 
 
 def _values(payload: dict[str, Any]) -> dict[str, Any]:
+    nested = payload.get("payload")
+    if isinstance(nested, dict):
+        payload = nested
     values = payload.get("values")
     return values if isinstance(values, dict) else payload
 

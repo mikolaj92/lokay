@@ -1,6 +1,6 @@
 # Graph test inventory
 
-The expanded Fala catalog is the authority for generated graph suites. Native tests drive `host_run_package` with a FEP/1 fixture organ. `host_drive` with pre-registered outputs is not a `when` proof.
+The expanded Fala catalog is the authority for generated graph suites. Native tests drive `host_run_package` with a Fala 0.9 fixture organ. `host_drive` with pre-registered outputs is not a `when` proof.
 
 - Paths: **46**
 - Expanded nodes and per-node suites: **626**

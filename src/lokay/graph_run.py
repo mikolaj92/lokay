@@ -381,8 +381,13 @@ def _process_payload(process: dict[str, Any]) -> dict[str, Any]:
             raw = {}
     if not isinstance(raw, dict):
         raw = {}
+    payload = raw.get("payload")
+    if isinstance(payload, dict):
+        return dict(payload)
     values = raw.get("values")
-    return dict(values if isinstance(values, dict) else raw)
+    if isinstance(values, dict):
+        return dict(values)
+    return dict(raw)
 
 
 _FAILED_REASON_RE = re.compile(r'"reason":\s*"([A-Za-z0-9_.:-]+)"')
