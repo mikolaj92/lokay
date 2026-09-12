@@ -55,3 +55,36 @@ def test_triage_decisions_reach_executor_rows_in_factory_pass(tmp_path):
 
     assert res is not None
     assert captured_triage.get("decisions") == triage_decisions
+
+
+def test_flat_fala_triage_payload_reaches_executor_rows(tmp_path):
+    pass_dir = tmp_path / "pass"
+    pass_dir.mkdir()
+    triage_decisions = [
+        decision_of({"repo": "mikolaj92/takt", "issue": 42, "route": "skip", "reason": "host_ops"}),
+    ]
+    flat = {
+        "ok": True,
+        "department": "issue_triage",
+        "route": "cap",
+        "decisions": triage_decisions,
+        "leftover": 108,
+        "leftover_issues": [{"repo": "mikolaj92/takt", "issue": 53}],
+    }
+    captured_triage = {}
+
+    def fake_run_executor_rows(*args, **kwargs):
+        captured_triage.update(kwargs.get("triage") or {})
+        return {"ok": True, "route": "cap", "result": {}}
+
+    up = {
+        "factory_begin_host_gate": {"route": "begin"},
+        "factory_begin": {"pass_dir": str(pass_dir)},
+        "select_executor_department": {"route": "run"},
+        "select_issue_triage_department": {"route": "run"},
+        "run_issue_triage_department": flat,
+    }
+    with patch("lokay.proc.run_executor_department.run", side_effect=fake_run_executor_rows):
+        handle_departments("run_executor_department", {"config_path": None, "live": False}, up, {})
+    assert captured_triage.get("decisions") == triage_decisions
+    assert captured_triage["leftover_issues"][0]["issue"] == 53

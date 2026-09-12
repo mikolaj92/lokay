@@ -87,6 +87,7 @@ def handle_departments(
         return select(enabled=_department_enabled(config, "executor"))
     if atom == "run_executor_department":
         from lokay.proc.run_executor_department import run
+        from lokay.sieve_decision import envelope
 
         select = up.get("select_issue_triage_department") or {}
         return run(
@@ -94,7 +95,7 @@ def handle_departments(
             config_path=config,
             live=live,
             triage_ran=str(select.get("route") or "") == "run",
-            triage=(up.get("run_issue_triage_department") or {}).get("result") or {},
+            triage=envelope(up.get("run_issue_triage_department") or {}),
         )
     if atom == "select_pr_triage_department":
         if stop := _host_stop(up):

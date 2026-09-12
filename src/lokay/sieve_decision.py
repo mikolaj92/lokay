@@ -31,6 +31,22 @@ def collect(*groups: list[dict]) -> list[SieveDecision]:
     return list(decisions.values())
 
 
+def envelope(triage: dict | None) -> dict:
+    """Executor fuel from a sieve department receipt.
+
+    Authored nests lift decisions under ``result``. Fala 0.9 flattens that
+    nest onto the organ payload. Both shapes must hand off or the mill
+    restarts leftover at the last skipped ticket.
+    """
+    blob = dict(triage or {})
+    inner = blob.get("result")
+    if isinstance(inner, dict) and any(
+        key in inner for key in ("decisions", "leftover", "leftover_issues")
+    ):
+        return inner
+    return blob
+
+
 def _decision_rows(triage: dict) -> list:
     """Decisions may sit flat or under the nest ``result`` (#1105 handoff)."""
     rows = list(triage.get("decisions") or [])

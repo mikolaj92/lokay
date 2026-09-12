@@ -35,3 +35,25 @@ def test_attach_keeps_rows_without_decision_and_drops_unbound():
     out = attach(listed, {"decisions": [_d(9)]})
     assert "sieve_decision" not in out["issues"][0]
     assert [r["issue"] for r in out["issues"]] == [2]
+
+
+def test_envelope_reads_fala_flat_payload():
+    from lokay.sieve_decision import envelope
+
+    flat = {
+        "ok": True,
+        "department": "issue_triage",
+        "decisions": [_d(42, reason="host_ops")],
+        "leftover": 108,
+        "leftover_issues": [{"repo": "o/r", "issue": 53}],
+    }
+    out = envelope(flat)
+    assert out["decisions"] == [_d(42, reason="host_ops")]
+    assert out["leftover_issues"][0]["issue"] == 53
+
+
+def test_envelope_reads_nested_result():
+    from lokay.sieve_decision import envelope
+
+    nested = {"ok": True, "result": {"decisions": [_d(2, route="do", reason="ready")]}}
+    assert envelope(nested)["decisions"] == [_d(2, route="do", reason="ready")]

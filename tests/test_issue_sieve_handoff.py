@@ -84,6 +84,35 @@ def test_authored_parent_conducts_completed_sieve_to_executor(monkeypatch):
     assert captured['triage'] == outputs['run_issue_triage_department']['result']
 
 
+def test_authored_parent_conducts_fala_flat_sieve_to_executor(monkeypatch):
+    import tomllib
+    from pathlib import Path
+    from lokay.organ.departments_boundary import handle_departments
+    package = tomllib.loads((Path(__file__).parents[1] / 'fala/lokay.fala-package.toml').read_text())
+    path = next(p for p in package['correlation_paths'] if p['id'] == 'factory_pass')
+    nodes = {e['id']: e for e in path['effectors']}
+    flat = {
+        'ok': True,
+        'department': 'issue_triage',
+        'decisions': [decision(42, 'skip', 'host_ops')],
+        'leftover': 108,
+        'leftover_issues': [{'repo': 'o/r', 'issue': 53}],
+    }
+    outputs = {'factory_begin': {'pass_dir': '/pass'},
+               'select_executor_department': {'route': 'run'},
+               'select_issue_triage_department': {'route': 'run'},
+               'run_issue_triage_department': flat}
+    up = {k: outputs[k] for k in nodes['run_executor_department']['conduction']}
+    captured = {}
+    def capture(**kwargs):
+        captured.update(kwargs)
+        return {'ok': True}
+    monkeypatch.setattr('lokay.proc.run_executor_department.run', capture)
+    handle_departments('run_executor_department', {'live': False}, up, {})
+    assert captured['triage']['decisions'] == [decision(42, 'skip', 'host_ops')]
+    assert captured['triage']['leftover_issues'][0]['issue'] == 53
+
+
 def test_sieve_resume_retains_decisions_from_earlier_slots(tmp_path):
     from lokay.proc.classify_issue_sieve_row import classify
     from lokay.proc.prepare_issue_sieve import prepare
