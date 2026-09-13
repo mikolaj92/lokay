@@ -912,7 +912,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_repair_result"
 capability = "lokay_atom"
-conduction = ["validate_repair_result", "validate_local_repair_retry"]
+conduction = ["prepare_local_repair_request", "validate_repair_result", "validate_local_repair_retry"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_repair_result" }
 output_schema = { type = "object", required = ["ok"] }

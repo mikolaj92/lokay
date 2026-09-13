@@ -35,7 +35,7 @@ def envelope(triage: dict | None) -> dict:
     """Executor fuel from a sieve department receipt.
 
     Authored nests lift decisions under ``result``. Fala 0.9 flattens that
-    nest onto the organ payload. Both shapes must hand off or the mill
+    nest onto the organ payload. Both shapes must hand off or the work queue
     restarts leftover at the last skipped ticket.
     """
     blob = dict(triage or {})

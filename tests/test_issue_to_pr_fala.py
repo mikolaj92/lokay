@@ -318,6 +318,70 @@ def test_local_repair_invalid_json_is_terminal():
     assert st["local_repair_terminal"] == "succeeded"
 
 
+def test_repaired_local_test_result_rechecks_from_explicit_request_message():
+    path = next(
+        p
+        for p in _package()["correlation_paths"]
+        if p["id"] == "local_repair_execution"
+    )
+    by_id = {node["id"]: node for node in path["effectors"]}
+    assert "prepare_local_repair_request" in by_id["select_repair_result"]["conduction"]
+
+    st = simulate_path(
+        "local_repair_execution",
+        {
+            "prepare_local_repair_request": {"ok": True, "first_test": {"route": "fail"}},
+            "repair_agent": {"route": "completed"},
+            "validate_repair_result": {
+                "route": "valid",
+                "decision": {"verdict": "implemented"},
+            },
+            "select_repair_result": {"route": "repaired"},
+            "assert_repair_diff": {"real": True},
+            "commit_repair": {"committed": True},
+            "test_local_recheck": {"route": "green", "tested": True},
+            "select_local_test_recheck": {"route": "pass"},
+            "local_repair_terminal": {"route": "pass", "passed": True},
+        },
+    )
+
+    assert st["select_repair_result"] == "succeeded"
+    assert st["assert_repair_diff"] == "succeeded"
+    assert st["commit_repair"] == "succeeded"
+    assert st["test_local_recheck"] == "succeeded"
+    assert st["local_repair_terminal"] == "succeeded"
+
+
+def test_native_local_repair_rechecks_from_conducted_request(tmp_path):
+    """Run the child through Fala and require its request message at selection."""
+    if not _fala_host_ready():
+        pytest.skip("Fala Mojo process host is not available")
+
+    body = base_effector(
+        """from fala.sdk import conduction as upstream
+if a=='prepare_local_repair_request':v.update(first_test={'route':'fail'})
+if a=='repair_agent':v.update(route='completed',stdout='{}')
+if a=='validate_repair_result':v.update(route='valid',decision={'verdict':'implemented'})
+if a=='select_repair_result':v.update(route='repaired',received_request='prepare_local_repair_request' in upstream(m))
+if a=='assert_repair_diff':v.update(route='real')
+if a=='commit_repair':v.update(route='committed')
+if a=='test_local_recheck':v.update(route='green',tested=True)
+if a=='select_local_test_recheck':v.update(route='pass')
+if a=='local_repair_terminal':v.update(route='pass',passed=True)"""
+    )
+    result = run_graph(
+        tmp_path, body, "native-repair-request-handoff", path_id="local_repair_execution"
+    )
+    statuses = {name: item["status"] for name, item in result["effector_results"].items()}
+    selected = result["effector_results"]["select_repair_result"]["output"]["payload"]
+    assert selected["received_request"] is True
+    assert statuses["assert_repair_diff"] == "succeeded"
+    assert statuses["commit_repair"] == "succeeded"
+    assert statuses["test_local_recheck"] == "succeeded"
+    assert statuses["select_local_test_recheck"] == "succeeded"
+    assert statuses["local_repair_terminal"] == "succeeded"
+
+
 def test_local_repair_prompt_has_zero_needs_human():
     from lokay.tool_contracts import render_contract
 

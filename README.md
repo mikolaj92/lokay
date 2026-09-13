@@ -1321,16 +1321,28 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> RepairAgent
+    [*] --> PrepareRepairRequest
+    PrepareRepairRequest --> RepairAgent
     RepairAgent --> ValidateRepairResult
-    ValidateRepairResult --> CommitRepair: REPAIRED
-    ValidateRepairResult --> RepairTerminal: invalid JSON / NEEDS_HUMAN
+    ValidateRepairResult --> RepairRetryAgent: invalid JSON (one retry)
+    RepairRetryAgent --> ValidateRepairRetry
+    ValidateRepairRetry --> SelectRepairResult
+    ValidateRepairResult --> SelectRepairResult: valid or retry not needed
+    SelectRepairResult --> AssertRepairDiff: REPAIRED
+    SelectRepairResult --> RepairTerminal: terminal / not applicable
+    AssertRepairDiff --> CommitRepair
     CommitRepair --> LocalTestAgain
-    LocalTestAgain --> RepairResult: PASS
-    LocalTestAgain --> RepairTerminal: FAIL
+    LocalTestAgain --> SelectRecheckOutcome
+    SelectRecheckOutcome --> RepairResult: PASS
+    SelectRecheckOutcome --> RepairTerminal: FAIL
     RepairResult --> [*]
     RepairTerminal --> [*]
 ```
+
+Every child atom receives only the named predecessor results in Fala `conduction`;
+repair applicability is derived from the explicit `PrepareRepairRequest` result,
+not ambient state. Recheck runs only after a valid repair result and the real-diff
+and commit steps.
 
 Każdy autonomiczny PR zawiera jeden canonical
 `lokay.autonomous-delivery/1` marker wiążący work unit, graph/path digest,

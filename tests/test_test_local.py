@@ -39,6 +39,31 @@ def test_missing_worktree_fails_closed(tmp_path):
     assert inspect(worktree=str(tmp_path / "none"))["result"]["ok"] is False
 
 
+def test_declared_test_command_does_not_inherit_fala_or_secret_environment(
+    tmp_path, monkeypatch
+):
+    import json
+    import sys
+    from lokay.proc.run_declared_test_command import run
+
+    monkeypatch.setenv("FALA_EFFECTOR_INPUT_DIR", "/private/fala/input")
+    monkeypatch.setenv("FALA_EFFECTOR_OUTPUT_DIR", "/private/fala/output")
+    monkeypatch.setenv("FALA_EFFECTOR_MANIFEST", "/private/fala/manifest.json")
+    monkeypatch.setenv("GH_TOKEN", "must-not-reach-tests")
+    script = "import json, os; print(json.dumps(sorted(os.environ)))"
+
+    result = run(
+        {"worktree": str(tmp_path)},
+        [sys.executable, "-c", script],
+    )
+
+    assert result["route"] == "green", result
+    child_env = set(json.loads(result["stdout_tail"]))
+    assert not any(name.startswith("FALA_EFFECTOR_") for name in child_env)
+    assert "GH_TOKEN" not in child_env
+    assert {"PATH", "HOME"} <= child_env
+
+
 def test_full_green_routes_to_cache():
     from lokay.proc.select_declared_test_outcome import select
 

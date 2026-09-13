@@ -46,3 +46,59 @@ def test_no_declared_test_reaches_inspection_terminal(tmp_path):
     assert status["run_declared_tests"] == "skipped"
     assert status["select_test_terminal"] == "succeeded"
 
+def test_native_fala_test_command_drops_parent_protocol_and_secret_env(
+    tmp_path, monkeypatch
+):
+    """Exercise the real Fala adapter and repository-test subprocess boundary."""
+    import json
+    import sys
+    from pathlib import Path
+
+    import pytest
+
+    try:
+        from fala._build import ensure_native
+
+        ensure_native()
+    except Exception as exc:
+        pytest.skip(f"Fala Mojo process host is not available: {exc}")
+
+    from lokay.graph_run import run_path
+
+    root = Path(__file__).resolve().parents[1]
+    worktree = tmp_path / "repo"
+    worktree.mkdir()
+    script = "import json, os; print(json.dumps(sorted(os.environ)))"
+    (worktree / "pyproject.toml").write_text(
+        "[tool.lokay]\ntest = "
+        + json.dumps([sys.executable, "-c", script])
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("FALA_EFFECTOR_INPUT_DIR", "/poison/fala/input")
+    monkeypatch.setenv("FALA_EFFECTOR_OUTPUT_DIR", "/poison/fala/output")
+    monkeypatch.setenv("FALA_EFFECTOR_MANIFEST", "/poison/fala/manifest.json")
+    monkeypatch.setenv("GH_TOKEN", "must-not-reach-tests")
+    monkeypatch.setenv("GITHUB_TOKEN", "must-not-reach-tests")
+
+    result = run_path(
+        path_id="test_local_execution",
+        repo="local/test",
+        issue=391234,
+        live=False,
+        package_path=root / "fala" / "lokay.fala-package.toml",
+        db_path=tmp_path / "fala-state",
+        extra_inputs={
+            "worktree": str(worktree),
+            "changed_scope": False,
+            "repo": "local/test",
+            "issue": 391234,
+        },
+    )
+
+    assert result["ok"] is True, result
+    run_result = next(step for step in result["steps"] if step.get("step") == "run_declared_tests")
+    child_env = set(json.loads(run_result["stdout_tail"]))
+    assert not any(name.startswith("FALA_EFFECTOR_") for name in child_env)
+    assert {"GH_TOKEN", "GITHUB_TOKEN"}.isdisjoint(child_env)
+
