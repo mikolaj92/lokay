@@ -17,12 +17,24 @@ HOST_OPS_UNPARK_CRITERION = (
 )
 
 # Live fleet/host ops — tight; avoid ordinary code-only host_ff docs.
+# A machine name is context, not an operation. Require an explicit action nearby
+# before treating a mini-m4 mention as a live host request.
+_MACHINE_NAME = r"\bmini[-_]?m4(?:-\d+)?\b"
+_MACHINE_ACTION = (
+    r"\b(?:restart|reboot|restore|recover|ssh|inspect|check|collect|capture|"
+    r"read|query|run|execute|deploy|update|repair|connect|login|"
+    r"uruchom\w*|zrestart\w*|przywr[oó]\w*|sprawdz\w*|diagnoz\w*|"
+    r"zbierz\w*|odczyt\w*|napraw\w*|podłącz\w*|połącz\w*|zaloguj\w*)\b"
+)
+_MACHINE_HOST_OPS = re.compile(
+    rf"(?i)(?:{_MACHINE_NAME}[^\n.!?]{{0,80}}{_MACHINE_ACTION}"
+    rf"|{_MACHINE_ACTION}[^\n.!?]{{0,80}}{_MACHINE_NAME})"
+)
 _HOST_OPS = re.compile(
     r"(?i)(?:"
     r"\bhermes\s+restore\b"
     r"|\brestore\s+(?:hermes|on\s+host(?:\s*\d+)?)\b"
     r"|\blaunchagent\b"
-    r"|\bmini[-_]?m4(?:-\d+)?\b"
     r"|\bssh\s+host\b"
     r"|\bgrok\s+bot\s+computer\s+update\b"
     r"|\bfleet\s+host\s+evidence\b"
@@ -48,7 +60,6 @@ _CODE_WORK = re.compile(
     r"|\bpull\s+request\b"
     r"|\bsrc/lokay\b"
     r"|\btool_contracts\b"
-    r"|\bai/fix\b"
     r")"
 )
 _CODE_NEGATION = re.compile(
@@ -58,11 +69,12 @@ _CODE_NEGATION = re.compile(
 )
 _DONE_MEANS = re.compile(r"(?im)^#{1,3}\s*done\s*means\b")
 
-# Line looks like host-ops-only work (filter from coding children).
+# Line looks like host-ops-only work (filter from coding children). Machine names
+# are intentionally excluded here as well; action context is required.
 _HOST_OPS_LINE = re.compile(
     r"(?i)(?:"
     r"hermes\s+restore|restore\s+(?:hermes|on\s+host)|launchagent|"
-    r"mini[-_]?m4|ssh\s+host|grok\s+bot\s+computer|fleet\s+host|"
+    r"ssh\s+host|grok\s+bot\s+computer|fleet\s+host|"
     r"host\s+evidence|żywy\s+host|zywy\s+host|live\s+(?:fleet|host)|"
     r"host\s*/\s*ops|host[-_]ops"
     r")"
@@ -72,7 +84,11 @@ _HOST_OPS_LINE = re.compile(
 def issue_requests_host_ops(issue: Issue) -> bool:
     """True when the issue asks for live host/fleet ops evidence."""
     blob = f"{issue.title or ''}\n{issue.body or ''}"
-    return bool(_HOST_OPS.search(blob))
+    if _HOST_OPS.search(blob):
+        return True
+    # A machine mention in copied prose or an example is context only; host ops
+    # require a nearby operational verb such as restart, inspect, or SSH.
+    return bool(_MACHINE_HOST_OPS.search(blob))
 
 
 def _has_code_slice(issue: Issue) -> bool:
@@ -97,7 +113,10 @@ def issue_is_host_ops_monolith(issue: Issue) -> bool:
 
 def line_is_host_ops_only(text: str) -> bool:
     """True when a checkbox/heading line is host-ops work, not a coding child."""
-    return bool(_HOST_OPS_LINE.search(text or ""))
+    blob = text or ""
+    if _HOST_OPS_LINE.search(blob):
+        return True
+    return bool(_MACHINE_HOST_OPS.search(blob))
 
 
 def host_ops_child_body(parent: Issue, *, criterion: str = HOST_OPS_UNPARK_CRITERION) -> str:

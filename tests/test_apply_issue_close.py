@@ -306,3 +306,87 @@ def test_temida_4995_graph_does_not_close_on_obsolete_verdict():
     }
     prs = next(p for p in describe_package()["paths"] if p["id"] == "pr_triage")
     assert any(n["id"] == "close_issue" for n in prs["nodes"])
+
+
+def test_apply_issue_mark_is_idempotent_for_duplicate_skip_comment(monkeypatch):
+    comments: list[str] = []
+    issue = SimpleNamespace(
+        repo="mikolaj92/lokay",
+        number=901,
+        title="Stale issue",
+        body="",
+        labels=[],
+        assignees=[],
+        url="",
+        state="OPEN",
+        author="",
+        comments=[],
+    )
+
+    def comment_issue(_runner, _repo, _number, body, *, live):
+        assert live is True
+        comments.append(body)
+        issue.comments.append(body)
+
+    monkeypatch.setattr("lokay.github_tasks.view_issue", lambda *a, **k: issue)
+    monkeypatch.setattr("lokay.github_tasks.comment_issue", comment_issue)
+    monkeypatch.setattr("lokay.github_tasks.add_issue_labels", lambda *a, **k: None)
+    monkeypatch.setattr("lokay.github_tasks.remove_issue_labels", lambda *a, **k: None)
+
+    kwargs = dict(
+        runner=object(),
+        cfg=_Cfg(),
+        repo="mikolaj92/lokay",
+        issue=901,
+        issue_data={"state": "OPEN", "labels": []},
+        decision={"verdict": "skip", "reason": "obsolete_source_removed"},
+        live=True,
+    )
+    first = apply_issue_mark.apply(**kwargs)
+    second = apply_issue_mark.apply(**kwargs)
+
+    assert first["applied"] is True
+    assert second["applied"] is True
+    assert len(comments) == 1
+
+
+def test_apply_issue_mark_does_not_repeat_skip_receipt_with_changed_reason(monkeypatch):
+    comments: list[str] = []
+    issue = SimpleNamespace(
+        repo="mikolaj92/lokay",
+        number=902,
+        title="Stale issue",
+        body="",
+        labels=[],
+        assignees=[],
+        url="",
+        state="OPEN",
+        author="",
+        comments=[
+            "Skipped (Lokay intake): obsolete_memory_sources_removed. "
+            "No limbo label — issue stays open unless a last-resort close applies."
+        ],
+    )
+
+    def comment_issue(_runner, _repo, _number, body, *, live):
+        assert live is True
+        comments.append(body)
+        issue.comments.append(body)
+
+    monkeypatch.setattr("lokay.github_tasks.view_issue", lambda *a, **k: issue)
+    monkeypatch.setattr("lokay.github_tasks.comment_issue", comment_issue)
+    monkeypatch.setattr("lokay.github_tasks.add_issue_labels", lambda *a, **k: None)
+    monkeypatch.setattr("lokay.github_tasks.remove_issue_labels", lambda *a, **k: None)
+
+    result = apply_issue_mark.apply(
+        runner=object(),
+        cfg=_Cfg(),
+        repo="mikolaj92/lokay",
+        issue=902,
+        issue_data={"state": "OPEN", "labels": []},
+        decision={"verdict": "skip", "reason": "obsolete_user_md_removed"},
+        live=True,
+    )
+
+    assert result["applied"] is True
+    assert comments == []

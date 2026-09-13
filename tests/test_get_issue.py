@@ -56,3 +56,43 @@ def test_get_issue_still_fetches_lokay(
     assert payload["offline"] is False
     assert payload["issue"]["number"] == 459
     assert payload["issue"]["state"] == "OPEN"
+
+
+def test_live_task_issue_read_preserves_comment_bodies_for_idempotency():
+    from lokay.gh_issues import get_issue as get_task_issue
+
+    class _Runner:
+        def __init__(self):
+            self.spec = None
+
+        def run(self, spec, *, live):
+            assert live is True
+            self.spec = spec
+            return SimpleNamespace(
+                returncode=0,
+                stdout=json.dumps(
+                    {
+                        "number": 31,
+                        "title": "Identity report",
+                        "body": "Details",
+                        "labels": [],
+                        "assignees": [],
+                        "author": {"login": "mikolaj92"},
+                        "url": "https://github.com/mikolaj92/dotfiles/issues/31",
+                        "state": "OPEN",
+                        "comments": [
+                            {"body": "Skipped (Lokay intake): obsolete_source_removed."}
+                        ],
+                    }
+                ),
+            )
+
+    runner = _Runner()
+    issue = get_task_issue(
+        runner, SimpleNamespace(), "mikolaj92/dotfiles", 31, live=True
+    )
+
+    assert issue.comments == ["Skipped (Lokay intake): obsolete_source_removed."]
+    requested_fields = runner.spec.argv[runner.spec.argv.index("--json") + 1].split(",")
+    assert "comments" in requested_fields
+    assert "comments" not in issue.to_dict()

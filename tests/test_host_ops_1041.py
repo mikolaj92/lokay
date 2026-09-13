@@ -7,6 +7,7 @@ from lokay.host_ops import (
     host_ops_unpark_ready,
     issue_is_host_ops_monolith,
     issue_requests_host_ops,
+    line_is_host_ops_only,
 )
 from lokay.issue_triage_boundary import resolve_hard_facts
 from lokay.models import Issue
@@ -189,3 +190,60 @@ def test_host_ops_unpark_ready_pure():
         _issue(title="Normal code", body="implement tests"),
         evidence={"hermes_restored": True},
     )
+
+
+def test_machine_name_mention_is_not_itself_a_host_ops_request():
+    # Issue #31 documents that a fleet machine receives an incorrect identity.
+    # A machine mention in the evidence does not request live host work.
+    issue = _issue(
+        title=(
+            "[docs-audit] fleet Hermes USER.md/MEMORY.md traktują Mirosława "
+            "jako bieżącego użytkownika"
+        ),
+        body="Agent na mini-m4-0 i na stacji dostaje cudzą sesję jako default.",
+    )
+    assert not issue_requests_host_ops(issue)
+    assert not issue_is_host_ops_monolith(issue)
+    assert not line_is_host_ops_only("- [ ] Fix Hermes identity for mini-m4-0")
+
+
+def test_machine_identity_report_reaches_semantic_triage():
+    data = _data(
+        title=(
+            "[docs-audit] fleet Hermes USER.md/MEMORY.md traktują Mirosława "
+            "jako bieżącego użytkownika"
+        ),
+        body="Agent na mini-m4-0 i na stacji dostaje cudzą sesję jako default.",
+    )
+    out = resolve_hard_facts(
+        data, {"route": "evaluate"}, {"merged_prs": []}, {"covering_prs": []}
+    )
+    assert out["route"] == "agent"
+
+
+def test_generated_host_ops_child_is_not_split_again():
+    issue = _issue(
+        number=42,
+        title="Host/ops evidence (not coding)",
+        body=(
+            "## Goal\nDeterministic host/fleet ops evidence for the parent. "
+            "This is NOT a coding slot — do not route to issue_to_pr / ai/fix.\n\n"
+            "## Done means\n"
+            "- [ ] auto-unpark when host evidence receipt exists / Hermes restored\n"
+            "- [ ] Keep parent skipped (no limbo label) until evidence exists "
+            "(factory skip; zero needs_human)\n\n"
+            "## Parent\nSplit from mikolaj92/dotfiles#40: Host/ops evidence "
+            "(not coding)\n\n"
+            "<!-- lokay-host-ops:auto-unpark when host evidence receipt "
+            "exists / Hermes restored -->\n"
+            "<!-- lokay-split:mikolaj92/dotfiles#40:child:2 -->\n"
+        ),
+    )
+    assert issue_requests_host_ops(issue)
+    assert not issue_is_host_ops_monolith(issue)
+    out = resolve_hard_facts(
+        issue.to_dict(), {"route": "evaluate"}, {"merged_prs": []}, {"covering_prs": []}
+    )
+    assert out["route"] == "terminal"
+    assert out["decision"]["verdict"] == "skip"
+    assert out["decision"]["reason"] == "host_ops"

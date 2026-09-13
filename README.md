@@ -969,6 +969,10 @@ executora, a następny pass kontynuuje sito. Leftover jest zjadane tylko przy
 authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
 adapter fail zostawia wiersz. Ticket na samym Lokayu nie zajmuje product slotu. Cudzy
 assignee nie jest zadaniem lokaja.
+Host-ops hard fact nie może wynikać z samej wzmianki o nazwie maszyny:
+`mini-m4-0` w przykładzie/raporcie to kontekst, nie zlecenie czynności na hoście.
+Wymagana jest jawna operacja na maszynie albo inne wyraźne host-ops evidence.
+
 
 ### Jeden wiersz triage — `issue_sieve_row`
 
@@ -985,8 +989,9 @@ stateDiagram-v2
     SummarizeIssueSieveRow --> [*]
 ```
 
-Jedno pytanie, jeden werdykt triage. Nie ma drugiego intake po werdykcie:
-hard facts → agent tylko przy niepewności → walidacja/evidence → publish.
+`IssuesRunTriage` prowadzi osobną pod-Falę `issue_triage` opisaną poniżej.
+Jedno pytanie, jeden werdykt: hard facts → agent tylko przy niepewności →
+walidacja/evidence → publish. Nie ma drugiego intake po werdykcie.
 Shape i named paths są dowodami tej ścieżki, nie konkurencyjnym READY/CLOSE.
 `select_next_issue` tylko odpowiada czy
 jest wiersz. Wiersz z `ai:ready` albo `work:ready` to `route=ready`: sito
@@ -1065,10 +1070,11 @@ repo z leftover, żeby nest nie kręcił 180s. Wyłączony dział nie spełnia
 
 ### Triage issue — `issue_triage`
 
-Dziecko działu `issue_triage_department`. **Triage tylko:** robić / nie / oznaczyć / człowiek.
+Dziecko działu `issue_triage_department`. **Triage tylko:** robić / podzielić / nie / oznaczyć / człowiek.
 Nie implementuje. Nie zamyka cudzego issue. Werdykt zamknąć oznacza
-oznaczenie (`ai:blocked`), nie `close_issue`. `issue_split` jest osobną
-pod-Falą na później.
+oznaczenie (`ai:blocked`), nie `close_issue`. Werdykt `split` jest przekazywany
+do `issue_sieve_row`; dopiero zewnętrzny wiersz uruchamia osobną pod-Falę
+`issue_split`.
 
 ```mermaid
 stateDiagram-v2
@@ -1102,7 +1108,9 @@ stateDiagram-v2
     SitoDecision --> ApplySkip: nie
     SitoDecision --> MarkBlocked: nie
     SitoDecision --> MarkIssue: zamknąć
+    SitoDecision --> ReturnSplit: split (handoff do issue_sieve_row)
     SitoDecision --> HumanTerminal: człowiek
+    ReturnSplit --> [*]
     MarkReady --> [*]
     ApplySkip --> [*]
     MarkBlocked --> [*]
@@ -1110,11 +1118,12 @@ stateDiagram-v2
     HumanTerminal --> [*]
 ```
 
-Triage nie rozcina issue, nie otwiera PR i nie zamyka cudzego issue. Dział
+Triage nie tworzy dzieci, nie otwiera PR i nie zamyka cudzego issue. Dział
 `executor` woła `issue_to_pr` tylko po **robić**. Incydent preflight to **nie**
 (liść `apply_issue_blocked` zostaje jednym zadaniem). Werdykt zamknąć idzie
-do `apply_issue_mark` (etykieta + komentarz). `issue_split` nie jest wyjściem
-tego triage. Zamknięcie po merge zostaje w `pr_triage` (`close_issue`).
+do `apply_issue_mark` (etykieta + komentarz). Werdykt `split` wraca do
+`issue_sieve_row`, który prowadzi osobną pod-Falę `issue_split`. Zamknięcie po
+merge zostaje w `pr_triage` (`close_issue`).
 
 Techniczna trudność nie jest residualem: dependency bump / migracja adaptera /
 HTMX idą do implementacji, god-file do split, timeout/invalid output do bounded

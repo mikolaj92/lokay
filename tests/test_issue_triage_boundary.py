@@ -50,3 +50,22 @@ def test_preflight_hard_fact_stays_blocked_without_agent_or_manual_rewrite():
     out=resolve_hard_facts(data,{"route":"evaluate"},{"merged_prs":[]},{"covering_prs":[]})
     assert out["route"] == "terminal"
     assert out["decision"]["verdict"] == "blocked"
+
+
+def test_split_verdict_reaches_outer_issue_sieve_handoff():
+    from lokay.issue_triage_boundary import finalize, select_initial, validate_output
+    from lokay.proc.select_triage_leaf import select
+
+    hard = {"route": "agent"}
+    agent = validate_output(
+        '{"verdict":"split","reason":"host_ops_issue_split",'
+        '"evidence":[],"evidence_kind":null,"summary":"Separate host evidence."}'
+    )
+    selected = select_initial(hard, agent, {})
+    final = finalize(selected, {"route": "not_applicable"})
+    leaf = select(final=final)
+
+    assert agent["route"] == "valid"
+    assert final["decision"]["verdict"] == "split"
+    assert leaf["route"] == "split"
+    assert leaf["decision"]["verdict"] == "split"

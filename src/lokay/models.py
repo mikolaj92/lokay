@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
@@ -15,9 +15,12 @@ class Issue:
     url: str
     state: str = "OPEN"
     author: str = ""
+    comments: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        data.pop("comments", None)
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Issue:

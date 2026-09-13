@@ -26,11 +26,20 @@ def apply(*, runner, cfg, repo: str, issue: int, issue_data: dict, decision: dic
     row = catalog_row(cfg, repo)
     source = load_tasks(row, runner=runner, config=cfg, live=True)
     identity = TaskId(source.plugin, source.target, int(issue))
-    source.comment(
-        identity,
+    comment = (
         f"Skipped (Lokay intake): {reason}. No limbo label — issue stays open "
-        "unless a last-resort close applies.",
+        "unless a last-resort close applies."
     )
+    current = source.get(identity)
+    if current is None:
+        raise KeyError(
+            f"task not found: {identity.plugin}+{identity.target}+{identity.number}"
+        )
+    if not any(
+        existing.startswith("Skipped (Lokay intake): ")
+        for existing in current.comments
+    ):
+        source.comment(identity, comment)
     task = source.mark(identity, "park")
     if str(task.state or "").upper() == "CLOSED":
         raise RuntimeError("sito must not close an open task")

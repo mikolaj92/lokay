@@ -52,6 +52,33 @@ def test_sieve_routes_do_skip_park_split_intake() -> None:
     )["route"] == "skip"
 
 
+def test_split_triage_verdict_selects_the_authored_issue_split_handoff() -> None:
+    triage_run = {
+        "route": "completed",
+        "triage": {
+            "result": {
+                "decision": {
+                    "verdict": "split",
+                    "reason": "host_ops_issue_split",
+                }
+            }
+        },
+    }
+    picked = {"route": "issue", "repo": "o/r", "issue": 30}
+
+    selected = select(picked, triage_run)
+    row = [node for node in _path("issue_sieve_row")["effectors"]]
+    split = next(node for node in row if node["id"] == "run_issue_sieve_split")
+
+    assert selected["route"] == "split"
+    assert selected["reason"] == "host_ops_issue_split"
+    assert split["when"] == {
+        "upstream": "select_issue_sieve",
+        "path": "route",
+        "equals": "split",
+    }
+
+
 def test_sieve_ready_route_is_do_without_triage() -> None:
     listed = {
         "issues": [

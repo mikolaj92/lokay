@@ -320,7 +320,7 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
                 "--repo",
                 repo,
                 "--json",
-                "number,title,body,labels,assignees,author,url,state",
+                "number,title,body,labels,assignees,author,url,state,comments",
             ]
         ),
         live=live,
@@ -350,6 +350,11 @@ def get_issue(runner: Runner, config: Config, repo: str, number: int, *, live: b
         url=str(row.get("url") or ""),
         state=str(row.get("state") or "OPEN").upper(),
         author=_author_login(row),
+        comments=[
+            str(comment.get("body") or "")
+            for comment in row.get("comments") or []
+            if isinstance(comment, dict)
+        ],
     )
 
 
