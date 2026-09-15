@@ -15,9 +15,24 @@ def route_review_repair(review: Mapping[str, Any]) -> dict[str, Any]:
         return err("review decision required")
     if decision.get("verdict") != "request_changes":
         return ok(route="not_applicable", reason="review_does_not_request_changes")
+    task = decision.get("task")
+    findings = decision.get("findings")
+    if (
+        not isinstance(task, Mapping) or not task
+        or task.get("type") != "Issue" or task.get("state") != "OPEN"
+        or not isinstance(findings, list) or not findings
+        or not str(decision.get("reviewed_head_sha") or "")
+        or not str(decision.get("task_identity_sha256") or "")
+        or not str(decision.get("review_result_sha256") or "")
+    ):
+        return ok(route="fail_closed", reason="review_repair_handoff_incomplete")
     if review.get("escalated") or decision.get("secrets") is True:
         return ok(route="fail_closed", reason="review_repair_escalated")
-    return ok(route="repair", reason="review_requested_changes")
+    return ok(
+        route="repair",
+        reason="review_requested_changes",
+        reviewed_head_sha=str(decision.get("reviewed_head_sha") or ""),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

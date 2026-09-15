@@ -21,6 +21,7 @@ def child_graph(selected: Mapping[str, Any], *, config_path: str | None, live: b
             repo=str(selected.get("repo") or ""),
             pr=int(selected.get("pr") or 0),
             branch=str(selected.get("branch") or ""),
+            repair_kind=str(selected.get("repair_kind") or ""),
         )
     if route != "repair":
         return ok(route="skip", reason=str(selected.get("reason") or "not_selected"))

@@ -19,6 +19,11 @@ def handle_pr_triage_department(
         from lokay.proc.select_next_pr import select
 
         return select(up.get("list_pr_sieve") or {})
+    if atom == "reconcile_pr_repair_push":
+        from lokay.proc.reconcile_pr_repair_push import reconcile_pending
+
+        picked = dict(up.get("select_pr_sieve") or {})
+        return reconcile_pending(config_path=config, live=live, selection=picked)
     if atom == "run_pr_sieve":
         from lokay.proc.run_pr_triage_subflow import run
 
@@ -29,6 +34,7 @@ def handle_pr_triage_department(
         return select(
             up.get("select_pr_sieve") or {},
             up.get("run_pr_sieve") or {},
+            up.get("reconcile_pr_repair_push") or {},
         )
     if atom == "summarize_pr_triage_department":
         from lokay.proc.summarize_pr_triage_department import summarize
@@ -37,5 +43,6 @@ def handle_pr_triage_department(
             up.get("select_pr_sieve") or {},
             up.get("run_pr_sieve") or {},
             up.get("select_pr_triage_verdict") or {},
+            up.get("reconcile_pr_repair_push") or {},
         )
     return None

@@ -102,8 +102,11 @@ def test_zero_pending_in_failed_summary_routes_to_repair():
     )
     rep = pr_checks_report(r, "a/b", 1, live=True)
     assert rep["status"] == "failed"
+    assert rep["head_sha"] == ""
     from lokay.proc.classify_pr_triage_checks import classify
-    assert classify({**rep, "require_checks": True})["route"] == "repair"
+    classified = classify({**rep, "require_checks": True})
+    assert classified["route"] == "wait"
+    assert classified["reason"] == "ci_repair_start_head_missing"
 
 
 def test_transient_github_503_is_pending_and_not_green():

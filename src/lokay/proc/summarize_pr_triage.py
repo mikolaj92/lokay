@@ -25,10 +25,22 @@ def summarize(
         )
         return {"ok": True, "result": result}
     if selected.get("route") == "repair":
+        repair_kind = str(selected.get("repair_kind") or "")
+        if repair_kind not in {"ci", "review"}:
+            return {"ok": False, "error": "repair_kind_missing_or_invalid"}
         result.update(
             skipped=True,
             reason=str(selected.get("reason") or "review_requested_changes"),
             repairable=True,
+            repair_kind=repair_kind,
+            head_sha=str(selected.get("head_sha") or ""),
+            review=decision,
+            task=dict(selected.get("task") or decision.get("task") or {}),
+            findings=list(selected.get("findings") or decision.get("findings") or []),
+            reviewed_head_sha=str(selected.get("reviewed_head_sha") or decision.get("reviewed_head_sha") or ""),
+            task_identity_sha256=str(selected.get("task_identity_sha256") or decision.get("task_identity_sha256") or ""),
+            review_result_sha256=str(selected.get("review_result_sha256") or decision.get("review_result_sha256") or ""),
+            repair_start_head_sha=str(selected.get("repair_start_head_sha") or ""),
         )
     elif repair and repair.get("reason") != "condition_not_met":
         result.update(

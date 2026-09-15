@@ -76,20 +76,41 @@ def test_summarize_pr_repair_not_repaired_when_push_fails():
         repo="a/b",
         pr=9,
         branch="ai/fix/9",
+        repair_handoff={"kind": "ci", "task": {}, "findings": []},
     )
     assert out["ok"] is False
     assert out["result"]["repaired"] is False
     assert out["result"]["reason"] == "ref_lock"
 
 
-def test_summarize_pr_repair_published_with_head_sha():
+def test_summarize_pr_repair_published_with_review_handoff():
+    task = {"repo": "a/b", "type": "Issue", "state": "OPEN", "number": 9, "title": "task", "body": "acceptance"}
+    finding = {"path": "src/a.py", "start_line": 1, "end_line": 1, "content": "defect"}
+    handoff = {
+        "kind": "review", "task": task, "findings": [finding], "reviewed_head_sha": "a" * 40,
+        "task_identity_sha256": "b" * 64, "review_result_sha256": "c" * 64,
+    }
     out = summarize(
         final={"route": "publish"},
-        push={"ok": True, "head_sha": "abc"},
-        repo="a/b",
-        pr=9,
-        branch="ai/fix/9",
+        push={"ok": True, "head_sha": "d" * 40},
+        repo="a/b", pr=9, branch="ai/fix/9", repair_handoff=handoff,
     )
     assert out["ok"] is True
     assert out["result"]["repaired"] is True
-    assert out["result"]["head_sha"] == "abc"
+    assert out["result"]["head_sha"] == "d" * 40
+    assert out["result"]["task"] == task
+    assert out["result"]["findings"] == [finding]
+    assert out["result"]["reviewed_head_sha"] == "a" * 40
+    assert out["result"]["task_identity_sha256"] == "b" * 64
+    assert out["result"]["review_result_sha256"] == "c" * 64
+
+
+def test_summarize_pr_repair_refuses_published_result_without_handoff():
+    out = summarize(
+        final={"route": "publish"}, push={"ok": True, "head_sha": "d" * 40},
+        repo="a/b", pr=9, branch="ai/fix/9",
+        repair_handoff={"kind": "review"},
+    )
+    assert out["ok"] is False
+    assert out["result"]["terminal"] == "repair_handoff_incomplete"
+    assert out["result"]["published"] is False

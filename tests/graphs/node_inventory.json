@@ -358,10 +358,10 @@
       "when_branches": 1
     },
     {
-      "conduction_edges": 7,
+      "conduction_edges": 10,
       "mismatches": [],
-      "node_suites": 5,
-      "nodes": 5,
+      "node_suites": 6,
+      "nodes": 6,
       "path": "pr_triage_department",
       "when_branches": 1
     },
@@ -375,14 +375,14 @@
     }
   ],
   "totals": {
-    "authored_conduction_edges": 1170,
+    "authored_conduction_edges": 1173,
     "authored_effectors_missing_schema": 0,
-    "authored_effectors_with_schema": 554,
-    "authored_nodes": 526,
-    "authored_when_branches": 222,
-    "conduction_edges": 1391,
-    "expanded_nodes": 626,
-    "node_suites": 626,
+    "authored_effectors_with_schema": 555,
+    "authored_nodes": 527,
+    "authored_when_branches": 221,
+    "conduction_edges": 1394,
+    "expanded_nodes": 627,
+    "node_suites": 627,
     "paths": 46,
     "when_branches": 246
   }

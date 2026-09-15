@@ -345,6 +345,54 @@ merge:
     assert cfg.require_checks is False
 
 
+def test_pr_review_config_requires_pinned_plugin_provider_and_sandbox(tmp_path: Path):
+    cfg = Config(
+        mode="live",
+        merge_enabled=True,
+        repos=[RepoConfig(name="a/b", clone_path=tmp_path)],
+        require_llm_review=True,
+    )
+    errors = cfg.validate()
+    assert any("plugin command and args" in item for item in errors)
+    assert any("provider and model" in item for item in errors)
+    assert any("pinned pr_review binary" in item for item in errors)
+    assert any("OS sandbox" in item for item in errors)
+
+    sandbox_profile = tmp_path / "review.sb"
+    sandbox_profile.write_text("sandbox profile")
+    ocr_config = tmp_path / "ocr.json"
+    ocr_config.write_text("{}")
+    configured = Config(
+        mode="live",
+        merge_enabled=True,
+        repos=[RepoConfig(name="a/b", clone_path=tmp_path)],
+        pr_review_plugin_command="lokay-review-opencode-plugin",
+        pr_review_plugin_args=["--max-input-bytes", "4194304"],
+        pr_review_provider="provider-a",
+        pr_review_model="model-a",
+        pr_review_config_sha256="c" * 64,
+        pr_review_ocr_config=ocr_config,
+        pr_review_sandbox_profile=sandbox_profile,
+        pr_review_binary=tmp_path / "ocr",
+        pr_review_binary_sha256="a" * 64,
+        pr_review_rule_file=tmp_path / "rule.json",
+        pr_review_tools_file=tmp_path / "tools.json",
+        pr_review_sandbox_command=["sandbox-exec", "--"],
+    )
+    assert configured.validate() == []
+
+
+def test_pr_review_config_rejects_github_credentials_and_unknown_pin(tmp_path: Path):
+    cfg = Config(
+        repos=[RepoConfig(name="a/b", clone_path=tmp_path)],
+        pr_review_provider_env=["OCR_PROVIDER_KEY", "GH_TOKEN"],
+        pr_review_binary_version="v1.13.0",
+    )
+    errors = cfg.validate()
+    assert any("forbidden name" in item for item in errors)
+    assert any("pinned to v1.12.0" in item for item in errors)
+
+
 def test_live_allows_missing_clone_in_validate(tmp_path: Path):
     """Scope lists repos even without local trees; implement needs clone later."""
     cfg = Config(

@@ -93,6 +93,39 @@ merge:
   require_checks: false
   require_llm_review: true
 
+# OpenCodeReview runs as a replaceable, isolated subprocess. Install and pin the
+# matching platform binary out of band; never inherit shell/provider config or
+# GitHub credentials from the Lokay service environment.
+pr_review:
+  engine: open-code-review
+  plugin_command: lokay-review-opencode-plugin
+  plugin_args: [--max-input-bytes, "4194304"]
+  plugin_timeout_seconds: 7200
+  provider: openai
+  # Required HTTPS provider URL (must match the OCR provider configuration).
+  # Only connections through the exact-authority loopback proxy are permitted.
+  provider_endpoint_url: https://api.openai.com/v1
+  model: your-model
+  # Digest of canonical review config (rule/tools/provider/model/runtime policy), excluding credentials.
+  config_sha256: ""
+  provider_env: [OCR_LLM_API_KEY]  # explicit provider credential variable only
+  binary: ~/.local/bin/ocr
+  binary_version: v1.12.0
+  # Set to the verified SHA-256 for the selected platform release asset.
+  binary_sha256: ""
+  effort: medium
+  timeout_minutes: 15
+  max_tokens_budget: 100000
+  rule_file: ~/.config/lokay/pr-review/rule.json
+  tools_file: ~/.config/lokay/pr-review/tools.json
+  # Dedicated OCR config.json: provider/model settings, no credentials or shell hooks.
+  ocr_config: ~/.config/lokay/pr-review/opencodereview.json
+  # Supply an OS sandbox profile that gives the OCR process read-only access to
+  # the pinned checkout and only the configured provider egress capability.
+  sandbox_profile: ~/.config/lokay/pr-review/review.sb
+  sandbox_command: [sandbox-exec, -f, ~/.config/lokay/pr-review/review.sb, --]
+  artifacts_dir: ~/.lokay/pr-review-artifacts
+
 # Kofte is optional and only styles public PR-review prose after the structured
 # verdict has been validated. Configure its LLM with KOFTE_LLM_BASE_URL,
 # KOFTE_LLM_MODEL and optional KOFTE_LLM_API_KEY. Without them, publication

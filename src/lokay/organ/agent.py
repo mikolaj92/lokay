@@ -102,8 +102,16 @@ def handle_agent(
                 branch=branch,
                 checks_text=checks_text,
                 review_text=json.dumps(
-                    inputs.get("review") or {}, ensure_ascii=False, sort_keys=True
+                    {
+                        **dict(inputs.get("review") or {}),
+                        "findings": inputs.get("findings") or dict(inputs.get("review") or {}).get("findings") or [],
+                        "reviewed_head_sha": inputs.get("reviewed_head_sha") or dict(inputs.get("review") or {}).get("reviewed_head_sha") or "",
+                        "task_identity_sha256": inputs.get("task_identity_sha256") or dict(inputs.get("review") or {}).get("task_identity_sha256") or "",
+                    "review_result_sha256": dict(inputs.get("review") or {}).get("review_result_sha256") or "",
+                    },
+                    ensure_ascii=False, sort_keys=True,
                 ),
+                task=dict(inputs.get("task") or dict(inputs.get("review") or {}).get("task") or {}),
                 paths=paths,
             )
         else:

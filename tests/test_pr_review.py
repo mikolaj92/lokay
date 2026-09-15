@@ -200,19 +200,48 @@ def test_review_marker_roundtrip_and_head_lookup():
             '{"verdict":"request_changes","secrets":false,"blocking":["x"],'
             '"summary":"fix"}'
         ),
-        head_sha="abcDEF12",
+        head_sha="a" * 40,
         merge_ok=False,
     )
     markers = parse_review_markers([body])
     assert len(markers) == 1
-    assert markers[0]["head_sha"] == "abcdef12"
+    assert markers[0]["head_sha"] == "a" * 40
     assert markers[0]["verdict"] == "request_changes"
-    assert find_review_for_head(markers, "ABCDEF12")["merge_ok"] is False
+    assert find_review_for_head(markers, "A" * 40)["merge_ok"] is False
+
+
+def test_legacy_short_review_marker_is_not_accepted_as_sha_identity():
+    from lokay.pr_review import format_review_marker
+
+    with pytest.raises(ValueError, match="malformed"):
+        format_review_marker(
+            head_sha="abcDEF12", verdict="request_changes", merge_ok=False,
+        )
+
+
+def test_review_marker_carries_exact_result_and_artifact_identity():
+    result_sha, artifact_sha = "a" * 64, "b" * 64
+    marker = format_review_marker(
+        head_sha="c" * 40, verdict="request_changes", merge_ok=False,
+        result_sha256=result_sha, artifact_sha256=artifact_sha,
+    )
+    parsed = parse_review_markers([marker])
+    assert parsed[0]["result_sha256"] == result_sha
+    assert parsed[0]["artifact_sha256"] == artifact_sha
+
+
+def test_request_changes_marker_count_is_per_unique_head_sha():
+    markers = parse_review_markers([
+        format_review_marker(head_sha="a" * 40, verdict="request_changes", merge_ok=False),
+        format_review_marker(head_sha="a" * 40, verdict="request_changes", merge_ok=False),
+        format_review_marker(head_sha="b" * 40, verdict="request_changes", merge_ok=False),
+    ])
+    assert count_request_changes_reviews(markers) == 2
 
 
 def test_request_changes_escalation_cap():
     assert should_escalate_request_changes(0, max_request_changes=2) is False
-    assert should_escalate_request_changes(1, max_request_changes=2) is True
+    assert should_escalate_request_changes(1, max_request_changes=2) is False
     markers = parse_review_markers(
         [
             format_review_marker(head_sha="a" * 40, verdict="request_changes", merge_ok=False),
@@ -230,7 +259,7 @@ def test_labels_and_merge_decision_helpers():
     )
     assert labels_for_review(d, escalated=False) == ["ai:request-changes"]
     assert labels_for_review(d, escalated=True) == ["ai:needs-review"]
-    merge_ok, escalated = decide_review_merge(d, 1, max_request_changes=2)
+    merge_ok, escalated = decide_review_merge(d, 2, max_request_changes=2)
     assert merge_ok is False
     assert escalated is True
 

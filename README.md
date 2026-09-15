@@ -14,6 +14,11 @@ The parent selects and conditionally runs these departments in authored order:
 4. `run_pr_triage_department`: checks and reviews existing PRs, then waits, requests repair, or merges eligible quality code.
 5. `run_pr_repair_department`: invokes `pr_repair` only for the preceding PR-triage repair verdict, without starting another merge process inside that department.
 
+Within PR triage, after selecting its exact candidate and before launching
+review, Lokay reconciles any durable repair-push intent against the live PR
+identity. A recovered push consumes this pass without review or merge; an
+unavailable or mismatched identity fails closed. This runs even when
+`pr_repair` is disabled, and dry-run never probes GitHub.
 `record_pass` collects department results, then `factory_pass_terminal` returns
 the receipt. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
 prerequisite for departments or the receipt. A started worker is occupancy;
@@ -84,8 +89,9 @@ ukrywać kolejnego grafu. Agent występuje tylko na granicy niedeterministycznej
 i zwraca jeden wynik z zamkniętego schematu. Recenzja PR może poprosić o dokładnie
 jeden dodatkowy fakt: `pr_metadata`, `changed_files`, `diff_tail` albo
 `commit_summary`. Każdy rodzaj ma osobny kolektor Unixowy. Fala uruchamia tylko
-wybrany kolektor, ponawia agenta raz i kieruje drugą prośbę o dowody do terminala
-ręcznego.
+wybrany kolektor, a druga prośba o dowody trafia do terminala ręcznego. Recenzja
+OpenCodeReview jest walidowana z dokładnym coverage i cache’owana po SHA; błędny
+wynik kończy się fail-closed, bez generatywnego retry.
 
 Ten diagram jest kontraktem projektowym. **Każda zmiana przepływu zaczyna się
 od zmiany i przeglądu diagramu. Dopiero zaakceptowany diagram wolno zakodować
@@ -709,20 +715,27 @@ i nie zapisuje empty stamp.
 stateDiagram-v2
     [*] --> ListPrSieve
     ListPrSieve --> SelectPrSieve
-    SelectPrSieve --> RunPrSieve: jest otwarty PR
-    SelectPrSieve --> SelectPrTriageVerdict: pusta lista
+    SelectPrSieve --> ReconcileRepairPush: zawsze — skan wszystkich trwałych intentów
+    ReconcileRepairPush --> RunPrSieve: route=review — brak pending intent i jest PR
+    ReconcileRepairPush --> SelectPrTriageVerdict: brak PR / recovered / fail-closed
     RunPrSieve --> SelectPrTriageVerdict
     SelectPrTriageVerdict --> SummarizePrTriageDepartment
     SummarizePrTriageDepartment --> [*]
 ```
 
-Dział `pr_triage_department` ma pięć węzłów. `list_pr_sieve` i
-`select_pr_sieve` są liśćmi. `run_pr_sieve` uruchamia pod-Falę `pr_triage`,
-która orzeka: scal / feedback / popraw. Werdykt `popraw` jest wartością.
-Rodzic `factory_pass` po tym werdykcie może uruchomić osobny dział
-`pr_repair`; wyłączony dział zostawia feedback i nie dotyka gałęzi.
-`summarize_pr_triage_department` jest liściem. Pusta lista pomija dziecko i nie
-psuje passu. Nie ma 30-slotowego katalogu ani leftover overflow.
+Dział `pr_triage_department` ma sześć węzłów. Po liście i wyborze kandydata
+`reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
+przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest
+wybrany PR; zgodny live OPEN PR potwierdza odzyskany push, a bieżący pass
+kończy bez review i merge; brak live dowodu, mismatch lub błędny stan zatrzymuje
+triage fail-closed. Bramka działa również wtedy,
+gdy `pr_repair` jest wyłączony; dry-run nie wykonuje live probe. Outcome jest
+przekazany przez verdict i summary, więc żaden wynik recovery nie może
+przypadkiem otworzyć ścieżki review/merge/repair. Tylko gałąź `review`
+uruchamia pod-Falę `pr_triage`, która orzeka: scal / feedback / popraw.
+Werdykt `popraw` pozostaje wartością; rodzic `factory_pass` może uruchomić
+osobny dział `pr_repair`. Pusta lista pomija recovery i dziecko. Nie ma
+30-slotowego katalogu ani leftover overflow.
 
 
 
@@ -1366,19 +1379,16 @@ sekretów ani transcriptów nie zapisuje się w markerze.
 stateDiagram-v2
     [*] --> InspectPullRequest
     InspectPullRequest --> ConflictRecovery: konflikt
-    InspectPullRequest --> WaitChecks: pending / offline
-    InspectPullRequest --> RepairVerdict: czerwone CI
+    InspectPullRequest --> WaitChecks: pending / offline / brak stabilnego head SHA
+    InspectPullRequest --> RepairVerdict: czerwone CI i head SHA odczytany dla PR
     InspectPullRequest --> HumanTerminal: terminal ręczny
     InspectPullRequest --> CollectReviewEvidence: gotowy do recenzji
     CollectReviewEvidence --> ResolveShaReview
-    ResolveShaReview --> ReviewVerdict: werdykt zapisany dla SHA
-    ResolveShaReview --> ReviewAgent: brak werdyktu dla SHA
-    ReviewAgent --> ValidateReviewResult
-    ValidateReviewResult --> ReviewRetryAgent: invalid JSON + informacja zwrotna
-    ReviewRetryAgent --> ValidateRetryResult
-    ValidateRetryResult --> ReviewVerdict: wynik poprawny
-    ValidateRetryResult --> HumanTerminal: nadal invalid JSON
-    ValidateReviewResult --> ReviewVerdict: wynik poprawny
+    ResolveShaReview --> ReviewVerdict: zweryfikowany artifact dla tego SHA i OPEN tasku
+    ResolveShaReview --> OpenCodeReviewPlugin: brak zweryfikowanego artifactu dla SHA
+    OpenCodeReviewPlugin --> ValidateReviewResult: versioned JSON + preview/manifest coverage
+    ValidateReviewResult --> ReviewVerdict: kompletne exact-SHA review bez findings lub z findings
+    ValidateReviewResult --> HumanTerminal: error / drift / niepełne coverage / invalid result (fail-closed, no retry)
     ReviewVerdict --> SelectEvidenceCollector: NEEDS_EVIDENCE
     SelectEvidenceCollector --> CollectPrMetadata: pr_metadata
     SelectEvidenceCollector --> CollectChangedFiles: changed_files
@@ -1394,7 +1404,7 @@ stateDiagram-v2
     ValidateEvidenceReview --> ReviewVerdict: wynik poprawny
     ValidateEvidenceReview --> HumanTerminal: ponowne NEEDS_EVIDENCE / invalid JSON
     ReviewVerdict --> LocalMergeGate: APPROVE
-    ReviewVerdict --> RepairVerdict: REQUEST_CHANGES
+    ReviewVerdict --> RepairVerdict: REQUEST_CHANGES, każde finding blokuje (także low)
     ReviewVerdict --> HumanTerminal: NEEDS_HUMAN
     LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
     LocalMergeGate --> RepairVerdict: test lokalny nie przechodzi
@@ -1404,9 +1414,23 @@ stateDiagram-v2
     ObserveDeliveryConfirmation --> ReceiptPending: authoritative confirmation incomplete
     PublishDeliveryReceipt --> Delivered
     ReceiptPending --> [*]
-    RepairVerdict --> TriageReceipt: published review decision and blocking findings
-    ReviewVerdict --> TriageReceipt: published decision for every outcome
-    TriageReceipt --> [*]: rodzic przekazuje review do pr_repair
+    RepairVerdict --> TriageReceipt: task + wszystkie findings + reviewed SHA + artifact digest
+    ReviewVerdict --> TriageReceipt: SHA-bound decision i durable artifact
+    TriageReceipt --> RevalidateCanonicalTask: review repair tuż przed workerem
+    RevalidateCanonicalTask --> RepairPullRequest: nadal ten sam OPEN Issue i digest
+    RevalidateCanonicalTask --> HumanTerminal: task zamknięty / zmieniony / nieosiągalny
+    TriageReceipt --> FactoryParentRepairSelect: selector rodzica najpierw uzgadnia istniejącą intencję push; niepewność fail-closed
+    FactoryParentRepairSelect --> RepairPullRequest: świeży request_changes; potwierdzony licznik poniżej cap
+    FactoryParentRepairSelect --> RepairPullRequest: request_changes, enabled i poniżej cap
+    FactoryParentRepairSelect --> HumanTerminal: cap exhausted / niekompletne task lub artifact
+    FactoryParentRepairSelect --> [*]: dział wyłączony; feedback pozostaje
+    RepairPullRequest --> VerifyRepairStartHead: przygotuj istniejący worktree bez edycji
+    VerifyRepairStartHead --> RepairPullRequest: PR tip i worktree HEAD = zapisany start SHA
+    VerifyRepairStartHead --> HumanTerminal: brak SHA / drift PR lub worktree / PR z forka
+    RepairPullRequest --> NewHeadSha: gates zaliczone, push potwierdzony
+    RepairPullRequest --> HumanTerminal: brak postępu / błąd / niepotwierdzony push
+    NewHeadSha --> NextFactoryPassReview: następny pass uruchamia review od początku
+    TriageReceipt --> [*]: non-repair outcome wraca do rodzica bez uruchomienia kodera
     ConflictRecovery --> [*]
     HumanTerminal --> [*]
     WaitChecks --> [*]
@@ -1456,8 +1480,8 @@ stateDiagram-v2
     CommitTestRepair --> LocalRepairTestAgain
     LocalRepairTestAgain --> VerifyPublishDiff: PASS
     LocalRepairTestAgain --> RepairTerminal: FAIL
-    VerifyPublishDiff --> PushNewSha
-    PushNewSha --> RepairResult
+    VerifyPublishDiff --> PushNewSha: po gates zapisz i fsync dokładny target SHA; trwale oznacz attempt przed git push
+    PushNewSha --> RepairResult: intent pozostaje trwały do autorytatywnego potwierdzenia PR head przez rodzica
     RepairResult --> [*]
     HumanTerminal --> [*]
     RepairTerminal --> [*]
@@ -1512,7 +1536,7 @@ kontraktu. Aktualny audyt:
 
 | Fragment | Stan obecny |
 | --- | --- |
-| `approve → lokalne testy → merge` | zaimplementowane w Fali |
+| `approve → lokalne testy → merge` | zaimplementowane w Fali; pending repair push jest godzone przed uruchomieniem PR triage |
 | `request_changes → werdykt popraw → pr_repair → nowy SHA → recenzja` | zaimplementowane: `pr_triage` tylko orzeka, a rodzic `factory_pass` przy włączonym dziale uruchamia osobną pod-Falę naprawy; recenzja wraca w następnym passie |
 | `czerwone CI / czerwony test lokalny → werdykt popraw` | zaimplementowane: `pr_triage` nie uruchamia executora; osobny dział `pr_repair` jest wywoływany przez rodzica |
 | `pending / offline → czekanie` | zaimplementowane w Fali; pass nie pada |

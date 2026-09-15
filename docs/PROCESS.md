@@ -119,9 +119,8 @@ still require real diff, local verification and publication gates.
 | `pr_repair_retry_agent` | entropy | Failed repair contract → corrected changes |
 | `evidence_repair_agent` | entropy | Requested repair evidence → scoped changes |
 | `pr_test_repair_agent` | entropy | PR test failure → scoped repair |
-| `pr_review_agent` | entropy | Exact SHA and evidence → review verdict |
-| `pr_review_retry_agent` | entropy | Invalid review → corrected verdict |
-| `evidence_review_agent` | entropy | SHA-bound evidence → review verdict |
+| `pr_review_agent` | entropy | Exact SHA and evidence → neutral OpenCodeReview JSON, Lokay verdict |
+| `evidence_review_agent` | entropy | SHA-bound additional evidence → review verdict |
 | `self_repair_run_agent` | entropy | Factory incident and scope → candidate code repair |
 
 Campaign: bounded authoring #996, retired surfaces #998, removed Python survey

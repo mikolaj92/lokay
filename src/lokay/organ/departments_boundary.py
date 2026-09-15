@@ -119,6 +119,7 @@ def handle_departments(
             enabled=_department_enabled(config, "pr_repair"),
             triage_ran=str(select_pr.get("route") or "") == "run",
             config_path=config,
+            live=live,
         )
     if atom == "run_pr_repair_department":
         from lokay.proc.run_pr_repair_department import run

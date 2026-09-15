@@ -238,6 +238,20 @@ def add_pr_labels(runner: Runner, repo: str, number: int, labels: list[str], *, 
         )
 
 
+def _pr_head_sha(runner: Runner, repo: str, number: int) -> str:
+    try:
+        value = gh_json(
+            runner,
+            ["pr", "view", str(number), "--repo", repo, "--json", "headRefOid"],
+            live=True,
+            timeout_seconds=60,
+        )
+    except Exception:
+        return ""
+    candidate = str(value.get("headRefOid") or "").lower()
+    return candidate if re.fullmatch(r"[a-f0-9]{40}", candidate) else ""
+
+
 def pr_checks_report(
     runner: Runner, repo: str, number: int, *, live: bool
 ) -> dict[str, Any]:
@@ -250,17 +264,23 @@ def pr_checks_report(
       - none: repository reports no checks on the head branch
       - offline: dry-run / no network
     """
-    result = runner.run(
-        gh_spec(["pr", "checks", str(number), "--repo", repo], timeout_seconds=120),
-        live=live,
-    )
     if not live:
         return {
             "status": "offline",
             "green": False,
             "no_checks": False,
             "text": "dry-run",
+            "head_sha": "",
         }
+    before_sha = _pr_head_sha(runner, repo, number)
+    result = runner.run(
+        gh_spec(["pr", "checks", str(number), "--repo", repo], timeout_seconds=120),
+        live=True,
+    )
+    after_sha = _pr_head_sha(runner, repo, number)
+    # Checks can race a push. Bind the status to a head only if both adjacent
+    # metadata reads agree; otherwise callers cannot authorize CI repair.
+    head_sha = before_sha if before_sha and before_sha == after_sha else ""
     text = ((result.stdout or "") + "\n" + (result.stderr or "")).strip()
     low = text.lower()
     if "no checks reported" in low:
@@ -269,6 +289,7 @@ def pr_checks_report(
             "green": False,
             "no_checks": True,
             "text": text or "no checks reported",
+            "head_sha": head_sha,
         }
     if result.returncode == 0:
         return {
@@ -276,6 +297,7 @@ def pr_checks_report(
             "green": True,
             "no_checks": False,
             "text": text or "checks passed",
+            "head_sha": head_sha,
         }
     # gh: pending checks commonly exit 8. A 429/5xx is also non-green but
     # unknown, not failed CI: wait for an authoritative check read rather than
@@ -290,12 +312,14 @@ def pr_checks_report(
             "green": False,
             "no_checks": False,
             "text": text or f"checks pending (exit {result.returncode})",
+            "head_sha": head_sha,
         }
     return {
         "status": "failed",
         "green": False,
         "no_checks": False,
         "text": text or f"checks exit {result.returncode}",
+        "head_sha": head_sha,
     }
 
 

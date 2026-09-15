@@ -22,6 +22,13 @@ def compose_pr_repair(
     branch: str,
     live: bool,
     review: dict | None = None,
+    task: dict | None = None,
+    findings: list[dict] | None = None,
+    reviewed_head_sha: str = "",
+    task_identity_sha256: str = "",
+    review_result_sha256: str = "",
+    repair_kind: str = "",
+    repair_start_head_sha: str = "",
     package_path: str | None = None,
 ) -> dict:
     if live and load_config(config_path).mode != "live":
@@ -60,7 +67,15 @@ def compose_pr_repair(
 
     result = run_path(
         path_id="pr_repair", repo=repo, pr=pr_number, branch=branch,
-        config_path=config_path, live=live, package_path=package_path, extra_inputs={"review": review or {}},
+        config_path=config_path, live=live, package_path=package_path,
+        extra_inputs={
+            "review": review or {}, "task": task or {},
+            "findings": findings or [], "reviewed_head_sha": reviewed_head_sha,
+            "task_identity_sha256": task_identity_sha256,
+            "review_result_sha256": review_result_sha256,
+            "repair_kind": repair_kind,
+            "head_sha": repair_start_head_sha,
+        },
     )
     result.update(kind="pr_repair", engine="fala", planned=not live, admit=admitted)
     try:
@@ -77,12 +92,27 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--branch", required=True)
     p.add_argument("--review-json", default="")
+    p.add_argument("--task-json", default="")
+    p.add_argument("--findings-json", default="")
+    p.add_argument("--reviewed-head-sha", default="")
+    p.add_argument("--task-identity-sha256", default="")
+    p.add_argument("--review-result-sha256", default="")
+    p.add_argument("--repair-kind", choices=("ci", "review"), required=True)
     args = p.parse_args(argv)
     try:
         review = json.loads(args.review_json) if args.review_json else None
+        task = json.loads(args.task_json) if args.task_json else None
+        findings = json.loads(args.findings_json) if args.findings_json else None
     except json.JSONDecodeError as exc:
         return emit_exit({"ok": False, "error": f"invalid --review-json: {exc}"})
-    return emit_exit(compose_pr_repair(config_path=args.config, repo=args.repo, pr_number=args.pr, branch=args.branch, live=bool(args.live), review=review))
+    return emit_exit(compose_pr_repair(
+        config_path=args.config, repo=args.repo, pr_number=args.pr, branch=args.branch,
+        live=bool(args.live), review=review, task=task, findings=findings,
+        reviewed_head_sha=args.reviewed_head_sha,
+        task_identity_sha256=args.task_identity_sha256,
+        review_result_sha256=args.review_result_sha256,
+        repair_kind=args.repair_kind,
+    ))
 
 
 if __name__ == "__main__":

@@ -7,8 +7,14 @@ def test_green_checks_route_to_review():
 
 
 def test_failed_checks_route_to_repair():
-    out = classify({"status": "failed", "require_checks": True})
+    out = classify({"status": "failed", "require_checks": True, "head_sha": "a" * 40})
     assert out["route"] == "repair" and out["repairable"] is True
+
+
+def test_failed_checks_without_head_sha_wait_for_a_stable_tip():
+    out = classify({"status": "failed", "require_checks": True})
+    assert out["route"] == "wait"
+    assert out["reason"] == "ci_repair_start_head_missing"
 
 
 def test_unstable_without_require_checks_reviews():

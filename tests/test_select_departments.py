@@ -112,7 +112,7 @@ def test_pr_triage_switch_does_not_start_repair(tmp_path) -> None:
         enabled=True,
         triage_ran=True,
         state_dir=tmp_path,
-    )["route"] == "repair"
+    )["route"] == "fail_closed"
 
 
 def test_pr_repair_disabled_leaves_sieve(tmp_path) -> None:

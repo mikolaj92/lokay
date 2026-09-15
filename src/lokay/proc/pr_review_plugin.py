@@ -1,0 +1,168 @@
+"""One bounded JSON process invocation for the configured PR-review plugin."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import selectors
+import signal
+import subprocess
+import threading
+from typing import Any, Mapping
+
+from lokay.config import Config
+
+_MAX_INPUT_BYTES = 4 * 1024 * 1024
+_MAX_OUTPUT_BYTES = 16 * 1024 * 1024
+_ENV = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+_FORBIDDEN_ENV_PREFIXES = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
+
+
+class PluginFailure(ValueError):
+    """Sanitized plugin process failure."""
+
+
+def _plugin_env(cfg: Config) -> dict[str, str]:
+    names = tuple(cfg.pr_review_provider_env)
+    if len(set(names)) != len(names) or any(
+        not _ENV.fullmatch(name) or name.startswith(_FORBIDDEN_ENV_PREFIXES)
+        for name in names
+    ):
+        raise PluginFailure("review plugin credential allowlist is invalid")
+    missing = [name for name in names if not os.environ.get(name)]
+    if missing:
+        raise PluginFailure("review plugin provider credential is missing")
+    path_dirs = [os.path.dirname(cfg.pr_review_plugin_command)] if os.path.sep in cfg.pr_review_plugin_command else ["/usr/local/bin", "/usr/bin", "/bin"]
+    return {
+        "PATH": os.pathsep.join(path_dirs),
+        "HOME": os.path.expanduser("~"),
+        "LANG": "C.UTF-8",
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+        **{name: os.environ[name] for name in names},
+    }
+
+
+def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) -> bytes:
+    assert process.stdout is not None
+    output = bytearray()
+    deadline = __import__("time").monotonic() + timeout
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while True:
+                remaining = deadline - __import__("time").monotonic()
+                if remaining <= 0:
+                    raise PluginFailure("review plugin failed or timed out")
+                if not selector.select(min(remaining, 0.25)):
+                    if process.poll() is not None:
+                        break
+                    continue
+                chunk = os.read(process.stdout.fileno(), min(65536, limit + 1 - len(output)))
+                if not chunk:
+                    break
+                output.extend(chunk)
+                if len(output) > limit:
+                    raise PluginFailure("review plugin output exceeded size limit")
+        if process.wait(timeout=max(0.1, deadline - __import__("time").monotonic())) != 0:
+            raise PluginFailure("review plugin returned a failure status")
+        return bytes(output)
+    except Exception:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except OSError:
+            process.kill()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+
+
+def invoke_plugin(
+    cfg: Config,
+    request: Mapping[str, Any],
+    *,
+    runner=None,
+) -> dict[str, Any]:
+    """Send exactly one JSON document and accept only one bounded JSON envelope."""
+    command = str(cfg.pr_review_plugin_command or "").strip()
+    args = list(cfg.pr_review_plugin_args or [])
+    timeout = int(cfg.pr_review_plugin_timeout_seconds)
+    if not command or timeout < 1:
+        raise PluginFailure("review plugin command and finite timeout are required")
+    try:
+        payload = json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise PluginFailure("review request cannot be serialized") from exc
+    if len(payload) > _MAX_INPUT_BYTES:
+        raise PluginFailure("review request exceeded size limit")
+    env = _plugin_env(cfg)
+    argv = [command, *args]
+    if runner is not None:
+        try:
+            result = runner(argv, input=payload, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            cwd=None, env=env, timeout=timeout, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PluginFailure("review plugin failed or timed out") from exc
+        if result.returncode != 0:
+            raise PluginFailure("review plugin returned a failure status")
+        output = result.stdout
+    else:
+        try:
+            process = subprocess.Popen(
+                argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                env=env, start_new_session=True, bufsize=0,
+            )
+        except OSError as exc:
+            raise PluginFailure("review plugin could not start") from exc
+        assert process.stdin is not None
+        writer_error: list[BaseException] = []
+
+        def write_request() -> None:
+            try:
+                view = memoryview(payload)
+                while view:
+                    written = process.stdin.write(view[:65536])
+                    if not written:
+                        raise BrokenPipeError("plugin closed request input")
+                    view = view[written:]
+            except (BrokenPipeError, OSError) as exc:
+                writer_error.append(exc)
+            finally:
+                try:
+                    process.stdin.close()
+                except OSError:
+                    pass
+
+        writer = threading.Thread(target=write_request, daemon=True)
+        writer.start()
+        try:
+            output = _read_bounded(process, _MAX_OUTPUT_BYTES, timeout)
+            writer.join(timeout=1)
+            if writer.is_alive():
+                raise PluginFailure("review plugin did not consume the complete request")
+            if writer_error:
+                raise PluginFailure("review plugin failed to read request")
+        except (BrokenPipeError, OSError, subprocess.TimeoutExpired, PluginFailure) as exc:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except OSError:
+                process.kill()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                pass
+            if isinstance(exc, PluginFailure):
+                raise
+            raise PluginFailure("review plugin failed or timed out") from exc
+    if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
+        raise PluginFailure("review plugin output exceeded size limit")
+    try:
+        decoded = json.loads(bytes(output).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PluginFailure("review plugin did not return one JSON envelope") from exc
+    if not isinstance(decoded, dict) or decoded.get("ok") is not True:
+        raise PluginFailure("review plugin rejected the request")
+    return decoded

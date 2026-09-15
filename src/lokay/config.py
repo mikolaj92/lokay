@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -72,7 +73,28 @@ class Config:
     timeout_seconds: int = 1800
     merge_enabled: bool = False
     require_checks: bool = False
-    require_llm_review: bool = True  # structured executor review before auto-merge
+    require_llm_review: bool = True  # structured PR review before auto-merge
+    pr_review_engine: str = "open-code-review"
+    pr_review_plugin_command: str = ""
+    pr_review_plugin_args: list[str] = field(default_factory=list)
+    pr_review_plugin_timeout_seconds: int = 7200
+    pr_review_provider: str = ""
+    pr_review_provider_endpoint_url: str = ""
+    pr_review_model: str = ""
+    pr_review_config_sha256: str = ""
+    pr_review_ocr_config: Path | None = None
+    pr_review_sandbox_profile: Path | None = None
+    pr_review_provider_env: list[str] = field(default_factory=list)
+    pr_review_binary: Path | None = None
+    pr_review_binary_version: str = "v1.12.0"
+    pr_review_binary_sha256: str = ""
+    pr_review_effort: str = "medium"
+    pr_review_timeout_minutes: int = 15
+    pr_review_max_tokens_budget: int = 100000
+    pr_review_rule_file: Path | None = None
+    pr_review_tools_file: Path | None = None
+    pr_review_sandbox_command: list[str] = field(default_factory=list)
+    pr_review_artifacts_dir: Path = field(default_factory=lambda: Path.home() / ".lokay" / "pr-review-artifacts")
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
     # K: optional pass budget for issue_to_pr (serial by design; default 1).
@@ -144,6 +166,43 @@ class Config:
                 errors.append("executor.command must be non-empty")
             if not (self.agent_args or []):
                 errors.append("executor.args must be a non-empty argv template")
+        if self.max_repairs_per_tick < 0:
+            errors.append("limits.max_repairs_per_tick must be >= 0 (fleet pass budget)")
+        if self.max_request_changes_per_pr < 1:
+            errors.append("limits.max_request_changes_per_pr must be >= 1")
+        if self.live and self.merge_enabled and self.require_llm_review:
+            if not self.pr_review_plugin_command or not self.pr_review_plugin_args:
+                errors.append("pr_review plugin command and args are required for structured review")
+            if not self.pr_review_provider_endpoint_url and self.pr_review_provider in {"", "bedrock"}:
+                errors.append("pr_review requires an HTTPS provider endpoint URL; implicit provider/credential chains are unsupported")
+            if not self.pr_review_provider or not self.pr_review_model:
+                errors.append("pr_review provider and model are required for structured review")
+            if not re.fullmatch(r"[a-f0-9]{64}", self.pr_review_config_sha256):
+                errors.append("trusted pr_review configuration SHA-256 is required")
+            if not self.pr_review_binary or not self.pr_review_binary_sha256:
+                errors.append("pinned pr_review binary and SHA-256 are required")
+            if not self.pr_review_rule_file or not self.pr_review_tools_file:
+                errors.append("trusted pr_review rule and tools files are required")
+            if not self.pr_review_ocr_config or not self.pr_review_ocr_config.is_file():
+                errors.append("trusted OpenCodeReview provider config must exist as a trusted file")
+            if not self.pr_review_sandbox_command:
+                errors.append("OS sandbox command is required for pr_review")
+            if not self.pr_review_sandbox_profile or not self.pr_review_sandbox_profile.is_file():
+                errors.append("review OS sandbox profile must exist as a trusted file")
+        if self.pr_review_plugin_timeout_seconds < 1:
+            errors.append("pr_review.plugin_timeout_seconds must be >= 1")
+        if self.pr_review_engine != "open-code-review":
+            errors.append("pr_review.engine must be open-code-review in this plugin")
+        if self.pr_review_effort not in {"low", "medium", "high"}:
+            errors.append("pr_review.effort must be low|medium|high")
+        if self.pr_review_timeout_minutes < 1 or self.pr_review_max_tokens_budget < 1:
+            errors.append("pr_review runtime limits must be finite and positive")
+        if self.pr_review_binary_version != "v1.12.0":
+            errors.append("pr_review.binary_version must be pinned to v1.12.0")
+        forbidden_env = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
+        for name in self.pr_review_provider_env:
+            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) or name.startswith(forbidden_env):
+                errors.append(f"pr_review.provider_env contains forbidden name: {name!r}")
         # require_checks=false by default: local trust only. Do not gate merges on
         # GitHub Actions / remote CI providers (cost + free-tier limits).
         return errors
@@ -346,6 +405,7 @@ def load_config(path: str | Path | None = None) -> Config:
     wt = data.get("worktrees") or {}
     st = data.get("state") or {}
     lim = data.get("limits") or {}
+    review = data.get("pr_review") or {}
 
     repos = _load_repos(data, cfg_path)
 
@@ -389,6 +449,27 @@ def load_config(path: str | Path | None = None) -> Config:
         require_llm_review=_yaml_bool(
             mg.get("require_llm_review", True), True, field="merge.require_llm_review"
         ),
+        pr_review_engine=str(review.get("engine", "open-code-review")),
+        pr_review_plugin_command=str(review.get("plugin_command") or ""),
+        pr_review_plugin_args=[str(item) for item in review.get("plugin_args") or []],
+        pr_review_plugin_timeout_seconds=int(review.get("plugin_timeout_seconds", 7200)),
+        pr_review_provider=str(review.get("provider") or ""),
+        pr_review_provider_endpoint_url=str(review.get("provider_endpoint_url") or ""),
+        pr_review_model=str(review.get("model") or ""),
+        pr_review_config_sha256=str(review.get("config_sha256") or "").lower(),
+        pr_review_ocr_config=_expand(review["ocr_config"]) if review.get("ocr_config") else None,
+        pr_review_provider_env=[str(item) for item in review.get("provider_env") or []],
+        pr_review_binary=_expand(review["binary"]) if review.get("binary") else None,
+        pr_review_binary_version=str(review.get("binary_version", "v1.12.0")),
+        pr_review_binary_sha256=str(review.get("binary_sha256") or "").lower(),
+        pr_review_effort=str(review.get("effort", "medium")),
+        pr_review_timeout_minutes=int(review.get("timeout_minutes", 15)),
+        pr_review_max_tokens_budget=int(review.get("max_tokens_budget", 100000)),
+        pr_review_rule_file=_expand(review["rule_file"]) if review.get("rule_file") else None,
+        pr_review_tools_file=_expand(review["tools_file"]) if review.get("tools_file") else None,
+        pr_review_sandbox_command=[str(item) for item in review.get("sandbox_command") or []],
+        pr_review_sandbox_profile=_expand(review["sandbox_profile"]) if review.get("sandbox_profile") else None,
+        pr_review_artifacts_dir=_expand(review.get("artifacts_dir", "~/.lokay/pr-review-artifacts")),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issue_to_pr_per_pass=(

@@ -22,7 +22,7 @@ def handle_pr_outcome(
             merge=up.get("pr_merge") or {},
             close=up.get("close_issue") or {},
             receipt=up.get("publish_delivery_receipt") or {},
-            outcome=up.get("select_pr_triage_outcome") or {},
+            outcome=up.get("pr_repair_verdict") or up.get("select_pr_triage_outcome") or {},
         )
 
     if atom == "classify_pr_triage_checks":
@@ -42,12 +42,55 @@ def handle_pr_outcome(
     if atom == "pr_repair_verdict":
         selected = up.get("select_pr_triage_outcome") or {}
         review = up.get("publish_pr_review") or {}
+        repair_kind = str(selected.get("repair_kind") or "")
+        decision = dict(review.get("decision") or {})
+        task = dict(decision.get("task") or {})
+        findings = decision.get("findings") if isinstance(decision.get("findings"), list) else []
+        reviewed_sha = str(decision.get("reviewed_head_sha") or "")
+        task_digest = str(decision.get("task_identity_sha256") or "")
+        review_digest = str(decision.get("review_result_sha256") or "")
+        if not repair_kind:
+            return {
+                "ok": True, "route": "fail_closed", "repairable": False,
+                "reason": "repair_kind_invalid", "needs_review": True,
+            }
+        if repair_kind == "ci":
+            start_head_sha = str(selected.get("head_sha") or "").lower()
+            import re
+            if not re.fullmatch(r"[a-f0-9]{40}", start_head_sha):
+                return {
+                    "ok": True, "route": "fail_closed", "repairable": False,
+                    "reason": "ci_repair_start_head_missing", "needs_review": True,
+                }
+            return {
+                "ok": True, "route": "repair", "repairable": True,
+                "reason": str(selected.get("reason") or "checks_failed"),
+                "repair_kind": "ci", "head_sha": start_head_sha, "review": decision,
+                "task": {}, "findings": [], "reviewed_head_sha": "",
+                "task_identity_sha256": "", "review_result_sha256": "",
+            }
+        if repair_kind != "review" or (
+            decision.get("verdict") != "request_changes" or not task or not findings
+            or not reviewed_sha or not task_digest or not review_digest
+            or str(selected.get("repair_start_head_sha") or "").lower() != reviewed_sha.lower()
+        ):
+            return {
+                "ok": True, "route": "fail_closed", "repairable": False,
+                "reason": "review_repair_handoff_incomplete", "needs_review": True,
+            }
         return {
             "ok": True,
             "route": "repair",
             "repairable": True,
             "reason": str(selected.get("reason") or "pr_triage_requested_repair"),
-            "review": dict(review.get("decision") or {}),
+            "review": decision,
+            "task": task,
+            "findings": findings,
+            "reviewed_head_sha": reviewed_sha,
+            "task_identity_sha256": task_digest,
+            "review_result_sha256": review_digest,
+            "repair_kind": "review",
+            "repair_start_head_sha": reviewed_sha,
         }
 
     if atom == "review_repair_gate":

@@ -376,6 +376,7 @@ ORGAN_BINDINGS: tuple[Binding, ...] = (
     Binding('select_pr_triage_outcome', handle_pr_outcome),
     Binding('summarize_pr_triage', handle_pr_outcome),
     Binding('list_pr_sieve', handle_pr_triage_department),
+    Binding('reconcile_pr_repair_push', handle_pr_triage_department),
     Binding('run_pr_sieve', handle_pr_triage_department),
     Binding('select_pr_sieve', handle_pr_triage_department),
     Binding('select_pr_triage_verdict', handle_pr_triage_department),

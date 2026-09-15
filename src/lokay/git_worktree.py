@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import stat
 from pathlib import Path
@@ -672,6 +673,114 @@ def leftover_status(
         "keep_unpublished": keep_unpublished,
     }
 
+
+
+def _repair_git_output(runner: Runner, clone: Path, *args: str) -> str:
+    result = runner.run(
+        git_spec(list(args), cwd=clone, timeout_seconds=180), live=True
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(detail or f"git {' '.join(args[:2])} failed")
+    return str(result.stdout or "").strip()
+
+
+def _repair_worktree_identity(
+    runner: Runner, clone: Path, worktree: Path, branch: str, expected_sha: str
+) -> None:
+    head = _repair_git_output(runner, worktree, "rev-parse", "--verify", "HEAD^{commit}").lower()
+    attached = _repair_git_output(runner, worktree, "symbolic-ref", "--quiet", "--short", "HEAD")
+    common_raw = _repair_git_output(runner, worktree, "rev-parse", "--git-common-dir")
+    common = Path(common_raw)
+    if not common.is_absolute():
+        common = worktree / common
+    status = runner.run(
+        git_spec(["status", "--porcelain=v1", "--untracked-files=all"], cwd=worktree, timeout_seconds=60),
+        live=True,
+    )
+    if (
+        head != expected_sha
+        or attached != branch
+        or common.resolve() != (clone / ".git").resolve()
+        or status.returncode != 0
+        or (status.stdout or "").strip()
+        or (status.stderr or "").strip()
+    ):
+        raise RuntimeError("repair worktree does not match recorded repair SHA")
+
+
+def ensure_repair_worktree(
+    runner: Runner,
+    config: Config,
+    repo: RepoConfig,
+    branch: str,
+    expected_sha: str,
+    *,
+    head_repo: str,
+    live: bool,
+) -> Path:
+    """Prepare the existing PR branch only at its exact recorded remote SHA."""
+    worktree = worktree_dir(config, repo, branch)
+    if not live:
+        return worktree
+    expected = str(expected_sha or "").lower()
+    if not re.fullmatch(r"[a-f0-9]{40}", expected):
+        raise RuntimeError("repair start SHA is missing or malformed")
+    clone = repo.clone_path.resolve()
+    if not clone.is_dir():
+        raise RuntimeError("canonical repository clone is missing")
+    assert_valid_branch_ref(runner, branch, cwd=clone)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", head_repo):
+        raise RuntimeError("PR head repository identity is missing or malformed")
+    if head_repo.lower() != repo.name.lower():
+        raise RuntimeError("fork-hosted PR repair is not supported")
+    tracking_ref = f"refs/remotes/lokay/pr-repair/{branch}"
+    fetched = runner.run(
+        git_spec(
+            ["fetch", "--no-tags", "origin", f"+refs/heads/{branch}:{tracking_ref}"],
+            cwd=clone,
+            timeout_seconds=300,
+        ),
+        live=True,
+    )
+    if fetched.returncode != 0:
+        detail = (fetched.stderr or fetched.stdout or "").strip()
+        raise RuntimeError(f"cannot fetch PR repair branch: {detail or 'fetch failed'}")
+    remote_sha = _repair_git_output(runner, clone, "rev-parse", "--verify", f"{tracking_ref}^{{commit}}").lower()
+    if remote_sha != expected:
+        raise RuntimeError("remote PR tip does not match recorded repair SHA")
+
+    if worktree.is_symlink():
+        raise RuntimeError("refusing symlink repair worktree")
+    if worktree.exists():
+        if not (worktree / ".git").exists():
+            raise RuntimeError("existing repair path is not a linked worktree")
+        _repair_worktree_identity(runner, clone, worktree, branch, expected)
+        return worktree
+
+    branch_sha = runner.run(
+        git_spec(["show-ref", "--verify", "--hash", f"refs/heads/{branch}"], cwd=clone, timeout_seconds=30),
+        live=True,
+    )
+    if branch_sha.returncode == 0:
+        if (branch_sha.stdout or "").strip().lower() != expected:
+            raise RuntimeError("local repair branch does not match recorded repair SHA")
+        add_args = ["worktree", "add", str(worktree), branch]
+    else:
+        absent = runner.run(
+            git_spec(["show-ref", "--verify", f"refs/heads/{branch}"], cwd=clone, timeout_seconds=30),
+            live=True,
+        )
+        if absent.returncode != 128:
+            raise RuntimeError("cannot determine local repair branch identity")
+        add_args = ["worktree", "add", "-b", branch, str(worktree), tracking_ref]
+    worktree.parent.mkdir(parents=True, exist_ok=True)
+    added = runner.run(git_spec(add_args, cwd=clone, timeout_seconds=180), live=True)
+    if added.returncode != 0:
+        detail = (added.stderr or added.stdout or "").strip()
+        raise RuntimeError(f"cannot create exact repair worktree: {detail or 'git worktree add failed'}")
+    _repair_worktree_identity(runner, clone, worktree, branch, expected)
+    return worktree
 
 
 def ensure_worktree(

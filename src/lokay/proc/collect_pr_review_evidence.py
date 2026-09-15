@@ -5,10 +5,13 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.pr_review_io import load_pr_evidence
 from lokay.proc._common import add_config_read, runner
 
-def collect(*, repo: str, pr: int, branch: str, live: bool, checks_text: str = "") -> dict:
+def collect(*, repo: str, pr: int, branch: str, live: bool, checks_text: str = "", config_path: str | None = None) -> dict:
     try:
+        from lokay.config import load_config
+        cfg = load_config(config_path)
         return ok(repo=repo, pr=pr, evidence=load_pr_evidence(
-            runner(), repo, pr, live=live, branch=branch, checks_text=checks_text,
+            runner(cfg), repo, pr, live=live, branch=branch, branch_prefix=cfg.branch_prefix,
+            checks_text=checks_text, cfg=cfg,
         ))
     except Exception as exc:
         return err(f"failed to load PR review evidence: {exc}", repo=repo, pr=pr, probe_failed=True)
@@ -16,5 +19,5 @@ def collect(*, repo: str, pr: int, branch: str, live: bool, checks_text: str = "
 def main(argv=None):
     p=argparse.ArgumentParser(prog="lokay-collect-pr-review-evidence"); add_config_read(p)
     p.add_argument("--repo",required=True); p.add_argument("--pr",required=True,type=int); p.add_argument("--branch",default=""); p.add_argument("--checks-text",default="")
-    a=p.parse_args(argv); return emit_exit(collect(repo=a.repo,pr=a.pr,branch=a.branch,live=not a.offline,checks_text=a.checks_text))
+    a=p.parse_args(argv); return emit_exit(collect(repo=a.repo,pr=a.pr,branch=a.branch,live=not a.offline,checks_text=a.checks_text,config_path=a.config))
 if __name__=="__main__": raise SystemExit(main())

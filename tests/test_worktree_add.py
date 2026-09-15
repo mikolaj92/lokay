@@ -104,3 +104,62 @@ def test_missing_clone_is_classified_ready_route(config_path, monkeypatch, capsy
     assert payload["ok"] is True
     assert payload["route"] == "missing"
     assert payload["reason"] == "clone_path_missing"
+
+
+def test_live_repair_main_resolves_and_verifies_the_exact_pr_head(
+    tmp_path, monkeypatch, capsys
+):
+    from types import SimpleNamespace
+
+    from lokay import gh_prs, git_worktree
+    from lokay.runner import CommandResult
+
+    head = "a" * 40
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    worktree = tmp_path / "repair"
+    repo = SimpleNamespace(name="acme/demo", clone_path=clone)
+    cfg = SimpleNamespace(repos=[repo])
+
+    class Runner:
+        def run(self, spec, *, live):
+            if "rev-parse" in spec.argv:
+                return CommandResult(spec, live, 0, stdout=head)
+            if "status" in spec.argv:
+                return CommandResult(spec, live, 0, stdout="")
+            raise AssertionError(f"unexpected command: {spec.argv}")
+
+    command_runner = Runner()
+    calls = []
+    monkeypatch.setattr(worktree_add, "load_cfg", lambda _args: cfg)
+    monkeypatch.setattr(worktree_add, "mutations_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(worktree_add, "runner", lambda: command_runner)
+    monkeypatch.setattr(
+        git_worktree,
+        "ensure_repair_worktree",
+        lambda *_args, **_kwargs: worktree,
+    )
+    monkeypatch.setattr(
+        gh_prs,
+        "gh_json",
+        lambda *_args, **_kwargs: calls.append(True)
+        or {
+            "headRefOid": head,
+            "headRepository": {"nameWithOwner": "acme/demo"},
+        },
+    )
+
+    code = worktree_add.main(
+        [
+            "--repo", "acme/demo", "--branch", "ai/fix/42-demo",
+            "--pr", "84", "--repair-start-head-sha", head, "--live",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["route"] == "ready"
+    assert payload["repair_start_head_sha"] == head
+    assert payload["worktree_head_sha"] == head
+    assert payload["repair_start_head_sha"] == head
+    assert len(calls) == 2

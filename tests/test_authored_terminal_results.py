@@ -54,17 +54,38 @@ def test_pr_triage_merge_without_confirmed_receipt_is_not_done():
     assert out["reason"] == "delivery_confirmation_incomplete"
 
 
-def test_pr_triage_request_changes_leaves_repair_verdict():
+def test_pr_triage_request_changes_preserves_complete_repair_handoff():
+    task = {"repo": "o/r", "type": "Issue", "state": "OPEN", "number": 7}
+    findings = [{"path": "src/a.py", "start_line": 1, "end_line": 1, "content": "fix"}]
+    head = "a" * 40
+    task_digest = "b" * 64
+    result_digest = "c" * 64
     out = pr_triage(
-        review={"decision": {"verdict": "request_changes"}},
+        review={"decision": {
+            "verdict": "request_changes", "task": task, "findings": findings,
+            "reviewed_head_sha": head,
+            "task_identity_sha256": task_digest, "review_result_sha256": result_digest,
+        }},
         repair={},
         repair_manual={},
         manual={},
         merge={},
         close={},
-        outcome={"route": "repair", "reason": "review_requested_changes"},
+        outcome={
+            "route": "repair", "repair_kind": "review",
+            "reason": "review_requested_changes", "task": task,
+            "findings": findings, "reviewed_head_sha": head,
+            "repair_start_head_sha": head,
+            "task_identity_sha256": task_digest,
+            "review_result_sha256": result_digest,
+        },
     )["result"]
     assert out["skipped"] and out["repairable"] is True
+    assert out["repair_kind"] == "review"
+    assert out["task"] == task and out["findings"] == findings
+    assert out["reviewed_head_sha"] == out["repair_start_head_sha"] == head
+    assert out["task_identity_sha256"] == task_digest
+    assert out["review_result_sha256"] == result_digest
     assert "repaired" not in out
 
 

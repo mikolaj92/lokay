@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from lokay.pr_review import PrReviewDecision
 from lokay.review_style import style_review_comment
 
@@ -18,13 +16,13 @@ def test_style_is_applied_only_to_human_text_and_preserves_marker():
 
     body = style_review_comment(
         decision,
-        head_sha="abc",
+        head_sha="a" * 40,
         merge_ok=False,
         escalated=False,
         target="en+kofte",
         stylist=stylist,
     )
-    assert body.startswith("<!-- lokay-review head=abc verdict=request_changes merge_ok=0 -->")
+    assert body.startswith(f"<!-- lokay-review head={'a' * 40} verdict=request_changes merge_ok=0 -->")
     assert "Could we guard" in body
     assert calls[0][1] == "en+kofte"
     assert "verdict=request_changes" not in calls[0][0]
@@ -38,7 +36,7 @@ def test_style_failure_falls_back_to_neutral_comment():
 
     body = style_review_comment(
         decision,
-        head_sha="abc",
+        head_sha="a" * 40,
         merge_ok=True,
         escalated=False,
         target="en+kofte",
@@ -52,7 +50,7 @@ def test_empty_style_uses_neutral_comment_without_stylist():
     decision = PrReviewDecision(verdict="approve", summary="Ready.")
     body = style_review_comment(
         decision,
-        head_sha="abc",
+        head_sha="a" * 40,
         merge_ok=True,
         escalated=False,
         target="",

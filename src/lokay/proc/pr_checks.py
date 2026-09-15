@@ -49,6 +49,11 @@ def main(argv: list[str] | None = None) -> int:
             merge_ok=merge_ok,
             require_checks=cfg.require_checks,
             text=str(report.get("text") or "")[-4000:],
+            head_sha=str(report.get("head_sha") or ""),
+            **({"route": "wait", "waiting": True, "repairable": False,
+                "reason": "ci_repair_start_head_missing"}
+               if status == "failed" and cfg.require_checks and not report.get("head_sha")
+               else {}),
         )
     )
 

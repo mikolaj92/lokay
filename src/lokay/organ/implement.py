@@ -69,6 +69,16 @@ def handle_implement(
         argv = [*cfg, *live, "--repo", repo, "--branch", branch]
         if "make_branch" in up:
             argv.append("--reset-base")
+        if repair_mode:
+            pr_number = inputs.get("pr") or inputs.get("pr_number")
+            start_head_sha = str(inputs.get("head_sha") or "")
+            if pr_number is None or not start_head_sha:
+                return {
+                    "ok": True, "route": "missing",
+                    "reason": "repair_start_identity_missing",
+                    "repo": repo, "branch": branch,
+                }
+            argv.extend(["--pr", str(pr_number), "--repair-start-head-sha", start_head_sha])
         return _run_atom_main(worktree_add.main, argv)
 
     if atom == "plan_issue":

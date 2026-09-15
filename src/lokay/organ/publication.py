@@ -202,6 +202,37 @@ def handle_publication(
                     "worktree": worktree,
                     "branch": branch,
                 }
+        if repair_mode and pr_number is not None and inputs.get("live"):
+            from lokay.proc.pr_repair_push import prepare_live_push
+
+            prepared = prepare_live_push(
+                config_path=str(inputs.get("config_path") or "") or None,
+                repo=repo, pr=int(pr_number), branch=branch, worktree=worktree,
+                start_head_sha=str(inputs.get("head_sha") or inputs.get("repair_start_head_sha") or ""),
+                repair_kind=str(inputs.get("repair_kind") or ""),
+                reviewed_head_sha=str(inputs.get("reviewed_head_sha") or ""),
+                task=inputs.get("task") or {},
+                findings=inputs.get("findings") or [],
+                task_identity_sha256=str(inputs.get("task_identity_sha256") or ""),
+                review_result_sha256=str(inputs.get("review_result_sha256") or ""),
+            )
+            if prepared.get("route") != "ready":
+                return {
+                    "ok": False,
+                    "error": "repair push intent could not be durably prepared",
+                    "reason": str(prepared.get("reason") or "repair_push_intent_failed"),
+                    "intent": prepared,
+                    "worktree": worktree,
+                    "branch": branch,
+                }
+            pushed = _run_atom_main(
+                push_branch.main,
+                [*cfg, *live, *repo_flags, "--worktree", worktree, "--branch", branch],
+            )
+            return {
+                **dict(pushed or {}),
+                "repair_push_intent_sha256": prepared["intent_sha256"],
+            }
         return _run_atom_main(
             push_branch.main,
             [*cfg, *live, *repo_flags, "--worktree", worktree, "--branch", branch],

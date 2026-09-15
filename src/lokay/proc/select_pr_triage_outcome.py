@@ -21,6 +21,7 @@ def select(
     test: Mapping[str, Any],
 ) -> dict[str, Any]:
     cr = str(checks_route.get("route") or "")
+    head_sha = str(checks_route.get("head_sha") or "")
     if cr == "wait":
         return ok(
             route="wait",
@@ -32,6 +33,8 @@ def select(
             route="repair",
             reason=str(checks_route.get("reason") or "checks_failed"),
             repairable=True,
+            repair_kind="ci",
+            head_sha=head_sha,
         )
     rg = str(review_gate.get("route") or "")
     if rg == "fail_closed":
@@ -44,10 +47,12 @@ def select(
             route="repair",
             reason=str(review_gate.get("reason") or "review_requested_changes"),
             repairable=True,
+            repair_kind="review",
+            repair_start_head_sha=str(review_gate.get("reviewed_head_sha") or ""),
         )
     if not _skipped(test):
         if test.get("recorded_red") is True or test.get("passed") is False:
-            return ok(route="repair", reason="test_local_failed", repairable=True)
+            return ok(route="repair", reason="test_local_failed", repairable=True, repair_kind="ci", head_sha=head_sha)
         return ok(route="merge", reason="approve_green")
     return ok(route="none", reason="no_merge_path")
 

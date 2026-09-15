@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 
 from lokay.localize import render_paths_for_prompt
@@ -78,17 +79,24 @@ def repair_pr_prompt(
     branch: str,
     checks_text: str,
     review_text: str = "",
+    task: dict | None = None,
     paths: Iterable[str] | None = None,
 ) -> str:
     """Harness-agnostic goal: repair checks or actionable structured review findings."""
     scope, stay = _scope_block(paths)
+    task_payload = json.dumps(task or {}, ensure_ascii=False, sort_keys=True)
+    review_payload = str(review_text or "")
+    for delimiter in ("</original-task", "</review-evidence", "</checks-evidence"):
+        task_payload = task_payload.replace(delimiter, delimiter.replace("<", "&lt;"))
+        review_payload = review_payload.replace(delimiter, delimiter.replace("<", "&lt;"))
     return render_contract(
         "pr_repair",
         pr_number=pr_number,
         repo=repo,
         branch=branch,
         checks_text=checks_text[:6000] or "(none)",
-        review_text=review_text[:6000] or "(none)",
+        review_text=review_payload or "(none)",
+        task_text=task_payload,
         scope=scope,
         stay=stay,
     )

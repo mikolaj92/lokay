@@ -37,6 +37,15 @@ class PrReviewDecision:
     evidence_kind: EvidenceKind | None = None
     nits: tuple[str, ...] = ()
     summary: str = ""
+    findings: tuple[dict[str, Any], ...] = ()
+    reviewed_head_sha: str = ""
+    task: dict[str, Any] = field(default_factory=dict)
+    task_identity_sha256: str = ""
+    review_result_sha256: str = ""
+    review_input_fingerprint_sha256: str = ""
+    review_preview_sha256: str = ""
+    review_rule_config_sha256: str = ""
+    review_runtime_config_sha256: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -74,7 +83,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 def decision_from_dict(data: dict[str, Any]) -> PrReviewDecision:
-    allowed = {"verdict", "risk", "scope_ok", "secrets", "tests_adequate", "blocking", "evidence_kind", "nits", "summary"}
+    allowed = {"verdict", "risk", "scope_ok", "secrets", "tests_adequate", "blocking", "evidence_kind", "nits", "summary", "findings", "reviewed_head_sha", "task", "task_identity_sha256", "review_result_sha256"}
     unknown = sorted(set(data) - allowed)
     if unknown:
         raise PrReviewError(f"unknown review fields: {unknown}")
@@ -119,6 +128,11 @@ def decision_from_dict(data: dict[str, Any]) -> PrReviewDecision:
         evidence_kind=evidence_kind,  # type: ignore[arg-type]
         nits=_str_list("nits"),
         summary=summary,
+        findings=tuple(dict(item) for item in data.get("findings", []) if isinstance(item, dict)),
+        reviewed_head_sha=str(data.get("reviewed_head_sha") or ""),
+        task=dict(data.get("task") or {}),
+        task_identity_sha256=str(data.get("task_identity_sha256") or ""),
+        review_result_sha256=str(data.get("review_result_sha256") or ""),
     )
 
 
@@ -176,6 +190,15 @@ def coerce_soft_nits(decision: PrReviewDecision) -> PrReviewDecision:
         evidence_kind=decision.evidence_kind,
         nits=decision.nits,
         summary=decision.summary or "soft nits only; approve",
+        findings=decision.findings,
+        reviewed_head_sha=decision.reviewed_head_sha,
+        task=decision.task,
+        task_identity_sha256=decision.task_identity_sha256,
+        review_result_sha256=decision.review_result_sha256,
+        review_input_fingerprint_sha256=decision.review_input_fingerprint_sha256,
+        review_preview_sha256=decision.review_preview_sha256,
+        review_rule_config_sha256=decision.review_rule_config_sha256,
+        review_runtime_config_sha256=decision.review_runtime_config_sha256,
     )
 
 
@@ -222,15 +245,26 @@ def decide_review_merge(
 # Durable marker embedded in published PR review comments.
 # Used for head-SHA idempotency and request_changes escalation counts.
 REVIEW_MARKER_RE = re.compile(
-    r"<!--\s*lokay-review\s+head=(?P<head>[0-9a-fA-F]+)\s+"
-    r"verdict=(?P<verdict>[a-z_]+)\s+merge_ok=(?P<merge_ok>[01])\s*-->"
+    r"<!--\s*lokay-review\s+head=(?P<head>[0-9a-fA-F]{40})\s+"
+    r"verdict=(?P<verdict>[a-z_]+)\s+merge_ok=(?P<merge_ok>[01])"
+    r"(?:\s+result=(?P<result>[a-f0-9]{64})\s+artifact=(?P<artifact>[a-f0-9]{64}))?\s*-->"
 )
 
 
-def format_review_marker(*, head_sha: str, verdict: str, merge_ok: bool) -> str:
-    sha = (head_sha or "").strip()
+def format_review_marker(
+    *, head_sha: str, verdict: str, merge_ok: bool,
+    result_sha256: str = "", artifact_sha256: str = "",
+) -> str:
+    sha = (head_sha or "").strip().lower()
     verd = (verdict or "").strip().lower() or "fail_closed"
-    return f"<!-- lokay-review head={sha} verdict={verd} merge_ok={1 if merge_ok else 0} -->"
+    if not re.fullmatch(r"[a-f0-9]{40}", sha) or not re.fullmatch(r"[a-z_]+", verd):
+        raise ValueError("review marker identity is malformed")
+    suffix = ""
+    if result_sha256 or artifact_sha256:
+        if not re.fullmatch(r"[a-f0-9]{64}", result_sha256) or not re.fullmatch(r"[a-f0-9]{64}", artifact_sha256):
+            raise ValueError("review marker artifact identity is malformed")
+        suffix = f" result={result_sha256} artifact={artifact_sha256}"
+    return f"<!-- lokay-review head={sha} verdict={verd} merge_ok={1 if merge_ok else 0}{suffix} -->"
 
 
 def parse_review_markers(comment_bodies: list[str] | tuple[str, ...]) -> list[dict[str, Any]]:
@@ -246,6 +280,8 @@ def parse_review_markers(comment_bodies: list[str] | tuple[str, ...]) -> list[di
                     "head_sha": match.group("head").strip().lower(),
                     "verdict": verd,
                     "merge_ok": match.group("merge_ok") == "1",
+                    "result_sha256": str(match.group("result") or ""),
+                    "artifact_sha256": str(match.group("artifact") or ""),
                 }
             )
     return out
@@ -265,15 +301,19 @@ def find_review_for_head(
 
 
 def count_request_changes_reviews(markers: list[dict[str, Any]]) -> int:
-    return sum(1 for m in markers if m.get("verdict") == "request_changes")
+    return len({
+        str(marker.get("head_sha") or "").lower()
+        for marker in markers
+        if marker.get("verdict") == "request_changes" and marker.get("head_sha")
+    })
 
 
 def should_escalate_request_changes(
     prior_request_changes: int, *, max_request_changes: int
 ) -> bool:
-    """True when this additional request_changes would reach/exceed the cap."""
+    """True when earlier published request_changes already exhausted the repair cap."""
     limit = max(1, int(max_request_changes))
-    return int(prior_request_changes) + 1 >= limit
+    return int(prior_request_changes) >= limit
 
 
 def build_review_comment_body(

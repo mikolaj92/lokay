@@ -22,7 +22,7 @@ from lokay.gh_prs import (
     pr_checks_report,
     view_pr,
 )
-from lokay.git_worktree import InvalidBranchRef, ensure_worktree, worktree_dir
+from lokay.git_worktree import InvalidBranchRef, ensure_repair_worktree, ensure_worktree, worktree_dir
 from lokay.models import PullRequest
 from lokay.runner import Runner, gh_spec
 
@@ -84,6 +84,18 @@ class GithubRepo:
         head = _need_name(name, what="branch")
         self.clone()
         return head
+
+    def repair_worktree(
+        self, name: str, expected_sha: str, *, head_repo: str
+    ) -> Path:
+        """Prepare an existing repair branch at its exact recorded published SHA."""
+        head = _need_name(name, what="worktree")
+        if not self._live:
+            return worktree_dir(self._config, self._row, head)
+        return ensure_repair_worktree(
+            self._runner, self._config, self._row, head, expected_sha,
+            head_repo=head_repo, live=True,
+        )
 
     def worktree(self, name: str, *, base: str = "main", reset_to_base: bool = False) -> Path:
         head = _need_name(name, what="worktree")

@@ -2,34 +2,40 @@
 
 from types import SimpleNamespace
 
-from lokay.proc import (
-    _pr_review_agent_runtime, publish_pr_review, run_evidence_review_agent,
-    run_pr_review_agent, run_pr_review_retry_agent,
-)
+from lokay.proc import publish_pr_review
 
 
 def _cfg():
     return SimpleNamespace(max_request_changes_per_pr=2)
 
 
-def test_retry_agent_receives_validator_feedback(monkeypatch, tmp_path):
-    cfg=SimpleNamespace(executor_enabled=True)
-    monkeypatch.setattr("lokay.config.load_config",lambda _:cfg)
-    monkeypatch.setattr(_pr_review_agent_runtime,"agent_execute_allowed",lambda *_args,**_kwargs:True)
-    monkeypatch.setattr(_pr_review_agent_runtime,"review_worktree",lambda *_args:tmp_path)
-    prompts=[]
-    monkeypatch.setattr(_pr_review_agent_runtime,"run_agent",lambda *_args,**kwargs:prompts.append(kwargs["prompt"]) or {"status":"completed","stdout_tail":"{}"})
-    evidence={"title":"x","body":"","head":"b","head_sha":"abc","diff":"d","checks_text":""}
-    out=run_pr_review_retry_agent.run(config_path=None,repo="a/b",pr=7,evidence=evidence,live=True,feedback={"validation_error":"verdict missing","agent_stdout_tail":"{}"})
-    assert out["ok"] is True
-    assert "Validator feedback: verdict missing" in prompts[0]
-
-
-def test_publish_cached_result_does_not_mutate(monkeypatch):
+def test_publish_cached_result_preserves_merge_policy_without_mutating(monkeypatch):
     monkeypatch.setattr(publish_pr_review,"mutations_allowed",lambda **_: (_ for _ in ()).throw(AssertionError("no mutation")))
-    out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"abc"},selected={"route":"cached","decision":{"verdict":"request_changes"},"merge_ok":False},live=True)
-    assert out["decision"]["verdict"] == "request_changes"
-    assert out["execution"] == {"source":"cache"}
+    out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"a"*40},selected={"route":"cached","decision":{"verdict":"approve"},"merge_ok":True},live=True)
+    assert out["decision"]["verdict"] == "approve"
+    assert out["merge_ok"] is True
+    assert out["applied"] is False
+    assert out["execution"] == {"source":"cached"}
+
+
+def test_cached_request_changes_preserves_escalation_after_restart(monkeypatch):
+    monkeypatch.setattr(publish_pr_review,"mutations_allowed",lambda **_: (_ for _ in ()).throw(AssertionError("no mutation")))
+    out=publish_pr_review.publish(
+        cfg=SimpleNamespace(max_request_changes_per_pr=2), repo="a/b", pr=7,
+        evidence={"head_sha":"a"*40},
+        selected={
+            "route":"cached", "merge_ok":False, "request_changes_count":3,
+            "decision":{
+                "verdict":"request_changes", "findings":[{"path":"src/a.py"}],
+                "reviewed_head_sha":"a"*40, "task_identity_sha256":"b"*64,
+                "review_result_sha256":"c"*64,
+                "task":{"repo":"a/b", "type":"Issue", "state":"OPEN"},
+            },
+        }, live=True,
+    )
+    assert out["escalated"] is True
+    assert out["request_changes_count"] == 3
+    assert out["merge_ok"] is False
 
 
 def test_exhausted_invalid_review_publishes_terminal_not_approval(monkeypatch):
@@ -40,46 +46,6 @@ def test_exhausted_invalid_review_publishes_terminal_not_approval(monkeypatch):
     out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"abc"},selected={"route":"fail_closed","reason":"invalid_review_json_exhausted","validation_error":"bad"},live=True)
     assert out["decision"] == {"verdict":"fail_closed"}
     assert out["merge_ok"] is False and applied == [True]
-
-
-def test_publish_styles_public_comment_after_structural_decision(monkeypatch):
-    cfg=SimpleNamespace(
-        max_request_changes_per_pr=2,
-        review_style_for=lambda repo: "en+kofte",
-    )
-    monkeypatch.setattr(publish_pr_review,"mutations_allowed",lambda **_:True)
-    monkeypatch.setattr(publish_pr_review,"runner",lambda *_:object())
-    published=[]
-    monkeypatch.setattr(
-        publish_pr_review,
-        "publish_decision",
-        lambda *_args,**kwargs: published.append(kwargs),
-    )
-    out=publish_pr_review.publish(
-        cfg=cfg,
-        repo="a/b",
-        pr=7,
-        evidence={"head_sha":"abc"},
-        selected={"route":"publish","decision":{"verdict":"approve","summary":"Ready."}},
-        live=True,
-    )
-    assert out["decision"]["verdict"] == "approve"
-    assert published[0]["style_target"] == "en+kofte"
-
-
-def test_evidence_agent_receives_only_selected_supplement(monkeypatch, tmp_path):
-    cfg=SimpleNamespace(executor_enabled=True)
-    monkeypatch.setattr("lokay.config.load_config",lambda _:cfg)
-    monkeypatch.setattr(_pr_review_agent_runtime,"agent_execute_allowed",lambda *_args,**_kwargs:True)
-    monkeypatch.setattr(_pr_review_agent_runtime,"review_worktree",lambda *_args:tmp_path)
-    prompts=[]
-    monkeypatch.setattr(_pr_review_agent_runtime,"run_agent",lambda *_args,**kwargs:prompts.append(kwargs["prompt"]) or {"status":"completed","stdout_tail":"{}"})
-    evidence={"title":"x","body":"","head":"b","head_sha":"abc","diff":"d","checks_text":""}
-    additional={"kind":"diff_tail","value":{"diff":"complete"}}
-    out=run_evidence_review_agent.run(config_path=None,repo="a/b",pr=7,evidence=evidence,live=True,additional=additional)
-    assert out["ok"] is True
-    assert '"kind": "diff_tail"' in prompts[0]
-    assert "only evidence collection round" in prompts[0]
 
 
 def test_verify_supplement_rejects_changed_sha(monkeypatch):

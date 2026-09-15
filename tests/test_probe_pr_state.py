@@ -42,6 +42,34 @@ def test_classify_open() -> None:
     assert out["merged"] is False
 
 
+def test_live_probe_returns_identity_required_for_repair_push_recovery(monkeypatch) -> None:
+    from lokay.config import Config
+    from lokay.runner import CommandResult
+
+    seen = []
+    monkeypatch.setattr("lokay.proc.probe_pr_state.load_config", lambda _path: Config())
+    monkeypatch.setattr("lokay.proc.probe_pr_state.runner", lambda _cfg: object())
+
+    def gh_json(_runner, args, *, live: bool):
+        seen.append((args, live))
+        return {
+            "number": 9, "state": "OPEN", "mergedAt": None,
+            "headRefName": "ai/fix/9-x", "headRefOid": "b" * 40,
+            "headRepository": {"nameWithOwner": "o/r"},
+        }
+
+    monkeypatch.setattr("lokay.proc.probe_pr_state.gh_json", gh_json)
+    out = probe(repo="o/r", pr=9, live=True, config_path="config.yaml")
+
+    assert out["route"] == "open"
+    assert out["head_ref"] == "ai/fix/9-x"
+    assert out["head_ref_sha"] == "b" * 40
+    assert out["head_repo"] == "o/r"
+    assert seen[0][1] is True
+    assert "headRefOid" in seen[0][0][-1]
+    assert "headRepository{nameWithOwner}" in seen[0][0][-1]
+
+
 def test_offline_probe_assumes_open() -> None:
     out = probe(repo="o/r", pr=9, live=False)
     assert out["route"] == "open"

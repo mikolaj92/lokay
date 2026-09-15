@@ -33,36 +33,62 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
     branch, live = str(ctx["branch"]), bool(ctx["live"])
     config = str(inputs.get("config_path") or "") or None
     evidence = dict((up.get("collect_pr_review_evidence") or {}).get("evidence") or {})
+    if atom == "resolve_sha_review":
+        evidence["config_path"] = config or ""
     if atom == "collect_pr_review_evidence":
         from lokay.proc.collect_pr_review_evidence import collect
-        return collect(repo=repo,pr=pr,branch=branch,live=live,checks_text=str((up.get("pr_checks") or {}).get("text") or ""))
+        return collect(repo=repo,pr=pr,branch=branch,live=live,checks_text=str((up.get("pr_checks") or {}).get("text") or ""),config_path=config)
     if atom == "resolve_sha_review":
-        from lokay.config import load_config
-        from lokay.review_boundary import resolve_sha_review
-        if not load_config(config).require_llm_review:
-            return {"ok":True,"route":"policy","decision":{"verdict":"approve"},"merge_ok":True,"request_changes_count":0}
-        return resolve_sha_review(evidence)
+        from lokay.review_boundary import resolve_structured_sha_review
+        return resolve_structured_sha_review(evidence)
     if atom == "pr_review_agent":
         if str((up.get("resolve_sha_review") or {}).get("route") or "") != "agent":
             return {"ok": True, "route": "not_applicable", "reason": "review_agent_not_selected"}
         from lokay.proc.run_pr_review_agent import run_review_agent
-        return run_review_agent(config_path=config,repo=repo,pr=pr,evidence=evidence,live=live)
+        result = run_review_agent(config_path=config,repo=repo,pr=pr,evidence=evidence,live=live)
+        if not result.get("ok"):
+            return {"ok": True, "route": "complete", "stdout": "", "plugin_error": str(result.get("reason") or result.get("error") or "plugin failed")}
+        return result
     if atom == "pr_review_retry_agent":
-        from lokay.proc.run_pr_review_retry_agent import run
-        return run(config_path=config,repo=repo,pr=pr,evidence=evidence,feedback=up.get("validate_pr_review") or {},live=live)
+        return {"ok": True, "route": "not_applicable", "stdout": ""}
     if atom == "evidence_review_agent":
         from lokay.proc.run_evidence_review_agent import run
         additional=dict((up.get("review_evidence_catalog") or {}).get("additional_evidence") or {})
         return run(config_path=config,repo=repo,pr=pr,evidence=evidence,additional=additional,live=live)
     if atom in {"validate_pr_review", "validate_pr_review_retry", "validate_evidence_review"}:
-        from lokay.review_boundary import validate_review_output
-        if atom == "validate_pr_review" and (up.get("resolve_sha_review") or {}).get("route") in {"cached","policy"}:
-            return {"ok":True,"route":"not_applicable"}
-        source={"validate_pr_review":"pr_review_agent","validate_pr_review_retry":"pr_review_retry_agent","validate_evidence_review":"evidence_review_agent"}[atom]
-        return validate_review_output(str((up.get(source) or {}).get("stdout") or ""))
+        from lokay.proc.validate_pr_review import validate_result
+        if atom != "validate_pr_review":
+            if atom == "validate_evidence_review" and (up.get("select_pr_review") or {}).get("route") == "evidence":
+                return {"ok": True, "route": "fail_closed", "reason": "structured_evidence_review_unsupported"}
+            return {"ok": True, "route": "not_applicable"}
+        source = up.get("pr_review_agent") or {}
+        if source.get("plugin_error"):
+            return {"ok": True, "route": "fail_closed", "reason": "review_plugin_failed"}
+        if (up.get("resolve_sha_review") or {}).get("route") == "cached":
+            return {"ok": True, "route": "not_applicable"}
+        result = source.get("result")
+        request = source.get("request")
+        if not isinstance(request, dict):
+            return {"ok": True, "route": "fail_closed", "reason": "review_request_missing"}
+        validated = validate_result(result if isinstance(result, dict) else {}, request)
+        if validated.get("route") == "valid":
+            execution = dict(result.get("evidence") or {}).get("upstream_execution") or {}
+            decision = dict(validated.get("decision") or {})
+            decision.update(
+                review_input_fingerprint_sha256=str((result.get("evidence") or {}).get("input_fingerprint_sha256") or ""),
+                review_preview_sha256=str((result.get("evidence") or {}).get("preview_sha256") or ""),
+                review_rule_config_sha256=str(execution.get("rule_config_sha256") or ""),
+                review_runtime_config_sha256=str(execution.get("runtime_config_sha256") or ""),
+            )
+            validated = {**validated, "decision": decision}
+        return {**validated, "request_changes_count": int((up.get("resolve_sha_review") or {}).get("request_changes_count") or 0)}
     if atom == "select_pr_review":
-        from lokay.review_boundary import select_review_decision
-        return select_review_decision(up.get("resolve_sha_review") or {},up.get("validate_pr_review") or {},up.get("validate_pr_review_retry") or {})
+        from lokay.review_boundary import select_structured_review
+        resolved = up.get("resolve_sha_review") or {}
+        validated = up.get("validate_pr_review") or {}
+        if validated.get("route") == "fail_closed":
+            return {"ok": True, "route": "fail_closed", "decision": {"verdict": "fail_closed"}, "reason": str(validated.get("reason") or "review_plugin_failed")}
+        return select_structured_review(resolved, validated)
     if atom == "review_evidence_catalog":
         from lokay.proc.review_evidence_catalog import run
         return run(

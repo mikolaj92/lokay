@@ -132,6 +132,14 @@ def handle_repair_boundary(
     if atom == "summarize_pr_repair":
         from lokay.proc.summarize_pr_repair import summarize
 
+        selected = dict(inputs.get("select_pr_repair_department") or {})
+        selected_task = dict(selected.get("task") or inputs.get("task") or {})
+        selected_review = dict(selected.get("review") or inputs.get("review") or {})
+        repair_kind = str(selected.get("repair_kind") or inputs.get("repair_kind") or "")
+        start_head_sha = str(
+            selected.get("repair_start_head_sha") or inputs.get("repair_start_head_sha")
+            or inputs.get("head_sha") or ""
+        )
         return summarize(
             final=up.get("finalize_repair_tests") or {},
             push=up.get("push") or {},
@@ -139,6 +147,19 @@ def handle_repair_boundary(
             pr=pr,
             branch=str(inputs.get("branch") or ""),
             admit=up.get("admit_pr_repair") or {},
+            repair_handoff={
+                "kind": repair_kind,
+                "start_head_sha": start_head_sha,
+                "head_sha": str(selected.get("head_sha") or inputs.get("head_sha") or ""),
+                "task": selected_task,
+                "findings": list(selected.get("findings") or inputs.get("findings") or []),
+                "reviewed_head_sha": str(selected.get("reviewed_head_sha") or inputs.get("reviewed_head_sha") or ""),
+                "task_identity_sha256": str(selected.get("task_identity_sha256") or inputs.get("task_identity_sha256") or ""),
+                "review_result_sha256": str(selected.get("review_result_sha256") or inputs.get("review_result_sha256") or selected_review.get("review_result_sha256") or ""),
+                "repair_push_intent_sha256": str((up.get("push") or {}).get("repair_push_intent_sha256") or ""),
+                **({"repair_kind": repair_kind, "head_sha": start_head_sha}
+                   if repair_kind == "ci" else {}),
+            },
         )
     if atom in {"pr_repair_fail_closed", "pr_repair_terminal"}:
         from lokay.proc.repair_terminal import terminal

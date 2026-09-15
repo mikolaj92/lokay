@@ -16,7 +16,7 @@ def test_readme_contains_mermaid_state_machine_before_implementation_contract():
     assert "invalid JSON + informacja zwrotna" in readme
     assert "NEEDS_EVIDENCE" in readme
     assert "pr_metadata" in readme
-    assert "ponawia agenta raz" in readme
+    assert "fail-closed, bez generatywnego retry" in readme
 
 
 def test_readme_state_machine_maps_every_fala_path():
@@ -25,6 +25,33 @@ def test_readme_state_machine_maps_every_fala_path():
         readme_path=ROOT / "README.md",
     )
     assert ok, f"README sync failed: {errors}"
+
+
+def test_pr_review_diagram_captures_opencode_review_and_parent_repair_loop():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    start = readme.index("### Zamknięcie PR — `pr_triage`")
+    end = readme.index("### Naprawa istniejącego PR — `pr_repair`", start)
+    graph = readme[start:end]
+
+    assert "ResolveShaReview --> OpenCodeReviewPlugin" in graph
+    assert "OpenCodeReviewPlugin --> ValidateReviewResult" in graph
+    assert "no retry" in graph
+    assert "ValidateReviewResult --> HumanTerminal" in graph
+    assert "ReviewVerdict --> RepairVerdict: REQUEST_CHANGES" in graph
+    assert "RepairVerdict --> TriageReceipt: task + wszystkie findings" in graph
+    assert "TriageReceipt --> FactoryParentRepairSelect" in graph
+    assert "FactoryParentRepairSelect --> RepairPullRequest" in graph
+    assert "TriageReceipt --> RevalidateCanonicalTask" in graph
+    assert "RevalidateCanonicalTask --> RepairPullRequest" in graph
+    assert "RevalidateCanonicalTask --> HumanTerminal" in graph
+    assert "RepairPullRequest --> VerifyRepairStartHead" in graph
+    assert "VerifyRepairStartHead --> RepairPullRequest" in graph
+    assert "VerifyRepairStartHead --> HumanTerminal" in graph
+    assert "PR z forka" in graph
+    assert "RepairPullRequest --> NewHeadSha" in graph
+    assert "NewHeadSha --> NextFactoryPassReview" in graph
+    assert "ReviewVerdict --> LocalMergeGate: APPROVE" in graph
+    assert "LocalMergeGate --> MergePullRequest" in graph
 
 
 def test_repository_has_no_github_actions_workflows():

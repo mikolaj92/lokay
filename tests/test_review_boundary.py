@@ -7,7 +7,8 @@ from lokay.review_boundary import (
 
 
 def test_resolve_same_sha_preserves_domain_verdict_not_cache_status():
-    evidence={"head_sha":"abc123","comments":["<!-- lokay-review head=abc123 verdict=request_changes merge_ok=0 -->"]}
+    head = "a" * 40
+    evidence={"head_sha":head,"comments":[f"<!-- lokay-review head={head} verdict=request_changes merge_ok=0 -->"]}
     out=resolve_sha_review(evidence)
     assert out["route"] == "cached"
     assert out["decision"] == {"verdict":"request_changes"}
@@ -23,6 +24,45 @@ def test_invalid_output_routes_retry_with_feedback():
     assert out["ok"] is True and out["route"] == "retry"
     prompt=validation_feedback_prompt(out["validation_error"],out["agent_stdout_tail"])
     assert "Validator feedback" in prompt and "not json" in prompt
+
+
+def test_verified_structured_cache_preserves_complete_decision_and_merge_policy():
+    from lokay.review_boundary import select_structured_review
+
+    head = "a" * 40
+    decision = {
+        "verdict": "approve",
+        "findings": [],
+        "reviewed_head_sha": head,
+        "task_identity_sha256": "b" * 64,
+        "review_result_sha256": "c" * 64,
+        "task": {"repo": "o/r", "type": "Issue", "state": "OPEN"},
+    }
+    resolved = {
+        "route": "cached", "head_sha": head, "artifact_sha256": "d" * 64,
+        "decision": decision, "merge_ok": True, "request_changes_count": 1,
+    }
+
+    selected = select_structured_review(resolved, {})
+
+    assert selected["route"] == "cached"
+    assert selected["decision"] == decision
+    assert selected["merge_ok"] is True
+    assert selected["request_changes_count"] == 1
+
+
+def test_structured_cache_without_artifact_or_bound_decision_fails_closed():
+    from lokay.review_boundary import select_structured_review
+
+    resolved = {
+        "route": "cached", "head_sha": "a" * 40,
+        "decision": {"verdict": "approve", "findings": []}, "merge_ok": True,
+    }
+
+    selected = select_structured_review(resolved, {})
+
+    assert selected["route"] == "fail_closed"
+    assert selected["decision"] == {"verdict": "fail_closed"}
 
 
 def test_valid_retry_becomes_authoritative_domain_result():
@@ -54,6 +94,36 @@ def test_cached_first_validation_is_not_applicable_at_organ_boundary():
     from lokay.organ.review_boundary import handle_review_boundary
     out=handle_review_boundary("validate_pr_review",{}, {"resolve_sha_review":{"route":"cached"}}, {"repo":"a/b","pr_number":7,"branch":"b","live":[]})
     assert out == {"ok":True,"route":"not_applicable"}
+
+
+def test_structured_review_does_not_fall_back_to_a_different_reviewer_for_evidence():
+    from lokay.organ.review_boundary import handle_review_boundary
+
+    out = handle_review_boundary(
+        "validate_evidence_review", {},
+        {"select_pr_review": {"route": "evidence"}},
+        {"repo": "a/b", "pr_number": 7, "branch": "b", "live": True},
+    )
+
+    assert out["route"] == "fail_closed"
+    assert out["reason"] == "structured_evidence_review_unsupported"
+
+
+def test_live_review_validation_fails_closed_when_plugin_request_is_missing():
+    from lokay.organ.review_boundary import handle_review_boundary
+
+    up = {
+        "collect_pr_review_evidence": {"evidence": {"task": {"number": 42}}},
+        "resolve_sha_review": {"route": "agent"},
+        "pr_review_agent": {"result": {}},
+    }
+    out = handle_review_boundary(
+        "validate_pr_review", {}, up,
+        {"repo": "a/b", "pr_number": 7, "branch": "b", "live": True},
+    )
+
+    assert out["route"] == "fail_closed"
+    assert out["reason"] == "review_request_missing"
 
 
 def test_policy_approval_skips_agent_results():
