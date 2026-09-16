@@ -12,6 +12,7 @@ import threading
 from typing import Any, Mapping
 
 from lokay.config import Config
+from lokay.pr_review_credential import resolve_pi_api_key
 
 _MAX_INPUT_BYTES = 4 * 1024 * 1024
 _MAX_OUTPUT_BYTES = 16 * 1024 * 1024
@@ -30,9 +31,17 @@ def _plugin_env(cfg: Config) -> dict[str, str]:
         for name in names
     ):
         raise PluginFailure("review plugin credential allowlist is invalid")
-    missing = [name for name in names if not os.environ.get(name)]
-    if missing:
-        raise PluginFailure("review plugin provider credential is missing")
+    values = {}
+    for name in names:
+        value = os.environ.get(name, "")
+        if name == "OCR_LLM_API_KEY" and not value:
+            try:
+                value = resolve_pi_api_key()
+            except Exception as exc:
+                raise PluginFailure("review plugin provider credential is missing") from exc
+        if not value:
+            raise PluginFailure("review plugin provider credential is missing")
+        values[name] = value
     path_dirs = [os.path.dirname(cfg.pr_review_plugin_command)] if os.path.sep in cfg.pr_review_plugin_command else ["/usr/local/bin", "/usr/bin", "/bin"]
     return {
         "PATH": os.pathsep.join(path_dirs),
@@ -40,7 +49,7 @@ def _plugin_env(cfg: Config) -> dict[str, str]:
         "LANG": "C.UTF-8",
         "NO_COLOR": "1",
         "TERM": "dumb",
-        **{name: os.environ[name] for name in names},
+        **values,
     }
 
 

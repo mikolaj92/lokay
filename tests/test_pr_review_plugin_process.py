@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from types import SimpleNamespace
 
@@ -97,6 +98,31 @@ def test_process_boundary_drains_output_while_streaming_large_request(monkeypatc
     result = invoke_plugin(cfg, request)
 
     assert result == {"ok": True}
+
+
+def test_process_boundary_resolves_pi_credential_at_plugin_boundary(monkeypatch):
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "lokay.proc.pr_review_plugin.resolve_pi_api_key",
+        lambda: "resolved-review-credential",
+    )
+    seen = {}
+
+    def run(argv, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(
+            argv, 0, stdout=b'{"ok":true,"schema":"lokay.review-result/1"}'
+        )
+
+    result = invoke_plugin(
+        _config(pr_review_provider_env=["OCR_LLM_API_KEY"]),
+        {"schema": "lokay.review-request/1"},
+        runner=run,
+    )
+
+    assert result["ok"] is True
+    assert seen["env"]["OCR_LLM_API_KEY"] == "resolved-review-credential"
+    assert "OCR_LLM_API_KEY" not in os.environ
 
 
 def test_process_boundary_rejects_bad_credential_names_before_start(monkeypatch):

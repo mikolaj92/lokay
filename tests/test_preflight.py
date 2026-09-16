@@ -107,6 +107,32 @@ def test_live_review_preflight_requires_a_non_empty_ocr_credential(tmp_path, mon
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "lokay.pr_review_credential.resolve_pi_api_key",
+        lambda: (_ for _ in ()).throw(RuntimeError("resolver unavailable")),
+    )
+    _host_ok(monkeypatch)
+
+    result = preflight.run_preflight(str(cfg), remediate=False)
+
+    finding = next(item for item in result["findings"] if item["name"] == "pr_review_credential")
+    assert finding["ok"] is False
+    assert finding["code"] == "resolver_failed"
+    assert result["gate_released"] is False
+    assert "ReviewConfigError" not in json.dumps(result)
+
+
+def test_live_review_preflight_reports_empty_resolver_result_as_missing_credential(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    cfg.write_text(
+        cfg.read_text()
+        + "\nmerge:\n  enabled: true\n  require_llm_review: true\n"
+        + "pr_review:\n  provider_env: [OCR_LLM_API_KEY]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    monkeypatch.setattr("lokay.pr_review_credential.resolve_pi_api_key", lambda: "")
     _host_ok(monkeypatch)
 
     result = preflight.run_preflight(str(cfg), remediate=False)
@@ -115,7 +141,6 @@ def test_live_review_preflight_requires_a_non_empty_ocr_credential(tmp_path, mon
     assert finding["ok"] is False
     assert finding["code"] == "missing_credential"
     assert result["gate_released"] is False
-    assert "ReviewConfigError" not in json.dumps(result)
 
 
 def test_live_review_preflight_accepts_ocr_credential_without_exposing_it(tmp_path, monkeypatch):
@@ -129,6 +154,10 @@ def test_live_review_preflight_accepts_ocr_credential_without_exposing_it(tmp_pa
     monkeypatch.setenv("LANG", "C.UTF-8")
     monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
     monkeypatch.setenv("OCR_LLM_API_KEY", "test-review-credential")
+    monkeypatch.setattr(
+        "lokay.pr_review_credential.resolve_pi_api_key",
+        lambda: "resolved-review-credential",
+    )
     _host_ok(monkeypatch)
 
     result = preflight.run_preflight(str(cfg), remediate=False)

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 
 def test_run_path_suppresses_host_envelope_stdout(monkeypatch, tmp_path, capsys):
     from lokay import graph_run
@@ -460,6 +462,98 @@ def test_run_path_supplies_project_root_for_fala_inherit_env(
     )
 
     assert seen["root"] == str(graph_run._project_root())
+
+
+def test_run_path_does_not_resolve_credential_for_non_review_paths(
+    monkeypatch, tmp_path
+):
+    import os
+    from lokay import graph_run
+
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "lokay.pr_review_credential.resolve_pi_api_key",
+        lambda: (_ for _ in ()).throw(AssertionError("resolver must not run")),
+    )
+
+    def host(**_kwargs):
+        assert os.environ.get("OCR_LLM_API_KEY") == ""
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    graph_run.run_path(
+        path_id="status_snapshot",
+        repo="local/status",
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        live=True,
+        require_healthy=False,
+    )
+    assert "OCR_LLM_API_KEY" not in os.environ
+
+
+@pytest.mark.parametrize("path_id", ["pr_triage", "pr_repair"])
+def test_run_path_resolves_review_credential_only_for_review_paths(
+    monkeypatch, tmp_path, path_id
+):
+    import os
+    from lokay import graph_run
+
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "lokay.pr_review_credential.resolve_pi_api_key",
+        lambda: "resolved-review-credential",
+    )
+    seen = {}
+
+    def host(**_kwargs):
+        seen["credential"] = os.environ.get("OCR_LLM_API_KEY")
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    graph_run.run_path(
+        path_id=path_id,
+        repo="local/status",
+        pr=1,
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        live=True,
+        require_healthy=False,
+    )
+
+    assert seen["credential"] == "resolved-review-credential"
+    assert "OCR_LLM_API_KEY" not in os.environ
+
+
+@pytest.mark.parametrize("path_id", ["pr_triage", "pr_repair"])
+def test_run_path_restores_review_credential_after_host_failure(
+    monkeypatch, tmp_path, path_id
+):
+    import os
+    from lokay import graph_run
+
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "lokay.pr_review_credential.resolve_pi_api_key",
+        lambda: "resolved-review-credential",
+    )
+
+    def host(**_kwargs):
+        assert os.environ["OCR_LLM_API_KEY"] == "resolved-review-credential"
+        raise RuntimeError("host failed")
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    with pytest.raises(RuntimeError, match="host failed"):
+        graph_run.run_path(
+            path_id=path_id,
+            repo="local/status",
+            pr=1,
+            package_path=graph_run.find_default_package(),
+            db_path=tmp_path,
+            live=True,
+            require_healthy=False,
+        )
+    assert "OCR_LLM_API_KEY" not in os.environ
 
 
 def test_run_path_declares_missing_review_credential_as_empty_for_fala(

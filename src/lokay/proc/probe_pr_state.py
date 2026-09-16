@@ -10,7 +10,7 @@ from lokay.envelope import emit_exit, ok
 from lokay.gh_prs import gh_json
 from lokay.proc._common import add_config_read, read_live, runner
 
-_REPAIR_PR_IDENTITY_FIELDS = "state,mergedAt,number,headRefName,headRefOid,headRepository{nameWithOwner}"
+_REPAIR_PR_IDENTITY_FIELDS = "state,mergedAt,number,headRefName,headRefOid,headRepository"
 
 
 def classify_view(row: dict[str, Any] | None, *, pr: int) -> dict[str, Any]:

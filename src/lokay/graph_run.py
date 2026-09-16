@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +60,35 @@ _PR_JOURNAL_FAMILIES = {
     "pr_triage": "pr-triage",
     "pr_repair": "pr-repair",
 }
+
+
+_REVIEW_PATH_IDS = frozenset({"pr_triage", "pr_repair"})
+
+
+@contextmanager
+def _review_credential_scope(*, path_id: str, live: bool):
+    """Resolve the review credential only around the Fala host snapshot.
+
+    Fala receives the host environment and later materializes only the
+    adapter's declared ``inherit_env``.  Keep the resolver result out of the
+    process until a live review path is actually being driven, and restore the
+    caller environment even when Fala raises.
+    """
+    if not live or path_id not in _REVIEW_PATH_IDS:
+        yield
+        return
+    from lokay.pr_review_credential import resolve_pi_api_key
+
+    previous = os.environ.get("OCR_LLM_API_KEY")
+    credential = resolve_pi_api_key()
+    os.environ["OCR_LLM_API_KEY"] = credential
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("OCR_LLM_API_KEY", None)
+        else:
+            os.environ["OCR_LLM_API_KEY"] = previous
 
 
 def issue_journal_dir(
@@ -308,9 +337,11 @@ def run_path(
     for key in (
         "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED",
         "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH",
-        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "OCR_LLM_API_KEY",
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
     ):
         os.environ.setdefault(key, "")
+    had_review_credential = "OCR_LLM_API_KEY" in os.environ
+    previous_review_credential = os.environ.get("OCR_LLM_API_KEY")
 
     # Fala Mojo sources: FALA_HOME env, else sibling ../Fala only (no machine hardcodes).
     if not os.environ.get("FALA_HOME"):
@@ -327,21 +358,30 @@ def run_path(
     try:
         # The host persists its detailed journal in ``db``; its stdout copy can
         # be hundreds of kilobytes and must not leak into the daemon log.
-        with open(os.devnull, "w", encoding="utf-8") as sink, redirect_stdout(sink):
-            result = host_run_package(
-                db_path=db,
-                package_path=pkg_runtime,
-                path_id=path_id,
-                run_id=rid,
-                inputs=base_input,
-                max_ticks=max_ticks,
-                worker_id="lokay-graph",
-            )
+        with _review_credential_scope(path_id=path_id, live=live):
+            # Fala requires every declared optional capability key to exist.
+            # For non-review paths this is an empty declaration; the review
+            # scope has already installed the resolved value when applicable.
+            os.environ.setdefault("OCR_LLM_API_KEY", "")
+            with open(os.devnull, "w", encoding="utf-8") as sink, redirect_stdout(sink):
+                result = host_run_package(
+                    db_path=db,
+                    package_path=pkg_runtime,
+                    path_id=path_id,
+                    run_id=rid,
+                    inputs=base_input,
+                    max_ticks=max_ticks,
+                    worker_id="lokay-graph",
+                )
     finally:
         if previous_issue_guard is None:
             os.environ.pop("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", None)
         else:
             os.environ["LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] = previous_issue_guard
+        if had_review_credential:
+            os.environ["OCR_LLM_API_KEY"] = str(previous_review_credential or "")
+        else:
+            os.environ.pop("OCR_LLM_API_KEY", None)
         for key, value in dynamic_library_env.items():
             if value is None:
                 os.environ.pop(key, None)

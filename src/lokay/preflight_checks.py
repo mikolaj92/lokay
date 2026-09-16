@@ -51,15 +51,24 @@ def check_pr_review_config(*, cfg: Any) -> Finding:
 
 
 def check_pr_review_credential(*, cfg: Any) -> Finding:
-    """Prove the isolated review lane has a non-empty credential, never its value."""
+    """Prove the review lane can resolve its credential without exposing it."""
     armed = bool(cfg.live and cfg.merge_enabled and cfg.require_llm_review)
     if not armed:
         return finding("pr_review_credential", True, "not_required")
     names = tuple(cfg.pr_review_provider_env or ())
     if len(names) != 1 or names[0] != "OCR_LLM_API_KEY":
         return finding("pr_review_credential", False, "credential_allowlist_invalid")
-    present = bool(os.environ.get("OCR_LLM_API_KEY", "").strip())
-    return finding("pr_review_credential", present, "ok" if present else "missing_credential")
+    try:
+        from lokay.pr_review_credential import resolve_pi_api_key
+
+        credential = resolve_pi_api_key()
+    except Exception:
+        return finding("pr_review_credential", False, "resolver_failed")
+    return finding(
+        "pr_review_credential",
+        bool(credential),
+        "ok" if credential else "missing_credential",
+    )
 
 
 def check_repository_catalog_clones(*, cfg: Any) -> Finding:

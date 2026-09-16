@@ -21,9 +21,11 @@ FAIL_CLOSED = (
     "Lokay LLM PR review failed closed (invalid structured output): {exc}\n"
     "Will not auto-merge until a valid review is produced."
 )
+# gh v2.100 accepts the object field and returns nameWithOwner inside it;
+# the older nested selector is rejected by current gh CLI versions.
 _VIEW_FIELDS = (
     "number,title,body,headRefName,headRefOid,baseRefName,baseRefOid,"
-    "url,isDraft,mergeable,comments,headRepository{nameWithOwner}"
+    "url,isDraft,mergeable,comments,headRepository"
 )
 _ISSUE_QUERY = """query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){__typename ... on Issue{number title body state url repository{nameWithOwner}} ... on PullRequest{number state url repository{nameWithOwner}}}}}"""
 _CLOSING_QUERY = """query($owner:String!,$name:String!,$number:Int!,$after:String){repository(owner:$owner,name:$name){pullRequest(number:$number){closingIssuesReferences(first:100,after:$after){nodes{number} pageInfo{hasNextPage endCursor}}}}}"""

@@ -143,6 +143,8 @@ def test_load_pr_evidence_requests_exact_base_and_head_refs_and_preserves_task_c
     assert "baseRefName" in calls[0][-1]
     assert "baseRefOid" in calls[0][-1]
     assert "headRefOid" in calls[0][-1]
+    assert "headRepository" in calls[0][-1]
+    assert "headRepository{" not in calls[0][-1]
 
 
 def test_revalidation_fails_closed_when_pr_head_changes_during_review(monkeypatch):

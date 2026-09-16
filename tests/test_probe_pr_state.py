@@ -67,7 +67,8 @@ def test_live_probe_returns_identity_required_for_repair_push_recovery(monkeypat
     assert out["head_repo"] == "o/r"
     assert seen[0][1] is True
     assert "headRefOid" in seen[0][0][-1]
-    assert "headRepository{nameWithOwner}" in seen[0][0][-1]
+    assert "headRepository" in seen[0][0][-1]
+    assert "headRepository{" not in seen[0][0][-1]
 
 
 def test_offline_probe_assumes_open() -> None:
