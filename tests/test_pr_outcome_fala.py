@@ -48,7 +48,7 @@ def test_request_changes_runs_repair_branch_not_merge(tmp_path):
     for key in (
         "LOKAY_ROOT", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED",
         "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH",
-        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "OCR_LLM_API_KEY",
     ):
         env.setdefault(key, "")
     env.setdefault("PYTHONPATH", "")
@@ -101,7 +101,7 @@ def test_invalid_review_runs_one_retry_then_approve_branch(tmp_path):
         "run_id='invalid-retry',command_overrides=json.loads(sys.argv[3]),max_ticks=32)))"
     )
     env = os.environ.copy()
-    for key in ("LOKAY_ROOT", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"):
+    for key in ("LOKAY_ROOT", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "OCR_LLM_API_KEY"):
         env.setdefault(key, "")
     env.setdefault("PYTHONPATH", "")
     run = subprocess.run([sys.executable, "-c", script, str(tmp_path / "state.sqlite"), str(package), json.dumps(commands)], cwd=root, env=env, capture_output=True, text=True)
@@ -137,7 +137,7 @@ def test_cached_sha_verdict_skips_both_review_agents(tmp_path):
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
     script="import fala,json,sys; print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id='pr_triage',run_id='cached',command_overrides=json.loads(sys.argv[3]),max_ticks=32)))"
     env=os.environ.copy(); env.pop("DYLD_LIBRARY_PATH",None); env.pop("DYLD_FALLBACK_LIBRARY_PATH",None); env.setdefault("PYTHONPATH","")
-    for key in ("LOKAY_ROOT","LOKAY_PROCESS_HEAD","LOKAY_HOST_FF_FETCHED","LOKAY_HEALTH_LEASE","LOKAY_HEALTH_LEASE_PATH","LOKAY_DISABLE_HEALTH_LEASE_ISSUE"): env.setdefault(key,'')
+    for key in ("LOKAY_ROOT","LOKAY_PROCESS_HEAD","LOKAY_HOST_FF_FETCHED","LOKAY_HEALTH_LEASE","LOKAY_HEALTH_LEASE_PATH","LOKAY_DISABLE_HEALTH_LEASE_ISSUE","OCR_LLM_API_KEY"): env.setdefault(key,'')
     run=subprocess.run([sys.executable,'-c',script,str(tmp_path/'db.sqlite'),str(package),json.dumps(commands)],cwd=root,env=env,capture_output=True,text=True); assert run.returncode==0,run.stderr
     result=json.loads(run.stdout.strip().splitlines()[-1]); statuses={k:v['status'] for k,v in result['effector_results'].items()}
     assert statuses['pr_review_agent']=='skipped' and statuses['pr_review_retry_agent']=='skipped'
@@ -175,7 +175,7 @@ def test_needs_evidence_runs_catalog_then_one_agent(tmp_path):
     path=next(x for x in tomllib.loads(package.read_text())['correlation_paths'] if x['id']=='pr_triage'); commands={x['id']:[sys.executable,str(effector)] for x in path['effectors']}
     script="import fala,json,sys; print(json.dumps(fala.host_run_package(db_path=sys.argv[1],package_path=sys.argv[2],path_id='pr_triage',run_id='evidence',command_overrides=json.loads(sys.argv[3]),max_ticks=64)))"
     env=os.environ.copy(); env.pop("DYLD_LIBRARY_PATH",None); env.pop("DYLD_FALLBACK_LIBRARY_PATH",None); env.setdefault("PYTHONPATH","")
-    for key in ("LOKAY_ROOT","LOKAY_PROCESS_HEAD","LOKAY_HOST_FF_FETCHED","LOKAY_HEALTH_LEASE","LOKAY_HEALTH_LEASE_PATH","LOKAY_DISABLE_HEALTH_LEASE_ISSUE","PYTHONPATH"): env.setdefault(key,'')
+    for key in ("LOKAY_ROOT","LOKAY_PROCESS_HEAD","LOKAY_HOST_FF_FETCHED","LOKAY_HEALTH_LEASE","LOKAY_HEALTH_LEASE_PATH","LOKAY_DISABLE_HEALTH_LEASE_ISSUE","PYTHONPATH","OCR_LLM_API_KEY"): env.setdefault(key,'')
     run=subprocess.run([sys.executable,'-c',script,str(tmp_path/'db.sqlite'),str(package),json.dumps(commands)],cwd=root,env=env,capture_output=True,text=True)
     assert run.returncode==0,run.stderr
     result=json.loads(run.stdout.strip().splitlines()[-1]); statuses={k:v['status'] for k,v in result['effector_results'].items()}
@@ -230,7 +230,7 @@ def test_red_checks_run_repair_node_not_review_or_merge(tmp_path):
         "LOKAY_HOST_FF_FETCHED",
         "LOKAY_HEALTH_LEASE",
         "LOKAY_HEALTH_LEASE_PATH",
-        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "OCR_LLM_API_KEY",
     ):
         env.setdefault(key, "")
     env.setdefault("PYTHONPATH", "")

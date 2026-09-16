@@ -11,6 +11,7 @@ from test_issue_triage_fala import base_effector
 PR_TRIAGE_ATOMS = (
     "list_pr_sieve",
     "select_pr_sieve",
+    "reconcile_pr_repair_push",
     "run_pr_sieve",
     "select_pr_triage_verdict",
     "summarize_pr_triage_department",
@@ -27,7 +28,11 @@ def _path() -> dict:
 
 
 def simulate(*, select_route: str) -> dict[str, str]:
-    routes = {"select_pr_sieve": select_route}
+    reconcile_route = "review" if select_route == "pr" else "no_pr"
+    routes = {
+        "select_pr_sieve": select_route,
+        "reconcile_pr_repair_push": reconcile_route,
+    }
     status: dict[str, str] = {}
     pending = list(_path()["effectors"])
     progressed = True
@@ -83,6 +88,7 @@ def test_empty_list_skips_triage_and_finishes(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[],count=0)
 if a=='select_pr_sieve':v.update(route='none',reason='no_open_pr')
+if a=='reconcile_pr_repair_push':v.update(route='no_pr',reason='no_open_pr')
 if a=='select_pr_triage_verdict':v.update(verdict='none')
 if a=='summarize_pr_triage_department':v.update(department='pr_triage',repair_started=False)"""
     )
@@ -104,6 +110,7 @@ def test_one_pr_runs_triage(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_pr_sieve':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
+if a=='reconcile_pr_repair_push':v.update(route='review')
 if a=='run_pr_sieve':v.update(route='completed',triage={'repairable':False})
 if a=='select_pr_triage_verdict':v.update(verdict='feedback')
 if a=='summarize_pr_triage_department':v.update(department='pr_triage',verdict='feedback',repair_started=False)"""
@@ -121,6 +128,7 @@ def test_repair_verdict_does_not_start_repair_inside_sieve(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_pr_sieve':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
+if a=='reconcile_pr_repair_push':v.update(route='review')
 if a=='run_pr_sieve':v.update(route='completed',triage={'repairable':True})
 if a=='select_pr_triage_verdict':v.update(verdict='repair',repairable=True)
 if a=='run_pr_repair_subflow':Path(""" + repr(str(sentinel)) + """).write_text('ran')

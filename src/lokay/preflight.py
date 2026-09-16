@@ -533,6 +533,8 @@ def _check(
         check_config,
         check_executor_availability,
         check_github_authentication,
+        check_pr_review_config,
+        check_pr_review_credential,
         check_repository_catalog_clones,
         check_required_environment,
     )
@@ -540,6 +542,8 @@ def _check(
     findings: list[dict[str, Any]] = []
     findings.append(check_required_environment(repaired=repaired))
     findings.append(check_config(cfg=cfg))
+    findings.append(check_pr_review_config(cfg=cfg))
+    findings.append(check_pr_review_credential(cfg=cfg))
     # A missing managed checkout blocks worktree operations for that repository,
     # not GitHub-only triage or work in every other repository.  Status reports
     # the actionable clone inventory; global preflight must not deadlock the

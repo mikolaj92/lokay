@@ -37,6 +37,31 @@ def check_config(*, cfg: Any) -> Finding:
     return finding("config", not errors, "ok" if not errors else "invalid")
 
 
+def check_pr_review_config(*, cfg: Any) -> Finding:
+    armed = bool(cfg.live and cfg.merge_enabled and cfg.require_llm_review)
+    if not armed:
+        return finding("pr_review_config", True, "not_required")
+    try:
+        from lokay.pr_review_config import verify_review_config
+
+        verify_review_config(cfg)
+    except Exception:
+        return finding("pr_review_config", False, "untrusted_review_config")
+    return finding("pr_review_config", True, "ok")
+
+
+def check_pr_review_credential(*, cfg: Any) -> Finding:
+    """Prove the isolated review lane has a non-empty credential, never its value."""
+    armed = bool(cfg.live and cfg.merge_enabled and cfg.require_llm_review)
+    if not armed:
+        return finding("pr_review_credential", True, "not_required")
+    names = tuple(cfg.pr_review_provider_env or ())
+    if len(names) != 1 or names[0] != "OCR_LLM_API_KEY":
+        return finding("pr_review_credential", False, "credential_allowlist_invalid")
+    present = bool(os.environ.get("OCR_LLM_API_KEY", "").strip())
+    return finding("pr_review_credential", present, "ok" if present else "missing_credential")
+
+
 def check_repository_catalog_clones(*, cfg: Any) -> Finding:
     clones = [
         repo for repo in preflight_repos(cfg) if not repo.clone_path.is_dir()
@@ -105,6 +130,8 @@ def check_executor_availability(*, cfg: Any, repaired: set[str]) -> Finding:
 FINDING_CHECKS: dict[str, Check] = {
     "required_environment": check_required_environment,
     "config": check_config,
+    "pr_review_config": check_pr_review_config,
+    "pr_review_credential": check_pr_review_credential,
     "repository_catalog_clones": check_repository_catalog_clones,
     "github_authentication": check_github_authentication,
     "executor_availability": check_executor_availability,

@@ -323,6 +323,10 @@ def invoke_ocr(
         background.write_bytes(render_background(request))
         env = _environment(engine, home=home)
         env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        if str(engine.get("provider") or "") == "openai":
+            credential = env.get("OCR_LLM_API_KEY")
+            if credential:
+                env["OPENAI_API_KEY"] = credential
         env.update({"DEVELOPER_DIR": "/Applications/Xcode-beta.app/Contents/Developer", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
         endpoint = host_for_provider(
             str(engine.get("provider") or ""),

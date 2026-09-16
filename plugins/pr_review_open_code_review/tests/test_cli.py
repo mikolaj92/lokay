@@ -360,6 +360,24 @@ def test_parse_one_json_rejects_prose_multiple_values_and_oversize():
         parse_one_json(" " * 11, max_bytes=10)
 
 
+def test_openai_provider_gets_explicit_provider_env_bridge(tmp_path: Path, monkeypatch):
+    request = _request(tmp_path)
+    request["engine"]["env_allowlist"] = ["OCR_LLM_API_KEY"]
+    request["engine"]["provider"] = "openai"
+    request["engine"]["provider_endpoint_url"] = "https://omniroute.example/v1"
+    monkeypatch.setenv("OCR_LLM_API_KEY", "review-key")
+    observed: dict = {}
+
+    def fake_run(argv, *, stdin, stdout, stderr, cwd, env, timeout, check):
+        observed["env"] = env
+        return subprocess.CompletedProcess(argv, 0, stdout=b'{"status":"complete"}')
+
+    assert invoke_ocr(request, preview=True, runner=fake_run) == {"status": "complete"}
+    assert observed["env"]["OCR_LLM_API_KEY"] == "review-key"
+    assert observed["env"]["OPENAI_API_KEY"] == "review-key"
+    assert "GH_TOKEN" not in observed["env"]
+
+
 def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp_path: Path, monkeypatch):
     request = _request(tmp_path)
     monkeypatch.setenv("OCR_PROVIDER_KEY", "secret-key")

@@ -308,7 +308,7 @@ def run_path(
     for key in (
         "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED",
         "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH",
-        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "OCR_LLM_API_KEY",
     ):
         os.environ.setdefault(key, "")
 

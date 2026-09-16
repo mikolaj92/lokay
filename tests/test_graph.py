@@ -520,6 +520,24 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
     assert "LOKAY_HOST_FF_FETCHED" in inherited
 
 
+def test_pr_review_agent_receives_ocr_credential_through_fala_capability():
+    import tomllib
+
+    package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
+    capability = next(
+        item for item in package["capabilities"] if item["id"] == "lokay_atom"
+    )
+    assert "OCR_LLM_API_KEY" in capability["secret_handles"]
+
+    review = next(
+        path for path in package["correlation_paths"] if path["id"] == "pr_triage"
+    )
+    agent = next(
+        effector for effector in review["effectors"] if effector["id"] == "pr_review_agent"
+    )
+    assert "OCR_LLM_API_KEY" in agent["adapter"]["inherit_env"]
+
+
 def test_subprocess_atoms_pin_project_cwd():
     import tomllib
 

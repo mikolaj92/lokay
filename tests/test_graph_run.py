@@ -462,6 +462,31 @@ def test_run_path_supplies_project_root_for_fala_inherit_env(
     assert seen["root"] == str(graph_run._project_root())
 
 
+def test_run_path_declares_missing_review_credential_as_empty_for_fala(
+    monkeypatch, tmp_path
+):
+    import os
+    from lokay import graph_run
+
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    seen = {}
+
+    def host(**_kwargs):
+        seen["credential"] = os.environ.get("OCR_LLM_API_KEY")
+        return {"ok": True, "run_status": "completed", "effector_results": {}}
+
+    monkeypatch.setattr("fala.host_run_package", host)
+    graph_run.run_path(
+        path_id="status_snapshot",
+        repo="local/status",
+        package_path=graph_run.find_default_package(),
+        db_path=tmp_path,
+        require_healthy=False,
+    )
+
+    assert seen["credential"] == ""
+
+
 def test_run_path_restores_dynamic_library_environment(monkeypatch, tmp_path):
     import os
     from lokay import graph_run

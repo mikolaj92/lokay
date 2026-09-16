@@ -96,6 +96,48 @@ def test_preflight_repairs_locale_and_runtime_directories(tmp_path, monkeypatch)
     assert result["repairs"][0]["value"] == "[redacted]"
 
 
+def test_live_review_preflight_requires_a_non_empty_ocr_credential(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    cfg.write_text(
+        cfg.read_text()
+        + "\nmerge:\n  enabled: true\n  require_llm_review: true\n"
+        + "pr_review:\n  provider_env: [OCR_LLM_API_KEY]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
+    _host_ok(monkeypatch)
+
+    result = preflight.run_preflight(str(cfg), remediate=False)
+
+    finding = next(item for item in result["findings"] if item["name"] == "pr_review_credential")
+    assert finding["ok"] is False
+    assert finding["code"] == "missing_credential"
+    assert result["gate_released"] is False
+    assert "ReviewConfigError" not in json.dumps(result)
+
+
+def test_live_review_preflight_accepts_ocr_credential_without_exposing_it(tmp_path, monkeypatch):
+    cfg = _config(tmp_path)
+    cfg.write_text(
+        cfg.read_text()
+        + "\nmerge:\n  enabled: true\n  require_llm_review: true\n"
+        + "pr_review:\n  provider_env: [OCR_LLM_API_KEY]\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    monkeypatch.setenv("LOKAY_LOG_DIR", str(tmp_path / "runtime" / "logs"))
+    monkeypatch.setenv("OCR_LLM_API_KEY", "test-review-credential")
+    _host_ok(monkeypatch)
+
+    result = preflight.run_preflight(str(cfg), remediate=False)
+
+    finding = next(item for item in result["findings"] if item["name"] == "pr_review_credential")
+    assert finding == {"name": "pr_review_credential", "ok": True, "code": "ok", "detail": "ok", "repaired": False}
+    assert "test-review-credential" not in json.dumps(result)
+
+
 def test_missing_catalog_clone_does_not_block_global_preflight(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     cfg.write_text(

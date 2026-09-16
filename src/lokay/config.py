@@ -83,6 +83,7 @@ class Config:
     pr_review_model: str = ""
     pr_review_config_sha256: str = ""
     pr_review_ocr_config: Path | None = None
+    pr_review_manifest: Path | None = None
     pr_review_sandbox_profile: Path | None = None
     pr_review_provider_env: list[str] = field(default_factory=list)
     pr_review_binary: Path | None = None
@@ -189,6 +190,10 @@ class Config:
                 errors.append("OS sandbox command is required for pr_review")
             if not self.pr_review_sandbox_profile or not self.pr_review_sandbox_profile.is_file():
                 errors.append("review OS sandbox profile must exist as a trusted file")
+            if not self.pr_review_manifest or not self.pr_review_manifest.is_file():
+                errors.append("trusted pr_review config manifest must exist as a trusted file")
+            if not self.pr_review_provider_env:
+                errors.append("pr_review provider credential environment allowlist is required")
         if self.pr_review_plugin_timeout_seconds < 1:
             errors.append("pr_review.plugin_timeout_seconds must be >= 1")
         if self.pr_review_engine != "open-code-review":
@@ -458,6 +463,7 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_review_model=str(review.get("model") or ""),
         pr_review_config_sha256=str(review.get("config_sha256") or "").lower(),
         pr_review_ocr_config=_expand(review["ocr_config"]) if review.get("ocr_config") else None,
+        pr_review_manifest=_expand(review["manifest"]) if review.get("manifest") else None,
         pr_review_provider_env=[str(item) for item in review.get("provider_env") or []],
         pr_review_binary=_expand(review["binary"]) if review.get("binary") else None,
         pr_review_binary_version=str(review.get("binary_version", "v1.12.0")),

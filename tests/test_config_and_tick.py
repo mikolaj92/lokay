@@ -357,11 +357,14 @@ def test_pr_review_config_requires_pinned_plugin_provider_and_sandbox(tmp_path: 
     assert any("provider and model" in item for item in errors)
     assert any("pinned pr_review binary" in item for item in errors)
     assert any("OS sandbox" in item for item in errors)
+    assert any("config manifest" in item for item in errors)
+    assert any("credential environment allowlist" in item for item in errors)
 
     sandbox_profile = tmp_path / "review.sb"
     sandbox_profile.write_text("sandbox profile")
     ocr_config = tmp_path / "ocr.json"
     ocr_config.write_text("{}")
+    (tmp_path / "config-manifest.json").write_text("{}")
     configured = Config(
         mode="live",
         merge_enabled=True,
@@ -372,12 +375,14 @@ def test_pr_review_config_requires_pinned_plugin_provider_and_sandbox(tmp_path: 
         pr_review_model="model-a",
         pr_review_config_sha256="c" * 64,
         pr_review_ocr_config=ocr_config,
+        pr_review_manifest=tmp_path / "config-manifest.json",
         pr_review_sandbox_profile=sandbox_profile,
         pr_review_binary=tmp_path / "ocr",
         pr_review_binary_sha256="a" * 64,
         pr_review_rule_file=tmp_path / "rule.json",
         pr_review_tools_file=tmp_path / "tools.json",
         pr_review_sandbox_command=["sandbox-exec", "--"],
+        pr_review_provider_env=["OCR_PROVIDER_KEY"],
     )
     assert configured.validate() == []
 
