@@ -8,7 +8,7 @@ Current behavior:
 - TTL archive GC retains recovery copies and reports their paths.
 - Log, backup, and subflow-directory age pruning reports completion_evidence_required.
 - Wrapper allocation keeps earlier journals.
-- Fala maintain_journal applies terminal-run deletion on one oversized journal per tick, smallest first.
+- Fala maintain_journal applies terminal-run deletion on one oversized journal per tick, smallest first. A journal with no terminal-run candidates does not consume the apply slot; the next oversized journal with candidates is reclaimed.
 - VACUUM is Fala-owned and runs only when remaining free space can hold the compact copy plus a 16 MiB safety margin.
 - Maintenance never finalizes created/running runs. Only the owning recovery path may do so with lease evidence.
 

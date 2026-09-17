@@ -175,9 +175,51 @@ def test_runtime_allows_only_the_exact_credential_command_for_custom_provider(
     assert '(allow process-exec (literal "/usr/bin/printenv"))' in profile
     assert '(allow process-exec (literal "/bin/sh"))' in profile
     assert '(allow process-exec (literal "/bin/bash"))' in profile
+    assert '(allow process-exec (literal "/usr/bin/grep"))' in profile
     assert '(allow file-read* (literal "/private/var/select/sh"))' in profile
     assert '(allow file-read* (literal "' + str(config.resolve()) + '"))' in profile
     assert "secret-key" not in profile
+
+
+def test_sandboxed_review_can_git_grep_changed_file(tmp_path: Path, monkeypatch):
+    request = _request(tmp_path)
+    repo = Path(request["repo_path"])
+    (repo / "file.py").write_text("review me\n")
+    subprocess.run(
+        ["/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo), "init", "-q"],
+        check=True,
+    )
+    subprocess.run(
+        ["/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo), "add", "file.py"],
+        check=True,
+        env={"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"},
+    )
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    home.chmod(0o700)
+    argv = build_ocr_argv(
+        request, background=home / "background.md", preview=False, provider_proxy_port=43127,
+    )
+    result = subprocess.run(
+        [
+            "/usr/bin/sandbox-exec", "-f", argv[2], "--",
+            "/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo),
+            "grep", "-n", "review me", "--", "file.py",
+        ],
+        capture_output=True,
+        env={
+            "HOME": str(home),
+            "PATH": "/Library/Developer/CommandLineTools/usr/bin:/usr/bin:/bin",
+            "DEVELOPER_DIR": "/Library/Developer/CommandLineTools",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_PAGER": "cat",
+        },
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert b"review me" in result.stdout
 
 
 def test_sandboxed_omniroute_profile_executes_api_key_cmd_through_macos_sh(
@@ -516,6 +558,7 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
     assert result == {"status": "complete"}
     env = observed["env"]
     assert env["OCR_PROVIDER_KEY"] == "secret-key"
+    assert env["GIT_PAGER"] == ""
     assert env["PATH"].split(":", 1)[0] == "/Library/Developer/CommandLineTools/usr/bin"
     assert "GH_TOKEN" not in env
     assert "LOKAY_HEALTH_LEASE" not in env
@@ -534,7 +577,7 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
             request["engine"]["rule_path"], request["engine"]["tools_path"],
             request["engine"]["ocr_config_path"],
         ),
-        allowed_executables=(request["engine"]["binary_path"],),
+        allowed_executables=(request["engine"]["binary_path"], "/usr/bin/grep"),
     )
 
     def fail_run(*_args, **_kwargs):

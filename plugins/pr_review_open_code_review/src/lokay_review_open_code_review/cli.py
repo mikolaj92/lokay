@@ -216,7 +216,9 @@ def build_ocr_argv(
         credential_runtime = (
             Path("/usr/bin/printenv"), Path("/bin/sh"), Path("/bin/bash"),
         )
-    allowed_runtime_executables = (Path(binary), *credential_runtime)
+    # code_search shells `git grep`, which execs /usr/bin/grep.
+    search_runtime = (Path("/usr/bin/grep"),)
+    allowed_runtime_executables = (Path(binary), *credential_runtime, *search_runtime)
     runtime_profile_text = review_profile(
         repository=Path(repo), home=scratch,
         provider_endpoint_host=sandbox_endpoint,
@@ -407,7 +409,7 @@ def invoke_ocr(
             credential = env.get("OCR_LLM_API_KEY")
             if credential:
                 env["OPENAI_API_KEY"] = credential
-        env.update({"DEVELOPER_DIR": "/Library/Developer/CommandLineTools", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
+        env.update({"DEVELOPER_DIR": "/Library/Developer/CommandLineTools", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0", "GIT_PAGER": ""})
         endpoint = host_for_provider(
             str(engine.get("provider") or ""),
             str(engine.get("provider_endpoint_url") or ""),

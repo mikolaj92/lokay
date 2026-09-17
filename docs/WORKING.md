@@ -319,7 +319,8 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Every live Fala sqlite under `~/.lokay/fala/<path>/` is maintained through
   `fala.maintain_journal` when oversized (default 64 MiB) so idle ticks do
   not reopen a multi-GB journal. One oversized journal per tick, smallest
-  first, deletes only terminal runs. VACUUM is Fala-owned and runs only when
+  first, deletes only terminal runs. A journal with no terminal-run candidates
+  does not consume the apply slot. VACUUM is Fala-owned and runs only when
   remaining free space can hold the compact copy plus a 16 MiB safety margin.
   Maintenance does not finalize `created` leftovers; that stays on the owning
   recovery path with lease evidence.

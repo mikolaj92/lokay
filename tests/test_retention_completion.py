@@ -124,8 +124,8 @@ def test_journal_maintenance_does_not_finalize_active_runs(tmp_path, monkeypatch
     maintain_lokay_fala_journals(home=tmp_path, min_bytes=1)
     assert 'finalized' not in calls
     assert 'deleted' not in calls
-    assert calls[0]['dry_run'] is False
-    assert calls[0]['vacuum'] is True
+    assert calls[0]['dry_run'] is True
+    assert calls[0]['vacuum'] is False
 
 
 def test_self_repair_reclaim_does_not_invent_timeouts(tmp_path, monkeypatch):

@@ -76,12 +76,19 @@ def maintain_lokay_fala_journals(
     maintained: list[dict[str, Any]] = []
     applied = False
     for size, db in ranked:
-        apply = (not applied) and _can_vacuum(db, size)
-        result = _maintain_sqlite(db, min_bytes=ceiling, keep=retained, apply=apply)
-        if result is not None:
-            maintained.append(result)
-            if apply:
-                applied = True
+        probe = _maintain_sqlite(db, min_bytes=ceiling, keep=retained, apply=False)
+        if probe is None:
+            continue
+        candidates = int(probe.get("candidate_run_count") or 0)
+        can_apply = (not applied) and candidates > 0 and _can_vacuum(db, size)
+        if not can_apply:
+            if probe.get("reason") == "deferred" and candidates == 0:
+                probe = {**probe, "reason": "no_terminal_candidates"}
+            maintained.append(probe)
+            continue
+        result = _maintain_sqlite(db, min_bytes=ceiling, keep=retained, apply=True)
+        maintained.append(result if result is not None else probe)
+        applied = True
     lokay_home = (home or Path.home()) / ".lokay"
     pruned = prune_stale_fala_journals(root)
     pruned_logs = prune_stale_logs(lokay_home / "logs")
