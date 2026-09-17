@@ -1,4 +1,4 @@
-"""Helpers for standalone Fala 0.9.1 subprocess fixtures."""
+"""Helpers for standalone Fala subprocess fixtures."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from fala.protocol import Request, build_result, validate
 def request_from_adapter_manifest(
     manifest: Mapping[str, Any], *, run_id: str = "run"
 ) -> Request:
-    """Turn a leftover adapter-shaped mapping into a typed Fala 0.9.1 Request."""
+    """Turn a leftover adapter-shaped mapping into a typed Fala Request."""
     del run_id
     job = str(manifest.get("job") or manifest.get("process_id") or "")
     payload = dict(manifest.get("payload") or manifest.get("input") or {})

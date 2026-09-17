@@ -1,4 +1,4 @@
-"""Drive one authored path through Fala with a protocol/0.9.1 fixture organ."""
+"""Drive one authored path through Fala with a protocol fixture organ."""
 from __future__ import annotations
 
 import json
@@ -22,7 +22,7 @@ _INHERIT = (
 
 
 def effector_source(values_path: Path, ran_path: Path) -> str:
-    """Return a Fala 0.9.1 organ that publishes JSON payload and logs ran ids."""
+    """Return a Fala organ that publishes JSON payload and logs ran ids."""
     return (
         "import json\n"
         "from pathlib import Path\n"
@@ -79,7 +79,7 @@ def run_overridden_path(
     run_id: str,
     max_ticks: int = 256,
 ) -> dict[str, Any]:
-    """Drive one expanded path with command_overrides and a Fala 0.9.1 fixture organ."""
+    """Drive one expanded path with command_overrides and a Fala fixture organ."""
     import pytest
 
     pytest.importorskip("fala")

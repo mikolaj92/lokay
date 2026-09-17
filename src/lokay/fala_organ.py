@@ -756,7 +756,7 @@ def organ_envelope(atom: str, result: dict[str, Any]) -> dict[str, Any]:
 
 
 def _request_job(manifest: Any) -> str:
-    """Full Fala process id from a 0.9.1 Request (``path:atom``)."""
+    """Full Fala process id from a Request (``path:atom``)."""
     if hasattr(manifest, "job"):
         return str(getattr(manifest, "job") or "")
     if isinstance(manifest, dict):
@@ -765,7 +765,7 @@ def _request_job(manifest: Any) -> str:
 
 
 def _job_id(manifest: Any) -> str:
-    """Effector id from a Fala 0.9.1 Request (config.atom, else job)."""
+    """Effector id from a Fala Request (config.atom, else job)."""
     return str(sdk.config(manifest).get("atom") or _request_job(manifest) or "")
 
 

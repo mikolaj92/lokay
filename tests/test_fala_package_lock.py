@@ -47,9 +47,9 @@ def test_python_fala_dependency_uses_immutable_git_tag():
     source = pyproject["tool"]["uv"]["sources"]["fala"]
     assert source == {
         "git": "https://github.com/mikolaj92/Fala.git",
-        "rev": "9c3ccf67f25bd4d1be34df67cd8a29fd43327b08",
+        "rev": "b2547ea6ef8050463a95b7cb10991ed92b9b4f33",
     }
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
     assert 'editable = "../Fala"' not in lock
-    assert 'version = "0.9.1"' in lock
-    assert "#9c3ccf67f25bd4d1be34df67cd8a29fd43327b08" in lock
+    assert 'version = "0.9.3"' in lock
+    assert "#b2547ea6ef8050463a95b7cb10991ed92b9b4f33" in lock
