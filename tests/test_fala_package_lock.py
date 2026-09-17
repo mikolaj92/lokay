@@ -9,8 +9,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 CHECKOUT = ROOT / "fala" / "lokay.fala-package.toml"
 PACKAGED = ROOT / "src" / "lokay" / "data" / "lokay.fala-package.toml"
-PINNED_FALA = "b2547ea6ef8050463a95b7cb10991ed92b9b4f33"
-PINNED_FALA_VERSION = "0.9.3"
+PINNED_FALA = "4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd"
+PINNED_FALA_VERSION = "0.9.4"
 
 
 def test_packaged_fala_is_byte_identical_to_checkout():
@@ -75,7 +75,7 @@ def _git_head(path: Path) -> str:
 def test_sibling_fala_checkout_matches_pinned_revision():
     """graph_run falls back to ../Fala when FALA_HOME is unset.
 
-    A stale 0.9.1 sibling mixes wheel 0.9.3 with native 0.9.1 and skips `when`.
+    A stale 0.9.3 sibling mixes wheel 0.9.4 with native 0.9.3 and skips `when`.
     """
     sibling = ROOT.parent / "Fala"
     assert sibling.is_dir(), f"canonical Fala checkout missing at {sibling}"
