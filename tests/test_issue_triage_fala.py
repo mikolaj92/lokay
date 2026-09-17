@@ -17,7 +17,7 @@ def run_graph(tmp_path, body: str, run_id: str, path_id: str = "issue_triage"):
     return json.loads(run.stdout.strip().splitlines()[-1])
 
 def base_effector(extra: str) -> str:
-    """Build a Fala 0.9 subprocess effector from the typed Request manifest."""
+    """Build a Fala 0.9.1 subprocess effector from the typed Request manifest."""
     return (
         "import json\n"
         "from pathlib import Path\n"

@@ -939,6 +939,8 @@ def test_job_id_prefers_config_atom():
         job="classify",
         payload={"conduction": {"source": {"route": "ready"}}},
         config={"atom": "classify", "attempt": 2},
+        contract_id="lokay-organ",
+        contract_version="1",
     )
     assert fala_organ._job_id(request) == "classify"
     result = fala_organ.sdk.output(request, {"ok": True, "atom": "classify"})
@@ -956,6 +958,8 @@ def test_job_id_falls_back_to_job_field():
         job="atom",
         payload={},
         config={},
+        contract_id="lokay-organ",
+        contract_version="1",
     )
     assert fala_organ._job_id(request) == "atom"
     mapping = {"job": "factory_pass:atom", "config": {"atom": "atom"}}
