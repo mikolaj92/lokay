@@ -56,11 +56,17 @@ def _trusted_path(path: Path | None, *, executable: bool = False) -> Path:
 def _credential_keys(value: Any) -> bool:
     if isinstance(value, Mapping):
         forbidden = {
-            "api_key", "api_key_cmd", "auth_token", "auth_token_cmd",
+            "api_key", "auth_token", "auth_token_cmd",
             "password", "token", "secret",
         }
         if any(str(key).lower() in forbidden for key in value):
             return True
+        # OCR's credential command is a reference to the allowlisted runtime
+        # environment, not materialized secret data. Only this exact command is
+        # permitted in the credential-free trusted config.
+        for key, item in value.items():
+            if str(key).lower() == "api_key_cmd" and item != "/usr/bin/printenv OCR_LLM_API_KEY":
+                return True
         return any(_credential_keys(item) for item in value.values())
     if isinstance(value, list):
         return any(_credential_keys(item) for item in value)
@@ -94,16 +100,35 @@ def canonical_review_payload(cfg: Config) -> dict[str, Any]:
         raise ReviewConfigError("credential_materialized")
     if provider_value.get("provider") != cfg.pr_review_provider:
         raise ReviewConfigError("provider_config_mismatch")
+    provider_key = cfg.pr_review_provider
     providers = provider_value.get("providers")
-    selected = providers.get(cfg.pr_review_provider) if isinstance(providers, Mapping) else None
-    if not isinstance(selected, Mapping):
-        raise ReviewConfigError("provider_config_mismatch")
-    if selected.get("url") != cfg.pr_review_provider_endpoint_url or selected.get("model") != cfg.pr_review_model:
-        raise ReviewConfigError("provider_config_mismatch")
-    if set(provider_value) != {"provider", "providers", "llm"} or provider_value.get("llm") != {}:
-        raise ReviewConfigError("provider_config_policy_mismatch")
-    if set(providers) != {cfg.pr_review_provider} or set(selected) != {"url", "model"}:
-        raise ReviewConfigError("provider_config_policy_mismatch")
+    custom_providers = provider_value.get("custom_providers")
+    if provider_key in {"", "openai"}:
+        if not isinstance(providers, Mapping):
+            raise ReviewConfigError("provider_config_mismatch")
+        selected = providers.get(provider_key)
+        if not isinstance(selected, Mapping):
+            raise ReviewConfigError("provider_config_mismatch")
+        if selected.get("url") != cfg.pr_review_provider_endpoint_url or selected.get("model") != cfg.pr_review_model:
+            raise ReviewConfigError("provider_config_mismatch")
+        if set(provider_value) != {"provider", "providers", "llm"} or provider_value.get("llm") != {}:
+            raise ReviewConfigError("provider_config_policy_mismatch")
+        if set(providers) != {provider_key} or set(selected) != {"url", "model"}:
+            raise ReviewConfigError("provider_config_policy_mismatch")
+    else:
+        if not isinstance(custom_providers, Mapping):
+            raise ReviewConfigError("provider_config_mismatch")
+        selected = custom_providers.get(provider_key)
+        if not isinstance(selected, Mapping):
+            raise ReviewConfigError("provider_config_mismatch")
+        if selected.get("url") != cfg.pr_review_provider_endpoint_url or selected.get("model") != cfg.pr_review_model:
+            raise ReviewConfigError("provider_config_mismatch")
+        if set(provider_value) != {"provider", "custom_providers", "llm"} or provider_value.get("llm") != {}:
+            raise ReviewConfigError("provider_config_policy_mismatch")
+        if set(custom_providers) != {provider_key} or set(selected) != {"url", "protocol", "model", "api_key_cmd"}:
+            raise ReviewConfigError("provider_config_policy_mismatch")
+        if selected.get("protocol") != "openai":
+            raise ReviewConfigError("provider_config_policy_mismatch")
     return {
         "schema": _MANIFEST_SCHEMA,
         "engine": {

@@ -318,10 +318,11 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the lokay.
   Every live Fala sqlite under `~/.lokay/fala/<path>/` is maintained through
   `fala.maintain_journal` when oversized (default 64 MiB) so idle ticks do
-  not reopen a multi-GB journal. Heartbeat journals also finalize and delete
-  `created` leftovers left by a 180s SIGKILL, through `finalize_run` then
-  `delete_terminal_run`. Reclaim is capped at eight rows per heartbeat journal
-  per tick, so old debris drains without consuming the next 180s product slot.
+  not reopen a multi-GB journal. One oversized journal per tick, smallest
+  first, deletes only terminal runs. VACUUM is Fala-owned and runs only when
+  remaining free space can hold the compact copy plus a 16 MiB safety margin.
+  Maintenance does not finalize `created` leftovers; that stays on the owning
+  recovery path with lease evidence.
   Detached issue-to-PR journals are not finalized. `daemon_entry` /
   `daemon_cycle` / `factory_pass` open a fresh wrapper sqlite per tick and
   prune old wrapper dirs; they do not reopen the shared lokay journals. Each

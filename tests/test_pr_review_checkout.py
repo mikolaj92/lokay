@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -67,6 +68,11 @@ def test_prepare_review_checkout_pins_head_and_hashes_exact_patch(tmp_path: Path
     from lokay.pr_review_checkout import recompute_review_evidence
     recompute_review_evidence(Runner(), review, base_ref_sha=base, head_sha=head)
 
+    # Fala serializes tuple ranges as JSON arrays before the boundary receives
+    # them again during revalidation.
+    round_tripped = replace(review, changed_ranges=json.loads(json.dumps(review.changed_ranges)))
+    recompute_review_evidence(Runner(), round_tripped, base_ref_sha=base, head_sha=head)
+
     (review.path / "injected.txt").write_text("repo write")
     with pytest.raises(ValueError, match="changed during review"):
         verify_review_checkout_unchanged(Runner(), review, head_sha=head)
@@ -100,6 +106,18 @@ def test_prepare_review_checkout_fetches_exact_fork_head_from_validated_head_rep
     review = prepare_review_checkout(cfg, Runner(), "acme/demo", base, fork_head, live=True, head_repo="contributor/demo-fork")
     assert review.diff_paths == [{"path": "file.py", "old_path": "", "status": "modified"}]
     assert subprocess.check_output(["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True).strip().endswith("origin")
+
+
+def test_verify_origin_accepts_the_canonical_ssh_transport(tmp_path: Path):
+    _source, clone, _base, _head = _repo(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(clone), "remote", "set-url", "origin", "git@github.com:acme/demo.git"],
+        check=True,
+    )
+
+    from lokay.pr_review_checkout import _verify_origin
+
+    _verify_origin(Runner(), clone, "acme/demo")
 
 
 def test_prepare_review_checkout_rejects_noncanonical_origin_and_sha(tmp_path: Path):

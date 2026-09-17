@@ -137,6 +137,39 @@ def test_child_boundary_wires_reconciliation_into_verdict_and_summary():
     assert summary["triage"]["repairable"] is False
 
 
+def test_run_pr_sieve_lifts_pr_identity_from_reconciliation_handoff(monkeypatch):
+    from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
+
+    seen: list[tuple[dict, dict]] = []
+    monkeypatch.setattr(
+        "lokay.proc.run_pr_triage_subflow.run",
+        lambda target, **kwargs: seen.append((target, kwargs)) or {"ok": True},
+    )
+
+    out = handle_pr_triage_department(
+        "run_pr_sieve",
+        {"config_path": "config.yaml", "live": True},
+        {
+            "reconcile_pr_repair_push": {
+                "ok": True,
+                "route": "review",
+                "repo": "o/r",
+                "pr": 9,
+                "branch": "ai/fix/9-x",
+            },
+        },
+        {},
+    )
+
+    assert out == {"ok": True}
+    assert seen == [
+        (
+            {"ok": True, "route": "pr", "repo": "o/r", "pr": 9, "branch": "ai/fix/9-x"},
+            {"config_path": "config.yaml", "live": True},
+        ),
+    ]
+
+
 def test_selected_pr_with_empty_or_failed_listing_cannot_enter_review(monkeypatch):
     from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
 

@@ -42,6 +42,9 @@ def test_no_pending_intent_opens_review_only_for_valid_selected_pr(monkeypatch, 
     out = reconcile_pending(config_path="config.yaml", live=True, selection=selected)
     assert out["route"] == "review"
     assert out["recovered"] == []
+    assert out["repo"] == "o/r"
+    assert out["pr"] == 9
+    assert out["branch"] == "ai/fix/9-x"
     no_pr = reconcile_pending(
         config_path="config.yaml", live=True,
         selection={"ok": True, "route": "none", "reason": "no_open_pr"},
@@ -169,3 +172,73 @@ def test_live_probe_is_never_performed_when_receipts_are_empty(monkeypatch, tmp_
     empty = {"ok": True, "route": "none", "reason": "no_open_pr"}
     assert reconcile_pending(config_path="config.yaml", live=True, selection=selected)["route"] == "review"
     assert reconcile_pending(config_path="config.yaml", live=True, selection=empty)["route"] == "no_pr"
+
+
+def test_oversized_terminal_receipt_does_not_block_independent_pr_review(
+    monkeypatch, tmp_path
+):
+    path = pr_repair_receipts.receipt_path("stale/repo", 54, state_dir=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({
+            "repo": "stale/repo",
+            "pr": 54,
+            "attempts": 1,
+            "budget": 1,
+            "last_head_sha": "",
+            "last_terminal": "x" * (1_048_576 + 1),
+            "updated_at": "2026-09-13T07:46:26Z",
+            "parked": True,
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "lokay.proc.pr_repair_receipts.resolve_state_dir", lambda _path: tmp_path,
+    )
+    monkeypatch.setattr(
+        "lokay.proc.pr_repair_receipts.resolve_budget", lambda _path: 2,
+    )
+
+    out = reconcile_pending(
+        config_path="config.yaml", live=True,
+        selection={"ok": True, "route": "pr", "repo": "o/r", "pr": 9,
+                   "branch": "ai/fix/9-x"},
+    )
+
+    assert out["route"] == "review"
+    assert out["recovered"] == []
+
+
+def test_oversized_receipt_beyond_compatibility_bound_stays_fail_closed(
+    monkeypatch, tmp_path
+):
+    path = pr_repair_receipts.receipt_path("too/large", 54, state_dir=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps({
+            "repo": "too/large",
+            "pr": 54,
+            "attempts": 1,
+            "budget": 1,
+            "last_head_sha": "",
+            "last_terminal": "x" * (16 * 1024 * 1024),
+            "updated_at": "2026-09-13T07:46:26Z",
+            "parked": True,
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "lokay.proc.pr_repair_receipts.resolve_state_dir", lambda _path: tmp_path,
+    )
+    monkeypatch.setattr(
+        "lokay.proc.pr_repair_receipts.resolve_budget", lambda _path: 2,
+    )
+
+    out = reconcile_pending(
+        config_path="config.yaml", live=True,
+        selection={"ok": True, "route": "pr", "repo": "o/r", "pr": 9,
+                   "branch": "ai/fix/9-x"},
+    )
+
+    assert out["route"] == "fail_closed"
+    assert out["reason"] == "pr_repair_receipt_invalid"

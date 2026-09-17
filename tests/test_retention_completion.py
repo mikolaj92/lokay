@@ -124,7 +124,8 @@ def test_journal_maintenance_does_not_finalize_active_runs(tmp_path, monkeypatch
     maintain_lokay_fala_journals(home=tmp_path, min_bytes=1)
     assert 'finalized' not in calls
     assert 'deleted' not in calls
-    assert calls[0]['dry_run'] is True
+    assert calls[0]['dry_run'] is False
+    assert calls[0]['vacuum'] is True
 
 
 def test_self_repair_reclaim_does_not_invent_timeouts(tmp_path, monkeypatch):
@@ -148,12 +149,24 @@ def test_native_maintenance_preserves_terminal_and_incomplete_runs(tmp_path):
     ensure_journal(db)
     for ident, status in [('recover-me', 'created'), ('failure-evidence', 'failed'), ('done-evidence', 'completed')]:
         upsert_run_metadata(db, run_id=ident, status=status, metadata={'keep': ident})
+    import sqlite3
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "UPDATE runs SET created_at=?, updated_at=?, finished_at=? "
+            "WHERE id IN ('failure-evidence', 'done-evidence')",
+            ('2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z'),
+        )
     before = fala.list_runs(db)
     result = maintain_lokay_fala_journals(home=tmp_path, min_bytes=1, keep=0)
     after = fala.list_runs(db)
-    assert after == before
-    assert result['maintained'][0]['planned'] is True
-    assert result['maintained'][0]['deleted_run_count'] == 0
+    remaining = {row['id']: row['status'] for row in after}
+    assert remaining['recover-me'] == 'created'
+    assert 'failure-evidence' not in remaining
+    assert 'done-evidence' not in remaining
+    assert db.exists()
+    assert result['maintained'][0]['planned'] is False
+    assert result['maintained'][0]['deleted_run_count'] == 2
+    assert result['maintained'][0]['vacuumed'] is True
 
 
 def test_late_ignored_content_survives_registry_detach(tmp_path):

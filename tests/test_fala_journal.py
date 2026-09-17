@@ -24,11 +24,13 @@ def _capture_maintain(monkeypatch):
     def maintain(db_path, **kwargs):
         path = Path(db_path)
         calls.append({"db_path": path, **kwargs})
+        planned = kwargs.get("dry_run", True)
         return {
             "ok": True,
-            "dry_run": False,
-            "deleted_run_count": 1,
-            "vacuumed": True,
+            "dry_run": planned,
+            "candidate_count": 1,
+            "deleted_run_count": 0 if planned else 1,
+            "vacuumed": bool(kwargs.get("vacuum")) and not planned,
         }
 
     monkeypatch.setattr("fala.maintain_journal", maintain)
@@ -56,10 +58,13 @@ def test_over_cap_journal_uses_fala_maintain_not_rename(tmp_path: Path, monkeypa
             "db_path": db,
             "older_than_days": 0,
             "keep_last": 1,
-            "vacuum": False,
-            "dry_run": True,
+            "vacuum": True,
+            "dry_run": False,
         }
     ]
+    assert out["maintained"][0]["planned"] is False
+    assert out["maintained"][0]["deleted_run_count"] == 1
+    assert out["maintained"][0]["vacuumed"] is True
     assert wal.exists()
     assert list(db.parent.glob("state.sqlite.*")) == []
 
@@ -422,4 +427,55 @@ def test_self_repair_incomplete_runs_keep_their_original_status(tmp_path: Path, 
     assert public["ok"] is True
     assert public["reclaimed"] == []
     assert calls == []
-    assert all(call["dry_run"] is True for call in maintain_calls)
+    applied = [call for call in maintain_calls if call["dry_run"] is False]
+    planned = [call for call in maintain_calls if call["dry_run"] is True]
+    assert len(applied) == 1 and applied[0]["vacuum"] is True
+    assert len(planned) == 2
+    assert all(call["vacuum"] is False for call in planned)
+
+
+def test_over_cap_apply_vacuums_smallest_journal_first(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    fala = home / ".lokay" / "fala"
+    small = _write_db(fala / "small" / "state.sqlite", size=60)
+    large = _write_db(fala / "large" / "state.sqlite", size=90)
+    calls = _capture_maintain(monkeypatch)
+
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
+    applied = [call for call in calls if call["dry_run"] is False]
+    assert [call["db_path"] for call in applied] == [small]
+    assert applied[0]["vacuum"] is True
+    rows = {Path(row["path"]): row for row in out["maintained"]}
+    assert rows[small]["planned"] is False
+    assert rows[small]["vacuumed"] is True
+    assert rows[large]["planned"] is True
+    assert rows[large]["deleted_run_count"] == 0
+
+
+def test_vacuum_is_skipped_when_headroom_cannot_hold_the_compact_copy(
+    tmp_path: Path, monkeypatch
+):
+    home = tmp_path / "home"
+    db = _write_db(home / ".lokay" / "fala" / "state.sqlite", size=80)
+    calls = _capture_maintain(monkeypatch)
+    monkeypatch.setattr(
+        "lokay.fala_journal._disk_free_bytes",
+        lambda _path: 10,
+    )
+    monkeypatch.setattr(
+        "lokay.fala_journal._vacuum_headroom_bytes",
+        lambda: 20,
+    )
+
+    out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
+    assert calls == [
+        {
+            "db_path": db,
+            "older_than_days": 0,
+            "keep_last": 1,
+            "vacuum": False,
+            "dry_run": True,
+        }
+    ]
+    assert out["maintained"][0]["planned"] is True
+    assert out["maintained"][0]["reason"] == "vacuum_headroom_insufficient"

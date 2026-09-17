@@ -110,7 +110,7 @@ def test_build_ocr_argv_uses_exact_refs_and_pinned_review_limits(tmp_path: Path)
     assert ["--model", "model-a"] == argv[argv.index("--model") : argv.index("--model") + 2]
     assert ["--max-tokens-budget", "50000"] == argv[argv.index("--max-tokens-budget") : argv.index("--max-tokens-budget") + 2]
     assert ["--format", "json"] == argv[argv.index("--format") : argv.index("--format") + 2]
-    assert ["--max-files", "1"] == argv[argv.index("--max-files") : argv.index("--max-files") + 2]
+    assert "--max-files" not in argv
     assert "--preview" not in argv
     assert "--resume" not in argv
     assert background.as_posix() in argv
@@ -131,6 +131,95 @@ def test_sandbox_egress_is_scoped_to_runtime_provider_proxy_port(tmp_path: Path)
     assert "process-exec)" not in profile_text
 
 
+def test_sandbox_grants_metadata_traversal_without_reading_unrelated_users(tmp_path: Path):
+    request = _request(tmp_path)
+    scratch = tmp_path / "lokay-ocr-home"
+    scratch.mkdir(mode=0o700)
+    scratch.chmod(0o700)
+
+    argv = build_ocr_argv(request, background=scratch / "background.md", preview=True)
+    profile_text = Path(argv[2]).read_text()
+
+    assert '(allow file-read-metadata file-test-existence (subpath "/Users"))' in profile_text
+    assert '(allow file-read* (subpath "/Users"))' not in profile_text
+
+
+def test_runtime_allows_only_the_exact_credential_command_for_custom_provider(
+    tmp_path: Path, monkeypatch
+):
+    request = _request(tmp_path)
+    config = tmp_path / "opencodereview.json"
+    config.write_text(
+        '{"provider":"omniroute","custom_providers":{"omniroute":{'
+        '"url":"https://gateway.example/v1","protocol":"openai",'
+        '"model":"pi","api_key_cmd":"/usr/bin/printenv OCR_LLM_API_KEY"}},'
+        '"llm":{}}'
+    )
+    request["engine"].update(
+        provider="omniroute",
+        model="pi",
+        provider_endpoint_url="https://gateway.example/v1",
+        ocr_config_path=str(config),
+    )
+    monkeypatch.setenv("OCR_LLM_API_KEY", "secret-key")
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    home.chmod(0o700)
+    argv = build_ocr_argv(
+        request,
+        background=home / "background.md",
+        preview=True,
+    )
+
+    profile = Path(argv[2]).read_text()
+    assert '(allow process-exec (literal "/usr/bin/printenv"))' in profile
+    assert '(allow process-exec (literal "/bin/sh"))' in profile
+    assert '(allow process-exec (literal "/bin/bash"))' in profile
+    assert '(allow file-read* (literal "/private/var/select/sh"))' in profile
+    assert '(allow file-read* (literal "' + str(config.resolve()) + '"))' in profile
+    assert "secret-key" not in profile
+
+
+def test_sandboxed_omniroute_profile_executes_api_key_cmd_through_macos_sh(
+    tmp_path: Path, monkeypatch
+):
+    request = _request(tmp_path)
+    config = tmp_path / "opencodereview.json"
+    config.write_text(
+        '{"provider":"omniroute","custom_providers":{"omniroute":{'
+        '"url":"https://gateway.example/v1","protocol":"openai",'
+        '"model":"pi","api_key_cmd":"/usr/bin/printenv OCR_LLM_API_KEY"}},'
+        '"llm":{}}'
+    )
+    request["engine"].update(
+        provider="omniroute",
+        model="pi",
+        provider_endpoint_url="https://gateway.example/v1",
+        ocr_config_path=str(config),
+    )
+    monkeypatch.setenv("OCR_LLM_API_KEY", "dummy-review-key")
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    home.chmod(0o700)
+    argv = build_ocr_argv(request, background=home / "background.md", preview=True)
+    result = subprocess.run(
+        [
+            "/usr/bin/sandbox-exec", "-f", argv[2], "--",
+            "/bin/sh", "-c", "/usr/bin/printenv OCR_LLM_API_KEY",
+        ],
+        capture_output=True,
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin",
+            "OCR_LLM_API_KEY": "dummy-review-key",
+        },
+        cwd=str(home),
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert result.stdout.strip() == b"dummy-review-key"
+
+
 def test_runtime_uses_same_git_binary_as_independent_checkout_verifier(tmp_path: Path, monkeypatch):
     import lokay_review_open_code_review.git_evidence as evidence
     import lokay_review_open_code_review.cli as cli
@@ -147,8 +236,8 @@ def test_runtime_uses_same_git_binary_as_independent_checkout_verifier(tmp_path:
     cli.build_ocr_argv(request, background=home / "background.md", preview=True)
 
     profile = (home / "review.sb").read_text()
-    assert evidence._git_binary() == "/usr/bin/git"
-    assert "/usr/bin/git" in profile
+    assert evidence._git_binary() == evidence._FALLBACK_GIT
+    assert evidence._FALLBACK_GIT in profile
 
 
 def test_preview_uses_same_scope_and_never_claims_runtime_validation(tmp_path: Path):
@@ -351,6 +440,35 @@ def test_invoke_ocr_rejects_credential_bearing_trusted_config(tmp_path: Path, mo
         invoke_ocr(request, preview=False, runner=lambda *_a, **_kw: pytest.fail("must not run"))
 
 
+def test_invoke_ocr_accepts_only_the_allowlisted_custom_provider_credential_command(
+    tmp_path: Path, monkeypatch
+):
+    request = _request(tmp_path)
+    (tmp_path / "opencodereview.json").write_text(
+        '{"provider":"omniroute","custom_providers":{"omniroute":{'
+        '"url":"https://gateway.example/v1","protocol":"openai",'
+        '"model":"pi","api_key_cmd":"/usr/bin/printenv OCR_LLM_API_KEY"}},'
+        '"llm":{}}'
+    )
+    request["engine"].update(
+        provider="omniroute",
+        model="pi",
+        provider_endpoint_url="https://gateway.example/v1",
+    )
+    request["engine"]["env_allowlist"] = ["OCR_LLM_API_KEY"]
+    monkeypatch.setenv("OCR_LLM_API_KEY", "secret-key")
+    seen: dict = {}
+
+    def run(argv, **kwargs):
+        seen.update(argv=argv, profile=Path(argv[2]).read_text(), **kwargs)
+        return subprocess.CompletedProcess(argv, 0, stdout=b'{"status":"complete"}')
+
+    assert invoke_ocr(request, preview=True, runner=run) == {"status": "complete"}
+    assert seen["env"]["OCR_LLM_API_KEY"] == "secret-key"
+    assert '(allow process-exec (literal "/usr/bin/printenv"))' in seen["profile"]
+    assert "secret-key" not in json.dumps(seen["argv"])
+
+
 def test_parse_one_json_rejects_prose_multiple_values_and_oversize():
     assert parse_one_json('{"status":"complete"}') == {"status": "complete"}
     for raw in ("progress\n{}", "{}\n{}", "null", "", "{"):
@@ -398,6 +516,7 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
     assert result == {"status": "complete"}
     env = observed["env"]
     assert env["OCR_PROVIDER_KEY"] == "secret-key"
+    assert env["PATH"].split(":", 1)[0] == "/Library/Developer/CommandLineTools/usr/bin"
     assert "GH_TOKEN" not in env
     assert "LOKAY_HEALTH_LEASE" not in env
     assert env["HOME"] != str(Path.home())
@@ -409,6 +528,12 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
         repository=Path(request["repo_path"]),
         home=Path(observed["cwd"]),
         provider_endpoint_host=f"localhost:{int(env['HTTPS_PROXY'].rsplit(':', 1)[1])}",
+        git_executable="/Library/Developer/CommandLineTools/usr/bin/git",
+        git_runtime_paths=("/Library/Developer/CommandLineTools",),
+        readable_files=(
+            request["engine"]["rule_path"], request["engine"]["tools_path"],
+            request["engine"]["ocr_config_path"],
+        ),
         allowed_executables=(request["engine"]["binary_path"],),
     )
 

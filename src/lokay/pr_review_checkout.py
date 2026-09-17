@@ -118,6 +118,27 @@ def _changed_ranges(runner: Runner, path: Path, base: str, head: str, paths: lis
     return ranges
 
 
+def _changed_ranges_signature(value: Any) -> tuple[tuple[str, tuple[tuple[int, int], ...]], ...]:
+    """Compare native and JSON-decoded changed-line ranges identically."""
+    if not isinstance(value, dict):
+        raise ValueError("malformed changed-line ranges")
+    normalized: list[tuple[str, tuple[tuple[int, int], ...]]] = []
+    for path, ranges in value.items():
+        if not isinstance(path, str) or not isinstance(ranges, (list, tuple)):
+            raise ValueError("malformed changed-line ranges")
+        parsed: list[tuple[int, int]] = []
+        for item in ranges:
+            if (
+                not isinstance(item, (list, tuple))
+                or len(item) != 2
+                or any(not isinstance(number, int) or isinstance(number, bool) for number in item)
+            ):
+                raise ValueError("malformed changed-line ranges")
+            parsed.append((item[0], item[1]))
+        normalized.append((path, tuple(parsed)))
+    return tuple(sorted(normalized))
+
+
 def _origin_for_repo(repo: str) -> str:
     if not _OWNER_REPO.fullmatch(repo):
         raise ValueError("invalid GitHub repository name")
@@ -125,10 +146,12 @@ def _origin_for_repo(repo: str) -> str:
 
 
 def _verify_origin(runner: Runner, clone: Path, repo: str) -> None:
-    raw = _run(runner, ["remote", "get-url", "origin"], clone).strip()
-    expected = _origin_for_repo(repo)
-    # Credentials, alternate hosts, and rewritten/local origins are not accepted.
-    if raw.rstrip("/").lower() != expected.lower():
+    raw = _run(runner, ["remote", "get-url", "origin"], clone).strip().rstrip("/").lower()
+    expected = _origin_for_repo(repo).lower()
+    ssh = f"git@github.com:{repo}.git".lower()
+    # Accept the two credential-free GitHub transports used by Lokay's
+    # authenticated Git carrier; reject credentials, alternate hosts, and local rewrites.
+    if raw not in {expected, ssh}:
         raise ValueError("configured clone origin is not the canonical credential-free GitHub URL")
 
 
@@ -248,5 +271,5 @@ def recompute_review_evidence(
         raise ValueError("review diff path inventory drifted")
     if hashlib.sha256(patch).hexdigest() != checkout.diff_sha256:
         raise ValueError("review patch digest drifted")
-    if changed != checkout.changed_ranges:
+    if _changed_ranges_signature(changed) != _changed_ranges_signature(checkout.changed_ranges):
         raise ValueError("review changed-line ranges drifted")

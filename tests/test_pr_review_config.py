@@ -138,3 +138,35 @@ def test_programmatic_review_verification_rejects_credential_in_provider_config(
 
     with pytest.raises(ReviewConfigError, match="credential_materialized"):
         verify_review_config(cfg)
+
+
+def test_programmatic_review_verification_accepts_custom_provider_env_reference(
+    tmp_path: Path,
+):
+    cfg = _armed_config(tmp_path)
+    cfg.pr_review_provider = "omniroute"
+    cfg.pr_review_provider_endpoint_url = "https://gateway.example/v1"
+    cfg.pr_review_model = "pi"
+    cfg.pr_review_ocr_config.write_text(
+        json.dumps(
+            {
+                "provider": "omniroute",
+                "custom_providers": {
+                    "omniroute": {
+                        "url": "https://gateway.example/v1",
+                        "protocol": "openai",
+                        "model": "pi",
+                        "api_key_cmd": "/usr/bin/printenv OCR_LLM_API_KEY",
+                    }
+                },
+                "llm": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    cfg.pr_review_config_sha256 = review_config_sha256(cfg)
+    cfg.pr_review_manifest.write_text(
+        json.dumps(expected_review_manifest(cfg), sort_keys=True), encoding="utf-8"
+    )
+
+    verify_review_config(cfg)

@@ -70,6 +70,7 @@ def review_profile(
     *, repository: Path, home: Path, provider_endpoint_host: str,
     git_executable: Path | str = "/usr/bin/git",
     git_runtime_paths: tuple[Path | str, ...] = (),
+    readable_files: tuple[Path | str, ...] = (),
     allowed_executables: tuple[Path | str, ...] = (),
 ) -> str:
     repo = _sandbox_path(repository)
@@ -78,7 +79,12 @@ def review_profile(
     git = Path(git_executable).resolve()
     executables = sorted({git, *(Path(item).resolve() for item in allowed_executables)})
     git_runtime = sorted({_sandbox_path(Path(item)) for item in git_runtime_paths})
-    repo_ancestors = _sandbox_path(Path(repository).resolve().parent)
+    readable = sorted({_sandbox_path(Path(item)) for item in readable_files})
+    readable_ancestors = sorted({_sandbox_path(Path(item).resolve().parent) for item in readable_files})
+    repo_resolved = Path(repository).resolve()
+    repo_ancestors = _sandbox_path(repo_resolved.parent)
+    repo_parent_ancestors = _sandbox_path(repo_resolved.parent.parent.parent)
+    scratch_ancestors = _sandbox_path(Path(home).resolve().parent)
     return "\n".join([
         "(version 1)",
         "(deny default)",
@@ -87,7 +93,10 @@ def review_profile(
         '(allow file-read* (subpath "/System"))',
         '(allow file-read* (subpath "/usr"))',
         '(allow file-read* (subpath "/Library/Developer"))',
+        '(allow file-read-metadata file-test-existence (subpath "/Users"))',
         '(allow file-read* (literal "/var/select/developer_dir"))',
+        '(allow file-read* (literal "/private/var/select/sh"))',
+        '(allow file-read* (literal "/var/select/sh"))',
         '(allow file-read* file-test-existence (subpath "/Applications/Xcode-beta.app/Contents/Developer"))',
         '(allow file-read* (subpath "/bin"))',
         '(allow file-read* (subpath "/sbin"))',
@@ -99,10 +108,14 @@ def review_profile(
         "(allow sysctl-read)",
         '(allow mach-lookup (global-name "com.apple.logd"))',
         f'(allow file-read* (subpath "{repo}"))',
+        f'(allow file-read-metadata file-test-existence (subpath "{repo_parent_ancestors}"))',
         f'(allow file-read-metadata file-test-existence (subpath "{repo_ancestors}"))',
+        *(f'(allow file-read-metadata file-test-existence (subpath "{item}"))' for item in readable_ancestors),
         *(f'(allow file-read* (literal "{item}"))' for item in executables),
+        *(f'(allow file-read* (literal "{item}"))' for item in readable),
         *(f'(allow file-read* (subpath "{item}"))' for item in git_runtime),
         f'(deny file-write* (subpath "{repo}"))',
+        f'(allow file-read-metadata file-test-existence (subpath "{scratch_ancestors}"))',
         f'(allow file-read* (subpath "{scratch}"))',
         f'(allow file-write* (subpath "{scratch}"))',
         '(allow network-outbound (literal "/private/var/run/mDNSResponder"))',
@@ -115,12 +128,14 @@ def validate_review_profile(
     profile: str, *, repository: Path, home: Path, provider_endpoint_host: str,
     git_executable: Path | str = "/usr/bin/git",
     git_runtime_paths: tuple[Path | str, ...] = (),
+    readable_files: tuple[Path | str, ...] = (),
     allowed_executables: tuple[Path | str, ...] = (),
 ) -> None:
     expected = review_profile(
         repository=repository, home=home, provider_endpoint_host=provider_endpoint_host,
         git_executable=git_executable,
         git_runtime_paths=git_runtime_paths,
+        readable_files=readable_files,
         allowed_executables=allowed_executables,
     )
     if profile != expected:

@@ -50,7 +50,7 @@ def _repo(tmp_path: Path) -> tuple[Path, str, str, dict]:
     return repo, base, head, request
 
 
-def test_git_binary_uses_the_same_restricted_path_as_the_sandbox(monkeypatch):
+def test_git_binary_uses_a_real_toolchain_binary_instead_of_the_xcrun_shim(monkeypatch):
     from lokay_review_open_code_review import git_evidence
 
     calls = []
@@ -61,7 +61,10 @@ def test_git_binary_uses_the_same_restricted_path_as_the_sandbox(monkeypatch):
     monkeypatch.setattr(git_evidence.os.path, "isfile", lambda _path: True)
     monkeypatch.setattr(git_evidence.os, "access", lambda _path, _mode: True)
 
-    assert git_evidence._git_binary() == "/usr/bin/git"
+    assert git_evidence._git_binary() == git_evidence._FALLBACK_GIT
+    assert git_evidence._git_runtime_paths(git_evidence._FALLBACK_GIT) == (
+        Path("/Library/Developer/CommandLineTools"),
+    )
     assert calls == [("git", "/usr/bin:/bin")]
 
 

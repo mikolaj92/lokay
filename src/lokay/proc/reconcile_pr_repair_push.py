@@ -10,11 +10,14 @@ from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, ok
+
+_RECEIPT_SCAN_MAX_BYTES = 1_048_576
+_RECEIPT_COMPATIBILITY_MAX_BYTES = 16 * 1024 * 1024
 from lokay.proc import pr_repair_push, pr_repair_receipts
 
 
 def _receipt_identities(directory: Path) -> list[tuple[str, int]]:
-    """Read only enough of each receipt to discover its locked identity."""
+    """Read receipt identities without letting stale terminal payloads block recovery."""
     if not directory.exists():
         return []
     rows: list[tuple[str, int]] = []
@@ -22,12 +25,17 @@ def _receipt_identities(directory: Path) -> list[tuple[str, int]]:
         fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
         with os.fdopen(fd, "r", encoding="utf-8") as stream:
             info = os.fstat(stream.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_size > 1_048_576:
+            if not stat.S_ISREG(info.st_mode):
                 raise ValueError("repair receipt file is invalid")
-            try:
-                value = json.load(stream)
-            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise ValueError("repair receipt is malformed") from exc
+            if info.st_size > _RECEIPT_COMPATIBILITY_MAX_BYTES:
+                raise ValueError("repair receipt file is invalid")
+            if info.st_size > _RECEIPT_SCAN_MAX_BYTES:
+                value = _read_oversized_terminal_receipt(stream)
+            else:
+                try:
+                    value = json.load(stream)
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    raise ValueError("repair receipt is malformed") from exc
         if not isinstance(value, dict):
             raise ValueError("repair receipt must be an object")
         repo = str(value.get("repo") or "")
@@ -39,6 +47,35 @@ def _receipt_identities(directory: Path) -> list[tuple[str, int]]:
             raise ValueError("repair receipt identity does not match its path")
         rows.append((repo, pr))
     return rows
+
+
+def _read_oversized_terminal_receipt(stream: Any) -> dict[str, Any]:
+    """Accept only a parked, terminal-only legacy receipt over the scan bound.
+
+    Large pending intents or receipts with confirmed identity must still be
+    rejected: those records can affect recovery and must remain fail-closed.
+    The compatibility bound is finite so a hostile receipt cannot make this
+    pre-scan consume unbounded memory.
+    """
+    try:
+        payload = json.load(stream)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("repair receipt is malformed") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("repair receipt must be an object")
+    allowed = {
+        "repo", "pr", "attempts", "budget", "last_head_sha", "last_terminal",
+        "updated_at", "parked",
+    }
+    if (
+        set(payload) != allowed
+        or payload.get("parked") is not True
+        or payload.get("attempts") != payload.get("budget")
+        or not isinstance(payload.get("last_terminal"), str)
+        or payload.get("last_head_sha") != ""
+    ):
+        raise ValueError("repair receipt file is invalid")
+    return payload
 
 
 def reconcile_pending(
@@ -114,7 +151,15 @@ def reconcile_pending(
             reason=selection_reason or "pr_selection_invalid",
             recovered=[],
         )
-    return ok(route="review" if selected_route == "pr" else "no_pr", recovered=[])
+    if selected_route == "pr":
+        return ok(
+            route="review",
+            repo=str(selected["repo"]),
+            pr=int(selected["pr"]),
+            branch=str(selected["branch"]),
+            recovered=[],
+        )
+    return ok(route="no_pr", recovered=[])
 
 
 def main(argv: list[str] | None = None) -> int:

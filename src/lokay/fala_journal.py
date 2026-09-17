@@ -1,20 +1,24 @@
-"""Inspect Fala journal retention without destroying recovery evidence.
+"""Maintain oversized Fala journals without destroying recovery evidence.
 
-Native maintain_journal plans size-based candidates only. Directory age,
-run status and wrapper count cannot prove delivery or release child recovery
-references. Pending evidence is retained; no synthetic terminal transitions.
+Native maintain_journal deletes only terminal runs. Directory age, run status
+and wrapper count cannot prove delivery or release child recovery references.
+Incomplete runs stay; no synthetic terminal transitions. VACUUM is Fala-owned
+and runs only when remaining free space can hold the compact copy plus a
+16 MiB safety margin.
 """
 
 from __future__ import annotations
 
 import os
 import secrets
+import shutil
 from pathlib import Path
 from typing import Any
 
 DEFAULT_MIN_BYTES = 64 * 1024 * 1024
 KEEP_ROTATED = 1
 WRAPPER_KEEP = 2
+DEFAULT_VACUUM_HEADROOM_BYTES = 16 * 1024 * 1024
 _LIVE_JOURNAL = "state.sqlite"
 _WRAPPER_PREFIXES = {
     "daemon_entry": "daemon-entry",
@@ -22,28 +26,62 @@ _WRAPPER_PREFIXES = {
     "factory_pass": "factory-pass",
 }
 
+def _disk_free_bytes(path: Path) -> int:
+    return int(shutil.disk_usage(path).free)
+
+
+def _vacuum_headroom_bytes() -> int:
+    return DEFAULT_VACUUM_HEADROOM_BYTES
+
+
+def _can_vacuum(db: Path, size: int) -> bool:
+    # SQLite VACUUM copies remaining live pages after DELETE, not the old
+    # file. Gate on a small safety margin so a 21 GiB journal with a few
+    # kept runs can compact; skip only when the volume is already exhausted.
+    del size
+    try:
+        free = _disk_free_bytes(db)
+    except OSError:
+        return False
+    return free >= _vacuum_headroom_bytes()
+
+
 def maintain_lokay_fala_journals(
     *,
     home: Path | None = None,
     min_bytes: int = DEFAULT_MIN_BYTES,
     keep: int = KEEP_ROTATED,
 ) -> dict[str, Any]:
-    """Plan native retention for oversized journals, retaining recovery data.
+    """Apply native terminal retention to one oversized journal per tick.
 
     Call while lokay.lock is held. Fala owns SQLite and sidecar handling.
-    Pruning remains disabled until delivery and dependency evidence exists.
-    Pytest without an explicit home never inspects operator journals.
+    Incomplete runs stay. VACUUM runs only when remaining free space can hold
+    the compact copy plus a 16 MiB safety margin. Pytest without an explicit
+    home never inspects operator journals.
     """
     if os.environ.get("PYTEST_CURRENT_TEST") and home is None:
         return {"ok": True, "maintained": [], "reason": "pytest"}
     root = (home or Path.home()) / ".lokay" / "fala"
-    maintained: list[dict[str, Any]] = []
     ceiling = max(0, int(min_bytes))
     retained = max(0, int(keep))
+    ranked: list[tuple[int, Path]] = []
     for db in _iter_live_journals(root):
-        result = _maintain_sqlite(db, min_bytes=ceiling, keep=retained)
+        try:
+            size = db.stat().st_size
+        except OSError:
+            continue
+        if size >= ceiling:
+            ranked.append((size, db))
+    ranked.sort(key=lambda item: (item[0], str(item[1])))
+    maintained: list[dict[str, Any]] = []
+    applied = False
+    for size, db in ranked:
+        apply = (not applied) and _can_vacuum(db, size)
+        result = _maintain_sqlite(db, min_bytes=ceiling, keep=retained, apply=apply)
         if result is not None:
             maintained.append(result)
+            if apply:
+                applied = True
     lokay_home = (home or Path.home()) / ".lokay"
     pruned = prune_stale_fala_journals(root)
     pruned_logs = prune_stale_logs(lokay_home / "logs")
@@ -212,7 +250,9 @@ def _reclaim_created_runs(db: Path) -> int:
     return _reclaim_incomplete_runs(db)
 
 
-def _maintain_sqlite(db: Path, *, min_bytes: int, keep: int) -> dict[str, Any] | None:
+def _maintain_sqlite(
+    db: Path, *, min_bytes: int, keep: int, apply: bool = False,
+) -> dict[str, Any] | None:
     if not db.is_file():
         return None
     try:
@@ -238,13 +278,16 @@ def _maintain_sqlite(db: Path, *, min_bytes: int, keep: int) -> dict[str, Any] |
         }
     import fala
 
+    can_vacuum = _can_vacuum(db, size)
+    dry_run = not apply
+    vacuum = bool(apply and can_vacuum)
     try:
         applied = fala.maintain_journal(
             db,
             older_than_days=0,
             keep_last=keep,
-            vacuum=False,
-            dry_run=True,
+            vacuum=vacuum,
+            dry_run=dry_run,
         )
     except Exception as exc:  # noqa: BLE001
         if _skip_busy_or_corrupt(exc):
@@ -258,13 +301,26 @@ def _maintain_sqlite(db: Path, *, min_bytes: int, keep: int) -> dict[str, Any] |
                 "vacuumed": False,
             }
         raise
+    if dry_run:
+        reason = "vacuum_headroom_insufficient" if not can_vacuum else "deferred"
+        return {
+            "path": str(db),
+            "before_bytes": size,
+            "deleted_run_count": 0,
+            "candidate_run_count": int(
+                applied.get("candidate_count") or applied.get("deleted_run_count") or 0
+            ),
+            "reclaimed_created": reclaimed,
+            "vacuumed": False,
+            "planned": True,
+            "reason": reason,
+        }
     return {
         "path": str(db),
         "before_bytes": size,
-        "deleted_run_count": 0,
-        "candidate_run_count": int(applied.get("deleted_run_count") or 0),
+        "deleted_run_count": int(applied.get("deleted_run_count") or 0),
+        "candidate_run_count": int(applied.get("candidate_count") or 0),
         "reclaimed_created": reclaimed,
-        "vacuumed": False,
-        "planned": True,
-        "reason": "completion_evidence_required",
+        "vacuumed": bool(applied.get("vacuumed")),
+        "planned": False,
     }

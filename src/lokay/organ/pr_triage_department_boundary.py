@@ -27,7 +27,18 @@ def handle_pr_triage_department(
     if atom == "run_pr_sieve":
         from lokay.proc.run_pr_triage_subflow import run
 
-        return run(up.get("select_pr_sieve") or {}, config_path=config, live=live)
+        selected = dict(up.get("select_pr_sieve") or {})
+        if selected.get("route") != "pr":
+            reconciled = dict(up.get("reconcile_pr_repair_push") or {})
+            if reconciled.get("route") == "review":
+                selected = {
+                    "ok": True,
+                    "route": "pr",
+                    "repo": reconciled.get("repo"),
+                    "pr": reconciled.get("pr"),
+                    "branch": reconciled.get("branch"),
+                }
+        return run(selected, config_path=config, live=live)
     if atom == "select_pr_triage_verdict":
         from lokay.proc.select_pr_triage_verdict import select
 

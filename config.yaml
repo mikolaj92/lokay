@@ -52,10 +52,10 @@ pr_review:
   plugin_command: /Users/mini-m4-0/Developer/OSS/lokay/plugins/pr_review_open_code_review/.venv/bin/lokay-review-opencode-plugin
   plugin_args: [--max-input-bytes, "4194304"]
   plugin_timeout_seconds: 7200
-  provider: openai
+  provider: omniroute
   provider_endpoint_url: https://omniroute.patryk.it/v1
   model: pi
-  config_sha256: e0f2b8b9f580c66e5c89a25de19ddd07ef47602b2c27028c262bd127013947f1
+  config_sha256: df5efd14fe5b56af8a633c2dd594fefd4552464b89b8ba9ba8b8caeeff46cc68
   provider_env: [OCR_LLM_API_KEY]
   binary: /Users/mini-m4-0/.local/bin/ocr
   binary_version: v1.12.0

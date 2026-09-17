@@ -121,23 +121,30 @@ def build_ocr_argv(
             str(engine.get("provider") or ""),
             str(engine.get("provider_endpoint_url") or ""),
         )
-        from .git_evidence import _git_binary
+        from .git_evidence import _git_binary, _git_runtime_paths
 
         git_executable = Path(_git_binary()).resolve()
-        git_runtime_paths = (
-            () if git_executable == Path("/usr/bin/git")
-            else (Path("/Library/Developer/CommandLineTools"),)
+        git_runtime_paths = _git_runtime_paths(git_executable)
+        trusted_files = tuple(
+            Path(value).resolve()
+            for value in (
+                engine.get("rule_path"), engine.get("tools_path"),
+                engine.get("ocr_config_path"),
+            )
+            if value
         )
         profile_text = review_profile(
             repository=Path(repo), home=scratch, provider_endpoint_host=endpoint,
             git_executable=git_executable,
             git_runtime_paths=git_runtime_paths,
+            readable_files=trusted_files,
         )
         validate_review_profile(
             profile_text,
             repository=Path(repo), home=scratch, provider_endpoint_host=endpoint,
             git_executable=git_executable,
             git_runtime_paths=git_runtime_paths,
+            readable_files=trusted_files,
         )
     except ValueError as exc:
         raise ReviewFailure("OS sandbox profile does not match exact checkout, scratch and provider policy") from exc
@@ -148,12 +155,21 @@ def build_ocr_argv(
         if provider_proxy_port is not None
         else "localhost:" + endpoint.rsplit(":", 1)[1]
     )
+    credential_runtime: tuple[Path, ...] = ()
+    if str(engine.get("provider") or "") == "omniroute":
+        # OCR runs api_key_cmd through macOS /bin/sh, which then execs
+        # /bin/bash via /private/var/select/sh. printenv alone hangs.
+        credential_runtime = (
+            Path("/usr/bin/printenv"), Path("/bin/sh"), Path("/bin/bash"),
+        )
+    allowed_runtime_executables = (Path(binary), *credential_runtime)
     runtime_profile_text = review_profile(
         repository=Path(repo), home=scratch,
         provider_endpoint_host=sandbox_endpoint,
         git_executable=git_executable,
         git_runtime_paths=git_runtime_paths,
-        allowed_executables=(Path(binary),),
+        readable_files=trusted_files,
+        allowed_executables=allowed_runtime_executables,
     )
     runtime_profile = scratch / "review.sb"
     try:
@@ -183,7 +199,7 @@ def build_ocr_argv(
             "--effort", effort, "--timeout", str(timeout),
             "--max-tokens-budget", str(budget)]
     if preview:
-        argv.extend(["--max-files", str(len(request.get("diff_paths") or [])), "--preview"])
+        argv.append("--preview")
         return argv
     tools = _trusted_file(engine.get("tools_path"), "tool allowlist")
     try:
@@ -191,15 +207,17 @@ def build_ocr_argv(
     except ValueError as exc:
         raise ReviewFailure("trusted OCR tool allowlist is invalid") from exc
     argv.extend(["--provider", _required_text(engine, "provider"),
-                 "--model", _required_text(engine, "model"), "--tools", tools,
-                 "--max-files", str(len(request.get("diff_paths") or []))])
+                 "--model", _required_text(engine, "model"), "--tools", tools])
     return argv
 
 
 def _contains_credential(value: Any) -> bool:
     if isinstance(value, Mapping):
         for key, item in value.items():
-            if str(key).lower() in {"api_key", "api_key_cmd", "auth_token", "auth_token_cmd", "password", "token"}:
+            key_name = str(key).lower()
+            if key_name in {"api_key", "auth_token", "auth_token_cmd", "password", "token"}:
+                return True
+            if key_name == "api_key_cmd" and item != "/usr/bin/printenv OCR_LLM_API_KEY":
                 return True
             if _contains_credential(item):
                 return True
@@ -322,12 +340,13 @@ def invoke_ocr(
             raise ReviewFailure("canonical task evidence is required")
         background.write_bytes(render_background(request))
         env = _environment(engine, home=home)
-        env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+        env["PATH"] = "/Library/Developer/CommandLineTools/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+        env["OCR_CONFIG_DIR"] = str(home / ".opencodereview")
         if str(engine.get("provider") or "") == "openai":
             credential = env.get("OCR_LLM_API_KEY")
             if credential:
                 env["OPENAI_API_KEY"] = credential
-        env.update({"DEVELOPER_DIR": "/Applications/Xcode-beta.app/Contents/Developer", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
+        env.update({"DEVELOPER_DIR": "/Library/Developer/CommandLineTools", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"})
         endpoint = host_for_provider(
             str(engine.get("provider") or ""),
             str(engine.get("provider_endpoint_url") or ""),

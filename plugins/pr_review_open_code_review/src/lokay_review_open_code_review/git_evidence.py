@@ -13,14 +13,29 @@ from typing import Any, Mapping
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _GIT_PATH = "/usr/bin:/bin"
 _FALLBACK_GIT = "/Library/Developer/CommandLineTools/usr/bin/git"
+_XCODE_GIT = "/Applications/Xcode-beta.app/Contents/Developer/usr/bin/git"
+_GIT_RUNTIME_PATHS = {
+    _FALLBACK_GIT: "/Library/Developer/CommandLineTools",
+    _XCODE_GIT: "/Applications/Xcode-beta.app/Contents/Developer",
+}
 _OWNER_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def _git_binary() -> str:
     candidate = shutil.which("git", path=_GIT_PATH) or _FALLBACK_GIT
+    if candidate == "/usr/bin/git":
+        # /usr/bin/git is xcrun's shim and cannot run in the review sandbox.
+        candidate = _FALLBACK_GIT
     if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
         raise ValueError("trusted system git executable is unavailable")
     return candidate
+
+
+def _git_runtime_paths(git_executable: str | Path) -> tuple[Path, ...]:
+    """Return only the runtime directory needed by a non-shim Git binary."""
+    resolved = str(Path(git_executable).resolve())
+    runtime = _GIT_RUNTIME_PATHS.get(resolved)
+    return (Path(runtime),) if runtime else ()
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -91,6 +106,8 @@ def _ranges(repo: Path, base: str, head: str, paths: list[dict[str, str]]) -> di
             start, count = int(match.group(1)), int(match.group(2) or "1")
             if count:
                 result.setdefault(path, []).append((start, start + count - 1))
+            else:
+                result.setdefault(path, [])
     allowed = {row["path"] for row in paths if row["status"] != "deleted"}
     if set(result) - allowed:
         raise ValueError("changed-line ranges do not match immutable path inventory")
@@ -104,10 +121,11 @@ def verify_checkout(request: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("isolated repository checkout and valid repo identity are required")
     origin = _git(repo, "remote", "get-url", "origin").strip().rstrip("/")
     expected_origin = f"https://github.com/{request['repo']}.git"
+    expected_ssh_origin = f"git@github.com:{request['repo']}.git"
     head_repo = str(request.get("head_repo") or "")
     if not _OWNER_REPO.fullmatch(head_repo):
         raise ValueError("canonical PR head repository identity is required")
-    if origin.lower() != expected_origin.lower():
+    if origin.lower() not in {expected_origin.lower(), expected_ssh_origin.lower()}:
         raise ValueError("review checkout origin does not match canonical GitHub repository")
     head = str(request.get("head_sha") or "").lower()
     base_ref = str(request.get("base_ref_sha") or "").lower()
@@ -146,10 +164,13 @@ def verify_checkout(request: Mapping[str, Any]) -> dict[str, Any]:
     if digest != str(request.get("diff_sha256") or "").lower():
         raise ValueError("review patch digest does not match exact checkout")
     changed_ranges = _ranges(repo, comparison, head, paths)
-    if changed_ranges != {
+    requested_ranges = {
         str(path): [(int(bounds[0]), int(bounds[1])) for bounds in rows]
         for path, rows in dict(request.get("changed_ranges") or {}).items()
-    }:
+    }
+    if set(changed_ranges) != set(requested_ranges) or any(
+        changed_ranges[path] != requested_ranges[path] for path in changed_ranges
+    ):
         raise ValueError("review changed-line ranges do not match exact checkout")
     return {
         "head_repo": head_repo,
