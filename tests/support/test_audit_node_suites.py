@@ -12,6 +12,8 @@ def test_expanded_graph_suites_match_catalog():
     assert report["missing_node_suites"] == []
     assert report["extra_node_suites"] == []
     assert report["missing_output_schema"] == []
+    assert report["unnamed_when_fields"] == []
+    assert report["unnamed_expanded_when_fields"] == []
     assert all(not row["mismatches"] for row in report["paths"])
     assert report["totals"]["expanded_nodes"] == report["totals"]["node_suites"]
     assert report["totals"]["authored_effectors_missing_schema"] == 0

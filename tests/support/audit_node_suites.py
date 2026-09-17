@@ -24,6 +24,82 @@ def _literal(path: Path, name: str) -> Any:
     raise ValueError(f"{path}: missing literal {name}")
 
 
+def _when_root(path: str) -> str:
+    root = str(path or "").split(".", 1)[0]
+    if not root:
+        raise ValueError("when path must name a payload field")
+    return root
+
+
+def _schema_required(schema: Any) -> set[str]:
+    if not isinstance(schema, dict):
+        return set()
+    raw = schema.get("required")
+    if not isinstance(raw, list):
+        return set()
+    return {str(item) for item in raw if str(item)}
+
+
+def _schema_properties(schema: Any) -> set[str] | None:
+    if not isinstance(schema, dict):
+        return None
+    raw = schema.get("properties")
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        return set()
+    return {str(key) for key in raw}
+
+
+def _when_fields_by_upstream(package: dict[str, Any]) -> dict[str, set[str]]:
+    needed: dict[str, set[str]] = {}
+
+    def remember(effectors: list[dict[str, Any]] | None) -> None:
+        for node in effectors or []:
+            when = node.get("when") or {}
+            upstream = str(when.get("upstream") or "")
+            path = when.get("path")
+            if not upstream or not isinstance(path, str) or not path:
+                continue
+            needed.setdefault(upstream, set()).add(_when_root(path))
+
+    for path in package.get("correlation_paths", []):
+        remember(path.get("effectors"))
+        remember(path.get("prefix_effectors"))
+        remember(path.get("suffix_effectors"))
+    for template in package.get("path_templates", []) or []:
+        remember(template.get("effectors"))
+    return needed
+
+
+def _unnamed_when_fields(
+    nodes: list[tuple[str, dict[str, Any]]],
+    needed: dict[str, set[str]],
+) -> list[dict[str, Any]]:
+    unnamed: list[dict[str, Any]] = []
+    for name, node in nodes:
+        fields = needed.get(str(node.get("id") or ""))
+        if not fields:
+            continue
+        schema = node.get("output_schema")
+        required = _schema_required(schema)
+        properties = _schema_properties(schema)
+        missing = sorted(field for field in fields if field not in required)
+        stripped = []
+        if properties is not None:
+            stripped = sorted(field for field in fields if field not in properties)
+        if missing or stripped:
+            unnamed.append(
+                {
+                    "node": name,
+                    "id": node.get("id"),
+                    "missing_required": missing,
+                    "stripped_by_properties": stripped,
+                }
+            )
+    return unnamed
+
+
 def _walk_effectors(package: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     rows: list[tuple[str, dict[str, Any]]] = []
     for path in package.get("correlation_paths", []):
@@ -104,6 +180,15 @@ def audit(root: Path) -> dict[str, Any]:
         )
     authored_nodes = _walk_effectors(package)
     missing_schema = [name for name, node in authored_nodes if not node.get("output_schema")]
+    needed = _when_fields_by_upstream(package)
+    unnamed_when_fields = _unnamed_when_fields(authored_nodes, needed)
+    expanded_nodes = [
+        (f"{path.get('id')}.effectors.{node.get('id')}", node)
+        for path in expanded.get("correlation_paths", [])
+        for node in path.get("effectors", []) or []
+    ]
+    expanded_needed = _when_fields_by_upstream({"correlation_paths": expanded.get("correlation_paths", [])})
+    unnamed_expanded_when_fields = _unnamed_when_fields(expanded_nodes, expanded_needed)
     totals = {
         "paths": len(paths),
         "expanded_nodes": sum(len(path.get("effectors", [])) for path in paths.values()),
@@ -129,6 +214,8 @@ def audit(root: Path) -> dict[str, Any]:
         "missing_node_suites": missing,
         "extra_node_suites": extra,
         "missing_output_schema": missing_schema,
+        "unnamed_when_fields": unnamed_when_fields,
+        "unnamed_expanded_when_fields": unnamed_expanded_when_fields,
     }
 
 
@@ -142,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
         report["missing_node_suites"]
         or report["extra_node_suites"]
         or report["missing_output_schema"]
+        or report["unnamed_when_fields"]
+        or report["unnamed_expanded_when_fields"]
         or any(row["mismatches"] for row in report["paths"])
     )
     return 1 if failed else 0
