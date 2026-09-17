@@ -12,7 +12,7 @@ from typing import Any
 from lokay.config import Config
 from lokay.gh_issues import ensure_labels
 from lokay.gh_prs import add_pr_labels, comment_bodies, comment_pr, gh_json, gh_text
-from lokay.pr_review import PrReviewDecision, labels_for_review
+from lokay.pr_review import PrReviewDecision, format_review_marker, labels_for_review
 from lokay.review_style import style_review_comment
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import issue_number_from_branch
@@ -351,13 +351,18 @@ def publish_review(
 
 
 def publish_fail_closed(
-    runner: Runner, repo: str, pr: int, exc: Exception, *, mutate: bool
+    runner: Runner, repo: str, pr: int, exc: Exception, *, mutate: bool,
+    head_sha: str = "",
 ) -> bool:
     if not mutate:
         return False
+    body = FAIL_CLOSED.format(exc=exc)
+    sha = str(head_sha or "").strip().lower()
+    if sha:
+        body = f"{body}\n{format_review_marker(head_sha=sha, verdict='fail_closed', merge_ok=False)}"
     try:
         publish_review(
-            runner, repo, pr, FAIL_CLOSED.format(exc=exc), ["ai:needs-review"], live=True
+            runner, repo, pr, body, ["ai:needs-review"], live=True
         )
         return True
     except Exception:

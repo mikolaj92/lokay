@@ -42,10 +42,32 @@ def test_exhausted_invalid_review_publishes_terminal_not_approval(monkeypatch):
     monkeypatch.setattr(publish_pr_review,"mutations_allowed",lambda **_:True)
     monkeypatch.setattr(publish_pr_review,"runner",lambda *_:object())
     applied=[]
-    monkeypatch.setattr(publish_pr_review,"publish_fail_closed",lambda *_args,**_kwargs:applied.append(True) or True)
-    out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"abc"},selected={"route":"fail_closed","reason":"invalid_review_json_exhausted","validation_error":"bad"},live=True)
+    monkeypatch.setattr(publish_pr_review,"publish_fail_closed",lambda *_args,**_kwargs:applied.append(_kwargs) or True)
+    out=publish_pr_review.publish(cfg=_cfg(),repo="a/b",pr=7,evidence={"head_sha":"a"*40},selected={"route":"fail_closed","reason":"invalid_review_json_exhausted","validation_error":"bad"},live=True)
     assert out["decision"] == {"verdict":"fail_closed"}
-    assert out["merge_ok"] is False and applied == [True]
+    assert out["merge_ok"] is False and applied
+    assert applied[0]["head_sha"] == "a" * 40
+
+
+def test_fail_closed_comment_binds_head_sha_so_the_same_pr_is_not_reviewed_again(monkeypatch):
+    from lokay.pr_review import parse_review_markers
+    from lokay.pr_review_io import publish_fail_closed
+
+    posted: list[str] = []
+    monkeypatch.setattr(
+        "lokay.pr_review_io.publish_review",
+        lambda _runner, _repo, _pr, body, _labels, live: posted.append(body),
+    )
+    head = "f" * 40
+    applied = publish_fail_closed(
+        object(), "a/b", 39, ValueError("ocr_exited_unsuccessfully"),
+        mutate=True, head_sha=head,
+    )
+    markers = parse_review_markers(posted)
+    assert applied is True
+    assert markers[-1]["head_sha"] == head
+    assert markers[-1]["verdict"] == "fail_closed"
+    assert markers[-1]["merge_ok"] is False
 
 
 def test_verify_supplement_rejects_changed_sha(monkeypatch):

@@ -343,9 +343,13 @@ def _run_bounded(
                 process.kill()
             process.wait()
             raise
+        output = bytes(captured)
         if returncode != 0:
-            raise ReviewFailure("OpenCodeReview exited unsuccessfully")
-        return bytes(captured)
+            try:
+                parse_one_json(output)
+            except ReviewFailure:
+                raise ReviewFailure("OpenCodeReview exited unsuccessfully") from None
+        return output
 
 
 def _run_with_runner(argv, *, home, env, timeout_seconds, runner):
@@ -358,7 +362,10 @@ def _run_with_runner(argv, *, home, env, timeout_seconds, runner):
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ReviewFailure("OpenCodeReview invocation failed or timed out") from exc
     if completed.returncode != 0:
-        raise ReviewFailure("OpenCodeReview exited unsuccessfully")
+        try:
+            parse_one_json(completed.stdout)
+        except ReviewFailure:
+            raise ReviewFailure("OpenCodeReview exited unsuccessfully") from None
     return completed.stdout
 
 

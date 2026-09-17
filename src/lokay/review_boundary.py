@@ -31,10 +31,18 @@ def resolve_structured_sha_review(evidence: Mapping[str, Any]) -> dict[str, Any]
     from lokay.proc.pr_review_artifacts import load_verified_result
 
     head = str(evidence.get("head_sha") or "").lower()
-    marker = find_review_for_head(parse_review_markers(list(evidence.get("comments") or [])), head)
+    markers = parse_review_markers(list(evidence.get("comments") or []))
+    marker = find_review_for_head(markers, head)
+    request_changes = count_request_changes_reviews(markers)
+    if marker is not None and marker.get("verdict") == "fail_closed":
+        return {
+            "ok": True, "route": "cached", "head_sha": head,
+            "request_changes_count": request_changes,
+            "decision": {"verdict": "fail_closed"}, "merge_ok": False,
+        }
     if marker is None or not marker.get("artifact_sha256") or not marker.get("result_sha256"):
         return {"ok": True, "route": "agent", "head_sha": head,
-                "request_changes_count": count_request_changes_reviews(parse_review_markers(list(evidence.get("comments") or [])))}
+                "request_changes_count": request_changes}
     try:
         if not evidence.get("config_path"):
             raise ValueError("review configuration path is required for artifact cache")
@@ -127,6 +135,12 @@ def select_structured_review(resolved: Mapping[str, Any], validated: Mapping[str
     if resolved.get("route") == "cached":
         decision = resolved.get("decision")
         head = str(resolved.get("head_sha") or "").lower()
+        if isinstance(decision, Mapping) and decision.get("verdict") == "fail_closed":
+            return {
+                "ok": True, "route": "cached", "decision": {"verdict": "fail_closed"},
+                "merge_ok": False,
+                "request_changes_count": int(resolved.get("request_changes_count") or 0),
+            }
         if (
             not isinstance(decision, Mapping)
             or decision.get("reviewed_head_sha") != head

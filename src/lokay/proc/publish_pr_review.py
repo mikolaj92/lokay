@@ -56,6 +56,7 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
             runner(cfg), repo, pr,
             ValueError(str(selected.get("reason") or "review_not_validated")),
             mutate=applied,
+            head_sha=str(evidence.get("head_sha") or ""),
         )
         return ok(
             repo=repo, pr=pr, head_sha=str(evidence.get("head_sha") or ""),

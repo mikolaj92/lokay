@@ -144,6 +144,45 @@ def test_live_review_validation_keeps_classified_plugin_error():
     assert out["reason"] != "review_plugin_failed"
 
 
+def test_fail_closed_marker_on_current_sha_does_not_reinvoke_agent():
+    from lokay.pr_review import format_review_marker
+    from lokay.review_boundary import resolve_structured_sha_review
+
+    head = "a" * 40
+    evidence = {
+        "head_sha": head,
+        "comments": [
+            "Lokay LLM PR review failed closed: ocr_exited_unsuccessfully\n"
+            + format_review_marker(head_sha=head, verdict="fail_closed", merge_ok=False)
+        ],
+    }
+
+    out = resolve_structured_sha_review(evidence)
+
+    assert out["route"] == "cached"
+    assert out["decision"]["verdict"] == "fail_closed"
+    assert out["merge_ok"] is False
+
+
+def test_cached_fail_closed_is_authoritative_for_this_sha():
+    from lokay.review_boundary import select_structured_review
+
+    head = "a" * 40
+    selected = select_structured_review(
+        {
+            "route": "cached",
+            "head_sha": head,
+            "decision": {"verdict": "fail_closed"},
+            "merge_ok": False,
+        },
+        {},
+    )
+
+    assert selected["route"] == "cached"
+    assert selected["decision"]["verdict"] == "fail_closed"
+    assert selected["merge_ok"] is False
+
+
 def test_policy_approval_skips_agent_results():
     out=select_review_decision({"route":"policy","decision":{"verdict":"approve"},"merge_ok":True},{"reason":"condition_not_met"},{"reason":"condition_not_met"})
     assert out["route"] == "policy" and out["decision"]["verdict"] == "approve"

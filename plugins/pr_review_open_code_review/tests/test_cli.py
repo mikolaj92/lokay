@@ -560,6 +560,35 @@ def test_bounded_runner_stops_oversized_stdout_before_capture_finishes(tmp_path:
     assert __import__("time").monotonic() - started < 2
 
 
+def test_nonzero_ocr_json_is_kept_for_contract_classification(tmp_path: Path, monkeypatch):
+    request = _request(tmp_path)
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "secret-key")
+    payload = (
+        b'{"status":"failed","llm":{"provider":"omniroute","model":"pi"},'
+        b'"comments":[],"summary":{"budget_exceeded":true}}'
+    )
+
+    def fake_run(argv, **_kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout=payload, stderr=b"secret-key")
+
+    result = invoke_ocr(request, preview=True, runner=fake_run)
+
+    assert result["status"] == "failed"
+    assert result["summary"]["budget_exceeded"] is True
+
+
+def test_nonzero_ocr_without_json_still_fails_closed(tmp_path: Path, monkeypatch):
+    request = _request(tmp_path)
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "secret-key")
+
+    def fake_run(argv, **_kwargs):
+        return subprocess.CompletedProcess(argv, 1, stdout=b"", stderr=b"secret-key")
+
+    with pytest.raises(ReviewFailure, match="exited unsuccessfully") as caught:
+        invoke_ocr(request, preview=True, runner=fake_run)
+    assert "secret-key" not in str(caught.value)
+
+
 def test_main_emits_classified_review_failure_code(monkeypatch, capsys):
     import io
 
