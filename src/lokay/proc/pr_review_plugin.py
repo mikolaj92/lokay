@@ -17,11 +17,39 @@ from lokay.pr_review_credential import resolve_pi_api_key
 _MAX_INPUT_BYTES = 4 * 1024 * 1024
 _MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 _ENV = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 _FORBIDDEN_ENV_PREFIXES = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
 
 
 class PluginFailure(ValueError):
     """Sanitized plugin process failure."""
+
+
+def _classified_error_code(decoded: Any) -> str | None:
+    if not isinstance(decoded, dict):
+        return None
+    error = decoded.get("error")
+    if not isinstance(error, dict):
+        return None
+    code = error.get("code")
+    if not isinstance(code, str) or not _ERROR_CODE.fullmatch(code):
+        return None
+    return code
+
+
+def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
+    if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
+        raise PluginFailure("review plugin output exceeded size limit")
+    try:
+        decoded = json.loads(bytes(output).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PluginFailure("review plugin did not return one JSON envelope") from exc
+    code = _classified_error_code(decoded)
+    if returncode != 0:
+        raise PluginFailure(code or "review plugin returned a failure status")
+    if not isinstance(decoded, dict) or decoded.get("ok") is not True:
+        raise PluginFailure(code or "review plugin rejected the request")
+    return decoded
 
 
 def _plugin_env(cfg: Config) -> dict[str, str]:
@@ -53,7 +81,7 @@ def _plugin_env(cfg: Config) -> dict[str, str]:
     }
 
 
-def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) -> bytes:
+def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) -> tuple[bytes, int]:
     assert process.stdout is not None
     output = bytearray()
     deadline = __import__("time").monotonic() + timeout
@@ -74,9 +102,8 @@ def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) ->
                 output.extend(chunk)
                 if len(output) > limit:
                     raise PluginFailure("review plugin output exceeded size limit")
-        if process.wait(timeout=max(0.1, deadline - __import__("time").monotonic())) != 0:
-            raise PluginFailure("review plugin returned a failure status")
-        return bytes(output)
+        returncode = process.wait(timeout=max(0.1, deadline - __import__("time").monotonic()))
+        return bytes(output), returncode
     except Exception:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -115,9 +142,8 @@ def invoke_plugin(
                             cwd=None, env=env, timeout=timeout, check=False)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise PluginFailure("review plugin failed or timed out") from exc
-        if result.returncode != 0:
-            raise PluginFailure("review plugin returned a failure status")
         output = result.stdout
+        return _decode_plugin_envelope(output, result.returncode)
     else:
         try:
             process = subprocess.Popen(
@@ -148,12 +174,13 @@ def invoke_plugin(
         writer = threading.Thread(target=write_request, daemon=True)
         writer.start()
         try:
-            output = _read_bounded(process, _MAX_OUTPUT_BYTES, timeout)
+            output, returncode = _read_bounded(process, _MAX_OUTPUT_BYTES, timeout)
             writer.join(timeout=1)
             if writer.is_alive():
                 raise PluginFailure("review plugin did not consume the complete request")
             if writer_error:
                 raise PluginFailure("review plugin failed to read request")
+            return _decode_plugin_envelope(output, returncode)
         except (BrokenPipeError, OSError, subprocess.TimeoutExpired, PluginFailure) as exc:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -166,12 +193,3 @@ def invoke_plugin(
             if isinstance(exc, PluginFailure):
                 raise
             raise PluginFailure("review plugin failed or timed out") from exc
-    if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
-        raise PluginFailure("review plugin output exceeded size limit")
-    try:
-        decoded = json.loads(bytes(output).decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PluginFailure("review plugin did not return one JSON envelope") from exc
-    if not isinstance(decoded, dict) or decoded.get("ok") is not True:
-        raise PluginFailure("review plugin rejected the request")
-    return decoded

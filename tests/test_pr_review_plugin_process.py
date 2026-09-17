@@ -130,3 +130,22 @@ def test_process_boundary_rejects_bad_credential_names_before_start(monkeypatch)
     cfg = _config(pr_review_provider_env=["GH_TOKEN"])
     with pytest.raises(PluginFailure, match="allowlist"):
         invoke_plugin(cfg, {}, runner=lambda *_a, **_k: pytest.fail("must not run"))
+
+
+def test_process_boundary_surfaces_classified_plugin_error_code(monkeypatch):
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "provider-secret")
+    monkeypatch.setenv("GH_TOKEN", "github-secret")
+
+    def run(argv, **_kwargs):
+        return subprocess.CompletedProcess(
+            argv,
+            1,
+            stdout=b'{"ok":false,"error":{"code":"ocr_exited_unsuccessfully"}}',
+            stderr=b"provider-secret github-secret",
+        )
+
+    with pytest.raises(PluginFailure, match="ocr_exited_unsuccessfully") as caught:
+        invoke_plugin(_config(), {"request": True}, runner=run)
+    assert "provider-secret" not in str(caught.value)
+    assert "github-secret" not in str(caught.value)
+    assert "failure status" not in str(caught.value)

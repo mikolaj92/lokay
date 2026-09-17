@@ -30,6 +30,60 @@ class ReviewFailure(ValueError):
     """Sanitized process boundary failure; never contains provider output."""
 
 
+_FAILURE_CODES = {
+    "OpenCodeReview output exceeded size limit": "ocr_output_too_large",
+    "OpenCodeReview output is not one JSON document": "ocr_output_not_json",
+    "OpenCodeReview output root must be an object": "ocr_output_not_object",
+    "review engine configuration missing": "review_engine_missing",
+    "provider environment allowlist is required": "env_allowlist_required",
+    "provider environment allowlist contains a forbidden name": "env_allowlist_forbidden",
+    "OpenCodeReview version pin mismatch": "ocr_version_mismatch",
+    "OpenCodeReview binary digest is required": "ocr_binary_digest_required",
+    "OpenCodeReview binary digest mismatch": "ocr_binary_digest_mismatch",
+    "finite positive review timeout is required": "review_timeout_invalid",
+    "finite positive token budget is required": "review_budget_invalid",
+    "valid review effort is required": "review_effort_invalid",
+    "OS sandbox command is required": "sandbox_required",
+    "OS sandbox command must end with --": "sandbox_command_invalid",
+    "only the verified macOS sandbox-exec runtime is supported": "sandbox_runtime_unsupported",
+    "OS sandbox command must enforce its trusted profile with -f": "sandbox_profile_flag_required",
+    "isolated repository checkout is required": "checkout_required",
+    "OS sandbox profile must be the trusted generated-profile template": "sandbox_profile_untrusted",
+    "OS sandbox profile does not match exact checkout, scratch and provider policy": "sandbox_profile_mismatch",
+    "a live exact-authority provider proxy is required": "provider_proxy_required",
+    "cannot create private runtime OS sandbox profile": "sandbox_profile_create_failed",
+    "trusted review configuration digest is required": "config_digest_required",
+    "trusted OCR tool allowlist is invalid": "tools_allowlist_invalid",
+    "allowlisted provider credential is missing": "provider_credential_missing",
+    "OpenCodeReview invocation failed": "ocr_invocation_failed",
+    "OpenCodeReview invocation timed out": "ocr_timed_out",
+    "OpenCodeReview exited unsuccessfully": "ocr_exited_unsuccessfully",
+    "OpenCodeReview invocation failed or timed out": "ocr_invocation_failed",
+    "trusted OpenCodeReview config is invalid": "ocr_config_invalid",
+    "OpenCodeReview config must be credential-free": "ocr_config_has_credential",
+    "canonical task evidence is required": "task_evidence_required",
+    "review checkout evidence drifted after preview": "checkout_drift_preview",
+    "review checkout evidence drifted after review": "checkout_drift_review",
+}
+_FAILURE_PREFIXES = (
+    ("review engine ", "review_engine_required"),
+    ("trusted ", "trusted_file_missing"),
+    ("full immutable ", "immutable_sha_required"),
+    ("OpenCodeReview contract rejected:", "ocr_contract_rejected"),
+)
+
+
+def classified_failure_code(exc: ReviewFailure) -> str:
+    message = str(exc)
+    code = _FAILURE_CODES.get(message)
+    if code:
+        return code
+    for prefix, mapped in _FAILURE_PREFIXES:
+        if message.startswith(prefix):
+            return mapped
+    return "review_failed_closed"
+
+
 def parse_one_json(raw: str | bytes, *, max_bytes: int = _MAX_OUTPUT_BYTES) -> dict[str, Any]:
     data = raw.encode("utf-8") if isinstance(raw, str) else raw
     if len(data) > max_bytes:
@@ -451,8 +505,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             request = parse_one_json(raw, max_bytes=args.max_input_bytes)
             payload = review_request(request)
-        except ReviewFailure:
-            payload = {"ok": False, "error": {"code": "review_failed_closed"}}
+        except ReviewFailure as exc:
+            payload = {"ok": False, "error": {"code": classified_failure_code(exc)}}
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
     return 0 if payload.get("ok") is True else 1
 

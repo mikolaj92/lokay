@@ -558,3 +558,26 @@ def test_bounded_runner_stops_oversized_stdout_before_capture_finishes(tmp_path:
             max_bytes=32,
         )
     assert __import__("time").monotonic() - started < 2
+
+
+def test_main_emits_classified_review_failure_code(monkeypatch, capsys):
+    import io
+
+    from lokay_review_open_code_review import cli
+
+    class _Stdin:
+        buffer = io.BytesIO(b'{"schema":"lokay.review-request/1"}')
+
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin())
+    monkeypatch.setattr(
+        cli,
+        "review_request",
+        lambda _request: (_ for _ in ()).throw(
+            ReviewFailure("OpenCodeReview exited unsuccessfully")
+        ),
+    )
+
+    assert cli.main([]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"ok": False, "error": {"code": "ocr_exited_unsuccessfully"}}
+    assert "provider" not in json.dumps(payload)

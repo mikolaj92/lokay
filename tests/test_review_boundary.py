@@ -126,6 +126,24 @@ def test_live_review_validation_fails_closed_when_plugin_request_is_missing():
     assert out["reason"] == "review_request_missing"
 
 
+def test_live_review_validation_keeps_classified_plugin_error():
+    from lokay.organ.review_boundary import handle_review_boundary
+
+    up = {
+        "collect_pr_review_evidence": {"evidence": {"task": {"number": 42}}},
+        "resolve_sha_review": {"route": "agent"},
+        "pr_review_agent": {"plugin_error": "ocr_exited_unsuccessfully"},
+    }
+    out = handle_review_boundary(
+        "validate_pr_review", {}, up,
+        {"repo": "a/b", "pr_number": 7, "branch": "b", "live": True},
+    )
+
+    assert out["route"] == "fail_closed"
+    assert out["reason"] == "ocr_exited_unsuccessfully"
+    assert out["reason"] != "review_plugin_failed"
+
+
 def test_policy_approval_skips_agent_results():
     out=select_review_decision({"route":"policy","decision":{"verdict":"approve"},"merge_ok":True},{"reason":"condition_not_met"},{"reason":"condition_not_met"})
     assert out["route"] == "policy" and out["decision"]["verdict"] == "approve"

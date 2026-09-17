@@ -63,7 +63,13 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
             return {"ok": True, "route": "not_applicable"}
         source = up.get("pr_review_agent") or {}
         if source.get("plugin_error"):
-            return {"ok": True, "route": "fail_closed", "reason": "review_plugin_failed"}
+            error = str(source.get("plugin_error") or "")
+            reason = (
+                error
+                if error.isascii() and error.replace("_", "").isalnum() and error[0:1].isalpha() and len(error) <= 64
+                else "review_plugin_failed"
+            )
+            return {"ok": True, "route": "fail_closed", "reason": reason}
         if (up.get("resolve_sha_review") or {}).get("route") == "cached":
             return {"ok": True, "route": "not_applicable"}
         result = source.get("result")
