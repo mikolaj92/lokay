@@ -1,11 +1,16 @@
 """Fail-closed lock: checkout Fala and packaged wheel copy must not drift."""
 
+import subprocess
 import tomllib
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 CHECKOUT = ROOT / "fala" / "lokay.fala-package.toml"
 PACKAGED = ROOT / "src" / "lokay" / "data" / "lokay.fala-package.toml"
+PINNED_FALA = "b2547ea6ef8050463a95b7cb10991ed92b9b4f33"
+PINNED_FALA_VERSION = "0.9.3"
 
 
 def test_packaged_fala_is_byte_identical_to_checkout():
@@ -47,9 +52,68 @@ def test_python_fala_dependency_uses_immutable_git_tag():
     source = pyproject["tool"]["uv"]["sources"]["fala"]
     assert source == {
         "git": "https://github.com/mikolaj92/Fala.git",
-        "rev": "b2547ea6ef8050463a95b7cb10991ed92b9b4f33",
+        "rev": PINNED_FALA,
     }
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
     assert 'editable = "../Fala"' not in lock
-    assert 'version = "0.9.3"' in lock
-    assert "#b2547ea6ef8050463a95b7cb10991ed92b9b4f33" in lock
+    assert f'version = "{PINNED_FALA_VERSION}"' in lock
+    assert f"#{PINNED_FALA}" in lock
+
+
+def _git_head(path: Path) -> str:
+    run = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if run.returncode != 0:
+        pytest.fail(f"{path} is not a git checkout: {run.stderr.strip()}")
+    return run.stdout.strip()
+
+
+def test_sibling_fala_checkout_matches_pinned_revision():
+    """graph_run falls back to ../Fala when FALA_HOME is unset.
+
+    A stale 0.9.1 sibling mixes wheel 0.9.3 with native 0.9.1 and skips `when`.
+    """
+    sibling = ROOT.parent / "Fala"
+    assert sibling.is_dir(), f"canonical Fala checkout missing at {sibling}"
+    assert _git_head(sibling) == PINNED_FALA, (
+        f"{sibling} HEAD is {_git_head(sibling)}; pin is {PINNED_FALA} "
+        f"({PINNED_FALA_VERSION})"
+    )
+    pixi = tomllib.loads((sibling / "pixi.toml").read_text(encoding="utf-8"))
+    assert pixi["workspace"]["version"] == PINNED_FALA_VERSION
+
+
+def test_service_default_fala_home_is_the_canonical_checkout():
+    script = (ROOT / "scripts" / "lokay-service.sh").read_text(encoding="utf-8")
+    assert 'FALA_HOME="${FALA_HOME:-${HOME}/Developer/OSS/Fala}"' in script
+
+
+def _plist_fala_home(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    run = subprocess.run(
+        ["/usr/bin/plutil", "-extract", "EnvironmentVariables.FALA_HOME", "raw", str(path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if run.returncode != 0:
+        return None
+    return run.stdout.strip() or None
+
+
+def test_host_launchagents_use_canonical_fala_checkout():
+    """A /tmp worktree is a pin scratchpad, not the host native home."""
+    canonical = Path.home() / "Developer" / "OSS" / "Fala"
+    agents = Path.home() / "Library" / "LaunchAgents"
+    for name in ("ai.mikolaj.lokay.plist", "ai.mikolaj.lokay-status.plist"):
+        home = _plist_fala_home(agents / name)
+        if home is None:
+            continue
+        assert home == str(canonical), (
+            f"{name} FALA_HOME={home!r}; expected canonical {canonical}"
+        )
