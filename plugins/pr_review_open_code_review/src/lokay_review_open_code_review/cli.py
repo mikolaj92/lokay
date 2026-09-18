@@ -84,6 +84,21 @@ def classified_failure_code(exc: ReviewFailure) -> str:
     return "review_failed_closed"
 
 
+_CONTRACT_PREFIX = "OpenCodeReview contract rejected: "
+_DETAIL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.:-]{0,199}$")
+
+
+def classified_failure(exc: ReviewFailure) -> dict[str, str]:
+    """Code always; ContractError text only when it is a bounded ASCII detail."""
+    message = str(exc)
+    error = {"code": classified_failure_code(exc)}
+    if message.startswith(_CONTRACT_PREFIX):
+        detail = message[len(_CONTRACT_PREFIX):].strip()
+        if _DETAIL.fullmatch(detail):
+            error["detail"] = detail
+    return error
+
+
 def parse_one_json(raw: str | bytes, *, max_bytes: int = _MAX_OUTPUT_BYTES) -> dict[str, Any]:
     data = raw.encode("utf-8") if isinstance(raw, str) else raw
     if len(data) > max_bytes:
@@ -515,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
             request = parse_one_json(raw, max_bytes=args.max_input_bytes)
             payload = review_request(request)
         except ReviewFailure as exc:
-            payload = {"ok": False, "error": {"code": classified_failure_code(exc)}}
+            payload = {"ok": False, "error": classified_failure(exc)}
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
     return 0 if payload.get("ok") is True else 1
 

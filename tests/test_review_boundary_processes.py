@@ -70,6 +70,29 @@ def test_fail_closed_comment_binds_head_sha_so_the_same_pr_is_not_reviewed_again
     assert markers[-1]["merge_ok"] is False
 
 
+def test_fail_closed_comment_is_idempotent_for_the_same_sha(monkeypatch):
+    from lokay.pr_review import format_review_marker
+    from lokay.pr_review_io import publish_fail_closed
+
+    posted: list[str] = []
+    monkeypatch.setattr(
+        "lokay.pr_review_io.publish_review",
+        lambda _runner, _repo, _pr, body, _labels, live: posted.append(body),
+    )
+    head = "f" * 40
+    comments = [
+        "Lokay LLM PR review failed closed (invalid structured output): ocr_contract_rejected\n"
+        + format_review_marker(head_sha=head, verdict="fail_closed", merge_ok=False)
+    ]
+    applied = publish_fail_closed(
+        object(), "a/b", 39,
+        ValueError("ocr_contract_rejected: review terminal state is not complete"),
+        mutate=True, head_sha=head, comments=comments,
+    )
+    assert applied is True
+    assert posted == []
+
+
 def test_verify_supplement_rejects_changed_sha(monkeypatch):
     from lokay.proc import verify_review_evidence_sha
     monkeypatch.setattr(verify_review_evidence_sha,"runner",lambda:object())

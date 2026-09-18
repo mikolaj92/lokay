@@ -64,11 +64,20 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
         source = up.get("pr_review_agent") or {}
         if source.get("plugin_error"):
             error = str(source.get("plugin_error") or "")
-            reason = (
-                error
-                if error.isascii() and error.replace("_", "").isalnum() and error[0:1].isalpha() and len(error) <= 64
-                else "review_plugin_failed"
-            )
+            code, _, detail = error.partition(": ")
+            if (
+                code.isascii()
+                and code.replace("_", "").isalnum()
+                and code[0:1].isalpha()
+                and len(code) <= 64
+            ):
+                reason = (
+                    f"{code}: {detail}"
+                    if detail and detail.isascii() and 0 < len(detail) <= 200
+                    else code
+                )
+            else:
+                reason = "review_plugin_failed"
             return {"ok": True, "route": "fail_closed", "reason": reason}
         if (up.get("resolve_sha_review") or {}).get("route") == "cached":
             return {"ok": True, "route": "not_applicable"}

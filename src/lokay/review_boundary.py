@@ -34,12 +34,11 @@ def resolve_structured_sha_review(evidence: Mapping[str, Any]) -> dict[str, Any]
     markers = parse_review_markers(list(evidence.get("comments") or []))
     marker = find_review_for_head(markers, head)
     request_changes = count_request_changes_reviews(markers)
+    # fail_closed is not a review. The SHA marker only stops comment loops;
+    # the agent must run again until a complete JSON document exists.
     if marker is not None and marker.get("verdict") == "fail_closed":
-        return {
-            "ok": True, "route": "cached", "head_sha": head,
-            "request_changes_count": request_changes,
-            "decision": {"verdict": "fail_closed"}, "merge_ok": False,
-        }
+        return {"ok": True, "route": "agent", "head_sha": head,
+                "request_changes_count": request_changes}
     if marker is None or not marker.get("artifact_sha256") or not marker.get("result_sha256"):
         return {"ok": True, "route": "agent", "head_sha": head,
                 "request_changes_count": request_changes}

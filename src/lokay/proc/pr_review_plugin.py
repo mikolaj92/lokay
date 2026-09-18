@@ -18,6 +18,7 @@ _MAX_INPUT_BYTES = 4 * 1024 * 1024
 _MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 _ENV = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 _ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+_ERROR_DETAIL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.:-]{0,199}$")
 _FORBIDDEN_ENV_PREFIXES = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
 
 
@@ -37,6 +38,26 @@ def _classified_error_code(decoded: Any) -> str | None:
     return code
 
 
+def _classified_error_detail(decoded: Any) -> str | None:
+    if not isinstance(decoded, dict):
+        return None
+    error = decoded.get("error")
+    if not isinstance(error, dict):
+        return None
+    detail = error.get("detail")
+    if not isinstance(detail, str) or not _ERROR_DETAIL.fullmatch(detail):
+        return None
+    return detail
+
+
+def _plugin_failure_message(decoded: Any, fallback: str) -> str:
+    code = _classified_error_code(decoded)
+    if not code:
+        return fallback
+    detail = _classified_error_detail(decoded)
+    return f"{code}: {detail}" if detail else code
+
+
 def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
     if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
         raise PluginFailure("review plugin output exceeded size limit")
@@ -44,11 +65,10 @@ def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
         decoded = json.loads(bytes(output).decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PluginFailure("review plugin did not return one JSON envelope") from exc
-    code = _classified_error_code(decoded)
     if returncode != 0:
-        raise PluginFailure(code or "review plugin returned a failure status")
+        raise PluginFailure(_plugin_failure_message(decoded, "review plugin returned a failure status"))
     if not isinstance(decoded, dict) or decoded.get("ok") is not True:
-        raise PluginFailure(code or "review plugin rejected the request")
+        raise PluginFailure(_plugin_failure_message(decoded, "review plugin rejected the request"))
     return decoded
 
 

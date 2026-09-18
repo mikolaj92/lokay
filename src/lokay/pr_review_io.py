@@ -353,12 +353,18 @@ def publish_review(
 def publish_fail_closed(
     runner: Runner, repo: str, pr: int, exc: Exception, *, mutate: bool,
     head_sha: str = "",
+    comments: list[str] | None = None,
 ) -> bool:
     if not mutate:
         return False
     body = FAIL_CLOSED.format(exc=exc)
     sha = str(head_sha or "").strip().lower()
     if sha:
+        from lokay.pr_review import find_review_for_head, parse_review_markers
+
+        prior = find_review_for_head(parse_review_markers(list(comments or [])), sha)
+        if prior is not None and prior.get("verdict") == "fail_closed":
+            return True
         body = f"{body}\n{format_review_marker(head_sha=sha, verdict='fail_closed', merge_ok=False)}"
     try:
         publish_review(

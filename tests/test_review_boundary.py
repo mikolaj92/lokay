@@ -144,7 +144,7 @@ def test_live_review_validation_keeps_classified_plugin_error():
     assert out["reason"] != "review_plugin_failed"
 
 
-def test_fail_closed_marker_on_current_sha_does_not_reinvoke_agent():
+def test_fail_closed_marker_on_current_sha_reinvokes_agent():
     from lokay.pr_review import format_review_marker
     from lokay.review_boundary import resolve_structured_sha_review
 
@@ -152,16 +152,16 @@ def test_fail_closed_marker_on_current_sha_does_not_reinvoke_agent():
     evidence = {
         "head_sha": head,
         "comments": [
-            "Lokay LLM PR review failed closed: ocr_exited_unsuccessfully\n"
+            "Lokay LLM PR review failed closed: ocr_contract_rejected\n"
             + format_review_marker(head_sha=head, verdict="fail_closed", merge_ok=False)
         ],
     }
 
     out = resolve_structured_sha_review(evidence)
 
-    assert out["route"] == "cached"
-    assert out["decision"]["verdict"] == "fail_closed"
-    assert out["merge_ok"] is False
+    assert out["route"] == "agent"
+    assert out.get("decision", {}).get("verdict") != "fail_closed"
+    assert out.get("merge_ok") is not True
 
 
 def test_cached_fail_closed_is_authoritative_for_this_sha():
