@@ -5,6 +5,36 @@ def test_named_slot_is_pr_triage() -> None:
     assert CHILD_PATH == "pr_triage"
 
 
+def test_triage_receipt_lifts_classified_incomplete_reason(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "lokay.proc.run_pr_triage_subflow.run_path",
+        lambda **_kwargs: {
+            "ok": True,
+            "publish_pr_review": {
+                "decision": {"verdict": "fail_closed"},
+                "reason": "ocr_output_not_json",
+            },
+            "review_manual": {"reason": "review_fail_closed", "verdict": "fail_closed"},
+            "terminal": {
+                "summarize_pr_triage": {
+                    "ok": True,
+                    "result": {
+                        "skipped": True,
+                        "reason": "review_fail_closed",
+                        "review": {"verdict": "fail_closed"},
+                    },
+                },
+            },
+        },
+    )
+    out = run(
+        {"route": "pr", "repo": "mikolaj92/splot", "pr": 56, "branch": "ai/fix/41-x"},
+        config_path=None, live=True,
+    )
+    assert out["triage"]["reason"] == "ocr_output_not_json"
+    assert out["triage"]["reason"] != "review_fail_closed"
+
+
 def test_triage_receipt_preserves_complete_structured_review_handoff(monkeypatch) -> None:
     task = {
         "repo": "o/r", "type": "Issue", "state": "OPEN", "number": 42,

@@ -489,7 +489,9 @@ open lokay PRs. Incomplete review — no complete JSON, any plugin code in that
 class (`ocr_timed_out`, `ocr_invocation_failed`, `ocr_exited_unsuccessfully`,
 `ocr_output_not_json`, `plugin_error`, …) — KEEP the same identity so the next
 pass retries that SHA until a complete JSON exists. Occupancy is the class,
-not a single string. Pending checks KEEP the row. A new head SHA is a new
+not a single string. The review terminal (`review_manual` / summarize) must
+carry that classified reason; collapsing it to `review_fail_closed` makes
+incomplete and complete reject share one value and consumes the SHA. Pending checks KEEP the row. A new head SHA is a new
 identity and may be reviewed again. This is queue hygiene, not a parallel
 scheduler and not a human-approval gate.
 

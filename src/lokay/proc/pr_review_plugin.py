@@ -84,20 +84,46 @@ def _classified_error_warnings(decoded: Any) -> list[dict[str, str]]:
     return out
 
 
+_HOST_FAILURE_CODES = {
+    "review plugin did not return one JSON envelope": "ocr_output_not_json",
+    "review plugin returned a failure status": "ocr_exited_unsuccessfully",
+    "review plugin rejected the request": "ocr_exited_unsuccessfully",
+    "review plugin output exceeded size limit": "ocr_output_too_large",
+    "review plugin failed or timed out": "ocr_invocation_failed",
+    "review plugin could not start": "ocr_invocation_failed",
+    "review plugin did not consume the complete request": "ocr_invocation_failed",
+    "review plugin failed to read request": "ocr_invocation_failed",
+    "review plugin command and finite timeout are required": "review_timeout_invalid",
+    "review request cannot be serialized": "review_result_invalid",
+    "review request exceeded size limit": "ocr_output_too_large",
+    "review plugin credential allowlist is invalid": "env_allowlist_forbidden",
+    "review plugin provider credential is missing": "provider_credential_missing",
+}
+
+
+def classified_host_failure_code(message: str) -> str:
+    """Map a host plugin English failure to the occupancy code."""
+    return _HOST_FAILURE_CODES.get(message, message)
+
+
+def _host_failure(message: str, *, warnings: list[dict[str, str]] | None = None) -> PluginFailure:
+    return PluginFailure(classified_host_failure_code(message), warnings=warnings)
+
+
 def _plugin_failure(decoded: Any, fallback: str) -> PluginFailure:
     return PluginFailure(
-        _plugin_failure_message(decoded, fallback),
+        _plugin_failure_message(decoded, classified_host_failure_code(fallback)),
         warnings=_classified_error_warnings(decoded),
     )
 
 
 def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
     if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
-        raise PluginFailure("review plugin output exceeded size limit")
+        raise _host_failure("review plugin output exceeded size limit")
     try:
         decoded = json.loads(bytes(output).decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise PluginFailure("review plugin did not return one JSON envelope") from exc
+        raise _host_failure("review plugin did not return one JSON envelope") from exc
     if returncode != 0:
         raise _plugin_failure(decoded, "review plugin returned a failure status")
     if not isinstance(decoded, dict) or decoded.get("ok") is not True:
@@ -111,7 +137,7 @@ def _plugin_env(cfg: Config) -> dict[str, str]:
         not _ENV.fullmatch(name) or name.startswith(_FORBIDDEN_ENV_PREFIXES)
         for name in names
     ):
-        raise PluginFailure("review plugin credential allowlist is invalid")
+        raise _host_failure("review plugin credential allowlist is invalid")
     values = {}
     for name in names:
         value = os.environ.get(name, "")
@@ -119,9 +145,9 @@ def _plugin_env(cfg: Config) -> dict[str, str]:
             try:
                 value = resolve_pi_api_key()
             except Exception as exc:
-                raise PluginFailure("review plugin provider credential is missing") from exc
+                raise _host_failure("review plugin provider credential is missing") from exc
         if not value:
-            raise PluginFailure("review plugin provider credential is missing")
+            raise _host_failure("review plugin provider credential is missing")
         values[name] = value
     path_dirs = [os.path.dirname(cfg.pr_review_plugin_command)] if os.path.sep in cfg.pr_review_plugin_command else ["/usr/local/bin", "/usr/bin", "/bin"]
     return {
@@ -144,7 +170,7 @@ def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) ->
             while True:
                 remaining = deadline - __import__("time").monotonic()
                 if remaining <= 0:
-                    raise PluginFailure("review plugin failed or timed out")
+                    raise _host_failure("review plugin failed or timed out")
                 if not selector.select(min(remaining, 0.25)):
                     if process.poll() is not None:
                         break
@@ -154,7 +180,7 @@ def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) ->
                     break
                 output.extend(chunk)
                 if len(output) > limit:
-                    raise PluginFailure("review plugin output exceeded size limit")
+                    raise _host_failure("review plugin output exceeded size limit")
         returncode = process.wait(timeout=max(0.1, deadline - __import__("time").monotonic()))
         return bytes(output), returncode
     except Exception:
@@ -180,13 +206,13 @@ def invoke_plugin(
     args = list(cfg.pr_review_plugin_args or [])
     timeout = int(cfg.pr_review_plugin_timeout_seconds)
     if not command or timeout < 1:
-        raise PluginFailure("review plugin command and finite timeout are required")
+        raise _host_failure("review plugin command and finite timeout are required")
     try:
         payload = json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     except (TypeError, ValueError) as exc:
-        raise PluginFailure("review request cannot be serialized") from exc
+        raise _host_failure("review request cannot be serialized") from exc
     if len(payload) > _MAX_INPUT_BYTES:
-        raise PluginFailure("review request exceeded size limit")
+        raise _host_failure("review request exceeded size limit")
     env = _plugin_env(cfg)
     argv = [command, *args]
     if runner is not None:
@@ -194,7 +220,7 @@ def invoke_plugin(
             result = runner(argv, input=payload, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             cwd=None, env=env, timeout=timeout, check=False)
         except (OSError, subprocess.TimeoutExpired) as exc:
-            raise PluginFailure("review plugin failed or timed out") from exc
+            raise _host_failure("review plugin failed or timed out") from exc
         output = result.stdout
         return _decode_plugin_envelope(output, result.returncode)
     else:
@@ -204,7 +230,7 @@ def invoke_plugin(
                 env=env, start_new_session=True, bufsize=0,
             )
         except OSError as exc:
-            raise PluginFailure("review plugin could not start") from exc
+            raise _host_failure("review plugin could not start") from exc
         assert process.stdin is not None
         writer_error: list[BaseException] = []
 
@@ -230,9 +256,9 @@ def invoke_plugin(
             output, returncode = _read_bounded(process, _MAX_OUTPUT_BYTES, timeout)
             writer.join(timeout=1)
             if writer.is_alive():
-                raise PluginFailure("review plugin did not consume the complete request")
+                raise _host_failure("review plugin did not consume the complete request")
             if writer_error:
-                raise PluginFailure("review plugin failed to read request")
+                raise _host_failure("review plugin failed to read request")
             return _decode_plugin_envelope(output, returncode)
         except (BrokenPipeError, OSError, subprocess.TimeoutExpired, PluginFailure) as exc:
             try:
@@ -245,4 +271,4 @@ def invoke_plugin(
                 pass
             if isinstance(exc, PluginFailure):
                 raise
-            raise PluginFailure("review plugin failed or timed out") from exc
+            raise _host_failure("review plugin failed or timed out") from exc

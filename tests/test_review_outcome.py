@@ -48,6 +48,57 @@ def test_manual_terminal_is_a_domain_result():
     assert result["needs_review"] is True
 
 
+def test_review_manual_keeps_classified_incomplete_reason():
+    from lokay.organ.pr_outcome import handle_pr_outcome
+    from lokay.proc.walk_pr_leftover import classify_occupancy, leftover_after
+
+    out = handle_pr_outcome(
+        "review_manual", {},
+        {"publish_pr_review": {
+            "decision": {"verdict": "fail_closed"},
+            "reason": "review_plugin_failed",
+        }},
+        {"repo": "mikolaj92/splot", "pr_number": 56, "branch": "ai/fix/41-x", "live": True},
+    )
+    assert out["reason"] == "review_plugin_failed"
+    assert out["reason"] != "review_fail_closed"
+    occupancy = classify_occupancy({
+        "route": "completed", "verdict": "feedback", "reason": out["reason"],
+    })
+    assert occupancy == {"class": "incomplete", "keep": True}
+    kept = leftover_after(
+        {"repo": "mikolaj92/splot", "pr": 56, "head_sha": "908e0d03",
+         "route": "pr", "leftover_prs": [{"repo": "o/r", "pr": 41, "head_sha": "aa"}]},
+        {"route": "completed", "verdict": "feedback", "reason": out["reason"]},
+    )
+    assert [row["pr"] for row in kept] == [56, 41]
+
+
+def test_review_manual_keeps_complete_reject_reason():
+    from lokay.organ.pr_outcome import handle_pr_outcome
+    from lokay.proc.walk_pr_leftover import classify_occupancy, leftover_after
+
+    out = handle_pr_outcome(
+        "review_manual", {},
+        {"publish_pr_review": {
+            "decision": {"verdict": "fail_closed"},
+            "reason": "ocr_contract_rejected: review has warnings",
+        }},
+        {"repo": "a/b", "pr_number": 7, "branch": "ai/fix/7-x", "live": True},
+    )
+    assert out["reason"].startswith("ocr_contract_rejected")
+    occupancy = classify_occupancy({
+        "route": "completed", "verdict": "feedback", "reason": out["reason"],
+    })
+    assert occupancy == {"class": "complete_reject", "keep": False}
+    rest = leftover_after(
+        {"repo": "a/b", "pr": 7, "head_sha": "aa", "route": "pr",
+         "leftover_prs": [{"repo": "o/r", "pr": 1, "head_sha": "bb"}]},
+        {"route": "completed", "verdict": "feedback", "reason": out["reason"]},
+    )
+    assert [row["pr"] for row in rest] == [1]
+
+
 def test_pr_repair_verdict_preserves_ci_only_repairs_without_review_evidence():
     from lokay.organ.pr_outcome import handle_pr_outcome
 

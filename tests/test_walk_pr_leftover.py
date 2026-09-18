@@ -46,6 +46,7 @@ def test_fail_closed_and_non_review_skip_consume() -> None:
     assert consumes({"route": "fail_closed", "reason": "ocr_contract_rejected: review has warnings"})
     assert consumes({"route": "fail_closed", "reason": "review has warnings"})
     assert consumes({"route": "completed", "verdict": "feedback", "reason": "ocr_contract_rejected"})
+    assert consumes({"route": "completed", "verdict": "feedback", "reason": "review_fail_closed"})
     assert consumes({"route": "completed", "verdict": "merge"})
     assert consumes({"outcome": "merge"})
 

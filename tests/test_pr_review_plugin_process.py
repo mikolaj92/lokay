@@ -45,10 +45,10 @@ def test_process_boundary_sends_one_request_with_minimal_environment(monkeypatch
 @pytest.mark.parametrize(
     ("stdout", "returncode", "message"),
     [
-        (b'{}\n{}', 0, "one JSON"),
-        (b'{"ok":false}', 1, "failure status"),
-        (b'provider-secret', 0, "one JSON"),
-        (b'{"ok":true}', 7, "failure status"),
+        (b'{}\n{}', 0, "ocr_output_not_json"),
+        (b'{"ok":false}', 1, "ocr_exited_unsuccessfully"),
+        (b'provider-secret', 0, "ocr_output_not_json"),
+        (b'{"ok":true}', 7, "ocr_exited_unsuccessfully"),
     ],
 )
 def test_process_boundary_fails_closed_for_bad_plugin_output(monkeypatch, stdout, returncode, message):
@@ -75,7 +75,7 @@ def test_process_boundary_kills_child_when_streamed_output_exceeds_limit(monkeyp
         pr_review_plugin_args=["-c", "import sys,time; sys.stdout.write('x'*10000000); sys.stdout.flush(); time.sleep(3)"],
     )
     started = time.monotonic()
-    with pytest.raises(PluginFailure, match="size limit"):
+    with pytest.raises(PluginFailure, match="ocr_output_too_large"):
         invoke_plugin(cfg, {"request": True})
     assert time.monotonic() - started < 2
 

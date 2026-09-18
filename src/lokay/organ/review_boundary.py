@@ -63,8 +63,10 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
             return {"ok": True, "route": "not_applicable"}
         source = up.get("pr_review_agent") or {}
         if source.get("plugin_error"):
+            from lokay.proc.pr_review_plugin import classified_host_failure_code
             error = str(source.get("plugin_error") or "")
-            code, _, detail = error.partition(": ")
+            mapped = classified_host_failure_code(error)
+            code, _, detail = mapped.partition(": ")
             if (
                 code.isascii()
                 and code.replace("_", "").isalnum()

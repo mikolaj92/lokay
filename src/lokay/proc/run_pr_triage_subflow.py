@@ -17,6 +17,8 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
         live=live,
     )
     result = dict(result)
+    published = dict(result.get("publish_pr_review") or {})
+    published_reason = str(published.get("reason") or "")
     terminal = result.get("terminal")
     summary = terminal.get("summarize_pr_triage") if isinstance(terminal, dict) else None
     if not isinstance(summary, dict):
@@ -53,7 +55,8 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
                 or (result.get("select_pr_triage_outcome") or {}).get("repairable")
             ),
             "reason": (
-                result.get("reason")
+                published_reason
+                or result.get("reason")
                 or (result.get("pr_repair_verdict") or {}).get("reason")
                 or (result.get("select_pr_triage_outcome") or {}).get("reason")
             ),
