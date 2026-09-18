@@ -11,7 +11,7 @@ The parent selects and conditionally runs these departments in authored order:
 1. `run_self_repair_department`: repairs a confirmed factory stall; off when the recovery gate excludes it. Repair and product work are exclusive.
 2. `run_issue_triage_department`: lists and triages intentional issues, marks decisions and handles bounded split/intake work. It does not start coding.
 3. `run_executor_department`: selects executable work and dispatches the child `issue_to_pr`, up to the serial budget. This is where implementation lives; `select_implement` is not the first step of the parent.
-4. `run_pr_triage_department`: checks and reviews existing PRs, then waits, requests repair, or merges eligible quality code. A skip without merge consumes `(repo, pr, head_sha)` and leftover walks to the next open lokay PR. `fail_closed` is not a review and must not KEEP the sieve.
+4. `run_pr_triage_department`: checks and reviews existing PRs, then waits, requests repair, or merges eligible quality code. A skip without merge consumes `(repo, pr, head_sha)` and leftover walks to the next open lokay PR. Incomplete review (no complete JSON) is not a review and KEEP the SHA. Classified complete reject (`ocr_contract_rejected`) still consumes.
 5. `run_pr_repair_department`: invokes `pr_repair` only for the preceding PR-triage repair verdict, without starting another merge process inside that department.
 
 Within PR triage, after selecting its exact candidate and before launching
@@ -725,10 +725,11 @@ stateDiagram-v2
 
 Dział `pr_triage_department` ma sześć węzłów. Sitko chodzi leftover jak issue:
 tożsamość `(repo, pr, head_sha)`. Skip bez merge zjada wiersz i oddaje
-`leftover_prs`. Niekompletny OCR (`ocr_timed_out`) nie jest review i nie jest
-skip — KEEP tej samej SHA. Sklasyfikowany kompletny reject
-(`ocr_contract_rejected`) nadal zjada wiersz. Nowe SHA to nowa tożsamość.
-Pending KEEP. Po liście i wyborze kandydata
+`leftover_prs`. Niekompletny review (brak kompletnego JSON: timeout,
+invocation failed, not JSON, plugin_error) nie jest review i nie jest skip —
+KEEP tej samej SHA. Klasa occupancy, nie jeden string. Sklasyfikowany
+kompletny reject (`ocr_contract_rejected`) nadal zjada wiersz. Nowe SHA to
+nowa tożsamość. Pending KEEP. Po liście i wyborze kandydata
 `reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
 przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest
 wybrany PR; zgodny live OPEN PR potwierdza odzyskany push, a bieżący pass

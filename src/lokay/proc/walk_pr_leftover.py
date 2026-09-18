@@ -9,12 +9,46 @@ KEEP_REASONS = frozenset(
         "ci_repair_start_head_missing",
         "merge_disabled",
         "repair_push_recovered",
-        "ocr_timed_out",
     }
 )
 KEEP_ROUTES = frozenset({"wait"})
 KEEP_VERDICTS = frozenset({"repair"})
-_INCOMPLETE_PREFIXES = ("ocr_timed_out",)
+_PLUGIN_INCOMPLETE = frozenset(
+    {
+        "plugin_error",
+        "review_plugin_failed",
+        "review_failed_closed",
+        "review_result_invalid",
+        "review_request_missing",
+    }
+)
+OCCUPANCY_SCHEMA = {
+    "type": "object",
+    "required": ["class", "keep"],
+    "additionalProperties": False,
+    "properties": {
+        "class": {
+            "type": "string",
+            "enum": [
+                "incomplete",
+                "complete_reject",
+                "merge",
+                "pending",
+                "repair",
+                "consumed",
+            ],
+        },
+        "keep": {"type": "boolean"},
+    },
+    "oneOf": [
+        {"properties": {"class": {"const": "incomplete"}, "keep": {"const": True}}},
+        {"properties": {"class": {"const": "complete_reject"}, "keep": {"const": False}}},
+        {"properties": {"class": {"const": "merge"}, "keep": {"const": False}}},
+        {"properties": {"class": {"const": "pending"}, "keep": {"const": True}}},
+        {"properties": {"class": {"const": "repair"}, "keep": {"const": True}}},
+        {"properties": {"class": {"const": "consumed"}, "keep": {"const": False}}},
+    ],
+}
 
 
 def identity(row: dict | None) -> tuple[str, int, str] | None:
@@ -41,28 +75,45 @@ def skipped_identity(last: dict | None) -> tuple[str, int, str] | None:
     )
 
 
-def consumes(receipt: object) -> bool:
-    """Skip / fail_closed / merge consume. Pending checks KEEP the row."""
-    if not isinstance(receipt, dict):
+def _reason_code(reason: str) -> str:
+    return reason.split(":", 1)[0].strip()
+
+
+def incomplete_review(reason: str) -> bool:
+    """True when OCR/plugin produced no complete review JSON."""
+    code = _reason_code(reason)
+    if code == "ocr_contract_rejected":
         return False
-    if str(receipt.get("outcome") or "") == "merge":
+    if code.startswith("ocr_"):
         return True
-    verdict = str(receipt.get("verdict") or "")
-    if verdict == "merge":
-        return True
+    return code in _PLUGIN_INCOMPLETE
+
+
+def classify_occupancy(receipt: object) -> dict:
+    """Leftover occupancy: incomplete JSON KEEP; complete reject consume."""
+    if not isinstance(receipt, dict):
+        return {"class": "pending", "keep": True}
+    if str(receipt.get("outcome") or "") == "merge" or str(receipt.get("verdict") or "") == "merge":
+        return {"class": "merge", "keep": False}
     route = str(receipt.get("route") or "")
     reason = str(receipt.get("reason") or "")
-    if route in KEEP_ROUTES:
-        return False
-    if reason in KEEP_REASONS or reason.startswith(_INCOMPLETE_PREFIXES):
-        return False
+    verdict = str(receipt.get("verdict") or "")
+    if route in KEEP_ROUTES or reason in KEEP_REASONS:
+        return {"class": "pending", "keep": True}
     if verdict in KEEP_VERDICTS or receipt.get("repairable"):
-        return False
-    if route in {"fail_closed", "skip"}:
-        return True
-    if route == "completed" and verdict == "feedback":
-        return True
-    return False
+        return {"class": "repair", "keep": True}
+    if incomplete_review(reason):
+        return {"class": "incomplete", "keep": True}
+    if _reason_code(reason) == "ocr_contract_rejected":
+        return {"class": "complete_reject", "keep": False}
+    if route in {"fail_closed", "skip"} or (route == "completed" and verdict == "feedback"):
+        return {"class": "consumed", "keep": False}
+    return {"class": "pending", "keep": True}
+
+
+def consumes(receipt: object) -> bool:
+    """Skip / fail_closed / merge consume. Incomplete JSON and pending KEEP."""
+    return not bool(classify_occupancy(receipt).get("keep"))
 
 
 def after(rows: list | None, skipped: dict | None) -> list[dict]:
@@ -101,7 +152,7 @@ def keep(rows: list | None, picked: dict | None) -> list[dict]:
 
 
 def leftover_after(picked: dict | None, receipt: dict | None) -> list[dict]:
-    """Consume drops the pick. Pending KEEP starts at the pick."""
+    """Consume drops the pick. Incomplete JSON and pending KEEP start at the pick."""
     picked = picked if isinstance(picked, dict) else {}
     rest = [
         dict(row)

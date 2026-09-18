@@ -1,6 +1,19 @@
 """PR sieve leftover: skip without merge consumes (repo, pr, sha); pending KEEP."""
 
-from lokay.proc.walk_pr_leftover import after, consumes, identity, keep, leftover_after, queue
+import pytest
+from fala.conformance import check_payload, exercise_handler
+from fala.protocol import ProtocolError, Result
+
+from lokay.proc.walk_pr_leftover import (
+    OCCUPANCY_SCHEMA,
+    after,
+    classify_occupancy,
+    consumes,
+    identity,
+    keep,
+    leftover_after,
+    queue,
+)
 
 
 def _pr(repo: str, number: int, sha: str, *, title: str = "") -> dict:
@@ -30,17 +43,46 @@ def test_identity_is_repo_pr_sha() -> None:
 
 def test_fail_closed_and_non_review_skip_consume() -> None:
     assert consumes({"route": "fail_closed", "reason": "ocr_contract_rejected"})
+    assert consumes({"route": "fail_closed", "reason": "ocr_contract_rejected: review has warnings"})
     assert consumes({"route": "fail_closed", "reason": "review has warnings"})
-    assert consumes({"route": "skip", "reason": "plugin_error"})
     assert consumes({"route": "completed", "verdict": "feedback", "reason": "ocr_contract_rejected"})
     assert consumes({"route": "completed", "verdict": "merge"})
     assert consumes({"outcome": "merge"})
 
 
-def test_incomplete_ocr_timeout_keeps_the_sha() -> None:
-    assert not consumes({"route": "fail_closed", "reason": "ocr_timed_out"})
-    assert not consumes({"route": "fail_closed", "reason": "ocr_timed_out: review timed out"})
-    assert not consumes({"route": "completed", "verdict": "feedback", "reason": "ocr_timed_out"})
+_INCOMPLETE = (
+    "ocr_timed_out",
+    "ocr_timed_out: review timed out",
+    "ocr_invocation_failed",
+    "ocr_exited_unsuccessfully",
+    "ocr_output_not_json",
+    "ocr_output_not_object",
+    "ocr_output_too_large",
+    "plugin_error",
+    "review_plugin_failed",
+    "review_failed_closed",
+    "review_result_invalid",
+    "review_request_missing",
+)
+
+
+@pytest.mark.parametrize("reason", _INCOMPLETE)
+def test_incomplete_review_without_json_keeps_the_sha(reason: str) -> None:
+    assert not consumes({"route": "fail_closed", "reason": reason})
+    assert not consumes({"route": "completed", "verdict": "feedback", "reason": reason})
+    assert not consumes({"route": "skip", "reason": reason})
+
+
+def test_incomplete_ocr_class_is_prefix_not_a_timeout_allowlist() -> None:
+    assert not consumes({"route": "fail_closed", "reason": "ocr_new_capacity_code"})
+    assert classify_occupancy({"route": "fail_closed", "reason": "ocr_new_capacity_code"}) == {
+        "class": "incomplete",
+        "keep": True,
+    }
+    assert classify_occupancy({"route": "fail_closed", "reason": "ocr_contract_rejected"}) == {
+        "class": "complete_reject",
+        "keep": False,
+    }
 
 
 def test_pending_checks_keep() -> None:
@@ -134,6 +176,67 @@ def test_leftover_after_ocr_timeout_keeps_the_pick() -> None:
     picked = {**KIT_39, "route": "pr", "leftover_prs": [VIBE_30, SPLOT_55]}
     kept = leftover_after(picked, {"route": "fail_closed", "reason": "ocr_timed_out"})
     assert [row["pr"] for row in kept] == [39, 30, 55]
+
+
+@pytest.mark.parametrize(
+    "reason",
+    (
+        "ocr_invocation_failed",
+        "ocr_exited_unsuccessfully",
+        "ocr_output_not_json",
+        "plugin_error",
+        "review_plugin_failed",
+    ),
+)
+def test_leftover_after_incomplete_plugin_keeps_the_pick(reason: str) -> None:
+    picked = {**KIT_39, "route": "pr", "leftover_prs": [VIBE_30, SPLOT_55]}
+    kept = leftover_after(picked, {"route": "fail_closed", "reason": reason})
+    assert [row["pr"] for row in kept] == [39, 30, 55]
+
+
+def _occupancy_handler(request):
+    return Result.from_request(request, payload=classify_occupancy(request.payload))
+
+
+def test_fala_occupancy_contract_incomplete_keeps() -> None:
+    result = exercise_handler(
+        _occupancy_handler,
+        {"route": "fail_closed", "reason": "ocr_invocation_failed"},
+        OCCUPANCY_SCHEMA,
+        job="summarize_pr_triage_department",
+    )
+    assert result.payload == {"class": "incomplete", "keep": True}
+    check_payload(result.payload, OCCUPANCY_SCHEMA)
+
+
+def test_fala_occupancy_contract_complete_reject_consumes() -> None:
+    result = exercise_handler(
+        _occupancy_handler,
+        {"route": "fail_closed", "reason": "ocr_contract_rejected: review has warnings"},
+        OCCUPANCY_SCHEMA,
+        job="summarize_pr_triage_department",
+    )
+    assert result.payload == {"class": "complete_reject", "keep": False}
+    check_payload(result.payload, OCCUPANCY_SCHEMA)
+
+
+def test_fala_occupancy_contract_merge_consumes() -> None:
+    result = exercise_handler(
+        _occupancy_handler,
+        {"route": "completed", "verdict": "merge", "outcome": "merge"},
+        OCCUPANCY_SCHEMA,
+        job="summarize_pr_triage_department",
+    )
+    assert result.payload["class"] == "merge"
+    assert result.payload["keep"] is False
+    check_payload(result.payload, OCCUPANCY_SCHEMA)
+
+
+def test_fala_occupancy_contract_rejects_keep_on_complete_reject() -> None:
+    with pytest.raises(ProtocolError):
+        check_payload({"class": "complete_reject", "keep": True}, OCCUPANCY_SCHEMA)
+    with pytest.raises(ProtocolError):
+        check_payload({"class": "incomplete", "keep": False}, OCCUPANCY_SCHEMA)
 
 
 def test_leftover_queue_is_not_jumped_by_a_new_pr() -> None:
