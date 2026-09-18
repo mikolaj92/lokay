@@ -12,6 +12,13 @@ def test_diff_kind_is_mechanical():
     )
     assert classify_changed_paths([]) == "empty"
     assert classify_changed_paths(["src/x.py", "uv.lock"]) == "real"
+    assert (
+        classify_changed_paths(
+            ["tests/__pycache__/test_fleet_contracts.cpython-314.pyc"]
+        )
+        == "empty"
+    )
+    assert classify_changed_paths([".build/debug/OpenAPIDynamic"]) == "empty"
 
 
 def test_ticket_scope_requires_one_named_changed_path():

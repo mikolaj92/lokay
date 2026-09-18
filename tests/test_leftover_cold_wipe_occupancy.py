@@ -132,6 +132,34 @@ def test_last_pass_with_leftover_is_not_empty_idle():
         is True
     )
 
+def test_consumed_host_ops_leftover_is_not_reseeded():
+    remaining = _issues_leftover_remaining(
+        {
+            "result": {
+                "issue": 48,
+                "repo": "mikolaj92/dotfiles",
+                "route": "skip",
+                "reason": "host_ops",
+                "leftover": 0,
+                "leftover_issues": [],
+                "launched": None,
+            }
+        },
+        {
+            "leftover": 2,
+            "leftover_issues": [
+                {"repo": "mikolaj92/dotfiles", "issue": 47},
+                {"repo": "mikolaj92/dotfiles", "issue": 48},
+            ],
+            "skipped_issue": 48,
+            "skipped_repo": "mikolaj92/dotfiles",
+        },
+        working={"occupied_repos": []},
+    )
+    assert remaining["leftover"] == 0
+    assert "leftover_issues" not in remaining
+
+
 def test_tick_leftover_zero_still_reseeds_leftover_issues(tmp_path: Path):
     state = tmp_path / "state.jsonl"
     write_pass_receipt(

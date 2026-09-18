@@ -170,9 +170,17 @@ def _issues_leftover_remaining(
         else:
             leftover = 0
     else:
-        # Empty/missing leftover_issues. Occupancy or skip must not cold-wipe
-        # prior non-occupied fuel from the receipt (#1067).
-        if prior:
+        # Empty/missing leftover_issues. Occupancy or a missing list must not
+        # cold-wipe prior non-occupied fuel from the receipt (#1067). An
+        # explicit leftover_issues=[] with leftover=0 and no occupancy is a
+        # consumed queue (host_ops skip); do not reseed the same tickets.
+        leftover_listed = "leftover_issues" in issues_r
+        try:
+            leftover_n = int(issues_r.get("leftover") or 0)
+        except (TypeError, ValueError):
+            leftover_n = 0
+        consumed = leftover_listed and leftover_n == 0 and not occupied
+        if prior and not consumed:
             leftover_issues = prior
             leftover = len(leftover_issues)
         else:
@@ -185,8 +193,7 @@ def _issues_leftover_remaining(
                 )
             except (TypeError, ValueError):
                 leftover = 0
-            # Explicit empty list without prior fuel: trust zero.
-            if not occupied and "leftover_issues" in issues_r:
+            if consumed or (not occupied and leftover_listed):
                 leftover = 0
     out = {**remaining, "leftover": leftover}
     if leftover_issues:

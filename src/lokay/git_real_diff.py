@@ -28,7 +28,7 @@ def is_evidence_path(path: str) -> bool:
 
 
 _DISPOSABLE_IGNORED_PARTS = frozenset(
-    {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".uv"}
+    {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".uv", ".build"}
 )
 _DISPOSABLE_IGNORED_NAMES = frozenset({"dist", "build"})
 
@@ -55,7 +55,11 @@ def is_disposable_tracked_path(path: str) -> bool:
 def classify_changed_paths(paths: list[str] | tuple[str, ...]) -> str:
     """empty | plan_only | real."""
     cleaned = [normalize_rel(p) for p in paths if normalize_rel(p)]
-    cleaned = [p for p in cleaned if not is_disposable_tracked_path(p)]
+    cleaned = [
+        p
+        for p in cleaned
+        if not is_disposable_tracked_path(p) and not is_disposable_ignored_path(p)
+    ]
     if not cleaned:
         return "empty"
     if all(is_evidence_path(p) for p in cleaned):
@@ -101,9 +105,9 @@ def list_uncommitted_paths(runner: Runner, worktree: Path) -> list[str]:
         (["ls-files", "--others", "--ignored", "--exclude-standard", "-z"],),
     )
     return sorted(
-        set(found).union(
-            path for path in ignored if not is_disposable_ignored_path(path)
-        )
+        path
+        for path in set(found).union(ignored)
+        if not is_disposable_ignored_path(path)
     )
 
 

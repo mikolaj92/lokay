@@ -34,6 +34,23 @@ def test_overflow_with_rows_picks_one():
     assert out["leftover"] == 0
 
 
+def test_consumed_host_ops_leftover_does_not_starve_listed_issues():
+    listed = _listed(
+        {"repo": "mikolaj92/OpenAPITransportKit", "issue": 22, "title": "code"},
+        {"repo": "mikolaj92/dotfiles", "issue": 47, "title": "parent skip"},
+        {"repo": "mikolaj92/dotfiles", "issue": 48, "title": "host/ops evidence"},
+    )
+    last = {
+        "leftover": 0,
+        "skipped_issue": 48,
+        "skipped_repo": "mikolaj92/dotfiles",
+    }
+    out = select(listed, last=last)
+    assert out["route"] == "issue"
+    assert out["repo"] == "mikolaj92/OpenAPITransportKit"
+    assert out["issue"] == 22
+
+
 def test_picks_first_and_leaves_leftover():
     out = select(
         _listed(
