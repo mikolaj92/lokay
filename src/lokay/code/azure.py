@@ -262,6 +262,10 @@ class AzurePr:
         checks_status: str = "none",
     ) -> Change:
         number = int(payload.get("pullRequestId") or payload.get("id") or 0)
+        sha = ""
+        source = payload.get("lastMergeSourceCommit")
+        if isinstance(source, dict):
+            sha = str(source.get("commitId") or "")
         return Change(
             target=self.target,
             number=number,
@@ -271,6 +275,7 @@ class AzurePr:
             state=_state(str(payload.get("status") or "active")),
             comments=comments,
             checks_status=checks_status,
+            head_sha=sha,
         )
 
     def _lokay_row(self, payload: dict[str, Any], change: Change) -> dict[str, Any]:

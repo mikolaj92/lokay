@@ -128,6 +128,46 @@ def _occupied_repos_for_leftover(
     return occupied
 
 
+def _prior_leftover_prs(remaining: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        row
+        for row in list(remaining.get("leftover_prs") or [])
+        if isinstance(row, dict)
+    ]
+
+
+def _prs_leftover_remaining(
+    prs: dict[str, Any] | None,
+    remaining: dict[str, Any],
+) -> dict[str, Any]:
+    """Skip / fail_closed leftover_prs stay on last-pass. Missing key keeps prior."""
+    prs_r = _result(prs)
+    raw_prs = [
+        row for row in list(prs_r.get("leftover_prs") or []) if isinstance(row, dict)
+    ]
+    prior = _prior_leftover_prs(remaining)
+    leftover_listed = "leftover_prs" in prs_r
+    if leftover_listed:
+        leftover_prs = raw_prs
+    elif prior:
+        leftover_prs = prior
+    else:
+        leftover_prs = []
+    out = dict(remaining)
+    if leftover_prs:
+        out["leftover_prs"] = leftover_prs
+    elif leftover_listed:
+        out["leftover_prs"] = []
+    elif prior:
+        out["leftover_prs"] = prior
+    for key in ("skipped_pr", "skipped_repo", "skipped_head_sha"):
+        if prs_r.get(key) is not None:
+            out[key] = prs_r.get(key)
+        elif remaining.get(key) is not None:
+            out[key] = remaining.get(key)
+    return out
+
+
 def _prior_leftover_issues(remaining: dict[str, Any]) -> list[dict[str, Any]]:
     return [
         row
@@ -237,7 +277,7 @@ def run_record_pass(
     # compute_health rebuilds remaining without leftover; seed from last-pass
     # so occupancy-without-relist cannot cold-wipe catalog memory (#1067).
     # leftover:0 alone must not block leftover_issues reseeding (#1071).
-    if "leftover_issues" not in seed:
+    if "leftover_issues" not in seed or "leftover_prs" not in seed:
         try:
             from lokay.pass_receipt import read_pass_receipt
 
@@ -246,18 +286,26 @@ def run_record_pass(
             prior = None
         prior_rem = prior.get("remaining") if isinstance(prior, dict) else None
         if isinstance(prior_rem, dict):
-            if "leftover_issues" in prior_rem:
+            if "leftover_issues" not in seed and "leftover_issues" in prior_rem:
                 seed["leftover_issues"] = prior_rem["leftover_issues"]
             if "leftover" not in seed and "leftover" in prior_rem:
                 seed["leftover"] = prior_rem["leftover"]
+            if "leftover_prs" not in seed and "leftover_prs" in prior_rem:
+                seed["leftover_prs"] = prior_rem["leftover_prs"]
+            for key in ("skipped_pr", "skipped_repo", "skipped_head_sha"):
+                if key not in seed and key in prior_rem:
+                    seed[key] = prior_rem[key]
     remaining = _issues_leftover_remaining(
         issues,
         seed,
         working=working,
     )
+    remaining = _prs_leftover_remaining(prs, remaining)
     if started:
         remaining = {**remaining, "issue_to_pr_started": started}
-    leftover_n = int(remaining.get("leftover") or 0)
+    leftover_n = int(remaining.get("leftover") or 0) + len(
+        _prior_leftover_prs(remaining)
+    )
     progress = int(tick.get("progress") or 0)
     productive = outcome != "none" or started > 0
     if productive:

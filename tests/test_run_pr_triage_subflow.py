@@ -86,7 +86,9 @@ def test_department_runner_keeps_reconciliation_inside_authored_child(monkeypatc
 
     run_department(pass_dir="/tmp/pass", config_path="config.yaml", live=True)
 
-    assert seen[0]["extra_inputs"] == {"pass_dir": "/tmp/pass"}
+    extra = seen[0]["extra_inputs"]
+    assert extra["pass_dir"] == "/tmp/pass"
+    assert "last" in extra
 
 
 def test_launches_child_path_only(monkeypatch) -> None:

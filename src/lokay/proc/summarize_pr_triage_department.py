@@ -1,5 +1,7 @@
 """PR sieve receipt. Review + merge. Repair is a verdict, not a child start."""
 
+from lokay.proc.walk_pr_leftover import consumes, leftover_after
+
 
 def summarize(
     picked: dict, triage_run: dict, verdict: dict, recovery: dict | None = None,
@@ -108,4 +110,19 @@ def summarize(
         },
         "repair_started": False,
     }
+    stamp = {**chosen, **receipt}
+    leftover_prs = leftover_after(picked, stamp)
+    if str(picked.get("route") or "") == "pr" or "leftover_prs" in picked:
+        receipt["leftover_prs"] = leftover_prs
+        receipt["leftover"] = len(leftover_prs)
+        if consumes(stamp) and str(picked.get("route") or "") == "pr":
+            receipt["skipped_pr"] = picked.get("pr")
+            receipt["skipped_repo"] = picked.get("repo")
+            receipt["skipped_head_sha"] = (
+                picked.get("head_sha") or receipt.get("reviewed_head_sha") or ""
+            )
+        elif picked.get("skipped_pr") is not None:
+            receipt["skipped_pr"] = picked.get("skipped_pr")
+            receipt["skipped_repo"] = picked.get("skipped_repo")
+            receipt["skipped_head_sha"] = picked.get("skipped_head_sha") or ""
     return {**receipt, "result": dict(receipt)}

@@ -3,6 +3,11 @@
 from typing import Any
 
 
+def _last_of(inputs: dict[str, Any]) -> dict[str, Any]:
+    last = inputs.get("last") or {}
+    return last if isinstance(last, dict) else {}
+
+
 def handle_pr_triage_department(
     atom: str,
     inputs: dict[str, Any],
@@ -18,7 +23,7 @@ def handle_pr_triage_department(
     if atom == "select_pr_sieve":
         from lokay.proc.select_next_pr import select
 
-        return select(up.get("list_pr_sieve") or {})
+        return select(up.get("list_pr_sieve") or {}, last=_last_of(inputs))
     if atom == "reconcile_pr_repair_push":
         from lokay.proc.reconcile_pr_repair_push import reconcile_pending
 

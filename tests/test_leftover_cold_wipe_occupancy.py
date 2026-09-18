@@ -131,6 +131,154 @@ def test_last_pass_with_leftover_is_not_empty_idle():
         )
         is True
     )
+    assert (
+        last_pass_is_empty_idle(
+            {
+                "health": "idle",
+                "idle": True,
+                "remaining": {
+                    "leftover": 0,
+                    "leftover_prs": [
+                        {"repo": "mikolaj92/VibeFront", "pr": 30, "head_sha": "abc"}
+                    ],
+                },
+            }
+        )
+        is False
+    )
+
+def test_consumed_pr_sieve_leftover_is_not_reseeded():
+    from lokay.proc.record_pass import _prs_leftover_remaining
+
+    remaining = _prs_leftover_remaining(
+        {
+            "result": {
+                "pr": 39,
+                "repo": "mikolaj92/OpenAPITransportKit",
+                "head_sha": "f654e881",
+                "route": "fail_closed",
+                "reason": "ocr_contract_rejected",
+                "leftover": 2,
+                "leftover_prs": [
+                    {
+                        "repo": "mikolaj92/VibeFront",
+                        "pr": 30,
+                        "head_sha": "abc111",
+                        "branch": "ai/fix/30-x",
+                    },
+                    {
+                        "repo": "mikolaj92/splot",
+                        "pr": 55,
+                        "head_sha": "def222",
+                        "branch": "ai/fix/55-x",
+                    },
+                ],
+                "skipped_pr": 39,
+                "skipped_repo": "mikolaj92/OpenAPITransportKit",
+                "skipped_head_sha": "f654e881",
+            }
+        },
+        {
+            "leftover_prs": [
+                {
+                    "repo": "mikolaj92/OpenAPITransportKit",
+                    "pr": 39,
+                    "head_sha": "f654e881",
+                    "branch": "ai/fix/39-x",
+                }
+            ]
+        },
+    )
+    assert remaining["leftover_prs"][0]["pr"] == 30
+    assert remaining["skipped_pr"] == 39
+    assert remaining["skipped_head_sha"] == "f654e881"
+    assert all(row["pr"] != 39 for row in remaining["leftover_prs"])
+
+
+def test_record_pass_keeps_consumed_pr_leftover(tmp_path: Path):
+    pass_dir = tmp_path / "factory-pass-pr"
+    pass_dir.mkdir()
+    pass_io.write_json(
+        pass_io.begin_path(pass_dir),
+        {"state_path": str(tmp_path / "state.jsonl"), "live": True, "config_path": "x"},
+    )
+    leftover_prs = [
+        {
+            "repo": "mikolaj92/VibeFront",
+            "pr": 30,
+            "head_sha": "abc111",
+            "branch": "ai/fix/30-x",
+        }
+    ]
+    out = run_record_pass(
+        pass_dir=str(pass_dir),
+        prs={
+            "result": {
+                "route": "fail_closed",
+                "reason": "ocr_contract_rejected",
+                "repo": "mikolaj92/OpenAPITransportKit",
+                "pr": 39,
+                "head_sha": "f654e881",
+                "leftover": 1,
+                "leftover_prs": leftover_prs,
+                "skipped_pr": 39,
+                "skipped_repo": "mikolaj92/OpenAPITransportKit",
+                "skipped_head_sha": "f654e881",
+            }
+        },
+    )
+    rem = out["result"]["remaining"]
+    assert rem["leftover_prs"] == leftover_prs
+    assert rem["skipped_pr"] == 39
+    assert rem["skipped_head_sha"] == "f654e881"
+    from lokay.pass_receipt import read_pass_receipt
+
+    receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
+    assert receipt is not None
+    assert receipt["remaining"]["leftover_prs"] == leftover_prs
+
+
+def test_exhausted_pr_leftover_keeps_skipped_identity():
+    from lokay.proc.record_pass import _prs_leftover_remaining
+
+    remaining = _prs_leftover_remaining(
+        {
+            "result": {
+                "route": "none",
+                "reason": "no_open_pr",
+                "leftover": 0,
+                "leftover_prs": [],
+            }
+        },
+        {
+            "leftover_prs": [],
+            "skipped_pr": 39,
+            "skipped_repo": "mikolaj92/OpenAPITransportKit",
+            "skipped_head_sha": "f654e881",
+        },
+    )
+    assert remaining["leftover_prs"] == []
+    assert remaining["skipped_pr"] == 39
+    assert remaining["skipped_head_sha"] == "f654e881"
+
+
+def test_missing_pr_leftover_keeps_prior():
+    from lokay.proc.record_pass import _prs_leftover_remaining
+
+    prior = [
+        {
+            "repo": "mikolaj92/VibeFront",
+            "pr": 30,
+            "head_sha": "abc111",
+            "branch": "ai/fix/30-x",
+        }
+    ]
+    remaining = _prs_leftover_remaining(
+        {"result": {"route": "none", "reason": "no_open_pr"}},
+        {"leftover_prs": prior},
+    )
+    assert remaining["leftover_prs"] == prior
+
 
 def test_consumed_host_ops_leftover_is_not_reseeded():
     remaining = _issues_leftover_remaining(

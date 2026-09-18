@@ -21,6 +21,7 @@ def _list_open(cfg, repos, *, live: bool) -> dict:
                         "pr": int(change.number),
                         "title": str(change.title or ""),
                         "branch": str(change.head or ""),
+                        "head_sha": str(change.head_sha or ""),
                     }
                 )
         except Exception as exc:  # noqa: BLE001

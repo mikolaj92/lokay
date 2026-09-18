@@ -24,6 +24,7 @@ class Change:
     comments: tuple[str, ...] = ()
     checks_status: str = "none"
     merge_method: str | None = None
+    head_sha: str = ""
 
 
 @dataclass(frozen=True)

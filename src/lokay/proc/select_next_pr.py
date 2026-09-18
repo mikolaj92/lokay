@@ -1,7 +1,9 @@
-"""Pick the first open lokay PR. One review/repair/merge per pass."""
+"""Pick one open lokay PR. Skip without merge walks leftover like issues."""
+
+from lokay.proc.walk_pr_leftover import queue
 
 
-def select(listed: dict) -> dict:
+def select(listed: dict, last: dict | None = None) -> dict:
     if listed.get("ok") is False:
         return {
             "ok": False,
@@ -9,9 +11,29 @@ def select(listed: dict) -> dict:
             "reason": "list_failed",
             "error": listed.get("error"),
         }
-    for row in listed.get("prs") or []:
-        if not isinstance(row, dict):
-            continue
-        if row.get("repo") and row.get("pr") and row.get("branch"):
-            return {"ok": True, "route": "pr", **dict(row)}
-    return {"ok": True, "route": "none", "reason": "no_open_pr"}
+    rows = [row for row in list(listed.get("prs") or []) if isinstance(row, dict)]
+    queued = [
+        row
+        for row in queue(rows, last)
+        if row.get("repo") and row.get("pr") and row.get("branch")
+    ]
+    if not queued:
+        out = {"ok": True, "route": "none", "reason": "no_open_pr"}
+        if isinstance(last, dict) and (
+            last.get("skipped_pr") is not None or "leftover_prs" in last
+        ):
+            out["leftover"] = 0
+            out["leftover_prs"] = []
+            for key in ("skipped_pr", "skipped_repo", "skipped_head_sha"):
+                if last.get(key) is not None:
+                    out[key] = last.get(key)
+        return out
+    row = dict(queued[0])
+    rest = [dict(item) for item in queued[1:]]
+    return {
+        **row,
+        "ok": True,
+        "route": "pr",
+        "leftover": len(rest),
+        "leftover_prs": rest,
+    }

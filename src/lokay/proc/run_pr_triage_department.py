@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lokay.graph_run import run_path
+from lokay.proc.seed_issue_queue import seed as seed_queue
 
 
 def child_graph(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
@@ -11,7 +12,7 @@ def child_graph(*, pass_dir: str, config_path: str | None, live: bool) -> dict:
         repo="local/pr-triage-department",
         config_path=config_path,
         live=live,
-        extra_inputs={"pass_dir": pass_dir},
+        extra_inputs={"pass_dir": pass_dir, "last": seed_queue(None)},
     )
 
 

@@ -109,7 +109,7 @@ def last_pass_is_empty_idle(receipt: dict[str, Any] | None) -> bool:
     )
     if work:
         return False
-    if remaining.get("leftover_issues"):
+    if remaining.get("leftover_issues") or remaining.get("leftover_prs"):
         return False
     by_repo = remaining.get("by_repo") or receipt.get("by_repo") or []
     if isinstance(by_repo, list) and any(

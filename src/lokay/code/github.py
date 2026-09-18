@@ -140,6 +140,7 @@ class GithubPr:
             body=str(row.body or ""),
             head=str(row.head_ref or ""),
             state=state,
+            head_sha=str(row.head_sha or ""),
         )
 
     def _from_view(self, view: dict[str, Any], number: int) -> Change:
@@ -157,6 +158,7 @@ class GithubPr:
             state="open",
             comments=comments,
             checks_status=status,
+            head_sha=str(view.get("headRefOid") or ""),
         )
 
     def lokay_dicts(self) -> list[dict[str, Any]]:

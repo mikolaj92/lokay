@@ -89,6 +89,33 @@ def test_receipt_never_starts_repair() -> None:
     assert "run_pr_repair" not in out["result"]
 
 
+def test_select_pr_sieve_walks_last_pass_leftover(monkeypatch):
+    from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
+
+    seen = []
+
+    def fake_select(listed, last=None):
+        seen.append((listed, last))
+        return {"ok": True, "route": "pr", "pr": 30}
+
+    monkeypatch.setattr("lokay.proc.select_next_pr.select", fake_select)
+    last = {
+        "leftover_prs": [{"repo": "mikolaj92/VibeFront", "pr": 30, "head_sha": "abc"}],
+        "skipped_pr": 39,
+        "skipped_head_sha": "f654e881",
+    }
+    out = handle_pr_triage_department(
+        "select_pr_sieve",
+        {"last": last},
+        {"list_pr_sieve": {"ok": True, "prs": [{"repo": "o/r", "pr": 39}]}},
+        {},
+    )
+    assert out["pr"] == 30
+    assert seen == [
+        ({"ok": True, "prs": [{"repo": "o/r", "pr": 39}]}, last),
+    ]
+
+
 def test_reconcile_boundary_scans_without_candidate_but_does_not_open_review(monkeypatch):
     from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
 

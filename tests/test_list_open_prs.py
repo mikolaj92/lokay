@@ -95,6 +95,7 @@ def test_lists_live_lokay_prs(monkeypatch) -> None:
     assert out["ok"] is True
     assert out["count"] == 1
     assert out["prs"][0]["pr"] == 9
+    assert out["prs"][0]["head_sha"] == "abc"
 
 
 def test_forty_repos_do_not_catalog_fail(monkeypatch) -> None:
