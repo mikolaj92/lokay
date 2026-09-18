@@ -55,13 +55,13 @@ pr_review:
   provider: omniroute
   provider_endpoint_url: https://omniroute.patryk.it/v1
   model: pi
-  config_sha256: df5efd14fe5b56af8a633c2dd594fefd4552464b89b8ba9ba8b8caeeff46cc68
+  config_sha256: 831729ee8d0009870f14a25db06882493e6011b0b95967697ea32a6955f3a057
   provider_env: [OCR_LLM_API_KEY]
   binary: /Users/mini-m4-0/.local/bin/ocr
   binary_version: v1.12.0
   binary_sha256: 92601579180aacc61d2d2861773271ddd03d6d5d3a2ac2bea553d883def81cf2
   effort: medium
-  timeout_minutes: 15
+  timeout_minutes: 30
   max_tokens_budget: 100000
   rule_file: /Users/mini-m4-0/.config/lokay/pr-review/rule.json
   tools_file: /Users/mini-m4-0/.config/lokay/pr-review/tools.json

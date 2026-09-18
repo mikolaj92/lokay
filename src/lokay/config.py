@@ -90,7 +90,7 @@ class Config:
     pr_review_binary_version: str = "v1.12.0"
     pr_review_binary_sha256: str = ""
     pr_review_effort: str = "medium"
-    pr_review_timeout_minutes: int = 15
+    pr_review_timeout_minutes: int = 30
     pr_review_max_tokens_budget: int = 100000
     pr_review_rule_file: Path | None = None
     pr_review_tools_file: Path | None = None
@@ -469,7 +469,7 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_review_binary_version=str(review.get("binary_version", "v1.12.0")),
         pr_review_binary_sha256=str(review.get("binary_sha256") or "").lower(),
         pr_review_effort=str(review.get("effort", "medium")),
-        pr_review_timeout_minutes=int(review.get("timeout_minutes", 15)),
+        pr_review_timeout_minutes=int(review.get("timeout_minutes", 30)),
         pr_review_max_tokens_budget=int(review.get("max_tokens_budget", 100000)),
         pr_review_rule_file=_expand(review["rule_file"]) if review.get("rule_file") else None,
         pr_review_tools_file=_expand(review["tools_file"]) if review.get("tools_file") else None,

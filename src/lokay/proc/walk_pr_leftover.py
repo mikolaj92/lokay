@@ -9,10 +9,12 @@ KEEP_REASONS = frozenset(
         "ci_repair_start_head_missing",
         "merge_disabled",
         "repair_push_recovered",
+        "ocr_timed_out",
     }
 )
 KEEP_ROUTES = frozenset({"wait"})
 KEEP_VERDICTS = frozenset({"repair"})
+_INCOMPLETE_PREFIXES = ("ocr_timed_out",)
 
 
 def identity(row: dict | None) -> tuple[str, int, str] | None:
@@ -52,7 +54,7 @@ def consumes(receipt: object) -> bool:
     reason = str(receipt.get("reason") or "")
     if route in KEEP_ROUTES:
         return False
-    if reason in KEEP_REASONS:
+    if reason in KEEP_REASONS or reason.startswith(_INCOMPLETE_PREFIXES):
         return False
     if verdict in KEEP_VERDICTS or receipt.get("repairable"):
         return False

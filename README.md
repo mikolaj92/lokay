@@ -725,8 +725,10 @@ stateDiagram-v2
 
 Dział `pr_triage_department` ma sześć węzłów. Sitko chodzi leftover jak issue:
 tożsamość `(repo, pr, head_sha)`. Skip bez merge zjada wiersz i oddaje
-`leftover_prs`; `fail_closed` nie jest review i nie KEEP-uje kolejki. Nowe SHA
-to nowa tożsamość. Pending KEEP. Po liście i wyborze kandydata
+`leftover_prs`. Niekompletny OCR (`ocr_timed_out`) nie jest review i nie jest
+skip — KEEP tej samej SHA. Sklasyfikowany kompletny reject
+(`ocr_contract_rejected`) nadal zjada wiersz. Nowe SHA to nowa tożsamość.
+Pending KEEP. Po liście i wyborze kandydata
 `reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
 przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest
 wybrany PR; zgodny live OPEN PR potwierdza odzyskany push, a bieżący pass

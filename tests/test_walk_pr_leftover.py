@@ -37,6 +37,12 @@ def test_fail_closed_and_non_review_skip_consume() -> None:
     assert consumes({"outcome": "merge"})
 
 
+def test_incomplete_ocr_timeout_keeps_the_sha() -> None:
+    assert not consumes({"route": "fail_closed", "reason": "ocr_timed_out"})
+    assert not consumes({"route": "fail_closed", "reason": "ocr_timed_out: review timed out"})
+    assert not consumes({"route": "completed", "verdict": "feedback", "reason": "ocr_timed_out"})
+
+
 def test_pending_checks_keep() -> None:
     assert not consumes({"route": "wait", "reason": "checks_pending", "waiting": True})
     assert not consumes({"route": "completed", "verdict": "feedback", "reason": "checks_pending"})
@@ -122,6 +128,12 @@ def test_leftover_after_pending_keeps_the_pick() -> None:
     picked = {**KIT_39, "route": "pr", "leftover_prs": [VIBE_30]}
     kept = leftover_after(picked, {"route": "wait", "reason": "checks_pending"})
     assert [row["pr"] for row in kept] == [39, 30]
+
+
+def test_leftover_after_ocr_timeout_keeps_the_pick() -> None:
+    picked = {**KIT_39, "route": "pr", "leftover_prs": [VIBE_30, SPLOT_55]}
+    kept = leftover_after(picked, {"route": "fail_closed", "reason": "ocr_timed_out"})
+    assert [row["pr"] for row in kept] == [39, 30, 55]
 
 
 def test_leftover_queue_is_not_jumped_by_a_new_pr() -> None:
