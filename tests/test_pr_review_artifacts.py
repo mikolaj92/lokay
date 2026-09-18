@@ -129,3 +129,32 @@ def test_artifact_restores_findings_only_when_digest_and_live_identity_match(tmp
         cfg=cfg, repo="acme/demo", pr=84, head_sha="b" * 40,
         artifact_sha256=stored["artifact_sha256"], evidence=evidence,
     ) is None
+
+
+def test_rejected_vendor_warnings_are_archived_without_messages(tmp_path: Path):
+    from lokay.proc.pr_review_artifacts import persist_rejected_vendor
+
+    cfg, evidence, _decision = _inputs(tmp_path)
+    stored = persist_rejected_vendor(
+        cfg=cfg,
+        repo="acme/demo",
+        pr=84,
+        evidence=evidence,
+        reason="ocr_contract_rejected: review has warnings",
+        warnings=[
+            {
+                "type": "token_budget_reached",
+                "file": "src/demo.py",
+                "message": "sk-yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+            }
+        ],
+    )
+    assert stored["ok"] is True
+    raw = Path(stored["path"]).read_text(encoding="utf-8")
+    payload = json.loads(raw)
+    assert payload["schema"] == "lokay.review-rejection/1"
+    assert payload["head_sha"] == "b" * 40
+    assert payload["reason"] == "ocr_contract_rejected: review has warnings"
+    assert payload["warnings"] == [{"type": "token_budget_reached", "file": "src/demo.py"}]
+    assert "sk-" not in raw
+    assert "message" not in raw

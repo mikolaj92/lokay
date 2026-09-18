@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from .contract import ContractError, normalize_result, validate_request
+from .contract import ContractError, normalize_result, redact_vendor_warnings, validate_request
 from .background import render_background
 from .tools import validate_tools
 from .git_evidence import verify_checkout
@@ -28,6 +28,10 @@ _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 class ReviewFailure(ValueError):
     """Sanitized process boundary failure; never contains provider output."""
+
+    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None):
+        super().__init__(message)
+        self.warnings = redact_vendor_warnings(warnings)
 
 
 _FAILURE_CODES = {
@@ -88,14 +92,17 @@ _CONTRACT_PREFIX = "OpenCodeReview contract rejected: "
 _DETAIL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.:-]{0,199}$")
 
 
-def classified_failure(exc: ReviewFailure) -> dict[str, str]:
+def classified_failure(exc: ReviewFailure) -> dict[str, Any]:
     """Code always; ContractError text only when it is a bounded ASCII detail."""
     message = str(exc)
-    error = {"code": classified_failure_code(exc)}
+    error: dict[str, Any] = {"code": classified_failure_code(exc)}
     if message.startswith(_CONTRACT_PREFIX):
         detail = message[len(_CONTRACT_PREFIX):].strip()
         if _DETAIL.fullmatch(detail):
             error["detail"] = detail
+    warnings = list(getattr(exc, "warnings", []) or [])
+    if warnings:
+        error["warnings"] = warnings
     return error
 
 
@@ -515,7 +522,10 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
             changed_ranges=request_data.get("changed_ranges") or {},
         )
     except ContractError as exc:
-        raise ReviewFailure(f"OpenCodeReview contract rejected: {exc}") from None
+        raise ReviewFailure(
+            f"OpenCodeReview contract rejected: {exc}",
+            warnings=list(getattr(exc, "warnings", []) or []),
+        ) from None
 
 
 def main(argv: list[str] | None = None) -> int:

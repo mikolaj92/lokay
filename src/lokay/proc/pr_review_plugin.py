@@ -19,11 +19,17 @@ _MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 _ENV = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 _ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 _ERROR_DETAIL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.:-]{0,199}$")
+_WARNING_TYPE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+_WARNING_FILE = re.compile(r"^[A-Za-z0-9_.-][A-Za-z0-9_./-]{0,254}$")
 _FORBIDDEN_ENV_PREFIXES = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
 
 
 class PluginFailure(ValueError):
     """Sanitized plugin process failure."""
+
+    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None):
+        super().__init__(message)
+        self.warnings = list(warnings or [])
 
 
 def _classified_error_code(decoded: Any) -> str | None:
@@ -58,6 +64,33 @@ def _plugin_failure_message(decoded: Any, fallback: str) -> str:
     return f"{code}: {detail}" if detail else code
 
 
+def _classified_error_warnings(decoded: Any) -> list[dict[str, str]]:
+    if not isinstance(decoded, dict):
+        return []
+    error = decoded.get("error")
+    if not isinstance(error, dict) or not isinstance(error.get("warnings"), list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in error.get("warnings")[:32]:
+        if not isinstance(item, Mapping):
+            continue
+        type_name = str(item.get("type") or "")
+        if not _WARNING_TYPE.fullmatch(type_name):
+            continue
+        file_name = str(item.get("file") or "")
+        if file_name and (".." in file_name or not _WARNING_FILE.fullmatch(file_name)):
+            file_name = ""
+        out.append({"type": type_name, "file": file_name})
+    return out
+
+
+def _plugin_failure(decoded: Any, fallback: str) -> PluginFailure:
+    return PluginFailure(
+        _plugin_failure_message(decoded, fallback),
+        warnings=_classified_error_warnings(decoded),
+    )
+
+
 def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
     if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
         raise PluginFailure("review plugin output exceeded size limit")
@@ -66,9 +99,9 @@ def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise PluginFailure("review plugin did not return one JSON envelope") from exc
     if returncode != 0:
-        raise PluginFailure(_plugin_failure_message(decoded, "review plugin returned a failure status"))
+        raise _plugin_failure(decoded, "review plugin returned a failure status")
     if not isinstance(decoded, dict) or decoded.get("ok") is not True:
-        raise PluginFailure(_plugin_failure_message(decoded, "review plugin rejected the request"))
+        raise _plugin_failure(decoded, "review plugin rejected the request")
     return decoded
 
 

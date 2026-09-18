@@ -684,3 +684,43 @@ def test_main_emits_contract_rejection_detail(monkeypatch, capsys):
         },
     }
     assert "provider" not in json.dumps(payload)
+
+
+def test_main_emits_redacted_vendor_warnings_on_contract_rejection(monkeypatch, capsys):
+    import io
+
+    from lokay_review_open_code_review import cli
+    from lokay_review_open_code_review.cli import ReviewFailure
+
+    class _Stdin:
+        buffer = io.BytesIO(b'{"schema":"lokay.review-request/1"}')
+
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin())
+    monkeypatch.setattr(
+        cli,
+        "review_request",
+        lambda _request: (_ for _ in ()).throw(
+            ReviewFailure(
+                "OpenCodeReview contract rejected: review has warnings",
+                warnings=[
+                    {
+                        "type": "token_budget_reached",
+                        "file": "src/demo.py",
+                        "message": "secret-key leaked in provider text",
+                    }
+                ],
+            )
+        ),
+    )
+
+    assert cli.main([]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "ocr_contract_rejected"
+    assert payload["error"]["detail"] == "review has warnings"
+    assert payload["error"]["warnings"] == [
+        {"type": "token_budget_reached", "file": "src/demo.py"}
+    ]
+    assert "secret-key" not in json.dumps(payload)
+    assert "provider" not in json.dumps(payload)
+    assert "message" not in json.dumps(payload["error"]["warnings"])

@@ -205,3 +205,56 @@ def test_low_severity_findings_remain_findings():
 
     assert result["findings"][0]["severity"] == "low"
     assert len(result["findings"]) == 1
+
+
+def test_omitted_vendor_warnings_are_empty_not_rejected():
+    preview, upstream = _upstream()
+    upstream.pop("warnings")
+
+    result = _normalize(preview=preview, upstream=upstream)
+
+    assert result["ok"] is True
+    assert result["status"] == "complete"
+    assert result["evidence"]["warning_count"] == 0
+
+
+def test_operational_ocr_nits_do_not_fail_closed():
+    preview, upstream = _upstream()
+    upstream["warnings"] = [
+        {
+            "type": "comment_refiled",
+            "file": "src/demo.py",
+            "message": "comment filed against src/old.py describes code in src/demo.py; re-filed",
+        },
+        {
+            "type": "comment_args_repaired",
+            "file": "src/demo.py",
+            "message": "comments violated the array schema",
+        },
+    ]
+
+    result = _normalize(preview=preview, upstream=upstream)
+
+    assert result["ok"] is True
+    assert result["status"] == "complete"
+    assert result["findings"]
+    assert result["evidence"]["warning_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "warning",
+    [
+        {"type": "token_budget_reached", "file": "src/demo.py", "message": "budget"},
+        {"type": "manifest_error", "file": "", "message": "cannot freeze"},
+        {"type": "review_round_failed", "file": "src/demo.py", "message": "round 1"},
+        {"type": "token_threshold_exceeded", "file": "src/demo.py", "message": "tokens"},
+        {"type": "unknown_vendor_signal", "file": "src/demo.py", "message": "new"},
+    ],
+)
+def test_material_ocr_warnings_fail_closed_and_keep_type(warning):
+    preview, upstream = _upstream()
+    upstream["warnings"] = [warning]
+
+    with pytest.raises(ContractError, match="warning") as caught:
+        _normalize(preview=preview, upstream=upstream)
+    assert caught.value.warnings == [{"type": warning["type"], "file": warning["file"]}]

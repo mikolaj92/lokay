@@ -171,3 +171,26 @@ def test_process_boundary_keeps_contract_rejection_detail(monkeypatch):
     assert "review terminal state is not complete" in str(caught.value)
     assert "provider-secret" not in str(caught.value)
     assert "github-secret" not in str(caught.value)
+
+
+def test_process_boundary_keeps_redacted_vendor_warnings(monkeypatch):
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "provider-secret")
+    monkeypatch.setenv("GH_TOKEN", "github-secret")
+
+    def run(argv, **_kwargs):
+        return subprocess.CompletedProcess(
+            argv,
+            1,
+            stdout=(
+                b'{"ok":false,"error":{"code":"ocr_contract_rejected",'
+                b'"detail":"review has warnings",'
+                b'"warnings":[{"type":"token_budget_reached","file":"src/demo.py"}]}}'
+            ),
+            stderr=b"provider-secret github-secret",
+        )
+
+    with pytest.raises(PluginFailure, match="ocr_contract_rejected") as caught:
+        invoke_plugin(_config(), {"request": True}, runner=run)
+    assert caught.value.warnings == [{"type": "token_budget_reached", "file": "src/demo.py"}]
+    assert "provider-secret" not in str(caught.value)
+    assert "github-secret" not in str(caught.value)

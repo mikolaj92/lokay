@@ -65,6 +65,7 @@ def run_review_agent(
 ) -> dict[str, Any]:
     if not live:
         return {"ok": True, "route": "planned", "stdout": "", "result": {}}
+    cfg = None
     try:
         cfg = load_config(config_path)
         request = plugin_request(cfg, repo, pr, evidence)
@@ -118,6 +119,17 @@ def run_review_agent(
             route="complete",
         )
     except (PluginFailure, OSError, ValueError) as exc:
+        if cfg is not None and isinstance(exc, PluginFailure) and getattr(exc, "warnings", None):
+            from lokay.proc.pr_review_artifacts import persist_rejected_vendor
+
+            persist_rejected_vendor(
+                cfg=cfg,
+                repo=repo,
+                pr=pr,
+                evidence=evidence,
+                reason=str(exc),
+                warnings=list(exc.warnings),
+            )
         return err("OpenCodeReview plugin failed closed", route="fail_closed", reason=str(exc))
 
 

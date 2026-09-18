@@ -30,6 +30,51 @@ _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 class ContractError(ValueError):
     """Untrusted upstream output failed the pinned neutral contract."""
 
+    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None):
+        super().__init__(message)
+        self.warnings = list(warnings or [])
+
+
+_OPERATIONAL_WARNING_TYPES = frozenset({"comment_refiled", "comment_args_repaired"})
+_WARNING_TYPE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
+_WARNING_FILE = re.compile(r"^[A-Za-z0-9_.-][A-Za-z0-9_./-]{0,254}$")
+
+
+def redact_vendor_warnings(raw: Any) -> list[dict[str, str]]:
+    """Keep vendor warning type+file only. Never forward message text."""
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in raw[:32]:
+        if not isinstance(item, Mapping):
+            continue
+        type_name = str(item.get("type") or "")
+        if not _WARNING_TYPE.fullmatch(type_name):
+            continue
+        file_name = str(item.get("file") or "")
+        if file_name and (".." in file_name or not _WARNING_FILE.fullmatch(file_name)):
+            file_name = ""
+        out.append({"type": type_name, "file": file_name})
+    return out
+
+
+def _material_warnings(raw: Any) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, list):
+        raise ContractError("review has warnings")
+    material: list[dict[str, str]] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            raise ContractError("review has warnings")
+        type_name = str(item.get("type") or "")
+        if type_name in _OPERATIONAL_WARNING_TYPES:
+            continue
+        redacted = redact_vendor_warnings([item])
+        material.extend(redacted or [{"type": "malformed_warning", "file": ""}])
+    if material:
+        raise ContractError("review has warnings", warnings=material)
+
 
 def canonical_json(value: Any) -> bytes:
     return json.dumps(
@@ -311,8 +356,7 @@ def normalize_result(
         raise ContractError("upstream execution identity mismatch")
     rule_hash = _digest(execution.get("rule_config_sha256"), "rule config")
     runtime_hash = _digest(execution.get("runtime_config_sha256"), "runtime config")
-    if not isinstance(upstream.get("warnings"), list) or upstream.get("warnings"):
-        raise ContractError("review has warnings")
+    _material_warnings(upstream.get("warnings"))
     if "thinking" in upstream:
         raise ContractError("raw reasoning is not accepted at the review boundary")
     summary = _required_mapping(upstream.get("summary"), "review summary")

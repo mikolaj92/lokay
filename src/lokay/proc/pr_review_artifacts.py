@@ -132,6 +132,67 @@ def persist_result(*, cfg: Config, repo: str, pr: int, evidence: Mapping[str, An
         return {"ok": False, "reason": "artifact_write_failed"}
 
 
+def persist_rejected_vendor(
+    *,
+    cfg: Config,
+    repo: str,
+    pr: int,
+    evidence: Mapping[str, Any],
+    reason: str,
+    warnings: list[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    try:
+        head = str(evidence.get("head_sha") or "").lower()
+        if not _SHA.fullmatch(head):
+            raise ValueError("malformed rejection identity")
+        redacted = []
+        for item in list(warnings or [])[:32]:
+            if not isinstance(item, Mapping):
+                continue
+            type_name = str(item.get("type") or "")
+            file_name = str(item.get("file") or "")
+            if not re.fullmatch(r"^[a-z][a-z0-9_]{1,63}$", type_name):
+                continue
+            if file_name and (".." in file_name or not re.fullmatch(r"^[A-Za-z0-9_.-][A-Za-z0-9_./-]{0,254}$", file_name)):
+                file_name = ""
+            redacted.append({"type": type_name, "file": file_name})
+        payload = {
+            "schema": "lokay.review-rejection/1",
+            "repo": repo,
+            "pr": int(pr),
+            "head_sha": head,
+            "reason": str(_sanitize(reason)),
+            "warnings": redacted,
+            "diff_sha256": str(evidence.get("diff_sha256") or ""),
+            "task_identity_sha256": str(evidence.get("task_identity_sha256") or ""),
+        }
+        directory = Path(cfg.pr_review_artifacts_dir).expanduser().resolve() / "rejections" / _safe_component(repo) / str(int(pr))
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        directory.chmod(0o700)
+        body = _canonical(payload) + b"\n"
+        digest = hashlib.sha256(body).hexdigest()
+        path = directory / f"{head}-{digest}.json"
+        if path.exists() and path.read_bytes() != body:
+            return {"ok": False, "reason": "artifact_conflict"}
+        if not path.exists():
+            temp = directory / f".{path.name}.{os.getpid()}.tmp"
+            fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            try:
+                with os.fdopen(fd, "wb") as stream:
+                    stream.write(body)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temp, path)
+            except Exception:
+                temp.unlink(missing_ok=True)
+                raise
+        if path.read_bytes() != body:
+            return {"ok": False, "reason": "artifact_verification_failed"}
+        return {"ok": True, "path": str(path), "artifact_sha256": digest}
+    except (OSError, ValueError, TypeError):
+        return {"ok": False, "reason": "artifact_write_failed"}
+
+
 def load_verified_result(*, cfg: Config, repo: str, pr: int, head_sha: str, artifact_sha256: str, evidence: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
     if not _SHA.fullmatch(str(head_sha or "").lower()) or not _HASH.fullmatch(str(artifact_sha256 or "")):
         return None

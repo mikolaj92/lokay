@@ -275,3 +275,57 @@ def test_policy_fails_closed_on_identity_or_coverage_drift():
     request, result = _result()
     result["coverage"]["failed"] = [{"path": "src/demo.py"}]
     assert validate_result(result, request)["route"] == "fail_closed"
+
+
+def test_review_agent_archives_redacted_vendor_warnings_on_contract_reject(monkeypatch, tmp_path):
+    from lokay.proc import run_pr_review_agent
+    from lokay.proc.pr_review_plugin import PluginFailure
+
+    cfg = SimpleNamespace(
+        branch_prefix="ai/fix",
+        pr_review_artifacts_dir=tmp_path,
+        pr_review_config_sha256="9" * 64,
+        pr_review_binary_version="v1.12.0",
+        pr_review_binary_sha256="f" * 64,
+        pr_review_provider="p",
+        pr_review_model="m",
+    )
+    task = {
+        "repo": "acme/demo", "type": "Issue", "state": "OPEN", "number": 42,
+        "title": "task", "body": "full task body",
+        "url": "https://github.com/acme/demo/issues/42",
+    }
+    evidence = {
+        "repo": "acme/demo", "pr": 84, "head_ref": "ai/fix/42-demo",
+        "head_repo": "acme/demo", "head_sha": "b" * 40,
+        "base_ref": "main", "base_ref_sha": "a" * 40,
+        "comparison_base_sha": "c" * 40, "diff_sha256": "d" * 64,
+        "task_identity_sha256": "e" * 64, "task": task,
+        "diff_paths": [{"path": "src/a.py", "old_path": "", "status": "modified"}],
+        "changed_ranges": {"src/a.py": [[1, 1]]},
+    }
+    identity = {key: evidence[key] for key in (
+        "repo", "pr", "head_ref", "head_repo", "head_sha", "base_ref",
+        "base_ref_sha", "comparison_base_sha", "diff_sha256", "task_identity_sha256",
+    )}
+    failure = PluginFailure("ocr_contract_rejected: review has warnings")
+    failure.warnings = [{"type": "token_budget_reached", "file": "src/demo.py"}]
+    monkeypatch.setattr(run_pr_review_agent, "load_config", lambda _path: cfg)
+    monkeypatch.setattr(run_pr_review_agent, "plugin_request", lambda *_args: {"request": True})
+    monkeypatch.setattr(run_pr_review_agent, "invoke_plugin", lambda *_args: (_ for _ in ()).throw(failure))
+    monkeypatch.setattr(
+        "lokay.pr_review_io.revalidate_pr_identity",
+        lambda *_args, **_kwargs: identity,
+    )
+
+    result = run_pr_review_agent.run_review_agent(
+        config_path=None, repo="acme/demo", pr=84, evidence=evidence, live=True,
+    )
+
+    assert result["ok"] is False
+    assert result.get("route") == "fail_closed"
+    artifacts = list(tmp_path.glob("rejections/*/*/*.json"))
+    assert len(artifacts) == 1
+    payload = json.loads(artifacts[0].read_text())
+    assert payload["schema"] == "lokay.review-rejection/1"
+    assert payload["warnings"] == [{"type": "token_budget_reached", "file": "src/demo.py"}]
