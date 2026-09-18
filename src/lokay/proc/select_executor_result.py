@@ -75,9 +75,17 @@ def select(prepared: dict, rows: list[dict]) -> dict:
         stop=chosen.get("route"),
         department="executor",
     )
-    # Do not force leftover_issues=[] — omit so record_pass can keep prior (#1067).
+    # Omit leftover_issues only when the list was never listed. Explicit [] plus
+    # leftover=0 is a consumed queue (host_ops skip), not occupancy cold-wipe (#1067).
+    listed = (
+        "leftover_issues" in chosen
+        or "leftover_issues" in result
+        or "leftover_issues" in prepared
+    )
     if leftover_issues:
         result["leftover_issues"] = leftover_issues
+    elif listed:
+        result["leftover_issues"] = []
     else:
         result.pop("leftover_issues", None)
     return {

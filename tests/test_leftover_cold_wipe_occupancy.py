@@ -221,10 +221,64 @@ def test_select_executor_result_cap_keeps_prepared_leftover():
     assert out["result"]["leftover_issues"][0]["issue"] == 43
 
 
-def test_select_executor_result_omits_empty_leftover_issues():
+def test_select_executor_result_keeps_explicit_empty_leftover_issues():
+    from lokay.proc.select_executor_result import select
+
+    out = select(
+        {
+            "last": {
+                "issue": 48,
+                "repo": "mikolaj92/dotfiles",
+                "route": "skip",
+                "reason": "host_ops",
+                "leftover": 0,
+                "leftover_issues": [],
+                "launched": None,
+            },
+            "spent": 0,
+            "cap": 1,
+            "budget": 1,
+        },
+        rows=[],
+    )
+    assert out["result"]["leftover"] == 0
+    assert "leftover_issues" in out["result"]
+    assert out["result"]["leftover_issues"] == []
+
+
+def test_select_executor_result_omits_empty_leftover_when_never_listed():
     from lokay.proc.select_executor_result import select
 
     out = select({"last": {}, "spent": 0, "cap": 1, "budget": 1}, rows=[])
     assert "leftover_issues" not in out["result"]
     assert out["result"]["leftover"] == 0
+
+
+def test_executor_nest_empty_leftover_does_not_reseed_host_ops():
+    remaining = _issues_leftover_remaining(
+        {
+            "ok": True,
+            "route": "idle",
+            "department": "executor",
+            "result": {
+                "issue": 48,
+                "repo": "mikolaj92/dotfiles",
+                "route": "skip",
+                "reason": "host_ops",
+                "leftover": 0,
+                "leftover_issues": [],
+                "launched": None,
+            },
+        },
+        {
+            "leftover": 2,
+            "leftover_issues": [
+                {"repo": "mikolaj92/dotfiles", "issue": 47},
+                {"repo": "mikolaj92/dotfiles", "issue": 48},
+            ],
+        },
+        working={"occupied_repos": []},
+    )
+    assert remaining["leftover"] == 0
+    assert "leftover_issues" not in remaining
 
