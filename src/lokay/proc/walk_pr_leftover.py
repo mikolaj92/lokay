@@ -79,11 +79,15 @@ def _reason_code(reason: str) -> str:
     return reason.split(":", 1)[0].strip()
 
 
+_COMPLETE_REJECT_DETAILS = frozenset({"review has warnings"})
+
+
 def incomplete_review(reason: str) -> bool:
     """True when OCR/plugin produced no complete review JSON."""
     code = _reason_code(reason)
+    detail = reason.split(":", 1)[1].strip() if ":" in reason else ""
     if code == "ocr_contract_rejected":
-        return False
+        return detail not in _COMPLETE_REJECT_DETAILS
     if code.startswith("ocr_"):
         return True
     return code in _PLUGIN_INCOMPLETE
@@ -105,7 +109,9 @@ def classify_occupancy(receipt: object) -> dict:
     if incomplete_review(reason):
         return {"class": "incomplete", "keep": True}
     if _reason_code(reason) == "ocr_contract_rejected":
-        return {"class": "complete_reject", "keep": False}
+        detail = reason.split(":", 1)[1].strip() if ":" in reason else ""
+        if detail in _COMPLETE_REJECT_DETAILS:
+            return {"class": "complete_reject", "keep": False}
     if route in {"fail_closed", "skip"} or (route == "completed" and verdict == "feedback"):
         return {"class": "consumed", "keep": False}
     return {"class": "pending", "keep": True}

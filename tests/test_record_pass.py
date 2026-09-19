@@ -116,6 +116,32 @@ def test_writes_new_pr_receipt_only_after_published_pr(tmp_path: Path) -> None:
     assert receipt["progress"] == 1
 
 
+def test_occupancy_keep_is_not_a_merge_receipt(tmp_path: Path) -> None:
+    pass_dir = _begin(tmp_path)
+    out = run_record_pass(
+        pass_dir=str(pass_dir),
+        prs={
+            "result": {
+                "route": "fail_closed",
+                "reason": "ocr_budget_exceeded",
+                "leftover_prs": [
+                    {
+                        "repo": "mikolaj92/dotfiles",
+                        "pr": 32,
+                        "head_sha": "9429498b",
+                    }
+                ],
+            }
+        },
+    )
+    assert out["ok"] is True
+    assert out["outcome"] == "none"
+    receipt = read_pass_receipt(state_path=tmp_path / "state.jsonl")
+    assert receipt is not None
+    assert receipt["outcome"] == "none"
+    assert receipt["progress"] == 0
+
+
 def test_writes_merge_receipt(tmp_path: Path) -> None:
     pass_dir = _begin(tmp_path)
     out = run_record_pass(

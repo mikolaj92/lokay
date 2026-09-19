@@ -74,10 +74,18 @@ _FAILURE_PREFIXES = (
     ("review engine ", "review_engine_required"),
     ("trusted ", "trusted_file_missing"),
     ("full immutable ", "immutable_sha_required"),
-    ("OpenCodeReview contract rejected:", "ocr_contract_rejected"),
     ("review checkout ", "ocr_checkout_invalid"),
     ("could not ", "ocr_checkout_invalid"),
 )
+_CONTRACT_CAPACITY = {
+    "review budget exceeded or unreported": "ocr_budget_exceeded",
+    "review terminal state is not complete": "ocr_terminal_incomplete",
+    "coverage is incomplete or contains non-complete states": "ocr_coverage_incomplete",
+    "preview is incomplete or empty": "ocr_preview_incomplete",
+}
+_CONTRACT_COMPLETE_REJECT = frozenset({"review has warnings"})
+_CONTRACT_PREFIX = "OpenCodeReview contract rejected: "
+_DETAIL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.:-]{0,199}$")
 
 
 def classified_failure_code(exc: ReviewFailure) -> str:
@@ -85,14 +93,15 @@ def classified_failure_code(exc: ReviewFailure) -> str:
     code = _FAILURE_CODES.get(message)
     if code:
         return code
+    if message.startswith(_CONTRACT_PREFIX):
+        detail = message[len(_CONTRACT_PREFIX):].strip()
+        if detail in _CONTRACT_COMPLETE_REJECT:
+            return "ocr_contract_rejected"
+        return _CONTRACT_CAPACITY.get(detail, "ocr_contract_incomplete")
     for prefix, mapped in _FAILURE_PREFIXES:
         if message.startswith(prefix):
             return mapped
     return "review_failed_closed"
-
-
-_CONTRACT_PREFIX = "OpenCodeReview contract rejected: "
-_DETAIL = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 _.:-]{0,199}$")
 
 
 def classified_failure(exc: ReviewFailure) -> dict[str, Any]:

@@ -42,10 +42,9 @@ def test_identity_is_repo_pr_sha() -> None:
 
 
 def test_fail_closed_and_non_review_skip_consume() -> None:
-    assert consumes({"route": "fail_closed", "reason": "ocr_contract_rejected"})
     assert consumes({"route": "fail_closed", "reason": "ocr_contract_rejected: review has warnings"})
     assert consumes({"route": "fail_closed", "reason": "review has warnings"})
-    assert consumes({"route": "completed", "verdict": "feedback", "reason": "ocr_contract_rejected"})
+    assert consumes({"route": "completed", "verdict": "feedback", "reason": "ocr_contract_rejected: review has warnings"})
     assert consumes({"route": "completed", "verdict": "feedback", "reason": "review_fail_closed"})
     assert consumes({"route": "completed", "verdict": "merge"})
     assert consumes({"outcome": "merge"})
@@ -59,6 +58,11 @@ _INCOMPLETE = (
     "ocr_output_not_json",
     "ocr_output_not_object",
     "ocr_output_too_large",
+    "ocr_budget_exceeded",
+    "ocr_terminal_incomplete",
+    "ocr_contract_rejected",
+    "ocr_contract_rejected: review budget exceeded or unreported",
+    "ocr_contract_rejected: review terminal state is not complete",
     "plugin_error",
     "review_plugin_failed",
     "review_failed_closed",
@@ -81,6 +85,12 @@ def test_incomplete_ocr_class_is_prefix_not_a_timeout_allowlist() -> None:
         "keep": True,
     }
     assert classify_occupancy({"route": "fail_closed", "reason": "ocr_contract_rejected"}) == {
+        "class": "incomplete",
+        "keep": True,
+    }
+    assert classify_occupancy(
+        {"route": "fail_closed", "reason": "ocr_contract_rejected: review has warnings"}
+    ) == {
         "class": "complete_reject",
         "keep": False,
     }
@@ -163,7 +173,9 @@ def test_consumed_only_pr_does_not_wrap_back_to_same_sha() -> None:
 
 def test_leftover_after_consume_drops_the_pick() -> None:
     picked = {**KIT_39, "route": "pr", "leftover_prs": [VIBE_30, SPLOT_55]}
-    rest = leftover_after(picked, {"route": "fail_closed", "reason": "ocr_contract_rejected"})
+    rest = leftover_after(
+        picked, {"route": "fail_closed", "reason": "ocr_contract_rejected: review has warnings"}
+    )
     assert [row["pr"] for row in rest] == [30, 55]
 
 

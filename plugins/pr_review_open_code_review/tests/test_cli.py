@@ -678,6 +678,36 @@ def test_main_emits_classified_review_failure_code(monkeypatch, capsys):
     assert "provider" not in json.dumps(payload)
 
 
+def test_main_emits_capacity_codes_not_complete_reject(monkeypatch, capsys):
+    import io
+
+    from lokay_review_open_code_review import cli
+
+    class _Stdin:
+        buffer = io.BytesIO(b'{"schema":"lokay.review-request/1"}')
+
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin())
+    monkeypatch.setattr(
+        cli,
+        "review_request",
+        lambda _request: (_ for _ in ()).throw(
+            ReviewFailure(
+                "OpenCodeReview contract rejected: review budget exceeded or unreported"
+            )
+        ),
+    )
+
+    assert cli.main([]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "ok": False,
+        "error": {
+            "code": "ocr_budget_exceeded",
+            "detail": "review budget exceeded or unreported",
+        },
+    }
+
+
 def test_main_emits_contract_rejection_detail(monkeypatch, capsys):
     import io
 
@@ -702,7 +732,7 @@ def test_main_emits_contract_rejection_detail(monkeypatch, capsys):
     assert payload == {
         "ok": False,
         "error": {
-            "code": "ocr_contract_rejected",
+            "code": "ocr_terminal_incomplete",
             "detail": "review terminal state is not complete",
         },
     }

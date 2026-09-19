@@ -158,7 +158,7 @@ def test_summarize_fail_closed_consumes_and_publishes_leftover() -> None:
         {
             "route": "fail_closed",
             "verdict": "feedback",
-            "reason": "ocr_contract_rejected",
+            "reason": "ocr_contract_rejected: review has warnings",
             "repo": KIT_39["repo"],
             "pr": 39,
         },

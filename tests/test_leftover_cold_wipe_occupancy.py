@@ -157,7 +157,7 @@ def test_consumed_pr_sieve_leftover_is_not_reseeded():
                 "repo": "mikolaj92/OpenAPITransportKit",
                 "head_sha": "f654e881",
                 "route": "fail_closed",
-                "reason": "ocr_contract_rejected",
+                "reason": "ocr_contract_rejected: review has warnings",
                 "leftover": 2,
                 "leftover_prs": [
                     {
@@ -215,7 +215,7 @@ def test_record_pass_keeps_consumed_pr_leftover(tmp_path: Path):
         prs={
             "result": {
                 "route": "fail_closed",
-                "reason": "ocr_contract_rejected",
+                "reason": "ocr_contract_rejected: review has warnings",
                 "repo": "mikolaj92/OpenAPITransportKit",
                 "pr": 39,
                 "head_sha": "f654e881",
