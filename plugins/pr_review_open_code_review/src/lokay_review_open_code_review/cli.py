@@ -68,12 +68,15 @@ _FAILURE_CODES = {
     "canonical task evidence is required": "task_evidence_required",
     "review checkout evidence drifted after preview": "checkout_drift_preview",
     "review checkout evidence drifted after review": "checkout_drift_review",
+    "review checkout origin does not match canonical GitHub repository": "ocr_checkout_origin_mismatch",
 }
 _FAILURE_PREFIXES = (
     ("review engine ", "review_engine_required"),
     ("trusted ", "trusted_file_missing"),
     ("full immutable ", "immutable_sha_required"),
     ("OpenCodeReview contract rejected:", "ocr_contract_rejected"),
+    ("review checkout ", "ocr_checkout_invalid"),
+    ("could not ", "ocr_checkout_invalid"),
 )
 
 
@@ -482,7 +485,10 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
         repo_path = str(request.get("repo_path") or "")
         if not repo_path or not Path(repo_path).is_dir():
             raise ReviewFailure("isolated repository checkout is required")
-        observed = verify_checkout(request)
+        try:
+            observed = verify_checkout(request)
+        except ValueError as exc:
+            raise ReviewFailure(str(exc)) from None
         request_data = dict(request)
         review_context = dict(request_data.get("engine") or {})
         request_data["engine"] = {
@@ -500,11 +506,17 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
         request_data["diff_sha256"] = normalized["diff_sha256"]
         request_data["diff_paths"] = list(normalized["diff_paths"])
         preview = invoke_ocr(request_data, preview=True)
-        after_preview = verify_checkout(request_data)
+        try:
+            after_preview = verify_checkout(request_data)
+        except ValueError as exc:
+            raise ReviewFailure(str(exc)) from None
         if after_preview != observed:
             raise ReviewFailure("review checkout evidence drifted after preview")
         result = invoke_ocr(request_data, preview=False)
-        after_review = verify_checkout(request_data)
+        try:
+            after_review = verify_checkout(request_data)
+        except ValueError as exc:
+            raise ReviewFailure(str(exc)) from None
         if after_review != observed:
             raise ReviewFailure("review checkout evidence drifted after review")
         return normalize_result(
@@ -541,6 +553,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = review_request(request)
         except ReviewFailure as exc:
             payload = {"ok": False, "error": classified_failure(exc)}
+        except ValueError as exc:
+            payload = {"ok": False, "error": classified_failure(ReviewFailure(str(exc)))}
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n")
     return 0 if payload.get("ok") is True else 1
 

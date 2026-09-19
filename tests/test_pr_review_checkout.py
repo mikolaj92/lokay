@@ -40,7 +40,10 @@ def test_prepare_review_checkout_pins_head_and_hashes_exact_patch(tmp_path: Path
     artifacts = tmp_path / "artifacts"
     # GitHub is intentionally not contacted: both exact objects are already local.
     monkeypatch.setattr("lokay.pr_review_checkout._origin_for_repo", lambda _repo: str(_source))
-    monkeypatch.setattr("lokay.pr_review_checkout._verify_origin", lambda *_args: None)
+    monkeypatch.setattr(
+        "lokay.pr_review_checkout._verify_origin",
+        lambda *_args: "https://github.com/acme/demo.git",
+    )
     cfg = Config(
         repos=[RepoConfig(name="acme/demo", clone_path=clone)],
         pr_review_artifacts_dir=artifacts,
@@ -105,7 +108,9 @@ def test_prepare_review_checkout_fetches_exact_fork_head_from_validated_head_rep
     cfg = Config(repos=[RepoConfig(name="acme/demo", clone_path=clone)], pr_review_artifacts_dir=tmp_path / "fork-artifacts")
     review = prepare_review_checkout(cfg, Runner(), "acme/demo", base, fork_head, live=True, head_repo="contributor/demo-fork")
     assert review.diff_paths == [{"path": "file.py", "old_path": "", "status": "modified"}]
-    assert subprocess.check_output(["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True).strip() == str(clone.resolve())
+    assert subprocess.check_output(
+        ["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True
+    ).strip() == canonical_url
 
 
 def test_fetch_source_follows_the_clone_credential_free_transport():
@@ -146,7 +151,7 @@ def test_prepare_review_checkout_snapshots_from_verified_clone_not_github_https(
     assert "git@github.com" not in blob
     assert subprocess.check_output(
         ["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True
-    ).strip() == str(clone.resolve())
+    ).strip() == "git@github.com:acme/demo.git"
 
 
 def test_verify_origin_accepts_the_canonical_ssh_transport(tmp_path: Path):

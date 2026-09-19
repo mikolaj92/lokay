@@ -78,6 +78,13 @@ def test_git_binary_uses_fallback_when_restricted_path_has_no_git(monkeypatch):
     assert git_evidence._git_binary() == git_evidence._FALLBACK_GIT
 
 
+def test_local_path_origin_is_not_canonical_github_identity(tmp_path: Path):
+    repo, _base, _head, request = _repo(tmp_path)
+    subprocess.run(["git", "-C", str(repo), "remote", "set-url", "origin", str(repo)], check=True)
+    with pytest.raises(ValueError, match="origin"):
+        verify_checkout(request)
+
+
 def test_exact_local_checkout_evidence_matches_request(tmp_path: Path):
     _repo_path, _base, _head, request = _repo(tmp_path)
 

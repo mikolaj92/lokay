@@ -632,6 +632,29 @@ def test_nonzero_ocr_without_json_still_fails_closed(tmp_path: Path, monkeypatch
     assert "secret-key" not in str(caught.value)
 
 
+def test_main_emits_one_json_envelope_when_checkout_raises_valueerror(monkeypatch, capsys):
+    import io
+
+    from lokay_review_open_code_review import cli
+
+    class _Stdin:
+        buffer = io.BytesIO(b'{"schema":"lokay.review-request/1"}')
+
+    monkeypatch.setattr(cli.sys, "stdin", _Stdin())
+    monkeypatch.setattr(
+        cli,
+        "review_request",
+        lambda _request: (_ for _ in ()).throw(
+            ValueError("review checkout origin does not match canonical GitHub repository")
+        ),
+    )
+
+    assert cli.main([]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "ocr_checkout_origin_mismatch"
+
+
 def test_main_emits_classified_review_failure_code(monkeypatch, capsys):
     import io
 

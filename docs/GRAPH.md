@@ -491,10 +491,11 @@ class (`ocr_timed_out`, `ocr_invocation_failed`, `ocr_exited_unsuccessfully`,
 pass retries that SHA until a complete JSON exists. Occupancy is the class,
 not a single string. The review terminal (`review_manual` / summarize) must
 carry that classified reason; collapsing it to `review_fail_closed` makes
-incomplete and complete reject share one value and consumes the SHA. GitHub fetch for review goes through the clone's verified credential-free
-origin (SSH or HTTPS). Isolated checkout is a local snapshot of those objects;
-hardcoded GitHub HTTPS with `GIT_TERMINAL_PROMPT=0` is not a review and cannot
-produce JSON. Pending checks KEEP the row. A new head SHA is a new
+incomplete and complete reject share one value and consumes the SHA. Isolated review checkout origin is identity: the clone's credential-free
+GitHub URL (SSH or HTTPS). Object fetch is a local snapshot from that clone;
+hardcoded GitHub HTTPS with `GIT_TERMINAL_PROMPT=0` is not a review. Plugin
+stdout is always one JSON envelope; a Python `ValueError` is not JSON and
+cannot be a review. Pending checks KEEP the row. A new head SHA is a new
 identity and may be reviewed again. This is queue hygiene, not a parallel
 scheduler and not a human-approval gate.
 

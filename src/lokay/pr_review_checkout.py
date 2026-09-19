@@ -224,9 +224,9 @@ def prepare_review_checkout(
         init = runner.run(git_spec(["init", "--quiet"], cwd=path), live=True)
         if init.returncode != 0:
             raise ValueError("cannot initialize isolated review checkout")
-        _run(runner, ["remote", "add", "origin", str(clone)], path)
-        _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", base_ref_sha], path, timeout=300)
-        _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", head_sha], path, timeout=300)
+        _run(runner, ["remote", "add", "origin", clone_origin], path)
+        _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", str(clone), base_ref_sha], path, timeout=300)
+        _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", str(clone), head_sha], path, timeout=300)
         _assert_commit(runner, path, base_ref_sha)
         _assert_commit(runner, path, head_sha)
         _run(runner, ["checkout", "--quiet", "--detach", head_sha], path)
