@@ -106,8 +106,6 @@ def _ranges(repo: Path, base: str, head: str, paths: list[dict[str, str]]) -> di
             start, count = int(match.group(1)), int(match.group(2) or "1")
             if count:
                 result.setdefault(path, []).append((start, start + count - 1))
-            else:
-                result.setdefault(path, [])
     allowed = {row["path"] for row in paths if row["status"] != "deleted"}
     if set(result) - allowed:
         raise ValueError("changed-line ranges do not match immutable path inventory")

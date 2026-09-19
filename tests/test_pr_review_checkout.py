@@ -113,6 +113,34 @@ def test_prepare_review_checkout_fetches_exact_fork_head_from_validated_head_rep
     ).strip() == canonical_url
 
 
+def test_changed_ranges_omit_deletion_only_hunks(tmp_path: Path):
+    """Host evidence must omit unified=0 +0 paths so the plugin can verify them."""
+    from lokay.pr_review_checkout import _changed_ranges, _diff_paths
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.name", "Test"], check=True)
+    subprocess.run(["git", "-C", str(repo), "config", "user.email", "test@example.com"], check=True)
+    (repo / "keep.py").write_text("value = 1\n")
+    (repo / "gone.toml").write_text("[[waves]]\nid = \"camera_1\"\n")
+    subprocess.run(["git", "-C", str(repo), "add", "keep.py", "gone.toml"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "base"], check=True)
+    base = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    (repo / "keep.py").write_text("value = 2\n")
+    (repo / "gone.toml").write_text("")
+    subprocess.run(["git", "-C", str(repo), "add", "keep.py", "gone.toml"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "head"], check=True)
+    head = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+
+    paths = _diff_paths(Runner(), repo, base, head)
+    ranges = _changed_ranges(Runner(), repo, base, head, paths)
+
+    assert {row["path"] for row in paths} == {"gone.toml", "keep.py"}
+    assert ranges == {"keep.py": [(1, 1)]}
+    assert "gone.toml" not in ranges
+
+
 def test_fetch_source_follows_the_clone_credential_free_transport():
     from lokay.pr_review_checkout import _fetch_source_for
 

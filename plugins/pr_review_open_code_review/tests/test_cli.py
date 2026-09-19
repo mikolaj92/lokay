@@ -632,6 +632,19 @@ def test_nonzero_ocr_without_json_still_fails_closed(tmp_path: Path, monkeypatch
     assert "secret-key" not in str(caught.value)
 
 
+def test_changed_line_range_mismatch_is_checkout_invalid_not_default():
+    from lokay_review_open_code_review.cli import classified_failure_code
+
+    for message in (
+        "review changed-line ranges do not match exact checkout",
+        "review path inventory does not match immutable diff",
+        "review patch digest does not match exact checkout",
+    ):
+        code = classified_failure_code(ReviewFailure(message))
+        assert code == "ocr_checkout_invalid", message
+        assert code != "review_failed_closed"
+
+
 def test_main_emits_one_json_envelope_when_checkout_raises_valueerror(monkeypatch, capsys):
     import io
 

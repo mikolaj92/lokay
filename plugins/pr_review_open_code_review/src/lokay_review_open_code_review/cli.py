@@ -69,6 +69,10 @@ _FAILURE_CODES = {
     "review checkout evidence drifted after preview": "checkout_drift_preview",
     "review checkout evidence drifted after review": "checkout_drift_review",
     "review checkout origin does not match canonical GitHub repository": "ocr_checkout_origin_mismatch",
+    "review changed-line ranges do not match exact checkout": "ocr_checkout_invalid",
+    "review path inventory does not match immutable diff": "ocr_checkout_invalid",
+    "review patch digest does not match exact checkout": "ocr_checkout_invalid",
+    "review comparison base does not match immutable commits": "ocr_checkout_invalid",
 }
 _FAILURE_PREFIXES = (
     ("review engine ", "review_engine_required"),

@@ -97,6 +97,50 @@ def test_exact_local_checkout_evidence_matches_request(tmp_path: Path):
     assert observed["changed_ranges"] == {"file.py": [(1, 1)]}
 
 
+def test_deletion_only_hunks_are_omitted_from_changed_ranges(tmp_path: Path):
+    """Live class: unified=0 +0 hunks must not invent empty ranges the host omits."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    _git(repo, "config", "user.name", "Review Test")
+    _git(repo, "config", "user.email", "review@example.test")
+    (repo / "keep.py").write_text("value = 1\n")
+    (repo / "gone.toml").write_text("[[waves]]\nid = \"camera_1\"\n")
+    _git(repo, "add", "keep.py", "gone.toml")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "remote", "add", "origin", "https://github.com/acme/demo.git")
+    base = _git(repo, "rev-parse", "HEAD")
+    (repo / "keep.py").write_text("value = 2\n")
+    (repo / "gone.toml").write_text("")
+    _git(repo, "add", "keep.py", "gone.toml")
+    _git(repo, "commit", "-qm", "head")
+    head = _git(repo, "rev-parse", "HEAD")
+    patch = subprocess.check_output([
+        "git", "-C", str(repo), "diff", "--binary", "--full-index",
+        "--no-ext-diff", "--no-textconv", "--find-renames", "--no-color", base, head, "--",
+    ])
+    request = {
+        "repo": "acme/demo",
+        "head_repo": "acme/demo",
+        "repo_path": str(repo),
+        "head_sha": head,
+        "base_ref_sha": base,
+        "comparison_base_sha": base,
+        "diff_sha256": hashlib.sha256(patch).hexdigest(),
+        "diff_paths": [
+            {"path": "gone.toml", "old_path": "", "status": "modified"},
+            {"path": "keep.py", "old_path": "", "status": "modified"},
+        ],
+        "changed_ranges": {"keep.py": [[1, 1]]},
+    }
+
+    observed = verify_checkout(request)
+
+    assert observed["diff_paths"] == request["diff_paths"]
+    assert observed["changed_ranges"] == {"keep.py": [(1, 1)]}
+    assert "gone.toml" not in observed["changed_ranges"]
+
+
 @pytest.mark.parametrize(
     ("change", "error"),
     [
