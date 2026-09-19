@@ -1,4 +1,4 @@
-# Strategia: najpierw działający mill agentowy, potem deterministyka
+# Strategia: najpierw działający Lokaj (agent w liściach), potem deterministyka
 
 Status: **teza CEO (2026-09-10)** — zapis idei, nie commit do zmiany runtime Lokaya w tym PR.
 
@@ -34,7 +34,7 @@ Graf zostaje mapą; najpierw mapa może być prawie cała „agent w slocie”, 
 | Ouroboros / remote-factory | Agent-first SM | Typed contracts, eval gates, meta-improve |
 | evo | Closed-loop evolve | Benchmark gate zanim merge |
 
-Żaden poważny mill nie zaczyna od idealnego Unixowego grafu bez dowozu.
+Żaden poważny Lokaj nie zaczyna od idealnego Unixowego grafu bez dowozu.
 Zaczynają od **pętli która produkuje PR**, potem dokręcają harness.
 
 ## Mapowanie na działy Lokaya (hipoteza ścieżki)
@@ -45,7 +45,7 @@ Zaczynają od **pętli która produkuje PR**, potem dokręcają harness.
 | `executor` | Jeden coding agent → PR | Worktree/lease/test command jako skrypty |
 | `pr_triage` | Agent review **lub** sam CI+auto-merge policy | Merge policy bez LLM |
 | `pr_repair` | `@agent` na czerwonym PR | Ten sam branch + lokalny test gate |
-| `self_repair` | Watchdog „czy był merge?” | Fingerprint stall dopiero gdy mill żyje |
+| `self_repair` | Watchdog „czy był merge?” | Fingerprint stall dopiero gdy Lokaj żyje |
 
 ## Kryterium sukcesu MVP
 

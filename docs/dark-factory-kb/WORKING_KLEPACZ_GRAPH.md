@@ -1,6 +1,6 @@
 # Working klepacz graph — design (2026-09-10)
 
-Status: **design kanon** pod działający mill. Nie L5. Nie „cały bank”.
+Status: **design kanon** pod działającego **Lokaja**. Nie L5. Nie „cały bank”.
 Cel: issue (z etykietą) → worktree → diff → test → PR → merge policy.
 Graf = kod. LLM tylko w liściach ze **structured output**.
 
@@ -11,7 +11,7 @@ Powiązane: [KLEPACZ.md](./KLEPACZ.md), [instances/SPINE_INDEX.md](./instances/S
 
 Obecny `factory_pass` ma pięć departmentów + recovery + harvest + stuck + leftover +
 pass_ceiling + wiele `select_*` — topologia OK w intencji, ale entropia weszła w
-orkiestrację (survey/ready/stuck/limbo). Działające mille z KB robią odwrotnie:
+orkiestrację (survey/ready/stuck/limbo). Działające harnessy / ticket→PR z KB robią odwrotnie:
 **krótki stały łańcuch**, agent nie routuje.
 
 ## Pewniaczki do zapożyczenia (źródła w `instances/`)

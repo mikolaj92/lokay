@@ -1,0 +1,106 @@
+{
+  "slug": "44-wf-dsl",
+  "persona": "wf-dsl compose — artushin/conductor-ai: .wf DSL workflow engine owns steps/gates; Claude only in tmux slots",
+  "approach": "compose",
+  "confidence": 80,
+  "inspired_by": [
+    "artushin/conductor-ai",
+    "devinrosen/conductor-ai (upstream)",
+    "dark-factory-kb/instances/artushin-conductor-ai",
+    "SPINE_INDEX spine_deterministic — .wf DSL owns steps/gates; Claude in tmux slots",
+    "conductor workflow run ticket-to-pr",
+    "klepacz SOUL ticket→PR"
+  ],
+  "shape_map": {
+    "Mdiamond": "conductor_workflow_run",
+    "Msquare": "done_pr_or_escalate",
+    "parallelogram": "DET_wf_step_script",
+    "diamond": "DET_wf_gate",
+    "box": "Claude_tmux_slot",
+    "hexagon": "HITL_gate_or_merge"
+  },
+  "fixed_pipeline": [
+    "wf_spine",
+    "step_parallel_gate",
+    "tmux_claude_slot",
+    "ticket_to_pr_hitl"
+  ],
+  "conductor_ai": {
+    "orchestrator": ".wf DSL workflow engine — steps / parallel / gate own next edge",
+    "runtime": "Rust + SQLite local-first under ~/.conductor/",
+    "llm_placement": "Claude Code only inside tmux slots spawned by engine — never graph router",
+    "sandbox": "git worktrees linked to tickets (GitHub/Jira sync)",
+    "trigger": "conductor workflow run ticket-to-pr <repo> <wt> --input ticket_id=N",
+    "mcp": "conductor mcp serve (~22 tools)",
+    "obs": ["TUI", "CLI", "web monitor"],
+    "not": [
+      "microsoft/conductor (YAML+Jinja — see 24-conductor-yaml)",
+      "LLM choosing next .wf step",
+      "L5 lights-out auto-merge",
+      "event-driven GHA-only spine"
+    ]
+  },
+  "wf_dsl": {
+    "extension": ".wf",
+    "constructs": ["step", "parallel", "gate", "input", "output"],
+    "owns": ["step order", "parallel fan-in/out", "gate pass/fail", "slot spawn"],
+    "example_workflow": "ticket-to-pr"
+  },
+  "llm_slots": [
+    "plan_in_tmux",
+    "implement_in_tmux",
+    "review_critique_in_tmux",
+    "bounded_fix_in_tmux"
+  ],
+  "det_only": [
+    "tickets_sync",
+    "worktree_claim_k1",
+    "wf_load_validate",
+    "step_advance",
+    "parallel_join",
+    "gate_eval",
+    "tmux_spawn_teardown",
+    "commit_push_open_pr",
+    "merge_policy"
+  ],
+  "invariants": [
+    "wf_dsl_engine_owns_steps_and_gates",
+    "no_llm_as_wf_router",
+    "claude_only_in_tmux_slots",
+    "tmux_slot_returns_so_not_next_step",
+    "one_ticket_one_worktree_one_pr",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "gate_is_det_or_hitl_not_model_judge_alone",
+    "structured_output_schema_on_slots",
+    "merge_policy_off_classify_always",
+    "not_microsoft_conductor",
+    "not_l5"
+  ],
+  "budgets": {
+    "occupancy_k": 1,
+    "fix_n": 3,
+    "tmux_slot_timeout_min": 45
+  },
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-wf-spine.md",
+    "subgraph-step-parallel-gate.md",
+    "subgraph-tmux-claude.md",
+    "subgraph-ticket-to-pr.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-wf-spine.md",
+      "subgraph-step-parallel-gate.md",
+      "subgraph-tmux-claude.md",
+      "subgraph-ticket-to-pr.md"
+    ],
+    "phase_machine": "sync→wf_run→steps/gates→tmux_claude→pr→hitl",
+    "orchestrator": "wf_DSL_DET_engine",
+    "react": false,
+    "ticket_to_pr": true
+  }
+}

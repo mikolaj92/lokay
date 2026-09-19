@@ -1,0 +1,83 @@
+{
+  "slug": "29-codex-auto",
+  "persona": "codex-auto-reuse — maximal fidelity to OpenAI Codex CLI in GitHub Actions: label → DET harness → codex exec leaf → PR; agents are leaves",
+  "approach": "reuse_ready",
+  "confidence": 92,
+  "inspired_by": [
+    "OpenAI Codex CLI (codex exec / headless)",
+    "Codex in GitHub Actions automation",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "05-ready-for-agent-reuse",
+    "23-claude-action",
+    "09-label-fsm"
+  ],
+  "reused_patterns": [
+    "label_or_mention_trigger",
+    "fixed_gha_det_harness",
+    "codex_cli_leaf",
+    "branch_codex_issue_N",
+    "coder_ceiling_open_pr",
+    "det_majority_agent_only_leaves",
+    "merge_policy_off_default"
+  ],
+  "invariants": [
+    "label_or_event_is_start_not_chat_pick",
+    "gha_harness_steps_are_fixed_det",
+    "codex_cli_is_leaf_not_orchestrator",
+    "branch_name_codex_issue_N",
+    "coder_ceiling_is_open_pr",
+    "agent_does_not_pick_work",
+    "agent_does_not_route_graph",
+    "det_majority_agent_only_leaves",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": [
+    "Off",
+    "Classify",
+    "Always"
+  ],
+  "default_merge_policy": "Off",
+  "trigger": {
+    "events": [
+      "issues.labeled",
+      "issue_comment.created (@codex)",
+      "workflow_dispatch"
+    ],
+    "label_examples": [
+      "ready-for-agent",
+      "codex",
+      "do"
+    ]
+  },
+  "branch_convention": "codex/issue-N",
+  "cli": {
+    "name": "codex",
+    "mode": "exec_headless",
+    "invoked_from": "github_actions_det_harness",
+    "secret": "OPENAI_API_KEY"
+  },
+  "subgraphs": [
+    "subgraph-label-start.md",
+    "subgraph-det-harness.md",
+    "subgraph-codex-leaf.md",
+    "subgraph-pr-ceiling.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-label-start.md",
+      "subgraph-det-harness.md",
+      "subgraph-codex-leaf.md",
+      "subgraph-pr-ceiling.md"
+    ],
+    "trigger": "label|@codex|event → GHA",
+    "spine": "det_harness_gha_yaml",
+    "agent_seat": "codex_cli_leaf",
+    "branch": "codex/issue-N",
+    "coder_ceiling": "open_pr",
+    "merge_authority": "DET_merge_policy_or_human"
+  }
+}

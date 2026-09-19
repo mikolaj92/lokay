@@ -12,7 +12,7 @@ spec/harness/politykę; maszyna dowozi PR-y.
 ## Co to NIE jest
 
 - **Assisted IDE** (Cursor chat, Windsurf Cascade, Copilot chat) — człowiek w pętli na każdym kroku.
-- **App generator** (Bolt, v0, Lovable) — greenfield UI z promptu, nie mill po istniejącym katalogu issue.
+- **App generator** (Bolt, v0, Lovable) — greenfield UI z promptu, nie Lokaj po istniejącym katalogu issue.
 - **Benchmark harness** (SWE-bench runner) — ewaluacja, nie produkcyjna fabryka.
 
 ## Mapa folderu
@@ -26,7 +26,7 @@ spec/harness/politykę; maszyna dowozi PR-y.
 | [SOURCES.md](./SOURCES.md) | Bibliografia URL |
 | [CURSOR_SELF_DRIVING.md](./CURSOR_SELF_DRIVING.md) | Cursor: recursive planners (self-driving) |
 | [MAZUR_AUTONOM.md](./MAZUR_AUTONOM.md) | Mazur autonom ↔ harness |
-| [STRATEGY_AGENT_FIRST.md](./STRATEGY_AGENT_FIRST.md) | Teza: najpierw działający mill agentowy |
+| [STRATEGY_AGENT_FIRST.md](./STRATEGY_AGENT_FIRST.md) | Teza: najpierw działający Lokaj (agent w liściach) |
 | [KLEPACZ.md](./KLEPACZ.md) | **Kanon:** ticket-to-PR / klepacz, nie L5 |
 | [WORKING_KLEPACZ_GRAPH.md](./WORKING_KLEPACZ_GRAPH.md) | Dzialajacy cienki graf + pewniaczki + SO |
 | [commercial/](./commercial/) | Produkty zamknięte / SaaS |
@@ -43,4 +43,4 @@ spec/harness/politykę; maszyna dowozi PR-y.
 4. **Factory.ai Missions** — multi-droid orchestration; headless `droid exec --mission`.
 5. **Devin** — PR jako interfejs; auto-fix CI/review; merge zwykle ludzki (governance).
 
-Reszta = mocne agenty SWE albo assisted coding — wartościowe mechanizmy, słabszy „mill”.
+Reszta = mocne agenty SWE albo assisted coding — wartościowe mechanizmy, słabszy ticket→PR (obcy „coding mill” w research — nie nasza nazwa).

@@ -1,0 +1,44 @@
+{
+  "slug": "14-dot-pipeline",
+  "persona": "dot-pipeline compose — blueprint.dot is the program; PipelineRunner walks; LLM fills box nodes only",
+  "approach": "compose",
+  "confidence": 90,
+  "inspired_by": [
+    "samueljklee/attractor",
+    "az9713/attractor-software-factory",
+    "jhugman/attractor-pi-dev",
+    "campallison/attractor",
+    "StrongDM attractor nlspec"
+  ],
+  "shape_map": {
+    "Mdiamond": "start",
+    "Msquare": "done",
+    "box": "LLM_leaf",
+    "parallelogram": "DET_tool_shell",
+    "diamond": "DET_condition",
+    "hexagon": "HITL_gate"
+  },
+  "fixed_pipeline": [
+    "blueprint_load",
+    "det_walk",
+    "box_llm",
+    "hitl_exit"
+  ],
+  "invariants": [
+    "graph_is_code",
+    "pipeline_runner_deterministic_walk",
+    "llm_fills_box_nodes_only",
+    "no_agent_routing",
+    "no_fat_orchestrator_tool_calling",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "structured_output_on_every_box"
+  ],
+  "subgraphs": [
+    "subgraph-blueprint.md",
+    "subgraph-det-walk.md",
+    "subgraph-box-llm.md",
+    "subgraph-hitl-exit.md"
+  ]
+}

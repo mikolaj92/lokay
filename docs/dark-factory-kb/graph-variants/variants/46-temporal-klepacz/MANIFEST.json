@@ -1,0 +1,95 @@
+{
+  "slug": "46-temporal-klepacz",
+  "persona": "temporal-klepacz compose — Temporal Workflow-as-code + Activities; Signals for HITL; continue-as-new per ticket; LLM only in Implement/Review Activities",
+  "approach": "compose",
+  "confidence": 94,
+  "inspired_by": [
+    "Temporal Workflow as Code (TypeScript/Go/Python SDK)",
+    "Temporal Activities + ActivityOptions",
+    "Temporal defineSignal / waitCondition HITL",
+    "Temporal continueAsNew per-ticket",
+    "Temporal Event History replay",
+    "15-durable-steps (dual Temporal/Inngest — this is Temporal-only, narrower LLM seat)",
+    "31-inngest-steps (sibling durable — different runtime)",
+    "KLEPACZ.md Merge Off|Classify|Always",
+    "SOUL.md DET spine + agent leaves"
+  ],
+  "distinct_from_15": [
+    "Temporal-only (no Inngest dual)",
+    "LLM only in Implement and Review Activities (plan is DET, not agent leaf)",
+    "continue-as-new is the per-ticket boundary",
+    "HITL = defineSignal + waitCondition (not step.waitForEvent)",
+    "explicit Workflow-as-code API (proxyActivities, signals, queries)"
+  ],
+  "shape_map": {
+    "Mdiamond": "StartWorkflow_ready_for_agent",
+    "Msquare": "done_or_continueAsNew",
+    "parallelogram": "DET_Activity",
+    "diamond": "DET_budget_or_policy",
+    "box": "LLM_Activity_implement_or_review",
+    "hexagon": "HITL_Signal_waitCondition"
+  },
+  "fixed_pipeline": [
+    "workflow_as_code",
+    "det_activities",
+    "llm_implement_review",
+    "signals_continue_as_new"
+  ],
+  "temporal": {
+    "orchestrator": "Workflow function (deterministic; replay-safe)",
+    "checkpoint": "Event History",
+    "retry_unit": "failed Activity only",
+    "llm_placement": "Implement + Review Activities only — never Workflow body, never Plan",
+    "hitl": ["defineSignal(approve|deny|changes_requested)", "workflow.waitCondition"],
+    "per_ticket": "continueAsNew after ticket terminal",
+    "primitives": [
+      "proxyActivities",
+      "defineSignal",
+      "defineQuery",
+      "continueAsNew",
+      "workflow.waitCondition",
+      "ActivityOptions"
+    ]
+  },
+  "invariants": [
+    "workflow_body_is_deterministic",
+    "no_llm_in_workflow_body",
+    "llm_only_in_implement_and_review_activities",
+    "plan_is_det_not_agent_leaf",
+    "retries_are_activity_scoped",
+    "event_history_is_source_of_truth",
+    "hitl_via_temporal_signals",
+    "continue_as_new_per_ticket",
+    "no_agent_routing",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_alias_of_15_temporal_inngest_dual"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-workflow-as-code.md",
+    "subgraph-det-activities.md",
+    "subgraph-llm-implement-review.md",
+    "subgraph-signals-continue-as-new.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-workflow-as-code.md",
+      "subgraph-det-activities.md",
+      "subgraph-llm-implement-review.md",
+      "subgraph-signals-continue-as-new.md"
+    ],
+    "trigger": "label ready-for-agent → StartWorkflow(ticketId)",
+    "spine": "Temporal Workflow-as-code",
+    "agent_seat": "Implement Activity + Review Activity",
+    "hitl": "Signals + waitCondition",
+    "ticket_boundary": "continueAsNew",
+    "coder_ceiling": "open_pr",
+    "merge_authority": "DET MergePolicy + human Signal when Off"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "slug": "13-merge-policy",
+  "persona": "merge-policy-first — reuse ready-for-agent Merge Policy Off|Classify|Always as the star; coder never merges; classify AGENT SO only when Classify",
+  "approach": "reuse_ready",
+  "confidence": 93,
+  "inspired_by": [
+    "berenddeboer/ready-for-agent Merge Policy",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "05-ready-for-agent-reuse"
+  ],
+  "reused_patterns": [
+    "merge_policy_off_classify_always",
+    "coder_ceiling_open_pr",
+    "label_start",
+    "det_majority_agent_only_leaves",
+    "classify_so_gated_by_policy"
+  ],
+  "invariants": [
+    "merge_policy_is_star",
+    "coder_never_merges",
+    "merge_authority_is_det_policy",
+    "classify_agent_so_only_when_classify",
+    "off_and_always_never_invoke_classify_so",
+    "default_merge_policy_off",
+    "fail_closed_on_red_ci",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "classify_so": {
+    "enabled_when": "Classify",
+    "disabled_when": ["Off", "Always"],
+    "role": "advisory_risk_structured_output",
+    "authorizes_merge": false
+  },
+  "subgraphs": [
+    "subgraph-coder-ceiling.md",
+    "subgraph-policy-star.md",
+    "subgraph-classify-so.md",
+    "subgraph-verdict-exec.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-coder-ceiling.md",
+      "subgraph-policy-star.md",
+      "subgraph-classify-so.md",
+      "subgraph-verdict-exec.md"
+    ],
+    "trigger": "label:ready-for-agent",
+    "star": "MergePolicy Off|Classify|Always",
+    "coder_ceiling": "open_pr",
+    "merge_authority": "DET_merge_policy",
+    "llm_merge": false,
+    "classify_so_gate": "policy_equals_Classify"
+  }
+}

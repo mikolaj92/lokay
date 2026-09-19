@@ -1,0 +1,120 @@
+{
+  "slug": "35-phoenix-fsm",
+  "persona": "phoenix-fsm compose — Watcher label SM Planner→Coder→Tester→PR; ai:* labels sync state; local phoenixgithub watch / run-issue",
+  "approach": "compose_phoenix_fsm",
+  "confidence": 78,
+  "inspired_by": [
+    "kkipngenokoech/phoenix",
+    "dark-factory-kb/instances/kkipngenokoech-phoenix",
+    "phoenixgithub pip CLI",
+    "09-label-fsm",
+    "11-planner-coder",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md"
+  ],
+  "reused_patterns": [
+    "watcher_label_state_machine",
+    "ai_ready_revise_impulse",
+    "multi_agent_planner_coder_tester_pr",
+    "test_command_baseline_gate",
+    "auto_revise_bounded_loop",
+    "branch_phoenix_issue_n",
+    "coder_ceiling_pr_ai_review",
+    "human_merge_ai_done",
+    "agents_fill_slots_never_route",
+    "det_majority_watcher_owns_fsm",
+    "meat_equals_ai_same_slot",
+    "not_l5"
+  ],
+  "label_vocabulary": [
+    "ai:ready",
+    "ai:revise",
+    "ai:in-progress",
+    "ai:review",
+    "ai:failed",
+    "ai:done"
+  ],
+  "fsm_stages": [
+    "ready",
+    "in_progress",
+    "plan",
+    "code",
+    "test",
+    "pr_review",
+    "failed",
+    "revise",
+    "done"
+  ],
+  "agent_roles": [
+    "Planner",
+    "Coder",
+    "Tester",
+    "FailureAnalyst",
+    "PRAgent"
+  ],
+  "invariants": [
+    "watcher_owns_label_fsm",
+    "only_watcher_or_script_flips_ai_labels",
+    "impulse_is_ai_ready_or_ai_revise",
+    "agents_fill_slots_never_route",
+    "pipeline_order_planner_coder_tester_pr",
+    "TEST_COMMAND_plus_baseline_gate",
+    "auto_revise_cap_circuit_breaker",
+    "coder_ceiling_is_ai_review_plus_pr",
+    "merge_is_human_ai_done",
+    "one_active_ai_stage_label_mutex",
+    "meat_equals_ai_same_slot",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "executor": "local_watcher_phoenixgithub",
+  "triggers": [
+    "label:ai:ready",
+    "label:ai:revise",
+    "cli:phoenixgithub_watch",
+    "cli:run-issue"
+  ],
+  "agent_runtime": [
+    "LLM_PROVIDER",
+    "LLM_MODEL",
+    "multi_agent_roles"
+  ],
+  "sandbox": {
+    "runner": "local_host",
+    "worktree": true,
+    "branch": "phoenix/issue-N",
+    "auth": "host_gh_credentials"
+  },
+  "test_gate": {
+    "command_env": "TEST_COMMAND",
+    "baseline": true,
+    "profiles": ["auto", "python", "frontend", "generic"],
+    "auto_revise_env": "AUTO_REVISE_*"
+  },
+  "subgraphs": [
+    "subgraph-watcher-labels.md",
+    "subgraph-planner-coder.md",
+    "subgraph-tester-baseline.md",
+    "subgraph-pr-revise.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-watcher-labels.md",
+      "subgraph-planner-coder.md",
+      "subgraph-tester-baseline.md",
+      "subgraph-pr-revise.md"
+    ],
+    "trigger": "ai:ready | ai:revise → phoenixgithub watch",
+    "state_store": "github_issue_ai_labels",
+    "advance_authority": "Watcher_DET_only",
+    "agent_seat": "Planner_Coder_Tester_PRAgent_leaves",
+    "spine": "Watcher_label_SM_Planner_Coder_Tester_PR",
+    "branch": "phoenix/issue-N",
+    "coder_ceiling": "ai:review + open PR",
+    "escape": "ai:failed → ai:revise (capped) | HITL",
+    "merge_authority": "human_ai_done"
+  }
+}

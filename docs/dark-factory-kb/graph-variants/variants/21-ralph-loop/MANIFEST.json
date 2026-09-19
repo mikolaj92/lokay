@@ -1,0 +1,91 @@
+{
+  "slug": "21-ralph-loop",
+  "persona": "ralph-wiggum-loop — continuous implement/review ticks until LOOP_COMPLETE; git/PR stay DET; humans own architecture; never L5",
+  "approach": "compose",
+  "confidence": 86,
+  "focus": "continuous_implement_review_until_loop_complete",
+  "soul_alignment": [
+    "automate_babysitting",
+    "DET_plus_AGENT_SO",
+    "humans_for_architecture_and_QA",
+    "subgraphs_not_monolith",
+    "not_L5",
+    "git_pr_always_DET",
+    "reviewer_separate_from_implementer"
+  ],
+  "loop": {
+    "name": "ralph",
+    "unit": "tick",
+    "tick_steps": ["implement_so", "review_so"],
+    "continue_until": "LOOP_COMPLETE",
+    "signal_source": "review_so.loop_status",
+    "soft_max_ticks": 8,
+    "on_soft_max": "arch_hitl_or_skip_receipt",
+    "counters_are_DET": true
+  },
+  "budgets": {
+    "ralph_tick_soft_max": 8,
+    "occupancy_k": 1,
+    "arch_hitl_required_on": ["architecture_change", "migration", "auth", "public_api"]
+  },
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-intake.md",
+      "subgraph-ralph-tick.md",
+      "subgraph-loop-gate.md",
+      "subgraph-git-pr.md"
+    ],
+    "loop_body": "subgraph-ralph-tick.md",
+    "loop_predicate": "subgraph-loop-gate.md",
+    "det_git_pr": "subgraph-git-pr.md",
+    "on_LOOP_COMPLETE": "open_or_update_PR_then_merge_policy"
+  },
+  "subgraphs": [
+    "subgraph-intake.md",
+    "subgraph-ralph-tick.md",
+    "subgraph-loop-gate.md",
+    "subgraph-git-pr.md"
+  ],
+  "invariants": [
+    "loop_until_LOOP_COMPLETE_not_forever",
+    "soft_max_ticks_is_DET",
+    "no_agent_budget_reset",
+    "git_and_pr_are_DET_only",
+    "implementer_never_opens_pr_inside_tick",
+    "reviewer_separate_from_implementer",
+    "LOOP_COMPLETE_from_review_so_not_implementer",
+    "architecture_changes_require_human",
+    "one_ticket_one_pr",
+    "MergePolicy_Off_default",
+    "never_LLM_merge",
+    "no_limbo_labels",
+    "not_L5"
+  ],
+  "llm_slots": [
+    "implement_tick",
+    "review_tick"
+  ],
+  "det_only": [
+    "pick_one_labeled",
+    "worktree_branch",
+    "ralph_tick_counter",
+    "loop_gate_predicate",
+    "run_tests",
+    "commit",
+    "push",
+    "open_or_update_pr",
+    "ci_wait",
+    "merge_policy",
+    "arch_hitl_ping",
+    "skip_receipt"
+  ],
+  "forbidden": [
+    "fat_orchestrator_choosing_next_stage",
+    "agent_self_merge",
+    "L5_lights_out",
+    "infinite_loop_without_soft_max",
+    "implementer_declaring_LOOP_COMPLETE",
+    "limbo_labels"
+  ]
+}

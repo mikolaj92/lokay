@@ -1,0 +1,30 @@
+{
+  "slug": "11-planner-coder",
+  "persona": "dual-light-agents — plan-only SO + implement SO; optional task-breakdown; all git/PR DET",
+  "approach": "from_scratch",
+  "confidence": 87,
+  "light_agents": [
+    "plan_issue",
+    "implement"
+  ],
+  "optional_agents": [
+    "task_breakdown"
+  ],
+  "invariants": [
+    "plan_leaf_writes_no_product_code",
+    "implement_leaf_does_not_open_pr",
+    "all_git_and_pr_are_det",
+    "no_fat_orchestrator_tool_calling",
+    "task_breakdown_optional_default_off",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr"
+  ],
+  "subgraphs": [
+    "subgraph-intake.md",
+    "subgraph-plan.md",
+    "subgraph-task-breakdown.md",
+    "subgraph-implement.md",
+    "subgraph-git-pr.md",
+    "subgraph-review-merge.md"
+  ]
+}

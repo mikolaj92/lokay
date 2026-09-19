@@ -1,0 +1,73 @@
+{
+  "slug": "06-deerflow-borrow",
+  "persona": "deerflow-borrower compose — zapożycza pewniaczki ByteDance DeerFlow GitHub-channel do klepacza; DET majority; AGENT tylko liść",
+  "approach": "compose_borrow",
+  "confidence": 90,
+  "inspired_by": [
+    "bytedance/deer-flow GitHub channel (webhook, fire_and_forget, log-only outbound)",
+    "deer-flow resolve_thread_id UUID5(repo, number, agent_name)",
+    "deer-flow _is_self_event + busy follow-up buffer/drain",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "KLEPACZ.md Merge Off|Classify|Always",
+    "SOUL.md free humans / DET majority / subgraphs / no L5"
+  ],
+  "reused_patterns": [
+    "fire_and_forget_webhook",
+    "log_only_outbound_gh_mid_run",
+    "uuid5_threads_coder_ne_reviewer",
+    "self_event_gate",
+    "busy_follow_up_buffer",
+    "agent_leaf_structured",
+    "merge_policy_det_ours"
+  ],
+  "soul_alignment": [
+    "free_humans_from_babysitting",
+    "DET_majority",
+    "subgraphs_not_monolith",
+    "not_L5",
+    "meat_equals_ai_same_role",
+    "coder_ceiling_is_open_pr"
+  ],
+  "invariants": [
+    "webhook_hmac_cheap_ack",
+    "fire_and_forget_no_runs_wait",
+    "outbound_channel_send_is_log_only",
+    "agent_writes_github_via_gh_mid_run",
+    "uuid5_thread_includes_agent_name",
+    "coder_thread_ne_reviewer_thread",
+    "self_event_gate_before_dispatch",
+    "busy_conflict_buffers_not_silent_drop",
+    "coding_agent_is_leaf_SO_only",
+    "merge_is_DET_policy_ours_not_LLM",
+    "default_merge_Off",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "merge_authority": "DET_ours",
+  "subgraphs": [
+    "subgraph-webhook-ff.md",
+    "subgraph-uuid5-threads.md",
+    "subgraph-agent-leaf-gh.md",
+    "subgraph-busy-buffer.md",
+    "subgraph-merge-policy-det.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-webhook-ff.md",
+      "subgraph-uuid5-threads.md",
+      "subgraph-agent-leaf-gh.md",
+      "subgraph-busy-buffer.md",
+      "subgraph-merge-policy-det.md"
+    ],
+    "trigger": "github_webhook_HMAC",
+    "dispatch": "fire_and_forget_runs_create",
+    "outbound": "log_only_gh_mid_run",
+    "thread_id": "UUID5(repo#number:agent_name)",
+    "self_loop": "self_event_gate",
+    "concurrency": "busy_follow_up_buffer_FIFO",
+    "agent_seat": "coding_AGENT_leaf_SO",
+    "merge_authority": "DET_ours_Off_Classify_Always"
+  }
+}
