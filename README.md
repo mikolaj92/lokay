@@ -728,8 +728,9 @@ tożsamość `(repo, pr, head_sha)`. Skip bez merge zjada wiersz i oddaje
 `leftover_prs`. Niekompletny review (brak kompletnego JSON: timeout,
 invocation failed, not JSON, plugin_error) nie jest review i nie jest skip —
 KEEP tej samej SHA. Klasa occupancy, nie jeden string. Terminal review
-nie zgniata tej klasy do `review_fail_closed`. Sklasyfikowany kompletny
-reject (`ocr_contract_rejected`) nadal zjada wiersz. Nowe SHA to
+nie zgniata tej klasy do `review_fail_closed`. Fetch GitHub do review chodzi originem klona (SSH albo HTTPS).
+Izolowany checkout to lokalny snapshot; twardy GitHub HTTPS z promptem nie jest review.
+Sklasyfikowany kompletny reject (`ocr_contract_rejected`) nadal zjada wiersz. Nowe SHA to
 nowa tożsamość. Pending KEEP. Po liście i wyborze kandydata
 `reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
 przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest

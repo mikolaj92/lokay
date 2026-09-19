@@ -145,14 +145,28 @@ def _origin_for_repo(repo: str) -> str:
     return f"https://github.com/{repo}.git"
 
 
-def _verify_origin(runner: Runner, clone: Path, repo: str) -> None:
-    raw = _run(runner, ["remote", "get-url", "origin"], clone).strip().rstrip("/").lower()
-    expected = _origin_for_repo(repo).lower()
-    ssh = f"git@github.com:{repo}.git".lower()
+def _ssh_origin_for_repo(repo: str) -> str:
+    if not _OWNER_REPO.fullmatch(repo):
+        raise ValueError("invalid GitHub repository name")
+    return f"git@github.com:{repo}.git"
+
+
+def _fetch_source_for(repo: str, clone_origin: str) -> str:
+    """GitHub fetch uses the clone's verified transport; never invent HTTPS over SSH."""
+    if clone_origin.lower().startswith("git@github.com:"):
+        return _ssh_origin_for_repo(repo)
+    return _origin_for_repo(repo)
+
+
+def _verify_origin(runner: Runner, clone: Path, repo: str) -> str:
+    raw = _run(runner, ["remote", "get-url", "origin"], clone).strip().rstrip("/")
+    expected = _origin_for_repo(repo).rstrip("/").lower()
+    ssh = _ssh_origin_for_repo(repo).lower()
     # Accept the two credential-free GitHub transports used by Lokay's
     # authenticated Git carrier; reject credentials, alternate hosts, and local rewrites.
-    if raw not in {expected, ssh}:
+    if raw.lower() not in {expected, ssh}:
         raise ValueError("configured clone origin is not the canonical credential-free GitHub URL")
+    return raw
 
 
 def prepare_review_checkout(
@@ -173,23 +187,20 @@ def prepare_review_checkout(
     if row is None or not row.clone_path.is_dir():
         raise ValueError("configured repository clone is required for review")
     clone = row.clone_path.resolve()
-    _verify_origin(runner, clone, repo)
-    canonical_origin = _origin_for_repo(repo)
-    fetch_origin = canonical_origin
-    if head_repo:
-        if not _OWNER_REPO.fullmatch(head_repo):
-            raise ValueError("invalid GitHub PR head repository name")
-        fetch_origin = _origin_for_repo(head_repo)
+    clone_origin = _verify_origin(runner, clone, repo)
+    if head_repo and not _OWNER_REPO.fullmatch(head_repo):
+        raise ValueError("invalid GitHub PR head repository name")
     if not _SHA.fullmatch(base_ref_sha) or not _SHA.fullmatch(head_sha):
         raise ValueError("review checkout requires full immutable commit SHAs")
-    # The base belongs to the canonical repository; a fork PR head must be
-    # fetched from the exact head repository reported by the verified PR view.
-    for sha, source in ((base_ref_sha, canonical_origin), (head_sha, fetch_origin)):
+    # GitHub is reached only from the verified clone, with that clone's
+    # credential-free transport. Isolated checkout is a local snapshot.
+    for sha, source_repo in ((base_ref_sha, repo), (head_sha, head_repo or repo)):
         try:
             _assert_commit(runner, clone, sha)
             continue
         except ValueError:
             pass
+        source = _fetch_source_for(source_repo, clone_origin)
         fetched = runner.run(
             git_spec(
                 ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", source, sha],
@@ -213,13 +224,9 @@ def prepare_review_checkout(
         init = runner.run(git_spec(["init", "--quiet"], cwd=path), live=True)
         if init.returncode != 0:
             raise ValueError("cannot initialize isolated review checkout")
-        _run(runner, ["remote", "add", "origin", _origin_for_repo(repo)], path)
-        _run(runner, ["remote", "add", "review-head", fetch_origin], path)
+        _run(runner, ["remote", "add", "origin", str(clone)], path)
         _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", base_ref_sha], path, timeout=300)
-        if fetch_origin == canonical_origin:
-            _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", head_sha], path, timeout=300)
-        else:
-            _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "review-head", head_sha], path, timeout=300)
+        _run(runner, ["fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "origin", head_sha], path, timeout=300)
         _assert_commit(runner, path, base_ref_sha)
         _assert_commit(runner, path, head_sha)
         _run(runner, ["checkout", "--quiet", "--detach", head_sha], path)

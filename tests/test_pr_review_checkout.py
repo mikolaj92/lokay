@@ -105,7 +105,48 @@ def test_prepare_review_checkout_fetches_exact_fork_head_from_validated_head_rep
     cfg = Config(repos=[RepoConfig(name="acme/demo", clone_path=clone)], pr_review_artifacts_dir=tmp_path / "fork-artifacts")
     review = prepare_review_checkout(cfg, Runner(), "acme/demo", base, fork_head, live=True, head_repo="contributor/demo-fork")
     assert review.diff_paths == [{"path": "file.py", "old_path": "", "status": "modified"}]
-    assert subprocess.check_output(["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True).strip().endswith("origin")
+    assert subprocess.check_output(["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True).strip() == str(clone.resolve())
+
+
+def test_fetch_source_follows_the_clone_credential_free_transport():
+    from lokay.pr_review_checkout import _fetch_source_for
+
+    ssh = "git@github.com:acme/demo.git"
+    https = "https://github.com/acme/demo.git"
+    assert _fetch_source_for("acme/demo", ssh) == ssh
+    assert _fetch_source_for("contributor/fork", ssh) == "git@github.com:contributor/fork.git"
+    assert _fetch_source_for("acme/demo", https) == https
+    assert _fetch_source_for("contributor/fork", https) == "https://github.com/contributor/fork.git"
+
+
+def test_prepare_review_checkout_snapshots_from_verified_clone_not_github_https(tmp_path: Path):
+    """Live class: clone origin is SSH; inventing GitHub HTTPS prompts and cannot review."""
+    _source, clone, base, head = _repo(tmp_path)
+    subprocess.run(
+        ["git", "-C", str(clone), "remote", "set-url", "origin", "git@github.com:acme/demo.git"],
+        check=True,
+    )
+    fetches: list[tuple[str, ...]] = []
+
+    class Spy(Runner):
+        def run(self, spec, *, live):
+            argv = spec.argv
+            if argv and argv[0] == "git" and "fetch" in argv:
+                fetches.append(argv)
+            return super().run(spec, live=live)
+
+    cfg = Config(
+        repos=[RepoConfig(name="acme/demo", clone_path=clone)],
+        pr_review_artifacts_dir=tmp_path / "ssh-artifacts",
+    )
+    review = prepare_review_checkout(cfg, Spy(), "acme/demo", base, head, live=True)
+    assert review.diff_paths == [{"path": "file.py", "old_path": "", "status": "modified"}]
+    blob = " ".join(" ".join(part) for part in fetches)
+    assert "https://github.com" not in blob
+    assert "git@github.com" not in blob
+    assert subprocess.check_output(
+        ["git", "-C", str(review.path), "remote", "get-url", "origin"], text=True
+    ).strip() == str(clone.resolve())
 
 
 def test_verify_origin_accepts_the_canonical_ssh_transport(tmp_path: Path):
