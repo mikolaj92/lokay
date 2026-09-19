@@ -8,7 +8,7 @@ Generated 2026-09-10 (Europe/Warsaw). All `instances/*/README.md` except `_*`.
 | `spine_agent_loop` | Agent decides next actions; continuous executor / free tool loop is the orchestrator |
 | `spine_hybrid` | Unclear or mixed D-spine + free-agent orchestration |
 
-**Counts:** deterministic=60 · agent_loop=28 · hybrid=8 · **total=96**
+**Counts:** deterministic=60 · agent_loop=28 · hybrid=9 · **total=97**
 
 | slug | spine | confidence_spine | why |
 |------|-------|------------------|-----|
@@ -28,6 +28,7 @@ Generated 2026-09-10 (Europe/Warsaw). All `instances/*/README.md` except `_*`.
 | [berenddeboer-ready-for-agent](./berenddeboer-ready-for-agent/) | `spine_agent_loop` | 95 | Canonical ready-for-agent: thin harness + headless agent implement/review/PR |
 | [bitbitcodes-autonomous-sdlc](./bitbitcodes-autonomous-sdlc/) | `spine_agent_loop` | 55 | IDE-chat sdlc.orchestrator + markdown agents; no fixed ticket runner spine |
 | [brevity1swos-holdout](./brevity1swos-holdout/) | `spine_deterministic` | 84 | Holdout sealed oracle; grading = exit codes/JSON not LLM-judge |
+| [bytedance-deer-flow](./bytedance-deer-flow/) | `spine_hybrid` | 84 | DET GitHub webhook fan-out/UUID5/fire_and_forget; coding = free agent+gh in sandbox |
 | [campallison-attractor](./campallison-attractor/) | `spine_deterministic` | 86 | Go DOT parser+pipeline runner; agent loop is leaf under DOT |
 | [chippingway-orchestrator](./chippingway-orchestrator/) | `spine_deterministic` | 85 | workflow:* label + pinned JSON FSM; orchestrator advances stages |
 | [codebuddy-npc](./codebuddy-npc/) | `spine_agent_loop` | 70 | CNB NPC autonomous plan→code→PR; free tool loop drives delivery |
