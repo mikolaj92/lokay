@@ -42,6 +42,10 @@ def select(
     except (TypeError, ValueError):
         pr = 0
     branch = str(payload.get("branch") or "")
+    repair_start_head_sha = str(
+        payload.get("repair_start_head_sha") or payload.get("head_sha")
+        or verdict.get("repair_start_head_sha") or verdict.get("head_sha") or ""
+    ).lower()
     budget_n = (
         max(1, int(budget)) if budget is not None
         else pr_repair_receipts.resolve_budget(config_path)
@@ -60,6 +64,7 @@ def select(
             route="fail_closed", reason="pr_repair_receipt_invalid",
             repairable=bool(verdict.get("repairable")),
             repo=repo, pr=pr, branch=branch,
+            repair_start_head_sha=repair_start_head_sha,
         )
     if receipt.get("pending_push") is not None:
         recovery = pr_repair_push.reconcile_pending_push(
@@ -73,6 +78,7 @@ def select(
                 attempts=int(recovery.get("attempts") or receipt.get("attempts") or 0),
                 budget=int(recovery.get("budget") or receipt.get("budget") or budget_n),
                 repo=repo, pr=pr, branch=branch,
+                repair_start_head_sha=repair_start_head_sha,
             )
         return ok(
             route="skip", reason="repair_push_recovered",
@@ -101,16 +107,13 @@ def select(
     repair_push_intent_sha256 = str(
         payload.get("repair_push_intent_sha256") or verdict.get("repair_push_intent_sha256") or ""
     )
-    repair_start_head_sha = str(
-        payload.get("repair_start_head_sha") or payload.get("head_sha")
-        or verdict.get("repair_start_head_sha") or verdict.get("head_sha") or ""
-    ).lower()
     task_digest = str(handoff.get("task_identity_sha256") or "")
     review_result_digest = str(handoff.get("review_result_sha256") or "")
     if repair_kind not in {"ci", "review"}:
         return ok(
             route="fail_closed", reason="repair_kind_invalid",
             repairable=False, repo=repo, pr=pr, branch=branch, needs_review=True,
+            repair_start_head_sha=repair_start_head_sha,
         )
     if repair_kind == "ci" and (
         not re.fullmatch(r"[a-f0-9]{40}", repair_start_head_sha)
@@ -122,6 +125,7 @@ def select(
                 else "ci_repair_contains_review_handoff"
             ),
             repairable=False, repo=repo, pr=pr, branch=branch, needs_review=True,
+            repair_start_head_sha=repair_start_head_sha,
         )
     if repair_kind == "review" and (
         review.get("verdict") != "request_changes" or not task or not findings
@@ -140,6 +144,7 @@ def select(
         return ok(
             route="fail_closed", reason="review_repair_handoff_incomplete",
             repairable=False, repo=repo, pr=pr, branch=branch, needs_review=True,
+            repair_start_head_sha=repair_start_head_sha,
         )
     attempts = int(receipt.get("attempts") or 0)
     receipt_budget = max(1, int(receipt.get("budget") or budget_n))

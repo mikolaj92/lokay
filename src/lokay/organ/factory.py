@@ -240,11 +240,17 @@ def handle_factory(
 
             begin = {**begin, "state_path": str(load_config(inputs["config_path"]).state_path)}
         begin = {"live": bool(inputs.get("live")), "config_path": inputs.get("config_path"), **begin}
+        repair = up.get("run_pr_repair_department") or {}
+        selected_repair = up.get("select_pr_repair_department") or {}
+        if selected_repair.get("route") == "fail_closed":
+            # Authorization failure skips the child; its condition_not_met
+            # placeholder must not erase the selector's named blocker.
+            repair = selected_repair
         out = record_pass.record(
             pass_dir=str(begin.get("pass_dir") or ""),
             begin=begin,
             prs=up.get("run_pr_triage_department") or {},
-            repair=up.get("run_pr_repair_department") or {},
+            repair=repair,
             issues=up.get("run_executor_department")
             or up.get("run_issue_triage_department")
             or {},
