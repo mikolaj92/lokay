@@ -507,7 +507,13 @@ incomplete and complete reject share one value and consumes the SHA. Isolated re
 GitHub URL (SSH or HTTPS). Object fetch is a local snapshot from that clone;
 hardcoded GitHub HTTPS with `GIT_TERMINAL_PROMPT=0` is not a review. Plugin
 stdout is always one JSON envelope; a Python `ValueError` is not JSON and
-cannot be a review. Pending checks KEEP the row. A new head SHA is a new
+cannot be a review. Pending checks KEEP the row. Structured `waiting=true`
+survives child summary, parent verdict and the final queue stamp even when the
+invocation has `route=completed, verdict=feedback`. In particular,
+`merge_not_confirmed` / `merge_head_unverified` KEEP exact repo/PR/SHA without
+writing a consumed skip. This is a later-pass retry through the existing
+SHA-bound review/test/merge gates, not permission to merge. Confirmed merge
+and completed non-waiting feedback still consume. A new head SHA is a new
 identity and may be reviewed again. This is queue hygiene, not a parallel
 scheduler and not a human-approval gate.
 

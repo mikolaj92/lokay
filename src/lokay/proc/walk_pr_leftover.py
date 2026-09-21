@@ -122,6 +122,10 @@ def classify_occupancy(receipt: object) -> dict:
         return {"class": "repair", "keep": True}
     if incomplete_review(reason):
         return {"class": "incomplete", "keep": True}
+    # A completed child invocation is not a completed PR decision. Merge
+    # identity/transient failures carry waiting even after route normalization.
+    if receipt.get("waiting") is True:
+        return {"class": "pending", "keep": True}
     if _reason_code(reason) == "ocr_contract_rejected":
         detail = reason.split(":", 1)[1].strip() if ":" in reason else ""
         if detail in _COMPLETE_REJECT_DETAILS:

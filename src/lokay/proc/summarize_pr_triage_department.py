@@ -111,6 +111,9 @@ def summarize(
         },
         "repair_started": False,
     }
+    # Preserve the structured wait signal in both the public receipt and the
+    # queue stamp; reason strings and route=completed cannot encode occupancy.
+    receipt["waiting"] = receipt["triage"]["waiting"]
     stamp = {**chosen, **receipt}
     leftover_prs = leftover_after(picked, stamp, incomplete_retry_position=incomplete_retry_position)
     if str(picked.get("route") or "") == "pr" or "leftover_prs" in picked:

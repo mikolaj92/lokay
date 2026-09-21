@@ -762,7 +762,11 @@ Komentarze vendora (`comments[]`) zamykają recenzję: NIE → `request_changes`
 → `pr_repair`, także gdy budżet ucina resztę plików. Occupancy KEEP to brak
 komentarzy i brak kompletnego JSON (timeout, pusty budżet, nie JSON).
 Nowe SHA to
-nowa tożsamość. Pending KEEP. Po liście i wyborze kandydata
+nowa tożsamość. Pending KEEP. Structured `waiting=true` również zachowuje
+exact repo/PR/SHA po normalizacji do `route=completed, verdict=feedback`:
+`merge_not_confirmed` i `merge_head_unverified` nie są ukończoną decyzją ani
+skip memory. Następny pass ponownie przechodzi SHA-bound gates; KEEP nie
+upoważnia do merge. Po liście i wyborze kandydata
 `reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
 przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest
 wybrany PR; zgodny live OPEN PR potwierdza odzyskany push, a bieżący pass
