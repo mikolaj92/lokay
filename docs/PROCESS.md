@@ -91,6 +91,12 @@ inside those children (`coding_execution`, `pr_review_agent`, `pr_repair`
 repair agent). Department-wide agent slots are not the live bodies. The graph
 geometry does not change.
 
+A fresh review uses two explicit nodes: deterministic `select_pr_review_scope`
+invokes `ocr review --preview` once, then `pr_review_agent` invokes `ocr review`
+once. A verified cached result invokes neither. The plugin currently revalidates
+the checkout before and after each operation (four checks on the fresh path);
+these checks are not additional OCR or LLM invocations.
+
 The allowlist names actual organ bindings, not suffixes or vendor harnesses.
 Code workers return a transport envelope and scoped worktree changes; those
 still require real diff, local verification and publication gates.
