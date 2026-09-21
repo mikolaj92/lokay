@@ -93,6 +93,53 @@ if real is not None:v=real"""
     assert receipt["repair_started"] is False
     assert not list((tmp_path / "receipts").rglob("*.json"))  # no repair spent
 
+    # Continue through the actual department runner and composer. Substitute
+    # only child execution and external admission/event effects; validate the
+    # exact composed inputs with the real push-intent and summary consumers.
+    from lokay.compose import pr_repair
+    from lokay.organ.repair_boundary import handle_repair_boundary
+    from lokay.proc import pr_repair_receipts, run_pr_repair_department
+
+    monkeypatch.setattr(pr_repair_receipts, "resolve_state_dir", lambda _path: tmp_path / "receipts")
+    monkeypatch.setattr(pr_repair, "admit_live", lambda **_kwargs: {"route": "open"})
+    monkeypatch.setattr(pr_repair, "append_event", lambda *_args: None)
+    composed = {}
+
+    def repair_child(**kwargs):
+        inputs = kwargs["extra_inputs"]
+        composed.update(inputs)
+        intent = pr_repair_receipts.build_push_intent(
+            **target, repair_kind=inputs["repair_kind"],
+            start_head_sha=inputs["head_sha"], target_head_sha="c" * 40,
+            **{key: inputs[key] for key in fields},
+        )
+        composed["intent"] = intent
+        return handle_repair_boundary(
+            "summarize_pr_repair", {**inputs, "branch": kwargs["branch"]},
+            {"finalize_repair_tests": {"route": "publish"},
+             "push": {"ok": True, "head_sha": "c" * 40,
+                      "repair_push_intent_sha256": intent["intent_sha256"]}},
+            {"repo": kwargs["repo"], "pr_number": kwargs["pr"]},
+        )
+
+    monkeypatch.setattr(pr_repair, "run_path", repair_child)
+    repaired = run_pr_repair_department.run(selected, config_path=None, live=False)
+    assert {key: composed[key] for key in fields} == fields
+    assert composed["review"] == decision
+    assert composed["intent"]["start_head_sha"] == head
+    assert composed["intent"]["target_head_sha"] == "c" * 40
+    assert repaired["route"] == "planned", repaired
+    assert repaired["reason"] == "repair_push_not_live"
+    result = repaired["repair"]["result"]
+    assert result["terminal"] == "publish"
+    assert result["published"] is True
+    if expected_kind == "review":
+        assert {key: result[key] for key in fields} == fields
+    else:
+        assert {key: result.get(key, empty) for key, empty in fields.items()} == fields
+    assert repaired["attempts"] == 0
+    assert not list((tmp_path / "receipts").rglob("*.json"))
+
     if expected_kind == "ci":
         # Empty handoff authority must not mean accepting nonempty CI fields.
         for field, value in {
@@ -107,3 +154,40 @@ if real is not None:v=real"""
             )
             assert denied["route"] == "fail_closed"
             assert denied["reason"] == "ci_repair_contains_review_handoff"
+            with pytest.raises(ValueError, match="CI repair push intent cannot contain review handoff"):
+                pr_repair_receipts.build_push_intent(
+                    **target, repair_kind="ci", start_head_sha=head,
+                    target_head_sha="c" * 40, **{**fields, field: value},
+                )
+
+
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("contaminated", [False, True])
+def test_repair_summary_preserves_explicit_ci_authority(nested, contaminated):
+    from lokay.organ.repair_boundary import handle_repair_boundary
+
+    empty = {
+        "task": {}, "findings": [], "reviewed_head_sha": "",
+        "task_identity_sha256": "", "review_result_sha256": "",
+    }
+    approval = {
+        "task": {"number": 42}, "findings": [], "reviewed_head_sha": "a" * 40,
+        "task_identity_sha256": "b" * 64, "review_result_sha256": "d" * 64,
+    }
+    authority = {**empty, **({"review_result_sha256": "d" * 64} if contaminated else {})}
+    inputs = {"repair_kind": "ci", "head_sha": "a" * 40,
+              "branch": "ai/fix/42-task", "review": approval, **authority}
+    if nested:
+        inputs.update(approval)
+        inputs["select_pr_repair_department"] = authority
+    result = handle_repair_boundary(
+        "summarize_pr_repair", inputs,
+        {"finalize_repair_tests": {"route": "publish"},
+         "push": {"ok": True, "head_sha": "c" * 40}},
+        {"repo": "o/r", "pr_number": 9},
+    )
+    assert result is not None
+    assert result["ok"] is (not contaminated)
+    assert result["result"]["terminal"] == (
+        "ci_repair_identity_invalid" if contaminated else "publish"
+    )

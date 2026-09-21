@@ -133,8 +133,11 @@ def handle_repair_boundary(
         from lokay.proc.summarize_pr_repair import summarize
 
         selected = dict(inputs.get("select_pr_repair_department") or {})
-        selected_task = dict(selected.get("task") or inputs.get("task") or {})
-        selected_review = dict(selected.get("review") or inputs.get("review") or {})
+        selected_review = dict(selected.get("review", inputs.get("review")) or {})
+        # Overlay by key presence: explicit empty CI authority must override
+        # retained approval evidence and any less-specific input handoff.
+        handoff = {**inputs, **selected}
+        selected_task = dict(handoff.get("task") or {})
         repair_kind = str(selected.get("repair_kind") or inputs.get("repair_kind") or "")
         start_head_sha = str(
             selected.get("repair_start_head_sha") or inputs.get("repair_start_head_sha")
@@ -153,10 +156,10 @@ def handle_repair_boundary(
                 "start_head_sha": start_head_sha,
                 "head_sha": str(selected.get("head_sha") or inputs.get("head_sha") or ""),
                 "task": selected_task,
-                "findings": list(selected.get("findings") or inputs.get("findings") or []),
-                "reviewed_head_sha": str(selected.get("reviewed_head_sha") or inputs.get("reviewed_head_sha") or ""),
-                "task_identity_sha256": str(selected.get("task_identity_sha256") or inputs.get("task_identity_sha256") or ""),
-                "review_result_sha256": str(selected.get("review_result_sha256") or inputs.get("review_result_sha256") or selected_review.get("review_result_sha256") or ""),
+                "findings": list(handoff.get("findings") or []),
+                "reviewed_head_sha": str(handoff.get("reviewed_head_sha") or ""),
+                "task_identity_sha256": str(handoff.get("task_identity_sha256") or ""),
+                "review_result_sha256": str(handoff.get("review_result_sha256", selected_review.get("review_result_sha256")) or ""),
                 "repair_push_intent_sha256": str((up.get("push") or {}).get("repair_push_intent_sha256") or ""),
                 **({"repair_kind": repair_kind, "head_sha": start_head_sha}
                    if repair_kind == "ci" else {}),
