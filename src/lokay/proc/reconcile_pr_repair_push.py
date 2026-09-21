@@ -117,7 +117,13 @@ def reconcile_pending(
             if selected_path.exists() and selected_path.stat().st_size > _RECEIPT_COMPATIBILITY_MAX_BYTES:
                 raise ValueError("selected repair receipt exceeds compatibility bound")
             current = pr_repair_receipts.read(*identities[0], state_dir=state_dir)
-            if live and not current.get("pending_push") and not current.get("publication_checkpoint"):
+            # A confirmed checkpoint is historical evidence, not proof that a
+            # later repair reached its own checkpoint before crashing. Discovery
+            # still verifies exact lineage and archives the predecessor under lock.
+            if live and not current.get("pending_push") and (
+                not current.get("publication_checkpoint")
+                or current.get("checkpoint_terminal") == "confirmed_target"
+            ):
                 legacy = recover_legacy(repo=identities[0][0], pr=identities[0][1],
                                         branch=str(selected["branch"]), state_dir=state_dir, budget=budget)
                 if legacy.get("route") == "fail_closed":
