@@ -694,19 +694,17 @@ def _repair_worktree_identity(
     common = Path(common_raw)
     if not common.is_absolute():
         common = worktree / common
-    status = runner.run(
-        git_spec(["status", "--porcelain=v1", "--untracked-files=all"], cwd=worktree, timeout_seconds=60),
-        live=True,
-    )
-    if (
-        head != expected_sha
-        or attached != branch
-        or common.resolve() != (clone / ".git").resolve()
-        or status.returncode != 0
-        or (status.stdout or "").strip()
-        or (status.stderr or "").strip()
-    ):
+    if head != expected_sha:
         raise RuntimeError("repair worktree does not match recorded repair SHA")
+    if attached != branch or common.resolve() != (clone / ".git").resolve():
+        raise RuntimeError("repair worktree branch or repository identity mismatch")
+    from lokay.repair_worktree_dirt import repair_worktree_dirt
+
+    dirt = repair_worktree_dirt(runner, worktree)
+    if dirt == "unavailable":
+        raise RuntimeError("repair worktree status unavailable")
+    if dirt == "product":
+        raise RuntimeError("repair worktree has product dirt")
 
 
 def ensure_repair_worktree(
