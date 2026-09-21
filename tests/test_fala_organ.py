@@ -356,13 +356,11 @@ def test_pr_merge_skipped_suite_still_merges(tmp_path, monkeypatch):
         {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
         {
             "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
+            "test_local": {**_skip_test_local(), "tested_head_sha": "a" * 40},
             "publish_pr_review": {
-                "ok": True,
-                "skipped": True,
-                "reason": "llm_review_not_required",
-                "merge_ok": True,
+                "ok": True, "merge_ok": True,
+                "decision": {"verdict": "approve", "reviewed_head_sha": "a" * 40},
             },
-            "test_local": _skip_test_local(),
         },
     )
     assert merged["merged"] is True
@@ -373,8 +371,9 @@ def test_pr_merge_passes_issue_only_when_known(tmp_path, monkeypatch):
     cfg = _config(tmp_path, required=False, executor=False)
     up = {
         "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
-        "publish_pr_review": {"ok": True, "merge_ok": True},
-        "test_local": _ok_test_local(),
+        "publish_pr_review": {"ok": True, "merge_ok": True,
+                              "decision": {"verdict": "approve", "reviewed_head_sha": "a" * 40}},
+        "test_local": {**_ok_test_local(), "tested_head_sha": "a" * 40},
     }
 
     for issue in (23, None):
@@ -391,6 +390,7 @@ def test_pr_merge_passes_issue_only_when_known(tmp_path, monkeypatch):
         merged = fala_organ._handle("pr_merge", inputs, up)
 
         assert merged["merged"] is True
+        assert called[0][called[0].index("--expected-head-sha") + 1] == "a" * 40
         assert ("--issue" in called[0]) is (issue is not None)
         if issue is not None:
             assert called[0][called[0].index("--issue") + 1] == str(issue)

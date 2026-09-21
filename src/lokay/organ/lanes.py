@@ -2,11 +2,47 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import Any
 
 from lokay.organ.common import (
     _require_test_local,
 )
+
+
+def _clean_head(worktree: str) -> str:
+    """Read a clean local commit; do not turn mutable worktree contents into evidence."""
+    from lokay.code.pr import require_head_sha
+
+    def git(*args: str) -> str:
+        return subprocess.check_output(
+            ["git", "-C", worktree, *args], text=True, stderr=subprocess.PIPE,
+            timeout=30,
+        ).strip()
+
+    head = require_head_sha(git("rev-parse", "HEAD"))
+    if git("status", "--porcelain", "--untracked-files=all"):
+        raise ValueError("local test worktree is dirty")
+    return head
+
+
+def run_merge_tests(run, *, review: dict, **kwargs) -> dict:
+    """Attest the existing test child at its execution boundary (including cache/skip)."""
+    from lokay.code.pr import require_head_sha
+
+    try:
+        head = require_head_sha((review.get("decision") or {}).get("reviewed_head_sha"))
+        if _clean_head(kwargs["worktree"]) != head:
+            raise ValueError("local test head differs from reviewed head")
+        result = run(**kwargs)
+        if _clean_head(kwargs["worktree"]) != head:
+            raise ValueError("local test head changed during verification")
+    except (ValueError, LookupError, OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "skipped": True, "waiting": True,
+                "reason": "merge_test_identity_unverified", "error": str(exc)}
+    if result.get("ok") is True and result.get("passed") is not False:
+        result = {**result, "tested_head_sha": head}
+    return result
 
 
 def handle_lanes(
@@ -84,10 +120,31 @@ def handle_lanes(
         refused = _require_test_local(up)
         if refused is not None:
             return refused
-        argv = [*cfg, *live, "--repo", repo, "--pr", str(pr_number)]
+        from lokay.code.pr import require_head_sha
+
+        try:
+            head = require_head_sha((review.get("decision") or {}).get("reviewed_head_sha"))
+            tested = (up.get("test_local") or {}).get("tested_head_sha")
+            if tested != head:
+                raise ValueError("local tests are not bound to the reviewed head")
+            if review.get("head_sha") not in (None, head):
+                raise ValueError("published review head differs from reviewed head")
+            if checks.get("head_sha") not in (None, head):
+                raise ValueError("checks head differs from reviewed head")
+        except (ValueError, LookupError) as exc:
+            return {"ok": True, "skipped": True, "waiting": True,
+                    "reason": "merge_head_unverified", "error": str(exc)}
+        argv = [*cfg, *live, "--repo", repo, "--pr", str(pr_number),
+                "--expected-head-sha", head]
         if issue_number is not None:
             argv.extend(["--issue", str(issue_number)])
-        return _run_atom_main(pr_merge.main, argv)
+        result = _run_atom_main(pr_merge.main, argv)
+        if not result.get("ok"):
+            # No retry with a fresh tip: next pass re-enters SHA-bound review.
+            return {"ok": True, "skipped": True, "waiting": True,
+                    "reason": "merge_not_confirmed", "error": result.get("error"),
+                    "reviewed_head_sha": head}
+        return result
 
     if atom == "publish_delivery_receipt":
         from lokay.proc.publish_delivery_receipt import publish

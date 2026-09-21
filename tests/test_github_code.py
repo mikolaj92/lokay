@@ -175,7 +175,7 @@ def test_github_plugin_clones_and_merges_from_one_target(tmp_path: Path) -> None
     assert rows[0].head == "ai/fix/7-parser"
     assert rows[0].target == host.target
 
-    merged = contract.pr.merge_commit(7)
+    merged = contract.pr.merge_commit(7, expected_head_sha="a" * 40)
     assert merged.state == "merged"
     assert merged.merge_method == "merge"
     assert merged.merge_method != "squash"
@@ -183,6 +183,8 @@ def test_github_plugin_clones_and_merges_from_one_target(tmp_path: Path) -> None
     assert merge_calls
     assert "--merge" in merge_calls[0]
     assert "--squash" not in merge_calls[0]
+    assert "--admin" not in merge_calls[0]
+    assert merge_calls[0][-2:] == ("--match-head-commit", "a" * 40)
     assert "7" in merge_calls[0]
     assert "mikolaj92/lokay" in merge_calls[0]
 
@@ -193,7 +195,7 @@ def test_load_code_from_catalog_field(tmp_path: Path) -> None:
     contract = load_code(slot_from_repo(cfg.repos[0]), runner=runner, config=cfg, live=True)
     assert contract.target == CodeTarget(plugin="github", id="mikolaj92/lokay")
     contract.repo.clone()
-    contract.pr.merge_commit(7)
+    contract.pr.merge_commit(7, expected_head_sha="a" * 40)
     assert any(argv[:3] == ("gh", "repo", "clone") for argv in runner.calls)
     assert any("--merge" in argv for argv in runner.calls)
 

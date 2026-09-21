@@ -5,10 +5,18 @@ No tasks. No clone. Merge is merge-commit, not squash.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
 from lokay.code.contract import CodeError, CodeTarget
+
+
+def require_head_sha(value: object) -> str:
+    """Merge preconditions must name an immutable commit, never a branch/ref."""
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value):
+        raise CodeError("expected_head_sha must be a full commit SHA")
+    return value
 
 
 @dataclass(frozen=True)
@@ -57,8 +65,8 @@ class PrBlock(Protocol):
         """Add a review comment."""
         ...
 
-    def merge_commit(self, number: int) -> Change:
-        """Merge with a merge commit. Not squash."""
+    def merge_commit(self, number: int, *, expected_head_sha: str) -> Change:
+        """Compare-and-merge exactly this reviewed/tested commit. Not squash."""
         ...
 
     def close(self, number: int) -> Change:

@@ -18,6 +18,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", required=True)
     p.add_argument("--pr", required=True, type=int)
     p.add_argument("--issue", type=int)
+    p.add_argument("--expected-head-sha", default="")
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     live = mutations_allowed(live_flag=args.live, cfg=cfg)
@@ -31,8 +32,11 @@ def main(argv: list[str] | None = None) -> int:
         root = getattr(cfg, "worktrees_root", None)
         repo = RepoConfig(name=args.repo, clone_path=Path(root or "/tmp") / "unused")
     try:
+        from lokay.code.pr import require_head_sha
+
+        require_head_sha(args.expected_head_sha)
         contract = load_code(repo, runner=runner(), config=cfg, live=live)
-        contract.pr.merge_commit(args.pr)
+        contract.pr.merge_commit(args.pr, expected_head_sha=args.expected_head_sha)
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     parked = None
@@ -54,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo,
             pr=args.pr,
             merged=live,
+            reviewed_head_sha=args.expected_head_sha,
             issue=args.issue,
             parked=parked,
         )

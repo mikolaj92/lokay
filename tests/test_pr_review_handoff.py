@@ -217,7 +217,7 @@ def test_two_repairs_force_fresh_sha_three_review_before_one_merge(monkeypatch, 
 
     merges = []
     contract = SimpleNamespace(pr=SimpleNamespace(
-        merge_commit=lambda number: merges.append(number),
+        merge_commit=lambda number, *, expected_head_sha: merges.append((number, expected_head_sha)),
     ))
     cfg = Config(
         mode="live", merge_enabled=True,
@@ -228,6 +228,7 @@ def test_two_repairs_force_fresh_sha_three_review_before_one_merge(monkeypatch, 
     monkeypatch.setattr(pr_merge, "runner", lambda: object())
     monkeypatch.setattr(pr_merge, "load_code", lambda *_args, **_kwargs: contract)
 
-    assert pr_merge.main(["--repo", repo, "--pr", str(pr), "--live"]) == 0
-    assert merges == [pr]
+    assert pr_merge.main(["--repo", repo, "--pr", str(pr), "--live",
+                          "--expected-head-sha", sha3]) == 0
+    assert merges == [(pr, sha3)]
     assert resolve_sha_review({"head_sha": sha3, "comments": comments})["route"] == "agent"
