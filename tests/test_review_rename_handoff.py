@@ -39,13 +39,21 @@ def test_plugin_to_host_accepts_exact_rename_identity(findings, verdict):
     assert validated['decision']['verdict'] == verdict
 
 
-@pytest.mark.parametrize('drift', ['old_name_anchor', 'outside_hunk', 'coverage_old_name'])
+@pytest.mark.parametrize('drift', ['old_name_anchor', 'outside_hunk', 'coverage_old_name', 'ambiguous_destination'])
 def test_rename_does_not_relax_anchor_or_identity(drift):
     request, result = renamed_review()
     if drift == 'old_name_anchor':
         result['findings'][0]['path'] = 'src/old.py'
     elif drift == 'outside_hunk':
         result['findings'][0].update(start_line=99, end_line=99)
-    else:
+    elif drift == 'coverage_old_name':
         result['coverage']['reviewable_paths'][0]['old_path'] = 'src/wrong.py'
+    else:
+        # Even matching inventories cannot authorize an ambiguous destination.
+        duplicate = {'path': 'src/demo.py', 'old_path': 'src/another.py', 'status': 'renamed'}
+        request['diff_paths'].append(duplicate)
+        result['diff_paths'].append(dict(duplicate))
+        result['coverage']['reviewable_paths'].append(dict(duplicate))
+        for key in ('selected', 'completed'):
+            result['coverage'][key].append({'path': duplicate['path'], 'old_path': duplicate['old_path']})
     assert validate_result(result, request)['route'] == 'fail_closed'
