@@ -3,6 +3,8 @@
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from lokay.proc.select_pr_repair_department import select as select_repair
 from lokay.proc.select_pr_triage_verdict import classify, select
 from lokay.proc.summarize_pr_triage_department import summarize
@@ -344,6 +346,30 @@ def test_disabled_repair_does_not_touch_sieve_feedback(tmp_path) -> None:
     assert out["route"] == "skip"
     assert out["reason"] == "pr_repair_disabled"
     assert receipt["repair_started"] is False
+
+
+@pytest.mark.parametrize("reason,waiting,keep", [
+    ("merge_not_confirmed", True, True),
+    ("merge_head_unverified", True, True),
+    ("future_wait_reason", True, True),
+    ("review_fail_closed", False, False),
+    ("ocr_contract_rejected: review has warnings", False, False),
+])
+def test_final_queue_stamp_preserves_child_wait_without_verdict_copy(reason, waiting, keep):
+    from lokay.proc.walk_pr_leftover import classify_occupancy
+
+    row = {"repo": "owner/repo", "pr": 7, "branch": "ai/fix/7", "head_sha": "b" * 40}
+    receipt = summarize(
+        {**row, "route": "pr", "leftover_prs": []},
+        {"triage": {"waiting": waiting, "reason": reason}},
+        {"route": "completed", "verdict": "feedback", "reason": reason},
+        {"route": "review"},
+    )
+    assert receipt["waiting"] is waiting
+    assert receipt["result"]["waiting"] is waiting
+    assert classify_occupancy(receipt)["keep"] is keep
+    assert receipt["leftover_prs"] == ([row] if keep else [])
+    assert ("skipped_head_sha" not in receipt) is keep
 
 
 def test_department_graph_has_no_repair_child() -> None:

@@ -106,6 +106,19 @@ def test_pending_checks_keep() -> None:
     assert not consumes({"route": "completed", "verdict": "repair", "repairable": True})
 
 
+@pytest.mark.parametrize("reason", ["merge_not_confirmed", "merge_head_unverified", "future_wait_reason"])
+def test_structured_wait_keeps_normalized_feedback(reason):
+    receipt = {"route": "completed", "verdict": "feedback", "reason": reason}
+    assert classify_occupancy({**receipt, "waiting": True}) == {"class": "pending", "keep": True}
+    assert consumes({**receipt, "waiting": False})
+
+
+def test_wait_does_not_override_merge_repair_or_incomplete_class():
+    assert classify_occupancy({"waiting": True, "verdict": "merge"}) == {"class": "merge", "keep": False}
+    assert classify_occupancy({"waiting": True, "verdict": "repair"}) == {"class": "repair", "keep": True}
+    assert classify_occupancy({"waiting": True, "reason": "ocr_timed_out"}) == {"class": "incomplete", "keep": True}
+
+
 def test_after_skipped_sha_returns_the_rest() -> None:
     listed = [KIT_39, VIBE_30, SPLOT_55]
     rest = after(listed, KIT_39)
