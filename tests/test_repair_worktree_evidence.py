@@ -11,7 +11,7 @@ from lokay.config import Config, RepoConfig
 from lokay.git_commit import commit_all
 from lokay.git_worktree import _repair_worktree_identity, ensure_repair_worktree, worktree_dir
 from lokay.proc.worktree_add import verify_repair_start_identity
-from lokay.runner import Runner
+from lokay.runner import CommandResult, Runner
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -131,6 +131,126 @@ def test_product_dirt_is_not_evidence_and_is_preserved(implementation, gate, dir
     assert git(tree, "rev-parse", "HEAD").strip() == sha
     assert git(tree, "status", "--porcelain=v1", "-z", "--untracked-files=all") == before
     assert git(tree, "diff", "HEAD", "--binary") == diff
+
+
+@pytest.mark.parametrize("case", [
+    "clean", "evidence", "staged_evidence", "product", "conflict", "symlink",
+    "staged_symlink", "parent_symlink", "branch", "status_unavailable", "unchanged",
+])
+def test_product_commit_to_repair_publication(implementation, tmp_path, monkeypatch, case):
+    from lokay.organ.lanes import _clean_head
+    from lokay.organ.publication import handle_publication
+    from lokay.proc import pr_repair_receipts as receipts
+
+    clone, tree, _, repo, branch, start = implementation
+    # Admission and local attestation accept the producer's exact host evidence.
+    assert admit(implementation, "preflight")["route"] == "ready"
+    assert _clean_head(str(tree)) == start
+    if case != "unchanged":
+        (tree / "product.py").write_text("value = 43\n")
+        assert commit_all(Runner(), tree, "repair", live=True)
+    target = git(tree, "rev-parse", "HEAD").strip()
+    if case == "clean":
+        # A clean control uses a fresh checkout, never cleans the product worktree.
+        clean_tree = tmp_path / "clean"
+        git(tree, "clone", "-q", "--branch", branch, str(clone), str(clean_tree))
+        tree = clean_tree
+    elif case == "staged_evidence":
+        git(tree, "add", ".lokay/approach.md", ".lokay/localize.json")
+    elif case == "product":
+        (tree / "product.py").write_text("uncommitted user work\n")
+    elif case == "conflict":
+        blob = git(tree, "rev-parse", "HEAD:.lokay/approach.md").strip()
+        subprocess.run(
+            ["git", "-C", str(tree), "update-index", "--index-info"],
+            input="0 " + "0" * 40 + "\t.lokay/approach.md\n" + "".join(
+                f"100644 {blob} {stage}\t.lokay/approach.md\n" for stage in (1, 2, 3)
+            ), text=True, check=True,
+        )
+    elif case in {"symlink", "staged_symlink"}:
+        plan = tree / ".lokay/approach.md"
+        plan.unlink()
+        plan.symlink_to("../product.py")
+        if case == "staged_symlink":
+            git(tree, "add", ".lokay/approach.md")
+            plan.unlink()
+            plan.write_text("regular working evidence\n")
+    elif case == "parent_symlink":
+        external = tmp_path / "evidence"
+        (tree / ".lokay").rename(external)
+        (tree / ".lokay").symlink_to(external, target_is_directory=True)
+
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "-q", "--bare", str(remote))
+    git(tree, "remote", "set-url", "origin", str(remote))
+    config = tmp_path / "config.yaml"
+    state = tmp_path / "state"
+    config.write_text(
+        f"mode: live\nstate:\n  path: {state / 'state.jsonl'}\n"
+        f"repos:\n  - name: {repo.name}\n    clone_path: {clone}\n"
+    )
+    pushes = []
+
+    class LocalRunner(Runner):
+        def run(self, spec, *, live):
+            assert spec.argv[0] == "git", spec
+            if "status" in spec.argv and case == "status_unavailable":
+                return CommandResult(spec, True, 1, stderr="status unavailable")
+            if "push" in spec.argv:
+                # Read the real on-disk intent at the physical push boundary.
+                pending = receipts.read(repo.name, 57, state_dir=state)["pending_push"]
+                assert pending["push_attempted"] is True
+                assert pending["start_head_sha"] == start
+                assert pending["target_head_sha"] == target
+                assert pending["repo"] == repo.name
+                assert pending["branch"] == branch
+                assert pending["pr"] == 57
+                pushes.append(spec.argv)
+            return super().run(spec, live=live)
+
+    run = LocalRunner()
+    monkeypatch.setattr("lokay.proc._common.runner", lambda *_a: run)
+    monkeypatch.setattr("lokay.proc.push_branch.runner", lambda: run)
+    monkeypatch.setattr("lokay.proc._common.mutations_allowed", lambda **_kw: True)
+    monkeypatch.setattr("lokay.proc.push_branch.mutations_allowed", lambda **_kw: True)
+    status = git(tree, "--no-optional-locks", "status", "--porcelain=v1", "-z")
+    index_path = Path(git(tree, "rev-parse", "--absolute-git-dir").strip()) / "index"
+    index = index_path.read_bytes()
+    evidence = [(tree / path).read_bytes() for path in (".lokay/approach.md", ".lokay/localize.json")]
+    inputs = {"live": True, "config_path": str(config), "head_sha": start, "repair_kind": "ci"}
+    up = {
+        "worktree_add": {"worktree": str(tree), "branch": branch if case != "branch" else "ai/fix/other"},
+        "commit_initial_repair": {"committed": True},
+        "test_local": {"ok": True, "passed": True},
+        "assert_real_diff": {"ok": True, "real": True},
+    }
+    out = handle_publication("push", inputs, up, {
+        "cfg": ["--config", str(config)], "live": ["--live"], "repo": repo.name,
+        "issue_number": None, "pr_number": 57, "repair_mode": True, "branch": branch,
+    })
+    assert out is not None
+    if case in {"clean", "evidence", "staged_evidence"}:
+        assert out["ok"] is True, out
+        assert len(pushes) == 1
+        assert pushes[0] == ("git", "push", "-u", "origin", branch)
+        assert git(remote, "rev-parse", f"refs/heads/{branch}").strip() == target
+        assert out["head_sha"] == target
+        pending = receipts.read(repo.name, 57, state_dir=state)["pending_push"]
+        assert out["repair_push_intent_sha256"] == pending["intent_sha256"]
+    else:
+        assert out["ok"] is False, out
+        assert out["reason"] == {
+            "branch": "repair_push_local_branch_mismatch",
+            "unchanged": "repair_push_no_new_sha",
+        }.get(case, "repair_push_worktree_dirty")
+        assert pushes == []
+        assert not receipts.receipt_path(repo.name, 57, state_dir=state).exists()
+        assert git(remote, "for-each-ref") == ""
+    assert git(tree, "rev-parse", "HEAD").strip() == target
+    assert git(tree, "branch", "--show-current").strip() == branch
+    assert git(tree, "--no-optional-locks", "status", "--porcelain=v1", "-z") == status
+    assert index_path.read_bytes() == index
+    assert [(tree / path).read_bytes() for path in (".lokay/approach.md", ".lokay/localize.json")] == evidence
 
 
 @pytest.mark.parametrize("identity", ["sha", "branch", "repository"])

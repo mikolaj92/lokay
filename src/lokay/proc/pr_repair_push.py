@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from lokay.proc import pr_repair_receipts
+from lokay.repair_worktree_dirt import repair_worktree_dirt
 
 _SHA = re.compile(r"^[a-f0-9]{40}$")
 
@@ -54,9 +55,7 @@ def prepare_live_push(
         branch_status, local_branch, branch_error = _git_value(
             command_runner, path, "symbolic-ref", "--quiet", "--short", "HEAD"
         )
-        clean_status, dirty, clean_error = _git_value(
-            command_runner, path, "status", "--porcelain=v1", "--untracked-files=all"
-        )
+        dirt = repair_worktree_dirt(command_runner, path)
     except Exception as exc:
         return {
             "ok": False, "route": "fail_closed",
@@ -68,7 +67,7 @@ def prepare_live_push(
     target = target.lower()
     if branch_status != 0 or branch_error or local_branch != branch:
         return {"ok": False, "route": "fail_closed", "reason": "repair_push_local_branch_mismatch"}
-    if clean_status != 0 or clean_error or dirty:
+    if dirt not in {"clean", "evidence"}:
         return {"ok": False, "route": "fail_closed", "reason": "repair_push_worktree_dirty"}
     if target == start:
         return {"ok": False, "route": "fail_closed", "reason": "repair_push_no_new_sha"}
