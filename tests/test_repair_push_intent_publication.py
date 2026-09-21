@@ -92,6 +92,7 @@ def test_repair_push_intent_is_fsynced_and_marked_before_push(
     ), raising=False)
     monkeypatch.setattr("lokay.proc.pr_repair_push.mutations_allowed", lambda **_kwargs: True, raising=False)
     monkeypatch.setattr("lokay.preflight.require_healthy", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("lokay.proc.pr_repair_push.repair_worktree_dirt", lambda *_args: "clean")
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     monkeypatch.setattr(
@@ -153,6 +154,7 @@ def test_repair_push_is_not_attempted_when_intent_cannot_be_recorded(
     )
     monkeypatch.setattr("lokay.proc.pr_repair_push.mutations_allowed", lambda **_kwargs: True, raising=False)
     monkeypatch.setattr("lokay.preflight.require_healthy", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("lokay.proc.pr_repair_push.repair_worktree_dirt", lambda *_args: "clean")
     monkeypatch.setattr("lokay.proc.pr_repair_push.make_runner", lambda _cfg: object(), raising=False)
     monkeypatch.setattr(
         "lokay.proc.pr_repair_push._git_value",
