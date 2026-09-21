@@ -395,7 +395,7 @@ def test_pr_review_config_rejects_github_credentials_and_unknown_pin(tmp_path: P
     )
     errors = cfg.validate()
     assert any("forbidden name" in item for item in errors)
-    assert any("pinned to v1.12.0" in item for item in errors)
+    assert any("pinned to v1.12.7" in item for item in errors)
 
 
 def test_live_allows_missing_clone_in_validate(tmp_path: Path):

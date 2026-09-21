@@ -119,7 +119,8 @@ still require real diff, local verification and publication gates.
 | `pr_repair_retry_agent` | entropy | Failed repair contract → corrected changes |
 | `evidence_repair_agent` | entropy | Requested repair evidence → scoped changes |
 | `pr_test_repair_agent` | entropy | PR test failure → scoped repair |
-| `pr_review_agent` | entropy | Exact SHA and evidence → neutral OpenCodeReview JSON, Lokay verdict |
+| `select_pr_review_scope` | deterministic | Exact host diff → OCR v1.12.7 `review --preview` → required scope ready / fail_closed |
+| `pr_review_agent` | entropy | Exact SHA and admitted scope → one OCR v1.12.7 `review` → neutral JSON, independent Lokay validator (no plugin imports) |
 | `evidence_review_agent` | entropy | SHA-bound additional evidence → review verdict |
 | `self_repair_run_agent` | entropy | Factory incident and scope → candidate code repair |
 

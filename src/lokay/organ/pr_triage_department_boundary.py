@@ -60,5 +60,6 @@ def handle_pr_triage_department(
             up.get("run_pr_sieve") or {},
             up.get("select_pr_triage_verdict") or {},
             up.get("reconcile_pr_repair_push") or {},
+            incomplete_retry_position=str(inputs.get("incomplete_retry_position") or "head"),
         )
     return None

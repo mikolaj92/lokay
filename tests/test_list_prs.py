@@ -8,6 +8,7 @@ import pytest
 
 from lokay.code import github as github_code
 from lokay.proc import list_prs
+from lokay.models import PullRequest
 
 
 def _cfg(tmp_path: Path) -> SimpleNamespace:
@@ -25,7 +26,7 @@ def test_list_prs_still_lists_lokay(
     cfg = _cfg(tmp_path)
     sentinel_runner = object()
     seen: list[tuple[object, object, object, bool]] = []
-    pr = SimpleNamespace(number=453, title="", body="", head_ref="ai/fix/453", to_dict=lambda: {"number": 453})
+    pr = PullRequest.from_dict({"repo": "mikolaj92/lokay", "number": 453, "head_ref": "ai/fix/453", "head_sha": "abc123"})
 
     monkeypatch.setattr(list_prs, "load_cfg", lambda _args: cfg)
     monkeypatch.setattr(list_prs, "read_live", lambda _args: True)
@@ -46,5 +47,5 @@ def test_list_prs_still_lists_lokay(
     assert seen[0][3] is True
     payload = json.loads(capsys.readouterr().out)
     assert payload["repo"] == "mikolaj92/lokay"
-    assert payload["prs"] == [{"number": 453}]
+    assert payload["prs"] == [pr.to_dict()]
     assert payload["count"] == 1

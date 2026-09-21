@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from typing import Any
 
@@ -35,6 +34,8 @@ def publish(
         return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_missing"}
 
     head = str(viewed.get("headRefOid") or "")
+    if any(provisional.get(key) != value for key, value in (("repo", repo), ("issue", issue), ("head_sha", head))):
+        return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_identity_mismatch"}
     merge_sha = str((viewed.get("mergeCommit") or {}).get("oid") or "")
     merged_at = str(viewed.get("mergedAt") or "")
     issue_closed = str(read_issue(repo, issue).get("state") or "").upper() == "CLOSED"
@@ -48,14 +49,15 @@ def publish(
         }
 
     complete = finalize_receipt(
-        {**provisional, "head_sha": head},
+        provisional,
         merge_sha=merge_sha,
         merged_at=merged_at,
         issue_closed=issue_closed,
         main_contains_head=on_main,
     )
     final_body = PATTERN.sub(lambda _match: marker(complete), body, count=1)
-    edit_pr(repo, pr, final_body)
+    if final_body != body:
+        edit_pr(repo, pr, final_body)
     return {
         "ok": True,
         "route": "confirmed",

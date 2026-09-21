@@ -32,16 +32,52 @@ def _request():
 
 def _result():
     request = _request()
-    preview = json.loads((FIXTURES / "preview-complete.json").read_text())
     upstream = json.loads((FIXTURES / "review-complete.json").read_text())
     upstream["manifest"]["repository"]["identity_sha256"] = __import__("hashlib").sha256(b"github.com/acme/demo").hexdigest()
     result = normalize_result(
-        request, preview, upstream,
-        engine={"name": "open-code-review", "version": "v1.12.0", "binary_sha256": "f" * 64,
+        request, upstream,
+        engine={"name": "open-code-review", "version": "v1.12.7", "binary_sha256": "f" * 64,
                 "provider": "example-provider", "model": "example-model", "config_sha256": "9" * 64},
         changed_ranges=request["changed_ranges"],
     )
     return request, result
+
+
+def test_vendor_comments_close_review_as_request_changes_when_budget_is_partial():
+    request = _request()
+    upstream = json.loads((FIXTURES / "review-complete.json").read_text())
+    upstream["manifest"]["repository"]["identity_sha256"] = __import__("hashlib").sha256(
+        b"github.com/acme/demo"
+    ).hexdigest()
+    upstream["summary"]["budget_exceeded"] = True
+    upstream["status"] = "partial"
+    upstream["manifest"]["terminal_state"] = "partial"
+    result = normalize_result(
+        request, upstream,
+        engine={"name": "open-code-review", "version": "v1.12.7", "binary_sha256": "f" * 64,
+                "provider": "example-provider", "model": "example-model", "config_sha256": "9" * 64},
+        changed_ranges=request["changed_ranges"],
+    )
+    result["coverage"]["reviewable_paths"] = [
+        {"path": "src/demo.py", "old_path": "", "status": "modified"}
+    ]
+    selected = validate_result(result, request)
+    assert selected["route"] == "valid"
+    assert selected["decision"]["verdict"] == "request_changes"
+    assert selected["decision"]["findings"]
+
+
+def test_host_validation_runs_without_plugin_import_path():
+    import subprocess
+    request, result = _result()
+    request["engine"]["version"] = "v1.12.7"
+    completed = subprocess.run(
+        [sys.executable, "-I", "-m", "lokay.proc.validate_pr_review",
+         "--result-json", json.dumps(result), "--request-json", json.dumps(request)],
+        capture_output=True, text=True,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert json.loads(completed.stdout)["decision"]["verdict"] == "request_changes"
 
 
 def test_policy_maps_every_finding_even_low_severity_to_request_changes():

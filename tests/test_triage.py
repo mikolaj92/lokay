@@ -275,6 +275,7 @@ def test_pr_triage_path_in_package():
         "classify_pr_triage_checks",
         "collect_pr_review_evidence",
         "resolve_sha_review",
+        "select_pr_review_scope",
         "pr_review_agent",
         "validate_pr_review",
         "pr_review_retry_agent",

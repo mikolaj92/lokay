@@ -33,8 +33,12 @@ def test_pr_review_diagram_captures_opencode_review_and_parent_repair_loop():
     end = readme.index("### Naprawa istniejącego PR — `pr_repair`", start)
     graph = readme[start:end]
 
-    assert "ResolveShaReview --> OpenCodeReviewPlugin" in graph
-    assert "OpenCodeReviewPlugin --> ValidateReviewResult" in graph
+    assert "ResolveShaReview --> SelectPrReviewScope" in graph
+    assert "SelectPrReviewScope --> OpenCodeReview" in graph
+    assert "SelectPrReviewScope --> HumanTerminal" in graph
+    assert "OpenCodeReview --> ValidateReviewResult" in graph
+    assert "ocr review" in graph
+    assert "OpenCodeReviewPlugin" not in graph
     assert "no retry" in graph
     assert "ValidateReviewResult --> HumanTerminal" in graph
     assert "ReviewVerdict --> RepairVerdict: REQUEST_CHANGES" in graph

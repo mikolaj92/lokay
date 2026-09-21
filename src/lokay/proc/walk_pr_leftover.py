@@ -157,7 +157,9 @@ def keep(rows: list | None, picked: dict | None) -> list[dict]:
     return leftover if seen else listed
 
 
-def leftover_after(picked: dict | None, receipt: dict | None) -> list[dict]:
+def leftover_after(
+    picked: dict | None, receipt: dict | None, *, incomplete_retry_position: str = "head",
+) -> list[dict]:
     """Consume drops the pick. Incomplete JSON and pending KEEP start at the pick."""
     picked = picked if isinstance(picked, dict) else {}
     rest = [
@@ -173,6 +175,8 @@ def leftover_after(picked: dict | None, receipt: dict | None) -> list[dict]:
         if picked.get(key) is not None
     }
     if head.get("repo") is not None and head.get("pr") is not None:
+        if incomplete_retry_position == "tail" and classify_occupancy(receipt)["class"] == "incomplete":
+            return [*rest, head]
         return [head, *rest]
     return rest
 
@@ -195,8 +199,10 @@ def queue(listed_rows: list | None, last: dict | None) -> list[dict]:
     skipped = skipped_identity(last)
     new_sha = [row for row in live_rows if _new_sha_of_skipped(row, skipped)]
     if leftover:
-        leftover_ids = {identity(row) for row in leftover if identity(row)}
-        kept = [live[key] for row in leftover if (key := identity(row)) in live]
+        live_prs = {identity(row)[:2]: row for row in live_rows}
+        kept = [live_prs[key[:2]] for row in leftover if (key := identity(row)) and key[:2] in live_prs]
+        kept = [row for row in kept if identity(row) != skipped and not _new_sha_of_skipped(row, skipped)]
+        leftover_ids = {identity(row) for row in kept}
         extra = [
             row
             for row in live_rows

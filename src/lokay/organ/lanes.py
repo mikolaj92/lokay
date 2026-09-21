@@ -90,14 +90,23 @@ def handle_lanes(
         return _run_atom_main(pr_merge.main, argv)
 
     if atom == "publish_delivery_receipt":
-        assert repo and pr_number is not None and issue_number is not None
         from lokay.proc.publish_delivery_receipt import publish
+        from lokay.config import load_config
+        from lokay.proc._common import runner as make_runner
+
+        closed = up.get("close_issue") or {}
+        if issue_number is None and closed.get("repo") == repo:
+            issue_number = closed.get("issue")
+        if not repo or type(pr_number) is not int or type(issue_number) is not int or issue_number < 1:
+            return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_identity_missing"}
+        receipt_cfg = load_config(str(inputs.get("config_path") or inputs.get("config") or "") or None)
+        carrier = make_runner(receipt_cfg)
 
         def read_pr(observed_repo: str, observed_pr: int) -> dict[str, Any]:
             from lokay.gh_prs import gh_json
 
             return gh_json(
-                runner(),
+                carrier,
                 [
                     "pr",
                     "view",
@@ -114,7 +123,7 @@ def handle_lanes(
             from lokay.gh_prs import gh_json
 
             return gh_json(
-                runner(),
+                carrier,
                 [
                     "issue",
                     "view",
@@ -132,7 +141,7 @@ def handle_lanes(
 
             return bool(
                 gh_text(
-                    runner(),
+                    carrier,
                     [
                         "api",
                         f"repos/{observed_repo}/compare/{head}...main",
@@ -149,7 +158,7 @@ def handle_lanes(
             from lokay.gh_prs import gh_text
 
             return gh_text(
-                runner(),
+                carrier,
                 [
                     "pr",
                     "edit",

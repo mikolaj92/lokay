@@ -11,6 +11,19 @@ from lokay.envelope import emit_exit, err, ok
 _SCHEMA = "lokay.review-result/1"
 
 
+def _path_identity(row: Mapping[str, Any]) -> tuple[str, str]:
+    """Host-owned neutral path identity; no vendor imports."""
+    path, old = row.get("path"), row.get("old_path", "")
+    for value in (path, old):
+        if not isinstance(value, str) or "\\" in value or "\x00" in value:
+            raise ValueError("invalid coverage path")
+        if value and any(part in {"", ".", ".."} for part in value.split("/")):
+            raise ValueError("invalid coverage path")
+    if not path:
+        raise ValueError("missing coverage path")
+    return path, old
+
+
 def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
     if result.get("ok") is not True or result.get("schema") != _SCHEMA:
         return err("unknown or unsuccessful review result", route="fail_closed")
@@ -28,7 +41,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         return err("review engine identity is missing", route="fail_closed")
     if (
         engine.get("name") != "open-code-review"
-        or engine.get("version") != "v1.12.0"
+        or engine.get("version") != "v1.12.7"
         or engine.get("binary_sha256") != requested_engine.get("binary_sha256")
         or engine.get("provider") != requested_engine.get("provider")
         or engine.get("model") != requested_engine.get("model")
@@ -103,8 +116,6 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         or coverage.get("reused") != []
     ):
         return err("review coverage is incomplete", route="fail_closed")
-    from lokay_review_open_code_review.contract import _path_identity
-
     try:
         selected_set = {_path_identity(row) for row in selected if isinstance(row, Mapping)}
         completed_set = {_path_identity(row) for row in completed if isinstance(row, Mapping)}

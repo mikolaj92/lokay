@@ -87,7 +87,7 @@ class Config:
     pr_review_sandbox_profile: Path | None = None
     pr_review_provider_env: list[str] = field(default_factory=list)
     pr_review_binary: Path | None = None
-    pr_review_binary_version: str = "v1.12.0"
+    pr_review_binary_version: str = "v1.12.7"
     pr_review_binary_sha256: str = ""
     pr_review_effort: str = "medium"
     pr_review_timeout_minutes: int = 30
@@ -202,8 +202,8 @@ class Config:
             errors.append("pr_review.effort must be low|medium|high")
         if self.pr_review_timeout_minutes < 1 or self.pr_review_max_tokens_budget < 1:
             errors.append("pr_review runtime limits must be finite and positive")
-        if self.pr_review_binary_version != "v1.12.0":
-            errors.append("pr_review.binary_version must be pinned to v1.12.0")
+        if self.pr_review_binary_version != "v1.12.7":
+            errors.append("pr_review.binary_version must be pinned to v1.12.7")
         forbidden_env = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
         for name in self.pr_review_provider_env:
             if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name) or name.startswith(forbidden_env):
@@ -466,7 +466,7 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_review_manifest=_expand(review["manifest"]) if review.get("manifest") else None,
         pr_review_provider_env=[str(item) for item in review.get("provider_env") or []],
         pr_review_binary=_expand(review["binary"]) if review.get("binary") else None,
-        pr_review_binary_version=str(review.get("binary_version", "v1.12.0")),
+        pr_review_binary_version=str(review.get("binary_version", "v1.12.7")),
         pr_review_binary_sha256=str(review.get("binary_sha256") or "").lower(),
         pr_review_effort=str(review.get("effort", "medium")),
         pr_review_timeout_minutes=int(review.get("timeout_minutes", 30)),

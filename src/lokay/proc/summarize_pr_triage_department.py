@@ -5,6 +5,7 @@ from lokay.proc.walk_pr_leftover import consumes, leftover_after
 
 def summarize(
     picked: dict, triage_run: dict, verdict: dict, recovery: dict | None = None,
+    *, incomplete_retry_position: str = "head",
 ) -> dict:
     recovered = dict(recovery or {})
     chosen = dict(verdict or {})
@@ -111,7 +112,7 @@ def summarize(
         "repair_started": False,
     }
     stamp = {**chosen, **receipt}
-    leftover_prs = leftover_after(picked, stamp)
+    leftover_prs = leftover_after(picked, stamp, incomplete_retry_position=incomplete_retry_position)
     if str(picked.get("route") or "") == "pr" or "leftover_prs" in picked:
         receipt["leftover_prs"] = leftover_prs
         receipt["leftover"] = len(leftover_prs)

@@ -63,7 +63,7 @@ def _upstream() -> tuple[dict, dict]:
 def _engine() -> dict:
     return {
         "name": "open-code-review",
-        "version": "v1.12.0",
+        "version": "v1.12.7",
         "binary_sha256": "f" * 64,
         "provider": "example-provider",
         "model": "example-model",
@@ -72,14 +72,55 @@ def _engine() -> dict:
 
 
 def _normalize(request: dict | None = None, preview: dict | None = None, upstream: dict | None = None) -> dict:
-    default_preview, default_upstream = _upstream()
+    _default_preview, default_upstream = _upstream()
     return normalize_result(
         request or _request(),
-        preview or default_preview,
         upstream or default_upstream,
         engine=_engine(),
         changed_ranges={"src/demo.py": [(12, 13)], "src/new.py": [(12, 13)]},
     )
+
+
+def test_v1127_complete_review_accepts_vendor_omitted_false():
+    request = _request()
+    _, upstream = _upstream()
+    upstream["comments"] = []
+    upstream["summary"].pop("budget_exceeded", None)
+    upstream["manifest"]["execution"]["ocr_version"] = "v1.12.7"
+    engine = {**_engine(), "version": "v1.12.7"}
+    result = normalize_result(request, upstream, engine=engine, changed_ranges=request["changed_ranges"])
+    assert result["status"] == "complete"
+    assert result["findings"] == []
+    assert result["evidence"]["budget_exceeded"] is False
+
+
+@pytest.mark.parametrize("budget", [True, None, 0, "false"])
+def test_empty_review_does_not_accept_malformed_or_exceeded_budget(budget):
+    _, upstream = _upstream()
+    upstream["comments"] = []
+    upstream["summary"]["budget_exceeded"] = budget
+    with pytest.raises(ContractError, match="budget"):
+        _normalize(upstream=upstream)
+
+
+def test_normalize_result_covers_host_diff_without_vendor_preview():
+    request = _request()
+    _preview, upstream = _upstream()
+
+    result = normalize_result(
+        request,
+        upstream,
+        engine=_engine(),
+        changed_ranges={"src/demo.py": [(12, 13)]},
+    )
+
+    assert result["ok"] is True
+    assert result["schema"] == "lokay.review-result/1"
+    assert result["coverage"]["reviewable_paths"] == [
+        {"path": "src/demo.py", "old_path": "", "status": "modified"}
+    ]
+    assert result["coverage"]["excluded"] == []
+    assert result["evidence"]["preview_sha256"] == sha256_json(request["diff_paths"])
 
 
 def test_v112_result_maps_to_closed_lokay_contract_without_thinking():
@@ -122,17 +163,8 @@ def test_v112_result_maps_to_closed_lokay_contract_without_thinking():
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [
-        (lambda preview, run: run.update(status="partial"), "terminal"),
-        (lambda preview, run: run["manifest"].update(terminal_state="partial"), "terminal"),
-        (lambda preview, run: run["manifest"].update(run_failure={"classification": "budget"}), "run_failure"),
-        (lambda preview, run: run["summary"].update(budget_exceeded=True), "budget"),
         (lambda preview, run: run["tool_calls"].update(failure=1), "tool failure"),
-        (lambda preview, run: run.update(warnings=[{"message": "do not expose"}]), "warning"),
-        (lambda preview, run: run["manifest"]["coverage"].update(failed=[{"path": "src/demo.py"}]), "coverage"),
-        (lambda preview, run: run["manifest"]["coverage"].update(waived=[{"path": "src/demo.py"}]), "coverage"),
-        (lambda preview, run: (preview["files"][0].update(will_review=False, exclude_reason="too_large"), preview.update(reviewable_count=0, excluded_count=1)), "excluded"),
         (lambda preview, run: run["manifest"].pop("coverage"), "coverage"),
-        (lambda preview, run: run["manifest"]["coverage"]["completed"].clear(), "coverage"),
         (lambda preview, run: run["manifest"]["input"].update(requested_from="0" * 40), "requested_from"),
         (lambda preview, run: run["manifest"]["execution"].update(configured_concurrency=2), "execution identity"),
     ],
@@ -167,34 +199,73 @@ def test_rename_coverage_keeps_old_and_new_path_identity():
     ]
 
 
-def test_delete_is_explicitly_excluded_but_other_exclusions_fail():
+def test_delete_is_excluded_from_reviewable_host_diff():
     request = _request()
     request["diff_paths"].append(
         {"path": "src/removed.py", "old_path": "", "status": "deleted"}
     )
-    preview, upstream = _upstream()
-    preview["files"].append(
-        {
-            "path": "src/removed.py",
-            "status": "deleted",
-            "insertions": 0,
-            "deletions": 3,
-            "will_review": False,
-            "exclude_reason": "deleted",
-        }
-    )
-    preview["total_files"] = 2
-    preview["reviewable_count"] = 1
-    preview["excluded_count"] = 1
 
-    result = _normalize(request, preview, upstream)
+    result = _normalize(request)
     assert result["coverage"]["excluded"] == [
         {"path": "src/removed.py", "old_path": "", "status": "deleted"}
     ]
+    assert result["coverage"]["reviewable_paths"] == [
+        {"path": "src/demo.py", "old_path": "", "status": "modified"}
+    ]
 
-    preview["files"][1]["exclude_reason"] = "too_large"
-    with pytest.raises(ContractError, match="excluded"):
-        _normalize(request, preview, upstream)
+
+def test_empty_reviewable_host_diff_cannot_be_approved():
+    request = _request()
+    request["diff_paths"] = [{"path": "src/removed.py", "old_path": "", "status": "deleted"}]
+    with pytest.raises(ContractError, match="empty reviewable"):
+        _normalize(request)
+
+
+def test_vendor_comments_close_review_when_budget_or_terminal_is_partial():
+    preview, upstream = _upstream()
+    upstream["summary"]["budget_exceeded"] = True
+    upstream["status"] = "partial"
+    upstream["manifest"]["terminal_state"] = "partial"
+    upstream["manifest"]["run_failure"] = {"classification": "budget"}
+    upstream["warnings"] = [
+        {"type": "token_budget_reached", "file": "src/demo.py", "message": "budget"}
+    ]
+    upstream["manifest"]["coverage"]["failed"] = [
+        {"item_id": "budget-1", "path": "src/other.py", "fingerprint": "5" * 32}
+    ]
+
+    result = _normalize(preview=preview, upstream=upstream)
+
+    assert result["ok"] is True
+    assert result["schema"] == "lokay.review-result/1"
+    assert result["status"] == "complete"
+    assert result["findings"]
+    assert result["findings"][0]["content"] == "Blank IDs reach persistence."
+
+
+def test_empty_vendor_comments_with_budget_remain_occupancy():
+    preview, upstream = _upstream()
+    upstream["comments"] = []
+    upstream["summary"]["budget_exceeded"] = True
+    upstream["summary"]["comments"] = 0
+
+    with pytest.raises(ContractError, match="budget"):
+        _normalize(preview=preview, upstream=upstream)
+
+
+def test_empty_vendor_comments_keep_capacity_signals_as_occupancy():
+    preview, upstream = _upstream()
+    upstream["comments"] = []
+    upstream["summary"]["comments"] = 0
+    upstream["manifest"]["run_failure"] = {"classification": "budget"}
+    with pytest.raises(ContractError, match="run_failure"):
+        _normalize(preview=preview, upstream=upstream)
+    upstream = _upstream()[1]
+    upstream["comments"] = []
+    upstream["summary"]["comments"] = 0
+    upstream["warnings"] = [{"type": "token_budget_reached", "file": "src/demo.py", "message": "budget"}]
+    with pytest.raises(ContractError, match="warning"):
+        _normalize(preview=preview, upstream=upstream)
 
 
 def test_low_severity_findings_remain_findings():
@@ -253,6 +324,8 @@ def test_operational_ocr_nits_do_not_fail_closed():
 )
 def test_material_ocr_warnings_fail_closed_and_keep_type(warning):
     preview, upstream = _upstream()
+    upstream["comments"] = []
+    upstream["summary"]["comments"] = 0
     upstream["warnings"] = [warning]
 
     with pytest.raises(ContractError, match="warning") as caught:

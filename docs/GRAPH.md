@@ -101,7 +101,7 @@ position must not turn it into a dependency of product or the terminal.
 | `select_self_repair_department` / `run_self_repair_department` | Department 1. Parent switch; run only on a confirmed stall (`did_not_move`). Same exclusions as `select_repair_route`: leftover skip, empty survey, occupied, idle, pass_ceiling, waiting. One pass is self XOR product (product wins). Body is a department agent slot with authored child Fala `self_repair_department` as fallback. Off never touches lokay main. |
 | `select_issue_triage_department` / `run_issue_triage_department` | Department 2. Sieve only. Body is a department agent slot with authored child Fala `issue_triage_department` as fallback: marks, split, skip. One triage boundary after hard_facts — never a second intake engine. Legal exits: ready→implement | split | skip (no stamp) | close+reason (last resort). Never stamp `ai:frozen` / `ai:needs-feedback` / `ai:blocked`. Stops at `limits.max_triage_per_tick`, publishes leftover, then yields to executor. Zero `ai/fix`. Zero `needs_human`. Foreign assignee still skipped. `launched` stays null. |
 | `select_executor_department` / `run_executor_department` | Department 3. Code and PR. Body is a department agent slot with authored child Fala `executor_department` as fallback: a do issue becomes an open PR. No merge. Off = zero new `ai/fix`. |
-| `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Body is a department agent slot with authored child Fala `pr_triage_department` as fallback: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. `repair_started` stays false. `select_pr_sieve` walks leftover like issue leftover: identity is `(repo, pr, head_sha)`. A skip without merge / new_pr **consumes** that identity and publishes `leftover_prs`; the next pass must not KEEP the same SHA. Incomplete review (no complete JSON: timeout, budget, terminal not complete, not JSON, plugin_error) is not a review and is not a skip: KEEP the same SHA. Classified complete reject is only material vendor JSON (`review has warnings`); it consumes. Bare `ocr_contract_rejected` without complete JSON KEEP. Wait / pending KEEP. A new SHA on the same PR is a new identity. Pass `outcome=merge` only after that complete JSON and `approve`; occupancy KEEP is `outcome=none`. |
+| `select_pr_triage_department` / `run_pr_triage_department` | Department 4. PR sieve / merge. Body is a department agent slot with authored child Fala `pr_triage_department` as fallback: list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start `pr_repair`. `repair_started` stays false. `select_pr_sieve` walks leftover like issue leftover: identity is `(repo, pr, head_sha)`. A skip without merge / new_pr **consumes** that identity and publishes `leftover_prs`; the next pass must not KEEP the same SHA. Incomplete review (no vendor comments and no complete JSON: timeout, empty-comment budget, terminal not complete, not JSON, plugin_error) is not a review and is not a skip: KEEP the same SHA at the tail, using authored `incomplete_retry_position = "tail"` on the summary node; it is not consumed or approved and cannot starve other PRs. Changed SHA replaces the existing queue row in place. Vendor `comments[]` close the review even when budget or terminal is partial: findings → `request_changes` → parent `pr_repair`. Empty findings → `approve`. Wait / pending KEEP. A new SHA on the same PR is a new identity. Pass `outcome=merge` only after that complete JSON and `approve`; occupancy KEEP is `outcome=none`. |
 | `select_pr_repair_department` / `run_pr_repair_department` | Department 5. Body is a department agent slot with authored child `pr_repair` as fallback after a repair verdict from `run_pr_triage_department`. Conducts from the sieve run plus the PR-triage switch. Not started from inside `pr_triage_department`. Disabled skip leaves published feedback and does not touch the branch. **MERGED (or CLOSED) target PR:** compose/`admit_pr_repair` fail-closed skip (`pr_already_merged`) — does not start Fala repair and does not consume the per-PR receipt; mid-flight organ re-probe refuses mutating atoms. Per-PR lifetime K (default 1, from `limits.max_repairs_per_tick`) is enforced via a durable `pr-repair-receipts` receipt: after budget stop select returns `fail_closed` / `pr_repair_budget_exhausted` (park-by-factory); next tick does not invoke repair again. Zero `needs_human`. |
 | `reap_stale_worktrees` | sibling child `stale_worktree_reap`: collect → catalog → summarize. Conducts from `factory_begin` only. Throw / empty / `process.failed` / `adapter_failed` is a classified `route=failed` at the parent boundary, never a path abort. The factory_pass parent stays ok. Does not conduct departments or `record_pass`. Collect composes `protection` or `bound_slots` (oldest first). Catalog composes `overflow_bound` or `apply_slot`. Summarize composes `persist_result` and `prune_preserved_worktree_archives` (TTL GC of `.lokay-preserved`). Overflow bounds one pass to authored slots; a failed removal advances that candidate behind the oldest remainder, so it never pins the four slots forever. Archive TTL GC uses the same four-slot bound. A later pass continues the remainder. Classified REMOVE reclaims disk after registry detach (not archive-only). KEEP live i2pr is issue-scoped (repo+issue), not repo-scoped; also `pr_survey_failed` / open PR / dirty unpublished. Foreign leftover localize is REMOVE (`foreign_localize`) and beats live-i2pr / unpublished-or-dirty / uncommitted-real KEEP. Never unlink Fala sqlite/WAL. Do not raise the 180s ceiling. Tests use tmp dirs only. |
 | `record_pass` | write a small `last-pass.json` receipt: `outcome` is `new_pr` \| `merge` \| `none`. A detached `launched=started` worker is occupancy (`remaining.issue_to_pr_started`), not `new_pr`. Moving forward stays a published PR or a merge. Conducts from `factory_begin` and the five department selects. Leftover overflow is a skip on the receipt, never a pass failure. Cleanup success is not required. A this-tick idle/progress receipt is kept by `write_pass_ceiling_receipt`; the 180s watchdog does not erase it. |
@@ -463,7 +463,10 @@ pr_checks
   └─→ classify_pr_triage_checks   ← wait | repair | review
         ├─ wait     → summarize (pending / offline; do not fail the pass)
         ├─ repair   → summarize repair verdict (red CI; no executor)
-        └─ review   → collect evidence → publish verdict
+        └─ review   → collect evidence → resolve cached SHA
+                       → select_pr_review_scope (`ocr review --preview`, no LLM)
+                       → ready: one `ocr review` → validate → publish verdict
+                       → fail_closed: terminal, no LLM
               ├─ needs_evidence → review_evidence_catalog (one atom: collect_* + SHA verify)
               │                    → evidence_review_agent → finalize → publish
               ├─ request_changes → summarize repair verdict
@@ -483,12 +486,11 @@ list_pr_sieve
       → summarize         leftover_prs + skipped_pr on the receipt
 ```
 
-A classified complete reject is a consumed row: vendor produced complete JSON
-that fails a material gate (`ocr_contract_rejected: review has warnings`).
-Capacity is not that class — budget exceeded, terminal not complete, coverage
-incomplete, timeout, not JSON. Those are occupancy KEEP on the same SHA until
-`lokay.review-result/1` + `status=complete` + `findings[]` exists. Bare
-`ocr_contract_rejected` without that complete JSON is KEEP, not consume.
+Vendor `comments[]` close the review. Findings (including low) are
+`request_changes` → parent `pr_repair`; empty findings are `approve`.
+Budget or partial terminal without comments is occupancy KEEP on the same SHA
+until `lokay.review-result/1` + `status=complete` + `findings[]` exists.
+Timeout, not JSON, and plugin_error are the same occupancy class.
 The receipt leftover is the rest of the open lokay PRs after a consume.
 Occupancy is the class, not a single string. The review terminal (`review_manual` / summarize) must
 carry that classified reason; collapsing it to `review_fail_closed` makes
@@ -502,6 +504,16 @@ scheduler and not a human-approval gate.
 
 Supplemental evidence is one catalog atom (`review_evidence_catalog`), not four
 when-gated `collect_review_*` nodes plus `verify_review_evidence_sha`.
+
+`ocr` is not a Lokay pipeline. Each Alibaba command is a possible Unix job;
+`ocr review` is the body of `pr_review_agent`. Host checkout
+(`collect_pr_review_evidence`) already has the diff. `select_pr_review_scope`
+uses OCR v1.12.7 `review --preview` as a deterministic selection check after
+`resolve_sha_review`; only ready conducts the expensive review. Cached review
+skips both. Vendor exclusions cannot silently drop required files, including
+Python tests. Preview does not supply review approval. `ocr scan`, `delegate`, `session`, `viewer`, `rules`,
+`config`, and `llm` stay outside the factory pass. Do not fold those commands
+into the five departments.
 
 The parent `factory_pass` consumes that verdict and may invoke the
 `pr_repair` department. With repair disabled, feedback remains published and no code

@@ -53,7 +53,7 @@ def _request(tmp_path: Path) -> dict:
         "task": {"title": "Issue", "body": "Acceptance criteria"},
         "engine": {
             "binary_path": str(binary),
-            "version": "v1.12.0",
+            "version": "v1.12.7",
             "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
             "provider": "openai",
             "model": "model-a",
@@ -472,6 +472,52 @@ def test_background_keeps_untrusted_text_inside_explicit_data_blocks():
     assert 'shell"' not in text
 
 
+def test_background_fits_ocr_hard_character_limit():
+    from lokay_review_open_code_review.background import (
+        OCR_BACKGROUND_CHAR_LIMIT,
+        render_background,
+    )
+
+    text = render_background({
+        "pr_title": "Fix camera fixture",
+        "pr_body": "P" * 5000,
+        "task": {"title": "splot#40", "body": "T" * 5000},
+        "repo": "mikolaj92/splot",
+        "pr": 55,
+        "head_sha": "b" * 40,
+        "base_ref_sha": "a" * 40,
+        "comparison_base_sha": "c" * 40,
+        "diff_sha256": "d" * 64,
+        "task_identity_sha256": "e" * 64,
+        "engine": {"config_sha256": "9" * 64},
+    }).decode()
+
+    assert len(text) <= OCR_BACKGROUND_CHAR_LIMIT
+    assert '<task_title untrusted="true">' in text
+    assert "mikolaj92/splot" in text
+    assert "Report every actionable finding" in text
+
+
+def test_vendor_background_limit_abort_is_classified_not_generic_exit(tmp_path: Path, monkeypatch):
+    request = _request(tmp_path)
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "secret-key")
+
+    def fake_run(argv, **_kwargs):
+        return subprocess.CompletedProcess(
+            argv,
+            1,
+            stdout=b"",
+            stderr=b"Error: background content is 8323 characters, exceeding the hard limit of 8000 (aborting)\n",
+        )
+
+    with pytest.raises(ReviewFailure, match="background exceeds vendor character limit") as caught:
+        invoke_ocr(request, preview=True, runner=fake_run)
+    from lokay_review_open_code_review.cli import classified_failure_code
+    assert classified_failure_code(caught.value) == "ocr_background_too_large"
+    assert classified_failure_code(caught.value) != "ocr_exited_unsuccessfully"
+    assert "8323" not in str(caught.value)
+
+
 def test_invoke_ocr_rejects_credential_bearing_trusted_config(tmp_path: Path, monkeypatch):
     request = _request(tmp_path)
     (tmp_path / "opencodereview.json").write_text(
@@ -630,6 +676,61 @@ def test_nonzero_ocr_without_json_still_fails_closed(tmp_path: Path, monkeypatch
     with pytest.raises(ReviewFailure, match="exited unsuccessfully") as caught:
         invoke_ocr(request, preview=True, runner=fake_run)
     assert "secret-key" not in str(caught.value)
+
+
+def test_review_request_invokes_one_ocr_review_without_preview(tmp_path, monkeypatch):
+    from lokay_review_open_code_review import cli
+    from lokay_review_open_code_review.contract import sha256_json
+
+    task = {
+        "repo": "acme/demo",
+        "type": "Issue",
+        "state": "OPEN",
+        "number": 42,
+        "title": "Prevent invalid save",
+        "body": "Acceptance: reject blank IDs.",
+        "url": "https://github.com/acme/demo/issues/42",
+    }
+    request = _request(tmp_path)
+    request.update(
+        {
+            "repo": "acme/demo",
+            "pr": 84,
+            "head_repo": "acme/demo",
+            "task": task,
+            "task_identity_sha256": sha256_json(
+                {key: task[key] for key in ("repo", "type", "state", "number", "title", "body", "url")}
+            ),
+            "diff_paths": [{"path": "src/demo.py", "old_path": "", "status": "modified"}],
+            "changed_ranges": {"src/demo.py": [(12, 13)]},
+        }
+    )
+    request["engine"].update(provider="example-provider", model="example-model")
+    upstream = json.loads(
+        (Path(__file__).parent / "fixtures" / "upstream_v1_12" / "review-complete.json").read_text()
+    )
+    upstream["manifest"]["repository"]["identity_sha256"] = __import__("hashlib").sha256(
+        b"github.com/acme/demo"
+    ).hexdigest()
+    observed: list[bool] = []
+    checkout = {"origin": "git@github.com:acme/demo.git", "head": "b" * 40}
+    monkeypatch.setattr(cli, "verify_checkout", lambda _req: dict(checkout))
+
+    def fake_invoke(_req, *, preview, runner=None):
+        observed.append(preview)
+        if preview:
+            pytest.fail("preview is not a review job")
+        return upstream
+
+    monkeypatch.setattr(cli, "invoke_ocr", fake_invoke)
+
+    result = cli.review_request(request)
+
+    assert observed == [False]
+    assert result["ok"] is True
+    assert result["schema"] == "lokay.review-result/1"
+    assert result["status"] == "complete"
+    assert result["findings"]
 
 
 def test_changed_line_range_mismatch_is_checkout_invalid_not_default():

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 OWNED = frozenset({
-    "collect_pr_review_evidence", "resolve_sha_review", "pr_review_agent",
+    "collect_pr_review_evidence", "resolve_sha_review", "select_pr_review_scope", "pr_review_agent",
     "validate_pr_review", "pr_review_retry_agent", "validate_pr_review_retry",
     "select_pr_review", "review_evidence_catalog", "evidence_review_agent",
     "validate_evidence_review", "select_evidence_review",
@@ -41,6 +41,9 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
     if atom == "resolve_sha_review":
         from lokay.review_boundary import resolve_structured_sha_review
         return resolve_structured_sha_review(evidence)
+    if atom == "select_pr_review_scope":
+        from lokay.proc.select_pr_review_scope import select
+        return select(config_path=config, repo=repo, pr=pr, evidence=evidence, live=live)
     if atom == "pr_review_agent":
         if str((up.get("resolve_sha_review") or {}).get("route") or "") != "agent":
             return {"ok": True, "route": "not_applicable", "reason": "review_agent_not_selected"}
@@ -61,6 +64,9 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
             if atom == "validate_evidence_review" and (up.get("select_pr_review") or {}).get("route") == "evidence":
                 return {"ok": True, "route": "fail_closed", "reason": "structured_evidence_review_unsupported"}
             return {"ok": True, "route": "not_applicable"}
+        scope = up.get("select_pr_review_scope") or {}
+        if scope.get("route") == "fail_closed":
+            return {"ok": True, "route": "fail_closed", "reason": str(scope.get("reason") or "ocr_scope_incomplete")}
         source = up.get("pr_review_agent") or {}
         if source.get("plugin_error"):
             from lokay.proc.pr_review_plugin import classified_host_failure_code

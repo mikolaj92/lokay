@@ -11,7 +11,7 @@ The parent selects and conditionally runs these departments in authored order:
 1. `run_self_repair_department`: repairs a confirmed factory stall; off when the recovery gate excludes it. Repair and product work are exclusive.
 2. `run_issue_triage_department`: lists and triages intentional issues, marks decisions and handles bounded split/intake work. It does not start coding.
 3. `run_executor_department`: selects executable work and dispatches the child `issue_to_pr`, up to the serial budget. This is where implementation lives; `select_implement` is not the first step of the parent.
-4. `run_pr_triage_department`: checks and reviews existing PRs, then waits, requests repair, or merges eligible quality code. A skip without merge consumes `(repo, pr, head_sha)` and leftover walks to the next open lokay PR. Incomplete review (no complete JSON, including budget) is not a review and KEEP the SHA. Complete reject is only material vendor JSON (`review has warnings`); it consumes. Bare `ocr_contract_rejected` without that JSON KEEP. Merge is `outcome=merge` after complete JSON v1 and `approve`, never after occupancy.
+4. `run_pr_triage_department`: checks and reviews existing PRs, then waits, requests repair, or merges eligible quality code. A skip without merge consumes `(repo, pr, head_sha)` and leftover walks to the next open lokay PR. Incomplete review (no vendor comments and no complete JSON: timeout, not JSON, plugin_error, empty-comment budget) is not a review and KEEP the SHA. Vendor `comments[]` close the review even when budget or terminal is partial: findings → `request_changes` → `pr_repair`. Merge is `outcome=merge` after complete JSON v1 and `approve`, never after occupancy.
 5. `run_pr_repair_department`: invokes `pr_repair` only for the preceding PR-triage repair verdict, without starting another merge process inside that department.
 
 Within PR triage, after selecting its exact candidate and before launching
@@ -90,8 +90,10 @@ i zwraca jeden wynik z zamkniętego schematu. Recenzja PR może poprosić o dok�
 jeden dodatkowy fakt: `pr_metadata`, `changed_files`, `diff_tail` albo
 `commit_summary`. Każdy rodzaj ma osobny kolektor Unixowy. Fala uruchamia tylko
 wybrany kolektor, a druga prośba o dowody trafia do terminala ręcznego. Recenzja
-OpenCodeReview jest walidowana z dokładnym coverage i cache’owana po SHA; błędny
-wynik kończy się fail-closed, bez generatywnego retry.
+`select_pr_review_scope` używa OCR v1.12.7 `review --preview` bez LLM,
+aby sprawdzić zakres przed kosztowną recenzją. Dopiero zgodny zakres uruchamia
+`pr_review_agent` (`ocr review`); coverage pochodzi z evidence hosta i manifestu vendora.
+Błędny wynik kończy się fail-closed, bez generatywnego retry.
 
 Ten diagram jest kontraktem projektowym. **Każda zmiana przepływu zaczyna się
 od zmiany i przeglądu diagramu. Dopiero zaakceptowany diagram wolno zakodować
@@ -720,20 +722,29 @@ stateDiagram-v2
     ReconcileRepairPush --> SelectPrTriageVerdict: brak PR / recovered / fail-closed
     RunPrSieve --> SelectPrTriageVerdict
     SelectPrTriageVerdict --> SummarizePrTriageDepartment
-    SummarizePrTriageDepartment --> [*]
+    SummarizePrTriageDepartment --> [*]: incomplete KEEP na końcu kolejki; inne wyniki bez zmian
+    note right of SummarizePrTriageDepartment
+      Następny pass wybiera kolejny PR.
+      KEEP zachowuje repo, pr, SHA; nie oznacza approve ani consume.
+    end note
 ```
 
 Dział `pr_triage_department` ma sześć węzłów. Sitko chodzi leftover jak issue:
 tożsamość `(repo, pr, head_sha)`. Skip bez merge zjada wiersz i oddaje
 `leftover_prs`. Niekompletny review (brak kompletnego JSON: timeout,
 invocation failed, not JSON, plugin_error) nie jest review i nie jest skip —
-KEEP tej samej SHA. Klasa occupancy, nie jeden string. Terminal review
+KEEP tej samej SHA, ale na końcu `leftover_prs`, aby nie blokować innych PR-ów.
+`incomplete_retry_position = "tail"` jest polityką authored Fali w
+`summarize_pr_triage_department`; pending i repair nadal zachowują pozycję.
+Zmiana SHA istniejącego wiersza aktualizuje go w miejscu, nie spycha na koniec.
+Klasa occupancy, nie jeden string. Terminal review
 nie zgniata tej klasy do `review_fail_closed`. Origin izolowanego checkoutu to tożsamość klona (SSH albo HTTPS).
 Fetch obiektów to lokalny snapshot; twardy GitHub HTTPS z promptem nie jest review.
 Stdout pluginu to zawsze jeden JSON; `ValueError` bez koperty nie jest review.
-Kompletny reject to tylko materialny JSON vendora (`review has warnings`);
-zjada wiersz. Budżet / niekompletny terminal / goły `ocr_contract_rejected`
-bez tego JSON to KEEP. Nowe SHA to
+Komentarze vendora (`comments[]`) zamykają recenzję: NIE → `request_changes`
+→ `pr_repair`, także gdy budżet ucina resztę plików. Occupancy KEEP to brak
+komentarzy i brak kompletnego JSON (timeout, pusty budżet, nie JSON).
+Nowe SHA to
 nowa tożsamość. Pending KEEP. Po liście i wyborze kandydata
 `reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
 przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest
@@ -1396,8 +1407,10 @@ stateDiagram-v2
     InspectPullRequest --> CollectReviewEvidence: gotowy do recenzji
     CollectReviewEvidence --> ResolveShaReview
     ResolveShaReview --> ReviewVerdict: zweryfikowany artifact dla tego SHA i OPEN tasku
-    ResolveShaReview --> OpenCodeReviewPlugin: brak zweryfikowanego artifactu dla SHA
-    OpenCodeReviewPlugin --> ValidateReviewResult: versioned JSON + preview/manifest coverage
+    ResolveShaReview --> SelectPrReviewScope: brak zweryfikowanego artifactu
+    SelectPrReviewScope --> OpenCodeReview: zakres zgodny z exact diff; jedno ocr review
+    SelectPrReviewScope --> HumanTerminal: preview error / pominięty wymagany plik; fail-closed, no retry
+    OpenCodeReview --> ValidateReviewResult: lokay.review-result/1 + host/manifest coverage
     ValidateReviewResult --> ReviewVerdict: kompletne exact-SHA review bez findings lub z findings
     ValidateReviewResult --> HumanTerminal: error / drift / niepełne coverage / invalid result (fail-closed, no retry)
     ReviewVerdict --> SelectEvidenceCollector: NEEDS_EVIDENCE
@@ -1446,6 +1459,42 @@ stateDiagram-v2
     HumanTerminal --> [*]
     WaitChecks --> [*]
     Delivered --> [*]
+```
+
+Alibaba OpenCodeReview (`ocr`) to ciała atomów, nie drugi pipeline. Jedna rzecz
+z libki = jeden job. Checkout zostaje w `collect_pr_review_evidence`.
+Węzeł `select_pr_review_scope` używa `ocr review --preview` jako deterministycznej
+implementacji sprawdzenia zakresu; `pr_review_agent` używa `ocr review`.
+Preview nie jest recenzją ani zgodą na merge. Cached review pomija oba wywołania.
+Zakres nadal wymaga wszystkich nieusuniętych plików, w tym testów; nie wolno
+cicho zaakceptować nowych wyłączeń vendora po aktualizacji.
+
+| Węzeł w `pr_triage` | Implementacja | Kontrakt |
+| --- | --- | --- |
+| `select_pr_review_scope` | izolowany OCR v1.12.7 `review --preview` | exact diff → ready / fail_closed; bez LLM |
+| `pr_review_agent` | izolowany OCR v1.12.7 `review` | exact SHA → neutralny wynik lub sklasyfikowany błąd |
+| `validate_pr_review` | walidator Lokaya, bez importu pluginu | neutralny wynik → decyzja polityki |
+
+```mermaid
+stateDiagram-v2
+    [*] --> OcrScope: ocr review --preview — ciało select_pr_review_scope
+    OcrScope --> OcrReview: zakres zgodny; kolejność należy do Fali
+    OcrReview: ocr review — entropy, ciało pr_review_agent
+    OcrReview --> ValidateReviewResult
+    [*] --> OcrScan: ocr scan — cały plik, bez diffa PR; poza passem
+    [*] --> OcrDelegate: ocr delegate — spec bez LLM; host już ma evidence
+    [*] --> OcrSession: ocr session — ops, nie pass
+    [*] --> OcrViewer: ocr viewer — WebUI, człowiek
+    [*] --> OcrRules: ocr rules — debug reguł, ops
+    [*] --> OcrConfig: ocr config — pin plików hosta, nie recenzja
+    [*] --> OcrLlm: ocr llm — łączność, nie recenzja
+    OcrScan --> [*]
+    OcrDelegate --> [*]
+    OcrSession --> [*]
+    OcrViewer --> [*]
+    OcrRules --> [*]
+    OcrConfig --> [*]
+    OcrLlm --> [*]
 ```
 
 ### Naprawa istniejącego PR — `pr_repair`

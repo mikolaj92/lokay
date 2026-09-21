@@ -32,7 +32,7 @@
       "exact_range": "cccccccccccccccccccccccccccccccccccccccc..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     },
     "execution": {
-      "ocr_version": "v1.12.0",
+      "ocr_version": "v1.12.7",
       "provider": "example-provider",
       "model": "example-model",
       "configured_concurrency": 1,

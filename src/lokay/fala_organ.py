@@ -485,6 +485,7 @@ ORGAN_BINDINGS: tuple[Binding, ...] = (
     Binding('review_evidence_catalog', handle_review_boundary),
     Binding('select_evidence_review', handle_review_boundary),
     Binding('select_pr_review', handle_review_boundary),
+    Binding('select_pr_review_scope', handle_review_boundary),
     Binding('validate_evidence_review', handle_review_boundary),
     Binding('validate_pr_review', handle_review_boundary),
     Binding('validate_pr_review_retry', handle_review_boundary),

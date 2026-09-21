@@ -110,7 +110,7 @@ pr_review:
   config_sha256: ""
   provider_env: [OCR_LLM_API_KEY]  # explicit provider credential variable only
   binary: ~/.local/bin/ocr
-  binary_version: v1.12.0
+  binary_version: v1.12.7
   # Set to the verified SHA-256 for the selected platform release asset.
   binary_sha256: ""
   effort: medium

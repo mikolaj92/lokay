@@ -186,6 +186,34 @@ def test_summarize_exhausted_consumed_queue_keeps_empty_leftover() -> None:
     assert "skipped_pr" not in out
 
 
+def test_incomplete_round_robin_keeps_every_sha_and_reaches_repaired_pr() -> None:
+    from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
+    from lokay.proc.walk_pr_leftover import identity
+
+    rows = [SPLOT_55, VIBE_30, KIT_39]
+    last = {}
+    seen = []
+    for _ in range(4):
+        picked = select(_listed(*rows), last=last)
+        seen.append(identity(picked))
+        last = handle_pr_triage_department(
+            "summarize_pr_triage_department", {"incomplete_retry_position": "tail"},
+            {"select_pr_sieve": picked,
+             "select_pr_triage_verdict": {"route": "completed", "verdict": "feedback", "reason": "ocr_terminal_incomplete"},
+             "reconcile_pr_repair_push": {"route": "review"}}, {},
+        )
+        assert {identity(row) for row in last["leftover_prs"]} == {identity(row) for row in rows}
+        assert "skipped_pr" not in last
+    assert seen == [identity(row) for row in [SPLOT_55, VIBE_30, KIT_39, SPLOT_55]]
+
+
+def test_updated_sha_keeps_existing_leftover_position() -> None:
+    updated = {**KIT_39, "head_sha": "repaired"}
+    picked = select(_listed(SPLOT_55, updated, VIBE_30), last={"leftover_prs": [KIT_39, VIBE_30, SPLOT_55]})
+    assert (picked["pr"], picked["head_sha"]) == (39, "repaired")
+    assert [row["pr"] for row in picked["leftover_prs"]] == [30, 55]
+
+
 def test_summarize_pending_keeps_the_pick_on_leftover() -> None:
     picked = {
         **KIT_39,

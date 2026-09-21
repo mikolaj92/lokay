@@ -51,6 +51,62 @@ def test_publish_delivery_receipt_replaces_provisional_marker_after_observation(
     assert verify_receipt(receipt, observed_head="h", require_delivered=True)["autonomous"]
 
 
+def test_receipt_organ_uses_closed_issue_and_configured_runner(monkeypatch):
+    from lokay.organ.lanes import handle_lanes
+    from lokay import gh_prs
+    from lokay.proc import _common
+    from lokay import config
+
+    configured = object()
+    carrier = object()
+    monkeypatch.setattr(config, "load_config", lambda path: configured if path == "chosen.yaml" else pytest.fail("wrong config"))
+    monkeypatch.setattr(_common, "runner", lambda cfg: carrier if cfg is configured else pytest.fail("unconfigured runner"))
+    calls = []
+
+    def read(runner, args, *, live):
+        assert runner is carrier and live
+        calls.append(args)
+        if args[:2] == ["pr", "view"]:
+            return {"body": marker(base()), "headRefOid": "h", "mergeCommit": {"oid": "m"}, "mergedAt": "t"}
+        assert args[:3] == ["issue", "view", "7"]
+        return {"state": "CLOSED"}
+
+    def text(runner, args, *, live, require_success):
+        assert runner is carrier and live and require_success
+        calls.append(args)
+        return "ahead" if args[0] == "api" else ""
+
+    monkeypatch.setattr(gh_prs, "gh_json", read)
+    monkeypatch.setattr(gh_prs, "gh_text", text)
+    out = handle_lanes("publish_delivery_receipt", {"live": True, "config_path": "chosen.yaml"},
+                       {"pr_merge": {"merged": True}, "close_issue": {"ok": True, "closed": True, "repo": "a/b", "issue": 7}},
+                       {"cfg": [], "live": ["--live"], "repo": "a/b", "pr_number": 9, "issue_number": None, "branch": "ai/fix/7-title"})
+    assert out["route"] == "confirmed"
+    assert out["issue"] == 7
+    assert len(calls) == 4
+
+
+@pytest.mark.parametrize("change", [{"repo": "other/repo"}, {"issue": 8}, {"head_sha": "old"}])
+def test_receipt_never_rebinds_provenance_to_other_delivery(change):
+    from lokay.proc.publish_delivery_receipt import publish
+    out = publish(repo="a/b", pr=9, issue=7, merge={"merged": True}, close={}, live=True,
+                  read_pr=lambda *_: {"body": marker({**base(), **change}), "headRefOid": "h", "mergeCommit": {"oid": "m"}, "mergedAt": "t"},
+                  read_issue=lambda *_: {"state": "CLOSED"}, main_contains=lambda *_: True,
+                  edit_pr=lambda *_: pytest.fail("must not rewrite provenance"))
+    assert out["route"] == "pending"
+    assert out["reason"] == "receipt_identity_mismatch"
+
+
+def test_receipt_repeat_is_confirmed_without_second_write():
+    from lokay.proc.publish_delivery_receipt import publish
+    complete = finalize_receipt(base(), merge_sha="m", merged_at="t", issue_closed=True, main_contains_head=True)
+    out = publish(repo="a/b", pr=9, issue=7, merge={"merged": True}, close={}, live=True,
+                  read_pr=lambda *_: {"body": marker(complete), "headRefOid": "h", "mergeCommit": {"oid": "m"}, "mergedAt": "t"},
+                  read_issue=lambda *_: {"state": "CLOSED"}, main_contains=lambda *_: True,
+                  edit_pr=lambda *_: pytest.fail("receipt already published"))
+    assert out["confirmed"] is True
+
+
 def test_publish_delivery_receipt_fails_closed_without_authoritative_confirmation():
     from lokay.proc.publish_delivery_receipt import publish
 

@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from .contract import ContractError, normalize_result, redact_vendor_warnings, validate_request
+from .contract import ENGINE_VERSION, ContractError, normalize_result, redact_vendor_warnings, validate_request
 from .background import render_background
 from .tools import validate_tools
 from .git_evidence import verify_checkout
@@ -62,6 +62,7 @@ _FAILURE_CODES = {
     "OpenCodeReview invocation failed": "ocr_invocation_failed",
     "OpenCodeReview invocation timed out": "ocr_timed_out",
     "OpenCodeReview exited unsuccessfully": "ocr_exited_unsuccessfully",
+    "review background exceeds vendor character limit": "ocr_background_too_large",
     "OpenCodeReview invocation failed or timed out": "ocr_invocation_failed",
     "trusted OpenCodeReview config is invalid": "ocr_config_invalid",
     "OpenCodeReview config must be credential-free": "ocr_config_has_credential",
@@ -174,7 +175,7 @@ def build_ocr_argv(
 ) -> list[str]:
     engine = _engine(request)
     binary = _trusted_file(engine.get("binary_path"), "OpenCodeReview binary", executable=True)
-    if engine.get("version") != "v1.12.0":
+    if engine.get("version") != ENGINE_VERSION:
         raise ReviewFailure("OpenCodeReview version pin mismatch")
     digest = str(engine.get("binary_sha256") or "").lower()
     if not re.fullmatch(r"[a-f0-9]{64}", digest):
@@ -384,11 +385,13 @@ def _run_bounded(
             process.wait()
             raise
         output = bytes(captured)
+        stderr_file.seek(0)
+        stderr = stderr_file.read()
         if returncode != 0:
             try:
                 parse_one_json(output)
             except ReviewFailure:
-                raise ReviewFailure("OpenCodeReview exited unsuccessfully") from None
+                raise _ocr_exit_failure(stderr) from None
         return output
 
 
@@ -405,8 +408,15 @@ def _run_with_runner(argv, *, home, env, timeout_seconds, runner):
         try:
             parse_one_json(completed.stdout)
         except ReviewFailure:
-            raise ReviewFailure("OpenCodeReview exited unsuccessfully") from None
+            raise _ocr_exit_failure(completed.stderr) from None
     return completed.stdout
+
+
+def _ocr_exit_failure(stderr: bytes | str | None) -> ReviewFailure:
+    text = stderr.decode("utf-8", "replace") if isinstance(stderr, (bytes, bytearray)) else str(stderr or "")
+    if "background content is" in text and "exceeding the hard limit of 8000" in text:
+        return ReviewFailure("review background exceeds vendor character limit")
+    return ReviewFailure("OpenCodeReview exited unsuccessfully")
 
 
 def invoke_ocr(
@@ -491,6 +501,28 @@ def invoke_ocr(
         return parse_one_json(output)
 
 
+def scope_request(request: Mapping[str, Any]) -> dict[str, Any]:
+    """One deterministic OCR call; Fala, not this plugin, starts review next."""
+    from .scope import validate_scope
+    try:
+        validate_request(request)
+        observed = verify_checkout(request)
+        preview = invoke_ocr(request, preview=True)
+        if verify_checkout(request) != observed:
+            raise ReviewFailure("review checkout evidence drifted after preview")
+        validate_scope(request, preview)
+        return {
+            "ok": True, "schema": "lokay.review-scope/1",
+            **{key: request[key] for key in (
+                "repo", "pr", "head_sha", "base_ref_sha", "comparison_base_sha",
+                "diff_sha256", "task_identity_sha256", "review_config_sha256",
+            )},
+            "preview": preview,
+        }
+    except ContractError as exc:
+        raise ReviewFailure(f"OpenCodeReview contract rejected: {exc}") from None
+
+
 def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
     engine = _engine(request)
     try:
@@ -518,13 +550,6 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
         request_data["comparison_base_sha"] = normalized["comparison_base_sha"]
         request_data["diff_sha256"] = normalized["diff_sha256"]
         request_data["diff_paths"] = list(normalized["diff_paths"])
-        preview = invoke_ocr(request_data, preview=True)
-        try:
-            after_preview = verify_checkout(request_data)
-        except ValueError as exc:
-            raise ReviewFailure(str(exc)) from None
-        if after_preview != observed:
-            raise ReviewFailure("review checkout evidence drifted after preview")
         result = invoke_ocr(request_data, preview=False)
         try:
             after_review = verify_checkout(request_data)
@@ -534,7 +559,6 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
             raise ReviewFailure("review checkout evidence drifted after review")
         return normalize_result(
             request,
-            preview,
             result,
             engine={
                 "name": "open-code-review",
@@ -556,6 +580,7 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-review-opencode-plugin")
     parser.add_argument("--max-input-bytes", type=int, default=_MAX_INPUT_BYTES)
+    parser.add_argument("--operation", choices=("review", "scope"), default="review")
     args = parser.parse_args(argv)
     raw = sys.stdin.buffer.read(args.max_input_bytes + 1)
     if len(raw) > args.max_input_bytes:
@@ -563,7 +588,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         try:
             request = parse_one_json(raw, max_bytes=args.max_input_bytes)
-            payload = review_request(request)
+            payload = scope_request(request) if args.operation == "scope" else review_request(request)
         except ReviewFailure as exc:
             payload = {"ok": False, "error": classified_failure(exc)}
         except ValueError as exc:
