@@ -170,6 +170,11 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
             "budget": int(receipt.get("budget") or budget),
             "parked": bool(receipt.get("parked")),
         }
+    # An explicit empty digest is CI authority, not missing review evidence.
+    review = dict(selected.get("review") or {})
+    review_result_sha256 = str(
+        selected.get("review_result_sha256", review.get("review_result_sha256")) or ""
+    )
     try:
         result = compose_pr_repair(
             config_path=config_path,
@@ -181,7 +186,7 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
             findings=list(selected.get("findings") or []),
             reviewed_head_sha=str(selected.get("reviewed_head_sha") or ""),
             task_identity_sha256=str(selected.get("task_identity_sha256") or ""),
-            review_result_sha256=str(selected.get("review_result_sha256") or (selected.get("review") or {}).get("review_result_sha256") or ""),
+            review_result_sha256=review_result_sha256,
             repair_kind=str(selected.get("repair_kind") or ""),
             repair_start_head_sha=str(selected.get("repair_start_head_sha") or ""),
             live=live,
@@ -209,7 +214,6 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
             "budget": int(receipt.get("budget") or budget),
             "parked": bool(receipt.get("parked")),
         }
-    review = dict(selected.get("review") or {})
     expected_handoff = {
         "kind": str(selected.get("repair_kind") or ""),
         "start_head_sha": str(selected.get("repair_start_head_sha") or selected.get("head_sha") or ""),
@@ -217,7 +221,7 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
         "findings": list(selected.get("findings") or []),
         "reviewed_head_sha": str(selected.get("reviewed_head_sha") or ""),
         "task_identity_sha256": str(selected.get("task_identity_sha256") or ""),
-        "review_result_sha256": str(selected.get("review_result_sha256") or review.get("review_result_sha256") or ""),
+        "review_result_sha256": review_result_sha256,
     }
     head_sha, terminal, reviewed_sha, result_repo, result_pr, confirmed, _task_digest = _repair_meta(
         result, expected_handoff

@@ -92,10 +92,12 @@ def select(
         return ok(route="skip", reason="no_triage_verdict")
     raw_review = verdict.get("review") or payload.get("review") or {}
     review = dict(raw_review) if isinstance(raw_review, Mapping) else {}
-    task = dict(payload.get("task") or review.get("task") or {})
-    findings = list(payload.get("findings") or review.get("findings") or [])
+    # Explicit repair fields (including empty CI fields) outrank review evidence.
+    handoff = {**review, **verdict, **payload}
+    task = dict(handoff.get("task") or {})
+    findings = list(handoff.get("findings") or [])
     repair_kind = str(verdict.get("repair_kind") or "")
-    reviewed_head_sha = str(payload.get("reviewed_head_sha") or review.get("reviewed_head_sha") or "")
+    reviewed_head_sha = str(handoff.get("reviewed_head_sha") or "")
     repair_push_intent_sha256 = str(
         payload.get("repair_push_intent_sha256") or verdict.get("repair_push_intent_sha256") or ""
     )
@@ -103,8 +105,8 @@ def select(
         payload.get("repair_start_head_sha") or payload.get("head_sha")
         or verdict.get("repair_start_head_sha") or verdict.get("head_sha") or ""
     ).lower()
-    task_digest = str(payload.get("task_identity_sha256") or review.get("task_identity_sha256") or "")
-    review_result_digest = str(payload.get("review_result_sha256") or review.get("review_result_sha256") or "")
+    task_digest = str(handoff.get("task_identity_sha256") or "")
+    review_result_digest = str(handoff.get("review_result_sha256") or "")
     if repair_kind not in {"ci", "review"}:
         return ok(
             route="fail_closed", reason="repair_kind_invalid",
