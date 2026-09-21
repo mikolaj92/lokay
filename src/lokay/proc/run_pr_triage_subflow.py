@@ -29,7 +29,8 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
         result = {**result, **summary}
         if isinstance(summary.get("result"), dict):
             result = {**result, **summary["result"]}
-    review = result.get("review") if isinstance(result.get("review"), dict) else {}
+    raw_review = result.get("review")
+    review = raw_review if isinstance(raw_review, dict) else {}
     check = dict(result.get("pr_checks") or {})
     check_route = dict(result.get("classify_pr_triage_checks") or {})
     review_decision = dict((result.get("publish_pr_review") or {}).get("decision") or {})
@@ -44,6 +45,8 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
         result.get("repair_kind") or repair_verdict.get("repair_kind")
         or triage_outcome.get("repair_kind") or ""
     )
+    # Later envelopes own even empty fields; review is only a legacy fallback.
+    handoff = {**review, **triage_outcome, **repair_verdict, **result}
     return {
         "ok": True,
         **target,
@@ -63,17 +66,11 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
             "repair_kind": repair_kind,
             "head_sha": head_sha,
             "review": review or review_decision,
-            "task": dict(
-                result.get("task") or repair_verdict.get("task")
-                or triage_outcome.get("task") or review.get("task") or {}
-            ),
-            "findings": list(
-                result.get("findings") or repair_verdict.get("findings")
-                or triage_outcome.get("findings") or review.get("findings") or []
-            ),
-            "reviewed_head_sha": str(result.get("reviewed_head_sha") or review.get("reviewed_head_sha") or ""),
-            "task_identity_sha256": str(result.get("task_identity_sha256") or review.get("task_identity_sha256") or ""),
-            "review_result_sha256": str(result.get("review_result_sha256") or review.get("review_result_sha256") or ""),
+            "task": dict(handoff.get("task") or {}),
+            "findings": list(handoff.get("findings") or []),
+            "reviewed_head_sha": str(handoff.get("reviewed_head_sha") or ""),
+            "task_identity_sha256": str(handoff.get("task_identity_sha256") or ""),
+            "review_result_sha256": str(handoff.get("review_result_sha256") or ""),
             "repair_push_intent_sha256": str(result.get("repair_push_intent_sha256") or ""),
             "repair_start_head_sha": str(
                 result.get("repair_start_head_sha") or repair_verdict.get("repair_start_head_sha")

@@ -35,11 +35,12 @@ def summarize(
             repair_kind=repair_kind,
             head_sha=str(selected.get("head_sha") or ""),
             review=decision,
-            task=dict(selected.get("task") or decision.get("task") or {}),
-            findings=list(selected.get("findings") or decision.get("findings") or []),
-            reviewed_head_sha=str(selected.get("reviewed_head_sha") or decision.get("reviewed_head_sha") or ""),
-            task_identity_sha256=str(selected.get("task_identity_sha256") or decision.get("task_identity_sha256") or ""),
-            review_result_sha256=str(selected.get("review_result_sha256") or decision.get("review_result_sha256") or ""),
+            # Explicit empty CI handoff fields override retained review evidence.
+            task=dict(selected.get("task", decision.get("task")) or {}),
+            findings=list(selected.get("findings", decision.get("findings")) or []),
+            reviewed_head_sha=str(selected.get("reviewed_head_sha", decision.get("reviewed_head_sha")) or ""),
+            task_identity_sha256=str(selected.get("task_identity_sha256", decision.get("task_identity_sha256")) or ""),
+            review_result_sha256=str(selected.get("review_result_sha256", decision.get("review_result_sha256")) or ""),
             repair_start_head_sha=str(selected.get("repair_start_head_sha") or ""),
         )
     elif repair and repair.get("reason") != "condition_not_met":
