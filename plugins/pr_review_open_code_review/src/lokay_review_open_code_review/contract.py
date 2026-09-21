@@ -258,20 +258,15 @@ def _manifest_coverage(
             raise ContractError("coverage is incomplete or contains non-complete states")
     elif not selected or not selected.issubset(expected):
         raise ContractError("coverage selected does not match reviewable preview")
-    selected_items = sorted(
-        (_coverage_item(row) for row in selected_rows if _path_identity(row) in expected),
-        key=lambda x: (x["path"], x["old_path"]),
-    )
+    groups = {
+        "selected": selected_rows, "completed": completed_rows,
+        "reused": reused_rows, "failed": failed_rows, "waived": waived_rows,
+    }
+    if any(not {_path_identity(row) for row in rows}.issubset(selected) for rows in groups.values()):
+        raise ContractError("coverage states are outside selected scope")
     return {
-        "selected": selected_items if require_complete else [
-            {"path": path, "old_path": old} for path, old in sorted(expected)
-        ],
-        "completed": selected_items if require_complete else [
-            {"path": path, "old_path": old} for path, old in sorted(expected)
-        ],
-        "reused": [],
-        "failed": [],
-        "waived": [],
+        name: sorted((_coverage_item(row) for row in rows), key=lambda x: (x["path"], x["old_path"]))
+        for name, rows in groups.items()
     }
 
 
@@ -432,11 +427,13 @@ def normalize_result(
         **expected_refs,
         "resolved_base_sha": normalized_request["comparison_base_sha"],
         "resolved_head_sha": normalized_request["head_sha"],
-        "terminal_state": "complete",
-        "run_failure": None,
-        "warning_count": 0,
-        "tool_failure_count": 0,
-        "budget_exceeded": False,
+        "terminal_state": manifest.get("terminal_state"),
+        "upstream_status": upstream.get("status"),
+        "run_failure": manifest.get("run_failure"),
+        "warnings": redact_vendor_warnings(upstream.get("warnings")),
+        "warning_count": len(upstream.get("warnings") or []),
+        "tool_failure_count": tool_calls.get("failure"),
+        "budget_exceeded": summary.get("budget_exceeded", False),
         "upstream_execution": {
             "ocr_version": ENGINE_VERSION,
             "provider": str(execution.get("provider")),

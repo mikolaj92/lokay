@@ -16,6 +16,7 @@ from typing import Any
 from lokay.code.github import InvalidBranchRef
 from lokay.envelope import emit_exit, ok
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.repair_worktree_dirt import repair_worktree_dirt
 from lokay.runner import git_spec
 from lokay.source import load_code
 
@@ -72,14 +73,7 @@ def verify_repair_start_identity(
             live=True,
         )
         local = str(local_result.stdout or "").strip().lower()
-        clean = command_runner.run(
-            git_spec(
-                ["status", "--porcelain=v1", "--untracked-files=all"],
-                cwd=worktree,
-                timeout_seconds=30,
-            ),
-            live=True,
-        )
+        dirt = repair_worktree_dirt(command_runner, worktree)
     except Exception:
         return {
             "ok": True, "route": "missing",
@@ -92,10 +86,7 @@ def verify_repair_start_identity(
         or local != expected
         or not re.fullmatch(r"[a-f0-9]{40}", local)
         or local_result.returncode != 0
-        or clean.returncode != 0
         or (local_result.stderr or "").strip()
-        or (clean.stdout or "").strip()
-        or (clean.stderr or "").strip()
     ):
         return {
             "ok": True,
@@ -105,9 +96,20 @@ def verify_repair_start_identity(
             "remote_head_sha": remote,
             "worktree_head_sha": local,
         }
+    if dirt in {"product", "unavailable"}:
+        return {
+            "ok": True,
+            "route": "missing",
+            "reason": "repair_start_product_dirt" if dirt == "product" else "repair_start_identity_unavailable",
+            "expected_head_sha": expected,
+            "remote_head_sha": remote,
+            "worktree_head_sha": local,
+            "worktree_dirt": dirt,
+        }
     return {
         "ok": True,
         "route": "ready",
+        "worktree_dirt": dirt,
         "repair_start_head_sha": expected,
         "worktree_head_sha": local,
     }
@@ -164,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo, pr=args.pr, branch=args.branch,
             repair_start_head_sha=repair_start_sha,
         ))
+    identity: dict[str, Any] = {}
     try:
         command_runner = runner()
         if repair_start_sha:
@@ -216,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                 ))
             identity = {
                 "worktree_head_sha": identity["worktree_head_sha"],
+                "worktree_dirt": identity["worktree_dirt"],
                 "verified_repair_start_head_sha": identity["repair_start_head_sha"],
             }
     except InvalidBranchRef as exc:
@@ -251,6 +255,7 @@ def main(argv: list[str] | None = None) -> int:
             **({
                 "repair_start_head_sha": identity["verified_repair_start_head_sha"],
                 "worktree_head_sha": identity["worktree_head_sha"],
+                "worktree_dirt": identity["worktree_dirt"],
             } if repair_start_sha else {
                 "repair_start_head_sha": str(args.repair_start_head_sha or "").lower(),
             }),

@@ -169,6 +169,15 @@ the ledger for step order.
 The retired `closeout_prs` catalog path is removed. Live `pr_triage_department`
 and `pr_repair_department` own fleet PR decisions and repairs. The single-PR
 `closeout_pr` child remains for existing-PR delivery and the explicit CLI. Parent `issue_to_pr` closeout of an existing open/merged ai/fix PR is path success (`delivered`, reason `delivery_pr_exists`), never `condition_not_met`.
+
+Its repair authorization forwards distinct contracts through the shared repair
+helper: CI uses the checks' stable head SHA without review identity; review uses
+the reviewed SHA, original task, findings and both identity digests. Missing or
+conflicting identity, dry-run, disabled executor and exhausted budget do not
+start the child. The CLI's local `repair_used` budget counts a published correction
+or an evidenced coding invocation (including failed/timeout attempts), not
+admission skips or infrastructure blocks. This is not the daemon department's
+durable, push-confirmed lifetime receipt. The authored closeout edges are unchanged.
 `product_entry` / `product_pass_budget` are CLI multi-pass wrappers, not the
 heartbeat. `leftover_catalog` only parks CLOSED-ready labels.
 ### `pr_triage_department` (PR sieve)

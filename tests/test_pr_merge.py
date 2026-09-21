@@ -17,7 +17,7 @@ def test_factory_repo_still_merges_and_parks_issue(
 ) -> None:
     cfg = type("Cfg", (), {"merge_enabled": True, "repos": [], "worktrees_root": Path("/tmp")})()
     sentinel_runner = object()
-    merge_calls: list[tuple[object, str, int, bool]] = []
+    merge_calls: list[tuple[object, str, int, bool, str]] = []
     park_calls: list[tuple[object, list[str]]] = []
 
     monkeypatch.setattr(pr_merge, "load_cfg", lambda _args: cfg)
@@ -30,8 +30,8 @@ def test_factory_repo_still_merges_and_parks_issue(
     monkeypatch.setattr(
         github_code,
         "merge_pr",
-        lambda merge_runner, repo, pr, *, live: merge_calls.append(
-            (merge_runner, repo, pr, live)
+        lambda merge_runner, repo, pr, *, live, expected_head_sha: merge_calls.append(
+            (merge_runner, repo, pr, live, expected_head_sha)
         ),
     )
     monkeypatch.setattr(github_code, "view_pr", lambda *_a, **_k: {})
@@ -52,11 +52,12 @@ def test_factory_repo_still_merges_and_parks_issue(
                 "--issue",
                 "522",
                 "--live",
+                "--expected-head-sha", "a" * 40,
             ]
         )
         == 0
     )
-    assert merge_calls == [(sentinel_runner, "mikolaj92/lokay", 522, True)]
+    assert merge_calls == [(sentinel_runner, "mikolaj92/lokay", 522, True, "a" * 40)]
     assert park_calls == [
         (
             pr_merge.unbounded_park.main,
@@ -69,6 +70,7 @@ def test_factory_repo_still_merges_and_parks_issue(
         "repo": "mikolaj92/lokay",
         "pr": 522,
         "merged": True,
+        "reviewed_head_sha": "a" * 40,
         "issue": 522,
         "parked": {"ok": True},
     }

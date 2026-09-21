@@ -33,7 +33,7 @@ def _pr(
     description: str = "",
     status: str = "active",
     head: str = "ai/fix/7-parser",
-    commit: str = "abc123",
+    commit: str = "a" * 40,
     comments: list[str] | None = None,
     checks: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -133,6 +133,8 @@ class RecordedAzureRepos:
             if options.get("mergeStrategy") == "squash":
                 raise AssertionError("merge-commit must not squash")
             if (payload or {}).get("status") == "completed":
+                if payload.get("lastMergeSourceCommit") != item["lastMergeSourceCommit"]:
+                    return 409, {"message": "head changed"}
                 item["status"] = "completed"
             if (payload or {}).get("status") == "abandoned":
                 item["status"] = "abandoned"
@@ -298,15 +300,28 @@ def test_azure_plugin_path_and_merge_commit_from_one_target(tmp_path: Path) -> N
     assert rows[0].head == "ai/fix/7-parser"
     assert rows[0].target == host.target
 
-    merged = contract.pr.merge_commit(7)
+    merged = contract.pr.merge_commit(7, expected_head_sha="a" * 40)
     assert merged.state == "merged"
     assert merged.merge_method == "merge"
     assert merged.merge_method != "squash"
     patches = [payload for method, _, payload in transport.calls if method == "PATCH"]
     assert patches
     assert patches[0]["status"] == "completed"
+    assert patches[0]["lastMergeSourceCommit"] == {"commitId": "a" * 40}
+    assert not patches[0]["completionOptions"].get("bypassPolicy")
     assert patches[0]["completionOptions"]["mergeStrategy"] == "noFastForward"
     assert patches[0]["completionOptions"]["mergeStrategy"] != "squash"
+
+
+def test_merge_rejects_changed_azure_head_without_rebinding(tmp_path: Path) -> None:
+    transport = RecordedAzureRepos([_pr(7, commit="b" * 40)])
+    host = _host(tmp_path, _Runner(), _cfg(tmp_path), transport)
+    with pytest.raises(CodeError):
+        host.pr.merge_commit(7, expected_head_sha="a" * 40)
+    assert transport.items[7]["status"] == "active"
+    patches = [payload for method, _, payload in transport.calls if method == "PATCH"]
+    assert len(patches) == 1
+    assert patches[0]["lastMergeSourceCommit"] == {"commitId": "a" * 40}
 
 
 def test_load_code_from_catalog_field(tmp_path: Path) -> None:
@@ -323,7 +338,7 @@ def test_load_code_from_catalog_field(tmp_path: Path) -> None:
     )
     assert contract.target == CodeTarget(plugin="azure", id="contoso/app/repo")
     contract.repo.clone()
-    contract.pr.merge_commit(7)
+    contract.pr.merge_commit(7, expected_head_sha="a" * 40)
     assert any(argv[:2] == ("git", "clone") for argv in runner.calls)
     assert any(method == "PATCH" for method, _, _ in transport.calls)
 
@@ -397,7 +412,7 @@ def test_no_login_says_so_and_does_not_fake_success(tmp_path: Path) -> None:
     with pytest.raises(AzureLoginError, match="no login"):
         host.pr.comment(1, "x")
     with pytest.raises(AzureLoginError, match="no login"):
-        host.pr.merge_commit(1)
+        host.pr.merge_commit(1, expected_head_sha="a" * 40)
     with pytest.raises(AzureLoginError, match="no login"):
         host.pr.close(1)
 

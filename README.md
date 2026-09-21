@@ -20,7 +20,12 @@ identity. A recovered push consumes this pass without review or merge; an
 unavailable or mismatched identity fails closed. This runs even when
 `pr_repair` is disabled, and dry-run never probes GitHub.
 `record_pass` collects department results, then `factory_pass_terminal` returns
-the receipt. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
+the receipt. Compact `pr_triage` and `pr_repair` evidence remain independent:
+blocked repair records `health=pr_repair_blocked` and its named reason; a confirmed
+new repair SHA is progress (`health=repairing`), not `new_pr` or `merge`.
+Skip memory uses separate `skipped_issue_repo` and `skipped_pr_repo` tuples.
+`skipped_repo` remains a PR-only compatibility alias. Complete legacy PR-only
+receipts are accepted; mixed issue/PR legacy identities are not inferred. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
 prerequisite for departments or the receipt. A started worker is occupancy;
 only a published PR or merge is delivery. Remaining work is not silently idle.
 
@@ -94,6 +99,13 @@ wybrany kolektor, a druga prośba o dowody trafia do terminala ręcznego. Recenz
 aby sprawdzić zakres przed kosztowną recenzją. Dopiero zgodny zakres uruchamia
 `pr_review_agent` (`ocr review`); coverage pochodzi z evidence hosta i manifestu vendora.
 Błędny wynik kończy się fail-closed, bez generatywnego retry.
+
+`status=complete` zamyka decyzję, nie fałszuje wykonania silnika. Poprawnie
+zakotwiczone findings wystarczają do `request_changes` także przy częściowym
+przeglądzie. `evidence` zachowuje terminal, budżet, awarię i zredagowane warningi,
+a `coverage` rzeczywiste selected/completed/failed/reused/waived. Te dane trafiają
+do trwałego artefaktu. `approve` nadal wymaga kompletnego przeglądu całego
+zakresu bez materialnych warningów; pusta recenzja częściowa pozostaje KEEP.
 
 Ten diagram jest kontraktem projektowym. **Każda zmiana przepływu zaczyna się
 od zmiany i przeglądu diagramu. Dopiero zaakceptowany diagram wolno zakodować
@@ -1505,7 +1517,8 @@ stateDiagram-v2
     AdmitPrRepair --> SkipMerged: MERGED / CLOSED
     SkipMerged --> [*]
     AdmitPrRepair --> PrepareRepairWorktree: OPEN
-    PrepareRepairWorktree --> CollectRepairEvidence
+    PrepareRepairWorktree --> CollectRepairEvidence: ready, dokładny start SHA
+    PrepareRepairWorktree --> RepairResult: missing → blocked + nazwany reason; bez agenta i push
     CollectRepairEvidence --> RepairAgent
     RepairAgent --> ValidateRepairResult
     ValidateRepairResult --> SelectRepairResult: wynik poprawny
@@ -1546,6 +1559,11 @@ stateDiagram-v2
     HumanTerminal --> [*]
     RepairTerminal --> [*]
 ```
+
+Naprawa review startuje z `reviewed_head_sha`, jeśli wywołujący nie podał
+osobnego start SHA. Sprzeczne SHA są odrzucane; nigdy nie zastępuje ich świeży
+HEAD z GitHuba. Summary czyta wynik `worktree_add`: brak tożsamości lub drift
+kończy się `blocked` z oryginalnym kodem przyczyny, nie `not_applicable`.
 
 ### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
 

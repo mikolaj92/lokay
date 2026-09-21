@@ -31,8 +31,11 @@ def test_memory_host_gives_branch_and_merges_pr(tmp_path: Path) -> None:
     contract = bind_code(host.target, repo=host.repo, pr=host.pr)
     head = contract.repo.branch("topic")
     assert head == "topic"
-    host.put_change(7, title="fix parser", head=head)
-    merged = contract.pr.merge_commit(7)
+    host.put_change(7, title="fix parser", head=head, head_sha="a" * 40)
+    with pytest.raises(CodeError, match="head changed"):
+        contract.pr.merge_commit(7, expected_head_sha="b" * 40)
+    assert contract.pr.get(7).state == "open"
+    merged = contract.pr.merge_commit(7, expected_head_sha="a" * 40)
     assert merged.state == "merged"
     assert merged.merge_method == "merge"
     assert merged.merge_method != "squash"
@@ -122,7 +125,7 @@ def test_same_target_bind_keeps_one_place(tmp_path: Path) -> None:
 
 def test_merge_commit_rejects_closed_change(tmp_path: Path) -> None:
     host = _host(tmp_path)
-    host.put_change(1, title="x", head="h")
+    host.put_change(1, title="x", head="h", head_sha="a" * 40)
     host.pr.close(1)
     with pytest.raises(CodeError, match="cannot merge-commit"):
-        host.pr.merge_commit(1)
+        host.pr.merge_commit(1, expected_head_sha="a" * 40)

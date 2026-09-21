@@ -10,6 +10,7 @@ def summarize(
     branch: str,
     admit: dict | None = None,
     repair_handoff: dict | None = None,
+    worktree: dict | None = None,
 ) -> dict:
     """repaired/published only when tests publish *and* push succeeded (#1016).
 
@@ -40,6 +41,19 @@ def summarize(
     findings = handoff.get("findings")
     repair_kind = str(handoff.get("kind") or "")
     start_head_sha = str(handoff.get("start_head_sha") or handoff.get("head_sha") or "").lower()
+    worktree = worktree or {}
+    if worktree.get("route") == "missing":
+        return {
+            "ok": True,  # Summary executed; the domain repair is blocked.
+            "result": {
+                "ok": False,
+                "repo": repo, "pr": pr, "branch": branch,
+                "repaired": False, "published": False,
+                "terminal": "blocked",
+                "reason": str(worktree.get("reason") or "repair_worktree_missing"),
+                "head_sha": start_head_sha,
+            },
+        }
     if repair_kind not in {"ci", "review"}:
         return {
             "ok": False,

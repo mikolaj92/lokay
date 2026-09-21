@@ -43,7 +43,7 @@ def handle_pr_closeout(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
             if atom == "authorize_closeout_repair"
             else up.get("classify_closeout_triage")
         )
-        return authorize(up.get("classify_closeout_gate") or {}, source or {})
+        return authorize(up.get("classify_closeout_gate") or {}, source or {}, live=live)
     if atom in {"run_closeout_repair", "run_closeout_review_repair"}:
         from lokay.proc.run_closeout_repair import repair
 
@@ -56,6 +56,7 @@ def handle_pr_closeout(atom: str, inputs: dict[str, Any], up: dict[str, dict[str
             up.get("classify_closeout_gate") or {},
             up.get(auth) or {},
             config_path=config,
+            live=live,
         )
     if atom == "run_closeout_triage":
         from lokay.proc.run_closeout_triage import triage

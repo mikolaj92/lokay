@@ -4,10 +4,10 @@ The expanded Fala catalog is the authority for generated graph suites. Native te
 
 - Paths: **46**
 - Expanded nodes and per-node suites: **627**
-- Conduction edges: **1394**
+- Conduction edges: **1395**
 - `when` branches: **246**
 - Authored effectors with `output_schema`: **555** / missing **0**.
-- Authored (before expansion): 527 nodes / 1173 edges / 221 `when` branches.
+- Authored (before expansion): 527 nodes / 1174 edges / 221 `when` branches.
 
 Each path has `test_<atom>.py`, `test_transitions.py`, and `test_graph.py`. The audit compares node metadata and transition metadata against `fala/lokay.expanded.golden.json`; it does not treat file names as proof of execution.
 
@@ -21,7 +21,7 @@ Each path has `test_<atom>.py`, `test_transitions.py`, and `test_graph.py`. The 
 | `local_repair_execution` | 11 | 23 | 5 |
 | `issue_triage` | 26 | 71 | 15 |
 | `issue_split` | 13 | 42 | 10 |
-| `pr_repair` | 38 | 95 | 28 |
+| `pr_repair` | 38 | 96 | 28 |
 | `pr_triage` | 27 | 75 | 18 |
 | `self_repair` | 9 | 15 | 0 |
 | `stale_worktree_reap` | 3 | 3 | 0 |

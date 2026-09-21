@@ -22,6 +22,12 @@ def classify(triaged: dict) -> dict:
         "reason": str(tri.get("reason") or ""),
         "deltas": triage_skip_deltas(tri),
         "review": dict(tri.get("review") or {}),
+        "repair_kind": str(tri.get("repair_kind") or ""),
+        "repair_start_head_sha": str(tri.get("repair_start_head_sha") or tri.get("head_sha") or ""),
+        **{key: tri[key] for key in (
+            "task", "findings", "reviewed_head_sha",
+            "task_identity_sha256", "review_result_sha256",
+        ) if key in tri},
         "step": "pr_review_repair",
         "park_manual": park_needs_review(tri),
         "triage": tri,

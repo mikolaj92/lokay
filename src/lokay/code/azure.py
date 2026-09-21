@@ -427,21 +427,11 @@ class AzurePr:
             return replace(row, comments=row.comments + (text,))
         return row
 
-    def _source_commit(self, number: int) -> str:
-        status, payload = self._client.call("GET", f"pullrequests/{int(number)}")
-        if status >= 400 or not isinstance(payload, dict):
-            self._client.raise_for(status if status >= 400 else 500, payload, action="merge")
-        source = payload.get("lastMergeSourceCommit")
-        commit = ""
-        if isinstance(source, dict):
-            commit = str(source.get("commitId") or "").strip()
-        if not commit:
-            raise CodeError(f"change {number} has no merge source commit")
-        return commit
+    def merge_commit(self, number: int, *, expected_head_sha: str) -> Change:
+        from lokay.code.pr import require_head_sha
 
-    def merge_commit(self, number: int) -> Change:
+        commit = require_head_sha(expected_head_sha)
         if self._live:
-            commit = self._source_commit(int(number))
             status, payload = self._client.call(
                 "PATCH",
                 f"pullrequests/{int(number)}",

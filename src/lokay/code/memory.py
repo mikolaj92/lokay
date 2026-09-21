@@ -85,8 +85,13 @@ class MemoryPr:
         row = self._get(number)
         return self._put(replace(row, comments=row.comments + (text,)))
 
-    def merge_commit(self, number: int) -> Change:
+    def merge_commit(self, number: int, *, expected_head_sha: str) -> Change:
+        from lokay.code.pr import require_head_sha
+
+        require_head_sha(expected_head_sha)
         row = self._get(number)
+        if row.head_sha != expected_head_sha:
+            raise CodeError(f"change {number} head changed")
         if row.state != "open":
             raise CodeError(f"change {number} is {row.state}, cannot merge-commit")
         return self._put(replace(row, state="merged", merge_method="merge"))
@@ -115,6 +120,7 @@ class MemoryCode:
         head: str,
         body: str = "",
         checks_status: str = "none",
+        head_sha: str = "",
     ) -> Change:
         """Place an open change on this target. Not a task."""
         change = Change(
@@ -125,6 +131,7 @@ class MemoryCode:
             head=_need_name(head, what="head"),
             state="open",
             checks_status=str(checks_status or "none"),
+            head_sha=head_sha,
         )
         self._store.changes[change.number] = change
         return change

@@ -212,8 +212,9 @@ class GithubPr:
             return replace(row, comments=row.comments + (text,))
         return row
 
-    def merge_commit(self, number: int) -> Change:
-        merge_pr(self._runner, self.target.id, int(number), live=self._live)
+    def merge_commit(self, number: int, *, expected_head_sha: str) -> Change:
+        merge_pr(self._runner, self.target.id, int(number), live=self._live,
+                 expected_head_sha=expected_head_sha)
         try:
             row = self.get(int(number))
         except CodeError:

@@ -323,7 +323,12 @@ def pr_checks_report(
     }
 
 
-def merge_pr(runner: Runner, repo: str, number: int, *, live: bool) -> CommandResult:
+def merge_pr(
+    runner: Runner, repo: str, number: int, *, live: bool, expected_head_sha: str
+) -> CommandResult:
+    from lokay.code.pr import require_head_sha
+
+    require_head_sha(expected_head_sha)
     return runner.run_checked(
         gh_spec(
             [
@@ -334,6 +339,8 @@ def merge_pr(runner: Runner, repo: str, number: int, *, live: bool) -> CommandRe
                 repo,
                 "--merge",
                 "--delete-branch=false",
+                "--match-head-commit",
+                expected_head_sha,
             ],
             timeout_seconds=180,
         ),

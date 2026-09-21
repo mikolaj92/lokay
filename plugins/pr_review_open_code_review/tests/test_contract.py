@@ -230,8 +230,9 @@ def test_vendor_comments_close_review_when_budget_or_terminal_is_partial():
     upstream["warnings"] = [
         {"type": "token_budget_reached", "file": "src/demo.py", "message": "budget"}
     ]
+    upstream["manifest"]["coverage"]["completed"] = []
     upstream["manifest"]["coverage"]["failed"] = [
-        {"item_id": "budget-1", "path": "src/other.py", "fingerprint": "5" * 32}
+        {"item_id": "budget-1", "path": "src/demo.py", "fingerprint": "5" * 32}
     ]
 
     result = _normalize(preview=preview, upstream=upstream)
@@ -241,6 +242,9 @@ def test_vendor_comments_close_review_when_budget_or_terminal_is_partial():
     assert result["status"] == "complete"
     assert result["findings"]
     assert result["findings"][0]["content"] == "Blank IDs reach persistence."
+    assert result["coverage"]["completed"] == []
+    assert result["coverage"]["failed"] == [{"path": "src/demo.py", "old_path": ""}]
+    assert result["evidence"]["budget_exceeded"] is True
 
 
 def test_empty_vendor_comments_with_budget_remain_occupancy():
@@ -309,7 +313,10 @@ def test_operational_ocr_nits_do_not_fail_closed():
     assert result["ok"] is True
     assert result["status"] == "complete"
     assert result["findings"]
-    assert result["evidence"]["warning_count"] == 0
+    assert result["evidence"]["warning_count"] == 2
+    assert [w["type"] for w in result["evidence"]["warnings"]] == [
+        "comment_refiled", "comment_args_repaired"
+    ]
 
 
 @pytest.mark.parametrize(

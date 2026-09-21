@@ -1,6 +1,6 @@
 """PR sieve receipt. Review + merge. Repair is a verdict, not a child start."""
 
-from lokay.proc.walk_pr_leftover import consumes, leftover_after
+from lokay.proc.walk_pr_leftover import consumes, leftover_after, skipped_fields
 
 
 def summarize(
@@ -117,13 +117,11 @@ def summarize(
         receipt["leftover_prs"] = leftover_prs
         receipt["leftover"] = len(leftover_prs)
         if consumes(stamp) and str(picked.get("route") or "") == "pr":
-            receipt["skipped_pr"] = picked.get("pr")
-            receipt["skipped_repo"] = picked.get("repo")
-            receipt["skipped_head_sha"] = (
-                picked.get("head_sha") or receipt.get("reviewed_head_sha") or ""
-            )
-        elif picked.get("skipped_pr") is not None:
-            receipt["skipped_pr"] = picked.get("skipped_pr")
-            receipt["skipped_repo"] = picked.get("skipped_repo")
-            receipt["skipped_head_sha"] = picked.get("skipped_head_sha") or ""
+            receipt.update(skipped_fields({
+                "skipped_pr": picked.get("pr"),
+                "skipped_pr_repo": picked.get("repo"),
+                "skipped_head_sha": picked.get("head_sha"),
+            }))
+        else:
+            receipt.update(skipped_fields(picked))
     return {**receipt, "result": dict(receipt)}

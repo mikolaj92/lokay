@@ -71,7 +71,7 @@ def test_checks_route_repairs_once():
     }
     routed = route(
         {"inspected": item},
-        {"route": "route", "checks": {"ok": True, "status": "failed"}},
+        {"route": "route", "checks": {"ok": True, "status": "failed", "head_sha": "a" * 40}},
         live=True,
     )
     assert (

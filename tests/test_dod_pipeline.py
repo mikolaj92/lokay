@@ -123,7 +123,8 @@ def test_pr_merge_mergeable_reports_merged(tmp_path, monkeypatch, capsys):
         ),
     )
     code = pr_merge.main(
-        ["--config", str(cfg), "--live", "--repo", "mikolaj92/lokay", "--pr", "88"]
+        ["--config", str(cfg), "--live", "--repo", "mikolaj92/lokay", "--pr", "88",
+         "--expected-head-sha", "a" * 40]
     )
     assert code == 0
     env = _envelope(capsys)
@@ -152,6 +153,7 @@ def test_pr_merge_with_issue_parks_ready_labels(tmp_path, monkeypatch, capsys):
             "--config",
             str(cfg),
             "--live",
+            "--expected-head-sha", "a" * 40,
             "--repo",
             "mikolaj92/lokay",
             "--pr",
@@ -191,6 +193,7 @@ def test_pr_merge_dry_run_does_not_park_issue(tmp_path, monkeypatch, capsys):
         [
             "--config",
             str(cfg),
+            "--expected-head-sha", "a" * 40,
             "--repo",
             "mikolaj92/lokay",
             "--pr",

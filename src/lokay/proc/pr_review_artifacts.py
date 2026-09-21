@@ -98,6 +98,7 @@ def _artifact(cfg: Config, repo: str, pr: int, evidence: Mapping[str, Any], deci
             "review_preview_sha256": str(decision.get("review_preview_sha256") or ""),
             "review_rule_config_sha256": str(decision.get("review_rule_config_sha256") or ""),
             "review_runtime_config_sha256": str(decision.get("review_runtime_config_sha256") or ""),
+            **{key: _sanitize(decision[key]) for key in ("review_evidence", "review_coverage") if key in decision},
         },
     }
 

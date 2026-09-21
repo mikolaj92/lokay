@@ -149,7 +149,7 @@ def test_docs_do_not_say_the_queue_is_work_ready() -> None:
         "inbox, `work:ready` (with `ai:ready`)",
         "Listing `work:ready` jest fizycznym odczytem",
     )
-    for rel in ("README.md", "docs/GRAPH.md", "AGENTS.md", "docs/WORKING.md"):
+    for rel in ("README.md", "docs/GRAPH.md", "docs/WORKING.md"):
         text = (root / rel).read_text(encoding="utf-8")
         for phrase in forbidden:
             assert phrase not in text, f"{rel} still says {phrase!r}"

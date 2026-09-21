@@ -70,7 +70,7 @@
       "when_branches": 10
     },
     {
-      "conduction_edges": 95,
+      "conduction_edges": 96,
       "mismatches": [],
       "node_suites": 38,
       "nodes": 38,
@@ -375,12 +375,12 @@
     }
   ],
   "totals": {
-    "authored_conduction_edges": 1173,
+    "authored_conduction_edges": 1174,
     "authored_effectors_missing_schema": 0,
     "authored_effectors_with_schema": 555,
     "authored_nodes": 527,
     "authored_when_branches": 221,
-    "conduction_edges": 1394,
+    "conduction_edges": 1395,
     "expanded_nodes": 627,
     "node_suites": 627,
     "paths": 46,

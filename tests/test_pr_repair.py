@@ -59,6 +59,53 @@ def test_factory_repo_propagates_explicit_repair_kind(
     assert seen["extra_inputs"]["repair_kind"] == "ci"
 
 
+def test_reviewed_sha_reaches_worktree_when_explicit_start_was_omitted(monkeypatch):
+    from lokay.organ.implement import handle_implement
+
+    sha = "b37a7c81a4e634729d2f7cbc60b8f7d51aa8b755"
+    calls = []
+
+    def run_path(**kwargs):
+        inputs = {**kwargs["extra_inputs"], "pr": kwargs["pr"], "branch": kwargs["branch"]}
+        return handle_implement(
+            "worktree_add", inputs, {},
+            {"cfg": [], "live": [], "repo": kwargs["repo"], "issue_number": None,
+             "pr_number": kwargs["pr"], "repair_mode": True, "branch": kwargs["branch"],
+             "run_atom_main": lambda _main, argv: calls.append(argv) or {"ok": True, "route": "ready"}},
+        )
+
+    monkeypatch.setattr(pr_repair, "run_path", run_path)
+    monkeypatch.setattr(pr_repair, "append_event", lambda *_a: None)
+    out = pr_repair.compose_pr_repair(
+        config_path=None, repo="o/r", pr_number=34, branch="ai/fix/17-docs",
+        live=False, repair_kind="review", reviewed_head_sha=sha,
+        review={"verdict": "request_changes", "reviewed_head_sha": sha},
+    )
+    assert out["route"] == "ready"
+    assert calls[0][calls[0].index("--repair-start-head-sha") + 1] == sha
+
+
+def test_review_repair_rejects_conflicting_start_sha_before_graph(monkeypatch):
+    monkeypatch.setattr(pr_repair, "run_path", lambda **_kw: pytest.fail("identity drift must not run"))
+    out = pr_repair.compose_pr_repair(
+        config_path=None, repo="o/r", pr_number=34, branch="ai/fix/17-docs",
+        live=False, repair_kind="review", reviewed_head_sha="a" * 40,
+        repair_start_head_sha="b" * 40,
+    )
+    assert out["ok"] is False
+    assert out["result"]["reason"] == "repair_start_head_mismatch"
+
+
+def test_repair_cli_carries_explicit_start_sha(monkeypatch, capsys):
+    seen = {}
+    monkeypatch.setattr(pr_repair, "compose_pr_repair", lambda **kw: seen.update(kw) or {"ok": True})
+    assert pr_repair.main([
+        "--repo", "o/r", "--pr", "34", "--branch", "ai/fix/17-docs",
+        "--repair-kind", "ci", "--repair-start-head-sha", "a" * 40,
+    ]) == 0
+    assert seen["repair_start_head_sha"] == "a" * 40
+
+
 def test_factory_repo_runs_fala_and_propagates_review(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

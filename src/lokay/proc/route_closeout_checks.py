@@ -19,7 +19,7 @@ def route(gate: dict, checked: dict, *, live: bool) -> dict:
     reason = str(out.get("reason") or "")
     route = (
         "repair"
-        if r == "repair"
+        if r == "repair" and live
         else "triage" if r == "merge" and live and item.get("head") else "final"
     )
     return {
@@ -29,4 +29,6 @@ def route(gate: dict, checked: dict, *, live: bool) -> dict:
         "reason": reason,
         "deltas": route_deltas(r, reason),
         "routed": out,
+        "repair_kind": "ci" if r == "repair" else "",
+        "repair_start_head_sha": str((checked.get("checks") or {}).get("head_sha") or ""),
     }
