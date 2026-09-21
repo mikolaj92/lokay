@@ -147,6 +147,7 @@ def handle_repair_boundary(
             pr=pr,
             branch=str(inputs.get("branch") or ""),
             admit=up.get("admit_pr_repair") or {},
+            worktree=up.get("worktree_add") or {},
             repair_handoff={
                 "kind": repair_kind,
                 "start_head_sha": start_head_sha,

@@ -50,6 +50,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         return err("review engine identity drift", route="fail_closed")
     if result.get("status") != "complete" or not isinstance(result.get("findings"), list):
         return err("review result is incomplete", route="fail_closed")
+    has_findings = bool(result["findings"])
     evidence = result.get("evidence")
     coverage = result.get("coverage")
     task = request.get("task")
@@ -84,10 +85,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         return err("review evidence or coverage is missing", route="fail_closed")
     if (
         evidence.get("manifest_schema") != "ocr.run-manifest/v1"
-        or evidence.get("terminal_state") != "complete"
-        or evidence.get("warning_count") != 0
         or evidence.get("tool_failure_count") != 0
-        or evidence.get("budget_exceeded") is not False
         or evidence.get("resolved_head_sha") != request.get("head_sha")
         or evidence.get("resolved_base_sha") != request.get("comparison_base_sha")
         or evidence.get("requested_from") != request.get("base_ref_sha")
@@ -102,29 +100,45 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         or evidence.get("exact_range") != f"{request.get('comparison_base_sha')}..{request.get('head_sha')}"
         or evidence.get("operation") != "review"
         or evidence.get("input_mode") != "range"
-        or evidence.get("warning_count") != 0
-        or evidence.get("tool_failure_count") != 0
     ):
         return err("review evidence is incomplete or inconsistent", route="fail_closed")
+    warnings = evidence.get("warnings", [])
+    if not has_findings and (
+        evidence.get("terminal_state") != "complete"
+        or evidence.get("upstream_status", "complete") != "complete"
+        or evidence.get("run_failure") not in (None, {})
+        or evidence.get("budget_exceeded") is not False
+        or not isinstance(warnings, list)
+        or evidence.get("warning_count") != len(warnings)
+        or any(not isinstance(w, Mapping) or w.get("type") not in {
+            "comment_refiled", "comment_args_repaired"
+        } for w in warnings)
+    ):
+        return err("review execution is incomplete", route="fail_closed")
     paths = coverage.get("reviewable_paths")
     selected, completed = coverage.get("selected"), coverage.get("completed")
     if (
         not isinstance(paths, list) or not paths
         or not isinstance(selected, list) or not isinstance(completed, list)
-        or coverage.get("failed") != []
-        or coverage.get("waived") != []
-        or coverage.get("reused") != []
+        or any(not isinstance(coverage.get(key), list) for key in ("failed", "waived", "reused"))
     ):
         return err("review coverage is incomplete", route="fail_closed")
     try:
         selected_set = {_path_identity(row) for row in selected if isinstance(row, Mapping)}
         completed_set = {_path_identity(row) for row in completed if isinstance(row, Mapping)}
-        if (
-            len(selected_set) != len(selected) or len(completed_set) != len(completed)
-            or selected_set != completed_set
-            or selected_set != {(row.get("path"), row.get("old_path", "")) for row in paths if isinstance(row, Mapping)}
-        ):
+        expected_set = {_path_identity(row) for row in paths if isinstance(row, Mapping)}
+        if not selected_set or not selected_set.issubset(expected_set):
             return err("review coverage identity sets are inconsistent", route="fail_closed")
+        for key in ("selected", "completed", "failed", "waived", "reused"):
+            rows = coverage[key]
+            identities = {_path_identity(row) for row in rows if isinstance(row, Mapping)}
+            if len(identities) != len(rows) or not identities.issubset(selected_set):
+                return err("review coverage identity sets are inconsistent", route="fail_closed")
+        if not has_findings and (
+            selected_set != completed_set or selected_set != expected_set
+            or any(coverage[key] for key in ("failed", "waived", "reused"))
+        ):
+            return err("review coverage is incomplete", route="fail_closed")
     except (TypeError, ValueError):
         return err("review coverage identities are malformed", route="fail_closed")
     normalized_findings: list[dict[str, Any]] = []
@@ -197,6 +211,8 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         "nits": [],
         "summary": str(result.get("summary") or "Review complete."),
         "findings": normalized_findings,
+        "review_evidence": dict(evidence),
+        "review_coverage": dict(coverage),
         "reviewed_head_sha": request["head_sha"],
         "task": request.get("task"),
         "task_identity_sha256": request.get("task_identity_sha256"),

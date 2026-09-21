@@ -224,8 +224,11 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
     )
     repo, pr = str(selected["repo"]), int(selected["pr"])
     branch = str(selected.get("branch") or "")
-    nested_result = result.get("result") if isinstance(result.get("result"), Mapping) else {}
+    nested_result = result.get("result")
+    if not isinstance(nested_result, Mapping):
+        nested_result = {}
     result_branch = str(nested_result.get("branch") or result.get("branch") or "")
+    failure_reason = str(nested_result.get("reason") or result.get("reason") or "repair_push_not_confirmed")
     confirmed = (
         confirmed and result_repo == repo and result_pr == pr
         and result_branch == branch
@@ -238,7 +241,7 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
         return {
             "ok": True,
             "route": "planned" if confirmed else "fail_closed",
-            "reason": "repair_push_not_live" if confirmed else "repair_push_not_confirmed",
+            "reason": "repair_push_not_live" if confirmed else failure_reason,
             "repair": result,
             "attempts": int(receipt.get("attempts") or 0),
             "budget": int(receipt.get("budget") or budget),
@@ -286,7 +289,7 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
     if not confirmed or not intent_matches_result:
         return {
             "ok": True, "route": "fail_closed",
-            "reason": "repair_push_intent_result_mismatch" if confirmed else "repair_push_not_confirmed",
+            "reason": "repair_push_intent_result_mismatch" if confirmed else failure_reason,
             "repair": result,
             "attempts": int(receipt.get("attempts") or 0),
             "budget": int(receipt.get("budget") or budget),

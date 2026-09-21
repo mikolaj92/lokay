@@ -70,7 +70,9 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
                   decision={"verdict": "fail_closed"}, merge_ok=False,
                   reason=str(selected.get("reason") or "review_not_validated"),
                   applied=False, execution={"source": "open-code-review"})
-    decision_data = selected.get("decision") if isinstance(selected.get("decision"), dict) else {}
+    decision_data = selected.get("decision")
+    if not isinstance(decision_data, dict):
+        decision_data = {}
     decision = _decision(decision_data)
     head = str(evidence.get("head_sha") or "")
     if not head or decision.reviewed_head_sha != head or decision.task_identity_sha256 != evidence.get("task_identity_sha256"):
@@ -86,9 +88,13 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
     )
     if not decision.review_result_sha256:
         return err("review result digest is required for durable publication", route="fail_closed")
+    published_decision = {
+        **decision.to_dict(),
+        **{key: decision_data[key] for key in ("review_evidence", "review_coverage") if key in decision_data},
+    }
     artifact = persist_result(
         cfg=cfg, repo=repo, pr=pr, evidence=evidence,
-        decision=decision.to_dict(),
+        decision=published_decision,
     )
     if not artifact.get("ok"):
         return err("durable review artifact could not be verified", route="fail_closed")
@@ -117,7 +123,7 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
         publish_review(runner(cfg), repo, pr, body, labels_for_review(decision, escalated=escalated), live=True)
     return ok(
         repo=repo, pr=pr, head_sha=head,
-        decision=decision.to_dict(), merge_ok=merge_ok and not decision.findings,
+        decision=published_decision, merge_ok=merge_ok and not decision.findings,
         escalated=escalated, applied=applied,
         request_changes_count=prior + (1 if decision.verdict == "request_changes" else 0),
         execution={"source": "open-code-review"},

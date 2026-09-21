@@ -95,6 +95,13 @@ aby sprawdzić zakres przed kosztowną recenzją. Dopiero zgodny zakres uruchami
 `pr_review_agent` (`ocr review`); coverage pochodzi z evidence hosta i manifestu vendora.
 Błędny wynik kończy się fail-closed, bez generatywnego retry.
 
+`status=complete` zamyka decyzję, nie fałszuje wykonania silnika. Poprawnie
+zakotwiczone findings wystarczają do `request_changes` także przy częściowym
+przeglądzie. `evidence` zachowuje terminal, budżet, awarię i zredagowane warningi,
+a `coverage` rzeczywiste selected/completed/failed/reused/waived. Te dane trafiają
+do trwałego artefaktu. `approve` nadal wymaga kompletnego przeglądu całego
+zakresu bez materialnych warningów; pusta recenzja częściowa pozostaje KEEP.
+
 Ten diagram jest kontraktem projektowym. **Każda zmiana przepływu zaczyna się
 od zmiany i przeglądu diagramu. Dopiero zaakceptowany diagram wolno zakodować
 w pakiecie Fali.** Test sprawdza, że diagram oraz `fala/lokay.fala-package.toml`
@@ -1505,7 +1512,8 @@ stateDiagram-v2
     AdmitPrRepair --> SkipMerged: MERGED / CLOSED
     SkipMerged --> [*]
     AdmitPrRepair --> PrepareRepairWorktree: OPEN
-    PrepareRepairWorktree --> CollectRepairEvidence
+    PrepareRepairWorktree --> CollectRepairEvidence: ready, dokładny start SHA
+    PrepareRepairWorktree --> RepairResult: missing → blocked + nazwany reason; bez agenta i push
     CollectRepairEvidence --> RepairAgent
     RepairAgent --> ValidateRepairResult
     ValidateRepairResult --> SelectRepairResult: wynik poprawny
@@ -1546,6 +1554,11 @@ stateDiagram-v2
     HumanTerminal --> [*]
     RepairTerminal --> [*]
 ```
+
+Naprawa review startuje z `reviewed_head_sha`, jeśli wywołujący nie podał
+osobnego start SHA. Sprzeczne SHA są odrzucane; nigdy nie zastępuje ich świeży
+HEAD z GitHuba. Summary czyta wynik `worktree_add`: brak tożsamości lub drift
+kończy się `blocked` z oryginalnym kodem przyczyny, nie `not_applicable`.
 
 ### Odzyskanie Lokaya — `daemon_cycle` + `self_repair`
 

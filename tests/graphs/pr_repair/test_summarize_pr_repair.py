@@ -5,6 +5,7 @@ _PATH_ID = 'pr_repair'
 _NODE_ID = 'summarize_pr_repair'
 _ATOM = 'summarize_pr_repair'
 _CONDUCTION = ['admit_pr_repair',
+ 'worktree_add',
  'finalize_repair_result',
  'finalize_repair_tests',
  'push',
@@ -125,6 +126,7 @@ _EFFECTORS = [{'conduction': [], 'id': 'admit_pr_repair', 'when': None},
   'id': 'push',
   'when': {'equals': 'publish', 'path': 'route', 'upstream': 'finalize_repair_tests'}},
  {'conduction': ['admit_pr_repair',
+                 'worktree_add',
                  'finalize_repair_result',
                  'finalize_repair_tests',
                  'push',

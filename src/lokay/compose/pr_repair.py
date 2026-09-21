@@ -65,6 +65,21 @@ def compose_pr_repair(
             pass
         return result
 
+    # A review repair starts at the reviewed version, never at a fresh remote tip.
+    if repair_kind == "review":
+        repair_start_head_sha = repair_start_head_sha or reviewed_head_sha
+        if repair_start_head_sha != reviewed_head_sha:
+            return {
+                "ok": False,
+                "result": {
+                    "repo": repo, "pr": pr_number, "branch": branch,
+                    "repaired": False, "published": False,
+                    "terminal": "repair_start_head_mismatch",
+                    "reason": "repair_start_head_mismatch",
+                    "head_sha": repair_start_head_sha,
+                },
+            }
+
     result = run_path(
         path_id="pr_repair", repo=repo, pr=pr_number, branch=branch,
         config_path=config_path, live=live, package_path=package_path,
@@ -95,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--task-json", default="")
     p.add_argument("--findings-json", default="")
     p.add_argument("--reviewed-head-sha", default="")
+    p.add_argument("--repair-start-head-sha", default="")
     p.add_argument("--task-identity-sha256", default="")
     p.add_argument("--review-result-sha256", default="")
     p.add_argument("--repair-kind", choices=("ci", "review"), required=True)
@@ -112,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
         task_identity_sha256=args.task_identity_sha256,
         review_result_sha256=args.review_result_sha256,
         repair_kind=args.repair_kind,
+        repair_start_head_sha=args.repair_start_head_sha,
     ))
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import sys
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,19 +54,67 @@ def test_vendor_comments_close_review_as_request_changes_when_budget_is_partial(
     upstream["summary"]["budget_exceeded"] = True
     upstream["status"] = "partial"
     upstream["manifest"]["terminal_state"] = "partial"
+    upstream["manifest"]["run_failure"] = {"classification": "budget"}
+    upstream["manifest"]["coverage"]["completed"] = []
+    upstream["manifest"]["coverage"]["failed"] = list(upstream["manifest"]["coverage"]["selected"])
+    upstream["warnings"] = [{"type": "token_budget_reached", "file": "src/demo.py", "message": "budget"}]
     result = normalize_result(
         request, upstream,
         engine={"name": "open-code-review", "version": "v1.12.7", "binary_sha256": "f" * 64,
                 "provider": "example-provider", "model": "example-model", "config_sha256": "9" * 64},
         changed_ranges=request["changed_ranges"],
     )
-    result["coverage"]["reviewable_paths"] = [
-        {"path": "src/demo.py", "old_path": "", "status": "modified"}
-    ]
+    assert result["status"] == "complete"  # Decision is closed; execution was partial.
+    assert result["evidence"]["terminal_state"] == "partial"
+    assert result["evidence"]["budget_exceeded"] is True
+    assert result["evidence"]["run_failure"] == {"classification": "budget"}
+    assert result["evidence"]["warning_count"] == 1
+    assert result["coverage"]["completed"] == []
+    assert result["coverage"]["failed"] == [{"path": "src/demo.py", "old_path": ""}]
     selected = validate_result(result, request)
     assert selected["route"] == "valid"
     assert selected["decision"]["verdict"] == "request_changes"
     assert selected["decision"]["findings"]
+    assert selected["decision"]["review_evidence"] == result["evidence"]
+    assert selected["decision"]["review_coverage"] == result["coverage"]
+    result["findings"] = []
+    assert validate_result(result, request)["route"] == "fail_closed"
+
+
+@pytest.mark.parametrize("key, value", [
+    ("terminal_state", "partial"), ("upstream_status", "partial"),
+    ("budget_exceeded", True), ("run_failure", {"classification": "budget"}),
+    ("warning_count", 1),
+])
+def test_partial_execution_can_reject_but_never_approve(key, value):
+    request, result = _result()
+    result["evidence"][key] = value
+    assert validate_result(result, request)["decision"]["verdict"] == "request_changes"
+    result["findings"] = []
+    assert validate_result(result, request)["route"] == "fail_closed"
+
+
+@pytest.mark.parametrize("bucket", ["failed", "waived", "reused"])
+def test_partial_coverage_is_truthful_and_cannot_approve(bucket):
+    request, result = _result()
+    result["coverage"]["completed"] = []
+    result["coverage"][bucket] = list(result["coverage"]["selected"])
+    selected = validate_result(result, request)
+    assert selected["decision"]["verdict"] == "request_changes"
+    assert selected["decision"]["review_coverage"][bucket] == result["coverage"][bucket]
+    result["findings"] = []
+    assert validate_result(result, request)["route"] == "fail_closed"
+
+
+def test_operational_warnings_remain_visible_without_blocking_approval():
+    request, result = _result()
+    result["findings"] = []
+    result["evidence"].update(warnings=[{"type": "comment_refiled", "file": "src/demo.py"}], warning_count=1)
+    selected = validate_result(result, request)
+    assert selected["decision"]["verdict"] == "approve"
+    assert selected["decision"]["review_evidence"]["warning_count"] == 1
+    result["evidence"]["warnings"][0]["type"] = "token_budget_reached"
+    assert validate_result(result, request)["route"] == "fail_closed"
 
 
 def test_host_validation_runs_without_plugin_import_path():
@@ -145,6 +195,8 @@ def test_publish_persists_all_upstream_review_fingerprints(tmp_path):
     assert decision["review_preview_sha256"] == evidence["preview_sha256"]
     assert decision["review_rule_config_sha256"] == evidence["upstream_execution"]["rule_config_sha256"]
     assert decision["review_runtime_config_sha256"] == evidence["upstream_execution"]["runtime_config_sha256"]
+    assert decision["review_evidence"] == result["evidence"]
+    assert decision["review_coverage"] == result["coverage"]
 
 
 def test_policy_only_approves_complete_zero_finding_result():
@@ -309,7 +361,7 @@ def test_policy_fails_closed_on_identity_or_coverage_drift():
     result["head_sha"] = "e" * 40
     assert validate_result(result, request)["route"] == "fail_closed"
     request, result = _result()
-    result["coverage"]["failed"] = [{"path": "src/demo.py"}]
+    result["coverage"]["failed"] = [{"path": "src/outside-diff.py"}]
     assert validate_result(result, request)["route"] == "fail_closed"
 
 
