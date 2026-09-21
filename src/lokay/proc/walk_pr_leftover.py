@@ -68,11 +68,25 @@ def skipped_identity(last: dict | None) -> tuple[str, int, str] | None:
         number = int(last["skipped_pr"])
     except (TypeError, ValueError):
         return None
-    return (
-        str(last.get("skipped_repo") or ""),
-        number,
-        str(last.get("skipped_head_sha") or ""),
-    )
+    # Legacy skipped_repo was shared with issue skips. A mixed receipt cannot
+    # establish which repository owns the remembered PR, even in the same repo.
+    repo = last.get("skipped_pr_repo")
+    if "skipped_pr_repo" not in last and last.get("skipped_issue") is None:
+        repo = last.get("skipped_repo")
+    sha = last.get("skipped_head_sha")
+    if not repo or not sha or number <= 0:
+        return None
+    return str(repo), number, str(sha)
+
+
+def skipped_fields(last: dict | None) -> dict:
+    """Copy only a complete PR tuple; keep skipped_repo as a PR-only alias."""
+    key = skipped_identity(last)
+    if key is None:
+        return {}
+    repo, pr, sha = key
+    return {"skipped_pr_repo": repo, "skipped_repo": repo,
+            "skipped_pr": pr, "skipped_head_sha": sha}
 
 
 def _reason_code(reason: str) -> str:
@@ -212,6 +226,7 @@ def queue(listed_rows: list | None, last: dict | None) -> list[dict]:
         ]
         return new_sha + kept + extra
     if skipped is not None:
-        rest = [row for row in live_rows if identity(row) != skipped]
-        return new_sha + rest if new_sha else rest
+        rest = [row for row in live_rows
+                if identity(row) != skipped and not _new_sha_of_skipped(row, skipped)]
+        return new_sha + rest
     return live_rows

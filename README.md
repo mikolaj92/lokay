@@ -20,7 +20,12 @@ identity. A recovered push consumes this pass without review or merge; an
 unavailable or mismatched identity fails closed. This runs even when
 `pr_repair` is disabled, and dry-run never probes GitHub.
 `record_pass` collects department results, then `factory_pass_terminal` returns
-the receipt. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
+the receipt. Compact `pr_triage` and `pr_repair` evidence remain independent:
+blocked repair records `health=pr_repair_blocked` and its named reason; a confirmed
+new repair SHA is progress (`health=repairing`), not `new_pr` or `merge`.
+Skip memory uses separate `skipped_issue_repo` and `skipped_pr_repo` tuples.
+`skipped_repo` remains a PR-only compatibility alias. Complete legacy PR-only
+receipts are accepted; mixed issue/PR legacy identities are not inferred. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
 prerequisite for departments or the receipt. A started worker is occupancy;
 only a published PR or merge is delivery. Remaining work is not silently idle.
 

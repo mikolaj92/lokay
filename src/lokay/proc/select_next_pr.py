@@ -1,6 +1,6 @@
 """Pick one open lokay PR. Skip without merge walks leftover like issues."""
 
-from lokay.proc.walk_pr_leftover import queue
+from lokay.proc.walk_pr_leftover import queue, skipped_fields
 
 
 def select(listed: dict, last: dict | None = None) -> dict:
@@ -24,9 +24,7 @@ def select(listed: dict, last: dict | None = None) -> dict:
         ):
             out["leftover"] = 0
             out["leftover_prs"] = []
-            for key in ("skipped_pr", "skipped_repo", "skipped_head_sha"):
-                if last.get(key) is not None:
-                    out[key] = last.get(key)
+            out.update(skipped_fields(last))
         return out
     row = dict(queued[0])
     rest = [dict(item) for item in queued[1:]]

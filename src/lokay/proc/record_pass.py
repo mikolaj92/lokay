@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,7 @@ from lokay.passkit import io as pass_io
 from lokay.pass_history import append_pass_receipt
 from lokay.pass_receipt import write_pass_receipt
 from lokay.proc._common import add_config_live
+from lokay.proc.walk_pr_leftover import skipped_fields
 
 OUTCOMES = ("merge", "new_pr", "none")
 _OVERFLOW = "leftover_overflow"
@@ -28,6 +30,39 @@ def _result(value: Any) -> dict[str, Any]:
     blob = _blob(value)
     inner = blob.get("result")
     return inner if isinstance(inner, dict) else blob
+
+
+_PR_EVIDENCE = (
+    "ok", "route", "verdict", "reason", "repo", "pr", "branch", "head_sha",
+    "reviewed_head_sha", "repair_start_head_sha", "repair_kind", "merged",
+    "terminal", "repaired", "published", "repair_push_intent_sha256",
+    "attempts", "budget", "parked",
+)
+
+
+def _pr_evidence(value: Any, *, child: str) -> dict[str, Any]:
+    parent = _result(value)
+    detail = _result(parent.get(child))
+    combined = {**detail, **parent}
+    return {key: combined[key] for key in _PR_EVIDENCE if key in combined}
+
+
+def _skip_remaining(remaining: dict, prior: dict | None = None) -> dict:
+    """Migrate only unambiguous legacy tuples, never splice their components."""
+    prior = prior or {}
+    out = dict(remaining)
+    for key in ("skipped_repo", "skipped_pr_repo", "skipped_pr", "skipped_head_sha",
+                "skipped_issue_repo", "skipped_issue"):
+        out.pop(key, None)
+    out.update(skipped_fields(remaining) or skipped_fields(prior))
+    for source in (remaining, prior):
+        repo = source.get("skipped_issue_repo")
+        if "skipped_issue_repo" not in source and source.get("skipped_pr") is None:
+            repo = source.get("skipped_repo")
+        if repo and source.get("skipped_issue") is not None:
+            out.update(skipped_issue_repo=repo, skipped_issue=source["skipped_issue"])
+            break
+    return out
 
 
 def _read_optional(path: Path) -> dict[str, Any]:
@@ -160,11 +195,8 @@ def _prs_leftover_remaining(
         out["leftover_prs"] = []
     elif prior:
         out["leftover_prs"] = prior
-    for key in ("skipped_pr", "skipped_repo", "skipped_head_sha"):
-        if prs_r.get(key) is not None:
-            out[key] = prs_r.get(key)
-        elif remaining.get(key) is not None:
-            out[key] = remaining.get(key)
+    out = _skip_remaining(out)
+    out.update(skipped_fields(prs_r))
     return out
 
 
@@ -235,14 +267,14 @@ def _issues_leftover_remaining(
                 leftover = 0
             if consumed or (not occupied and leftover_listed):
                 leftover = 0
-    out = {**remaining, "leftover": leftover}
+    out = {**_skip_remaining(remaining), "leftover": leftover}
     if leftover_issues:
         out["leftover_issues"] = leftover_issues
     else:
         out.pop("leftover_issues", None)
-    if str(issues_r.get("route") or "") == "skip" and issues_r.get("issue") is not None:
-        out["skipped_issue"] = issues_r.get("issue")
-        out["skipped_repo"] = issues_r.get("repo")
+    if (str(issues_r.get("route") or "") == "skip"
+            and issues_r.get("issue") is not None and issues_r.get("repo")):
+        out.update(skipped_issue=issues_r["issue"], skipped_issue_repo=issues_r["repo"])
     return out
 
 
@@ -262,6 +294,7 @@ def run_record_pass(
     pass_dir: str = "",
     begin: dict[str, Any] | None = None,
     prs: dict[str, Any] | None = None,
+    repair: dict[str, Any] | None = None,
     issues: dict[str, Any] | None = None,
     leftover: dict[str, Any] | None = None,
     host_gate: dict[str, Any] | None = None,
@@ -277,24 +310,14 @@ def run_record_pass(
     # compute_health rebuilds remaining without leftover; seed from last-pass
     # so occupancy-without-relist cannot cold-wipe catalog memory (#1067).
     # leftover:0 alone must not block leftover_issues reseeding (#1071).
-    if "leftover_issues" not in seed or "leftover_prs" not in seed:
-        try:
-            from lokay.pass_receipt import read_pass_receipt
+    from lokay.pass_receipt import read_pass_receipt
 
-            prior = read_pass_receipt(state_path=_state_path(begin, pass_dir))
-        except Exception:
-            prior = None
-        prior_rem = prior.get("remaining") if isinstance(prior, dict) else None
-        if isinstance(prior_rem, dict):
-            if "leftover_issues" not in seed and "leftover_issues" in prior_rem:
-                seed["leftover_issues"] = prior_rem["leftover_issues"]
-            if "leftover" not in seed and "leftover" in prior_rem:
-                seed["leftover"] = prior_rem["leftover"]
-            if "leftover_prs" not in seed and "leftover_prs" in prior_rem:
-                seed["leftover_prs"] = prior_rem["leftover_prs"]
-            for key in ("skipped_pr", "skipped_repo", "skipped_head_sha"):
-                if key not in seed and key in prior_rem:
-                    seed[key] = prior_rem[key]
+    prior = read_pass_receipt(state_path=_state_path(begin, pass_dir))
+    prior_rem = _blob(_blob(prior).get("remaining"))
+    seed = _skip_remaining(seed, prior_rem)
+    for key in ("leftover_issues", "leftover", "leftover_prs"):
+        if key not in seed and key in prior_rem:
+            seed[key] = prior_rem[key]
     remaining = _issues_leftover_remaining(
         issues,
         seed,
@@ -306,8 +329,37 @@ def run_record_pass(
     leftover_n = int(remaining.get("leftover") or 0) + len(
         _prior_leftover_prs(remaining)
     )
+    triage_evidence = _pr_evidence(prs, child="triage")
+    repair_evidence = _pr_evidence(repair, child="repair")
+    repair_blocked = bool(repair_evidence) and (
+        repair_evidence.get("route") in {"fail_closed", "blocked", "failed"}
+        or repair_evidence.get("terminal") == "blocked"
+        or repair_evidence.get("ok") is False
+    )
+    repair_head = str(repair_evidence.get("head_sha") or "")
+    repair_start = str(repair_evidence.get("repair_start_head_sha")
+                       or repair_evidence.get("reviewed_head_sha") or "")
+    repair_pushed = (
+        not repair_blocked and repair_evidence.get("route") == "completed"
+        and repair_evidence.get("terminal") == "publish"
+        and repair_evidence.get("published") is True
+        and repair_evidence.get("repaired") is True
+        and bool(repair_evidence.get("repo") and repair_evidence.get("pr"))
+        and bool(re.fullmatch(r"[a-fA-F0-9]{40}", repair_head))
+        and bool(re.fullmatch(r"[a-fA-F0-9]{40}", repair_start))
+        and repair_head.lower() != repair_start.lower()
+    )
+    evidence = {}
+    if triage_evidence:
+        evidence["pr_triage"] = triage_evidence
+    if repair_evidence:
+        evidence["pr_repair"] = repair_evidence
+    if repair_blocked:
+        evidence.update(ok=False, reason=str(repair_evidence.get("reason")
+                                            or repair_evidence.get("terminal")
+                                            or "pr_repair_failed"))
     progress = int(tick.get("progress") or 0)
-    productive = outcome != "none" or started > 0
+    productive = outcome != "none" or started > 0 or repair_pushed
     if productive:
         progress = max(progress, 1)
     health = str(tick.get("health") or ("progress" if productive else "idle"))
@@ -315,6 +367,10 @@ def run_record_pass(
         health = "waiting"
     if overflow and health in {"", "idle"}:
         health = "waiting"
+    if repair_blocked:
+        health = "pr_repair_blocked"
+    elif repair_pushed and outcome == "none":
+        health = "repairing"
     receipt = {
         "kind": "pass_receipt",
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -326,14 +382,19 @@ def run_record_pass(
             and not overflow
             and leftover_n == 0
             and started == 0
+            and not repair_blocked
+            and not repair_pushed
             and tick.get("idle", outcome == "none")
         ),
         "live": bool(begin.get("live", tick.get("live"))),
         "progress": progress,
-        "lane": str(tick.get("lane") or ("product" if productive else "idle")),
+        "lane": "product" if repair_blocked or repair_pushed else str(
+            tick.get("lane") or ("product" if productive else "idle")
+        ),
         "config": begin.get("config_path"),
         "remaining": remaining,
         _OVERFLOW: overflow,
+        **evidence,
     }
     result = {
         "ok": True,
@@ -344,6 +405,7 @@ def run_record_pass(
         "idle": receipt["idle"],
         "remaining": remaining,
         _OVERFLOW: overflow,
+        **evidence,
     }
     from lokay.host_gate import stopped
 
@@ -373,6 +435,7 @@ def record(
     pass_dir: str = "",
     begin: dict[str, Any] | None = None,
     prs: dict[str, Any] | None = None,
+    repair: dict[str, Any] | None = None,
     issues: dict[str, Any] | None = None,
     leftover: dict[str, Any] | None = None,
     host_gate: dict[str, Any] | None = None,
@@ -381,6 +444,7 @@ def record(
         pass_dir=pass_dir,
         begin=begin,
         prs=prs,
+        repair=repair,
         issues=issues,
         leftover=leftover,
         host_gate=host_gate,
