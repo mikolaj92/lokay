@@ -8,6 +8,7 @@ from lokay.config import load_config
 _ATOMS = frozenset(
     {
         "admit_pr_repair",
+        "checkpoint_repair_publication",
         "probe_pr_state",
         "validate_initial_repair",
         "pr_repair_retry_agent",
@@ -42,6 +43,18 @@ def handle_repair_boundary(
 ) -> dict[str, Any] | None:
     if atom not in _ATOMS:
         return None
+    if atom == "checkpoint_repair_publication":
+        from lokay.proc.pr_repair_checkpoint import persist
+        from lokay.proc.pr_repair_receipts import resolve_budget, resolve_state_dir
+
+        if not inputs.get("live"):
+            return {"ok": True, "route": "checkpointed", "planned": True}
+        config = str(inputs.get("config_path") or "")
+        state = resolve_state_dir(config)
+        if state is None:
+            return {"ok": True, "route": "fail_closed", "reason": "repair_checkpoint_state_missing"}
+        return persist(inputs=inputs, run_ref=dict(inputs.get("repair_run_ref") or {}),
+                       state_dir=state, budget=resolve_budget(config))
     if atom in {"admit_pr_repair", "probe_pr_state"}:
         from lokay.proc.admit_pr_repair import admit_live
         from lokay.proc.probe_pr_state import probe as probe_pr

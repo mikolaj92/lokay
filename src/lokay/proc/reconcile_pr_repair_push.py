@@ -1,4 +1,4 @@
-"""Reconcile all durable PR-repair push intents before PR triage."""
+"""Reconcile selected PR publication evidence without blocking unrelated PRs."""
 
 from __future__ import annotations
 
@@ -109,11 +109,35 @@ def reconcile_pending(
     budget = pr_repair_receipts.resolve_budget(config_path)
     recovered: list[dict[str, Any]] = []
     try:
-        identities = _receipt_identities(pr_repair_receipts.receipts_dir(state_dir=state_dir))
+        if selected_route == "pr":
+            identities = [(str(selected["repo"]), int(selected["pr"]))]
+            from lokay.proc.pr_repair_checkpoint import recover_legacy
+
+            selected_path = pr_repair_receipts.receipt_path(*identities[0], state_dir=state_dir)
+            if selected_path.exists() and selected_path.stat().st_size > _RECEIPT_COMPATIBILITY_MAX_BYTES:
+                raise ValueError("selected repair receipt exceeds compatibility bound")
+            current = pr_repair_receipts.read(*identities[0], state_dir=state_dir)
+            if live and not current.get("pending_push") and not current.get("publication_checkpoint"):
+                legacy = recover_legacy(repo=identities[0][0], pr=identities[0][1],
+                                        branch=str(selected["branch"]), state_dir=state_dir, budget=budget)
+                if legacy.get("route") == "fail_closed":
+                    return ok(**{k: v for k, v in legacy.items() if k != "ok"})
+        else:
+            identities = _receipt_identities(pr_repair_receipts.receipts_dir(state_dir=state_dir))
         for repo, pr in identities:
-            receipt = pr_repair_receipts.read(repo, pr, state_dir=state_dir)
-            if receipt.get("pending_push") is None:
+            if selected_route == "pr" and (repo, pr) != (
+                str(selected["repo"]), int(selected["pr"])
+            ):
                 continue
+            receipt = pr_repair_receipts.read(repo, pr, state_dir=state_dir)
+            pending = receipt.get("pending_push") or (
+                (receipt.get("publication_checkpoint") or {}).get("intent")
+                if not receipt.get("checkpoint_terminal") else None
+            )
+            if pending is None:
+                continue
+            if selected_route == "pr" and selected["branch"] != pending["branch"]:
+                return ok(route="fail_closed", reason="repair_push_selected_branch_mismatch", repo=repo, pr=pr)
             outcome = pr_repair_push.reconcile_pending_push(
                 repo=repo, pr=pr, config_path=config_path, live=live,
                 budget=budget, state_dir=state_dir,
@@ -123,8 +147,9 @@ def reconcile_pending(
                     route="fail_closed",
                     reason=str(outcome.get("reason") or "repair_push_confirmation_failed"),
                     repo=repo, pr=pr,
+                    recovery_case=str(outcome.get("recovery_case") or ""),
                     repair_push_intent_sha256=str(
-                        (receipt.get("pending_push") or {}).get("intent_sha256") or ""
+                        pending.get("intent_sha256") or ""
                     ),
                     attempts=int(outcome.get("attempts") or receipt.get("attempts") or 0),
                     budget=int(outcome.get("budget") or receipt.get("budget") or budget),
@@ -132,7 +157,7 @@ def reconcile_pending(
                 )
             recovered.append({
                 "repo": repo, "pr": pr,
-                "branch": str(receipt["pending_push"].get("branch") or ""),
+                "branch": str(pending.get("branch") or ""),
                 "head_sha": str(outcome.get("head_sha") or ""),
                 "attempts": int(outcome.get("attempts") or 0),
                 "parked": bool(outcome.get("parked")),
@@ -142,7 +167,7 @@ def reconcile_pending(
         return ok(route="fail_closed", reason="pr_repair_receipt_invalid", recovered=recovered)
     if recovered:
         return ok(
-            route="recovered", recovered=recovered,
+            route="recovered", recovered=recovered, recovery_case="confirmed_target",
             **({"repair_push_intent_sha256": recovered[0]["intent_sha256"]} if len(recovered) == 1 else {}),
         )
     if selected_route == "invalid":

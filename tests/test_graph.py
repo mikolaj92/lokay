@@ -755,7 +755,18 @@ def test_describe_includes_pr_repair():
     assert by_id["pr_repair_retry_agent"]["when"]["equals"] == "retry"
     assert by_id["evidence_repair_agent"]["when"]["equals"] == "evidence"
     assert by_id["pr_test_repair_agent"]["when"]["equals"] == "fail"
-    assert by_id["push"]["when"]["equals"] == "publish"
+    assert by_id["checkpoint_repair_publication"]["when"] == {
+        "upstream": "finalize_repair_tests",
+        "path": "route",
+        "equals": "publish",
+    }
+    assert "assert_real_diff" in by_id["checkpoint_repair_publication"]["conduction"]
+    assert by_id["push"]["when"] == {
+        "upstream": "checkpoint_repair_publication",
+        "path": "route",
+        "equals": "checkpointed",
+    }
+    assert "checkpoint_repair_publication" in by_id["push"]["conduction"]
     assert "assert_real_diff" in by_id["push"]["conduction"]
 
 

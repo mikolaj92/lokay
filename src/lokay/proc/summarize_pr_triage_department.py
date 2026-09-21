@@ -116,6 +116,10 @@ def summarize(
     receipt["waiting"] = receipt["triage"]["waiting"]
     stamp = {**chosen, **receipt}
     leftover_prs = leftover_after(picked, stamp, incomplete_retry_position=incomplete_retry_position)
+    if (incomplete_retry_position == "tail" and recovery_route == "fail_closed"
+            and str(picked.get("route") or "") == "pr" and leftover_prs):
+        # Uncertainty is KEEP, but it cannot pin the fleet's next selection.
+        leftover_prs = [*leftover_prs[1:], leftover_prs[0]]
     if str(picked.get("route") or "") == "pr" or "leftover_prs" in picked:
         receipt["leftover_prs"] = leftover_prs
         receipt["leftover"] = len(leftover_prs)

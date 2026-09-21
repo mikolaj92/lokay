@@ -2,18 +2,17 @@
 from __future__ import annotations
 
 _PATH_ID = 'pr_repair'
-_NODE_ID = 'push'
-_ATOM = 'push'
+_NODE_ID = 'checkpoint_repair_publication'
+_ATOM = 'checkpoint_repair_publication'
 _CONDUCTION = ['worktree_add',
  'commit_initial_repair',
  'commit_test_repair',
  'test_local',
  'test_local_recheck',
  'finalize_repair_tests',
- 'assert_real_diff',
- 'checkpoint_repair_publication']
-_WHEN = {'equals': 'checkpointed', 'path': 'route', 'upstream': 'checkpoint_repair_publication'}
-_REQUIRED_WHEN_FIELDS = []
+ 'assert_real_diff']
+_WHEN = {'equals': 'publish', 'path': 'route', 'upstream': 'finalize_repair_tests'}
+_REQUIRED_WHEN_FIELDS = ['route']
 _EFFECTORS = [{'conduction': [], 'id': 'admit_pr_repair', 'when': None},
  {'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['pr_checks'], 'id': 'stage_repairing', 'when': None},
@@ -172,4 +171,3 @@ def test_model_status_for_this_node():
     status = run_model(_EFFECTORS, {})
     assert _NODE_ID in status
     assert status[_NODE_ID] in {"succeeded", "skipped"}
-

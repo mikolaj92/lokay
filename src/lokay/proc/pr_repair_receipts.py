@@ -189,6 +189,16 @@ def _read_unlocked(
             or data.get("last_repair_kind") not in {"ci", "review"}
         ):
             raise ValueError("confirmed repair receipt identity is incomplete")
+    if data.get("publication_checkpoint") is not None:
+        proof = data["publication_checkpoint"]
+        if not isinstance(proof, dict):
+            raise ValueError("repair checkpoint malformed")
+        digest = proof.get("sha256")
+        if digest != hashlib.sha256(_canonical({k: v for k, v in proof.items() if k != "sha256"})).hexdigest():
+            raise ValueError("repair checkpoint digest mismatch")
+        _validate_intent(proof.get("intent"), repo=repo, pr=pr)
+        if proof.get("schema") != "lokay.pr-repair-checkpoint/1":
+            raise ValueError("repair checkpoint schema mismatch")
     if data.get("pending_push") is not None:
         data["pending_push"] = _validate_intent(data["pending_push"], repo=repo, pr=pr)
         if data.get("last_intent_sha256") and int(data.get("attempts") or 0) == 0:
@@ -303,6 +313,32 @@ def prepare_push_intent(
         )
 
 
+def record_publication_checkpoint(*, proof: dict, state_dir: Path, budget: int) -> dict:
+    """Retain verified prepublication evidence under the existing receipt lock."""
+    intent = proof["intent"]
+    repo, pr = intent["repo"], intent["pr"]
+    _validate_intent(intent, repo=repo, pr=pr)
+    with _locked(repo, pr, state_dir=state_dir):
+        previous = _read_unlocked(repo, pr, state_dir=state_dir)
+        existing = previous.get("publication_checkpoint")
+        if existing and existing != proof:
+            if (previous.get("checkpoint_terminal") != "confirmed_target"
+                    or intent["start_head_sha"] != previous.get("last_head_sha")):
+                return {"ok": True, "route": "fail_closed", "reason": "repair_checkpoint_conflict"}
+            previous.setdefault("checkpoint_history", []).append({
+                "checkpoint": existing, "terminal": previous.pop("checkpoint_terminal"),
+            })
+            existing = None
+        if previous.get("pending_push") and previous["pending_push"]["intent_sha256"] != intent["intent_sha256"]:
+            return {"ok": True, "route": "fail_closed", "reason": "repair_checkpoint_conflict"}
+        if int(previous.get("attempts") or 0) >= budget:
+            return {"ok": True, "route": "fail_closed", "reason": "pr_repair_budget_exhausted"}
+        if not existing:
+            base = {**_empty(repo, pr, budget=budget), **previous, "publication_checkpoint": proof}
+            _write_unlocked(repo, pr, base, state_dir=state_dir)
+        return {"ok": True, "route": "checkpointed", "checkpoint_sha256": proof["sha256"]}
+
+
 def mark_push_attempted(
     *, repo: str, pr: int, intent_sha256: str,
     home: Path | str | None = None, state_dir: Path | str | None = None,
@@ -401,6 +437,10 @@ def _prepare_push_intent_unlocked(
     previous = _read_unlocked(repo, pr, home=home, state_dir=state_dir)
     base = _empty(repo, pr, budget=max(1, int(budget)))
     base.update(previous)
+    checkpoint = previous.get("publication_checkpoint")
+    if checkpoint and (previous.get("checkpoint_terminal")
+                       or checkpoint["intent"]["intent_sha256"] != prepared["intent_sha256"]):
+        return {"ok": True, "route": "fail_closed", "reason": "repair_checkpoint_intent_mismatch"}
     if previous and int(previous.get("budget") or 0) != max(1, int(budget)):
         base["parked"] = int(previous.get("attempts") or 0) >= max(1, int(budget))
     if base.get("pending_push") is not None:
@@ -474,6 +514,8 @@ def _confirm_pending_push_unlocked(
         or str(remote_state or "").upper() != "OPEN"
     ):
         return {"ok": True, "route": "fail_closed", "reason": "repair_push_remote_identity_mismatch"}
+    if receipt.get("publication_checkpoint"):
+        receipt["checkpoint_terminal"] = "confirmed_target"
     attempts = int(receipt.get("attempts") or 0) + 1
     budget_n = max(1, int(budget or receipt.get("budget") or 1))
     parked = attempts >= budget_n

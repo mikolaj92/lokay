@@ -209,15 +209,15 @@ def test_oversized_terminal_receipt_does_not_block_independent_pr_review(
     assert out["recovered"] == []
 
 
-def test_oversized_receipt_beyond_compatibility_bound_stays_fail_closed(
+def test_oversized_selected_receipt_stays_fail_closed_without_blocking_other_pr(
     monkeypatch, tmp_path
 ):
-    path = pr_repair_receipts.receipt_path("too/large", 54, state_dir=tmp_path)
+    path = pr_repair_receipts.receipt_path("o/r", 9, state_dir=tmp_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps({
-            "repo": "too/large",
-            "pr": 54,
+            "repo": "o/r",
+            "pr": 9,
             "attempts": 1,
             "budget": 1,
             "last_head_sha": "",

@@ -323,6 +323,10 @@ def run_path(
         raise ValueError(f"unknown Fala correlation path: {path_id}")
 
     rid = run_id or f"lokay-{uuid.uuid4().hex[:12]}"
+    if path_id == "pr_repair":
+        base_input["repair_run_ref"] = {
+            "db": str(db.resolve()), "run_id": rid, "path_id": path_id,
+        }
     # Ensure organ imports resolve from checkout when not fully installed
     root = _project_root()
     os.environ.setdefault("LOKAY_ROOT", str(root))

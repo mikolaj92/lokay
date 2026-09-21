@@ -57,6 +57,7 @@ if a in {{'validate_initial_repair', 'select_initial_repair', 'finalize_repair_r
     v.update(route='repaired', evidence_kind='none')
 if a in {{'select_evidence_repair', 'select_test_repair_result', 'select_repair_test_recheck'}}: v.update(route='not_applicable')
 if a in {{'select_repair_test', 'finalize_repair_tests'}}: v.update(route='publish')
+if a == 'checkpoint_repair_publication': v.update(route='checkpointed')
 if a == 'push':
     v = organ_envelope(a, {{'ok': {published!r}, 'head_sha': {target!r},
         'reason': 'repair_push_worktree_dirty' if not {published!r} else '',

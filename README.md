@@ -16,8 +16,12 @@ The parent selects and conditionally runs these departments in authored order:
 
 Within PR triage, after selecting its exact candidate and before launching
 review, Lokay reconciles any durable repair-push intent against the live PR
-identity. A recovered push consumes this pass without review or merge; an
-unavailable or mismatched identity fails closed. This runs even when
+identity, scoped to the selected repository/PR. Verified pre-publication
+checkpoints bind start/target SHA, branch, task/review, repair run and declared-test
+run before push preflight. Pre-attempt and unchanged-remote recovery retry only
+that exact tested target; closed/merged observations retain terminal evidence
+without spending repair budget. A recovered push consumes this pass without
+review or merge; unavailable or mismatched identities KEEP at the queue tail. This runs even when
 `pr_repair` is disabled, and dry-run never probes GitHub.
 `record_pass` collects department results, then `factory_pass_terminal` returns
 the receipt. Compact `pr_triage` and `pr_repair` evidence remain independent:
@@ -734,9 +738,19 @@ i nie zapisuje empty stamp.
 stateDiagram-v2
     [*] --> ListPrSieve
     ListPrSieve --> SelectPrSieve
-    SelectPrSieve --> ReconcileRepairPush: zawsze — skan wszystkich trwałych intentów
-    ReconcileRepairPush --> RunPrSieve: route=review — brak pending intent i jest PR
-    ReconcileRepairPush --> SelectPrTriageVerdict: brak PR / recovered / fail-closed
+    SelectPrSieve --> ReconcileRepairPush: selected repo/PR only; verified legacy journal fallback
+    ReconcileRepairPush --> RunPrSieve: review; no unresolved publication
+    ReconcileRepairPush --> RecoverRepairPreAttempt: pre_attempt
+    ReconcileRepairPush --> RecoverRepairRemoteUnchanged: remote_unchanged
+    ReconcileRepairPush --> RecoverRepairConfirmedTarget: confirmed_target
+    ReconcileRepairPush --> RecoverRepairClosedMerged: closed_merged
+    ReconcileRepairPush --> RecoverRepairUnavailable: unavailable
+    RecoverRepairPreAttempt --> SelectPrTriageVerdict: verified checkpoint; one exact-target retry
+    RecoverRepairRemoteUnchanged --> SelectPrTriageVerdict: verified checkpoint; one exact-target retry
+    RecoverRepairConfirmedTarget --> SelectPrTriageVerdict: idempotent confirmed accounting
+    RecoverRepairClosedMerged --> SelectPrTriageVerdict: retain evidence; terminal without publication credit
+    RecoverRepairUnavailable --> SelectPrTriageVerdict: retry observation next pass; KEEP at tail
+    ReconcileRepairPush --> SelectPrTriageVerdict: no PR / identity mismatch
     RunPrSieve --> SelectPrTriageVerdict
     SelectPrTriageVerdict --> SummarizePrTriageDepartment
     SummarizePrTriageDepartment --> [*]: incomplete KEEP na końcu kolejki; inne wyniki bez zmian
@@ -746,7 +760,7 @@ stateDiagram-v2
     end note
 ```
 
-Dział `pr_triage_department` ma sześć węzłów. Sitko chodzi leftover jak issue:
+Dział `pr_triage_department` ma jawne węzły obserwacji i pięć nazwanych recovery transitions. Sitko chodzi leftover jak issue:
 tożsamość `(repo, pr, head_sha)`. Skip bez merge zjada wiersz i oddaje
 `leftover_prs`. Niekompletny review (brak kompletnego JSON: timeout,
 invocation failed, not JSON, plugin_error) nie jest review i nie jest skip —
@@ -767,17 +781,21 @@ exact repo/PR/SHA po normalizacji do `route=completed, verdict=feedback`:
 `merge_not_confirmed` i `merge_head_unverified` nie są ukończoną decyzją ani
 skip memory. Następny pass ponownie przechodzi SHA-bound gates; KEEP nie
 upoważnia do merge. Po liście i wyborze kandydata
-`reconcile_pr_repair_push` skanuje **wszystkie** trwałe repair intents, także
-przy pustej kolejce PR. Brak intent otwiera gałąź `review` tylko wtedy, gdy jest
-wybrany PR; zgodny live OPEN PR potwierdza odzyskany push, a bieżący pass
-kończy bez review i merge; brak live dowodu, mismatch lub błędny stan zatrzymuje
-triage fail-closed. Bramka działa również wtedy,
+`reconcile_pr_repair_push` czyta tylko receipt wybranego repo/PR; cudzy błędny
+receipt nie blokuje recenzji. Bez wybranego PR pozostaje read-only skan recovery.
+Brak intent/checkpoint otwiera `review`. Legacy committed-before-intent może
+odtworzyć checkpoint wyłącznie ze zgodnego trwałego dziennika naprawy i testów;
+ancestry ani nazwa gałęzi nie stanowią dowodu. Zgodny OPEN target potwierdza push
+idempotentnie. Pre-attempt i remote unchanged prowadzą przez nazwane gałęzie do
+jednej próby non-force exact-SHA push po ponownym probe oraz SHA/repo/branch/dirt
+checks. CLOSED/MERGED archiwizuje intent bez naliczania sukcesu. Unavailable
+zachowuje dowód i pozycję KEEP na końcu kolejki, do ponownej obserwacji. Bramka działa również wtedy,
 gdy `pr_repair` jest wyłączony; dry-run nie wykonuje live probe. Outcome jest
 przekazany przez verdict i summary, więc żaden wynik recovery nie może
 przypadkiem otworzyć ścieżki review/merge/repair. Tylko gałąź `review`
 uruchamia pod-Falę `pr_triage`, która orzeka: scal / feedback / popraw.
 Werdykt `popraw` pozostaje wartością; rodzic `factory_pass` może uruchomić
-osobny dział `pr_repair`. Pusta lista pomija recovery i dziecko. Nie ma
+osobny dział `pr_repair`. Pusta lista pomija dziecko review, nie potwierdzenie już zapisanych prób. Nie ma
 30-slotowego katalogu ani leftover overflow.
 
 
@@ -1562,7 +1580,8 @@ stateDiagram-v2
     CommitTestRepair --> LocalRepairTestAgain
     LocalRepairTestAgain --> VerifyPublishDiff: PASS
     LocalRepairTestAgain --> RepairTerminal: FAIL
-    VerifyPublishDiff --> PushNewSha: po gates zapisz i fsync dokładny target SHA; trwale oznacz attempt przed git push
+    VerifyPublishDiff --> CheckpointRepairPublication: persist verified run/task/review/commit/test lineage before publication preflight
+    CheckpointRepairPublication --> PushNewSha: checkpointed; persist intent and mark attempt before git push
     PushNewSha --> RepairResult: intent pozostaje trwały do autorytatywnego potwierdzenia PR head przez rodzica
     RepairResult --> [*]
     HumanTerminal --> [*]

@@ -8,6 +8,7 @@ def defaults():
     return """if a=='admit_pr_repair':v.update(route='open')
 if a=='worktree_add':v.update(route='ready')
 if a=='localize':v.update(route='ready')
+if a=='checkpoint_repair_publication':v.update(route='checkpointed')
 if a=='select_evidence_repair':v['route']='not_applicable'
 if a=='select_repair_test_recheck':v['route']='not_applicable'"""
 

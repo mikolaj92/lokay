@@ -164,6 +164,26 @@ grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
 
 
+### Repair publication recovery (#1167)
+
+`pr_repair` conducts `checkpoint_repair_publication` after the exact commit,
+local tests, final publish decision and real-diff gate, before `push` preflight.
+The existing fsynced, locked repair receipt retains a digest-bound checkpoint:
+repo/PR/branch/start/target, canonical task and findings, review digests, repair
+journal/run, test journal/run/command/exact cache key and verified row digests.
+Dirt never destroys that checkpoint; it still prohibits publication.
+
+`pr_triage_department` observes the selected identity only. Its named branches
+are `recover_repair_pre_attempt`, `recover_repair_remote_unchanged`,
+`recover_repair_confirmed_target`, `recover_repair_closed_merged` and
+`recover_repair_unavailable`. Retry effects re-probe and revalidate exact local
+identity, origin and dirt, then push one exact SHA without force. Only a later
+exact OPEN target confirmation increments budget. Closed/merged intent evidence
+is archived, not deleted. Unavailable/mismatched observations retain KEEP at tail
+so another PR can proceed. Legacy recovery reads this PR's durable Fala journal
+and verifies the same commit/test lineage; a descendant alone is never authority.
+No recovery path resets, cleans or starts a coding/review agent.
+
 ### PR closeout ownership
 
 The retired `closeout_prs` catalog path is removed. Live `pr_triage_department`

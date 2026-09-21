@@ -116,6 +116,9 @@ def reconcile_pending_push(
     except (OSError, ValueError, TypeError):
         return {"ok": True, "route": "fail_closed", "reason": "pr_repair_receipt_invalid"}
     pending = receipt.get("pending_push")
+    checkpoint = receipt.get("publication_checkpoint") or {}
+    if pending is None and checkpoint and not receipt.get("checkpoint_terminal"):
+        pending = checkpoint.get("intent")
     if pending is None:
         return {
             "ok": True, "route": "none",
@@ -129,13 +132,6 @@ def reconcile_pending_push(
             "attempts": int(receipt.get("attempts") or 0),
             "budget": int(receipt.get("budget") or budget or 1),
         }
-    if not pending.get("push_attempted"):
-        return {
-            "ok": True, "route": "fail_closed",
-            "reason": "repair_push_attempt_not_recorded",
-            "attempts": int(receipt.get("attempts") or 0),
-            "budget": int(receipt.get("budget") or budget or 1),
-        }
     from lokay.proc.probe_pr_state import probe
 
     try:
@@ -145,11 +141,34 @@ def reconcile_pending_push(
     if identity.get("ok") is not True or identity.get("route") == "unavailable" or identity.get("probe_failed"):
         return {
             "ok": True, "route": "fail_closed",
-            "reason": "repair_push_remote_identity_unavailable",
+            "reason": ("repair_push_remote_identity_unavailable" if pending.get("push_attempted")
+                       else "repair_push_attempt_not_recorded"),
+            "recovery_case": "unavailable",
             "attempts": int(receipt.get("attempts") or 0),
             "budget": int(receipt.get("budget") or budget or 1),
         }
+    if identity.get("pr", pr) != pr or identity.get("repo", repo) != repo:
+        return {"ok": True, "route": "fail_closed", "reason": "repair_push_remote_identity_mismatch"}
     intent = dict(pending)
+    same_branch = (
+        str(identity.get("head_ref") or "") == intent["branch"]
+        and str(identity.get("head_repo") or "").lower() == repo.lower()
+    )
+    state = str(identity.get("state") or "").upper()
+    if same_branch and state in {"CLOSED", "MERGED"}:
+        return {"ok": True, "route": "fail_closed", "recovery_case": "closed_merged",
+                "reason": "repair_push_remote_closed"}
+    if (same_branch and state == "OPEN" and identity.get("route") == "open"
+            and identity.get("head_ref_sha") == intent["start_head_sha"]):
+        return {
+            "ok": True, "route": "fail_closed",
+            "recovery_case": "remote_unchanged" if intent["push_attempted"] else "pre_attempt",
+            "reason": "repair_push_remote_identity_mismatch" if intent["push_attempted"] else "repair_push_attempt_not_recorded",
+            "attempts": int(receipt.get("attempts") or 0),
+            "budget": int(receipt.get("budget") or budget or 1),
+        }
+    if not intent["push_attempted"]:
+        return {"ok": True, "route": "fail_closed", "reason": "repair_push_attempt_not_recorded"}
     if (
         identity.get("route") != "open"
         or str(identity.get("state") or "").upper() != "OPEN"
@@ -179,4 +198,4 @@ def reconcile_pending_push(
             "attempts": int(receipt.get("attempts") or 0),
             "budget": int(receipt.get("budget") or budget or 1),
         }
-    return {"ok": True, "route": "confirmed", **confirmed}
+    return {"ok": True, "route": "confirmed", "recovery_case": "confirmed_target", **confirmed}

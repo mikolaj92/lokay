@@ -4,37 +4,74 @@ from __future__ import annotations
 import pytest
 
 _PATH_ID = 'pr_triage_department'
-_EFFECTORS = [
-    {'conduction': [], 'id': 'list_pr_sieve', 'when': None},
-    {'conduction': ['list_pr_sieve'], 'id': 'select_pr_sieve', 'when': None},
-    {'conduction': ['select_pr_sieve'], 'id': 'reconcile_pr_repair_push', 'when': None},
-    {'conduction': ['reconcile_pr_repair_push'], 'id': 'run_pr_sieve',
-     'when': {'equals': 'review', 'path': 'route', 'upstream': 'reconcile_pr_repair_push'}},
-    {'conduction': ['select_pr_sieve', 'reconcile_pr_repair_push', 'run_pr_sieve'],
-     'id': 'select_pr_triage_verdict', 'when': None},
-    {'conduction': ['select_pr_sieve', 'reconcile_pr_repair_push', 'run_pr_sieve',
-                    'select_pr_triage_verdict'],
-     'id': 'summarize_pr_triage_department', 'when': None},
-]
-_MATCH = {
-    'select_pr_sieve': {'route': 'pr'},
-    'reconcile_pr_repair_push': {'route': 'review'},
-}
+_EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
+ {'conduction': ['list_pr_sieve'], 'id': 'select_pr_sieve', 'when': None},
+ {'conduction': ['select_pr_sieve'], 'id': 'reconcile_pr_repair_push', 'when': None},
+ {'conduction': ['reconcile_pr_repair_push'],
+  'id': 'recover_repair_pre_attempt',
+  'when': {'equals': 'pre_attempt',
+           'path': 'recovery_case',
+           'upstream': 'reconcile_pr_repair_push'}},
+ {'conduction': ['reconcile_pr_repair_push'],
+  'id': 'recover_repair_remote_unchanged',
+  'when': {'equals': 'remote_unchanged',
+           'path': 'recovery_case',
+           'upstream': 'reconcile_pr_repair_push'}},
+ {'conduction': ['reconcile_pr_repair_push'],
+  'id': 'recover_repair_confirmed_target',
+  'when': {'equals': 'confirmed_target',
+           'path': 'recovery_case',
+           'upstream': 'reconcile_pr_repair_push'}},
+ {'conduction': ['reconcile_pr_repair_push'],
+  'id': 'recover_repair_closed_merged',
+  'when': {'equals': 'closed_merged',
+           'path': 'recovery_case',
+           'upstream': 'reconcile_pr_repair_push'}},
+ {'conduction': ['reconcile_pr_repair_push'],
+  'id': 'recover_repair_unavailable',
+  'when': {'equals': 'unavailable',
+           'path': 'recovery_case',
+           'upstream': 'reconcile_pr_repair_push'}},
+ {'conduction': ['reconcile_pr_repair_push'],
+  'id': 'run_pr_sieve',
+  'when': {'equals': 'review', 'path': 'route', 'upstream': 'reconcile_pr_repair_push'}},
+ {'conduction': ['select_pr_sieve',
+                 'reconcile_pr_repair_push',
+                 'run_pr_sieve',
+                 'recover_repair_pre_attempt',
+                 'recover_repair_remote_unchanged',
+                 'recover_repair_confirmed_target',
+                 'recover_repair_closed_merged',
+                 'recover_repair_unavailable'],
+  'id': 'select_pr_triage_verdict',
+  'when': None},
+ {'conduction': ['select_pr_sieve',
+                 'reconcile_pr_repair_push',
+                 'run_pr_sieve',
+                 'select_pr_triage_verdict',
+                 'recover_repair_pre_attempt',
+                 'recover_repair_remote_unchanged',
+                 'recover_repair_confirmed_target',
+                 'recover_repair_closed_merged',
+                 'recover_repair_unavailable'],
+  'id': 'summarize_pr_triage_department',
+  'when': None}]
+_MATCH = {'reconcile_pr_repair_push': {'recovery_case': 'none', 'route': 'review'}}
 _RECOVERED = {
     'select_pr_sieve': {'route': 'pr'},
-    'reconcile_pr_repair_push': {'route': 'recovered'},
+    'reconcile_pr_repair_push': {'route': 'recovered', 'recovery_case': 'confirmed_target'},
 }
 _FAILED = {
     'select_pr_sieve': {'route': 'pr'},
-    'reconcile_pr_repair_push': {'route': 'fail_closed'},
+    'reconcile_pr_repair_push': {'route': 'fail_closed', 'recovery_case': 'unavailable'},
 }
 _NO_PR = {
     'select_pr_sieve': {'route': 'none'},
-    'reconcile_pr_repair_push': {'route': 'no_pr'},
+    'reconcile_pr_repair_push': {'route': 'no_pr', 'recovery_case': 'none'},
 }
 _LIST_FAILED = {
     'select_pr_sieve': {'route': 'none', 'reason': 'list_failed'},
-    'reconcile_pr_repair_push': {'route': 'no_pr'},
+    'reconcile_pr_repair_push': {'route': 'no_pr', 'recovery_case': 'none'},
 }
 _MAX_TICKS = 40
 
