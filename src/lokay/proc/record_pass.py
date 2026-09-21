@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,15 +36,67 @@ _PR_EVIDENCE = (
     "ok", "route", "verdict", "reason", "repo", "pr", "branch", "head_sha",
     "reviewed_head_sha", "repair_start_head_sha", "repair_kind", "merged",
     "terminal", "repaired", "published", "repair_push_intent_sha256",
-    "attempts", "budget", "parked",
+    "attempts", "budget", "parked", "root_reason",
 )
+_PR_FLAGS = frozenset({"ok", "merged", "repaired", "published", "parked"})
+_PR_COUNTS = frozenset({"pr", "attempts", "budget"})
+
+
+def _typed_pr_fields(value: Any) -> dict[str, Any]:
+    """Project domain scalars, never stringify a transport terminal or logs.
+
+    Oversized strings are omitted, not truncated: identity must remain exact.
+    Full evidence belongs to the referenced Fala journal, not the receipt.
+    """
+    out = {}
+    for key, item in _blob(value).items():
+        if key not in _PR_EVIDENCE:
+            continue
+        if key in _PR_FLAGS:
+            valid = type(item) is bool
+        elif key in _PR_COUNTS:
+            valid = type(item) is int and 0 <= item < 2**63
+        else:
+            valid = isinstance(item, str) and len(item) <= 1024
+        if valid:
+            out[key] = item
+    return out
 
 
 def _pr_evidence(value: Any, *, child: str) -> dict[str, Any]:
     parent = _result(value)
-    detail = _result(parent.get(child))
-    combined = {**detail, **parent}
-    return {key: combined[key] for key in _PR_EVIDENCE if key in combined}
+    raw_detail = _blob(parent.get(child))
+    detail = {**_typed_pr_fields(raw_detail),
+              **_typed_pr_fields(raw_detail.get("result"))}
+    combined = {**detail, **_typed_pr_fields(parent)}
+    if child == "repair" and raw_detail:
+        failed = raw_detail.get("ok") is False or detail.get("ok") is False
+        if failed:
+            # A transport failure cannot be made published by a partial summary.
+            combined.update(ok=False, repaired=False, published=False)
+            combined.setdefault("terminal", "failed")
+        root_reason = detail.get("reason")
+        if failed and not root_reason:
+            # Native subprocess failures wrap the organ's JSON in an adapter
+            # message. Read only that final bounded envelope, never its logs.
+            error = raw_detail.get("error")
+            message = _blob(error).get("message") if isinstance(error, dict) else error
+            if isinstance(message, str):
+                encoded = message[-2000:].rsplit("RuntimeError: ", 1)[-1].strip()
+                try:
+                    failure = _typed_pr_fields(json.loads(encoded))
+                except (ValueError, TypeError):
+                    failure = {}
+                root_reason = failure.get("reason")
+                if failure.get("head_sha"):
+                    combined["head_sha"] = failure["head_sha"]
+        if root_reason:
+            combined["root_reason"] = root_reason
+        trace = {key: raw_detail[key] for key in ("db", "run_id", "path_id")
+                 if isinstance(raw_detail.get(key), str) and 0 < len(raw_detail[key]) <= 1024}
+        if trace:
+            combined["trace"] = trace
+    return combined
 
 
 def _skip_remaining(remaining: dict, prior: dict | None = None) -> dict:
@@ -373,7 +425,7 @@ def run_record_pass(
         health = "repairing"
     receipt = {
         "kind": "pass_receipt",
-        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ts": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "outcome": outcome,
         "ok": True,
         "health": health,

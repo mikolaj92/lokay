@@ -246,6 +246,16 @@ def handle_factory(
             # Authorization failure skips the child; its condition_not_met
             # placeholder must not erase the selector's named blocker.
             repair = selected_repair
+        elif repair.get("repair"):
+            # Carry the authorized start identity even when the child fails
+            # before its domain summary. Never replace the child's new head.
+            repair = {
+                **{key: selected_repair[key] for key in (
+                    "repo", "pr", "branch", "repair_kind",
+                    "repair_start_head_sha", "reviewed_head_sha",
+                ) if key in selected_repair},
+                **repair,
+            }
         out = record_pass.record(
             pass_dir=str(begin.get("pass_dir") or ""),
             begin=begin,

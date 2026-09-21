@@ -23,6 +23,11 @@ unavailable or mismatched identity fails closed. This runs even when
 the receipt. Compact `pr_triage` and `pr_repair` evidence remain independent:
 blocked repair records `health=pr_repair_blocked` and its named reason; a confirmed
 new repair SHA is progress (`health=repairing`), not `new_pr` or `merge`.
+PR receipt evidence is a bounded scalar projection, never the transport's
+`terminal` dictionary. Repair evidence retains the authorized start SHA, new
+head SHA when known, attempts and publication flags. `root_reason` preserves
+the child's named failure independently of the parent reason; `trace` carries
+`db`, `run_id` and `path_id` to the full durable Fala evidence outside the receipt.
 Skip memory uses separate `skipped_issue_repo` and `skipped_pr_repo` tuples.
 `skipped_repo` remains a PR-only compatibility alias. Complete legacy PR-only
 receipts are accepted; mixed issue/PR legacy identities are not inferred. `reap_stale_worktrees` is a sibling from `factory_begin`, not a
