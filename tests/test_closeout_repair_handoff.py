@@ -175,7 +175,8 @@ if a == 'localize': v.update(route='ready')
 if a == 'run_agent':
     v.update(status='completed', returncode=0)
     if OUTCOME == 'agent_failed':
-        v = organ_envelope(a, {'ok': False, 'reason': 'agent_failed', 'returncode': 1})
+        v = organ_envelope(a, {'ok': False, 'stdout_tail': 'x' * 4000,
+            'stderr_tail': 'y' * 2000, 'reason': 'agent_failed', 'returncode': 1})
 if a in {'validate_initial_repair', 'select_initial_repair', 'finalize_repair_result'}:
     v.update(route='fail_closed', evidence_kind='none')
 if a in {'select_evidence_repair', 'select_repair_test', 'select_test_repair_result', 'select_repair_test_recheck', 'finalize_repair_tests'}:

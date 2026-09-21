@@ -745,7 +745,16 @@ def organ_envelope(atom: str, result: dict[str, Any]) -> dict[str, Any]:
             "atom": atom,
             **{k: v for k, v in result.items() if k != "_exit"},
         }
-        raise RuntimeError(json.dumps(values, ensure_ascii=False)[:2000])
+        encoded = json.dumps(values, ensure_ascii=False)
+        if len(encoded) > 2000:
+            # Never truncate JSON: budget consumers must retain structured
+            # failure identity even when agent stdout/stderr is large.
+            values = {key: values[key] for key in (
+                "ok", "atom", "reason", "returncode", "route"
+            ) if key in values}
+            values["detail_truncated"] = True
+            encoded = json.dumps(values, ensure_ascii=False)
+        raise RuntimeError(encoded)
     values = {
         "ok": True,
         "atom": atom,
