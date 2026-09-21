@@ -8,6 +8,7 @@ from pathlib import Path
 from lokay.envelope import emit_exit, err, ok
 from lokay.git_commit import commit_all, is_configured_issue_worktree
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
+from lokay.proc.repair_agent_revision import observe
 from lokay.runner import git_spec
 
 
@@ -21,6 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--repo", default=MINI_LOKAY_REPO_SCOPE)
     p.add_argument("--worktree", required=True)
     p.add_argument("--message", required=True)
+    p.add_argument("--record-repair-revision", action="store_true")
     args = p.parse_args(argv)
     cfg = load_cfg(args) if args.live else None
     run = runner()
@@ -36,7 +38,10 @@ def main(argv: list[str] | None = None) -> int:
         ):
             return emit_exit(err(str(exc)))
         live = True
+    revision = {}
     try:
+        if live and args.record_repair_revision:
+            revision['before'] = observe(run, Path(args.worktree))
         did = commit_all(
             run,
             Path(args.worktree),
@@ -52,6 +57,13 @@ def main(argv: list[str] | None = None) -> int:
                 git_spec(["rev-parse", "HEAD"], cwd=Path(args.worktree)),
                 live=True,
             ).stdout.strip()
+        if live and args.record_repair_revision:
+            revision['after'] = observe(run, Path(args.worktree))
+            if did:
+                revision['parents'] = run.run_checked(
+                    git_spec(['show', '-s', '--format=%P', commit], cwd=Path(args.worktree)),
+                    live=True,
+                ).stdout.strip().split()
     except Exception as exc:  # noqa: BLE001
         return emit_exit(err(str(exc)))
     return emit_exit(
@@ -61,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             commit=commit,
             repo=args.repo,
             worktree=args.worktree,
+            **({'revision': revision} if revision else {}),
         )
     )
 

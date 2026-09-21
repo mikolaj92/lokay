@@ -56,6 +56,10 @@ def successor_journal(tmp_path, inputs, outputs, ref, start):
     inputs['review'].update(reviewed_head_sha=start, review_result_sha256='d' * 64)
     outputs['worktree_add'].update(repair_start_head_sha=start, worktree_head_sha=start)
     outputs['commit_initial_repair']['commit'] = target
+    before = {'head': start, 'branch': inputs['branch'], 'origin': 'https://github.com/o/r.git'}
+    outputs['run_agent']['revision'] = {'before': before, 'after': before}
+    outputs['commit_initial_repair']['revision'] = {
+        'before': before, 'after': {**before, 'head': target}, 'parents': [start]}
     test = outputs['test_local']
     test.update(db=str(tmp_path / 'second-test.sqlite'), run_id='second-test-run')
     from lokay.proc._common import runner

@@ -20,7 +20,47 @@ def observe(run, worktree: Path) -> dict:
     return values
 
 
-def verified_target(*, inputs: dict, run_ref: dict, worktree: str) -> str:
+def _identity(observed: dict, inputs: dict) -> None:
+    head = observed.get('head')
+    if (not isinstance(head, str) or len(head) != 40
+            or any(c not in '0123456789abcdef' for c in head)
+            or observed.get('branch') != inputs['branch']
+            or str(observed.get('origin') or '').removesuffix('.git') not in {
+                'https://github.com/' + inputs['repo'],
+                'git@github.com:' + inputs['repo'],
+                'ssh://git@github.com/' + inputs['repo'],
+            }):
+        raise ValueError('repair revision repository/branch/target mismatch')
+
+
+def commit_target(commit: dict, *, preceding: str, inputs: dict, worktree: str) -> str:
+    """Bind a deterministic effect to its exact preceding host observation."""
+    if commit.get('committed') is not True or commit.get('worktree') != worktree:
+        raise ValueError('repair revision commit missing')
+    if commit.get('committed_by') == 'agent':
+        if commit.get('commit') and commit['commit'] != preceding:
+            raise ValueError('repair agent commit target mismatch')
+        return preceding
+    revision = commit.get('revision') or {}
+    before, after = revision.get('before') or {}, revision.get('after') or {}
+    for observed in (before, after):
+        _identity(observed, inputs)
+    target = commit.get('commit')
+    if (not isinstance(target, str) or before.get('head') != preceding or after.get('head') != target
+            or target == preceding or revision.get('parents') != [preceding]):
+        raise ValueError('repair deterministic commit continuity mismatch')
+    return target
+
+
+def verified_commit_target(*, commit: dict, inputs: dict, run_ref: dict, worktree: str) -> str:
+    preceding = verified_target(
+        inputs=inputs, run_ref=run_ref, worktree=worktree, allow_unchanged=True,
+    )
+    return commit_target(commit, preceding=preceding, inputs=inputs, worktree=worktree)
+
+
+def verified_target(*, inputs: dict, run_ref: dict, worktree: str,
+                    allow_unchanged: bool = False) -> str:
     """Require a continuous, exact, same-run harness history from admission.
 
     Historical runs lacking these observations cannot be upgraded from HEAD or
@@ -52,13 +92,9 @@ def verified_target(*, inputs: dict, run_ref: dict, worktree: str) -> str:
             # as its own authority.
             if 'pr_test_repair_agent' in rows:
                 initial = _output(rows, name)
-                if (any(rows[name]['input'].get(k) != original.get(k) for k in _IDENTITY)
-                        or initial.get('committed') is not True
-                        or initial.get('worktree') != worktree):
+                if any(rows[name]['input'].get(k) != original.get(k) for k in _IDENTITY):
                     raise ValueError('agent revision initial commit mismatch')
-                if initial.get('committed_by') == 'agent' and initial.get('commit') != head:
-                    raise ValueError('agent revision initial target mismatch')
-                head = initial.get('commit')
+                head = commit_target(initial, preceding=head, inputs=inputs, worktree=worktree)
             continue
         if any(rows[name]['input'].get(k) != original.get(k) for k in _IDENTITY):
             raise ValueError('agent revision run lineage mismatch')
@@ -71,17 +107,9 @@ def verified_target(*, inputs: dict, run_ref: dict, worktree: str) -> str:
                 or before.get('head') != head):
             raise ValueError('agent revision execution evidence missing')
         for observed in (before, after):
-            if (observed.get('branch') != inputs['branch']
-                    or str(observed.get('origin') or '').removesuffix('.git') not in {
-                        'https://github.com/' + inputs['repo'],
-                        'git@github.com:' + inputs['repo'],
-                        'ssh://git@github.com/' + inputs['repo'],
-                    }):
-                raise ValueError('agent revision repository/branch mismatch')
-        head = after.get('head')
-        if not isinstance(head, str) or len(head) != 40 or any(c not in '0123456789abcdef' for c in head):
-            raise ValueError('agent revision target missing')
+            _identity(observed, inputs)
+        head = after['head']
         found = True
-    if not found or head == start:
+    if not found or (head == start and not allow_unchanged):
         raise ValueError('agent revision exact target missing')
     return head

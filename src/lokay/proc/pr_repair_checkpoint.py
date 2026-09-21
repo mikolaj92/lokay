@@ -150,13 +150,10 @@ def derive(*, inputs: dict, run_ref: dict) -> dict:
     test = _output(rows, test_name)
     if commit.get("committed") is not True or commit.get("worktree") != worktree:
         raise ValueError("repair journal commit missing")
-    if commit.get("committed_by") == "agent":
-        from lokay.proc.repair_agent_revision import verified_target
+    from lokay.proc.repair_agent_revision import verified_commit_target
 
-        target = verified_target(inputs=inputs, run_ref=run_ref, worktree=worktree)
-        if commit.get("commit") and commit["commit"] != target:
-            raise ValueError("repair agent commit target mismatch")
-        commit = {**commit, "commit": target}
+    target = verified_commit_target(commit=commit, inputs=inputs, run_ref=run_ref, worktree=worktree)
+    commit = {**commit, "commit": target}
     if (_output(rows, "finalize_repair_tests").get("route") != "publish"
             or _output(rows, "assert_real_diff").get("real") is not True):
         raise ValueError("repair journal publication gates missing")
@@ -207,7 +204,8 @@ def derive(*, inputs: dict, run_ref: dict) -> dict:
         "evidence": {
             "repair": {name: hashlib.sha256(receipts._canonical(rows[name])).hexdigest()
                        for name in ("worktree_add", commit_name, test_name, "finalize_repair_tests", "assert_real_diff",
-                                    "run_agent", "pr_repair_retry_agent", "evidence_repair_agent", "pr_test_repair_agent")
+                                    "run_agent", "pr_repair_retry_agent", "evidence_repair_agent", "pr_test_repair_agent",
+                                    "commit_initial_repair")
                        if name in rows},
             "test": {name: hashlib.sha256(receipts._canonical(row)).hexdigest()
                      for name, row in test_rows.items()},

@@ -84,8 +84,19 @@ def handle_publication(
         assert worktree
         out = _run_atom_main(
             commit_all.main,
-            [*cfg, *live, "--worktree", worktree, "--message", msg],
+            [*cfg, *live, "--worktree", worktree, "--message", msg,
+             *(["--record-repair-revision"] if repair_mode else [])],
         )
+        if (repair_mode and inputs.get("live") and isinstance(out, dict)
+                and out.get("ok") is True and out.get("committed") is True):
+            import sqlite3
+
+            from lokay.proc.repair_agent_revision import verified_commit_target
+            try:
+                verified_commit_target(commit=out, inputs=inputs, worktree=worktree,
+                                       run_ref=dict(inputs.get("repair_run_ref") or {}))
+            except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+                return {**out, "ok": False, "reason": "repair_commit_revision_unverified", "error": str(exc)}
         if (
             isinstance(out, dict)
             and out.get("ok") is True

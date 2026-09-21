@@ -10,6 +10,15 @@ from test_repair_publication_checkpoint import evidence, git
 from lokay.proc import pr_repair_checkpoint as checkpoint
 
 
+def insert_output(ref, inputs, name, value):
+    with sqlite3.connect(ref['db']) as conn:
+        conn.execute('DELETE FROM processes WHERE run_id=? AND id=?',
+                     (ref['run_id'], ref['path_id'] + ':' + name))
+        conn.execute('INSERT INTO processes VALUES (?, ?, ?, ?, ?)', (
+            ref['run_id'], ref['path_id'] + ':' + name, 'succeeded', json.dumps(inputs),
+            json.dumps({'job': ref['path_id'] + ':' + name, 'status': 'ok', 'payload': value})))
+
+
 def replace_output(ref, name, value):
     with sqlite3.connect(ref['db']) as conn:
         conn.execute('UPDATE processes SET output_json=? WHERE run_id=? AND id=?', (
@@ -61,6 +70,19 @@ def test_actual_scoped_green_journal_crosses_checkpoint(tmp_path, monkeypatch, c
     work = Path(outputs['worktree_add']['worktree'])
     test = real_tests(tmp_path, monkeypatch, inputs, work, scoped=True)
     assert test['full_suite_returncode'] == 1
+    # Supply exact revision authority for the fixture-created repair too.
+    start = git(work, 'rev-parse', 'HEAD^')
+    target = git(work, 'rev-parse', 'HEAD')
+    inputs['head_sha'] = inputs['reviewed_head_sha'] = start
+    inputs['review']['reviewed_head_sha'] = start
+    outputs['worktree_add'].update(repair_start_head_sha=start, worktree_head_sha=start)
+    replace_output(ref, 'worktree_add', outputs['worktree_add'])
+    before = {'head': start, 'branch': inputs['branch'], 'origin': 'https://github.com/o/r.git'}
+    replace_output(ref, 'run_agent', {**outputs['run_agent'], 'revision': {'before': before, 'after': before}})
+    outputs['commit_initial_repair']['revision'] = {
+        'before': before, 'after': {**before, 'head': target}, 'parents': [start]}
+    with sqlite3.connect(ref['db']) as conn:
+        conn.execute('UPDATE processes SET input_json=?', (json.dumps(inputs),))
     bind_tests(ref, outputs, test, recheck=True)
     rows = checkpoint._rows(test, 'test_local_execution')
     if corrupt == 'identity':
@@ -84,6 +106,85 @@ def test_actual_scoped_green_journal_crosses_checkpoint(tmp_path, monkeypatch, c
         assert cached['cached'] is True and cached['tested'] is True, cached
         replace_output(ref, 'test_local_recheck', cached)
         assert checkpoint.derive(inputs=inputs, run_ref=ref)['test']['run_id'] == cached['run_id']
+
+
+@pytest.mark.parametrize('stage', ['initial', 'test', 'bridge'])
+@pytest.mark.parametrize('damage', [None, 'unrelated', 'historical'])
+def test_deterministic_commit_requires_exact_host_transition(tmp_path, monkeypatch, stage, damage):
+    from lokay.agent import run_agent
+    from lokay.config import Config
+    from lokay.graph_run import run_path
+    from lokay.organ.publication import handle_publication
+    from lokay.proc import test_local_execution_subflow as subflow
+    from lokay.runner import Runner
+
+    inputs, outputs, ref, _ = evidence(tmp_path)
+    work = Path(outputs['worktree_add']['worktree'])
+    (work / 'pyproject.toml').write_text('[tool.lokay]\ntest = ["true"]\n')
+    git(work, 'add', '.')
+    git(work, 'commit', '-m', 'test declaration')
+    start = git(work, 'rev-parse', 'HEAD')
+    inputs['head_sha'] = inputs['reviewed_head_sha'] = start
+    inputs['review']['reviewed_head_sha'] = start
+    outputs['worktree_add'].update(repair_start_head_sha=start, worktree_head_sha=start)
+    replace_output(ref, 'worktree_add', outputs['worktree_add'])
+    with sqlite3.connect(ref['db']) as conn:
+        conn.execute('UPDATE processes SET input_json=?', (json.dumps(inputs),))
+    git(work, 'update-ref', 'refs/remotes/origin/ai/fix/42', start)
+    git(work, 'branch', '--set-upstream-to=origin/ai/fix/42')
+    monkeypatch.setattr('lokay.proc.commit_all.mutations_allowed', lambda **kw: True)
+    monkeypatch.setattr('lokay.proc.commit_all.load_cfg', lambda args: Config())
+    monkeypatch.setattr(subflow, 'run_path', lambda **kw: run_path(
+        **kw, db_path=tmp_path / 'native-tests'))
+    produced = None
+    for index in range(1 if stage == 'initial' else 2):
+        name = 'run_agent' if index == 0 else 'pr_test_repair_agent'
+        agent = run_agent(Runner(), Config(
+            agent='test-harness', agent_command=sys.executable,
+            agent_args=['-c', f"from pathlib import Path; Path('source').write_text('repair {index}')"],
+            executor_enabled=True), worktree=work, prompt='repair', execute=True)
+        assert agent['status'] == 'completed' and agent['returncode'] == 0
+        insert_output(ref, inputs, name, {'ok': True, **agent} if index == 0 else {'ok': True, 'agent': agent})
+        damaged_stage = index == (1 if stage == 'test' else 0)
+        if damage == 'unrelated' and damaged_stage:
+            # Keep the authorized repair dirty while inserting an unobserved X.
+            (work / 'unrelated').write_text('not authorized by the harness')
+            git(work, 'add', 'unrelated')
+            git(work, 'commit', '-m', 'unrelated X', '--', 'unrelated')
+        produced = handle_publication('commit_all', {**inputs, 'repair_run_ref': ref}, {
+            'worktree_add': outputs['worktree_add'], 'assert_initial_repair_diff': {'ok': True, 'real': True}},
+            {'cfg': [], 'live': ['--live'], 'repo': 'o/r', 'issue_number': 42,
+             'pr_number': 57, 'repair_mode': True, 'branch': inputs['branch']})
+        assert produced is not None and produced['committed'] is True
+        # Feed even a rejected effect into the consumer as a successful historical
+        # row: consumer verification must not depend on the producer's ok flag.
+        recorded = {**produced, 'ok': True}
+        if damage == 'historical' and damaged_stage:
+            recorded.pop('revision', None)
+        if index == 0:
+            replace_output(ref, 'commit_initial_repair', recorded)
+        else:
+            insert_output(ref, inputs, 'commit_test_repair', recorded)
+    tested = subflow.run(worktree=str(work), changed_scope=False, repo='o/r', issue=42)
+    assert tested['ok'] is True and tested['tested'] is True
+    if stage == 'initial':
+        replace_output(ref, 'test_local', tested)
+    else:
+        insert_output(ref, inputs, 'test_local_recheck', tested)
+    persisted = checkpoint.persist(inputs=inputs, run_ref=ref, state_dir=tmp_path, budget=2)
+    monkeypatch.setattr('lokay.graph_run.pr_journal_dir', lambda *args: Path(ref['db']).parent)
+    recovered = checkpoint.recover_legacy(repo='o/r', pr=57, branch=inputs['branch'],
+                                          state_dir=tmp_path / 'discovery', budget=2)
+    assert produced is not None
+    if damage:
+        assert persisted['route'] == 'fail_closed', persisted
+        assert recovered['route'] != 'checkpointed', recovered
+        if damage == 'unrelated' or stage == 'bridge':
+            assert produced['ok'] is False, produced
+    else:
+        assert produced['ok'] is True, produced
+        assert persisted['route'] == recovered['route'] == 'checkpointed'
+        assert checkpoint.derive(inputs=inputs, run_ref=ref)['intent']['target_head_sha'] == git(work, 'rev-parse', 'HEAD')
 
 
 @pytest.mark.parametrize('corrupt', [None, 'missing', 'start', 'branch', 'repo', 'task', 'target', 'legacy'])
@@ -121,10 +222,7 @@ def test_actual_agent_commit_producer_crosses_checkpoint(tmp_path, monkeypatch, 
     elif corrupt == 'target':
         (work / 'source').write_text('unrelated post-agent commit')
         git(work, 'commit', '-am', 'unrelated')
-    with sqlite3.connect(ref['db']) as conn:
-        conn.execute('INSERT INTO processes VALUES (?, ?, ?, ?, ?)', (
-            ref['run_id'], 'pr_repair:run_agent', 'succeeded', json.dumps(agent_inputs),
-            json.dumps({'job': 'pr_repair:run_agent', 'status': 'ok', 'payload': {'ok': True, **agent}})))
+    insert_output(ref, agent_inputs, 'run_agent', {'ok': True, **agent})
     monkeypatch.setattr('lokay.proc.commit_all.mutations_allowed', lambda **kw: True)
     monkeypatch.setattr('lokay.proc.commit_all.load_cfg', lambda args: Config())
     git(work, 'update-ref', 'refs/remotes/origin/ai/fix/42', start)

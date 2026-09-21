@@ -66,7 +66,13 @@ def evidence(tmp_path):
     outputs = {
         'worktree_add': {'ok': True, 'route': 'ready', 'repo': 'o/r', 'pr': 57, 'branch': inputs['branch'],
                              'worktree': str(work), 'repair_start_head_sha': start, 'worktree_head_sha': start},
-        'commit_initial_repair': {'ok': True, 'committed': True, 'commit': target, 'worktree': str(work)},
+        'run_agent': {'ok': True, 'status': 'completed', 'returncode': 0, 'worktree': str(work),
+                      'revision': {'before': {'head': start, 'branch': inputs['branch'], 'origin': 'https://github.com/o/r.git'},
+                                   'after': {'head': start, 'branch': inputs['branch'], 'origin': 'https://github.com/o/r.git'}}},
+        'commit_initial_repair': {'ok': True, 'committed': True, 'commit': target, 'worktree': str(work),
+                                 'revision': {'before': {'head': start, 'branch': inputs['branch'], 'origin': 'https://github.com/o/r.git'},
+                                              'after': {'head': target, 'branch': inputs['branch'], 'origin': 'https://github.com/o/r.git'},
+                                              'parents': [start]}},
         'test_local': test,
         'finalize_repair_tests': {'ok': True, 'route': 'publish'},
         'assert_real_diff': {'ok': True, 'real': True},
@@ -129,11 +135,11 @@ def test_wrong_remote_pr_number_never_confirms_target(tmp_path, monkeypatch):
 
 def test_checkpoint_retains_bounded_evidence_not_agent_transcripts(tmp_path):
     from lokay.proc import pr_repair_checkpoint as checkpoint
-    inputs, _outputs, ref, _target = evidence(tmp_path)
+    inputs, outputs, ref, _target = evidence(tmp_path)
     with sqlite3.connect(ref['db']) as conn:
-        conn.execute('INSERT INTO processes VALUES (?, ?, ?, ?, ?)', (
-            ref['run_id'], 'pr_repair:run_agent', 'succeeded', json.dumps(inputs),
-            json.dumps({'job': 'pr_repair:run_agent', 'status': 'ok', 'payload': {'ok': True, 'stdout': 'x' * 2_000_000}})))
+        conn.execute("UPDATE processes SET output_json=? WHERE id='pr_repair:run_agent'", (
+            json.dumps({'job': 'pr_repair:run_agent', 'status': 'ok',
+                        'payload': {**outputs['run_agent'], 'stdout': 'x' * 2_000_000}}),))
     assert checkpoint.persist(inputs=inputs, run_ref=ref, state_dir=tmp_path, budget=2)['route'] == 'checkpointed'
     assert receipts.receipt_path('o/r', 57, state_dir=tmp_path).stat().st_size < 100_000
 
