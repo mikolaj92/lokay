@@ -12,6 +12,11 @@ PR_TRIAGE_ATOMS = (
     "list_pr_sieve",
     "select_pr_sieve",
     "reconcile_pr_repair_push",
+    "recover_repair_pre_attempt",
+    "recover_repair_remote_unchanged",
+    "recover_repair_confirmed_target",
+    "recover_repair_closed_merged",
+    "recover_repair_unavailable",
     "run_pr_sieve",
     "select_pr_triage_verdict",
     "summarize_pr_triage_department",
@@ -29,9 +34,9 @@ def _path() -> dict:
 
 def simulate(*, select_route: str) -> dict[str, str]:
     reconcile_route = "review" if select_route == "pr" else "no_pr"
-    routes = {
-        "select_pr_sieve": select_route,
-        "reconcile_pr_repair_push": reconcile_route,
+    values = {
+        "select_pr_sieve": {"route": select_route},
+        "reconcile_pr_repair_push": {"route": reconcile_route, "recovery_case": "none"},
     }
     status: dict[str, str] = {}
     pending = list(_path()["effectors"])
@@ -48,9 +53,9 @@ def simulate(*, select_route: str) -> dict[str, str]:
             name = str(node["id"])
             if when:
                 upstream = str(when.get("upstream") or "")
-                if status.get(upstream) != "succeeded" or routes.get(upstream) != when.get(
-                    "equals"
-                ):
+                if status.get(upstream) != "succeeded" or values.get(upstream, {}).get(
+                    str(when.get("path") or "route")
+                ) != when.get("equals"):
                     status[name] = "skipped"
                 else:
                     status[name] = "succeeded"
@@ -88,7 +93,7 @@ def test_empty_list_skips_triage_and_finishes(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[],count=0)
 if a=='select_pr_sieve':v.update(route='none',reason='no_open_pr')
-if a=='reconcile_pr_repair_push':v.update(route='no_pr',reason='no_open_pr')
+if a=='reconcile_pr_repair_push':v.update(route='no_pr',reason='no_open_pr',recovery_case='none')
 if a=='select_pr_triage_verdict':v.update(verdict='none')
 if a=='summarize_pr_triage_department':v.update(department='pr_triage',repair_started=False)"""
     )
@@ -110,14 +115,17 @@ def test_one_pr_runs_triage(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_pr_sieve':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
-if a=='reconcile_pr_repair_push':v.update(route='review')
+if a=='reconcile_pr_repair_push':v.update(route='review',recovery_case='none')
 if a=='run_pr_sieve':v.update(route='completed',triage={'repairable':False})
 if a=='select_pr_triage_verdict':v.update(verdict='feedback')
 if a=='summarize_pr_triage_department':v.update(department='pr_triage',verdict='feedback',repair_started=False)"""
     )
     result = run_graph(tmp_path, body, "pr-triage-one", path_id="pr_triage_department")
     status = {name: row["status"] for name, row in result["effector_results"].items()}
-    assert set(status) == set(PR_TRIAGE_ATOMS)
+    assert status == {
+        name: "skipped" if name.startswith("recover_repair_") else "succeeded"
+        for name in PR_TRIAGE_ATOMS
+    }
     assert status["run_pr_sieve"] == "succeeded"
     assert "run_pr_repair_subflow" not in status
 
@@ -128,7 +136,7 @@ def test_repair_verdict_does_not_start_repair_inside_sieve(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_pr_sieve':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
-if a=='reconcile_pr_repair_push':v.update(route='review')
+if a=='reconcile_pr_repair_push':v.update(route='review',recovery_case='none')
 if a=='run_pr_sieve':v.update(route='completed',triage={'repairable':True})
 if a=='select_pr_triage_verdict':v.update(verdict='repair',repairable=True)
 if a=='run_pr_repair_subflow':Path(""" + repr(str(sentinel)) + """).write_text('ran')
@@ -142,7 +150,7 @@ if a=='summarize_pr_triage_department':v.update(department='pr_triage',verdict='
     assert not sentinel.exists()
 
 
-def test_pr_triage_atoms_are_the_five_named_nodes():
+def test_pr_triage_atoms_include_named_recovery_transitions():
     ids = [str(node["id"]) for node in _path()["effectors"]]
     assert ids == list(PR_TRIAGE_ATOMS)
     assert len(ids) == len(set(ids))

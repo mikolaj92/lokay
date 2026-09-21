@@ -39,6 +39,7 @@ def run(inspected: dict, argv: list[str]) -> dict:
         "ok": True,
         "route": "green" if result.returncode == 0 else "red",
         "returncode": result.returncode,
+        "argv": list(argv),
         "tests": " ".join(argv),
         "stdout_tail": (result.stdout or "")[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],

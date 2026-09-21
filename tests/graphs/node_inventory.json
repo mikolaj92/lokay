@@ -3,7 +3,6 @@
   "extra_node_suites": [],
   "missing_node_suites": [],
   "missing_output_schema": [],
-  "package": "fala/lokay.fala-package.toml",
   "paths": [
     {
       "conduction_edges": 9,
@@ -70,20 +69,20 @@
       "when_branches": 10
     },
     {
-      "conduction_edges": 96,
+      "conduction_edges": 104,
       "mismatches": [],
-      "node_suites": 38,
-      "nodes": 38,
+      "node_suites": 39,
+      "nodes": 39,
       "path": "pr_repair",
-      "when_branches": 28
+      "when_branches": 29
     },
     {
-      "conduction_edges": 75,
+      "conduction_edges": 80,
       "mismatches": [],
-      "node_suites": 27,
-      "nodes": 27,
+      "node_suites": 28,
+      "nodes": 28,
       "path": "pr_triage",
-      "when_branches": 18
+      "when_branches": 19
     },
     {
       "conduction_edges": 15,
@@ -358,12 +357,12 @@
       "when_branches": 1
     },
     {
-      "conduction_edges": 10,
+      "conduction_edges": 25,
       "mismatches": [],
-      "node_suites": 6,
-      "nodes": 6,
+      "node_suites": 11,
+      "nodes": 11,
       "path": "pr_triage_department",
-      "when_branches": 1
+      "when_branches": 6
     },
     {
       "conduction_edges": 0,
@@ -375,15 +374,15 @@
     }
   ],
   "totals": {
-    "authored_conduction_edges": 1174,
     "authored_effectors_missing_schema": 0,
-    "authored_effectors_with_schema": 555,
-    "authored_nodes": 527,
-    "authored_when_branches": 221,
-    "conduction_edges": 1395,
-    "expanded_nodes": 627,
-    "node_suites": 627,
+    "authored_effectors_with_schema": 562,
+    "authored_nodes": 534,
+    "conduction_edges": 1423,
+    "expanded_nodes": 634,
+    "node_suites": 634,
     "paths": 46,
-    "when_branches": 246
-  }
+    "when_branches": 253
+  },
+  "unnamed_expanded_when_fields": [],
+  "unnamed_when_fields": []
 }

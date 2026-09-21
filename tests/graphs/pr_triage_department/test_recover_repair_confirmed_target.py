@@ -1,11 +1,11 @@
-"""select_pr_sieve in pr_triage_department: geometry and required when fields."""
+"""run_pr_sieve in pr_triage_department: graph metadata."""
 from __future__ import annotations
 
 _PATH_ID = 'pr_triage_department'
-_NODE_ID = 'select_pr_sieve'
-_ATOM = 'select_pr_sieve'
-_CONDUCTION = ['list_pr_sieve']
-_WHEN = None
+_NODE_ID = 'recover_repair_confirmed_target'
+_ATOM = 'recover_repair_confirmed_target'
+_CONDUCTION = ['reconcile_pr_repair_push']
+_WHEN = {'equals': 'confirmed_target', 'path': 'recovery_case', 'upstream': 'reconcile_pr_repair_push'}
 _REQUIRED_WHEN_FIELDS = []
 _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
  {'conduction': ['list_pr_sieve'], 'id': 'select_pr_sieve', 'when': None},
@@ -66,11 +66,12 @@ def test_node_identity():
 
 
 def test_conduction_is_declared():
-    assert _CONDUCTION == ['list_pr_sieve']
+    assert _CONDUCTION == ['reconcile_pr_repair_push']
 
 
-def test_required_when_fields_are_listed():
-    assert _REQUIRED_WHEN_FIELDS == []
+def test_when_is_declared():
+    assert _WHEN['path'] == 'recovery_case'
+    assert _WHEN['equals'] == _NODE_ID.removeprefix('recover_repair_')
 
 
 def test_model_status_for_this_node():

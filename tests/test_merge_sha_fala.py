@@ -149,7 +149,7 @@ child.run_path = lambda **kw: json.loads(Path({str(child_output)!r}).read_text()
 if a == 'list_pr_sieve':
     v = {{'ok': True, 'prs': [{row!r}]}}
 elif a == 'reconcile_pr_repair_push':
-    v = {{**up['select_pr_sieve'], 'route': 'review'}}
+    v = {{**up['select_pr_sieve'], 'route': 'review', 'recovery_case': 'none'}}
 else:
     v = handle_pr_triage_department(a, dict(m.config), up, {{}})
 write_result(output(m, v))
@@ -169,7 +169,19 @@ write_result(output(m, v))
     assert run.returncode == 0, run.stderr
     department = json.loads(run.stdout.strip().splitlines()[-1])
     outputs = department["effector_results"]
-    assert all(value["status"] == "succeeded" for value in outputs.values()), department
+    assert {name: value["status"] for name, value in outputs.items()} == {
+        "list_pr_sieve": "succeeded",
+        "select_pr_sieve": "succeeded",
+        "reconcile_pr_repair_push": "succeeded",
+        "recover_repair_pre_attempt": "skipped",
+        "recover_repair_remote_unchanged": "skipped",
+        "recover_repair_confirmed_target": "skipped",
+        "recover_repair_closed_merged": "skipped",
+        "recover_repair_unavailable": "skipped",
+        "run_pr_sieve": "succeeded",
+        "select_pr_triage_verdict": "succeeded",
+        "summarize_pr_triage_department": "succeeded",
+    }, department
     verdict = _process_payload(outputs["select_pr_triage_verdict"])
     receipt = _process_payload(outputs["summarize_pr_triage_department"])
     from lokay.proc.select_next_pr import select
