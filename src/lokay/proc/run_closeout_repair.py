@@ -46,9 +46,10 @@ def repair(
         kw["review"] = review
     try:
         out = compose_pr_repair(**kw)
-    except Exception:  # Infrastructure failure is not a correction attempt.
+    except Exception:  # noqa: BLE001 — child infrastructure failure is not an attempt.
         out = {"ok": False, "error": "compose_error"}
-    result = out.get("result") if isinstance(out.get("result"), dict) else out
+    nested = out.get("result")
+    result = nested if isinstance(nested, dict) else out
     # CLI budget counts an actual coding invocation or published correction.
     # Unlike the daemon's lifetime receipt, this does not require a push to count.
     attempted = any(

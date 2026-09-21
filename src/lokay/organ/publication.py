@@ -112,12 +112,12 @@ def handle_publication(
             argv.append("--changed-scope")
         from lokay.proc.test_local_execution_subflow import run
 
-        test_args = dict(
-            worktree=worktree,
-            changed_scope=bool(inputs.get("changed_scope")),
-            repo=str(ctx.get("repo") or inputs.get("repo") or ""),
-            issue=ctx.get("issue_number") or inputs.get("issue"),
-        )
+        test_args: dict[str, Any] = {
+            "worktree": worktree,
+            "changed_scope": bool(inputs.get("changed_scope")),
+            "repo": str(ctx.get("repo") or inputs.get("repo") or ""),
+            "issue": ctx.get("issue_number") or inputs.get("issue"),
+        }
         if "publish_pr_review" in up:
             from lokay.organ.lanes import run_merge_tests
 

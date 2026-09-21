@@ -166,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             repo=args.repo, pr=args.pr, branch=args.branch,
             repair_start_head_sha=repair_start_sha,
         ))
+    identity: dict[str, Any] = {}
     try:
         command_runner = runner()
         if repair_start_sha:
