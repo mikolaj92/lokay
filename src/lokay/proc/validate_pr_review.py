@@ -174,7 +174,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
             return err("malformed finding", route="fail_closed")
         path = str(raw.get("path") or "")
         start, end = raw.get("start_line"), raw.get("end_line")
-        if (path, "") not in allowed or not isinstance(start, int) or isinstance(start, bool) or not isinstance(end, int) or isinstance(end, bool) or start < 1 or end < start:
+        if sum(candidate == path for candidate, _old in allowed) != 1 or not isinstance(start, int) or isinstance(start, bool) or not isinstance(end, int) or isinstance(end, bool) or start < 1 or end < start:
             return err("finding anchor is malformed", route="fail_closed")
         if not any(
             isinstance(bounds, (list, tuple)) and len(bounds) == 2 and bounds[0] <= start and end <= bounds[1]
