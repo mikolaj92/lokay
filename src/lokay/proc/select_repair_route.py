@@ -19,6 +19,9 @@ _SOFT_HEALTH = frozenset(
     {
         "waiting",
         "repairing",
+        # A named PR-local failure remains blocked, not a carrier stall.
+        # Exclude it from both the current route and historical quorum votes.
+        "pr_repair_blocked",
         "idle",
         "progress",
         "running",
