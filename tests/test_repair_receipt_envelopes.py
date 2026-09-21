@@ -128,6 +128,73 @@ if a in {{'record_pass', 'factory_pass_terminal'}}:
     assert b"evidence-only-" in journal_before
 
 
+@pytest.mark.parametrize("root_reason", [
+    "repair_handoff_incomplete", "ci_repair_identity_invalid",
+    "repair_kind_missing_or_invalid", "push_failed",
+])
+@pytest.mark.parametrize("structured_error", [False, True])
+def test_native_summary_exception_preserves_nested_failure(tmp_path, root_reason, structured_error):
+    from lokay.fala_organ import organ_envelope
+    from lokay.proc.record_pass import run_record_pass
+    from lokay.proc.summarize_pr_repair import summarize
+
+    start, target = "a" * 40, "b" * 40
+    handoff = {
+        "repair_handoff_incomplete": {"kind": "review"},
+        "ci_repair_identity_invalid": {"kind": "ci"},
+        "repair_kind_missing_or_invalid": {},
+        "push_failed": {"kind": "ci", "start_head_sha": start},
+    }[root_reason]
+    summary = summarize(
+        final={"route": "publish"},
+        push={"ok": root_reason != "push_failed", "head_sha": target},
+        repo="o/r", pr=9, branch="ai/fix/42-task", repair_handoff=handoff,
+    )
+    assert summary["ok"] is False
+    assert summary["result"]["reason"] == root_reason
+    with pytest.raises(RuntimeError) as exc:
+        organ_envelope("summarize_pr_repair", summary)
+    message = f"adapter failed\nRuntimeError: {exc.value}"
+    error = {"message": message} if structured_error else message
+    trace = {"db": str(tmp_path / "state.sqlite"), "run_id": "repair-run", "path_id": "pr_repair"}
+    normalized = graph_run.normalize_path_result({
+        "ok": False, **trace,
+        "fala": {"effector_results": {"summarize_pr_repair": {
+            "status": "failed", "error": error,
+        }}},
+    })
+    state_path = tmp_path / "state.jsonl"
+    result = run_record_pass(
+        begin={"state_path": str(state_path)},
+        repair={
+            "ok": True, "route": "fail_closed", "reason": "repair_push_not_confirmed",
+            "repo": "o/r", "pr": 9, "branch": "ai/fix/42-task",
+            "repair_start_head_sha": start, "attempts": 0, "repair": normalized,
+        },
+    )["result"]
+    receipt = read_pass_receipt(state_path=state_path)
+    assert receipt is not None
+    for value in (result, receipt, read_pass_history(state_path=state_path)[-1]):
+        evidence = value["pr_repair"]
+        assert evidence["root_reason"] == root_reason
+        assert evidence["head_sha"] == target
+        assert evidence["reason"] == "repair_push_not_confirmed"
+        assert evidence["repair_start_head_sha"] == start
+        assert evidence["repo"] == "o/r"
+        assert evidence["pr"] == 9
+        assert evidence["branch"] == "ai/fix/42-task"
+        assert evidence["attempts"] == 0
+        assert evidence["ok"] is False
+        assert evidence["repaired"] is False
+        assert evidence["published"] is False
+        assert evidence["terminal"] == "failed"
+        assert evidence["trace"] == trace
+        assert value["health"] == "pr_repair_blocked"
+        assert value["progress"] == 0
+        assert len(json.dumps(evidence)) < 3000
+        assert all(not isinstance(v, (dict, list)) for k, v in evidence.items() if k != "trace")
+
+
 def test_failed_transport_cannot_claim_nested_publication(tmp_path):
     from lokay.proc.record_pass import run_record_pass
 

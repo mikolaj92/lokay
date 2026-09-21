@@ -84,7 +84,9 @@ def _pr_evidence(value: Any, *, child: str) -> dict[str, Any]:
             if isinstance(message, str):
                 encoded = message[-2000:].rsplit("RuntimeError: ", 1)[-1].strip()
                 try:
-                    failure = _typed_pr_fields(json.loads(encoded))
+                    envelope = _blob(json.loads(encoded))
+                    failure = {**_typed_pr_fields(envelope),
+                               **_typed_pr_fields(envelope.get("result"))}
                 except (ValueError, TypeError):
                     failure = {}
                 root_reason = failure.get("reason")
