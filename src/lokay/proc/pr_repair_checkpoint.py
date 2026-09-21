@@ -82,6 +82,38 @@ def verify_local(proof: dict, *, require_clean: bool = True) -> None:
         raise ValueError("repair checkpoint tested identity drift")
 
 
+def _verify_scoped_tests(rows: dict, declaration: dict, full: dict, terminal: dict,
+                         repo: str, worktree: str) -> None:
+    from lokay.proc.derive_changed_test_scope import derive as derive_scope
+
+    names = ("run_declared_tests", "select_declared_test_outcome", "derive_changed_test_scope",
+             "run_changed_scope_tests", "select_green_test_result", "write_test_green_cache")
+    for name in names:
+        child = rows[name]["input"]
+        if (child.get("repo") != repo or child.get("worktree") != worktree
+                or child.get("changed_scope") is not True):
+            raise ValueError("repair scoped test child identity mismatch")
+    selected = _output(rows, "select_declared_test_outcome")
+    scope = _output(rows, "derive_changed_test_scope")
+    executed = _output(rows, "run_changed_scope_tests")
+    written = _output(rows, "write_test_green_cache")
+    argv = scope.get("argv")
+    derived = derive_scope(declaration, selected)
+    green = _output(rows, "select_green_test_result")
+    if (full.get("route") != "red" or full.get("returncode") in (None, 0)
+            or full.get("argv") != declaration["test_argv"]
+            or full.get("tests") != " ".join(declaration["test_argv"])
+            or selected.get("route") != "scope" or scope.get("route") != "scope"
+            or not argv or derived.get("route") != "scope" or derived.get("argv") != argv
+            or executed.get("route") != "green" or executed.get("returncode") != 0
+            or executed.get("argv") != argv or executed.get("tests") != " ".join(argv)
+            or green.get("route") != "green" or green.get("source") != executed
+            or written.get("written") is not True or written.get("tests") != executed["tests"]
+            or terminal.get("tests") != executed["tests"]
+            or terminal.get("full_suite_returncode") != full["returncode"]):
+        raise ValueError("repair scoped test evidence mismatch")
+
+
 def derive(*, inputs: dict, run_ref: dict) -> dict:
     rows = _rows(run_ref, "pr_repair")
     admitted = _output(rows, "worktree_add")
@@ -118,6 +150,13 @@ def derive(*, inputs: dict, run_ref: dict) -> dict:
     test = _output(rows, test_name)
     if commit.get("committed") is not True or commit.get("worktree") != worktree:
         raise ValueError("repair journal commit missing")
+    if commit.get("committed_by") == "agent":
+        from lokay.proc.repair_agent_revision import verified_target
+
+        target = verified_target(inputs=inputs, run_ref=run_ref, worktree=worktree)
+        if commit.get("commit") and commit["commit"] != target:
+            raise ValueError("repair agent commit target mismatch")
+        commit = {**commit, "commit": target}
     if (_output(rows, "finalize_repair_tests").get("route") != "publish"
             or _output(rows, "assert_real_diff").get("real") is not True):
         raise ValueError("repair journal publication gates missing")
@@ -144,7 +183,9 @@ def derive(*, inputs: dict, run_ref: dict) -> dict:
             raise ValueError("repair test cache evidence missing")
     else:
         green = _output(test_rows, "run_declared_tests")
-        if green.get("returncode") != 0 or green.get("route") != "green":
+        if terminal.get("scoped") is True:
+            _verify_scoped_tests(test_rows, declaration, green, terminal, repo, worktree)
+        elif green.get("returncode") != 0 or green.get("route") != "green":
             raise ValueError("repair declared tests not green")
     intent = receipts.build_push_intent(
         repo=repo, pr=pr, branch=branch, repair_kind=inputs["repair_kind"],
@@ -165,7 +206,9 @@ def derive(*, inputs: dict, run_ref: dict) -> dict:
         # Preserve the verified evidence even after terminal journal retention.
         "evidence": {
             "repair": {name: hashlib.sha256(receipts._canonical(rows[name])).hexdigest()
-                       for name in ("worktree_add", commit_name, test_name, "finalize_repair_tests", "assert_real_diff")},
+                       for name in ("worktree_add", commit_name, test_name, "finalize_repair_tests", "assert_real_diff",
+                                    "run_agent", "pr_repair_retry_agent", "evidence_repair_agent", "pr_test_repair_agent")
+                       if name in rows},
             "test": {name: hashlib.sha256(receipts._canonical(row)).hexdigest()
                      for name, row in test_rows.items()},
         },

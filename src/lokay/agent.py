@@ -248,6 +248,9 @@ def run_agent(
         role = "builder"
     capability_env = executor_environment(role, os.environ)
     capability_env["LOKAY_HEALTH_LEASE"] = ""
+    from lokay.proc.repair_agent_revision import observe
+
+    before = observe(runner, worktree) if session_kind == "code" else {}
     result = runner.run(
         CommandSpec(
             argv=tuple(argv),
@@ -261,6 +264,7 @@ def run_agent(
     )
     timed_out = bool(getattr(result, "timed_out", False))
     return {
+        "revision": {"before": before, "after": observe(runner, worktree)} if before else {},
         "status": "completed" if result.returncode == 0 else "failed",
         "agent": kind,
         "returncode": result.returncode,

@@ -93,6 +93,21 @@ def handle_publication(
             and out.get("committed") is not True
             and branch_ahead_of_upstream(runner(), Path(worktree), live=True) > 0
         ):
+            if repair_mode:
+                import sqlite3
+
+                from lokay.proc.repair_agent_revision import observe, verified_target
+
+                try:
+                    target = verified_target(
+                        inputs=inputs, run_ref=dict(inputs.get("repair_run_ref") or {}),
+                        worktree=worktree,
+                    )
+                    if observe(runner(), Path(worktree)).get("head") != target:
+                        raise ValueError("agent revision changed before commit gate")
+                except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+                    return {**out, "ok": False, "reason": "repair_agent_revision_unverified", "error": str(exc)}
+                out["commit"] = target
             out["committed"] = True
             out["committed_by"] = "agent"
         return out
