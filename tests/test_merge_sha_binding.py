@@ -100,7 +100,7 @@ def test_cli_missing_sha_never_reaches_adapter(monkeypatch, capsys, sha):
     assert json.loads(capsys.readouterr().out)["ok"] is False
 
 
-@pytest.mark.parametrize("mutation", ["none", "commit", "dirty", "initial_dirty", "initial_drift"])
+@pytest.mark.parametrize("mutation", ["none", "host_evidence", "commit", "dirty", "initial_dirty", "initial_drift"])
 @pytest.mark.parametrize("test_result", [
     {"ok": True, "tested": True},
     {"ok": True, "tested": True, "cached": True},
@@ -119,6 +119,10 @@ def test_local_test_attests_only_unchanged_clean_head(tmp_path, monkeypatch, mut
     git("add", ".")
     git("commit", "-qm", "before")
     head = git("rev-parse", "HEAD")
+    if mutation == "host_evidence":
+        (tmp_path / ".lokay").mkdir()
+        (tmp_path / ".lokay/approach.md").write_text("host approach\n")
+        (tmp_path / ".lokay/localize.json").write_text("{}\n")
 
     if mutation.startswith("initial_"):
         (tmp_path / "code.py").write_text("changed before tests\n")
@@ -127,7 +131,7 @@ def test_local_test_attests_only_unchanged_clean_head(tmp_path, monkeypatch, mut
 
     def tests(**kwargs):
         assert not mutation.startswith("initial_"), "must refuse before executing tests"
-        if mutation != "none":
+        if mutation not in {"none", "host_evidence"}:
             (tmp_path / "code.py").write_text("after\n")
             if mutation == "commit":
                 git("commit", "-qam", "after")
@@ -138,7 +142,7 @@ def test_local_test_attests_only_unchanged_clean_head(tmp_path, monkeypatch, mut
         "publish_pr_review": {"decision": {"verdict": "approve", "reviewed_head_sha": head}},
         "worktree_add": {"ok": True, "worktree": str(tmp_path)},
     })
-    if mutation == "none":
+    if mutation in {"none", "host_evidence"}:
         assert out["tested_head_sha"] == head
     else:
         assert not out.get("tested_head_sha")

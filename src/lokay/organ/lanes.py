@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from lokay.organ.common import (
@@ -13,6 +14,8 @@ from lokay.organ.common import (
 def _clean_head(worktree: str) -> str:
     """Read a clean local commit; do not turn mutable worktree contents into evidence."""
     from lokay.code.pr import require_head_sha
+    from lokay.repair_worktree_dirt import repair_worktree_dirt
+    from lokay.runner import Runner
 
     def git(*args: str) -> str:
         return subprocess.check_output(
@@ -21,8 +24,8 @@ def _clean_head(worktree: str) -> str:
         ).strip()
 
     head = require_head_sha(git("rev-parse", "HEAD"))
-    if git("status", "--porcelain", "--untracked-files=all"):
-        raise ValueError("local test worktree is dirty")
+    if repair_worktree_dirt(Runner(), Path(worktree)) not in {"clean", "evidence"}:
+        raise ValueError("local test worktree has product dirt or unavailable status")
     return head
 
 
