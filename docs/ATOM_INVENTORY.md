@@ -24,6 +24,6 @@ unresolved nodes separately. None of these counts proves the number of distinct
 implementations or whether an atom hides a workflow. Ripwire is not required and
 is never dispatch authority.
 
-Execution identity and historical failure inspection are separate follow-ups
-(#1089 and #1091). Harvest migration is tracked in #1090. The inventory does not
-claim those tasks are complete.
+Execution identity, harvest migration and historical failure inspection landed
+with #1089, #1090 and #1091 (all closed). This inventory does not reopen them.
+A new locality gap needs a new issue, not those numbers.

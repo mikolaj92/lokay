@@ -58,18 +58,20 @@ Launchd nie robi `host_ff` gdy `lokay.lock` jest trzymany (inaczej zjada
 `updated=true`); `LOKAY_PROCESS_HEAD` i tak odmawia, gdy HEAD ruszył pod
 żywym daemonem.
 
-Pass katalogu (`factory_pass`):
+Pass katalogu (`factory_pass`), authored order:
 
 ```text
-factory_begin (tani katalog / occupancy)
-  → select / queue_conflict / implement (K=1; skip occupied; gdy selected)
-    → health / receipt
-  → survey PRs → inbox → ready → triage → konflikty  (gdy select.route == none)
-    → closeout (najpierw merge otwartych PR)
-      → reap resztek in-flight cache → ai:ready
-        → refresh_occupancy (occupy live/merged; re-list leftover-ready only)
-  → reap leftover worktrees gdy brak wybranego wiersza (KEEP live/occupancy / pr_survey_failed / open PR / dirty unpublished; foreign leftover localize = REMOVE; one ls-remote per repo)
+harvest_factory_children
+  → host_ff
+    → factory_begin_host_gate
+      → begin: factory_begin
+      → restart | blocked (host_behind): record_pass, bez produktu
+    → pięć departmentów (self_repair, issue_triage, executor, pr_triage, pr_repair)
+      → record_pass → factory_pass_terminal
+    → reap_stale_worktrees (sibling z factory_begin_host_gate i factory_begin; nie bramkuje receipt)
 ```
+
+`select_implement` jest zagnieżdżoną ścieżką egzekutora, nie pierwszym krokiem rodzica. Nie ma pętli „select.route == none → survey/closeout”.
 
 ## Resztki (do zmiecenia)
 

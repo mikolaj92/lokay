@@ -51,7 +51,7 @@ The **lokay process as a whole is cyclic**:
 - conflicting PR → close → re-ready → later `issue_to_pr`
 - failed implement → stuck / blocked → next seed
 - continuous `factory_pass` ticks re-survey and re-enter work
-- event wake re-enters triage / close-out
+- a local `lokay-wake` routes one issue or PR back into triage or one bounded pass; it is not a GitHub Actions wake
 
 So: local path order is structured; fleet behavior allows return, repeat, and
 retry across passes. Do not flatten the product into a single irreversible DAG

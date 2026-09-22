@@ -113,107 +113,50 @@ product. Green repository verification may be reused only for the identical
 
 ## Full pass (one tick)
 
-1. **Survey** every managed repo: inbox, open catalog issues (human stops exclude; lokay labels are not a gate), open `ai/fix/*` PRs
-   (full newest-first page, cap 1000; hitting the cap is `survey_error`, not idle).
-2. **Per-repo PR-first**: PR close-out (conflict / repair / triage / waiting) is
-   scoped to each repository. An **actionable** AI PR in repo A does **not**
-   freeze inbox triage or `issue_to_pr` in repo B. Manual/terminal PRs
-   (`ai:needs-review`) never freeze unrelated repos. Issue-level
-   `ai:needs-feedback` never freezes any repo. Safety: never open a second
-   `ai/fix/*` PR in a repo that already has an open AI PR.
-3. **Inbox sito** (per repo, when that repo has no
-   actionable open AI PR and its PR survey succeeded): undecided issues →
-   `issue_triage` sito: robić / nie / oznaczyć / człowiek. Not implement.
-   Sito may mark; it must not close someone else's issue.
-   Hard facts (open/superseded/duplicate AI PR) stay deterministic. Semantic
-   remainder is one structured executor call. Oversized / multi-epic work is
-   człowiek until the later `issue_split` child. A **bug**
-   (`bug` / `kind:bug` / `[BUG]`) is one symptom, one fix. Fail closed: a failed
-   PR survey for a repo refuses triage mutations **in that repo only**.
-4. **PR close-out**: for open AI PRs — conflicts → close + re-ready; confirmed
-   failed CI → `pr_repair`; pending **or transient GitHub/rate-limit checks** →
-   wait non-green; mergeable + policy → `pr_triage` (LLM review → merge → close
-   issue). Land code in a repo before opening a new front there.
-   - Same head SHA: do not re-post / re-run LLM review (`already_reviewed_head`).
-   - `request_changes` may auto-repair a few times (`limits.max_request_changes_per_pr`,
-     default 2); then escalate to `ai:needs-review` (manual terminal).
-   - `ai:request-changes` alone is **not** a terminal label; only `ai:needs-review` is.
-5. **Implement open catalog work (serial by design)**: unlabeled inbox is
-   work — `work:ready` is not a gate. One ticket after another. `K` /
-   `limits.max_issue_to_pr_per_pass` (default **1**; legacy alias
-   `max_issues_per_tick`) is an **optional pass budget**, not concurrent
-   worktrees / Pi / tmux. At most one attempt / one open AI PR per repo.
-   `K>1` remains configurable as rare breadth across already-isolated clean
-   repos — not the recommended default. Before `issue_to_pr`,
-   `lokay-queue-conflict` demotes/defers clear contradictions (open AI PR
-   covering the same issue, epic with children, unmet Depends on / Blocked by,
-   obvious path overlap), then the authored `issue_intake` gate so
-   READY-without-intake cannot implement. Inside `issue_to_pr`: worktree from
-   `origin/main` → **`plan_issue`** (`.lokay/approach.md` evidence) →
-   configured executor → commit → **`rebase_onto_base`** (fail closed on
-   conflict; never force-push) → tests → push → PR. A retry on a
-   deterministic `ai/fix/*` branch RESETs when `origin/<branch>` still
-   exists (closed CONFLICTING tip) **or** the unpublished leftover is
-   behind `origin/main` (rebase_conflict replay). KEEP only unpublished
-   ahead that already contains main, or a dirty leftover. `pr_repair`
-   does **not** rebase a published tip.
-   After closeout,
-   `refresh_occupancy` marks just-merged / still-coding repos occupied
-   and re-lists PRs only on leftover-ready repos that are not already
-   occupied, so a 29-repo catalog does not 429 the secondary budget.
-   Occupancy refresh, surveys, closeout, and stale reaps stay in the
-   path as housecleaning for passes with no selected work — they are
-   not the gate to `select_implement`. Select conducts from
-   `factory_begin` (pass workspace + configured catalog).
-   `queue_conflict` / `dispatch_implement` take a visible
-   `when select_implement.route == selected`. Hygiene nodes take
-   `when select_implement.route == none` and do not run in a selected
-   pass, so their 1800–7200s budgets cannot consume the 180s pass
-   ceiling before `dispatch_implement` or the receipt.
-   `compute_health` / `record_pass` conduct from dispatch, not from
-   the worktree reap. It drops leftover corners
-   that cannot resume (merged, closed CONFLICTING, unpublished-behind-main).
-   `uv.lock`-only is not real uncommitted content, so a CLOSED leftover with
-   only a dirty lockfile can archive. KEEP a live i2pr (from receipts **or**
-   `working.json`), a repo whose PR survey failed, an open covering PR, or a
-   dirty unpublished timeout leftover. A failed `list_prs` is unknown, not idle — wiping
-   `prs_by_repo` must not let reap `push --delete` a published MERGEABLE
-   tip (that closes the GitHub PR). A ready published
-   tip is stale and is reaped; `issue_to_pr` RESETs from `origin/main`.
-   Classify with one `ls-remote --heads` per repo — a per-branch fetch
-   stalls the pass. Over-cap leftover stacks view at most four oldest
-   issues; after a no-reap over_cap, skip those GitHub views for 300s without refreshing the stamp. Pytest must not skip over-cap GitHub views using the lokay stamp. The plan atom is trust-with-evidence,
-   not a human gate. `pr_review` is blind to `.lokay/approach.md`
-   (ticket + code diff + tests only). For a seed classified separately as unbounded collection
-   work, the executor may make only the bounded collector/bootstrap patch: the
-   deployed collector starts durably in the background after merge. Pi and the
-   lokay never populate its data or wait for it to finish; a later issue observes
-   whether it is accruing. Stuck → ledger → `ai:blocked`. Live ready with
-   `executor.enabled: false` is a **stall**.
-6. **Health** (honest):
-   - `idle` — survey finds no remaining work
-   - `progress` — mutations moved the queue this pass
-   - `repairing` — active repair / request_changes cycle (not lokay-failing)
-   - `waiting` — pending CI, no-CI while `require_checks`, review limbo,
-     green PRs while `merge.enabled` false (`remaining.merge_disabled`),
-     only manual PRs (same soft matrix as `merge_policy`), or ready
-     tickets frozen by per-repo PR-first / occupancy
-   - `stall` — actionable work with no progress (true stuck / agent disabled;
-     not merge-disarmed green; not ready behind an open AI PR or live job)
-   - `survey_error` — list atoms failed (refuse false idle)
+The parent is authored `factory_pass`. Order lives in the Fala package, not in this prose.
+
+1. **Harvest** child journals (`harvest_factory_children`), then **host-ff**: fetch + ff-only onto origin/main. Never `reset --hard`. Fail-closed when dirty or diverged.
+2. **Host gate** (`factory_begin_host_gate`): `route=begin` opens the workspace; `route=restart` means host-ff moved HEAD under this process and the pass records a receipt without product work; `route=blocked` / `health=host_behind` is a failed or missing host sync, not a restart. The gate stays `ok=true` so Fala can still reach the receipt.
+3. **`factory_begin`** (only on `begin`): host-alive probe, catalog, pass workspace. Empty surveys do not skip PRs or issues.
+4. **Five departments**, in authored order. Each is a switch plus a child Fala. One pass is self XOR product (product wins).
+   - `self_repair` — only a confirmed stall (`did_not_move`). Idle, waiting, occupied, leftover skip, empty survey and pass ceiling do not start it.
+   - `issue_triage` — sieve only: ready → implement, split, skip (no stamp), or close with a reason. Never stamp `ai:frozen` / `ai:needs-feedback` / `ai:blocked`.
+   - `executor` — one do-issue becomes an open PR. No merge. `K` / `limits.max_issue_to_pr_per_pass` (default **1**) is a pass budget, not concurrent worktrees. At most one attempt / one open AI PR per repo. Before coding, `lokay-queue-conflict` demotes clear contradictions, then the authored `intake_check_execution` path (`lokay-intake-check`) so a ready issue without intake cannot implement. Inside delivery: worktree from `origin/main` → `plan_issue` → configured executor → commit → `rebase_onto_base` (fail closed on conflict; never force-push) → tests → push → PR.
+   - `pr_triage` — list, checks, review, feedback, merge-commit. Verdict merge / feedback / repair. Does not start repair itself.
+   - `pr_repair` — only after a repair verdict from triage, inside the per-PR lifetime budget. A merged or closed target is a fail-closed skip.
+5. **`record_pass`** then **`factory_pass_terminal`**: receipt `outcome` is `new_pr` | `merge` | `none`. A detached worker start is occupancy, not a new PR.
+6. **`reap_stale_worktrees`** is a sibling from `factory_begin_host_gate` and `factory_begin`. It does not gate the departments or the receipt. KEEP live issue-to-PR, a failed PR survey, an open covering PR, or a dirty unpublished leftover. Foreign leftover localize is REMOVE.
+
+Quality that stays, regardless of geometry:
+
+- `K=1` is the recommended default. `K>1` is rare breadth across already-isolated clean repos, not concurrent workers in one repo.
+- Rebase onto base fails closed. Never force-push.
+- Same head SHA is not reviewed twice (`already_reviewed_head`).
+- `request_changes` may auto-repair a few times (`limits.max_request_changes_per_pr`, default 2); then escalate to `ai:needs-review`.
+- A failed PR survey refuses triage mutations in that repo only. It does not freeze other repos.
+- An actionable AI PR in repo A does not freeze triage or delivery in repo B. Never open a second `ai/fix/*` PR in a repo that already has one.
+
+**Health** (honest):
+
+- `idle` — survey finds no remaining work
+- `progress` — mutations moved the queue this pass
+- `repairing` — active repair / request_changes cycle (not lokay-failing)
+- `waiting` — pending CI, no-CI while `require_checks`, review limbo, green PRs while `merge.enabled` is false, only manual PRs, or ready tickets frozen by per-repo occupancy
+- `stall` — actionable work with no progress (true stuck / agent disabled)
+- `survey_error` — list atoms failed (refuse false idle)
 
 ## Continuous lokay
 
-LaunchAgent (cron heartbeat) **and** optional GitHub event wake. Cron keeps
-the lokay turning; event wake (`lokay-wake` on a self-hosted `lokay-work`
-runner) reacts when an issue opens / is labeled `ai:ready` or when PR checks
-complete. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
+LaunchAgent (cron heartbeat) is the clock. There is no GitHub Actions wake
+and no self-hosted Actions runner. `lokay-wake` is a local operator command
+that routes one issue or PR into triage or a bounded factory pass; nothing in
+`.github/workflows` calls it. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
 restarts immediately; idle 0 waits the 60s StartInterval. Classified
 `preflight_failed` is a gate and must exit 0 so the interval applies. Plist
 `StartInterval=60` and crash KeepAlive are host `--install` setup
 (`plutil`, not a per-tick rewrite). Missing plists stay missing. The
 LaunchAgent shell leases `lokay.lock` and execs `lokay-daemon`;
-host-ff lives in `factory_pass` (`host_ff` then `factory_begin_host_gate` begin|restart, then begin only on begin). Same serial lokay (K=1), same lock —
+host-ff lives in `factory_pass` (`harvest_factory_children`, then `host_ff`, then `factory_begin_host_gate` begin|restart|blocked, then begin only on begin). Same serial lokay (K=1), same lock —
 not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 
@@ -326,7 +269,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   recovery path with lease evidence.
   Detached issue-to-PR journals are not finalized. `daemon_entry` /
   `daemon_cycle` / `factory_pass` open a fresh wrapper sqlite per tick and
-  prune old wrapper dirs; they do not reopen the shared lokay journals. Each
+  prune old wrapper dirs; they do not reopen the shared lokay journals.
+  Wrapper directories are retained until completion and recovery dependencies
+  are known: allocating a newer wrapper does not delete the older ones.
+  Each
   host materializes only the requested path. Nested children never share the tree-root
   sqlite or overwrite a sibling materialized package. The journal is a pass
   trace, not world history. Product recovery stays on `state.jsonl`.
