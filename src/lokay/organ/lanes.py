@@ -154,6 +154,8 @@ def handle_lanes(
         from lokay.config import load_config
         from lokay.proc._common import runner as make_runner
 
+        if not inputs.get("live"):
+            return {"ok":True, "route":"planned", "confirmed":False, "planned":True}
         closed = up.get("close_issue") or {}
         if issue_number is None and closed.get("repo") == repo:
             issue_number = closed.get("issue")
@@ -174,7 +176,7 @@ def handle_lanes(
                     "--repo",
                     observed_repo,
                     "--json",
-                    "body,headRefOid,mergeCommit,mergedAt",
+                    "body,headRefOid,headRefName,headRepository,baseRefName,state,mergeCommit,mergedAt",
                 ],
                 live=bool(inputs.get("live")),
             )
@@ -216,7 +218,10 @@ def handle_lanes(
 
         def edit_pr(observed_repo: str, observed_pr: int, body: str) -> str:
             from lokay.gh_prs import gh_text
+            from lokay.proc._common import mutations_allowed
 
+            if not mutations_allowed(live_flag=bool(inputs.get("live")), cfg=receipt_cfg):
+                raise ValueError("delivery receipt mutation not authorized")
             return gh_text(
                 carrier,
                 [
@@ -232,18 +237,28 @@ def handle_lanes(
                 require_success=True,
             )
 
-        return publish(
-            repo=repo,
-            pr=pr_number,
-            issue=issue_number,
-            merge=up.get("pr_merge") or {},
-            close=up.get("close_issue") or {},
-            live=bool(inputs.get("live")),
-            read_pr=read_pr,
-            read_issue=read_issue,
-            main_contains=main_contains,
-            edit_pr=edit_pr,
-        )
+        from lokay.proc import pr_repair_receipts as receipts
+        state_path = getattr(receipt_cfg, "state_path", None)
+        try:
+            repair_receipt = receipts.read(repo, pr_number, state_dir=state_path.expanduser().resolve().parent) if state_path else {}
+            return publish(
+                repo=repo,
+                pr=pr_number,
+                issue=issue_number,
+                merge=up.get("pr_merge") or {},
+                close=up.get("close_issue") or {},
+                live=bool(inputs.get("live")),
+                read_pr=read_pr,
+                read_issue=read_issue,
+                main_contains=main_contains,
+                edit_pr=edit_pr,
+                repair_receipt=repair_receipt,
+                review=up.get("publish_pr_review"),
+                tests=up.get("test_local"),
+            )
+        except (OSError, RuntimeError, ValueError, TypeError) as exc:
+            return {"ok":True, "route":"pending", "confirmed":False,
+                    "reason":"delivery_publication_failed", "detail":str(exc)}
 
     if atom == "close_issue":
         assert repo

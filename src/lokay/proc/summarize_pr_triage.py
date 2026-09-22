@@ -14,7 +14,7 @@ def summarize(
 ) -> dict:
     decision = dict(review.get("decision") or {})
     verdict = str(decision.get("verdict") or "")
-    result = {"review": decision}
+    result: dict = {"review": decision}
     selected = dict(outcome or {})
     if selected.get("route") == "wait" or selected.get("waiting"):
         result.update(
@@ -84,8 +84,16 @@ def summarize(
         else:
             confirmed = dict(receipt or {})
             result.update(
-                merged=bool(merge.get("merged") or merge.get("planned")),
-                closed_issue=close.get("issue"),
+                merged=merge.get("merged") is True,
+                planned=merge.get("planned") is True,
+                issue_closed=confirmed.get("confirmed") is True or confirmed.get("issue_closed") is True or (
+                    close.get("ok") is True and close.get("closed") is True
+                ),
+                closed_issue=close.get("issue") if (
+                    confirmed.get("confirmed") is True or confirmed.get("issue_closed") is True or (
+                        close.get("ok") is True and close.get("closed") is True
+                    )
+                ) else 0,
                 delivery_confirmed=bool(confirmed.get("confirmed")),
                 delivery_receipt=dict(confirmed.get("receipt") or {}),
             )

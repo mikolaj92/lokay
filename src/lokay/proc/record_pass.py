@@ -37,9 +37,10 @@ _PR_EVIDENCE = (
     "reviewed_head_sha", "repair_start_head_sha", "repair_kind", "merged",
     "terminal", "repaired", "published", "repair_push_intent_sha256",
     "attempts", "budget", "parked", "root_reason",
+    "delivery_confirmed", "issue_closed", "closed_issue", "delivery_receipt",
 )
-_PR_FLAGS = frozenset({"ok", "merged", "repaired", "published", "parked"})
-_PR_COUNTS = frozenset({"pr", "attempts", "budget"})
+_PR_FLAGS = frozenset({"ok", "merged", "repaired", "published", "parked", "delivery_confirmed", "issue_closed"})
+_PR_COUNTS = frozenset({"pr", "attempts", "budget", "closed_issue"})
 
 
 def _typed_pr_fields(value: Any) -> dict[str, Any]:
@@ -51,6 +52,12 @@ def _typed_pr_fields(value: Any) -> dict[str, Any]:
     out = {}
     for key, item in _blob(value).items():
         if key not in _PR_EVIDENCE:
+            continue
+        if key == "delivery_receipt":
+            # Closed provenance data, never a transport envelope or transcript.
+            if isinstance(item, dict) and len(json.dumps(item)) <= 16384:
+                from lokay.delivery_receipt import compact_receipt
+                out[key] = compact_receipt(item)
             continue
         if key in _PR_FLAGS:
             valid = type(item) is bool
@@ -406,6 +413,11 @@ def run_record_pass(
     evidence = {}
     if triage_evidence:
         evidence["pr_triage"] = triage_evidence
+        delivered = (triage_evidence.get("delivery_confirmed") is True
+                     and triage_evidence.get("issue_closed") is True)
+        evidence.update(delivery_confirmed=delivered,
+                        merged_count=int(outcome == "merge"),
+                        delivered_count=int(delivered))
     if repair_evidence:
         evidence["pr_repair"] = repair_evidence
     if repair_blocked:

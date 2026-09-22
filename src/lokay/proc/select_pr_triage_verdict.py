@@ -13,6 +13,10 @@ def classify(triage_run: Mapping[str, Any]) -> dict:
     blob = triage if isinstance(triage, Mapping) else triage_run
     return {
         "repairable": bool(blob.get("repairable")),
+        "delivery_confirmed": blob.get("delivery_confirmed") is True,
+        "delivery_receipt": dict(blob.get("delivery_receipt") or {}),
+        "issue_closed": blob.get("issue_closed") is True,
+        "closed_issue": blob.get("closed_issue") or 0,
         "merged": bool(blob.get("merged")),
         "waiting": bool(blob.get("waiting")),
         "reason": str(blob.get("reason") or triage_run.get("reason") or ""),
@@ -134,6 +138,10 @@ def select(
             "task_identity_sha256": facts["task_identity_sha256"],
             "review_result_sha256": facts["review_result_sha256"],
             "repair_start_head_sha": facts["repair_start_head_sha"],
+            "delivery_confirmed": facts["delivery_confirmed"],
+            "delivery_receipt": facts["delivery_receipt"],
+            "issue_closed": facts["issue_closed"],
+            "closed_issue": facts["closed_issue"],
             "merged": facts["merged"],
             "waiting": facts["waiting"],
         },

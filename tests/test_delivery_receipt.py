@@ -61,6 +61,7 @@ def test_receipt_organ_uses_closed_issue_and_configured_runner(monkeypatch):
     carrier = object()
     monkeypatch.setattr(config, "load_config", lambda path: configured if path == "chosen.yaml" else pytest.fail("wrong config"))
     monkeypatch.setattr(_common, "runner", lambda cfg: carrier if cfg is configured else pytest.fail("unconfigured runner"))
+    monkeypatch.setattr(_common, "mutations_allowed", lambda **kw: kw['cfg'] is configured)
     calls = []
 
     def read(runner, args, *, live):
