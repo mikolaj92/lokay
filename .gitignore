@@ -9,6 +9,8 @@ dist/
 build/
 .uv/
 config.yaml
+# Host session dumps. Living contract stays in docs/.
+.prime/
 # Host/runtime under checkout — keep approach plan evidence trackable.
 # localize.json is a per-worktree sieve; never ship someone else's scope on main.
 .lokay/*

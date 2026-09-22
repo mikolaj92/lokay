@@ -138,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_config(val)
     val.set_defaults(func=cmd_validate)
 
-    t = sub.add_parser("tick", help="Composer: survey + optional live lokay pass")
+    t = sub.add_parser("tick", help="One factory_pass (compatibility CLI; not a separate survey)")
     add_config(t)
     t.add_argument("--live", action="store_true")
     t.set_defaults(func=cmd_tick)
