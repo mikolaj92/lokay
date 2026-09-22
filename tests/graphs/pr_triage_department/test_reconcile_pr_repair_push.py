@@ -4,12 +4,21 @@ from __future__ import annotations
 _PATH_ID = 'pr_triage_department'
 _NODE_ID = 'reconcile_pr_repair_push'
 _ATOM = 'reconcile_pr_repair_push'
-_CONDUCTION = ['select_pr_sieve']
+_CONDUCTION = ['select_pr_sieve', 'observe_delivery_replay']
 _WHEN = None
 _REQUIRED_WHEN_FIELDS = ['recovery_case', 'route']
 _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
  {'conduction': ['list_pr_sieve'], 'id': 'select_pr_sieve', 'when': None},
- {'conduction': ['select_pr_sieve'], 'id': 'reconcile_pr_repair_push', 'when': None},
+ {'conduction': ['select_pr_sieve'], 'id': 'observe_delivery_replay', 'when': None},
+ {'conduction': ['select_pr_sieve', 'observe_delivery_replay'],
+  'id': 'close_delivery_replay',
+  'when': {'equals': 'close', 'path': 'route', 'upstream': 'observe_delivery_replay'}},
+ {'conduction': ['select_pr_sieve', 'observe_delivery_replay', 'close_delivery_replay'],
+  'id': 'publish_delivery_replay',
+  'when': {'equals': 'publish', 'path': 'route', 'upstream': 'close_delivery_replay'}},
+ {'conduction': ['select_pr_sieve', 'observe_delivery_replay'],
+  'id': 'reconcile_pr_repair_push',
+  'when': None},
  {'conduction': ['reconcile_pr_repair_push'],
   'id': 'recover_repair_pre_attempt',
   'when': {'equals': 'pre_attempt',
@@ -45,7 +54,10 @@ _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
                  'recover_repair_remote_unchanged',
                  'recover_repair_confirmed_target',
                  'recover_repair_closed_merged',
-                 'recover_repair_unavailable'],
+                 'recover_repair_unavailable',
+                 'observe_delivery_replay',
+                 'close_delivery_replay',
+                 'publish_delivery_replay'],
   'id': 'select_pr_triage_verdict',
   'when': None},
  {'conduction': ['select_pr_sieve',
@@ -56,7 +68,10 @@ _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
                  'recover_repair_remote_unchanged',
                  'recover_repair_confirmed_target',
                  'recover_repair_closed_merged',
-                 'recover_repair_unavailable'],
+                 'recover_repair_unavailable',
+                 'observe_delivery_replay',
+                 'close_delivery_replay',
+                 'publish_delivery_replay'],
   'id': 'summarize_pr_triage_department',
   'when': None}]
 
@@ -66,7 +81,7 @@ def test_node_identity():
 
 
 def test_conduction_is_declared():
-    assert _CONDUCTION == ['select_pr_sieve']
+    assert _CONDUCTION == ['select_pr_sieve', 'observe_delivery_replay']
 
 
 def test_when_is_not_a_branch():

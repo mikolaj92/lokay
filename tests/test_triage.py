@@ -294,6 +294,7 @@ def test_pr_triage_path_in_package():
         "test_local",
         "select_pr_triage_outcome",
         "pr_repair_verdict",
+        "prepare_delivery_closeout",
         "pr_merge",
         "stage_clear",
         "close_issue",

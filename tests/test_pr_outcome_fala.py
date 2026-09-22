@@ -87,6 +87,7 @@ def test_invalid_review_runs_one_retry_then_approve_branch(tmp_path):
         "if a=='classify_pr_triage_checks': v['route']='review'\n"
         "if a=='review_repair_gate': v['route']='not_applicable'\n"
         "if a=='select_pr_triage_outcome': v['route']='merge'\n"
+        "if a=='prepare_delivery_closeout': v['route']='ready'\n"
         "if a=='pr_merge': v['merged']=True; Path(" + repr(str(merge_sentinel)) + ").write_text('ran')\n"
         "write_result(output(m, v))\n",
         encoding="utf-8",
@@ -169,6 +170,7 @@ def test_needs_evidence_runs_catalog_then_one_agent(tmp_path):
         "if a=='classify_pr_triage_checks': v['route']='review'\n"
         "if a=='review_repair_gate': v['route']='not_applicable'\n"
         "if a=='select_pr_triage_outcome': v['route']='merge'\n"
+        "if a=='prepare_delivery_closeout': v['route']='ready'\n"
         "if a=='pr_merge': Path("+repr(str(merge_sentinel))+").write_text('ran')\n"
         "write_result(output(m, v))\n",encoding='utf-8')
     package = _materialize_package(root / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml", project=root, path_id="pr_triage")

@@ -1,4 +1,4 @@
-"""#1168 scope controls: repair authority, not #1169 replay or #1170 provenance."""
+"""Delivery scope: #1168 authority, #1169 replay, not #1170 provenance."""
 import tomllib
 from pathlib import Path
 
@@ -29,9 +29,10 @@ def test_unchanged_marker_keeps_baseline_provisional_provenance_policy():
     assert verify_receipt(completed, observed_head='a' * 40, require_delivered=True)
 
 
-def test_department_has_no_deferred_delivery_replay_nodes():
+def test_department_has_authored_delivery_replay_nodes():
     root = Path(__file__).resolve().parents[1]
     for filename in ('fala/lokay.fala-package.toml', 'src/lokay/data/lokay.fala-package.toml'):
         package = tomllib.loads((root / filename).read_text())
         department = next(p for p in package['correlation_paths'] if p['id'] == 'pr_triage_department')
-        assert not any('delivery_replay' in node['id'] for node in department['effectors'])
+        replay = {node['id'] for node in department['effectors'] if 'delivery_replay' in node['id']}
+        assert replay == {'observe_delivery_replay', 'close_delivery_replay', 'publish_delivery_replay'}

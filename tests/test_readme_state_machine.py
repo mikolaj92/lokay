@@ -55,7 +55,8 @@ def test_pr_review_diagram_captures_opencode_review_and_parent_repair_loop():
     assert "RepairPullRequest --> NewHeadSha" in graph
     assert "NewHeadSha --> NextFactoryPassReview" in graph
     assert "ReviewVerdict --> LocalMergeGate: APPROVE" in graph
-    assert "LocalMergeGate --> MergePullRequest" in graph
+    assert "LocalMergeGate --> PrepareDeliveryCloseout" in graph
+    assert "PrepareDeliveryCloseout --> MergePullRequest" in graph
 
 
 def test_repository_has_no_github_actions_workflows():

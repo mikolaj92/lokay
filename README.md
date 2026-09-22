@@ -738,7 +738,11 @@ i nie zapisuje empty stamp.
 stateDiagram-v2
     [*] --> ListPrSieve
     ListPrSieve --> SelectPrSieve
-    SelectPrSieve --> ReconcileRepairPush: selected repo/PR only; verified legacy journal fallback
+    SelectPrSieve --> ObserveDeliveryReplay: durable closeout intent (including already merged PR)
+    ObserveDeliveryReplay --> CloseDeliveryReplay: exact merged repo/branch/SHA on main
+    CloseDeliveryReplay --> PublishDeliveryReplay: idempotent close, authoritative receipt reads
+    PublishDeliveryReplay --> SelectPrTriageVerdict: confirmed or named pending; KEEP at tail
+    SelectPrSieve --> ReconcileRepairPush: selected repo/PR only; closeout replay excludes review; verified legacy journal fallback
     ReconcileRepairPush --> RunPrSieve: review; no unresolved publication
     ReconcileRepairPush --> RecoverRepairPreAttempt: pre_attempt
     ReconcileRepairPush --> RecoverRepairRemoteUnchanged: remote_unchanged
@@ -1469,7 +1473,8 @@ stateDiagram-v2
     ReviewVerdict --> LocalMergeGate: APPROVE
     ReviewVerdict --> RepairVerdict: REQUEST_CHANGES, każde finding blokuje (także low)
     ReviewVerdict --> HumanTerminal: NEEDS_HUMAN
-    LocalMergeGate --> MergePullRequest: testy lokalne i fakty pozwalają
+    LocalMergeGate --> PrepareDeliveryCloseout: testy lokalne i fakty pozwalają
+    PrepareDeliveryCloseout --> MergePullRequest: durable exact-SHA intent saved
     LocalMergeGate --> RepairVerdict: test lokalny nie przechodzi
     MergePullRequest --> CloseIssue
     CloseIssue --> ObserveDeliveryConfirmation

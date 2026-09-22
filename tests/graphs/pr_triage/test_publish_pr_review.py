@@ -6,7 +6,7 @@ _NODE_ID = 'publish_pr_review'
 _ATOM = 'publish_pr_review'
 _CONDUCTION = ['classify_pr_triage_checks', 'collect_pr_review_evidence', 'finalize_pr_review']
 _WHEN = None
-_REQUIRED_WHEN_FIELDS = ['decision.verdict']
+_REQUIRED_WHEN_FIELDS = ['decision']
 _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['pr_checks'], 'id': 'classify_pr_triage_checks', 'when': None},
  {'conduction': ['pr_checks', 'classify_pr_triage_checks'],
@@ -81,9 +81,16 @@ _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['classify_pr_triage_checks', 'select_pr_triage_outcome', 'publish_pr_review'],
   'id': 'pr_repair_verdict',
   'when': {'equals': 'repair', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
- {'conduction': ['pr_checks', 'publish_pr_review', 'test_local', 'select_pr_triage_outcome'],
-  'id': 'pr_merge',
+ {'conduction': ['publish_pr_review', 'test_local', 'select_pr_triage_outcome'],
+  'id': 'prepare_delivery_closeout',
   'when': {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
+ {'conduction': ['pr_checks',
+                 'publish_pr_review',
+                 'test_local',
+                 'select_pr_triage_outcome',
+                 'prepare_delivery_closeout'],
+  'id': 'pr_merge',
+  'when': {'equals': 'ready', 'path': 'route', 'upstream': 'prepare_delivery_closeout'}},
  {'conduction': ['publish_pr_review', 'pr_merge', 'select_pr_triage_outcome'],
   'id': 'stage_clear',
   'when': {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
@@ -105,7 +112,8 @@ _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
                  'pr_merge',
                  'close_issue',
                  'publish_delivery_receipt',
-                 'publish_pr_review'],
+                 'publish_pr_review',
+                 'prepare_delivery_closeout'],
   'id': 'summarize_pr_triage',
   'when': None}]
 

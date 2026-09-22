@@ -377,6 +377,9 @@ def test_department_graph_has_no_repair_child() -> None:
     assert ids == [
         "list_pr_sieve",
         "select_pr_sieve",
+        "observe_delivery_replay",
+        "close_delivery_replay",
+        "publish_delivery_replay",
         "reconcile_pr_repair_push",
         "recover_repair_pre_attempt",
         "recover_repair_remote_unchanged",

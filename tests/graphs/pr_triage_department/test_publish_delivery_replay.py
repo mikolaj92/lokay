@@ -1,21 +1,9 @@
-"""select_pr_triage_verdict in pr_triage_department: graph metadata."""
-from __future__ import annotations
-
+"""Independent geometry for publish_delivery_replay."""
 _PATH_ID = 'pr_triage_department'
-_NODE_ID = 'select_pr_triage_verdict'
-_ATOM = 'select_pr_triage_verdict'
-_CONDUCTION = ['select_pr_sieve',
- 'reconcile_pr_repair_push',
- 'run_pr_sieve',
- 'recover_repair_pre_attempt',
- 'recover_repair_remote_unchanged',
- 'recover_repair_confirmed_target',
- 'recover_repair_closed_merged',
- 'recover_repair_unavailable',
- 'observe_delivery_replay',
- 'close_delivery_replay',
- 'publish_delivery_replay']
-_WHEN = None
+_NODE_ID = 'publish_delivery_replay'
+_ATOM = 'publish_delivery_replay'
+_CONDUCTION = ['select_pr_sieve', 'observe_delivery_replay', 'close_delivery_replay']
+_WHEN = {'equals': 'publish', 'path': 'route', 'upstream': 'close_delivery_replay'}
 _REQUIRED_WHEN_FIELDS = []
 _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
  {'conduction': ['list_pr_sieve'], 'id': 'select_pr_sieve', 'when': None},
@@ -85,18 +73,8 @@ _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
   'id': 'summarize_pr_triage_department',
   'when': None}]
 
-
-def test_node_identity():
-    assert _NODE_ID and _ATOM
-
-
-def test_conduction_is_declared():
-    assert _CONDUCTION == ['select_pr_sieve', 'reconcile_pr_repair_push', 'run_pr_sieve',
-        'recover_repair_pre_attempt', 'recover_repair_remote_unchanged',
-        'recover_repair_confirmed_target', 'recover_repair_closed_merged', 'recover_repair_unavailable',
-        'observe_delivery_replay', 'close_delivery_replay', 'publish_delivery_replay']
-
-
-def test_model_status_for_this_node():
+def test_node_geometry():
     from support.graph_model import run_model
-    assert run_model(_EFFECTORS, {})[_NODE_ID] in {'succeeded', 'skipped'}
+    assert _NODE_ID in run_model(_EFFECTORS, {})
+    if _WHEN:
+        assert _WHEN["upstream"] in _CONDUCTION

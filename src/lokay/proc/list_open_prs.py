@@ -45,7 +45,16 @@ def _keep_lokay(rows: list[dict], prefix: str) -> list[dict]:
 def run(*, config_path: str | None, live: bool) -> dict:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     listed = _list_open(cfg, cfg.active_repos(), live=live)
-    if listed.get("ok") is False:
+    from lokay.proc.delivery_closeout import pending
+
+    intents = pending(cfg.state_path) if live else []
+    active = {repo.name for repo in cfg.active_repos()}
+    intents = [intent for intent in intents if intent['repo'] in active]
+    if listed.get("ok") is False and not intents:
         return listed
     kept = _keep_lokay(list(listed.get("prs") or []), str(cfg.branch_prefix or "ai/fix"))
+    replay_ids = {(intent['repo'], intent['pr']) for intent in intents}
+    kept = [row for row in kept if (row['repo'], row['pr']) not in replay_ids]
+    kept.extend({**{key: intent[key] for key in ('repo', 'pr', 'branch', 'head_sha')},
+                 'delivery_replay': True, 'closeout_intent': intent} for intent in intents)
     return {"ok": True, "prs": kept, "count": len(kept)}

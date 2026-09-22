@@ -38,6 +38,9 @@ def _semantic(value: Any, out: list[dict[str, Any]]) -> None:
 
 def compact_event(event: dict[str, Any]) -> dict[str, Any]:
     """Retain recovery/yield facts; discard repeated Fala transcripts."""
+    if event.get('kind') in {'delivery_closeout_intent', 'delivery_closeout_complete',
+                             'delivery_closeout_superseded'}:
+        return {key: event[key] for key in (*_KEEP, 'intent', 'intent_sha256', 'head_sha') if key in event}
     compact = {key: event[key] for key in _KEEP if key in event}
     error = event.get("error")
     if isinstance(error, dict):

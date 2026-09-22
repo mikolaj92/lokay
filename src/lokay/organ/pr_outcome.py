@@ -14,12 +14,16 @@ def handle_pr_outcome(
     if atom == "summarize_pr_triage":
         from lokay.proc.summarize_pr_triage import summarize
 
+        intent = up.get('prepare_delivery_closeout') or {}
+        merge = up.get('pr_merge') or {}
+        if intent.get('route') == 'pending':
+            merge = {'skipped': True, 'waiting': True, 'reason': intent.get('reason')}
         return summarize(
             review=up.get("publish_pr_review") or {},
             repair=up.get("pr_repair_verdict") or {},
             repair_manual=up.get("review_repair_manual") or {},
             manual=up.get("review_manual") or {},
-            merge=up.get("pr_merge") or {},
+            merge=merge,
             close=up.get("close_issue") or {},
             receipt=up.get("publish_delivery_receipt") or {},
             outcome=up.get("pr_repair_verdict") or up.get("select_pr_triage_outcome") or {},

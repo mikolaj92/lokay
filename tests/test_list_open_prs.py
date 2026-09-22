@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from lokay.proc.list_open_prs import _keep_lokay, run
 
 
-def _cfg(names: list[str], *, prefix: str = "ai/fix") -> SimpleNamespace:
+def _cfg(names: list[str], *, state_path: Path, prefix: str = "ai/fix") -> SimpleNamespace:
     return SimpleNamespace(
         branch_prefix=prefix,
+        state_path=state_path,
         active_repos=lambda: [
             SimpleNamespace(name=name, clone_path=Path("/tmp") / name.replace("/", "__"))
             for name in names
@@ -45,17 +46,17 @@ def test_keep_lokay_is_a_small_function() -> None:
     assert [row["pr"] for row in kept] == [9]
 
 
-def test_empty_list_is_ok(monkeypatch) -> None:
-    monkeypatch.setattr("lokay.proc.list_open_prs.load_cfg", lambda _args: _cfg(["o/r"]))
+def test_empty_list_is_ok(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("lokay.proc.list_open_prs.load_cfg", lambda _args: _cfg(["o/r"], state_path=tmp_path / 'state.jsonl'))
 
     monkeypatch.setattr("lokay.proc.list_open_prs.runner", lambda: Git())
     assert run(config_path=None, live=True) == {"ok": True, "prs": [], "count": 0}
 
 
-def test_lists_live_lokay_prs(monkeypatch) -> None:
+def test_lists_live_lokay_prs(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         "lokay.proc.list_open_prs.load_cfg",
-        lambda _args: _cfg(["mikolaj92/lokay"]),
+        lambda _args: _cfg(["mikolaj92/lokay"], state_path=tmp_path / 'state.jsonl'),
     )
 
     class Listing(Git):
@@ -98,9 +99,9 @@ def test_lists_live_lokay_prs(monkeypatch) -> None:
     assert out["prs"][0]["head_sha"] == "abc"
 
 
-def test_forty_repos_do_not_catalog_fail(monkeypatch) -> None:
+def test_forty_repos_do_not_catalog_fail(monkeypatch, tmp_path) -> None:
     names = [f"o/r{i}" for i in range(40)]
-    monkeypatch.setattr("lokay.proc.list_open_prs.load_cfg", lambda _args: _cfg(names))
+    monkeypatch.setattr("lokay.proc.list_open_prs.load_cfg", lambda _args: _cfg(names, state_path=tmp_path / 'state.jsonl'))
 
     class Listing(Git):
         def run(self, spec, *, live):
@@ -130,8 +131,8 @@ def test_forty_repos_do_not_catalog_fail(monkeypatch) -> None:
     assert out.get("reason") != "leftover_overflow"
 
 
-def test_dry_run_is_empty(monkeypatch) -> None:
-    monkeypatch.setattr("lokay.proc.list_open_prs.load_cfg", lambda _args: _cfg(["o/r"]))
+def test_dry_run_is_empty(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("lokay.proc.list_open_prs.load_cfg", lambda _args: _cfg(["o/r"], state_path=tmp_path / 'state.jsonl'))
 
     class GitBad(Git):
         def run(self, spec, *, live):

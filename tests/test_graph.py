@@ -1049,7 +1049,10 @@ def test_pr_review_outcome_is_routed_by_fala_conditions():
             "path": "decision.verdict",
             "equals": "approve",
         }
-    for node_id in ("pr_merge", "stage_clear", "close_issue"):
+    assert by_id["pr_merge"]["when"] == {
+        "upstream": "prepare_delivery_closeout", "path": "route", "equals": "ready",
+    }
+    for node_id in ("prepare_delivery_closeout", "stage_clear", "close_issue"):
         assert by_id[node_id]["when"] == {
             "upstream": "select_pr_triage_outcome",
             "path": "route",

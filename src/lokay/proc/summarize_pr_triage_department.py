@@ -120,14 +120,18 @@ def summarize(
     receipt["waiting"] = receipt["triage"]["waiting"]
     stamp = {**chosen, **receipt}
     leftover_prs = leftover_after(picked, stamp, incomplete_retry_position=incomplete_retry_position)
-    if (incomplete_retry_position == "tail" and recovery_route == "fail_closed"
+    replay_pending = picked.get('delivery_replay') and not receipt['triage']['delivery_confirmed']
+    if replay_pending:
+        head = {key: picked[key] for key in ('repo', 'pr', 'branch', 'head_sha') if key in picked}
+        leftover_prs = [*list(picked.get('leftover_prs') or []), head]
+    if (not replay_pending and incomplete_retry_position == "tail" and recovery_route == "fail_closed"
             and str(picked.get("route") or "") == "pr" and leftover_prs):
         # Uncertainty is KEEP, but it cannot pin the fleet's next selection.
         leftover_prs = [*leftover_prs[1:], leftover_prs[0]]
     if str(picked.get("route") or "") == "pr" or "leftover_prs" in picked:
         receipt["leftover_prs"] = leftover_prs
         receipt["leftover"] = len(leftover_prs)
-        if consumes(stamp) and str(picked.get("route") or "") == "pr":
+        if not replay_pending and consumes(stamp) and str(picked.get("route") or "") == "pr":
             receipt.update(skipped_fields({
                 "skipped_pr": picked.get("pr"),
                 "skipped_pr_repo": picked.get("repo"),

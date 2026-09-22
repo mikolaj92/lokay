@@ -63,6 +63,10 @@ if a == 'test_local':
     v = fala_organ._handle(a, {{'repo': 'owner/repo', 'pr': 7}}, up)
 if a == 'select_pr_triage_outcome':
     v = select(up['classify_pr_triage_checks'], up['review_repair_gate'], up['test_local'])
+if a == 'prepare_delivery_closeout':
+    from lokay.proc.delivery_closeout import prepare
+    v = prepare(state_path=Path({str(tmp_path / 'state.jsonl')!r}), repo='owner/repo', pr=7,
+                issue=7, branch='ai/fix/7', review=up['publish_pr_review'], tests=up['test_local'], live=True)
 if a == 'pr_merge':
     if {merge_result!r} == 'unverified':
         up = {{**up, 'test_local': {{**up['test_local'], 'tested_head_sha': 'b' * 40}}}}
@@ -70,6 +74,8 @@ if a == 'pr_merge':
     lokay.config.load_config = lambda *_: cfg
     pr_merge.load_cfg = lambda *_: cfg
     pr_merge.mutations_allowed = lambda **_: True
+    import lokay.proc._common
+    lokay.proc._common.mutations_allowed = lambda **_: True
     github.view_pr = lambda *args, **kw: {{}}
     class Remote:
         def run_checked(self, spec, *, live):
@@ -81,8 +87,9 @@ if a == 'pr_merge':
             Path({str(merged)!r}).write_text(head)
             return CommandResult(spec=spec, executed=True, returncode=0)
     pr_merge.runner = Remote
-    v = handle_lanes(a, {{}}, up, {{'cfg': [], 'live': ['--live'], 'repo': 'owner/repo',
-        'pr_number': 7, 'issue_number': None, 'branch': '', 'run_atom_main': run_atom_main}})
+    pr_merge.run_proc = lambda *args: {{'ok': True}}  # external post-merge label effect
+    v = handle_lanes(a, {{'live': True}}, up, {{'cfg': [], 'live': ['--live'], 'repo': 'owner/repo',
+        'pr_number': 7, 'issue_number': 7, 'branch': 'ai/fix/7', 'run_atom_main': run_atom_main}})
 if a == 'close_issue':
     def close(main, argv):
         Path({str(closed)!r}).write_text('closed')
@@ -172,6 +179,9 @@ write_result(output(m, v))
     assert {name: value["status"] for name, value in outputs.items()} == {
         "list_pr_sieve": "succeeded",
         "select_pr_sieve": "succeeded",
+        "observe_delivery_replay": "succeeded",
+        "close_delivery_replay": "skipped",
+        "publish_delivery_replay": "skipped",
         "reconcile_pr_repair_push": "succeeded",
         "recover_repair_pre_attempt": "skipped",
         "recover_repair_remote_unchanged": "skipped",

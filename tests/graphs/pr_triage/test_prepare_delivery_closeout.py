@@ -1,15 +1,10 @@
-"""pr_review_agent in pr_triage: geometry and required when fields."""
-from __future__ import annotations
-
+"""Independent geometry for prepare_delivery_closeout."""
 _PATH_ID = 'pr_triage'
-_NODE_ID = 'pr_review_agent'
-_ATOM = 'pr_review_agent'
-_CONDUCTION = ['classify_pr_triage_checks',
- 'collect_pr_review_evidence',
- 'resolve_sha_review',
- 'select_pr_review_scope']
-_WHEN = {'equals': 'ready', 'path': 'route', 'upstream': 'select_pr_review_scope'}
-_REQUIRED_WHEN_FIELDS = []
+_NODE_ID = 'prepare_delivery_closeout'
+_ATOM = 'prepare_delivery_closeout'
+_CONDUCTION = ['publish_pr_review', 'test_local', 'select_pr_triage_outcome']
+_WHEN = {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}
+_REQUIRED_WHEN_FIELDS = ['route']
 _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['pr_checks'], 'id': 'classify_pr_triage_checks', 'when': None},
  {'conduction': ['pr_checks', 'classify_pr_triage_checks'],
@@ -120,24 +115,8 @@ _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
   'id': 'summarize_pr_triage',
   'when': None}]
 
-def test_node_identity():
-    assert _NODE_ID
-    assert _ATOM
-
-def test_conduction_is_declared():
-    assert isinstance(_CONDUCTION, list)
-
-def test_when_is_declared():
-    assert _WHEN["upstream"] in _CONDUCTION
-    assert _WHEN["path"]
-    assert "equals" in _WHEN
-
-def test_required_when_fields_are_listed():
-    assert all(isinstance(field, str) and field for field in _REQUIRED_WHEN_FIELDS)
-
-def test_model_status_for_this_node():
+def test_node_geometry():
     from support.graph_model import run_model
-    status = run_model(_EFFECTORS, {})
-    assert _NODE_ID in status
-    assert status[_NODE_ID] in {"succeeded", "skipped"}
-
+    assert _NODE_ID in run_model(_EFFECTORS, {})
+    if _WHEN:
+        assert _WHEN["upstream"] in _CONDUCTION
