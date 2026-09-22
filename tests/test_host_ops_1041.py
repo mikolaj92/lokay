@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from lokay.host_ops import (
-    HOST_OPS_UNPARK_CRITERION,
     host_ops_unpark_ready,
     issue_is_host_ops_monolith,
     issue_requests_host_ops,
     line_is_host_ops_only,
 )
-from lokay.issue_triage_boundary import resolve_hard_facts
+from lokay.issue_triage_boundary import resolve_hard_facts, validate_output
 from lokay.models import Issue
 from lokay.proc.select_issue_sieve import classify_sieve
 from lokay.split import plan_split
@@ -82,7 +81,7 @@ def test_monolith_vs_pure_host_ops():
     assert not issue_is_host_ops_monolith(pure)
 
 
-def test_hard_facts_monolith_parks_host_ops_issue_split():
+def test_monolith_policy_is_a_semantic_split_not_a_prose_hard_fact():
     data = _data(
         title="Hermes restore + implement detector",
         body=(
@@ -94,10 +93,12 @@ def test_hard_facts_monolith_parks_host_ops_issue_split():
     out = resolve_hard_facts(
         data, {"route": "evaluate"}, {"merged_prs": []}, {"covering_prs": []}
     )
-    assert out["route"] == "terminal"
-    assert out["decision"]["verdict"] == "park"
-    assert "host_ops_issue_split" in out["decision"]["reason"]
-    assert "issue_split" in out["decision"]["reason"]
+    assert out["route"] == "agent"
+    validated = validate_output(
+        '{"verdict":"split","reason":"host_ops_issue_split"}'
+    )
+    assert validated["route"] == "valid"
+    assert classify_sieve({"triage": validated}, {})["route"] == "split"
 
 
 def test_sieve_routes_host_ops_issue_split_to_split():
@@ -105,7 +106,7 @@ def test_sieve_routes_host_ops_issue_split_to_split():
         {
             "triage": {
                 "decision": {
-                    "verdict": "park",
+                    "verdict": "split",
                     "reason": "host_ops_issue_split",
                 }
             }
@@ -115,7 +116,7 @@ def test_sieve_routes_host_ops_issue_split_to_split():
     assert out["route"] == "split"
 
 
-def test_hard_facts_pure_host_ops_parks_not_do():
+def test_semantic_pure_host_ops_skips_not_do():
     data = _data(
         title="LaunchAgent on mini-m4",
         body="Restart LaunchAgent. Need host evidence only — no code change.",
@@ -123,12 +124,11 @@ def test_hard_facts_pure_host_ops_parks_not_do():
     out = resolve_hard_facts(
         data, {"route": "evaluate"}, {"merged_prs": []}, {"covering_prs": []}
     )
-    assert out["route"] == "terminal"
-    assert out["decision"]["verdict"] == "skip"
-    assert out["decision"]["reason"] == "host_ops"
-    assert HOST_OPS_UNPARK_CRITERION in (out["decision"].get("summary") or "")
+    assert out["route"] == "agent"
+    validated = validate_output('{"verdict":"skip","reason":"host_ops"}')
+    assert validated["route"] == "valid"
     sieve = classify_sieve(
-        {"triage": {"decision": out["decision"]}}, {"route": "issue"}
+        {"triage": validated}, {"route": "issue"}
     )
     assert sieve["route"] == "skip"
     assert sieve["route"] != "do"
@@ -244,6 +244,7 @@ def test_generated_host_ops_child_is_not_split_again():
     out = resolve_hard_facts(
         issue.to_dict(), {"route": "evaluate"}, {"merged_prs": []}, {"covering_prs": []}
     )
-    assert out["route"] == "terminal"
-    assert out["decision"]["verdict"] == "skip"
-    assert out["decision"]["reason"] == "host_ops"
+    # Generated prose is not a typed restriction; semantic policy still skips.
+    assert out["route"] == "agent"
+    validated = validate_output('{"verdict":"skip","reason":"host_ops"}')
+    assert classify_sieve({"triage": validated}, {})["route"] == "skip"

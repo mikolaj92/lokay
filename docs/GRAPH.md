@@ -547,8 +547,11 @@ Semantic remainder is one structured executor call; invalid JSON gets one retry;
 exhausted evidence / invalid JSON → skip (no stamp), not limbo. Close is last-resort
 with explanation; otherwise skip leaves the issue OPEN in queue. Own-work closeout
 after merge stays in `pr_triage` (`close_issue`). Oversized / multi-epic → split.
-Host-ops monolith → split `host_ops_issue_split`; pure host-ops → skip `host_ops`
-(no `ai:frozen`). Short title/body (`decide_issue`) → skip (no stamp). Zero
+The semantic agent decides host-ops intent, not a hard-fact keyword detector:
+monolith → explicit verdict split, reason `host_ops_issue_split`; pure live
+host-ops → skip `host_ops` (no `ai:frozen`). Documentation/negated mentions alone
+are not ops requests. The outer sieve maps only verdict=split to the split child;
+free-text reason cannot override skip or park. Short title/body (`decide_issue`) → skip (no stamp). Zero
 `needs_human`. Never `ai:frozen` / `ai:needs-feedback` / `ai:blocked` as process state.
 The executor department launches `issue_to_pr` only after a do mark.
 

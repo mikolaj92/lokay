@@ -39,7 +39,7 @@ def test_sieve_routes_do_skip_park_split_intake() -> None:
     assert classify_sieve(
         {
             "route": "completed",
-            "triage": {"decision": {"verdict": "park", "reason": "oversized_split"}},
+            "triage": {"decision": {"verdict": "split", "reason": "oversized_split"}},
         },
         {"route": "issue"},
     )["route"] == "split"
