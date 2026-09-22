@@ -421,6 +421,8 @@ def normalize_result(
         }
     )
     neutral_evidence = {
+        # Preserve vendor execution identity; never synthesize a reviewer ID.
+        "run_id": manifest.get("run_id"),
         "manifest_schema": MANIFEST_SCHEMA,
         "operation": "review",
         "input_mode": "range",

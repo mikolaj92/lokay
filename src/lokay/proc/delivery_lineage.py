@@ -72,8 +72,11 @@ def advance(provisional: dict, *, repo: str, pr: int, issue: int,
                 break
         if current != head:
             raise ValueError("receipt_identity_mismatch")
-    return {**provisional, "original_head_sha": provisional.get("original_head_sha", provisional["head_sha"]),
-            "head_sha": head, "branch": branch, "repair_lineage": lineage,
+    return {**provisional,
+            **({"original_head_sha": provisional.get("original_head_sha", provisional["head_sha"]),
+                "repair_lineage": lineage} if lineage else {}),
+            "head_sha": head, "branch": branch,
+            "reviewer_session": (decision.get("review_evidence") or {}).get("run_id"),
             "reviewed_head_sha": head, "tested_head_sha": head,
             "review_result_sha256": decision["review_result_sha256"],
             "task_identity_sha256": decision["task_identity_sha256"],

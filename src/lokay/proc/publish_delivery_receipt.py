@@ -106,7 +106,7 @@ def publish(
     head = str(viewed.get("headRefOid") or "")
     if any(provisional.get(key) != value for key, value in (("repo", repo), ("issue", issue))):
         return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_identity_mismatch"}
-    if provisional.get("head_sha") != head:
+    if provisional.get("head_sha") != head or review or tests:
         from lokay.proc.delivery_lineage import advance
         try:
             provisional = advance(provisional, repo=repo, pr=pr, issue=issue, viewed=viewed,
@@ -129,13 +129,17 @@ def publish(
             "issue_closed": issue_closed,
         }
 
-    complete = finalize_receipt(
-        provisional,
-        merge_sha=merge_sha,
-        merged_at=merged_at,
-        issue_closed=issue_closed,
-        main_contains_head=on_main,
-    )
+    try:
+        complete = finalize_receipt(
+            provisional,
+            merge_sha=merge_sha,
+            merged_at=merged_at,
+            issue_closed=issue_closed,
+            main_contains_head=on_main,
+        )
+    except ValueError as exc:
+        return {"ok": True, "route": "pending", "confirmed": False,
+                "reason": str(exc), "issue_closed": issue_closed}
     final_body = PATTERN.sub(lambda _match: marker(complete), body, count=1)
     if final_body != body:
         edit_pr(repo, pr, final_body)

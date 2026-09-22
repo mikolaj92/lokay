@@ -78,7 +78,7 @@ def test_receipt_edit_requires_mutation_authority(monkeypatch):
     monkeypatch.setattr('lokay.config.load_config', lambda _: Config())
     monkeypatch.setattr('lokay.proc._common.mutations_allowed', lambda **kw: False)
     monkeypatch.setattr('lokay.proc.pr_repair_receipts.read', lambda *a, **kw: {})
-    monkeypatch.setattr('lokay.gh_prs.gh_json', lambda *a, **kw: {'body':marker(base()), 'headRefOid':'h',
+    monkeypatch.setattr('lokay.gh_prs.gh_json', lambda *a, **kw: {'body':marker(base()), 'headRefOid':'b' * 40,
                          'mergeCommit':{'oid':'m'}, 'mergedAt':'t', 'state':'CLOSED'})
     def text(carrier, args, **kw):
         if args[0] == 'api': return 'identical'

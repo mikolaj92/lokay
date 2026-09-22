@@ -95,6 +95,7 @@ def select_initial(
         ),
         "evidence_kind": str(decision.get("evidence_kind") or "none"),
         "decision": decision,
+        "session": candidate.get("session"),
     }
 
 
@@ -118,7 +119,8 @@ def select_evidence(
             "decision": {"verdict": "fail_closed"},
             "reason": "coding_evidence_exhausted",
         }
-    return {"ok": True, "route": "implemented", "decision": decision}
+    return {"ok": True, "route": "implemented", "decision": decision,
+            "session": validation.get("session")}
 
 
 def finalize(

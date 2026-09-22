@@ -49,11 +49,12 @@ def produced(tmp_path, monkeypatch):
     provisional = {'repo':'o/r', 'issue':42, 'work_id':'o/r#42', 'branch':inputs['branch'],
         'graph_digest':'sha256:' + '1'*64, 'path_digest':'sha256:' + '2'*64,
         'run_refs':[ref], 'builder_session':'builder-run-42', 'reviewer_session':'pending',
-        'acceptance_digest':'sha256:' + '3'*64, 'head_sha':start}
+        'acceptance_digest':'sha256:' + '3'*64, 'head_sha':start,
+        'acceptance_identity':'o/r#42', 'acceptance_accepted':True}
     review = {'ok':True, 'merge_ok':True, 'repo':'o/r', 'pr':57, 'head_sha':target,
               'decision': {'verdict':'approve', 'findings':[], 'reviewed_head_sha':target,
                            'task':inputs['task'], 'task_identity_sha256':inputs['task_identity_sha256'],
-                           'review_result_sha256':'4'*64}}
+                           'review_result_sha256':'4'*64, 'review_evidence':{'run_id':'vendor-review-57'}}}
     return provisional, review, {**tested, 'tested_head_sha':target}, receipts.read('o/r', 57, state_dir=tmp_path)
 
 
@@ -108,6 +109,5 @@ def test_authorized_repair_only_can_finalize_original_marker(tmp_path, monkeypat
         assert completed['original_head_sha'] == provisional['head_sha']
         assert completed['repair_lineage'][0]['checkpoint_sha256'] == repair['publication_checkpoint']['sha256']
         assert completed['reviewed_head_sha'] == completed['tested_head_sha'] == target
-        # C5a validates repair authority; generic session completion is C5c.
-        assert completed['reviewer_session'] == provisional['reviewer_session']
+        assert completed['reviewer_session'] == review['decision']['review_evidence']['run_id']
         assert completed['issue_closed'] is True

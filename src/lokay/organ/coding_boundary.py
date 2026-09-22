@@ -176,13 +176,17 @@ def handle_coding_boundary(
                 "route": "empty",
                 "reason": str(source_blob.get("reason") or "localize_empty"),
             }
-        return validate(
+        validated = validate(
             str(
                 source_blob.get("stdout")
                 or source_blob.get("stdout_tail")
                 or ""
             )
         )
+        # Session comes from the executor envelope, never its generated JSON.
+        if validated.get("route") == "valid" and source_blob.get("session"):
+            validated["session"] = source_blob["session"]
+        return validated
     if atom == "collect_existing_delivery_pr":
         from lokay.proc.collect_existing_delivery_pr import collect
         from lokay.proc._common import runner

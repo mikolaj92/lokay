@@ -10,6 +10,12 @@ def test_merge_effect_has_durable_closeout_intent(tmp_path, head='b' * 40):
     config = tmp_path / 'config.yaml'
     config.write_text(f'state:\n  path: {state}\nrepos:\n  - name: o/r\n    clone_path: {tmp_path}\n')
     merged = tmp_path / 'merged'
+    import hashlib
+    task = {'repo':'o/r', 'type':'Issue', 'number':42, 'state':'OPEN'}
+    review = {'ok':True, 'repo':'o/r', 'pr':57, 'head_sha':head, 'merge_ok':True,
+              'decision':{'verdict':'approve', 'reviewed_head_sha':head, 'findings':[],
+                          'task':task, 'task_identity_sha256':hashlib.sha256(json.dumps(task, sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
+                          'review_result_sha256':'4'*64, 'review_evidence':{'run_id':'vendor-run-57'}}}
     body = base_effector(f'''
 from lokay.organ.common import _conduction_values
 from lokay.organ.lanes import handle_lanes
@@ -17,9 +23,10 @@ inputs = {{'config_path': {str(config)!r}, 'live': True, 'repo': 'o/r', 'pr': 57
 ctx = {{'cfg': [], 'live': ['--live'], 'repo': 'o/r', 'pr_number': 57, 'issue_number': 42, 'branch': 'ai/fix/42'}}
 if a == 'classify_pr_triage_checks': v.update(route='review', head_sha={head!r})
 elif a == 'resolve_sha_review': v.update(route='cached')
-elif a == 'publish_pr_review': v.update(decision={{'verdict':'approve','reviewed_head_sha':{head!r}}}, head_sha={head!r})
+elif a == 'publish_pr_review': v.update({review!r})
 elif a == 'worktree_add': v.update(route='ready')
-elif a == 'test_local': v.update(passed=True, tested_head_sha={head!r})
+elif a == 'test_local': v.update(passed=True, tested=True, tested_head_sha={head!r},
+    db='/tmp/test.sqlite', run_id='test-42', path_id='test_local_execution')
 elif a == 'select_pr_triage_outcome': v.update(route='merge')
 elif a == 'prepare_delivery_closeout': v = handle_lanes(a, inputs, _conduction_values(m), ctx)
 elif a == 'pr_merge':
@@ -52,8 +59,10 @@ def test_native_replays_closeout_without_open_prs(tmp_path, boundary):
     from test_delivery_receipt import base
 
     from lokay.delivery_receipt import marker
+    from lokay.proc.delivery_closeout import pending
     provisional = {**base(), 'repo': 'o/r', 'issue': 42, 'branch': 'ai/fix/42',
-                   'head_sha': 'b' * 40}
+                   'work_id':'o/r#42', 'acceptance_identity':'o/r#42', 'head_sha': 'b' * 40,
+                   'task_identity_sha256': pending(state)[0]['review']['decision']['task_identity_sha256']}
     body_text = marker(provisional)
     if boundary == 'publish':
         from lokay.delivery_receipt import finalize_receipt

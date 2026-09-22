@@ -22,6 +22,7 @@ def finalize(first: dict, recheck: dict, repair: dict | None = None) -> dict:
             "route": "publish",
             "accepted": True,
             "reason": "acceptance_first",
+            **{k: first[k] for k in ("identity", "acceptance_digest") if k in first},
             "failed_evidence": [],
         }
     if recheck.get("accepted") is True or recheck.get("route") == "publish":
@@ -30,6 +31,7 @@ def finalize(first: dict, recheck: dict, repair: dict | None = None) -> dict:
             "route": "publish",
             "accepted": True,
             "reason": "acceptance_recheck",
+            **{k: recheck[k] for k in ("identity", "acceptance_digest") if k in recheck},
             "failed_evidence": [],
         }
     failed = list(

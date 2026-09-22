@@ -32,4 +32,4 @@ def verify_acceptance(path: str|Path, observed: list[dict[str,Any]], expected_di
     required = {row["kind"] for row in body["evidence"]}; by_kind = {row.get("kind"):row for row in observed}
     failures = sorted(kind for kind in required if by_kind.get(kind,{}).get("ok") is not True)
     accepted = not failures
-    return {"schema":"lokay.acceptance-verdict/1","acceptance_digest":actual,"accepted":accepted,"route":"publish" if accepted else "repair","failed_evidence":failures,"evidence_refs":[row.get("ref") for row in observed if row.get("ref")]}
+    return {"schema":"lokay.acceptance-verdict/1","identity":body["identity"],"acceptance_digest":actual,"accepted":accepted,"route":"publish" if accepted else "repair","failed_evidence":failures,"evidence_refs":[row.get("ref") for row in observed if row.get("ref")]}
