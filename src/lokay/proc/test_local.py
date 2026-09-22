@@ -2,7 +2,8 @@
 
 Verification is declared by the checkout (`[tool.lokay] test` in
 ``pyproject.toml``), not inferred from ``pyproject`` / ``tests/``. Missing
-declaration is an honest skip — do not invent ``uv run --extra dev pytest``.
+declaration is an honest skip — do not invent a test command for a checkout
+that has none. This repo declares its own verifier under ``[tool.lokay]``.
 """
 
 from __future__ import annotations
