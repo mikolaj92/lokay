@@ -193,8 +193,34 @@ task or SHA fails closed. Child, department and pass receipts retain delivery
 confirmation, the bounded receipt and issue-closed evidence, counting real merge
 separately from confirmed delivery.
 
-Already-merged PR replay/enumeration belongs to #1169. Generic final provenance
-population and placeholder rejection belong to #1170, not this contract.
+Generic final provenance population and placeholder rejection belong to #1170,
+not this contract.
+
+### Durable merge closeout (#1169)
+
+The authored `prepare_delivery_closeout` node fsyncs an exact repo/PR/issue/branch/
+reviewed-and-tested SHA intent to the existing config `state.jsonl` before the
+merge effect can run. Ledger compaction preserves this recovery evidence. No
+new scheduler or process ledger is introduced. The existing SHA-guarded merge
+and all review/test gates remain mandatory.
+
+`list_pr_sieve` unions outstanding intents (active configured repositories only)
+with open PRs; replay does not depend on an open listing or a merge response.
+The authored department conducts `observe_delivery_replay` →
+`close_delivery_replay` → `publish_delivery_replay`. Effects reobserve exact
+merged identity and main containment. OPEN same-head candidates return to normal
+review gates, never replay merge from old authority. Identity drift, unavailable
+reads, close/edit failures and keep-issue-open are named pending results. Pending
+replay goes to the queue tail and bypasses obsolete merge skip memory. It never
+starts review, repair, or merge while closeout is pending.
+
+Close reads CLOSED first and adds no duplicate comment. Publication uses the
+existing marker finalizer and #1168 repair lineage verification; an already-final
+body is not edited again. Only confirmed publication writes a durable completion
+event. Crash after any external effect safely repeats authoritative observations.
+Successful first-pass publication is reconciled once on the next pass if completion
+has not yet been recorded. Historical pre-intent merges are not inferred from
+branch names or ancestry. Source tests are not deployment/live acceptance.
 
 ### PR closeout ownership
 
@@ -514,7 +540,7 @@ pr_checks
               ├─ secrets / fail_closed → terminal (never needs_human)
               └─ approve → worktree_add → test_local (record_red)
                     └─→ select_pr_triage_outcome
-                          ├─ merge  → pr_merge → stage_clear → close_issue
+                          ├─ merge  → prepare_delivery_closeout → pr_merge → stage_clear → close_issue → publish_delivery_receipt
                           └─ repair → summarize repair verdict (local suite red)
 ```
 

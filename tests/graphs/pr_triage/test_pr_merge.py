@@ -4,8 +4,12 @@ from __future__ import annotations
 _PATH_ID = 'pr_triage'
 _NODE_ID = 'pr_merge'
 _ATOM = 'pr_merge'
-_CONDUCTION = ['pr_checks', 'publish_pr_review', 'test_local', 'select_pr_triage_outcome']
-_WHEN = {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}
+_CONDUCTION = ['pr_checks',
+ 'publish_pr_review',
+ 'test_local',
+ 'select_pr_triage_outcome',
+ 'prepare_delivery_closeout']
+_WHEN = {'equals': 'ready', 'path': 'route', 'upstream': 'prepare_delivery_closeout'}
 _REQUIRED_WHEN_FIELDS = []
 _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['pr_checks'], 'id': 'classify_pr_triage_checks', 'when': None},
@@ -81,9 +85,16 @@ _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['classify_pr_triage_checks', 'select_pr_triage_outcome', 'publish_pr_review'],
   'id': 'pr_repair_verdict',
   'when': {'equals': 'repair', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
- {'conduction': ['pr_checks', 'publish_pr_review', 'test_local', 'select_pr_triage_outcome'],
-  'id': 'pr_merge',
+ {'conduction': ['publish_pr_review', 'test_local', 'select_pr_triage_outcome'],
+  'id': 'prepare_delivery_closeout',
   'when': {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
+ {'conduction': ['pr_checks',
+                 'publish_pr_review',
+                 'test_local',
+                 'select_pr_triage_outcome',
+                 'prepare_delivery_closeout'],
+  'id': 'pr_merge',
+  'when': {'equals': 'ready', 'path': 'route', 'upstream': 'prepare_delivery_closeout'}},
  {'conduction': ['publish_pr_review', 'pr_merge', 'select_pr_triage_outcome'],
   'id': 'stage_clear',
   'when': {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
@@ -105,7 +116,8 @@ _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
                  'pr_merge',
                  'close_issue',
                  'publish_delivery_receipt',
-                 'publish_pr_review'],
+                 'publish_pr_review',
+                 'prepare_delivery_closeout'],
   'id': 'summarize_pr_triage',
   'when': None}]
 

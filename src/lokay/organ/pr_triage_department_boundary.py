@@ -24,7 +24,17 @@ def handle_pr_triage_department(
         from lokay.proc.select_next_pr import select
 
         return select(up.get("list_pr_sieve") or {}, last=_last_of(inputs))
+    if atom in {'observe_delivery_replay', 'close_delivery_replay', 'publish_delivery_replay'}:
+        from lokay.proc import delivery_closeout
+
+        operation = {'observe_delivery_replay': delivery_closeout.observe,
+                     'close_delivery_replay': delivery_closeout.close,
+                     'publish_delivery_replay': delivery_closeout.publish}[atom]
+        return operation(picked=up.get('select_pr_sieve') or {}, config_path=config, live=live)
     if atom == "reconcile_pr_repair_push":
+        observed = up.get('observe_delivery_replay') or {}
+        if observed.get('route') not in {None, 'review'}:
+            return {'ok': True, 'route': 'delivery_replay', 'recovery_case': 'none'}
         from lokay.proc.reconcile_pr_repair_push import reconcile_pending
 
         picked = dict(up.get("select_pr_sieve") or {})
@@ -63,12 +73,20 @@ def handle_pr_triage_department(
         "recover_repair_pre_attempt", "recover_repair_remote_unchanged",
         "recover_repair_confirmed_target", "recover_repair_closed_merged", "recover_repair_unavailable",
     ) if up.get(name) and up[name].get("route")), dict(up.get("reconcile_pr_repair_push") or {}))
+    triage_run = up.get('run_pr_sieve') or {}
+    observed = up.get('observe_delivery_replay') or {}
+    if observed.get('route') not in {None, 'review'}:
+        from lokay.proc.delivery_closeout import triage
+
+        triage_run = triage(observed, up.get('close_delivery_replay') or {},
+                            up.get('publish_delivery_replay') or {})
+        recovery = {'route': 'review'}  # Reducers consume completion facts, never launch review.
     if atom == "select_pr_triage_verdict":
         from lokay.proc.select_pr_triage_verdict import select
 
         return select(
             up.get("select_pr_sieve") or {},
-            up.get("run_pr_sieve") or {},
+            triage_run,
             recovery,
         )
     if atom == "summarize_pr_triage_department":
@@ -76,7 +94,7 @@ def handle_pr_triage_department(
 
         return summarize(
             up.get("select_pr_sieve") or {},
-            up.get("run_pr_sieve") or {},
+            triage_run,
             up.get("select_pr_triage_verdict") or {},
             recovery,
             incomplete_retry_position=str(inputs.get("incomplete_retry_position") or "head"),

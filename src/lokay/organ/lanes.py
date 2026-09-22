@@ -86,6 +86,19 @@ def handle_lanes(
             [*cfg, "--repo", repo, "--pr", str(pr_number)],
         )
 
+    if atom == "prepare_delivery_closeout":
+        from lokay.config import load_config
+        from lokay.proc.delivery_closeout import prepare
+
+        if issue_number is None:
+            issue_number = issue_number_from_branch(branch, branch_prefix=str(inputs.get("branch_prefix") or "ai/fix"))
+        return prepare(
+            state_path=load_config(str(inputs.get("config_path") or "") or None).state_path,
+            repo=repo, pr=pr_number, issue=issue_number or 0, branch=branch,
+            review=up.get("publish_pr_review") or {}, tests=up.get("test_local") or {},
+            live=bool(inputs.get("live")), keep_issue_open=bool(inputs.get('keep_issue_open')),
+        )
+
     if atom == "pr_merge":
         assert repo and pr_number is not None
         from lokay.config import load_config
@@ -137,6 +150,15 @@ def handle_lanes(
         except (ValueError, LookupError) as exc:
             return {"ok": True, "skipped": True, "waiting": True,
                     "reason": "merge_head_unverified", "error": str(exc)}
+        if inputs.get('live'):
+            from lokay.proc.delivery_closeout import validate
+            try:
+                intent = validate((up.get('prepare_delivery_closeout') or {}).get('intent') or {})
+                if (intent['repo'], intent['pr'], intent['branch'], intent['head_sha']) != (repo, pr_number, branch, head):
+                    raise ValueError('intent identity mismatch')
+            except (ValueError, KeyError, TypeError):
+                return {'ok': True, 'skipped': True, 'waiting': True,
+                        'reason': 'delivery_closeout_intent_missing'}
         argv = [*cfg, *live, "--repo", repo, "--pr", str(pr_number),
                 "--expected-head-sha", head]
         if issue_number is not None:
@@ -150,9 +172,7 @@ def handle_lanes(
         return result
 
     if atom == "publish_delivery_receipt":
-        from lokay.proc.publish_delivery_receipt import publish
-        from lokay.config import load_config
-        from lokay.proc._common import runner as make_runner
+        from lokay.proc.publish_delivery_receipt import publish_from_config
 
         if not inputs.get("live"):
             return {"ok":True, "route":"planned", "confirmed":False, "planned":True}
@@ -161,104 +181,13 @@ def handle_lanes(
             issue_number = closed.get("issue")
         if not repo or type(pr_number) is not int or type(issue_number) is not int or issue_number < 1:
             return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_identity_missing"}
-        receipt_cfg = load_config(str(inputs.get("config_path") or inputs.get("config") or "") or None)
-        carrier = make_runner(receipt_cfg)
-
-        def read_pr(observed_repo: str, observed_pr: int) -> dict[str, Any]:
-            from lokay.gh_prs import gh_json
-
-            return gh_json(
-                carrier,
-                [
-                    "pr",
-                    "view",
-                    str(observed_pr),
-                    "--repo",
-                    observed_repo,
-                    "--json",
-                    "body,headRefOid,headRefName,headRepository,baseRefName,state,mergeCommit,mergedAt",
-                ],
-                live=bool(inputs.get("live")),
-            )
-
-        def read_issue(observed_repo: str, observed_issue: int) -> dict[str, Any]:
-            from lokay.gh_prs import gh_json
-
-            return gh_json(
-                carrier,
-                [
-                    "issue",
-                    "view",
-                    str(observed_issue),
-                    "--repo",
-                    observed_repo,
-                    "--json",
-                    "state",
-                ],
-                live=bool(inputs.get("live")),
-            )
-
-        def main_contains(observed_repo: str, head: str) -> bool:
-            from lokay.gh_prs import gh_text
-
-            return bool(
-                gh_text(
-                    carrier,
-                    [
-                        "api",
-                        f"repos/{observed_repo}/compare/{head}...main",
-                        "--jq",
-                        ".status",
-                    ],
-                    live=bool(inputs.get("live")),
-                    require_success=True,
-                ).strip()
-                in {"ahead", "identical"}
-            )
-
-        def edit_pr(observed_repo: str, observed_pr: int, body: str) -> str:
-            from lokay.gh_prs import gh_text
-            from lokay.proc._common import mutations_allowed
-
-            if not mutations_allowed(live_flag=bool(inputs.get("live")), cfg=receipt_cfg):
-                raise ValueError("delivery receipt mutation not authorized")
-            return gh_text(
-                carrier,
-                [
-                    "pr",
-                    "edit",
-                    str(observed_pr),
-                    "--repo",
-                    observed_repo,
-                    "--body",
-                    body,
-                ],
-                live=bool(inputs.get("live")),
-                require_success=True,
-            )
-
-        from lokay.proc import pr_repair_receipts as receipts
-        state_path = getattr(receipt_cfg, "state_path", None)
-        try:
-            repair_receipt = receipts.read(repo, pr_number, state_dir=state_path.expanduser().resolve().parent) if state_path else {}
-            return publish(
-                repo=repo,
-                pr=pr_number,
-                issue=issue_number,
-                merge=up.get("pr_merge") or {},
-                close=up.get("close_issue") or {},
-                live=bool(inputs.get("live")),
-                read_pr=read_pr,
-                read_issue=read_issue,
-                main_contains=main_contains,
-                edit_pr=edit_pr,
-                repair_receipt=repair_receipt,
-                review=up.get("publish_pr_review"),
-                tests=up.get("test_local"),
-            )
-        except (OSError, RuntimeError, ValueError, TypeError) as exc:
-            return {"ok":True, "route":"pending", "confirmed":False,
-                    "reason":"delivery_publication_failed", "detail":str(exc)}
+        return publish_from_config(
+            config_path=str(inputs.get("config_path") or inputs.get("config") or "") or None,
+            repo=repo, pr=pr_number, issue=issue_number,
+            merge=up.get("pr_merge") or {}, close=closed,
+            live=bool(inputs.get("live")), review=up.get("publish_pr_review"),
+            tests=up.get("test_local"), closeout_intent=inputs.get('closeout_intent'),
+        )
 
     if atom == "close_issue":
         assert repo

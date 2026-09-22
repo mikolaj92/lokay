@@ -11,6 +11,9 @@ from test_issue_triage_fala import base_effector
 PR_TRIAGE_ATOMS = (
     "list_pr_sieve",
     "select_pr_sieve",
+    "observe_delivery_replay",
+    "close_delivery_replay",
+    "publish_delivery_replay",
     "reconcile_pr_repair_push",
     "recover_repair_pre_attempt",
     "recover_repair_remote_unchanged",
@@ -36,6 +39,7 @@ def simulate(*, select_route: str) -> dict[str, str]:
     reconcile_route = "review" if select_route == "pr" else "no_pr"
     values = {
         "select_pr_sieve": {"route": select_route},
+        "observe_delivery_replay": {"route": "review"},
         "reconcile_pr_repair_push": {"route": reconcile_route, "recovery_case": "none"},
     }
     status: dict[str, str] = {}
@@ -115,6 +119,7 @@ def test_one_pr_runs_triage(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_pr_sieve':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
+if a=='observe_delivery_replay':v.update(route='review')
 if a=='reconcile_pr_repair_push':v.update(route='review',recovery_case='none')
 if a=='run_pr_sieve':v.update(route='completed',triage={'repairable':False})
 if a=='select_pr_triage_verdict':v.update(verdict='feedback')
@@ -123,7 +128,9 @@ if a=='summarize_pr_triage_department':v.update(department='pr_triage',verdict='
     result = run_graph(tmp_path, body, "pr-triage-one", path_id="pr_triage_department")
     status = {name: row["status"] for name, row in result["effector_results"].items()}
     assert status == {
-        name: "skipped" if name.startswith("recover_repair_") else "succeeded"
+        name: "skipped" if name.startswith("recover_repair_") or name in {
+            "close_delivery_replay", "publish_delivery_replay",
+        } else "succeeded"
         for name in PR_TRIAGE_ATOMS
     }
     assert status["run_pr_sieve"] == "succeeded"
@@ -136,6 +143,7 @@ def test_repair_verdict_does_not_start_repair_inside_sieve(tmp_path):
     body = base_effector(
         """if a=='list_pr_sieve':v.update(prs=[{'repo':'o/r','pr':9,'branch':'ai/fix/9-x'}],count=1)
 if a=='select_pr_sieve':v.update(route='pr',repo='o/r',pr=9,branch='ai/fix/9-x')
+if a=='observe_delivery_replay':v.update(route='review')
 if a=='reconcile_pr_repair_push':v.update(route='review',recovery_case='none')
 if a=='run_pr_sieve':v.update(route='completed',triage={'repairable':True})
 if a=='select_pr_triage_verdict':v.update(verdict='repair',repairable=True)

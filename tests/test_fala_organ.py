@@ -351,10 +351,16 @@ def test_pr_merge_skipped_suite_still_merges(tmp_path, monkeypatch):
         return {"ok": True, "merged": True}
 
     monkeypatch.setattr(fala_organ, "_run_atom_main", fake_run)
+    from lokay.proc.delivery_closeout import prepare
+    intent = prepare(state_path=tmp_path / 'closeout.jsonl', repo='a/b', pr=7, issue=7,
+                     branch='ai/fix/7', live=True,
+                     review={'decision': {'verdict':'approve', 'reviewed_head_sha':'a' * 40}},
+                     tests={**_skip_test_local(), 'tested_head_sha':'a' * 40})
     merged = fala_organ._handle(
         "pr_merge",
-        {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True},
+        {"config_path": cfg, "repo": "a/b", "pr": 7, "live": True, "branch": "ai/fix/7"},
         {
+            "prepare_delivery_closeout": intent,
             "pr_checks": {"ok": True, "status": "none", "merge_ok": True},
             "test_local": {**_skip_test_local(), "tested_head_sha": "a" * 40},
             "publish_pr_review": {

@@ -12,9 +12,13 @@ def select(listed: dict, last: dict | None = None) -> dict:
             "error": listed.get("error"),
         }
     rows = [row for row in list(listed.get("prs") or []) if isinstance(row, dict)]
+    remembered = dict(last or {})
+    if any(row.get('delivery_replay') and row.get('repo') == (remembered.get('skipped_pr_repo') or remembered.get('skipped_repo'))
+           and row.get('pr') == remembered.get('skipped_pr') for row in rows):
+        remembered.pop('skipped_pr', None)
     queued = [
         row
-        for row in queue(rows, last)
+        for row in queue(rows, remembered)
         if row.get("repo") and row.get("pr") and row.get("branch")
     ]
     if not queued:
