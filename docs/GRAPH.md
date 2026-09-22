@@ -199,7 +199,12 @@ Provisional markers may contain missing evidence, but neither final publication
 nor `verify-delivery-receipt --require-delivered` accepts placeholders as completed
 provenance. Coding validation retains the executor envelope's session (not an
 agent-generated identifier) through the selected retry/evidence result and native
-child terminal. The child wrapper retains its actual journal reference plus the
+child terminal. The executor envelope records a session only when the trusted
+argv template passes `{session}` in an actually executed argument. A retry key
+computed from the worktree, a session-looking prompt, or a planned invocation
+is not completed provenance. Sessionless harness configurations remain supported
+but cannot finalize delivery without session evidence; no generated JSON field
+is promoted to an authenticated session. The child wrapper retains its actual journal reference plus the
 SHA-256 of the authored package and canonical selected path, captured before run.
 The PR marker consumes those fields and the accepted, identity-bound acceptance
 verdict, including the acceptance recheck route.

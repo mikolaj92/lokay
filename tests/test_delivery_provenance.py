@@ -148,6 +148,65 @@ else:
     assert receipt['reviewer_session'] == 'pending'  # Still provisional before review.
 
 
+@pytest.mark.parametrize('binding', ['argument', 'embedded', 'absent', 'prompt_only', 'dropped'])
+def test_real_executor_session_binding_to_receipt(tmp_path, monkeypatch, binding):
+    import json
+    import sys
+
+    from lokay.agent import run_agent, session_id_for_worktree
+    from lokay.config import Config
+    from lokay.organ.coding_boundary import handle_coding_boundary
+    from lokay.runner import Runner
+
+    monkeypatch.delenv('LOKAY_AGENT', raising=False)
+    script = tmp_path / 'executor.py'
+    # A local executor consumes its session argument and records the binding.
+    # It returns no session in generated JSON: provenance must come from the
+    # trusted invocation, not model-authored text or a worktree-derived guess.
+    script.write_text('''import argparse, json, pathlib
+parser = argparse.ArgumentParser()
+parser.add_argument('--session-id')
+parser.add_argument('--prompt')
+args = parser.parse_args()
+pathlib.Path('bound-session.txt').write_text(args.session_id or '')
+print(json.dumps({'verdict': 'implemented'}))
+''')
+    args = [str(script)]
+    if binding == 'argument':
+        args += ['--session-id', '{session}']
+    elif binding == 'embedded':
+        args += ['--session-id={session}']
+    elif binding == 'prompt_only':
+        args += ['--prompt', '{prompt}']
+    elif binding == 'dropped':
+        args += ['--unused={session}', '{model}']
+    cfg = Config(agent='local-executor', agent_command=sys.executable,
+                 agent_args=args, agent_model=None, executor_enabled=True)
+    expected = session_id_for_worktree(tmp_path, kind='probe')
+    envelope = run_agent(Runner(), cfg, worktree=tmp_path, prompt=expected,
+                         execute=True, session_kind='probe', attach_collector_boundary=False)
+    assert envelope['status'] == 'completed', envelope
+    assert json.loads(envelope['stdout_tail']) == {'verdict': 'implemented'}
+    bound = binding in {'argument', 'embedded'}
+    assert (tmp_path / 'bound-session.txt').read_text() == (expected if bound else '')
+    validated = handle_coding_boundary('validate_coding_result', {'worktree': str(tmp_path)},
+                                      {'run_agent': envelope}, {})
+    assert validated is not None and validated['route'] == 'valid'
+    receipt = completed_lineage()
+    receipt['builder_session'] = validated.get('session', '')
+    if bound:
+        assert receipt['builder_session'] == expected
+        completed = finalize_receipt(receipt, merge_sha='c' * 40, merged_at='2026-09-21',
+                                     issue_closed=True, main_contains_head=True)
+        assert verify_receipt(completed, observed_head='b' * 40, require_delivered=True)
+    else:
+        with pytest.raises(ValueError, match='provenance'):
+            finalize_receipt(receipt, merge_sha='c' * 40, merged_at='2026-09-21',
+                             issue_closed=True, main_contains_head=True)
+        assert not envelope.get('session')
+        assert not validated.get('session')
+
+
 @pytest.mark.parametrize('session', ['fixture-run-1', None, 'pending', 'unavailable'])
 def test_vendor_run_identity_reaches_completed_marker(tmp_path, session):
     import hashlib
