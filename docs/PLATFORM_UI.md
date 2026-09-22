@@ -56,16 +56,21 @@ are real dependencies: issue #14.
 
 ## Pins vs COMPAT matrix
 
-The status host pins the latest immutable app-factory generation from the
-upstream [`COMPAT.md`](https://github.com/mikolaj92/app-factory/blob/main/COMPAT.md)
-row. Authentication packages are shown only to keep any future identity work on
-one compatible row; they are not installed by Lokay today.
+The status host pin is **not** the current upstream COMPAT row. Lokay installs
+only `app-factory` because the local status host has no identity routes.
+`my-auth` and `my-usermanager` are not installed, so this repo does not pin
+their tags and does not quote a stale identity generation as "current COMPAT".
 
-| Package | Current COMPAT tag | Lokay usage |
-| --- | --- | --- |
-| **app-factory** | `v0.6.22` | installed as `app-factory[platform]`; owns `product_shell` and `/static/platform` |
-| **my-auth** | `v0.4.8` | not installed; no authentication surface |
-| **my-usermanager** | `v0.5.11` | not installed; no account/admin surface |
+Upstream current row (app-factory `COMPAT.md` on `main`): **v0.7.7** /
+**v0.5.6** / **v0.6.7**. The installed tag below is an explicit host floor on
+the older v0.6.22 row (companions there are my-auth v0.5.4 and
+my-usermanager v0.6.5). Raising the floor is a separate change.
+
+| Package | Role here |
+| --- | --- |
+| **app-factory** | host pin `v0.6.22`, installed as `app-factory[platform]`; owns `product_shell` and `/static/platform` |
+| **my-auth** | not installed; no authentication surface |
+| **my-usermanager** | not installed; no account/admin surface |
 
 ```toml
 dependencies = ["app-factory[platform]"]
@@ -74,8 +79,9 @@ app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.
 ```
 
 Do not use a local `path`, floating `main`, or mix generations. If identity is
-added later, adopt the complete immutable row through app-factory's identity
-composer rather than copying installer, session, or route glue into Lokay.
+added later, adopt the complete current COMPAT row through app-factory's
+identity composer rather than copying installer, session, or route glue into
+Lokay.
 
 ## Smoke
 
