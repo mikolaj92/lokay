@@ -4,7 +4,8 @@ version = "0.3.0"
 description = "Continuous multi-repo issue-to-PR lokay built from Unix atoms and Fala."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
   "pyyaml>=6.0",
   "fala",

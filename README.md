@@ -1786,3 +1786,7 @@ The server does not survey GitHub or mutate the lokay. It renders the current lo
 pass receipt, 24-hour and 7-day event throughput, supported repositories, per-repo
 work, blockers, and a bounded history of completed pass receipts. Core UI assets
 come from the pinned app-factory platform at same-origin `/static/platform`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
