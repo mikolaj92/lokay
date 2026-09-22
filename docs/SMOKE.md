@@ -28,7 +28,7 @@
 5. Run a bounded live lokay:
 
    ```bash
-   uv run lokay lokay --config config.yaml --live --max-passes 3
+   uv run lokay work --config config.yaml --live --max-passes 3
    ```
 
    Alternatively, use the configured LaunchAgent, which invokes:
