@@ -164,6 +164,28 @@ grow `compose/*` with GitHub/git/agent logic beyond wiring. Hermes Kanban is not
 the ledger for step order.
 
 
+### Live executor PR-first admission (#1171)
+
+The existing `select_issue_executor` gate now observes a fresh PR list for its
+selected repository before emitting `route=do`. An actionable open AI PR not
+closing this issue yields `skip/actionable_pr`; unavailable, malformed, empty
+or capped survey evidence yields `skip/pr_survey_unavailable`. Other repositories
+remain eligible. Same-issue covering PRs preserve the existing closeout/resume
+route; they do not exempt a second unrelated actionable PR. Only explicit,
+well-formed `ai:needs-review` labels retain the existing manual-terminal exemption.
+Blocking evidence retains the exact repository, branch and head SHA.
+
+`issues_launch_pr` repeats the authoritative survey after acquiring the exclusive
+repository flock and before reserving a receipt or spawning. A denial releases
+that lease and abandons the delegated capability; success passes the same lock FD
+to the child for its whole slot. No cached parent admission can authorize spawn.
+The nested `collect_existing_delivery_pr` producer carries PR admission evidence
+to `resolve_existing_delivery`; denial or missing evidence routes `no_effect`
+before coding/delivery. Dry-run does not survey or authorize a detached launch.
+These tighten existing atom contracts: no path, conduction, budget, SHA guard,
+OCR engine or scheduler changes. Locks serialize cooperating Lokay launchers,
+not independent humans or external GitHub publishers.
+
 ### Repair publication recovery (#1167)
 
 `pr_repair` conducts `checkpoint_repair_publication` after the exact commit,

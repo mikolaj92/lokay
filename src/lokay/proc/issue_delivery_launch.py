@@ -86,6 +86,28 @@ def detach_issue_to_pr(
             "repo_lock": str(lock_path),
         }
 
+    # The earlier Fala admission is advisory until this exclusive repo lease.
+    # Re-survey before reserving a receipt or spawning; retain the same lock FD
+    # through child activation and its complete delivery slot.
+    from lokay.config import load_config
+    from lokay.proc._common import runner
+    from lokay.proc.inspect_repo_pr_admission import inspect
+
+    try:
+        admission = inspect(
+            runner=runner(), config=load_config(config_path), repo=repo_name,
+            issue=issue_number, live=True,
+        )
+    except Exception:  # noqa: BLE001 - release acquired lease on config/adapter failure
+        admission = {"allowed": False, "reason": "pr_survey_unavailable"}
+    if not admission["allowed"]:
+        abandon_delegated_lease(delegated["path"], delegated["token"])
+        _close_lock(lock_handle)
+        return {
+            "ok": False, "repo": repo_name, "issue": issue_number,
+            "reason": admission["reason"], "pr_admission": admission,
+        }
+
     spawn = popen or subprocess.Popen
     argv = [sys.executable, "-u", "-m", "lokay.compose.issue_to_pr"]
     if config_path:

@@ -38,10 +38,22 @@ def handle_issues(
         from lokay.proc.select_issue_executor import select
 
         cfg = load_config(config)
-        return select(
+        selected = select(
             up.get("select_issue_do_row") or {},
             enabled=department_enabled(cfg, "executor"),
         )
+        if selected.get("route") == "do":
+            from lokay.proc._common import runner
+            from lokay.proc.inspect_repo_pr_admission import inspect
+
+            admission = inspect(
+                runner=runner(), config=cfg, repo=str(selected["repo"]),
+                issue=int(selected["issue"]), live=live,
+            )
+            selected["pr_admission"] = admission
+            if not admission["allowed"]:
+                selected.update(route="skip", reason=admission["reason"])
+        return selected
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch
 

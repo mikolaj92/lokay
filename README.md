@@ -1131,8 +1131,8 @@ stateDiagram-v2
     [*] --> SelectNextIssue
     SelectNextIssue --> SelectIssueDoRow
     SelectIssueDoRow --> SelectIssueExecutor
-    SelectIssueExecutor --> IssuesLaunchPr: robic
-    SelectIssueExecutor --> SummarizeExecutorRow: skip
+    SelectIssueExecutor --> IssuesLaunchPr: robic + fresh repo PR-first clear
+    SelectIssueExecutor --> SummarizeExecutorRow: skip / actionable PR / survey unavailable
     IssuesLaunchPr --> SummarizeExecutorRow
     SummarizeExecutorRow --> [*]
 ```
@@ -1144,7 +1144,15 @@ zgłoszeń. Jawny skip ma pierwszeństwo przed starą etykietą ready.
 Ready leftover staje się `do` bez ponownego triage w tym wierszu. Żywy receipt zajmuje całe repo: nie jest takeable, leftover
 idzie dalej. Nieudany launch nie nadpisuje `route` kandydata i zjada to
 repo z leftover, żeby nest nie kręcił 180s. Wyłączony dział nie spełnia
-`when` launch. Po executorze rodzic nadal robi PR triage.
+`when` launch. `SelectIssueExecutor` surveys only the selected repository;
+an actionable open AI PR for another issue or unavailable survey denies launch.
+A covering same-issue PR remains eligible for the existing closeout/resume path.
+`IssuesLaunchPr` repeats this authoritative check under the exclusive repo flock,
+before receipt reservation and spawn, and retains that lease for the child slot.
+`RecheckDelivery` enforces the same rule before the nested delivery subflow;
+missing admission evidence fails closed. Explicit `ai:needs-review` retains the
+existing manual-terminal exemption. Dry-run never surveys or authorizes launch.
+Po executorze rodzic nadal robi PR triage.
 
 ### Triage issue — `issue_triage`
 
@@ -1321,7 +1329,7 @@ stateDiagram-v2
     RecheckOpenIssue --> RecheckDelivery: issue otwarte
     RecheckOpenIssue --> NoEffect: issue zamknięte
     RecheckDelivery --> CloseExistingDelivery: istniejący PR dostarcza issue
-    RecheckDelivery --> NoEffect: wznowiona gałąź ma kod celu
+    RecheckDelivery --> NoEffect: actionable PR / survey unavailable / wznowiona gałąź ma kod celu
     RecheckDelivery --> PrepareBranch: brak dostawy
     PrepareBranch --> PrepareWorktree
     PrepareWorktree --> MapRepo: ready

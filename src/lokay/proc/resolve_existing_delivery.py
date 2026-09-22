@@ -6,6 +6,12 @@ from __future__ import annotations
 def resolve(issue: dict, existing: dict, resumed: dict) -> dict:
     if str(issue.get("route")) == "closed":
         return {"ok": True, "route": "no_effect", "reason": "issue_closed"}
+    admission = existing.get("pr_admission") or {}
+    if admission.get("allowed") is not True:
+        return {
+            "ok": True, "route": "no_effect",
+            "reason": admission.get("reason") or "pr_survey_unavailable",
+        }
     if existing.get("existing_delivery"):
         return {"ok": True, "route": "closeout", "pr": existing["existing_delivery"]}
     if resumed.get("resumed_source"):

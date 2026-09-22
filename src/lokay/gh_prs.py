@@ -95,12 +95,16 @@ def list_open_ai_prs(runner: Runner, config: Config, repo: RepoConfig, *, live: 
     result = runner.run_checked(gh_spec(args, timeout_seconds=60), live=live)
     if not live:
         return []
+    if not result.stdout.strip():
+        raise ValueError("open-ai-pr survey returned no JSON")
     prefix = config.branch_prefix.rstrip("/") + "/"
     out: list[PullRequest] = []
     for row in parse_survey_list(
         result.stdout, kind="open-ai-pr", repo=repo.name, cap=cap
     ):
-        head = str(row.get("headRefName") or "")
+        head = row.get("headRefName")
+        if not isinstance(head, str) or not head.strip():
+            raise ValueError("open-ai-pr survey row has no head branch identity")
         if not head.startswith(prefix):
             continue
         author = ""
