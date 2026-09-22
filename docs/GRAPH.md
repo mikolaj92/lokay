@@ -193,8 +193,37 @@ task or SHA fails closed. Child, department and pass receipts retain delivery
 confirmation, the bounded receipt and issue-closed evidence, counting real merge
 separately from confirmed delivery.
 
-Generic final provenance population and placeholder rejection belong to #1170,
-not this contract.
+### Completed delivery provenance (#1170)
+
+Provisional markers may contain missing evidence, but neither final publication
+nor `verify-delivery-receipt --require-delivered` accepts placeholders as completed
+provenance. Coding validation retains the executor envelope's session (not an
+agent-generated identifier) through the selected retry/evidence result and native
+child terminal. The executor envelope records a session only when the trusted
+argv template passes `{session}` in an actually executed argument. A retry key
+computed from the worktree, a session-looking prompt, or a planned invocation
+is not completed provenance. Sessionless harness configurations remain supported
+but cannot finalize delivery without session evidence; no generated JSON field
+is promoted to an authenticated session. The child wrapper retains its actual journal reference plus the
+SHA-256 of the authored package and canonical selected path, captured before run.
+The PR marker consumes those fields and the accepted, identity-bound acceptance
+verdict, including the acceptance recheck route.
+
+The OCR adapter carries the vendor manifest's actual `run_id` in neutral review
+evidence. Existing validation, durable review artifact and cached publication
+preserve it; finalization uses it as `reviewer_session`, never a synthesized ID.
+Both unchanged and repaired heads require repo/PR/task/branch-bound approved
+review and exact tested SHA evidence when completing from review/test outputs.
+The existing confirmed repair checkpoint chain still exclusively authorizes A→B.
+Final receipts require non-placeholder sessions, graph/path/acceptance digests,
+matching acceptance work identity, nonempty run references, exact reviewed/tested
+head and test-run reference. Missing legacy evidence stays named
+`receipt_provenance_incomplete`; no historical session is invented to make a
+receipt green. Replay retains the same evidence in the #1169 intent and can retry
+publication without rerunning workers. Merge truth remains separate from delivery
+confirmation; source tests do not establish deployment or live acceptance.
+
+This changes atom contracts, not authored order or merge authorization.
 
 ### Durable merge closeout (#1169)
 

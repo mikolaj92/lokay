@@ -153,6 +153,27 @@ def build_agent_argv(
     timeout_seconds: int | None = None,
 ) -> list[str]:
     """Build argv from executor.command + executor.args. Fail closed on empty."""
+    argv, _ = _build_agent_invocation(
+        config, worktree=worktree, prompt=prompt, session_kind=session_kind,
+        timeout_seconds=timeout_seconds,
+    )
+    return argv
+
+
+def _build_agent_invocation(
+    config: Config,
+    *,
+    worktree: Path,
+    prompt: str,
+    session_kind: str,
+    timeout_seconds: int | None,
+) -> tuple[list[str], str]:
+    """Return argv and the session explicitly bound by the trusted template.
+
+    A worktree-derived retry key alone is not execution evidence. Only a
+    {session} placeholder in an argument actually passed to the harness binds
+    it; model output and coincidental occurrences in prompt text do not.
+    """
     command = (config.agent_command or "").strip()
     if not command:
         raise AgentError(
@@ -173,6 +194,7 @@ def build_agent_argv(
         timeout_seconds=timeout_seconds,
     )
     argv: list[str] = [command]
+    session = ""
     i = 0
     tokens = [str(t) for t in raw_args]
     while i < len(tokens):
@@ -191,8 +213,10 @@ def build_agent_argv(
             i += 1
             continue
         argv.append(rendered)
+        if "session" in _PLACEHOLDER_RE.findall(tok):
+            session = values["session"]
         i += 1
-    return argv
+    return argv, session
 
 
 def run_agent(
@@ -211,7 +235,7 @@ def run_agent(
     effective_prompt = (
         with_collector_boundary(prompt) if attach_collector_boundary else (prompt or "")
     )
-    argv = build_agent_argv(
+    argv, session = _build_agent_invocation(
         config,
         worktree=worktree,
         prompt=effective_prompt,
@@ -231,7 +255,7 @@ def run_agent(
             "worktree": str(worktree),
             "executor_enabled": config.executor_enabled,
             "execute": execute,
-            "session": session_id_for_worktree(worktree, kind=session_kind),
+            "session": "",  # A planned invocation is not execution evidence.
         }
 
     if not config.executor_enabled:
@@ -274,5 +298,5 @@ def run_agent(
         "collector_boundary": bool(attach_collector_boundary),
         "factory_workflow_boundary": bool(attach_collector_boundary),
         "worktree": str(worktree),
-        "session": session_id_for_worktree(worktree, kind=session_kind),
+        "session": session if getattr(result, "executed", False) else "",
     }

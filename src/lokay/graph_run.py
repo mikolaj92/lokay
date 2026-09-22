@@ -322,6 +322,14 @@ def run_path(
     ):
         raise ValueError(f"unknown Fala correlation path: {path_id}")
 
+    import hashlib
+    import json
+
+    graph_digest = "sha256:" + hashlib.sha256(pkg_src.read_bytes()).hexdigest()
+    selected_path = next(item for item in package["correlation_paths"] if item["id"] == path_id)
+    path_digest = "sha256:" + hashlib.sha256(
+        json.dumps(selected_path, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
     rid = run_id or f"lokay-{uuid.uuid4().hex[:12]}"
     if path_id == "pr_repair":
         base_input["repair_run_ref"] = {
@@ -399,6 +407,8 @@ def run_path(
         "engine": "fala",
         "path_id": path_id,
         "package": str(pkg_runtime),
+        "graph_digest": graph_digest,
+        "path_digest": path_digest,
         "db": str(db),
         "run_id": rid,
         "repo": repo,

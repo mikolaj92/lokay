@@ -304,13 +304,15 @@ def handle_publication(
         issue = Issue.from_dict(issue_raw)
         agent = up.get("run_agent", {})
         summary = str(agent.get("stdout_tail") or agent.get("status") or "")
-        acceptance = up.get("verify_acceptance") or up.get("prepare_acceptance") or {}
+        acceptance = up.get("finalize_acceptance") or up.get("verify_acceptance") or {}
         session = up.get("coding_execution") or {}
         receipt = inputs.get("delivery_receipt") or {
             "repo": repo, "issue": issue.number, "work_id": f"{repo}#{issue.number}", "branch": branch,
-            "graph_digest": str(inputs.get("graph_digest") or "pending"),
-            "path_digest": str(inputs.get("path_digest") or "issue_to_pr_delivery"),
-            "run_refs": list(inputs.get("run_refs") or []),
+            "graph_digest": str(session.get("graph_digest") or "pending"),
+            "path_digest": str(session.get("path_digest") or "pending"),
+            "run_refs": list(session.get("run_refs") or []),
+            "acceptance_identity": acceptance.get("identity"),
+            "acceptance_accepted": acceptance.get("accepted") is True,
             "builder_session": str(session.get("session") or "unavailable"),
             "reviewer_session": "pending", "acceptance_digest": str(acceptance.get("acceptance_digest") or acceptance.get("digest") or "pending"),
             "head_sha": str((up.get("push") or {}).get("head_sha") or inputs.get("head_sha") or "pending"),

@@ -53,4 +53,8 @@ def run(
         "decision": dict(out.get("decision") or {}),
         "evidence_kind": str(out.get("evidence_kind") or "none"),
         "reason": out.get("reason"),
+        "session": out.get("session"),
+        "run_refs": [{k: out.get(k) for k in ("db", "run_id", "path_id")}],
+        "graph_digest": out.get("graph_digest"),
+        "path_digest": out.get("path_digest"),
     }

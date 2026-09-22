@@ -2,11 +2,14 @@ import pytest
 from lokay.delivery_receipt import marker, parse_marker, verify_receipt, finalize_receipt
 
 
-def base(): return {'repo':'a/b','issue':7,'work_id':'a/b#7','graph_digest':'g','path_digest':'p','run_refs':['r'],'builder_session':'b','reviewer_session':'v','acceptance_digest':'a','head_sha':'h'}
+def base():
+    from test_delivery_provenance import completed_lineage
+    return {**completed_lineage(), 'repo':'a/b', 'issue':7, 'work_id':'a/b#7',
+            'acceptance_identity':'a/b#7'}
 
 def test_one_canonical_marker_roundtrips_without_prompts_or_secrets():
     text=marker(base()); parsed=parse_marker('body\n'+text+'\n')
-    assert parsed['head_sha']=='h' and text.count('lokay-autonomous-delivery:')==1
+    assert parsed['head_sha']=='b'*40 and text.count('lokay-autonomous-delivery:')==1
     assert 'prompt' not in text and 'token' not in text
 
 def test_manual_or_tampered_pr_is_not_autonomous():
@@ -16,7 +19,7 @@ def test_manual_or_tampered_pr_is_not_autonomous():
 
 def test_final_receipt_requires_main_merge_and_closed_issue():
     complete=finalize_receipt(base(),merge_sha='m',merged_at='t',issue_closed=True,main_contains_head=True)
-    assert verify_receipt(complete,observed_head='h',require_delivered=True)['autonomous']
+    assert verify_receipt(complete,observed_head='b'*40,require_delivered=True)['autonomous']
     with pytest.raises(ValueError,match='delivery'):
         finalize_receipt(base(),merge_sha='m',merged_at='t',issue_closed=False,main_contains_head=True)
 
@@ -34,7 +37,7 @@ def test_publish_delivery_receipt_replaces_provisional_marker_after_observation(
         live=True,
         read_pr=lambda *_: {
             "body": f"summary\n{provisional}\n",
-            "headRefOid": "h",
+            "headRefOid": "b" * 40,
             "mergeCommit": {"oid": "m"},
             "mergedAt": "t",
         },
@@ -48,7 +51,7 @@ def test_publish_delivery_receipt_replaces_provisional_marker_after_observation(
     assert receipt is not None
     assert receipt["merge_sha"] == "m"
     assert receipt["issue_closed"] is True
-    assert verify_receipt(receipt, observed_head="h", require_delivered=True)["autonomous"]
+    assert verify_receipt(receipt, observed_head="b" * 40, require_delivered=True)["autonomous"]
 
 
 def test_receipt_organ_uses_closed_issue_and_configured_runner(monkeypatch):
@@ -68,7 +71,7 @@ def test_receipt_organ_uses_closed_issue_and_configured_runner(monkeypatch):
         assert runner is carrier and live
         calls.append(args)
         if args[:2] == ["pr", "view"]:
-            return {"body": marker(base()), "headRefOid": "h", "mergeCommit": {"oid": "m"}, "mergedAt": "t"}
+            return {"body": marker(base()), "headRefOid": "b" * 40, "mergeCommit": {"oid": "m"}, "mergedAt": "t"}
         assert args[:3] == ["issue", "view", "7"]
         return {"state": "CLOSED"}
 
@@ -91,7 +94,7 @@ def test_receipt_organ_uses_closed_issue_and_configured_runner(monkeypatch):
 def test_receipt_never_rebinds_provenance_to_other_delivery(change):
     from lokay.proc.publish_delivery_receipt import publish
     out = publish(repo="a/b", pr=9, issue=7, merge={"merged": True}, close={}, live=True,
-                  read_pr=lambda *_: {"body": marker({**base(), **change}), "headRefOid": "h", "mergeCommit": {"oid": "m"}, "mergedAt": "t"},
+                  read_pr=lambda *_: {"body": marker({**base(), **change}), "headRefOid": "b" * 40, "mergeCommit": {"oid": "m"}, "mergedAt": "t"},
                   read_issue=lambda *_: {"state": "CLOSED"}, main_contains=lambda *_: True,
                   edit_pr=lambda *_: pytest.fail("must not rewrite provenance"))
     assert out["route"] == "pending"
@@ -102,7 +105,7 @@ def test_receipt_repeat_is_confirmed_without_second_write():
     from lokay.proc.publish_delivery_receipt import publish
     complete = finalize_receipt(base(), merge_sha="m", merged_at="t", issue_closed=True, main_contains_head=True)
     out = publish(repo="a/b", pr=9, issue=7, merge={"merged": True}, close={}, live=True,
-                  read_pr=lambda *_: {"body": marker(complete), "headRefOid": "h", "mergeCommit": {"oid": "m"}, "mergedAt": "t"},
+                  read_pr=lambda *_: {"body": marker(complete), "headRefOid": "b" * 40, "mergeCommit": {"oid": "m"}, "mergedAt": "t"},
                   read_issue=lambda *_: {"state": "CLOSED"}, main_contains=lambda *_: True,
                   edit_pr=lambda *_: pytest.fail("receipt already published"))
     assert out["confirmed"] is True
@@ -120,7 +123,7 @@ def test_publish_delivery_receipt_fails_closed_without_authoritative_confirmatio
         live=True,
         read_pr=lambda *_: {
             "body": marker(base()),
-            "headRefOid": "h",
+            "headRefOid": "b" * 40,
             "mergeCommit": {"oid": "m"},
             "mergedAt": "t",
         },
