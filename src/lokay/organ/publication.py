@@ -307,7 +307,7 @@ def handle_publication(
         acceptance = up.get("verify_acceptance") or up.get("prepare_acceptance") or {}
         session = up.get("coding_execution") or {}
         receipt = inputs.get("delivery_receipt") or {
-            "repo": repo, "issue": issue.number, "work_id": f"{repo}#{issue.number}",
+            "repo": repo, "issue": issue.number, "work_id": f"{repo}#{issue.number}", "branch": branch,
             "graph_digest": str(inputs.get("graph_digest") or "pending"),
             "path_digest": str(inputs.get("path_digest") or "issue_to_pr_delivery"),
             "run_refs": list(inputs.get("run_refs") or []),

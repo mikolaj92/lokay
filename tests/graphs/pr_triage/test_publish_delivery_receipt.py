@@ -4,7 +4,7 @@ from __future__ import annotations
 _PATH_ID = 'pr_triage'
 _NODE_ID = 'publish_delivery_receipt'
 _ATOM = 'publish_delivery_receipt'
-_CONDUCTION = ['pr_merge', 'close_issue', 'select_pr_triage_outcome']
+_CONDUCTION = ['pr_merge', 'close_issue', 'select_pr_triage_outcome', 'publish_pr_review', 'test_local']
 _WHEN = {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}
 _REQUIRED_WHEN_FIELDS = []
 _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
@@ -90,7 +90,11 @@ _EFFECTORS = [{'conduction': [], 'id': 'pr_checks', 'when': None},
  {'conduction': ['publish_pr_review', 'pr_merge', 'stage_clear', 'select_pr_triage_outcome'],
   'id': 'close_issue',
   'when': {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
- {'conduction': ['pr_merge', 'close_issue', 'select_pr_triage_outcome'],
+ {'conduction': ['pr_merge',
+                 'close_issue',
+                 'select_pr_triage_outcome',
+                 'publish_pr_review',
+                 'test_local'],
   'id': 'publish_delivery_receipt',
   'when': {'equals': 'merge', 'path': 'route', 'upstream': 'select_pr_triage_outcome'}},
  {'conduction': ['classify_pr_triage_checks',

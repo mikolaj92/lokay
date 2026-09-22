@@ -20,6 +20,9 @@ def publish(
     read_issue: Callable[[str, int], dict[str, Any]],
     main_contains: Callable[[str, str], bool],
     edit_pr: Callable[[str, int, str], Any],
+    repair_receipt: dict | None = None,
+    review: dict | None = None,
+    tests: dict | None = None,
 ) -> dict[str, Any]:
     """Publish only after authoritative reads confirm the complete delivery."""
     if not live:
@@ -34,8 +37,18 @@ def publish(
         return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_missing"}
 
     head = str(viewed.get("headRefOid") or "")
-    if any(provisional.get(key) != value for key, value in (("repo", repo), ("issue", issue), ("head_sha", head))):
+    if any(provisional.get(key) != value for key, value in (("repo", repo), ("issue", issue))):
         return {"ok": True, "route": "pending", "confirmed": False, "reason": "receipt_identity_mismatch"}
+    if provisional.get("head_sha") != head:
+        from lokay.proc.delivery_lineage import advance
+        try:
+            provisional = advance(provisional, repo=repo, pr=pr, issue=issue, viewed=viewed,
+                                  repair_receipt=repair_receipt or {}, review=review or {}, tests=tests or {})
+        except (ValueError, KeyError, TypeError) as exc:
+            reason = str(exc) if str(exc).startswith("receipt_") else "receipt_repair_lineage_unverified"
+            if not review and not tests:
+                reason = "receipt_identity_mismatch"
+            return {"ok": True, "route": "pending", "confirmed": False, "reason": reason}
     merge_sha = str((viewed.get("mergeCommit") or {}).get("oid") or "")
     merged_at = str(viewed.get("mergedAt") or "")
     issue_closed = str(read_issue(repo, issue).get("state") or "").upper() == "CLOSED"
@@ -46,6 +59,7 @@ def publish(
             "route": "pending",
             "confirmed": False,
             "reason": "delivery_confirmation_incomplete",
+            "issue_closed": issue_closed,
         }
 
     complete = finalize_receipt(
@@ -65,6 +79,7 @@ def publish(
         "repo": repo,
         "pr": pr,
         "issue": issue,
+        "issue_closed": issue_closed,
         "body": final_body,
         "receipt": complete,
     }

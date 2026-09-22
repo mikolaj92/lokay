@@ -184,6 +184,18 @@ so another PR can proceed. Legacy recovery reads this PR's durable Fala journal
 and verifies the same commit/test lineage; a descendant alone is never authority.
 No recovery path resets, cleans or starts a coding/review agent.
 
+### Repair delivery lineage (#1168)
+
+Advancing an original marker at A to repaired head B requires contiguous,
+confirmed repair checkpoints plus reviewed/tested B and authoritative merged
+identity. Ancestry alone never authorizes A→B; mismatched repository, branch,
+task or SHA fails closed. Child, department and pass receipts retain delivery
+confirmation, the bounded receipt and issue-closed evidence, counting real merge
+separately from confirmed delivery.
+
+Already-merged PR replay/enumeration belongs to #1169. Generic final provenance
+population and placeholder rejection belong to #1170, not this contract.
+
 ### PR closeout ownership
 
 The retired `closeout_prs` catalog path is removed. Live `pr_triage_department`

@@ -76,6 +76,10 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
                 result.get("repair_start_head_sha") or repair_verdict.get("repair_start_head_sha")
                 or triage_outcome.get("repair_start_head_sha") or review_decision.get("reviewed_head_sha") or ""
             ),
+            "delivery_confirmed": result.get("delivery_confirmed") is True,
+            "delivery_receipt": dict(result.get("delivery_receipt") or {}),
+            "issue_closed": result.get("issue_closed") is True,
+            "closed_issue": result.get("closed_issue") or 0,
             "merged": bool(result.get("merged")),
             "waiting": bool(result.get("waiting")),
         },

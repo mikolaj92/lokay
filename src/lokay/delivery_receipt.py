@@ -23,6 +23,29 @@ def verify_receipt(receipt:dict[str,Any],*,observed_head:str,require_delivered:b
     if supplied!=_digest(body):raise ValueError('receipt digest mismatch')
     if require_delivered and not (receipt.get('merge_sha') and receipt.get('merged_at') and receipt.get('issue_closed') is True and receipt.get('main_contains_head') is True):raise ValueError('delivery confirmation missing')
     return {'autonomous':True,'receipt_digest':supplied,'head_sha':observed_head}
+def compact_receipt(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Bounded provenance projection, excluding arbitrary transport data."""
+    scalars = REQUIRED - {'run_refs'} | {
+        'schema', 'receipt_digest', 'branch', 'original_head_sha', 'reviewed_head_sha',
+        'tested_head_sha', 'review_result_sha256', 'task_identity_sha256',
+        'merge_sha', 'merged_at', 'issue_closed', 'main_contains_head',
+    }
+    out = {k:v for k,v in receipt.items() if k in scalars
+           and (type(v) in (bool, int) or isinstance(v, str) and len(v) <= 1024)}
+    for key, fields in (
+        ('run_refs', {'db', 'run_id', 'path_id'}),
+        ('repair_lineage', {'start_head_sha', 'target_head_sha', 'checkpoint_sha256', 'intent_sha256'}),
+    ):
+        if isinstance(receipt.get(key), list):
+            out[key] = [{k:v for k,v in row.items() if k in fields and isinstance(v,str) and len(v)<=1024}
+                        for row in receipt[key][:32] if isinstance(row,dict)]
+    ref = receipt.get('test_run_ref')
+    if isinstance(ref, dict):
+        out['test_run_ref'] = {k:v for k,v in ref.items() if k in {'db','run_id','path_id'}
+                               and isinstance(v,str) and len(v)<=1024}
+    return out
+
+
 def finalize_receipt(receipt:dict[str,Any],*,merge_sha:str,merged_at:str,issue_closed:bool,main_contains_head:bool)->dict[str,Any]:
     if not (merge_sha and merged_at and issue_closed and main_contains_head):raise ValueError('delivery confirmation incomplete')
     return signed({**receipt,'merge_sha':merge_sha,'merged_at':merged_at,'issue_closed':issue_closed,'main_contains_head':main_contains_head})

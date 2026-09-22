@@ -9,7 +9,7 @@ def summarize(
 ) -> dict:
     recovered = dict(recovery or {})
     chosen = dict(verdict or {})
-    triage = chosen.get("triage") if isinstance(chosen.get("triage"), dict) else {}
+    triage: dict = dict(chosen["triage"]) if isinstance(chosen.get("triage"), dict) else {}
     if not triage:
         blob = triage_run.get("triage") if isinstance(triage_run.get("triage"), dict) else {}
         triage = dict(blob)
@@ -106,6 +106,10 @@ def summarize(
             "repair_start_head_sha": str(
                 triage.get("repair_start_head_sha") or chosen.get("repair_start_head_sha") or ""
             ),
+            "delivery_confirmed": triage.get("delivery_confirmed") is True,
+            "delivery_receipt": dict(triage.get("delivery_receipt") or {}),
+            "issue_closed": triage.get("issue_closed") is True,
+            "closed_issue": triage.get("closed_issue") or 0,
             "merged": bool(triage.get("merged") or chosen.get("merged")),
             "waiting": bool(triage.get("waiting") or chosen.get("waiting")),
         },
