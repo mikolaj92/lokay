@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from uuid import uuid4
 
 from lokay.code.pr import require_head_sha
 from lokay.state import append_event
@@ -35,7 +36,8 @@ def prepare(*, state_path: Path, repo: str, pr: int, issue: int, branch: str,
     if not live:
         return {'ok': True, 'route': 'ready', 'planned': True}
     try:
-        intent = {'schema': 'lokay.delivery-closeout/1', 'repo': repo, 'pr': pr,
+        intent = {'schema': 'lokay.delivery-closeout/1', 'attempt_id': uuid4().hex,
+                  'repo': repo, 'pr': pr,
                   'issue': issue, 'branch': branch,
                   'head_sha': (review.get('decision') or {}).get('reviewed_head_sha'),
                   'review': review, 'tests': tests, 'keep_issue_open': keep_issue_open}
@@ -55,11 +57,11 @@ def pending(state_path: Path) -> list[dict]:
         return []
     intents: dict[tuple, dict] = {}
     completed = set()
-    with state_path.open() as stream:
+    with state_path.open(encoding='utf-8', errors='replace') as stream:
         for line in stream:
             try:
                 event = json.loads(line)
-                if event.get('kind') == 'delivery_closeout_complete':
+                if event.get('kind') in {'delivery_closeout_complete', 'delivery_closeout_superseded'}:
                     completed.add(event['intent_sha256'])
                 elif event.get('kind') == 'delivery_closeout_intent':
                     intent = validate(event['intent'])
@@ -91,16 +93,31 @@ def observe(*, picked: dict, config_path: str | None, live: bool) -> dict:
             return {'ok': True, 'route': 'pending', 'reason': 'delivery_keep_issue_open'}
         if any(picked.get(key) != intent[key] for key in ('repo', 'pr', 'branch', 'head_sha')):
             raise ValueError('delivery_closeout_identity_mismatch')
-        carrier = runner(load_config(config_path))
+        cfg = load_config(config_path)
+        carrier = runner(cfg)
         viewed = gh_json(carrier, ['pr', 'view', str(intent['pr']), '--repo', intent['repo'],
             '--json', 'headRefOid,headRefName,headRepository,baseRefName,state,mergeCommit,mergedAt'], live=True)
-        if (viewed.get('headRefOid') != intent['head_sha']
-                or viewed.get('headRefName') != intent['branch']
+        if (viewed.get('headRefName') != intent['branch']
                 or (viewed.get('headRepository') or {}).get('nameWithOwner') != intent['repo']
                 or viewed.get('baseRefName') != 'main'):
             raise ValueError('delivery_closeout_identity_mismatch')
         if viewed.get('state') == 'OPEN' and not viewed.get('mergedAt'):
+            head = require_head_sha(viewed.get('headRefOid'))
+            if head != intent['head_sha']:
+                # This intent never became merge authority for the new head.
+                # Retire it durably, not as completed delivery. A later listing
+                # enters the ordinary fresh review/test/SHA-guarded merge path.
+                try:
+                    append_event(cfg.state_path, {'kind': 'delivery_closeout_superseded',
+                        'repo': intent['repo'], 'pr': intent['pr'],
+                        'intent_sha256': intent['sha256'], 'head_sha': head}, durable=True)
+                except OSError as exc:
+                    return {'ok': True, 'route': 'pending',
+                            'reason': 'delivery_closeout_supersede_failed', 'detail': str(exc)}
+                return {'ok': True, 'route': 'pending', 'reason': 'delivery_closeout_superseded'}
             return {'ok': True, 'route': 'review'}
+        if viewed.get('headRefOid') != intent['head_sha']:
+            raise ValueError('delivery_closeout_identity_mismatch')
         if (viewed.get('state') != 'MERGED' or not viewed.get('mergedAt')
                 or not (viewed.get('mergeCommit') or {}).get('oid')):
             raise ValueError('delivery_merge_unconfirmed')

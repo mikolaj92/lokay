@@ -5,7 +5,7 @@ import pytest
 from test_issue_triage_fala import base_effector, run_graph
 
 
-def test_merge_effect_has_durable_closeout_intent(tmp_path):
+def test_merge_effect_has_durable_closeout_intent(tmp_path, head='b' * 40):
     state = tmp_path / 'state.jsonl'
     config = tmp_path / 'config.yaml'
     config.write_text(f'state:\n  path: {state}\nrepos:\n  - name: o/r\n    clone_path: {tmp_path}\n')
@@ -15,24 +15,32 @@ from lokay.organ.common import _conduction_values
 from lokay.organ.lanes import handle_lanes
 inputs = {{'config_path': {str(config)!r}, 'live': True, 'repo': 'o/r', 'pr': 57, 'branch': 'ai/fix/42'}}
 ctx = {{'cfg': [], 'live': ['--live'], 'repo': 'o/r', 'pr_number': 57, 'issue_number': 42, 'branch': 'ai/fix/42'}}
-if a == 'classify_pr_triage_checks': v.update(route='review', head_sha={'b' * 40!r})
+if a == 'classify_pr_triage_checks': v.update(route='review', head_sha={head!r})
 elif a == 'resolve_sha_review': v.update(route='cached')
-elif a == 'publish_pr_review': v.update(decision={{'verdict':'approve','reviewed_head_sha':{'b' * 40!r}}}, head_sha={'b' * 40!r})
+elif a == 'publish_pr_review': v.update(decision={{'verdict':'approve','reviewed_head_sha':{head!r}}}, head_sha={head!r})
 elif a == 'worktree_add': v.update(route='ready')
-elif a == 'test_local': v.update(passed=True, tested_head_sha={'b' * 40!r})
+elif a == 'test_local': v.update(passed=True, tested_head_sha={head!r})
 elif a == 'select_pr_triage_outcome': v.update(route='merge')
 elif a == 'prepare_delivery_closeout': v = handle_lanes(a, inputs, _conduction_values(m), ctx)
 elif a == 'pr_merge':
-    rows = [json.loads(line) for line in Path({str(state)!r}).read_text().splitlines()] if Path({str(state)!r}).exists() else []
-    intents = [row for row in rows if row.get('kind') == 'delivery_closeout_intent']
-    assert intents, 'merge effect started without durable closeout intent'
-    intent = intents[-1]['intent']
-    assert (intent['repo'], intent['pr'], intent['issue'], intent['branch'], intent['head_sha']) == ('o/r', 57, 42, 'ai/fix/42', {'b' * 40!r})
+    from lokay.proc.delivery_closeout import pending
+    intents = pending(Path({str(state)!r}))
+    assert intents, 'merge effect started without recoverable durable closeout intent'
+    intent = intents[-1]
+    assert (intent['repo'], intent['pr'], intent['issue'], intent['branch'], intent['head_sha']) == ('o/r', 57, 42, 'ai/fix/42', {head!r})
     Path({str(merged)!r}).write_text('merged')
     raise RuntimeError('crash after merge effect before response')
 ''')
-    run_graph(tmp_path, body, 'interrupt-merge', 'pr_triage')
+    run_graph(tmp_path, body, f'interrupt-merge-{head}', 'pr_triage')
     assert merged.exists(), 'merge did not receive the durable pre-effect intent'
+
+
+@pytest.mark.parametrize('tail', [b'{"kind":"interrupted_event"', b'{"kind":"\xe2'])
+def test_torn_ledger_tail_cannot_swallow_pre_merge_intent(tmp_path, tail):
+    (tmp_path / 'state.jsonl').write_bytes(tail)
+    test_merge_effect_has_durable_closeout_intent(tmp_path)
+    from lokay.proc.delivery_closeout import pending
+    assert len(pending(tmp_path / 'state.jsonl')) == 1
 
 
 @pytest.mark.parametrize('boundary', ['merge', 'close', 'publish', 'close_failed', 'read_failed', 'edit_failed',
@@ -193,6 +201,100 @@ def test_pre_merge_interruption_reenters_review_not_replay_merge(tmp_path, monke
     assert observe(picked=picked, config_path=str(tmp_path / 'config.yaml'), live=True)['route'] == 'review'
     monkeypatch.setattr('lokay.gh_prs.gh_json', lambda *a, **kw: pytest.fail('dry-run read'))
     assert observe(picked=picked, config_path=str(tmp_path / 'config.yaml'), live=False)['route'] == 'pending'
+
+
+@pytest.mark.parametrize('listing_available', [True, False])
+def test_advanced_open_head_retires_intent_and_reenters_fresh_review(tmp_path, listing_available):
+    test_merge_effect_has_durable_closeout_intent(tmp_path)
+    from lokay.proc.delivery_closeout import pending
+    from lokay.state_compact import compact_state
+
+    state = tmp_path / 'state.jsonl'
+    config = tmp_path / 'config.yaml'
+    reviewed = tmp_path / 'reviewed.json'
+    summary = tmp_path / 'summary.json'
+    body = base_effector(f'''
+from lokay.organ.common import _conduction_values
+from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
+from lokay.proc import list_open_prs, run_pr_triage_subflow
+import lokay.gh_prs as gh
+row = {{'repo':'o/r', 'pr':57, 'branch':'ai/fix/42', 'head_sha':{'c' * 40!r}}}
+list_open_prs._list_open = lambda *args, **kw: {{'ok':{listing_available!r}, 'prs':[row] if {listing_available!r} else []}}
+gh.gh_json = lambda *args, **kw: {{'state':'OPEN', 'headRefOid':{'c' * 40!r},
+    'headRefName':'ai/fix/42', 'headRepository':{{'nameWithOwner':'o/r'}}, 'baseRefName':'main'}}
+def effect(*args, **kw): raise AssertionError('OPEN head drift cannot close/publish/merge')
+gh.gh_text = effect
+def fresh_review(target, **kw):
+    assert (target['repo'], target['pr'], target['branch']) == ('o/r', 57, 'ai/fix/42')
+    assert not target.get('delivery_replay') and not target.get('closeout_intent')
+    Path({str(reviewed)!r}).write_text(json.dumps(target))
+    return {{'ok':True, 'route':'completed', 'triage':{{'waiting':True, 'head_sha':row['head_sha']}}}}
+run_pr_triage_subflow.run = fresh_review
+v = handle_pr_triage_department(a, {{'config_path':{str(config)!r}, 'live':True}}, _conduction_values(m), {{}})
+if a == 'summarize_pr_triage_department': Path({str(summary)!r}).write_text(json.dumps(v))
+''')
+    replay = tmp_path / 'advanced'
+    replay.mkdir()
+    assert run_graph(replay, body, 'advanced', 'pr_triage_department')['ok'] is True
+    assert pending(state) == [], 'obsolete pre-merge intent still shadows authoritative OPEN head'
+    assert json.loads(summary.read_text())['triage']['reason'] == 'delivery_closeout_superseded'
+    assert not reviewed.exists(), 'old intent must not authorize review/merge as the new head'
+    compact_state(state, min_bytes=0)
+    assert pending(state) == [], 'compaction resurrected retired intent'
+    retry = tmp_path / 'fresh'
+    retry.mkdir()
+    fresh_body = body.replace(f"'ok':{listing_available!r}, 'prs':[row] if {listing_available!r} else []",
+                              "'ok':True, 'prs':[row]")
+    assert run_graph(retry, fresh_body, 'fresh', 'pr_triage_department')['ok'] is True
+    assert json.loads(reviewed.read_text())['pr'] == 57
+    assert json.loads(summary.read_text())['triage']['head_sha'] == 'c' * 40
+    # A newly reviewed/tested head produces its own durable authority, never reuses A.
+    test_merge_effect_has_durable_closeout_intent(tmp_path, head='c' * 40)
+    assert [intent['head_sha'] for intent in pending(state)] == ['c' * 40]
+
+
+def test_supersede_write_failure_retains_intent(tmp_path, monkeypatch):
+    test_merge_effect_has_durable_closeout_intent(tmp_path)
+    from lokay.proc import delivery_closeout
+
+    state = tmp_path / 'state.jsonl'
+    intent = delivery_closeout.pending(state)[0]
+    monkeypatch.setattr('lokay.gh_prs.gh_json', lambda *a, **kw: {
+        'state': 'OPEN', 'headRefOid': 'c' * 40, 'headRefName': 'ai/fix/42',
+        'headRepository': {'nameWithOwner': 'o/r'}, 'baseRefName': 'main'})
+
+    def failed_write(*args, **kwargs):
+        raise OSError('disk full')
+
+    monkeypatch.setattr(delivery_closeout, 'append_event', failed_write)
+    result = delivery_closeout.observe(
+        picked={**intent, 'delivery_replay': True, 'closeout_intent': intent},
+        config_path=str(tmp_path / 'config.yaml'), live=True)
+    assert result['route'] == 'pending'
+    assert result['reason'] == 'delivery_closeout_supersede_failed'
+    assert delivery_closeout.pending(state) == [intent]
+
+
+def test_fresh_evidence_can_reauthorize_a_previously_retired_head(tmp_path, monkeypatch):
+    test_merge_effect_has_durable_closeout_intent(tmp_path)
+    from lokay.proc import delivery_closeout
+
+    state = tmp_path / 'state.jsonl'
+    intent = delivery_closeout.pending(state)[0]
+    monkeypatch.setattr('lokay.gh_prs.gh_json', lambda *a, **kw: {
+        'state': 'OPEN', 'headRefOid': 'c' * 40, 'headRefName': 'ai/fix/42',
+        'headRepository': {'nameWithOwner': 'o/r'}, 'baseRefName': 'main'})
+    result = delivery_closeout.observe(
+        picked={**intent, 'delivery_replay': True, 'closeout_intent': intent},
+        config_path=str(tmp_path / 'config.yaml'), live=True)
+    assert result['reason'] == 'delivery_closeout_superseded'
+    assert delivery_closeout.pending(state) == []
+    # A later legitimate return to A with fresh matching review/tests must not
+    # be swallowed by the earlier retirement of byte-identical evidence.
+    result = delivery_closeout.prepare(state_path=state, repo='o/r', pr=57, issue=42,
+        branch='ai/fix/42', review=intent['review'], tests=intent['tests'], live=True)
+    assert result['route'] == 'ready'
+    assert delivery_closeout.pending(state) == [result['intent']]
 
 
 def test_listing_failure_and_bad_unrelated_event_do_not_hide_intent(tmp_path, monkeypatch):
