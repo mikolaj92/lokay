@@ -196,6 +196,7 @@ def handle_coding_boundary(
             repo=ctx["repo"],
             issue=int(ctx["issue_number"]),
             live=bool(inputs.get("live")),
+            config=load_config(inputs.get("config_path") or inputs.get("config")),
         )
     if atom == "collect_resumed_source":
         from lokay.proc.collect_resumed_source import collect

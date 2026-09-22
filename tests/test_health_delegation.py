@@ -13,6 +13,9 @@ from lokay.proc.issue_delivery_launch import detach_issue_to_pr
 
 
 def _parent_lease(tmp_path, monkeypatch):
+    from pr_first_fixtures import empty_pr_survey
+
+    empty_pr_survey(tmp_path, monkeypatch)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.delenv("LOKAY_HEALTH_LEASE", raising=False)
     monkeypatch.delenv("LOKAY_HEALTH_LEASE_PATH", raising=False)
