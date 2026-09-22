@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 DEFAULT_PI_COMMAND = (
-    "/Users/mini-m4-0/.local/share/mise/installs/pi/0.85.1/pi/pi",
+    "/Users/mini-m4-0/.local/share/mise/installs/pi/0.87.0/pi/pi",
     "auth",
     "print-api-key",
     "--provider",
