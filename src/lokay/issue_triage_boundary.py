@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 from typing import Any, Mapping
-from lokay.host_ops import (
-    HOST_OPS_UNPARK_CRITERION,
-    issue_is_host_ops_monolith,
-    issue_requests_host_ops,
-)
 from lokay.intake import (
     CheckResult,
     check_duplicate_ai_pr,
@@ -81,32 +76,9 @@ def resolve_hard_facts(
             "decision": {"verdict": verdict, "reason": hit.reason},
             "checks": [c.to_dict() for c in checks],
         }
-    host = _host_ops_hard_fact(issue)
-    if host is not None:
-        return {
-            "ok": True,
-            "route": "terminal",
-            "decision": host,
-            "checks": [c.to_dict() for c in checks],
-        }
+    # Host-ops intent is semantic, even when prose names a live operation.
+    # Keyword detectors are not physical evidence and cannot bypass triage.
     return {"ok": True, "route": "agent", "checks": [c.to_dict() for c in checks]}
-
-
-def _host_ops_hard_fact(issue: Issue) -> dict[str, str] | None:
-    """Monolith -> park+host_ops_issue_split (sieve auto-splits); pure host-ops -> skip."""
-    if issue_is_host_ops_monolith(issue):
-        return {
-            "verdict": "park",
-            "reason": "host_ops_issue_split",
-            "summary": HOST_OPS_UNPARK_CRITERION,
-        }
-    if issue_requests_host_ops(issue):
-        return {
-            "verdict": "skip",
-            "reason": "host_ops",
-            "summary": HOST_OPS_UNPARK_CRITERION,
-        }
-    return None
 
 
 def parse_output(text: str) -> dict[str, Any]:

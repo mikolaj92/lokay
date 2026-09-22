@@ -85,6 +85,11 @@ such as superseded, duplicate or shape do not trigger a second intake engine
 capability, not a competing READY/CLOSE after triage. Shape and named-path
 evidence belong inside the existing triage evidence branch (#1001). Published
 verdicts are park / ready / close / skip / split only — zero `needs_human`.
+Host-ops intent from issue prose belongs to that semantic boundary, not a keyword
+hard fact. Documentation mentioning LaunchAgent is not a physical ops restriction.
+Actual live ops retain skip policy, mixed ops/code require explicit `split`.
+The sieve maps the closed verdict only: reason/summary/evidence prose cannot
+promote skip or park to split.
 
 Parent department *bodies* are authored child Falas. High-entropy work stays
 inside those children (`coding_execution`, `pr_review_agent`, `pr_repair`

@@ -18,7 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
     ('ready', 'shape_verified', 'do'),
     ('skip', 'intake_superseded', 'skip'),
     ('park', 'shape_uncertain', 'skip'),
-    ('park', 'issue_split', 'split'),
+    ('park', 'issue_split', 'skip'),
+    ('split', 'independent_deliverables', 'split'),
+    ('skip', 'not_oversized; no split required', 'skip'),
     ('needs_human', 'czlowiek', 'skip'),
 ])
 def test_terminal_verdict_is_not_rerouted_by_intake_words(verdict, reason, route):

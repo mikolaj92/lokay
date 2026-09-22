@@ -1047,9 +1047,11 @@ executora, a następny pass kontynuuje sito. Leftover jest zjadane tylko przy
 authored skip (`needs_human`, `blocked`, already-closed). `triage_not_done` /
 adapter fail zostawia wiersz. Ticket na samym Lokayu nie zajmuje product slotu. Cudzy
 assignee nie jest zadaniem lokaja.
-Host-ops hard fact nie może wynikać z samej wzmianki o nazwie maszyny:
-`mini-m4-0` w przykładzie/raporcie to kontekst, nie zlecenie czynności na hoście.
-Wymagana jest jawna operacja na maszynie albo inne wyraźne host-ops evidence.
+Host-ops intent is a semantic decision, not a hard fact inferred from prose.
+Mentions of `mini-m4-0`, LaunchAgent or live-host evidence (including examples,
+documentation and negation) reach the triage agent. Actual live ops still yield
+skip; mixed live ops + code yield explicit `split`. The sieve routes split only
+from that closed verdict, never from words in a reason; skip/park remain skip.
 
 
 ### Jeden wiersz triage — `issue_sieve_row`
