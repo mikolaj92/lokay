@@ -19,7 +19,7 @@ def test_catalog_loads_managed_source_repos():
         p = root / ".pytest_catalog_config.yaml"
         p.write_text(yaml.dump(data), encoding="utf-8")
         cfg = load_config(p)
-    assert len(cfg.repos) == 31
+    assert len(cfg.repos) == 30
     names = {r.name for r in cfg.repos}
     assert "mikolaj92/Temida" in names
     assert "mikolaj92/Fala" in names

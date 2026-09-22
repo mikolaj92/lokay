@@ -71,6 +71,7 @@ repos:
     clone_path: ~/Developer/OSS/swift-openapi-dynamic
     priority: 45
   - name: mikolaj92/OpenAPITransportKit
+    # Checkout folder keeps the old name; origin is OpenAPITransportKit.
     clone_path: ~/Developer/OSS/swift-openapi-transport-kit
     priority: 45
   - name: mikolaj92/sqlite.fire
@@ -82,9 +83,7 @@ repos:
   - name: mikolaj92/PunkRecords
     clone_path: ~/Developer/OSS/PunkRecords
     priority: 40
-  - name: mikolaj92/punk-records
-    clone_path: ~/Developer/OSS/punk-records
-    priority: 35
+  # mikolaj92/punk-records is an empty pointer, not a product. Do not catalog it.
   - name: mikolaj92/influenzer
     clone_path: ~/Developer/OSS/influenzer
     priority: 25

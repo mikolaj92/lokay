@@ -133,5 +133,5 @@ def test_work_by_repo_unions_leftover_dual_ready():
 
 
 def test_catalog_slot_count_covers_live_repos_yaml():
-    # Live mini-m4-0 catalog is 31 repos; 30-slot fail-closed blocked issue→PR.
-    assert CATALOG_SLOT_COUNT >= 31
+    # Catalog is 30 product repos after dropping the empty punk-records pointer.
+    assert CATALOG_SLOT_COUNT >= 30
