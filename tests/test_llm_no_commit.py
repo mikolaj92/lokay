@@ -22,11 +22,6 @@ _READY = frozenset({"implemented", "repaired"})
 PI_ARGS = [
     "-p",
     "{prompt}",
-    "--model",
-    "{model}",
-    "--approve",
-    "--session-id",
-    "{session}",
 ]
 
 
@@ -104,8 +99,8 @@ def test_agent_execute_timeout_invokes_only_the_harness(tmp_path: Path) -> None:
     assert out["timed_out"] is True
     assert len(runner.specs) == 1
     argv = list(runner.specs[0].argv)
-    assert argv[0] == "/usr/bin/sandbox-exec"
-    assert "--" in argv and Path(argv[argv.index("--") + 1]).name == "pi"
+    assert argv[:2] == ["pi", "-p"]
+    assert len(argv) == 3
     assert "commit" not in argv
     assert not any("commit_all" in str(part) for part in argv)
 

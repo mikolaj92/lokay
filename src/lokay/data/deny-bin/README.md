@@ -1,1 +1,0 @@
-Fail-closed stubs prepended to PATH for builder/reviewer harnesses.\n

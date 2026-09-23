@@ -164,7 +164,7 @@ def test_coding_result_survives_transport_tail(tmp_path, monkeypatch, length):
         {'verdict': 'implemented', 'evidence_kind': None, 'summary': summary,
          'tests_run': ['pytest'], 'residual_risk': 'none'}) + '))\n')
     cfg = Config(agent='local-executor', agent_command=sys.executable,
-                 agent_args=[str(script)], agent_model=None, executor_enabled=True)
+                 agent_args=[str(script)], executor_enabled=True)
     envelope = run_agent(Runner(), cfg, worktree=tmp_path, prompt='edit',
                          execute=True, session_kind='code', attach_collector_boundary=False)
     from lokay.organ.coding_boundary import handle_coding_boundary
@@ -178,7 +178,7 @@ def test_coding_result_survives_transport_tail(tmp_path, monkeypatch, length):
     assert validated['decision']['summary'] == summary
 
 
-@pytest.mark.parametrize('binding', ['argument', 'embedded', 'absent', 'prompt_only', 'dropped'])
+@pytest.mark.parametrize('binding', ['argument', 'embedded', 'absent', 'prompt_only'])
 def test_real_executor_session_binding_to_receipt(tmp_path, monkeypatch, binding):
     import json
     import sys
@@ -208,10 +208,8 @@ print(json.dumps({'verdict': 'implemented', 'evidence_kind': None, 'summary': 'd
         args += ['--session-id={session}']
     elif binding == 'prompt_only':
         args += ['--prompt', '{prompt}']
-    elif binding == 'dropped':
-        args += ['--unused={session}', '{model}']
     cfg = Config(agent='local-executor', agent_command=sys.executable,
-                 agent_args=args, agent_model=None, executor_enabled=True)
+                 agent_args=args, executor_enabled=True)
     expected = session_id_for_worktree(tmp_path, kind='probe')
     envelope = run_agent(Runner(), cfg, worktree=tmp_path, prompt=expected,
                          execute=True, session_kind='probe', attach_collector_boundary=False)

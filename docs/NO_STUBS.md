@@ -24,10 +24,18 @@ executor:
   enabled: true
   agent: pi        # log label only
   command: pi      # binary on PATH
-  args: [ ... ]    # argv template; omit model unless the harness needs it
+  args: [-p, "{prompt}"]  # one task; final response on stdout
 ```
 
 The goal passed to the harness is always the same: implement the issue (or repair the PR) in the worktree; the orchestrator opens/merges the PR. Switching harness is a **config change**, not a code fork.
+
+The harness inherits the host environment and runs directly in the worktree.
+Lokay does not select its model, configure authentication, override HOME/PATH,
+wrap it in a coding sandbox, or force project trust/session flags. Only the
+Lokay host health lease is cleared in the child. The harness therefore runs
+with the user's permissions; the worktree is not an OS security boundary.
+Task scope, result validation and publication gates remain in the factory.
+An unbound harness session is reported as unavailable, never invented.
 
 ### Collector execution boundary
 

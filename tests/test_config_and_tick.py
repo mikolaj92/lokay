@@ -414,15 +414,12 @@ def test_agent_argv_from_template_not_vendor_branch():
     args = [
         "-p",
         "{prompt}",
-        "--model",
-        "{model}",
         "--approve",
         "--no-session",
     ]
     cfg = Config(
         agent="pi",
         agent_command="pi",
-        agent_model="omniroute/pi",
         agent_args=list(args),
         timeout_seconds=99,
     )
@@ -435,7 +432,6 @@ def test_agent_argv_from_template_not_vendor_branch():
         "--no-session",
     ]
     assert "--model" not in argv
-    assert "omniroute/pi" not in argv
     assert "--cwd" not in argv
 
 

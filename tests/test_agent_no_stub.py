@@ -8,25 +8,7 @@ from lokay.agent import AgentError, build_agent_argv, resolve_agent_kind, run_ag
 from lokay.config import Config, load_config
 from lokay.runner import Runner
 
-# Default Pi invocation uses the configured OmniRoute combo.
-PI_ARGS = [
-    "-p",
-    "{prompt}",
-    "--model",
-    "{model}",
-    "--approve",
-    "--session-id",
-    "{session}",
-]
-# Optional harness that wants an explicit model via template.
-ALT_ARGS = [
-    "--cwd",
-    "{cwd}",
-    "-p",
-    "{prompt}",
-    "--model",
-    "{model}",
-]
+PI_ARGS = ["-p", "{prompt}"]
 
 
 def _clear_lokay_env(monkeypatch):
@@ -42,51 +24,17 @@ def _clear_lokay_env(monkeypatch):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_pi_argv_uses_session_id_not_session():
-    cfg = Config(
-        agent="pi",
-        agent_command="pi",
-        agent_model="omniroute/pi",
-        agent_args=list(PI_ARGS),
-        timeout_seconds=1800,
-    )
-    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="implement issue")
-    assert argv == [
-        "pi",
-        "-p",
-        "implement issue",
-        "--approve",
-        "--session-id",
-        argv[-1],
+def test_pi_argv_only_passes_task():
+    cfg = Config(agent="pi", agent_command="pi", agent_args=list(PI_ARGS))
+    assert build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="implement issue") == [
+        "pi", "-p", "implement issue",
     ]
-    assert "--model" not in argv
-    assert argv[-2] == "--session-id"
-    assert argv[-1].startswith("lokay-")
 
 
-def test_model_stays_with_the_harness_even_when_configured():
-    """executor.model never reaches argv. The harness picks its own model."""
-    cfg = Config(
-        agent="alt",
-        agent_command="alt-agent",
-        agent_model="some-model",
-        agent_args=list(ALT_ARGS),
-    )
-    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
-    assert "--model" not in argv
-    assert "some-model" not in argv
-
-
-def test_empty_model_drops_flag_pair():
-    cfg = Config(
-        agent="alt",
-        agent_command="alt-agent",
-        agent_model=None,
-        agent_args=list(ALT_ARGS),
-    )
-    argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
-    assert "--model" not in argv
-    assert "{model}" not in argv
+def test_model_is_not_a_supported_placeholder():
+    cfg = Config(agent_args=["{model}"])
+    with pytest.raises(AgentError, match="unknown placeholder"):
+        build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
 
 
 def test_empty_command_fails():

@@ -55,21 +55,8 @@ class Config:
     executor_enabled: bool = False
     agent: str = "pi"  # log label only
     agent_command: str = "pi"  # harness binary on PATH (executor.command)
-    # Kept for the config file. Never reaches the harness argv.
-    agent_model: str | None = None
-    # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout} {session}
-    # Empty {model} drops a preceding flag + {model} pair.
-    agent_args: list[str] = field(
-        default_factory=lambda: [
-            "-p",
-            "{prompt}",
-            "--model",
-            "{model}",
-            "--approve",
-            "--session-id",
-            "{session}",
-        ]
-    )
+    # The harness owns its settings, credentials and sessions.
+    agent_args: list[str] = field(default_factory=lambda: ["-p", "{prompt}"])
     max_turns: int = 40
     timeout_seconds: int = 1800
     merge_enabled: bool = False
@@ -457,9 +444,6 @@ def load_config(path: str | Path | None = None) -> Config:
         # Omit identity → empty (fail closed when enabled). Never invent Pi.
         agent=str(ex["agent"]).strip().lower() if ex.get("agent") not in (None, "") else "",
         agent_command=str(ex["command"]).strip() if ex.get("command") not in (None, "") else "",
-        agent_model=(
-            str(ex["model"]).strip() if ex.get("model") not in (None, "") else None
-        ),
         agent_args=agent_args,
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
