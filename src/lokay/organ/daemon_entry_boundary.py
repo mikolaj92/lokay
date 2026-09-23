@@ -27,6 +27,7 @@ def handle_daemon_entry(
         return run(
             classified.get("preflight") or {},
             config_path=str(inputs.get("config_path") or ""),
+            live=bool(inputs.get("live", True)),
         )
     if atom == "daemon_entry_terminal":
         from lokay.proc.daemon_entry_terminal import terminal

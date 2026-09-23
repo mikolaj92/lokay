@@ -60,7 +60,7 @@ def handle_departments(
     if atom == "run_self_repair_department":
         from lokay.proc.run_self_repair_department import run
 
-        return run(config_path=config)
+        return run(config_path=config, live=live)
     if atom == "open_self_repair_incident":
         from lokay.proc.open_self_repair_incident import run
 
@@ -68,7 +68,9 @@ def handle_departments(
     if atom == "invoke_self_repair":
         from lokay.proc.invoke_self_repair import run
 
-        return run(up.get("open_self_repair_incident") or {}, config_path=config)
+        return run(
+            up.get("open_self_repair_incident") or {}, config_path=config, live=live
+        )
     if atom == "select_issue_triage_department":
         if stop := _host_stop(up):
             return {**stop, "ok": True, "route": "skip"}
