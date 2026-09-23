@@ -58,13 +58,23 @@ def handle_executor_department(
         prepared = up.get("prepare_executor_rows") or {}
         previous = up.get(f"classify_executor_row_{slot-1}") or {}
         last = previous.get("result") if previous.get("result") else prepared.get("last")
+        last = last if isinstance(last, dict) else {}
+        if int(last.get("spent") or 0) > 0:
+            return {
+                "ok": True,
+                "route": "busy",
+                "reason": "global_occupancy",
+                "slot": slot,
+                "spent": int(last["spent"]),
+            }
         return run(
             listed=prepared.get("listed") or _listed_of(inputs, up),
-            last=last if isinstance(last, dict) else {},
+            last=last,
             pass_dir=str(prepared.get("pass_dir") or pass_dir),
             config_path=str(prepared.get("config_path") or config or "") or None,
             live=bool(prepared.get("live") if "live" in prepared else live),
             slot=slot,
+            budget=prepared.get("cap"),
         )
     if atom.startswith("classify_executor_row_"):
         from lokay.proc.classify_executor_row import classify

@@ -59,9 +59,12 @@ def handle_issues(
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch
 
+        last = _last_of(inputs)
         return launch(
             up.get("select_issue_executor") or {},
             config_path=config,
             live=live,
+            budget=inputs.get("budget"),
+            live_count=last.get("spent"),
         )
     return None

@@ -23,6 +23,7 @@ def classify(selected: dict, row: dict, *, prepared: dict) -> dict:
         "launched": "started" if launched else result.get("launched"),
         "leftover": leftover,
         "leftover_issues": leftover_issues,
+        "spent": spent,
     }
     write_cursor(
         str(prepared.get("pass_dir") or ""),
