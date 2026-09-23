@@ -184,7 +184,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "select_pr_triage_department"
 capability = "lokay_atom"
-conduction = ["factory_begin_host_gate", "factory_begin", "select_self_repair_department", "select_executor_department"]
+conduction = ["factory_begin_host_gate", "factory_begin", "select_self_repair_department", "select_executor_department", "run_executor_department"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "FALA_HOME", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE"] }
 config = { atom = "select_pr_triage_department" }
 output_schema = { type = "object", required = ["ok", "route"] }

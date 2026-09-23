@@ -149,6 +149,7 @@ def test_describe_parent_factory_graph():
         "factory_begin",
         "select_self_repair_department",
         "select_executor_department",
+        "run_executor_department",
     ]
     assert conduction["select_pr_repair_department"] == [
         "factory_begin_host_gate",
