@@ -197,6 +197,8 @@ def build_ocr_argv(
     sandbox_argv = [str(item) for item in sandbox]
     if sandbox_argv[-1] != "--":
         raise ReviewFailure("OS sandbox command must end with --")
+    if sys.platform != "darwin":
+        raise ReviewFailure("only the verified macOS sandbox-exec runtime is supported")
     _trusted_file(sandbox_argv[0], "OS sandbox executable", executable=True)
     if Path(sandbox_argv[0]).resolve() != Path("/usr/bin/sandbox-exec"):
         raise ReviewFailure("only the verified macOS sandbox-exec runtime is supported")
@@ -451,13 +453,12 @@ def invoke_ocr(
             raise ReviewFailure("canonical task evidence is required")
         background.write_bytes(render_background(request))
         env = _environment(engine, home=home)
-        env["PATH"] = "/Library/Developer/CommandLineTools/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         env["OCR_CONFIG_DIR"] = str(home / ".opencodereview")
         if str(engine.get("provider") or "") == "openai":
             credential = env.get("OCR_LLM_API_KEY")
             if credential:
                 env["OPENAI_API_KEY"] = credential
-        env.update({"DEVELOPER_DIR": "/Library/Developer/CommandLineTools", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0", "GIT_PAGER": ""})
+        env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0", "GIT_PAGER": ""})
         endpoint = host_for_provider(
             str(engine.get("provider") or ""),
             str(engine.get("provider_endpoint_url") or ""),

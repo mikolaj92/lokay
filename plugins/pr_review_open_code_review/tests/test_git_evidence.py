@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -56,26 +57,36 @@ def test_git_binary_uses_a_real_toolchain_binary_instead_of_the_xcrun_shim(monke
     calls = []
     monkeypatch.setattr(
         git_evidence.shutil, "which",
-        lambda name, path: calls.append((name, path)) or "/usr/bin/git",
+        lambda name, path=None: calls.append((name, path)) or "/usr/local/bin/git",
     )
     monkeypatch.setattr(git_evidence.os.path, "isfile", lambda _path: True)
     monkeypatch.setattr(git_evidence.os, "access", lambda _path, _mode: True)
 
+    assert git_evidence._git_binary() == "/usr/local/bin/git"
+    assert git_evidence._git_runtime_paths("/usr/local/bin/git") == ()
+    assert calls == [("git", None)]
+
+
+def test_shim_git_uses_command_line_tools_not_an_xcode_beta(monkeypatch):
+    from lokay_review_open_code_review import git_evidence
+
+    monkeypatch.setattr(git_evidence.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/git")
+    monkeypatch.setattr(git_evidence.os.path, "isfile", lambda _path: True)
+    monkeypatch.setattr(git_evidence.os, "access", lambda _path, _mode: True)
+
     assert git_evidence._git_binary() == git_evidence._FALLBACK_GIT
-    assert git_evidence._git_runtime_paths(git_evidence._FALLBACK_GIT) == (
-        Path("/Library/Developer/CommandLineTools"),
-    )
-    assert calls == [("git", "/usr/bin:/bin")]
+    assert "Xcode-beta" not in str(git_evidence._git_runtime_paths(git_evidence._FALLBACK_GIT)[0])
 
 
 def test_git_binary_uses_fallback_when_restricted_path_has_no_git(monkeypatch):
     from lokay_review_open_code_review import git_evidence
 
     monkeypatch.setattr(git_evidence.shutil, "which", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(git_evidence.os.path, "isfile", lambda _path: True)
-    monkeypatch.setattr(git_evidence.os, "access", lambda _path, _mode: True)
+    monkeypatch.setattr(git_evidence.os.path, "isfile", lambda _path: False)
+    monkeypatch.setattr(git_evidence.os, "access", lambda _path, _mode: False)
 
-    assert git_evidence._git_binary() == git_evidence._FALLBACK_GIT
+    with pytest.raises(ValueError, match="trusted system git executable is unavailable"):
+        git_evidence._git_binary()
 
 
 def test_local_path_origin_is_not_canonical_github_identity(tmp_path: Path):

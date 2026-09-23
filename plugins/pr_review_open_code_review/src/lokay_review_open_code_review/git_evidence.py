@@ -11,20 +11,17 @@ from pathlib import Path
 from typing import Any, Mapping
 
 _SHA = re.compile(r"^[0-9a-f]{40}$")
-_GIT_PATH = "/usr/bin:/bin"
-_FALLBACK_GIT = "/Library/Developer/CommandLineTools/usr/bin/git"
-_XCODE_GIT = "/Applications/Xcode-beta.app/Contents/Developer/usr/bin/git"
-_GIT_RUNTIME_PATHS = {
-    _FALLBACK_GIT: "/Library/Developer/CommandLineTools",
-    _XCODE_GIT: "/Applications/Xcode-beta.app/Contents/Developer",
-}
 _OWNER_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
+_SHIM_GIT = "/usr/bin/git"
+_FALLBACK_GIT = "/Library/Developer/CommandLineTools/usr/bin/git"
+
+
 def _git_binary() -> str:
-    candidate = shutil.which("git", path=_GIT_PATH) or _FALLBACK_GIT
-    if candidate == "/usr/bin/git":
-        # /usr/bin/git is xcrun's shim and cannot run in the review sandbox.
+    candidate = shutil.which("git")
+    resolved = str(Path(candidate).resolve()) if candidate else ""
+    if not candidate or resolved == _SHIM_GIT:
         candidate = _FALLBACK_GIT
     if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
         raise ValueError("trusted system git executable is unavailable")
@@ -32,10 +29,11 @@ def _git_binary() -> str:
 
 
 def _git_runtime_paths(git_executable: str | Path) -> tuple[Path, ...]:
-    """Return only the runtime directory needed by a non-shim Git binary."""
+    """The Command Line Tools git needs its own tree. No Xcode beta path."""
     resolved = str(Path(git_executable).resolve())
-    runtime = _GIT_RUNTIME_PATHS.get(resolved)
-    return (Path(runtime),) if runtime else ()
+    if resolved == _FALLBACK_GIT:
+        return (Path("/Library/Developer/CommandLineTools"),)
+    return ()
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -48,9 +46,8 @@ def _git(repo: Path, *args: str) -> str:
         text=True,
         check=False,
         timeout=60,
-        env={"PATH": "/usr/bin:/bin", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C",
-             "HOME": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-             "DEVELOPER_DIR": "/Applications/Xcode-beta.app/Contents/Developer"},
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C",
+             "HOME": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"},
     )
     if result.returncode or result.stderr:
         raise ValueError("could not verify immutable review checkout")
@@ -152,9 +149,8 @@ def verify_checkout(request: Mapping[str, Any]) -> dict[str, Any]:
         stderr=subprocess.PIPE,
         check=False,
         timeout=60,
-        env={"PATH": "/usr/bin:/bin", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C",
-             "HOME": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-             "DEVELOPER_DIR": "/Applications/Xcode-beta.app/Contents/Developer"},
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C",
+             "HOME": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"},
     )
     if patch.returncode or patch.stderr:
         raise ValueError("could not compute immutable patch digest")
