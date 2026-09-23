@@ -19,7 +19,7 @@ B = "b" * 40
 
 @pytest.mark.parametrize("remote_head", [A, B])
 def test_final_merge_is_bound_to_review_and_local_test(monkeypatch, remote_head):
-    cfg = Config(merge_enabled=True, require_llm_review=True)
+    cfg = Config(merge_enabled=True, merge_mode="always", require_llm_review=True)
     monkeypatch.setattr("lokay.config.load_config", lambda *_: cfg)
     monkeypatch.setattr(pr_merge, "load_cfg", lambda *_: cfg)
     monkeypatch.setattr(pr_merge, "mutations_allowed", lambda **_: True)
@@ -68,6 +68,25 @@ def test_final_merge_is_bound_to_review_and_local_test(monkeypatch, remote_head)
         from lokay.pr_review import format_review_marker
         marker = format_review_marker(head_sha=A, verdict="approve", merge_ok=True)
         assert resolve({"head_sha": B, "comments": [marker]})["route"] == "agent"
+
+
+def test_pr_merge_off_mode_never_merges(monkeypatch):
+    """A named off mode blocks a green, approved PR."""
+    from lokay.atom_runtime import run_atom_main
+    from lokay.config import Config
+    from lokay.organ.lanes import handle_lanes
+
+    monkeypatch.setattr("lokay.config.load_config", lambda *_: Config(merge_mode="off"))
+    out = handle_lanes(
+        "pr_merge", {},
+        {"pr_checks": {"status": "passed", "merge_ok": True},
+         "publish_pr_review": {"merge_ok": True,
+                               "decision": {"verdict": "approve", "risk": "low"}}},
+        {"cfg": [], "live": [], "repo": "o/r", "pr_number": 1, "issue_number": None,
+         "branch": "ai/fix/1", "run_atom_main": run_atom_main},
+    )
+    assert out["skipped"] is True and out["reason"] == "merge_disabled"
+    assert out.get("merged") is not True
 
 
 @pytest.mark.parametrize("reviewed,tested", [(None, A), (A, None), (A, B), ("main", A), ("", "")])

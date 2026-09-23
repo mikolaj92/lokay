@@ -72,6 +72,7 @@ class Config:
     max_turns: int = 40
     timeout_seconds: int = 1800
     merge_enabled: bool = False
+    merge_mode: str = "off"
     require_checks: bool = False
     require_llm_review: bool = True  # structured PR review before auto-merge
     pr_review_engine: str = "open-code-review"
@@ -127,6 +128,10 @@ class Config:
     def live(self) -> bool:
         return self.mode == "live"
 
+
+    def __post_init__(self) -> None:
+        if self.merge_enabled and self.merge_mode == "off":
+            self.merge_mode = "always"
 
     disabled_repos: list[str] = field(default_factory=list)
 
@@ -219,6 +224,16 @@ def _expand(path: str | Path) -> Path:
 
 _TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})
 _FALSE_TOKENS = frozenset({"0", "false", "no", "off"})
+
+
+def _yaml_mode(value: Any, *, merge_enabled: bool) -> str:
+    """Parse merge.mode. Absent keeps the old meaning of merge.enabled."""
+    if value is None or value == "":
+        return "always" if merge_enabled else "off"
+    mode = str(value).strip().lower()
+    if mode not in {"off", "classify", "always"}:
+        raise ValueError(f"merge.mode must be off, classify, or always, got {value!r}")
+    return mode
 
 
 def _yaml_bool(value: Any, default: bool, *, field: str) -> bool:
@@ -448,6 +463,7 @@ def load_config(path: str | Path | None = None) -> Config:
         max_turns=int(ex.get("max_turns", 40)),
         timeout_seconds=int(ex.get("timeout_seconds", 1800)),
         merge_enabled=_yaml_bool(mg.get("enabled", False), False, field="merge.enabled"),
+        merge_mode=_yaml_mode(mg.get("mode"), merge_enabled=_yaml_bool(mg.get("enabled", False), False, field="merge.enabled")),
         require_checks=_yaml_bool(
             mg.get("require_checks", False), False, field="merge.require_checks"
         ),

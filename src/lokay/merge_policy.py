@@ -295,6 +295,7 @@ def decide_merge(
     require_checks: bool = True,
     checks: Mapping[str, Any] | None = None,
     review: Mapping[str, Any] | None = None,
+    pr_labels: Any = None,
 ) -> AutoMergeDecision:
     """Apply one named merge mode. Off is the default and never merges.
 
@@ -321,4 +322,5 @@ def decide_merge(
         require_llm_review=True,
         checks=checks,
         review=review,
+        pr_labels=pr_labels,
     )

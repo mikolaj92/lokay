@@ -102,19 +102,18 @@ def handle_lanes(
     if atom == "pr_merge":
         assert repo and pr_number is not None
         from lokay.config import load_config
-        from lokay.merge_policy import decide_auto_merge
+        from lokay.merge_policy import decide_merge
 
         merge_cfg = load_config(
             str(inputs.get("config_path") or inputs.get("config") or "") or None
         )
         checks = up.get("pr_checks") or {}
         review = up.get("publish_pr_review") or up.get("pr_review") or {}
-        # Trusted auto-merge gate (fail closed). Pending → waiting; red → repair;
-        # secrets / fail_closed / escalated needs-review never merge.
-        gate = decide_auto_merge(
-            merge_enabled=bool(merge_cfg.merge_enabled),
+        # The mode picks: off never merges, classify only on low risk, always
+        # on any approval. Secrets, escalation, and red checks still block.
+        gate = decide_merge(
+            mode=merge_cfg.merge_mode,
             require_checks=bool(merge_cfg.require_checks),
-            require_llm_review=bool(merge_cfg.require_llm_review),
             checks=checks,
             review=review,
             pr_labels=inputs.get("pr_labels") or inputs.get("labels"),
