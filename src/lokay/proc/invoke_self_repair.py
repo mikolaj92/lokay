@@ -8,7 +8,9 @@ from lokay.envelope import ok
 from lokay.self_repair import run_self_repair
 
 
-def run(incident: Mapping[str, Any], *, config_path: str | None) -> dict:
+def run(incident: Mapping[str, Any], *, config_path: str | None, live: bool = True) -> dict:
+    if not live:
+        return ok(route="skipped", department="self_repair", reason="dry_run")
     if str(incident.get("route") or "") != "run":
         return ok(
             route="skip",
