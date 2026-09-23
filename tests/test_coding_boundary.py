@@ -28,6 +28,24 @@ def test_closed_schema_accepts_implemented():
     assert out["route"] == "valid" and out["decision"]["verdict"] == "implemented"
 
 
+def test_coding_result_is_exactly_one_typed_object():
+    """Prose, fences, a second object, or a coerced type is not a result."""
+    good = valid()
+    rejected = [
+        f"done.\n{good}",
+        f"{good}\ntrailing",
+        f"{good}\n{valid('needs_evidence', 'issue_snapshot')}",
+        f"```json\n{good}\n```",
+        '{"verdict":"implemented","summary":{"text":"x"},"tests_run":[],"residual_risk":""}',
+        '{"verdict":"implemented","summary":"x","tests_run":false,"residual_risk":""}',
+        '{"verdict":"implemented","summary":"x","tests_run":[1],"residual_risk":""}',
+        '{"verdict":"implemented","summary":"x","tests_run":[],"residual_risk":false}',
+        '{"verdict":"implemented","summary":"x","residual_risk":""}',
+    ]
+    for text in rejected:
+        assert validate_output(text)["route"] == "retry", text[:60]
+
+
 def test_closed_schema_rejects_unknown_and_missing_evidence_kind():
     assert validate_output('{"verdict":"implemented","surprise":1}')["route"] == "retry"
     assert validate_output(valid("needs_evidence"))["route"] == "retry"
@@ -110,7 +128,7 @@ def test_coding_prompts_advertise_only_the_closed_schema():
         ),
         timeout_resume_prompt(repo="o/r", branch="fix", issue_number=1, timeout_seconds=30),
         (root / "tool_contracts/evidence_coding/prompt.md").read_text(),
-        (root / "organ/coding_boundary.py").read_text(),
+        (root / "tool_contracts/coding_retry/prompt.md").read_text(),
         FACTORY_WORKFLOW_BOUNDARY,
     ]
     for prompt in prompts:
