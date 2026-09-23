@@ -282,6 +282,34 @@ def test_secrets_always_needs_review_label():
 
 
 def test_escalated_cap_needs_review_label():
+    ...
+
+
+def test_merge_mode_gates_the_decision():
+    """Off never merges, Classify only on low risk, Always on any green approval."""
+    from lokay.merge_policy import decide_merge
+
+    green = {"status": "passed", "merge_ok": True}
+
+    def review(verdict: str, risk: str) -> dict:
+        return {
+            "decision": {"verdict": verdict, "risk": risk, "secrets": False},
+            "merge_ok": verdict == "approve",
+            "risk": risk,
+        }
+
+    low, high = review("approve", "low"), review("approve", "high")
+    rejected = review("request_changes", "low")
+
+    assert decide_merge(mode="off", checks=green, review=low).action == "disabled"
+
+    assert decide_merge(mode="classify", checks=green, review=low).merge_ok is True
+    held = decide_merge(mode="classify", checks=green, review=high)
+    assert held.merge_ok is False and held.action == "blocked"
+
+    assert decide_merge(mode="always", checks=green, review=high).merge_ok is True
+    refused = decide_merge(mode="always", checks=green, review=rejected)
+    assert refused.merge_ok is False and refused.action == "repair"
     d = parse_review_output(
         '{"verdict":"request_changes","secrets":false,"blocking":["x"]}'
     )
