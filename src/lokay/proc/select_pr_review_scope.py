@@ -2,35 +2,20 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import json
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.proc.pr_review_plugin import PluginFailure, invoke_plugin
 
 
 def select(*, config_path: str | None, repo: str, pr: int, evidence: dict[str, Any], live: bool) -> dict[str, Any]:
+    del config_path, repo, pr
     if not live:
         return ok(route="planned")
-    from lokay.config import load_config
-    from lokay.proc.run_pr_review_agent import plugin_request
-    try:
-        cfg = load_config(config_path)
-        request = plugin_request(cfg, repo, pr, evidence)
-        scoped = copy.copy(cfg)
-        scoped.pr_review_plugin_args = [*cfg.pr_review_plugin_args, "--operation", "scope"]
-        result = invoke_plugin(scoped, request)
-        identities = ("repo", "pr", "head_sha", "base_ref_sha", "comparison_base_sha",
-                      "diff_sha256", "task_identity_sha256", "review_config_sha256")
-        if (result.get("schema") != "lokay.review-scope/1"
-                or any(result.get(key) != request.get(key) for key in identities)
-                or not isinstance(result.get("preview"), dict)):
-            raise PluginFailure("ocr_scope_identity_mismatch")
-        return ok(route="ready", scope=result)
-    except (PluginFailure, ValueError, OSError) as exc:
-        # Classified success at the process layer lets Fala reach its fail-closed terminal.
-        return ok(route="fail_closed", reason="ocr_scope_incomplete", detail=str(exc))
+    paths = evidence.get("diff_paths")
+    if not isinstance(paths, list) or not paths:
+        return ok(route="fail_closed", reason="ocr_scope_incomplete")
+    return ok(route="ready", scope={"diff_paths": list(paths)})
 
 
 def main(argv=None):

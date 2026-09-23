@@ -97,10 +97,10 @@ repair agent). Department-wide agent slots are not the live bodies. The graph
 geometry does not change.
 
 A fresh review uses two explicit nodes: deterministic `select_pr_review_scope`
-invokes `ocr review --preview` once, then `pr_review_agent` invokes `ocr review`
-once. A verified cached result invokes neither. The plugin currently revalidates
-the checkout before and after each operation (four checks on the fresh path);
-these checks are not additional OCR or LLM invocations.
+takes the host diff and does not call OCR, then `pr_review_agent` invokes
+`ocr review` once. A verified cached result invokes neither. The plugin
+revalidates the checkout before and after that one review. These checks are
+not additional OCR or LLM invocations.
 
 The allowlist names actual organ bindings, not suffixes or vendor harnesses.
 Code workers return a transport envelope and scoped worktree changes; those
@@ -130,7 +130,7 @@ still require real diff, local verification and publication gates.
 | `pr_repair_retry_agent` | entropy | Failed repair contract → corrected changes |
 | `evidence_repair_agent` | entropy | Requested repair evidence → scoped changes |
 | `pr_test_repair_agent` | entropy | PR test failure → scoped repair |
-| `select_pr_review_scope` | deterministic | Exact host diff → OCR v1.12.7 `review --preview` → required scope ready / fail_closed |
+| `select_pr_review_scope` | deterministic | Host diff paths → required scope ready / fail_closed; no OCR |
 | `pr_review_agent` | entropy | Exact SHA and admitted scope → one OCR v1.12.7 `review` → neutral JSON, independent Lokay validator (no plugin imports) |
 | `evidence_review_agent` | entropy | SHA-bound additional evidence → review verdict |
 | `self_repair_run_agent` | entropy | Factory incident and scope → candidate code repair |

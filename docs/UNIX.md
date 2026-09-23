@@ -68,8 +68,8 @@ independent and tested, not a second parent spine.
 | `lokay-push` | nested | publish branch without force |
 | `lokay-pr-create` / `lokay-pr-label` / `lokay-pr-checks` / `lokay-pr-merge` | nested | separate PR lifecycle capabilities |
 | `lokay-classify-pr-triage-checks` | nested | checks row to wait, repair or review |
-| `lokay-select-pr-review-scope` | nested | exact diff selection via isolated OCR `review --preview`; ready / fail_closed, no LLM |
-| `lokay-review-opencode-plugin` | nested | one OCR v1.12.7 invocation: scope (`review --preview`) or review (`review`); never chains them |
+| `lokay-select-pr-review-scope` | nested | host diff paths → ready / fail_closed; no OCR, no LLM |
+| `lokay-review-opencode-plugin` | nested | one OCR v1.12.7 `review` on the fresh path; a direct `--preview` is not the graph |
 | `lokay-select-pr-triage-outcome` | nested | evidence to wait, repair or merge |
 | `lokay-pr-route` | nested | closeout route |
 | `lokay-repos` | cli-wrapper | read managed scope |
