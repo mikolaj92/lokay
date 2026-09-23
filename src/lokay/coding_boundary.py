@@ -1,8 +1,8 @@
 """Pure closed contracts for the issue implementation boundary."""
 
 from __future__ import annotations
+import json
 from typing import Any, Mapping
-from lokay.pr_review import extract_json_object, PrReviewError
 
 VERDICTS = frozenset({"implemented", "needs_evidence"})
 EVIDENCE_KINDS = frozenset(
@@ -18,17 +18,29 @@ class CodingResultError(ValueError):
 
 
 def parse_output(text: str) -> dict[str, Any]:
+    # The whole stdout is the result: one object, no prose, no fences, no second value.
+    raw = (text or "").strip()
     try:
-        data = extract_json_object(text)
-    except PrReviewError as exc:
-        raise CodingResultError(str(exc)) from exc
+        data = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
+    except (json.JSONDecodeError, CodingResultError) as exc:
+        raise CodingResultError(f"coding result must be exactly one JSON object: {exc}") from exc
+    if not isinstance(data, dict):
+        raise CodingResultError("coding result must be a JSON object")
     unknown = sorted(set(data) - _FIELDS)
     if unknown:
         raise CodingResultError(f"unknown coding fields: {unknown}")
-    verdict = str(data.get("verdict") or "").strip().lower()
+    missing = sorted(_FIELDS - set(data))
+    if missing:
+        raise CodingResultError(f"missing coding fields: {missing}")
+    if not isinstance(data.get("verdict"), str):
+        raise CodingResultError("verdict must be a string")
+    verdict = data["verdict"].strip().lower()
     if verdict not in VERDICTS:
         raise CodingResultError(f"verdict must be one of {sorted(VERDICTS)}")
-    kind = str(data.get("evidence_kind") or "").strip() or None
+    raw_kind = data.get("evidence_kind")
+    if raw_kind is not None and not isinstance(raw_kind, str):
+        raise CodingResultError("evidence_kind must be a string or null")
+    kind = str(raw_kind or "").strip() or None
     if kind is not None and kind not in EVIDENCE_KINDS:
         raise CodingResultError(
             f"evidence_kind must be one of {sorted(EVIDENCE_KINDS)} or null"
@@ -37,16 +49,28 @@ def parse_output(text: str) -> dict[str, Any]:
         raise CodingResultError("needs_evidence requires one evidence_kind")
     if verdict != "needs_evidence" and kind is not None:
         raise CodingResultError("evidence_kind is only valid with needs_evidence")
-    tests = data.get("tests_run") or []
+    tests = data.get("tests_run")
     if not isinstance(tests, list) or not all(isinstance(x, str) for x in tests):
         raise CodingResultError("tests_run must be a list of strings")
+    for field in ("summary", "residual_risk"):
+        if not isinstance(data.get(field), str):
+            raise CodingResultError(f"{field} must be a string")
     return {
         "verdict": verdict,
         "evidence_kind": kind,
-        "summary": str(data.get("summary") or ""),
+        "summary": data["summary"],
         "tests_run": [x for x in tests if x.strip()][:12],
-        "residual_risk": str(data.get("residual_risk") or ""),
+        "residual_risk": data["residual_risk"],
     }
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    seen: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in seen:
+            raise CodingResultError(f"duplicate key: {key}")
+        seen[key] = value
+    return seen
 
 
 def validate_output(stdout: str) -> dict[str, Any]:

@@ -81,10 +81,10 @@ def test_native_coding_producer_to_default_pr_marker(tmp_path, monkeypatch, rout
 from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.organ.common import _conduction_values
 if a in {'run_agent', 'coding_retry_agent', 'evidence_coding_agent'}:
-    text = json.dumps({'verdict':'implemented'})
+    text = json.dumps({'verdict':'implemented','evidence_kind':None,'summary':'done','tests_run':[],'residual_risk':''})
     if a == 'run_agent' and route == 'retry': text = 'invalid JSON'
     if a == 'run_agent' and route == 'evidence':
-        text = json.dumps({'verdict':'needs_evidence','evidence_kind':'localized_diff'})
+        text = json.dumps({'verdict':'needs_evidence','evidence_kind':'localized_diff','summary':'need','tests_run':[],'residual_risk':''})
     v.update(status='completed', session='executor-session-' + a, stdout=text)
 elif a == 'collect_coding_localized_diff':
     v.update(evidence='temporary diff')
@@ -169,7 +169,7 @@ parser.add_argument('--session-id')
 parser.add_argument('--prompt')
 args = parser.parse_args()
 pathlib.Path('bound-session.txt').write_text(args.session_id or '')
-print(json.dumps({'verdict': 'implemented'}))
+print(json.dumps({'verdict': 'implemented', 'evidence_kind': None, 'summary': 'done', 'tests_run': [], 'residual_risk': ''}))
 ''')
     args = [str(script)]
     if binding == 'argument':
@@ -186,7 +186,7 @@ print(json.dumps({'verdict': 'implemented'}))
     envelope = run_agent(Runner(), cfg, worktree=tmp_path, prompt=expected,
                          execute=True, session_kind='probe', attach_collector_boundary=False)
     assert envelope['status'] == 'completed', envelope
-    assert json.loads(envelope['stdout_tail']) == {'verdict': 'implemented'}
+    assert json.loads(envelope['stdout_tail'])['verdict'] == 'implemented'
     bound = binding in {'argument', 'embedded'}
     assert (tmp_path / 'bound-session.txt').read_text() == (expected if bound else '')
     validated = handle_coding_boundary('validate_coding_result', {'worktree': str(tmp_path)},
