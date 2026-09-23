@@ -136,6 +136,7 @@ def test_describe_parent_factory_graph():
     assert conduction["select_executor_department"] == [
         "factory_begin_host_gate",
         "factory_begin",
+        "select_self_repair_department",
         "select_issue_triage_department",
         "run_issue_triage_department",
     ]
@@ -146,6 +147,7 @@ def test_describe_parent_factory_graph():
     assert conduction["select_pr_triage_department"] == [
         "factory_begin_host_gate",
         "factory_begin",
+        "select_self_repair_department",
         "select_executor_department",
     ]
     assert conduction["select_pr_repair_department"] == [
