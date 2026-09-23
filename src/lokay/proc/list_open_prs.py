@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 from lokay.proc._common import load_cfg, runner
+from lokay.proc.scoped_active_repos import scoped_active_repos
 from lokay.source import load_code
 
 
@@ -44,11 +45,12 @@ def _keep_lokay(rows: list[dict], prefix: str) -> list[dict]:
 
 def run(*, config_path: str | None, live: bool) -> dict:
     cfg = load_cfg(argparse.Namespace(config=config_path))
-    listed = _list_open(cfg, cfg.active_repos(), live=live)
+    repos = scoped_active_repos(cfg)
+    listed = _list_open(cfg, repos, live=live)
     from lokay.proc.delivery_closeout import pending
 
     intents = pending(cfg.state_path) if live else []
-    active = {repo.name for repo in cfg.active_repos()}
+    active = {repo.name for repo in repos}
     intents = [intent for intent in intents if intent['repo'] in active]
     if listed.get("ok") is False and not intents:
         return listed
