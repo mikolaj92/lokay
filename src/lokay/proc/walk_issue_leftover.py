@@ -14,7 +14,7 @@ CONSUME = frozenset(
         "close",
     }
 )
-READY_LABELS = frozenset({"work:ready", "ai:ready"})
+READY_LABELS = frozenset({"work:ready", "ai:ready", "ready-for-agent"})
 
 
 def identity(row: dict | None) -> tuple[str, int] | None:
