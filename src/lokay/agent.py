@@ -242,7 +242,8 @@ def run_agent(
         session_kind=session_kind,
         timeout_seconds=timeout_seconds,
     )
-    display = [("<prompt>" if p == effective_prompt else p) for p in argv]
+    harness = list(argv)
+    display = [("<prompt>" if p == effective_prompt else p) for p in harness]
 
     if not execute:
         return {
@@ -272,6 +273,14 @@ def run_agent(
         role = "builder"
     capability_env = executor_environment(role, os.environ)
     capability_env["LOKAY_HEALTH_LEASE"] = ""
+    if session_kind == "code":
+        from lokay.coding_sandbox import coding_argv
+        try:
+            argv, scratch = coding_argv(argv, worktree=worktree)
+        except ValueError as exc:
+            raise AgentError(str(exc)) from exc
+        capability_env["HOME"] = str(scratch)
+        capability_env["TMPDIR"] = str(scratch)
     from lokay.proc.repair_agent_revision import observe
 
     before = observe(runner, worktree) if session_kind == "code" else {}

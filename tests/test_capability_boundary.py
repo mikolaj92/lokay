@@ -96,3 +96,76 @@ def test_coding_path_deny_bin_shadows_gh(tmp_path: Path, monkeypatch):
     assert deny_gh.stat().st_mode & 0o111
 
 
+def test_builder_cannot_write_outside_its_worktree(tmp_path: Path):
+    from lokay.agent import run_agent
+    from lokay.config import Config
+    from lokay.runner import Runner
+
+    worktree = tmp_path / "work"
+    outside = tmp_path / "outside.txt"
+    worktree.mkdir()
+    config = Config(
+        executor_enabled=True,
+        agent_command="/Library/Developer/CommandLineTools/usr/bin/python3",
+        agent_args=["-c", "open({outside!r}, 'w').write('escaped')".format(outside=str(outside))],
+    )
+    result = run_agent(Runner(), config, worktree=worktree, prompt="edit", execute=True)
+    assert result["status"] == "failed"
+    assert not outside.exists()
+
+
+def test_builder_can_write_inside_its_worktree(tmp_path: Path):
+    from lokay.agent import run_agent
+    from lokay.config import Config
+    from lokay.runner import Runner
+
+    worktree = tmp_path / "work"
+    worktree.mkdir()
+    target = worktree / "inside.txt"
+    config = Config(
+        executor_enabled=True,
+        agent_command="/Library/Developer/CommandLineTools/usr/bin/python3",
+        agent_args=["-c", "open({target!r}, 'w').write('inside')".format(target=str(target))],
+    )
+    result = run_agent(Runner(), config, worktree=worktree, prompt="edit", execute=True)
+    assert result["status"] == "completed"
+    assert target.read_text() == "inside"
+
+
+def test_builder_can_write_its_private_scratch(tmp_path: Path):
+    from lokay.agent import run_agent
+    from lokay.config import Config
+    from lokay.runner import Runner
+
+    worktree = tmp_path / "work"
+    worktree.mkdir()
+    config = Config(
+        executor_enabled=True,
+        agent_command="/Library/Developer/CommandLineTools/usr/bin/python3",
+        agent_args=["-c", "import os; from pathlib import Path; Path(os.environ['HOME'], 'note.txt').write_text('scratch')"],
+    )
+    result = run_agent(Runner(), config, worktree=worktree, prompt="edit", execute=True)
+    assert result["status"] == "completed"
+
+
+def test_builder_names_unsupported_sandbox(tmp_path: Path, monkeypatch):
+    from lokay.agent import AgentError, run_agent
+    from lokay.config import Config
+    from lokay.runner import Runner
+
+    monkeypatch.setattr("sys.platform", "linux")
+    worktree = tmp_path / "work"
+    worktree.mkdir()
+    config = Config(
+        executor_enabled=True,
+        agent_command="/Library/Developer/CommandLineTools/usr/bin/python3",
+        agent_args=["-c", "print('no')"],
+    )
+    try:
+        run_agent(Runner(), config, worktree=worktree, prompt="edit", execute=True)
+    except AgentError as exc:
+        assert str(exc) == "sandbox_runtime_unsupported"
+    else:
+        raise AssertionError("expected sandbox_runtime_unsupported")
+
+

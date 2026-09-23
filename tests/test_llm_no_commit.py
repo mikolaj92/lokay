@@ -104,7 +104,8 @@ def test_agent_execute_timeout_invokes_only_the_harness(tmp_path: Path) -> None:
     assert out["timed_out"] is True
     assert len(runner.specs) == 1
     argv = list(runner.specs[0].argv)
-    assert argv[0] == "pi"
+    assert argv[0] == "/usr/bin/sandbox-exec"
+    assert "--" in argv and Path(argv[argv.index("--") + 1]).name == "pi"
     assert "commit" not in argv
     assert not any("commit_all" in str(part) for part in argv)
 
