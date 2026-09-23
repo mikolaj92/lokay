@@ -39,4 +39,12 @@ def validate_source(source_blob: dict, validate) -> dict:
     )
     if validated.get("route") == "valid" and source_blob.get("session"):
         validated["session"] = source_blob["session"]
+    agent = source_blob.get("agent")
+    receipt = str(
+        source_blob.get("session_receipt")
+        or (agent.get("session_receipt") if isinstance(agent, dict) else "")
+        or ""
+    )
+    if receipt:
+        validated["session_receipt"] = receipt
     return validated

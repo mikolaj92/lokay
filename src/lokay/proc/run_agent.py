@@ -13,12 +13,30 @@ from lokay.envelope import emit_exit, err, ok, read_stdin_json
 from lokay.proc._common import add_config_live, agent_execute_allowed, load_cfg, runner
 
 
+def _prior_session(raw: str) -> dict | None:
+    import json
+
+    text = (raw or "").strip()
+    if not text:
+        return None
+    loaded = json.loads(text)
+    return loaded if isinstance(loaded, dict) else None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-run-agent")
     add_config_live(p)
     p.add_argument("--worktree", required=True)
     p.add_argument("--prompt-file")
     p.add_argument("--prompt", default="")
+    p.add_argument("--session-policy", default="")
+    p.add_argument("--session-role", default="")
+    p.add_argument("--repo", default="")
+    p.add_argument("--issue", type=int)
+    p.add_argument("--branch", default="")
+    p.add_argument("--head-sha", default="")
+    p.add_argument("--base-sha", default="")
+    p.add_argument("--prior-session", default="")
     args = p.parse_args(argv)
     cfg = load_cfg(args)
     execute = agent_execute_allowed(cfg, live_flag=args.live)
@@ -58,6 +76,14 @@ def main(argv: list[str] | None = None) -> int:
             worktree=Path(args.worktree),
             prompt=prompt,
             execute=execute,
+            session_policy=args.session_policy,
+            session_role=args.session_role,
+            repo=args.repo,
+            issue=args.issue,
+            branch=args.branch,
+            head_sha=args.head_sha,
+            base_sha=args.base_sha,
+            prior_session=_prior_session(args.prior_session),
         )
     except AgentError as exc:
         return emit_exit(err(str(exc), status="refused"))

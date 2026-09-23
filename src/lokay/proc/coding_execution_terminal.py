@@ -10,5 +10,6 @@ def terminal(finalized: dict, manual: dict) -> dict:
         "evidence_kind": str(finalized.get("evidence_kind") or "none"),
         "reason": finalized.get("reason") or manual.get("reason"),
         "session": finalized.get("session"),
+        "session_receipt": str(finalized.get("session_receipt") or ""),
     }
     return {**payload, "result": dict(payload)}

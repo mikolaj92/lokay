@@ -311,7 +311,7 @@ def handle_publication(
             "run_refs": list(session.get("run_refs") or []),
             "acceptance_identity": acceptance.get("identity"),
             "acceptance_accepted": acceptance.get("accepted") is True,
-            "builder_session": str(session.get("session") or "unavailable"),
+            "builder_session": str(session.get("session_receipt") or session.get("session") or "unavailable"),
             "reviewer_session": "pending", "acceptance_digest": str(acceptance.get("acceptance_digest") or acceptance.get("digest") or "pending"),
             "head_sha": str((up.get("push") or {}).get("head_sha") or inputs.get("head_sha") or "pending"),
         }
