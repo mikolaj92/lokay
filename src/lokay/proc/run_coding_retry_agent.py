@@ -18,6 +18,7 @@ def run(*, cfg, worktree, prompt: str, live: bool) -> dict:
     return {
         "ok": True,
         "route": "completed" if result.get("status") == "completed" else "failed",
-        "stdout": str(result.get("stdout_tail") or ""),
+        "stdout": str(result.get("result_stdout") or result.get("stdout_tail") or ""),
+        "result_truncated": str(result.get("result_truncated") or ""),
         "agent": result,
     }

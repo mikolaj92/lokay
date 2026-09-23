@@ -297,16 +297,28 @@ def run_agent(
         live=True,
     )
     timed_out = bool(getattr(result, "timed_out", False))
-    return {
+    full_stdout = result.stdout or ""
+    out = {
         "revision": {"before": before, "after": observe(runner, worktree)} if before else {},
         "status": "completed" if result.returncode == 0 else "failed",
         "agent": kind,
         "returncode": result.returncode,
         "timed_out": timed_out,
-        "stdout_tail": (result.stdout or "")[-4000:],
+        "stdout_tail": full_stdout[-4000:],
         "stderr_tail": (result.stderr or "")[-2000:],
         "collector_boundary": bool(attach_collector_boundary),
         "factory_workflow_boundary": bool(attach_collector_boundary),
         "worktree": str(worktree),
         "session": session if getattr(result, "executed", False) else "",
     }
+    if role == "builder":
+        # The result document rides its own bounded channel; the tail stays
+        # diagnostics. Past the bound the outcome is named truncation,
+        # never a partial "valid" result.
+        limit = 200_000
+        if len(full_stdout) > limit:
+            out["result_stdout"] = full_stdout[:limit]
+            out["result_truncated"] = "result_transport_limit"
+        else:
+            out["result_stdout"] = full_stdout
+    return out

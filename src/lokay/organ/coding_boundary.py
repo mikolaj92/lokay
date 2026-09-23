@@ -158,7 +158,7 @@ def handle_coding_boundary(
         "validate_repair_result",
         "validate_local_repair_retry",
     }:
-        from lokay.proc.validate_coding_result import validate
+        from lokay.proc.validate_coding_result import validate, validate_source
 
         source = {
             "validate_coding_result": "run_agent",
@@ -167,26 +167,7 @@ def handle_coding_boundary(
             "validate_repair_result": "repair_agent",
             "validate_local_repair_retry": "local_repair_retry_agent",
         }[atom]
-        source_blob = up.get(source) or {}
-        if str(source_blob.get("route") or "") == "empty" or str(
-            source_blob.get("reason") or ""
-        ) in {"localize_empty", "localize_missing", "localize_timeout"}:
-            return {
-                "ok": True,
-                "route": "empty",
-                "reason": str(source_blob.get("reason") or "localize_empty"),
-            }
-        validated = validate(
-            str(
-                source_blob.get("stdout")
-                or source_blob.get("stdout_tail")
-                or ""
-            )
-        )
-        # Session comes from the executor envelope, never its generated JSON.
-        if validated.get("route") == "valid" and source_blob.get("session"):
-            validated["session"] = source_blob["session"]
-        return validated
+        return validate_source(up.get(source) or {}, validate)
     if atom == "collect_existing_delivery_pr":
         from lokay.proc.collect_existing_delivery_pr import collect
         from lokay.proc._common import runner

@@ -148,6 +148,36 @@ else:
     assert receipt['reviewer_session'] == 'pending'  # Still provisional before review.
 
 
+@pytest.mark.parametrize('length', ['under', 'over', 'beyond'])
+def test_coding_result_survives_transport_tail(tmp_path, monkeypatch, length):
+    import json
+    import sys
+
+    from lokay.agent import run_agent
+    from lokay.config import Config
+    from lokay.runner import Runner
+
+    summary = {'under': 100, 'over': 5000, 'beyond': 250_000}[length]
+    summary = 'x' * summary
+    script = tmp_path / 'executor.py'
+    script.write_text('import json\nprint(json.dumps(' + repr(
+        {'verdict': 'implemented', 'evidence_kind': None, 'summary': summary,
+         'tests_run': ['pytest'], 'residual_risk': 'none'}) + '))\n')
+    cfg = Config(agent='local-executor', agent_command=sys.executable,
+                 agent_args=[str(script)], agent_model=None, executor_enabled=True)
+    envelope = run_agent(Runner(), cfg, worktree=tmp_path, prompt='edit',
+                         execute=True, session_kind='code', attach_collector_boundary=False)
+    from lokay.organ.coding_boundary import handle_coding_boundary
+    validated = handle_coding_boundary('validate_coding_result', {'worktree': str(tmp_path)},
+                                       {'run_agent': envelope}, {})
+    if length == 'beyond':
+        assert validated['route'] == 'fail_closed', validated
+        assert validated['reason'] == 'coding_result_truncated'
+        return
+    assert validated['route'] == 'valid', validated
+    assert validated['decision']['summary'] == summary
+
+
 @pytest.mark.parametrize('binding', ['argument', 'embedded', 'absent', 'prompt_only', 'dropped'])
 def test_real_executor_session_binding_to_receipt(tmp_path, monkeypatch, binding):
     import json
