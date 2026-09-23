@@ -43,6 +43,10 @@ def executor_environment(role: str, ambient: Mapping[str, str]) -> dict[str, str
     out: dict[str, str] = {}
     if role in _AGENT_ROLES:
         out["PATH"] = coding_path(ambient.get("PATH", ""))
+        # HOME stays the harness home. Its model catalog and credentials live
+        # there; the coding seatbelt never supplies them.
+        if ambient.get("HOME"):
+            out["HOME"] = ambient["HOME"]
     elif ambient.get("PATH"):
         out["PATH"] = ambient["PATH"]
     out["LOKAY_CAPABILITIES"] = ",".join(sorted(caps))

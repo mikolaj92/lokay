@@ -122,7 +122,9 @@ def _values(
         "command": command,
         "cwd": str(worktree),
         "prompt": prompt,
-        "model": (config.agent_model or "").strip(),
+        # The harness owns its model. A configured name is never forwarded:
+        # `{model}` renders empty, so the flag pair drops.
+        "model": "",
         "max_turns": str(int(config.max_turns)),
         "timeout": str(timeout),
         "session": session or session_id_for_worktree(worktree, kind=session_kind),
@@ -305,7 +307,8 @@ def run_agent(
             argv, scratch = coding_argv(argv, worktree=worktree)
         except ValueError as exc:
             raise AgentError(str(exc)) from exc
-        capability_env["HOME"] = str(scratch)
+        # Scratch is the temp dir only. HOME stays the harness home: its model
+        # catalog and credentials live there, and Lokay does not supply them.
         capability_env["TMPDIR"] = str(scratch)
     from lokay.proc.repair_agent_revision import observe
 

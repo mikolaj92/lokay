@@ -431,11 +431,11 @@ def test_agent_argv_from_template_not_vendor_branch():
         "pi",
         "-p",
         "fix it",
-        "--model",
-        "omniroute/pi",
         "--approve",
         "--no-session",
     ]
+    assert "--model" not in argv
+    assert "omniroute/pi" not in argv
     assert "--cwd" not in argv
 
 

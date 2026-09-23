@@ -4,7 +4,8 @@ import os
 
 from lokay.capabilities import coding_path, executor_environment, authorize_effect
 
-_AGENT_ENV_KEYS = frozenset({"PATH", "LOKAY_CAPABILITIES"})
+# HOME is the harness home. GitHub credentials stay out.
+_AGENT_ENV_KEYS = frozenset({"PATH", "HOME", "LOKAY_CAPABILITIES"})
 
 
 def _assert_agent_env_allowlist(env: dict[str, str]) -> None:
@@ -27,6 +28,7 @@ def test_builder_has_code_write_but_no_github_credentials_or_merge(tmp_path: Pat
     )
     assert env["LOKAY_CAPABILITIES"] == "code.write"
     assert env["PATH"] == coding_path("/bin")
+    assert env["HOME"] == "/tmp/home"
     _assert_agent_env_allowlist(env)
     assert "GH_TOKEN" not in env
     assert "GITHUB_TOKEN" not in env
@@ -63,6 +65,7 @@ def test_agent_env_keys_are_allowlist_only():
     for role in ("builder", "reviewer"):
         env = executor_environment(role, ambient)
         _assert_agent_env_allowlist(env)
+        assert env["HOME"] == "/home/lokay"
         deny_first = env["PATH"].split(os.pathsep)[0]
         assert (Path(deny_first) / "gh").is_file()
 
@@ -132,20 +135,30 @@ def test_builder_can_write_inside_its_worktree(tmp_path: Path):
     assert target.read_text() == "inside"
 
 
-def test_builder_can_write_its_private_scratch(tmp_path: Path):
+def test_builder_keeps_the_harness_home(tmp_path: Path, monkeypatch):
+    """Scratch is TMPDIR. HOME stays the harness home, so its own config resolves."""
     from lokay.agent import run_agent
     from lokay.config import Config
     from lokay.runner import Runner
 
     worktree = tmp_path / "work"
     worktree.mkdir()
+    home = tmp_path / "harness-home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
     config = Config(
         executor_enabled=True,
         agent_command="/Library/Developer/CommandLineTools/usr/bin/python3",
-        agent_args=["-c", "import os; from pathlib import Path; Path(os.environ['HOME'], 'note.txt').write_text('scratch')"],
+        agent_args=["-c", "import os; from pathlib import Path; Path(os.environ['TMPDIR'], 'note.txt').write_text(os.environ['HOME'])"],
     )
     result = run_agent(Runner(), config, worktree=worktree, prompt="edit", execute=True)
-    assert result["status"] == "completed"
+    assert result["status"] == "completed", result
+    import os
+    root = Path(os.environ.get("TMPDIR") or "/tmp")
+    scratch_notes = sorted(
+        root.glob("lokay-coding-*/note.txt"), key=lambda p: p.stat().st_mtime
+    )
+    assert scratch_notes and scratch_notes[-1].read_text() == str(home)
 
 
 def test_builder_names_unsupported_sandbox(tmp_path: Path, monkeypatch):

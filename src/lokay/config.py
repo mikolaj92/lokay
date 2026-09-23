@@ -55,7 +55,8 @@ class Config:
     executor_enabled: bool = False
     agent: str = "pi"  # log label only
     agent_command: str = "pi"  # harness binary on PATH (executor.command)
-    agent_model: str | None = "omniroute/pi"
+    # Kept for the config file. Never reaches the harness argv.
+    agent_model: str | None = None
     # Argv after binary. Placeholders: {cwd} {prompt} {model} {max_turns} {timeout} {session}
     # Empty {model} drops a preceding flag + {model} pair.
     agent_args: list[str] = field(
