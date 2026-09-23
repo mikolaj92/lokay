@@ -1,6 +1,7 @@
 """Fail-closed macOS seatbelt for one coding worker. Not a second framework."""
 from __future__ import annotations
 
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -13,15 +14,21 @@ def _path(path: Path) -> str:
     return value
 
 
-def coding_profile(*, worktree: Path, scratch: Path, executable: Path) -> str:
+def coding_profile(*, worktree: Path, scratch: Path, executable: Path | None) -> str:
     root = _path(worktree)
     private = _path(scratch)
-    binary = _path(executable)
+    binary = _path(executable) if executable else ""
     # The interpreter lives outside the worktree (uv/pyenv/venv). Read and exec
     # of its own prefix, and read of the worktree's ancestors (a checkout's
     # .venv sits above it), is the worker, not an escape. Writes stay inside.
-    runtime = _path(executable.parent.parent)
+    # A bare name PATH does not carry has no prefix, so it gets no exec grant.
+    runtime = _path(executable.parent.parent) if executable else ""
     ancestors = _path(worktree.resolve().parent)
+    harness = [
+        f'(allow process-exec (literal "{binary}"))',
+        f'(allow process-exec (subpath "{runtime}"))',
+        f'(allow file-read* (subpath "{runtime}"))',
+    ] if executable else []
     gitconfig = Path.home() / ".gitconfig"
     # Local git (commit inside the worktree) is an edit. Publication is not:
     # network stays on localhost, so push/fetch have no route out.
@@ -29,9 +36,7 @@ def coding_profile(*, worktree: Path, scratch: Path, executable: Path) -> str:
         "(version 1)",
         "(deny default)",
         '(import "system.sb")',
-        f'(allow process-exec (literal "{binary}"))',
-        f'(allow process-exec (subpath "{runtime}"))',
-        f'(allow file-read* (subpath "{runtime}"))',
+        *harness,
         f'(allow file-read* (subpath "{ancestors}"))',
         *( [f'(allow file-read* (literal "{_path(gitconfig)}"))'] if gitconfig.is_file() else [] ),
         '(allow process-exec (subpath "/usr/bin"))',
@@ -70,10 +75,19 @@ def coding_argv(argv: list[str], *, worktree: Path) -> tuple[list[str], Path]:
         raise ValueError("sandbox_runtime_unsupported")
     if not argv or not argv[0]:
         raise ValueError("sandbox_runtime_unsupported")
-    executable = Path(argv[0]).resolve()
+    named = argv[0]
+    if "/" not in named:
+        # A bare command found on PATH is the harness. Resolving it against cwd
+        # names a file in the repo (lokay/pi) that was never installed. A name
+        # PATH does not carry stays bare, so the exec fails closed on the name
+        # instead of on an invented path.
+        found = shutil.which(named)
+        executable = Path(found).resolve() if found else None
+    else:
+        executable = Path(named).resolve()
     # sandbox-exec canonicalises the exec path, so the profile must name the
     # real interpreter, not a venv symlink that points outside the prefix.
-    argv = [str(executable), *argv[1:]]
+    argv = [str(executable) if executable else named, *argv[1:]]
     scratch = Path(tempfile.mkdtemp(prefix="lokay-coding-")).resolve()
     profile = scratch / "coding.sb"
     profile.write_text(coding_profile(worktree=worktree, scratch=scratch, executable=executable))
