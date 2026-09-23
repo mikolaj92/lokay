@@ -3,13 +3,13 @@
 from lokay.graph_run import run_path
 
 
-def invoke(target: dict, *, config_path: str | None) -> dict:
+def invoke(target: dict, *, config_path: str | None, live: bool) -> dict:
     result = run_path(
         path_id="issue_triage",
         repo=str(target["repo"]),
         issue=int(target["issue"]),
         config_path=config_path,
-        live=True,
+        live=live,
     )
     return {**target, "ok": True, "route": "completed", "triage": result}
 
@@ -19,9 +19,11 @@ def failed(target: dict, exc: BaseException) -> dict:
     return {**target, "ok": True, "route": "failed", "error": error}
 
 
-def run(target: dict, *, config_path: str | None) -> dict:
+def run(target: dict, *, config_path: str | None, live: bool = True) -> dict:
+    if not live:
+        return {**target, "ok": True, "route": "skipped", "reason": "dry_run"}
     try:
-        return invoke(target, config_path=config_path)
+        return invoke(target, config_path=config_path, live=True)
     except BaseException as exc:
         if isinstance(exc, KeyboardInterrupt):
             raise

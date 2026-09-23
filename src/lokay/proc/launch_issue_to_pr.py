@@ -13,7 +13,14 @@ def leftover_without_repo(candidate: dict, repo: str) -> tuple[int, list[dict]]:
     return len(leftover_issues), leftover_issues
 
 
-def launch(candidate: dict, *, config_path: str | None) -> dict:
+def launch(candidate: dict, *, config_path: str | None, live: bool = True) -> dict:
+    if not live:
+        return {
+            **dict(candidate),
+            "ok": True,
+            "route": "skipped",
+            "reason": "dry_run",
+        }
     result = detach_issue_to_pr(
         repo=str(candidate["repo"]),
         issue=int(candidate["issue"]),

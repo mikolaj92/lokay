@@ -8,7 +8,7 @@ def select(prepared: dict, previous: dict, *, slot: int) -> dict:
     spent = int(prepared.get("spent") or 0)
     slots = int(prepared.get("slot_count") or 0)
     if slot == 1:
-        if remaining == 0 and spent > 0:
+        if remaining == 0:
             return {"ok": True, "route": "empty", "slot": slot}
         return {"ok": True, "route": "run", "slot": slot}
     if slots and slot > slots:

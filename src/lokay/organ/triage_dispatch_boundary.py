@@ -11,6 +11,7 @@ def handle_triage_dispatch(
 ) -> dict[str, Any] | None:
     pass_dir = str(inputs.get("pass_dir") or "")
     config = str(inputs.get("config_path") or "") or None
+    live = bool(inputs.get("live"))
     if atom == "select_triage_target":
         from lokay.proc.select_triage_target import select
 
@@ -28,7 +29,9 @@ def handle_triage_dispatch(
     if atom == "run_issue_triage_subflow":
         from lokay.proc.run_issue_triage_subflow import run
 
-        return run(up.get("select_triage_gate") or {}, config_path=config)
+        return run(
+            up.get("select_triage_gate") or {}, config_path=config, live=live
+        )
     if atom == "select_triage_run":
         from lokay.proc.select_triage_run import select
 
