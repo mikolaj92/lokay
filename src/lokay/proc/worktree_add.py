@@ -15,6 +15,7 @@ from typing import Any
 
 from lokay.code.github import InvalidBranchRef
 from lokay.envelope import emit_exit, ok
+from lokay.repair_continuation import repair_head_continues
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 from lokay.repair_worktree_dirt import repair_worktree_dirt
 from lokay.runner import git_spec
@@ -73,6 +74,7 @@ def verify_repair_start_identity(
             live=True,
         )
         local = str(local_result.stdout or "").strip().lower()
+        continues = repair_head_continues(command_runner, worktree, local, expected)
         dirt = repair_worktree_dirt(command_runner, worktree)
     except Exception:
         return {
@@ -83,7 +85,7 @@ def verify_repair_start_identity(
         }
     if (
         remote != expected
-        or local != expected
+        or not continues
         or not re.fullmatch(r"[a-f0-9]{40}", local)
         or local_result.returncode != 0
         or (local_result.stderr or "").strip()

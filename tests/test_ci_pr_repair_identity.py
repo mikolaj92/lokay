@@ -227,6 +227,40 @@ def test_repair_start_preflight_rejects_remote_drift(monkeypatch, tmp_path):
     assert result["reason"] == "repair_start_head_mismatch"
 
 
+def test_repair_start_preflight_continues_a_descendant_of_the_recorded_sha(monkeypatch, tmp_path):
+    """An unpushed repair commit stays on the same repair.
+
+    The remote tip must still be the recorded SHA. Only the local HEAD may move
+    forward, and only when git says it contains the recorded SHA.
+    """
+    from lokay.proc import worktree_add
+
+    recorded = "c" * 40
+    continued = "d" * 40
+    monkeypatch.setattr(
+        "lokay.gh_prs.gh_json",
+        lambda *_args, **_kwargs: {
+            "headRefOid": recorded,
+            "headRepository": {"nameWithOwner": "o/r"},
+        },
+    )
+    runner = _SequentialRunner([
+        (0, continued + "\n", ""),
+        (0, "", ""),
+        (0, "", ""),
+    ])
+
+    result = worktree_add.verify_repair_start_identity(
+        runner, repo="o/r", pr=57, worktree=tmp_path, expected_head_sha=recorded,
+    )
+
+    assert result["route"] == "ready", result
+    assert result["worktree_head_sha"] == continued
+    assert result["repair_start_head_sha"] == recorded
+    ancestry = runner.calls[1].argv
+    assert list(ancestry[:5]) == ["git", "merge-base", "--is-ancestor", recorded, continued]
+
+
 def test_repair_start_preflight_rejects_worktree_drift(monkeypatch, tmp_path):
     from lokay.proc import worktree_add
 
@@ -239,6 +273,7 @@ def test_repair_start_preflight_rejects_worktree_drift(monkeypatch, tmp_path):
     )
     runner = _SequentialRunner([
         (0, "e" * 40 + "\n", ""),
+        (1, "", ""),
         (0, "", ""),
     ])
 
