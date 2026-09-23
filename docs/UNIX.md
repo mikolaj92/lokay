@@ -24,7 +24,7 @@ The table below is an inventory, **not execution order**.
 - `top`: an entry or a direct atom of the live daemon/factory parent.
 - `nested`: a one-job capability or child workflow, not a parent scheduler.
 - `cli-wrapper`: an explicit command/status entry; its presence does not imply daemon conduction.
-- `legacy-unused`: retained old-spine surface, not part of the live department parent; cleanup tracked in #998/#999. It is not a recommended second process.
+- `legacy-unused`: retained old-spine surface, not part of the live department parent. It is not a recommended second process. #998 and #999 are closed; these wrappers stay until a later removal actually drops the scripts.
 
 `daemon_cycle` selects recovery XOR one `factory_pass`. The factory conducts
 `host_ff`, its host gate and workspace, then five selected departments:
@@ -37,7 +37,10 @@ Implementation lives under `executor_department` / `issue_to_pr`.
 The explicit CLI `product_entry` / `product_pass_budget` hosts bounded
 multi-pass work and `leftover_closeout`. Native bounded templates author
 slots 2–8 after a fixed first slot; they are not eight passes inside `daemon_cycle`.
-The retired survey/plan/closeout fleet paths and their CLI wrappers are removed.
+The retired survey/plan/closeout fleet paths are gone. Two old-spine commands
+remain on purpose and are not parent schedulers: `lokay-dispatch-triage` and
+`lokay-select-implement` (`legacy-unused` in the table, still registered in
+`pyproject.toml`).
 Issue listing belongs to issue triage/executor; PR listing and closeout belong
 to PR triage; occupancy comes from delivery receipts; recovery and work-copy
 cleanup keep their existing department/sibling paths. Domain collectors remain
