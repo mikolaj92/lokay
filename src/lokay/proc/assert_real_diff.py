@@ -6,19 +6,26 @@ import argparse
 import json
 from pathlib import Path
 
-_SCOPED_ROOTS = {"fala", "src", "tests"}
-
-
 def _paths_outside_scope(changed: list[str], scope: list[str]) -> list[str]:
-    def allowed(path: str) -> bool:
-        return any(path == item or path.startswith(f"{item}/") for item in scope)
+    allowed = [item.removeprefix("./").rstrip("/") for item in scope]
 
-    normalized = [path.removeprefix("./") for path in changed]
-    return [
-        path
-        for path in normalized
-        if path.split("/", 1)[0] in _SCOPED_ROOTS and not allowed(path)
-    ]
+    def outside(path: str) -> bool:
+        # Resolve parent escapes (a/../b) without touching the filesystem.
+        parts: list[str] = []
+        for part in path.removeprefix("./").split("/"):
+            if part in ("", "."):
+                continue
+            if part == "..":
+                if parts:
+                    parts.pop()
+                continue
+            parts.append(part)
+        normalized = "/".join(parts)
+        return not any(
+            normalized == item or normalized.startswith(f"{item}/") for item in allowed
+        )
+
+    return [path for path in changed if outside(path)]
 
 
 def _off_goal_paths(changed: list[str], localized: list[str]) -> list[str]:

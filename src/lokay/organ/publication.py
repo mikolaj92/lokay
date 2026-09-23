@@ -174,14 +174,12 @@ def handle_publication(
     if atom == "assert_real_diff":
         worktree = _worktree_path(up, inputs)
         assert worktree
-        from lokay.proc.assert_real_diff_subflow import run as run_real_diff
+        from lokay.proc.assert_real_diff_subflow import authorized_scope, run as run_real_diff
 
-        issue_raw = _issue_raw(up, inputs)
         return run_real_diff(
-            worktree=worktree,
-            base="@{upstream}" if repair_mode else "origin/main",
-            issue_body=str(issue_raw.get("body") or ""),
-            repo=repo,
+            worktree=worktree, base="@{upstream}" if repair_mode else "origin/main",
+            issue_body=str(_issue_raw(up, inputs).get("body") or ""), repo=repo,
+            authorized_paths=authorized_scope(up),
         )
 
     if atom == "push":

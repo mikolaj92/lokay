@@ -21,7 +21,10 @@ def handle_real_diff(
     if atom == "inspect_real_diff_worktree":
         from lokay.proc.inspect_real_diff_worktree import inspect
 
-        return inspect(worktree=str(inputs.get("worktree") or ""))
+        return inspect(
+            worktree=str(inputs.get("worktree") or ""),
+            authorized_paths=list(inputs.get("authorized_paths") or []),
+        )
     if atom == "read_real_diff_paths":
         from lokay.proc.read_real_diff_paths import read
 
