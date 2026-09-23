@@ -7,8 +7,14 @@ import json
 _SKIP = frozenset({"underspecified", "too_large", "dangerous"})
 
 
-def validate_plan(raw: str) -> dict:
-    """One JSON object. A false plan skips with a named reason; no limbo."""
+def validate_plan(raw: str | dict) -> dict:
+    """One plan. A JSON string is an agent response; a dict is a built plan.
+
+    A false plan skips with a named reason. A built plan needs a goal and at
+    least one file, under files or files_likely.
+    """
+    if isinstance(raw, dict):
+        return _built(raw)
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, ValueError):
@@ -31,3 +37,15 @@ def validate_plan(raw: str) -> dict:
     ):
         return {"ok": False, "reason": "plan_incomplete"}
     return {"ok": True, "plan": data}
+
+
+def _built(plan: dict) -> dict:
+    files = plan.get("files") or plan.get("files_likely") or []
+    if (
+        not str(plan.get("goal") or "").strip()
+        or not isinstance(files, list)
+        or not files
+        or not all(isinstance(item, str) and item.strip() for item in files)
+    ):
+        return {"ok": False, "reason": "plan_incomplete"}
+    return {"ok": True, "plan": plan}
