@@ -1,6 +1,6 @@
 # Antywzorce ciemnej fabryki oprogramowania
 
-> Antywzorzec = powtarzalny sposób, w jaki lights-out mill **udaje** fabrykę, a produkuje limbo, ciche pominięcia albo defekty na skalę przemysłową.
+> Antywzorzec = powtarzalny sposób, w jaki Lokaj **udaje** fabrykę, a produkuje limbo, ciche pominięcia albo defekty na skalę przemysłową.
 > Każdy wpis: objaw → mechanizm → skutek → remedium (odsyłacz do wzorca z `PATTERNS.md`).
 
 ---
