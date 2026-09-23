@@ -51,9 +51,10 @@ Factory workflow boundary (Lokay coding session — overrides product playbooks)
   work requires that.
 - Claim/assign, branch, and worktree already happened before this step as
   deterministic atoms. Commit/push/PR happen after as deterministic atoms.
-- Your only job: edit files in this worktree and return the required
-  structured result (files + verdict JSON). Architecture notes in product
-  docs may still guide *how* to change code; publication/claim steps do not.
+- Your only job: edit files in this worktree and return one closed JSON
+  object {verdict, evidence_kind, summary, tests_run, residual_risk}.
+  The edited files are the diff, not a JSON key. Architecture notes in
+  product docs may still guide *how* to change code; publication/claim steps do not.
 """.strip()
 
 

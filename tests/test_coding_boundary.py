@@ -94,6 +94,35 @@ def test_repair_requires_valid_implemented_result():
     )
 
 
+def test_coding_prompts_advertise_only_the_closed_schema():
+    """A worker following the prompt must land on a verdict the validator accepts."""
+    from pathlib import Path
+
+    from lokay.agent import FACTORY_WORKFLOW_BOUNDARY
+    from lokay.models import Issue
+    from lokay.prompts import issue_fix_prompt, timeout_resume_prompt
+
+    root = Path(__file__).resolve().parents[1] / "src/lokay"
+    prompts = [
+        issue_fix_prompt(
+            Issue(repo="o/r", number=1, title="t", body="b", labels=[], assignees=[], url=""),
+            branch="fix",
+        ),
+        timeout_resume_prompt(repo="o/r", branch="fix", issue_number=1, timeout_seconds=30),
+        (root / "tool_contracts/evidence_coding/prompt.md").read_text(),
+        (root / "organ/coding_boundary.py").read_text(),
+        FACTORY_WORKFLOW_BOUNDARY,
+    ]
+    for prompt in prompts:
+        assert "needs_human" not in prompt, prompt[:80]
+        assert "commit if you can" not in prompt
+    # The boundary names the physical diff, not a JSON inventory key.
+    assert '"files"' not in FACTORY_WORKFLOW_BOUNDARY
+    # What the prompt offers, the validator takes.
+    assert validate_output(valid())["route"] == "valid"
+    assert validate_output(valid("needs_evidence", "issue_snapshot"))["route"] == "valid"
+
+
 def test_needs_human_verdict_is_not_a_valid_state():
     """CEO/#1014: needs_human is not a verdict — invalid → retry → fail_closed."""
     assert validate_output(

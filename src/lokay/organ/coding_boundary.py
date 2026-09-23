@@ -297,7 +297,9 @@ def handle_coding_boundary(
 
         first = up.get("validate_coding_result") or {}
         prompt = (
-            "Your previous coding response JSON was invalid. Return ONLY the required closed JSON object. Validator feedback: %s\nInvalid response: %s"
+            "Your previous coding response JSON was invalid. Return ONLY one closed JSON object "
+            "{verdict: implemented|needs_evidence, evidence_kind, summary, tests_run, residual_risk}. "
+            "Validator feedback: %s\nInvalid response: %s"
             % (
                 first.get("validation_error") or "invalid JSON",
                 first.get("agent_stdout_tail") or "",
