@@ -81,6 +81,35 @@ def evidence(tmp_path):
     return inputs, outputs, {'db': str(db), 'run_id': 'repair-run', 'path_id': 'pr_repair'}, target
 
 
+@pytest.mark.parametrize('damage', [None, 'foreign', 'missing', 'observation'])
+def test_resumed_admission_still_requires_ancestry_and_exact_observation(tmp_path, damage):
+    from lokay.proc import pr_repair_checkpoint as checkpoint
+    inputs, outputs, ref, target = evidence(tmp_path)
+    admitted = outputs['worktree_add']
+    work = Path(admitted['worktree'])
+    admitted['worktree_head_sha'] = target
+    if damage == 'foreign':
+        admitted['worktree_head_sha'] = git(work, 'commit-tree', 'HEAD^{tree}', '-m', 'foreign root')
+    elif damage == 'missing':
+        admitted['worktree_head_sha'] = 'f' * 40
+    if damage != 'observation':
+        outputs['run_agent']['revision']['before']['head'] = target
+    outputs['run_agent']['revision']['after']['head'] = target
+    outputs['commit_initial_repair'].update(committed_by='agent', commit=target)
+    with sqlite3.connect(ref['db']) as conn:
+        for name in ('worktree_add', 'run_agent', 'commit_initial_repair'):
+            conn.execute('UPDATE processes SET output_json=? WHERE id=?', (
+                json.dumps({'job': 'pr_repair:' + name, 'status': 'ok', 'payload': outputs[name]}),
+                'pr_repair:' + name,
+            ))
+    result = checkpoint.persist(inputs=inputs, run_ref=ref, state_dir=tmp_path, budget=2)
+    assert result['route'] == ('fail_closed' if damage else 'checkpointed'), result
+    if not damage:
+        proof = checkpoint.derive(inputs=inputs, run_ref=ref)
+        assert proof['intent']['start_head_sha'] == inputs['head_sha']
+        assert proof['intent']['target_head_sha'] == target
+
+
 @pytest.mark.parametrize('remote', ['unchanged', 'unavailable', 'closed'])
 def test_native_checkpoint_consumer_routes_real_recovery_without_review(tmp_path, remote):
     from test_issue_triage_fala import base_effector, run_graph

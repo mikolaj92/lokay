@@ -108,7 +108,7 @@ def test_actual_scoped_green_journal_crosses_checkpoint(tmp_path, monkeypatch, c
         assert checkpoint.derive(inputs=inputs, run_ref=ref)['test']['run_id'] == cached['run_id']
 
 
-@pytest.mark.parametrize('stage', ['initial', 'test', 'bridge'])
+@pytest.mark.parametrize('stage', ['initial', 'test', 'bridge', 'resumed'])
 @pytest.mark.parametrize('damage', [None, 'unrelated', 'historical'])
 def test_deterministic_commit_requires_exact_host_transition(tmp_path, monkeypatch, stage, damage):
     from lokay.agent import run_agent
@@ -124,20 +124,21 @@ def test_deterministic_commit_requires_exact_host_transition(tmp_path, monkeypat
     git(work, 'add', '.')
     git(work, 'commit', '-m', 'test declaration')
     start = git(work, 'rev-parse', 'HEAD')
-    inputs['head_sha'] = inputs['reviewed_head_sha'] = start
-    inputs['review']['reviewed_head_sha'] = start
-    outputs['worktree_add'].update(repair_start_head_sha=start, worktree_head_sha=start)
+    recorded = inputs['head_sha'] if stage == 'resumed' else start
+    inputs['head_sha'] = inputs['reviewed_head_sha'] = recorded
+    inputs['review']['reviewed_head_sha'] = recorded
+    outputs['worktree_add'].update(repair_start_head_sha=recorded, worktree_head_sha=start)
     replace_output(ref, 'worktree_add', outputs['worktree_add'])
     with sqlite3.connect(ref['db']) as conn:
         conn.execute('UPDATE processes SET input_json=?', (json.dumps(inputs),))
-    git(work, 'update-ref', 'refs/remotes/origin/ai/fix/42', start)
+    git(work, 'update-ref', 'refs/remotes/origin/ai/fix/42', recorded)
     git(work, 'branch', '--set-upstream-to=origin/ai/fix/42')
     monkeypatch.setattr('lokay.proc.commit_all.mutations_allowed', lambda **kw: True)
     monkeypatch.setattr('lokay.proc.commit_all.load_cfg', lambda args: Config())
     monkeypatch.setattr(subflow, 'run_path', lambda **kw: run_path(
         **kw, db_path=tmp_path / 'native-tests'))
     produced = None
-    for index in range(1 if stage == 'initial' else 2):
+    for index in range(1 if stage in {'initial', 'resumed'} else 2):
         name = 'run_agent' if index == 0 else 'pr_test_repair_agent'
         agent = run_agent(Runner(), Config(
             agent='test-harness', agent_command=sys.executable,
@@ -167,7 +168,7 @@ def test_deterministic_commit_requires_exact_host_transition(tmp_path, monkeypat
             insert_output(ref, inputs, 'commit_test_repair', recorded)
     tested = subflow.run(worktree=str(work), changed_scope=False, repo='o/r', issue=42)
     assert tested['ok'] is True and tested['tested'] is True
-    if stage == 'initial':
+    if stage in {'initial', 'resumed'}:
         replace_output(ref, 'test_local', tested)
     else:
         insert_output(ref, inputs, 'test_local_recheck', tested)

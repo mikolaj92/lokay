@@ -114,6 +114,32 @@ def _verify_scoped_tests(rows: dict, declaration: dict, full: dict, terminal: di
         raise ValueError("repair scoped test evidence mismatch")
 
 
+def admitted_head(inputs: dict, admitted: dict) -> str:
+    """Validate admission; ancestry only admits the starting local revision.
+
+    Publication still requires exact same-run commit and test observations.
+    """
+    from lokay.proc._common import runner
+    from lokay.repair_continuation import repair_head_continues
+
+    start = inputs["head_sha"]
+    head = admitted.get("worktree_head_sha")
+    if any(admitted.get(k) != v for k, v in {
+        "repo": inputs["repo"], "pr": inputs["pr"], "branch": inputs["branch"],
+        "repair_start_head_sha": start,
+    }.items()) or not isinstance(head, str) or len(head) != 40 or any(
+        c not in "0123456789abcdef" for c in head
+    ):
+        raise ValueError("repair journal admission identity mismatch")
+    try:
+        continues = repair_head_continues(runner(), Path(admitted["worktree"]), head, start)
+    except RuntimeError as exc:
+        raise ValueError("repair journal admission ancestry unavailable") from exc
+    if not continues:
+        raise ValueError("repair journal admission identity mismatch")
+    return head
+
+
 def derive(*, inputs: dict, run_ref: dict) -> dict:
     rows = _rows(run_ref, "pr_repair")
     admitted = _output(rows, "worktree_add")
@@ -124,11 +150,7 @@ def derive(*, inputs: dict, run_ref: dict) -> dict:
         if original.get(key) != inputs.get(key):
             raise ValueError("repair journal handoff mismatch: " + key)
     repo, pr, branch, start = (inputs[k] for k in ("repo", "pr", "branch", "head_sha"))
-    if any(admitted.get(k) != v for k, v in {
-        "repo": repo, "pr": pr, "branch": branch,
-        "repair_start_head_sha": start, "worktree_head_sha": start,
-    }.items()):
-        raise ValueError("repair journal admission identity mismatch")
+    admitted_head(inputs, admitted)
     if inputs.get("repair_kind") == "review":
         task = inputs.get("task") or {}
         if (task.get("repo") != repo or task.get("type") != "Issue"
