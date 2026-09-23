@@ -37,6 +37,20 @@ def test_pick_ready_labels_becomes_do_without_triage() -> None:
     assert out["issue"] == 9
 
 
+def test_ready_for_agent_is_taken_before_an_unlabeled_issue() -> None:
+    """The operator label wins even when an unlabeled issue is listed first."""
+    listed = {
+        "issues": [
+            {"repo": "o/r", "issue": 1, "number": 1, "labels": []},
+            {"repo": "o/r", "issue": 2, "number": 2, "labels": ["ready-for-agent"]},
+        ],
+        "count": 2,
+        "overflow": False,
+    }
+    picked = pick(listed, {})
+    assert picked["issue"] == 2 and picked["route"] == "ready"
+
+
 def test_ready_row_becomes_do_without_triage() -> None:
     picked = {
         "route": "issue",

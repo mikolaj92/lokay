@@ -49,6 +49,23 @@ def select(listed: dict, last: dict | None = None, occupied=None) -> dict:
         return pick(classified)
     lokay = lokay_of(listed, last)
     occupied_repos = occupied_repos_of(occupied)
+    from lokay.proc.pick_one_labeled import pick_one_labeled
+
+    labeled = pick_one_labeled(
+        [
+            row for row in classified.get("issues") or []
+            if takeable(row, lokay) and str(row.get("repo") or "") not in occupied_repos
+        ]
+    )
+    if labeled["reason"] == "picked":
+        chosen = dict(labeled["issue"])
+        rest = [
+            dict(row) for row in classified.get("issues") or []
+            if row is not labeled["issue"]
+            and takeable(row, lokay)
+            and str(row.get("repo") or "") not in occupied_repos
+        ]
+        return pick({"route": "listed", "issues": [chosen, *rest]})
     rows = queue(classified.get("issues"), last, lokay=lokay, occupied=occupied_repos)
     if not rows:
         listed_rows = list(classified.get("issues") or [])
