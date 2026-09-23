@@ -685,6 +685,28 @@ def _repair_git_output(runner: Runner, clone: Path, *args: str) -> str:
     return str(result.stdout or "").strip()
 
 
+def _repair_head_continues(runner: Runner, repo: Path, head: str, recorded: str) -> bool:
+    """True when head is the recorded SHA or a descendant of it.
+
+    A prior repair commit stays on the same repair. A foreign line, or a head
+    that no longer contains the recorded SHA, is drift.
+    """
+    if head == recorded:
+        return True
+    contained = runner.run(
+        git_spec(
+            ["merge-base", "--is-ancestor", recorded, head],
+            cwd=repo, timeout_seconds=30,
+        ),
+        live=True,
+    )
+    if contained.returncode == 0 and not (contained.stderr or "").strip():
+        return True
+    if contained.returncode in (1, 128):
+        return False
+    raise RuntimeError("cannot verify repair SHA ancestry")
+
+
 def _repair_worktree_identity(
     runner: Runner, clone: Path, worktree: Path, branch: str, expected_sha: str
 ) -> None:
@@ -694,7 +716,7 @@ def _repair_worktree_identity(
     common = Path(common_raw)
     if not common.is_absolute():
         common = worktree / common
-    if head != expected_sha:
+    if not _repair_head_continues(runner, worktree, head, expected_sha):
         raise RuntimeError("repair worktree does not match recorded repair SHA")
     if attached != branch or common.resolve() != (clone / ".git").resolve():
         raise RuntimeError("repair worktree branch or repository identity mismatch")
@@ -745,7 +767,7 @@ def ensure_repair_worktree(
         detail = (fetched.stderr or fetched.stdout or "").strip()
         raise RuntimeError(f"cannot fetch PR repair branch: {detail or 'fetch failed'}")
     remote_sha = _repair_git_output(runner, clone, "rev-parse", "--verify", f"{tracking_ref}^{{commit}}").lower()
-    if remote_sha != expected:
+    if not _repair_head_continues(runner, clone, remote_sha, expected):
         raise RuntimeError("remote PR tip does not match recorded repair SHA")
 
     if worktree.is_symlink():
@@ -761,7 +783,8 @@ def ensure_repair_worktree(
         live=True,
     )
     if branch_sha.returncode == 0:
-        if (branch_sha.stdout or "").strip().lower() != expected:
+        local_sha = (branch_sha.stdout or "").strip().lower()
+        if not _repair_head_continues(runner, clone, local_sha, expected):
             raise RuntimeError("local repair branch does not match recorded repair SHA")
         add_args = ["worktree", "add", str(worktree), branch]
     else:

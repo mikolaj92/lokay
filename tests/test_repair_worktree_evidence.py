@@ -253,6 +253,37 @@ def test_product_commit_to_repair_publication(implementation, tmp_path, monkeypa
     assert [(tree / path).read_bytes() for path in (".lokay/approach.md", ".lokay/localize.json")] == evidence
 
 
+def test_repair_continues_when_worktree_head_descends_from_recorded_sha(implementation):
+    """A prior repair commit stays on the same repair; only a foreign line is drift."""
+    clone, tree, cfg, repo, branch, recorded = implementation
+    (tree / "product.py").write_text("value = 43\n")
+    assert commit_all(Runner(), tree, "repair: PR #57 checks", live=True)
+    continued = git(tree, "rev-parse", "HEAD").strip()
+    assert continued != recorded
+    assert git(tree, "merge-base", "--is-ancestor", recorded, "HEAD") == ""
+
+    assert ensure_repair_worktree(
+        Runner(), cfg, repo, branch, recorded, head_repo=repo.name, live=True,
+    ) == tree
+    assert git(tree, "rev-parse", "HEAD").strip() == continued
+
+    git(clone, "checkout", "-q", "--detach", "main")
+    (clone / "product.py").write_text("foreign line\n")
+    assert commit_all(Runner(), clone, "foreign", live=True)
+    foreign_sha = git(clone, "rev-parse", "HEAD").strip()
+    git(clone, "checkout", "-q", "main")
+    assert foreign_sha != recorded
+    assert subprocess.run(
+        ["git", "-C", str(clone), "merge-base", "--is-ancestor", foreign_sha, continued],
+        check=False,
+    ).returncode == 1
+    with pytest.raises(RuntimeError, match="does not match recorded repair SHA"):
+        ensure_repair_worktree(
+            Runner(), cfg, repo, branch, foreign_sha, head_repo=repo.name, live=True,
+        )
+    assert git(tree, "rev-parse", "HEAD").strip() == continued
+
+
 @pytest.mark.parametrize("identity", ["sha", "branch", "repository"])
 def test_evidence_allowance_does_not_weaken_identity(implementation, tmp_path, identity):
     clone, tree, _, _, branch, sha = implementation
