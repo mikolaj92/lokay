@@ -102,6 +102,9 @@ def _select_last(
     health = str(receipt.get("health") or "")
     if health in _SOFT_HEALTH:
         return _factory(health or "soft_health")
+    ready = _remaining(receipt).get("ready")
+    if ready is not None and int(ready) == 0:
+        return _factory("nothing_ready")
     return {
         "ok": True,
         "route": "repair",
