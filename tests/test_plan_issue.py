@@ -16,6 +16,30 @@ from lokay.approach_plan import (
 from lokay.models import Issue
 from lokay.pr_review import review_prompt
 from lokay.proc import plan_issue
+from lokay.proc.validate_plan import validate_plan
+
+
+def test_plan_contract_accepts_a_complete_plan_and_rejects_the_rest():
+    good = {
+        "ok": True,
+        "goal": "add the atom",
+        "files": ["src/lokay/proc/plan_issue.py"],
+        "test_command": "pytest -q",
+        "non_goals": ["merge"],
+        "stop_if": ["auth"],
+    }
+    assert validate_plan(json.dumps(good))["ok"] is True
+
+    for bad in (
+        {"ok": False, "reason": "underspecified"},
+        {"ok": False, "reason": "too_large"},
+        {"ok": False, "reason": "dangerous"},
+    ):
+        out = validate_plan(json.dumps(bad))
+        assert out["ok"] is False and out["reason"] == bad["reason"]
+
+    for raw in ('{"ok": true}', '{"ok": false, "reason": "bored"}', "not json"):
+        assert validate_plan(raw)["ok"] is False
 
 
 def _issue(**kwargs) -> Issue:
