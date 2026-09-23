@@ -8,7 +8,7 @@ from test_issue_triage_fala import base_effector, run_graph
 def test_merge_effect_has_durable_closeout_intent(tmp_path, head='b' * 40):
     state = tmp_path / 'state.jsonl'
     config = tmp_path / 'config.yaml'
-    config.write_text(f'state:\n  path: {state}\nrepos:\n  - name: o/r\n    clone_path: {tmp_path}\n')
+    config.write_text(f'state:\n  path: {state}\nmerge:\n  mode: always\nrepos:\n  - name: o/r\n    clone_path: {tmp_path}\n')
     merged = tmp_path / 'merged'
     import hashlib
     task = {'repo':'o/r', 'type':'Issue', 'number':42, 'state':'OPEN'}
