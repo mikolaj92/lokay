@@ -502,7 +502,7 @@ def test_run_path_resolves_review_credential_only_for_review_paths(
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
     monkeypatch.setattr(
         "lokay.pr_review_credential.resolve_pi_api_key",
-        lambda: "resolved-review-credential",
+        lambda: (_ for _ in ()).throw(AssertionError("resolver must not run")),
     )
     seen = {}
 
@@ -521,7 +521,7 @@ def test_run_path_resolves_review_credential_only_for_review_paths(
         require_healthy=False,
     )
 
-    assert seen["credential"] == "resolved-review-credential"
+    assert seen["credential"] == ""
     assert "OCR_LLM_API_KEY" not in os.environ
 
 
@@ -535,11 +535,11 @@ def test_run_path_restores_review_credential_after_host_failure(
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
     monkeypatch.setattr(
         "lokay.pr_review_credential.resolve_pi_api_key",
-        lambda: "resolved-review-credential",
+        lambda: (_ for _ in ()).throw(AssertionError("resolver must not run")),
     )
 
     def host(**_kwargs):
-        assert os.environ["OCR_LLM_API_KEY"] == "resolved-review-credential"
+        assert os.environ.get("OCR_LLM_API_KEY") == ""
         raise RuntimeError("host failed")
 
     monkeypatch.setattr("fala.host_run_package", host)
