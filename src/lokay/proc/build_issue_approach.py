@@ -12,6 +12,11 @@ def build(request: dict) -> dict:
         Issue.from_dict(request["issue"]),
         worktree=worktree if worktree.is_dir() else None,
     )
+    from lokay.proc.validate_plan import validate_plan
+
+    verdict = validate_plan(plan.to_dict())
+    if not verdict["ok"]:
+        return {"ok": False, "reason": verdict["reason"], "plan": plan.to_dict()}
     return {
         "ok": True,
         "plan": plan.to_dict(),

@@ -42,6 +42,22 @@ def test_plan_contract_accepts_a_complete_plan_and_rejects_the_rest():
         assert validate_plan(raw)["ok"] is False
 
 
+def test_a_built_plan_must_carry_a_goal_and_files():
+    """The deterministic planner's own dict passes the same contract."""
+    assert validate_plan({"goal": "add the atom", "files_likely": ["src/a.py"]})["ok"]
+    assert validate_plan({"goal": "", "files_likely": ["src/a.py"]})["reason"] == "plan_incomplete"
+    assert validate_plan({"goal": "add", "files_likely": []})["reason"] == "plan_incomplete"
+
+
+def test_building_a_plan_with_no_files_fails_closed(tmp_path: Path):
+    """An issue that names no file does not become a plan."""
+    from lokay.proc.build_issue_approach import build
+
+    out = build({"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+                 "issue": {"repo": "o/r", "number": 1, "title": "Do a thing", "body": ""}})
+    assert out["ok"] is False and out["reason"] == "plan_incomplete"
+
+
 def _issue(**kwargs) -> Issue:
     base = dict(
         repo="owner/repo",
