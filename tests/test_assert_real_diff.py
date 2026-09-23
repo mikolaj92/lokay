@@ -58,6 +58,34 @@ def test_localize_scope_rejects_off_goal_source():
     assert out["reason"] == "off_goal" and out["off_goal_paths"] == ["src/other.py"]
 
 
+def test_scope_holds_for_every_layout_and_comes_from_the_parent(tmp_path):
+    """Scope is not a src/fala/tests shortcut, and the worker cannot widen it."""
+    import json
+    from lokay.proc.classify_localized_diff_scope import classify
+    from lokay.proc.read_real_diff_localize_scope import read
+
+    scope = {"paths": ["src/app.py"]}
+    changed = {"paths": ["src/other.py", "app/other.py", "plugins/other.py",
+                           ".github/workflows/other.yml"]}
+    out = classify(changed, scope, {"route": "continue"})
+    assert out["reason"] == "off_goal"
+    assert set(out["off_goal_paths"]) == set(changed["paths"])
+
+    # Missing parent evidence fails closed; it is not "no scope".
+    assert read({"route": "read", "worktree": str(tmp_path)})["route"] == "terminal"
+
+    # The worker editing the checkout file cannot widen the parent scope.
+    (tmp_path / ".lokay").mkdir()
+    (tmp_path / ".lokay/localize.json").write_text(json.dumps({"paths": ["anywhere"]}))
+    trusted = read({"route": "read", "worktree": str(tmp_path),
+                    "authorized_paths": ["src/app.py"]})
+    assert trusted["paths"] == ["src/app.py"]
+
+    # A rename that lands outside the scope is still outside it.
+    renamed = classify({"paths": ["src/../app/escaped.py"]}, scope, {"route": "continue"})
+    assert renamed["reason"] == "off_goal" and renamed["off_goal_paths"] == ["src/../app/escaped.py"]
+
+
 def test_progress_closes_real_plan_and_empty_routes():
     from lokay.proc.classify_real_diff_progress import classify
 
