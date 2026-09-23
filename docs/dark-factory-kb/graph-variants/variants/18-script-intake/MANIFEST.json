@@ -1,0 +1,76 @@
+{
+  "slug": "18-script-intake",
+  "persona": "script-first pragmatic — intake = pure scripts (list → filter labeled → pick one); agent never chooses work; optional tiny plan only after pick",
+  "approach": "from_scratch",
+  "confidence": 88,
+  "hard_rules": [
+    "intake_is_100pct_DET",
+    "agent_never_chooses_work",
+    "no_LLM_before_pick",
+    "optional_tiny_plan_only_after_pick",
+    "plan_cannot_change_issue_id",
+    "K1_one_ticket_one_PR",
+    "label_ready_for_agent_is_start",
+    "underspecified_skip_not_enrich",
+    "coder_ceiling_open_PR",
+    "reviewer_separate_from_implementer"
+  ],
+  "stages": [
+    "list_issues",
+    "filter_labeled",
+    "pick_one_k1",
+    "optional_tiny_plan",
+    "implement",
+    "commit_push_open_pr",
+    "critical_review",
+    "merge_det"
+  ],
+  "intake": {
+    "mode": "pure_scripts",
+    "atoms": [
+      "pm_auth",
+      "list_open_issues",
+      "filter_labeled",
+      "pick_one_k1",
+      "assert_acceptance",
+      "normalize_facts",
+      "branch_name",
+      "worktree_add"
+    ],
+    "llm": false,
+    "agent_pick": false
+  },
+  "optional_plan": {
+    "default": "skip",
+    "position": "after_pick",
+    "leaf": "tiny_plan_so",
+    "schema_ok": ["goal", "files", "test_command", "non_goals", "stop_if"],
+    "schema_fail_reasons": ["underspecified", "too_large", "dangerous"]
+  },
+  "subgraphs": [
+    "subgraph-script-intake.md",
+    "subgraph-optional-plan.md",
+    "subgraph-implement-ship.md",
+    "subgraph-review-merge.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-script-intake.md",
+      "subgraph-optional-plan.md",
+      "subgraph-implement-ship.md",
+      "subgraph-review-merge.md"
+    ],
+    "intake_authority": "DET_scripts",
+    "agent_chooses_work": false
+  },
+  "invariants": [
+    "intake_never_calls_llm",
+    "pick_is_stable_script_not_agent_preference",
+    "plan_leaf_forbidden_before_pick",
+    "no_labeled_means_idle_not_find_similar",
+    "frozen_issue_id_after_intake",
+    "meat_equiv_ai_same_agent_seats",
+    "not_L5"
+  ]
+}

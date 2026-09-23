@@ -1,0 +1,76 @@
+{
+  "slug": "27-elasticclaw",
+  "persona": "elasticclaw-compose — ElasticClaw control plane: workflow YAML stages own the spine; OpenClaw agents are sandbox leaves only (Daytona/CMX/exe.dev + scoped GH App)",
+  "approach": "compose",
+  "confidence": 78,
+  "inspired_by": [
+    "elasticclaw/elasticclaw",
+    "elasticclaw.ai docs — workflows / stages / plan_gate",
+    "examples/workflows/linear-issue.yaml",
+    "dark-factory-kb/instances/elasticclaw",
+    "SPINE_INDEX spine_deterministic",
+    "WAVE1_MILLS elasticclaw control-plane",
+    "OpenClaw workers as sandbox leaves"
+  ],
+  "shape_map": {
+    "Mdiamond": "trigger_match_start",
+    "Msquare": "cleanup_terminal",
+    "parallelogram": "DET_hub_on_enter_run_gate",
+    "diamond": "stage_trigger_hub_owned",
+    "box": "sandbox_openclaw_leaf",
+    "hexagon": "plan_gate_or_merge_policy"
+  },
+  "fixed_pipeline": [
+    "workflow_yaml",
+    "hub_det_stages",
+    "sandbox_agent_leaf",
+    "lifecycle_cleanup"
+  ],
+  "elasticclaw": {
+    "control_plane": "ElasticClaw Server (single-binary Go): API, UI, lifecycle state",
+    "orchestrator": "workflow YAML stages under .elasticclaw/workflows/",
+    "orchestration_tokens": 0,
+    "hub_owned": [
+      "pr_merged",
+      "pr_closed",
+      "pr_conditions",
+      "gate_result",
+      "output_matches",
+      "run",
+      "gate",
+      "move_issue",
+      "add_labels",
+      "remove_labels",
+      "merge_pr",
+      "skip_if",
+      "plan_gate"
+    ],
+    "sandbox_providers": ["daytona", "replicated_cmx", "exe.dev"],
+    "agent_runtime": "OpenClaw inside provisioned sandbox",
+    "creds": "GitHub App → temporary installation tokens per agent",
+    "llm_placement": "sandbox leaf only — inject + optional judge; never stage router",
+    "not": "agent as control-plane brain / chat-pick next stage"
+  },
+  "invariants": [
+    "control_plane_owns_next_stage",
+    "workflow_yaml_is_program",
+    "hub_owned_triggers_and_gates_are_det",
+    "openclaw_agent_only_as_sandbox_leaf",
+    "no_llm_as_stage_router",
+    "scoped_github_app_creds_not_broad_pat",
+    "sandbox_ephemeral_cleanup_after_terminal",
+    "plan_gate_schema_not_chat_double_approve",
+    "coder_ceiling_is_open_pr",
+    "one_ticket_one_sandbox_run",
+    "concurrency_group_limits_parallel",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_openclaw_as_orchestrator"
+  ],
+  "subgraphs": [
+    "subgraph-workflow-yaml.md",
+    "subgraph-hub-det-stages.md",
+    "subgraph-sandbox-agent-leaf.md",
+    "subgraph-lifecycle-cleanup.md"
+  ]
+}

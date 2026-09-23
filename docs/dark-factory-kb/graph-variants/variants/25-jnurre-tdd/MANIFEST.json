@@ -1,0 +1,100 @@
+{
+  "slug": "25-jnurre-tdd",
+  "persona": "jnurre-tdd-fsm compose — label-driven GHA FSM: triage → plan HITL → TDD implement → adversarial review → PR (+ revision / cleanup)",
+  "approach": "compose_jnurre_tdd",
+  "confidence": 84,
+  "inspired_by": [
+    "jnurre64/sandbox-pal-action",
+    "dark-factory-kb/instances/jnurre64-sandbox-pal-action",
+    "WAVE_E sandbox-pal agent-pipeline",
+    "09-label-fsm",
+    "KLEPACZ.md",
+    "WORKING_KLEPACZ_GRAPH.md"
+  ],
+  "reused_patterns": [
+    "label_driven_gha_dispatch",
+    "agent_label_vocabulary",
+    "plan_hitl_approve_label",
+    "tdd_gate_AGENT_TEST_COMMAND",
+    "fresh_worktree_sandbox",
+    "adversarial_review_loop",
+    "revision_label_circuit_breaker",
+    "coder_ceiling_pr_open",
+    "post_merge_cleanup",
+    "self_hosted_runner_bot_pat"
+  ],
+  "label_vocabulary": [
+    "agent",
+    "agent:implement",
+    "agent:needs-info",
+    "agent:plan-approved",
+    "agent:pr-open",
+    "agent:revision",
+    "agent:review-unresolved"
+  ],
+  "fsm_stages": [
+    "triage",
+    "plan",
+    "tdd",
+    "review",
+    "pr"
+  ],
+  "invariants": [
+    "issues_labeled_is_impulse",
+    "only_gha_or_dispatch_flips_labels",
+    "agents_fill_slots_never_route",
+    "plan_requires_hitl_or_policy_approve",
+    "AGENT_TEST_COMMAND_gate_before_pr",
+    "adversarial_reviewer_separate_from_implementer",
+    "revision_cap_circuit_breaker",
+    "coder_ceiling_is_pr_open",
+    "merge_is_human_or_policy_not_agent",
+    "post_merge_cleanup_required",
+    "meat_equals_ai_same_slot",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "executor": "github_actions",
+  "triggers": [
+    "issues:labeled",
+    "pull_request_review:submitted",
+    "pull_request:merged"
+  ],
+  "agent_runtime": [
+    "claude_code_cli_default",
+    "named_dispatch_profiles_claude_codex_hybrid"
+  ],
+  "sandbox": {
+    "runner": "self_hosted",
+    "worktree": true,
+    "scripts_dir": ".sandbox-pal-dispatch/",
+    "auth": "bot_pat"
+  },
+  "subgraphs": [
+    "subgraph-label-dispatch.md",
+    "subgraph-triage-plan.md",
+    "subgraph-tdd-implement.md",
+    "subgraph-adversarial-review.md",
+    "subgraph-pr-cleanup.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-label-dispatch.md",
+      "subgraph-triage-plan.md",
+      "subgraph-tdd-implement.md",
+      "subgraph-adversarial-review.md",
+      "subgraph-pr-cleanup.md"
+    ],
+    "trigger": "issues:labeled (agent*) + PR review/merge events",
+    "state_store": "github_issue_pr_labels",
+    "advance_authority": "GHA_sandbox_pal_dispatch_only",
+    "agent_seat": "Claude_Code_or_Codex_leaf_slots",
+    "tdd_gate": "AGENT_TEST_COMMAND",
+    "coder_ceiling": "agent:pr-open",
+    "escape": "agent:needs-info | agent:review-unresolved",
+    "merge_authority": "human_default_Off"
+  }
+}

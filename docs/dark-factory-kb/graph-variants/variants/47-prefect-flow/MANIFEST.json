@@ -1,0 +1,111 @@
+{
+  "slug": "47-prefect-flow",
+  "persona": "prefect-flow compose — Prefect @flow/@task DET spine; Deployment from labeled issue; LLM @task only plan/impl; artifacts + PR ceiling",
+  "approach": "compose",
+  "confidence": 91,
+  "inspired_by": [
+    "Prefect 2/3 @flow @task",
+    "Prefect Deployments + automation triggers",
+    "Prefect create_markdown_artifact / create_link_artifact",
+    "Prefect task retries + result persistence / caching",
+    "15-durable-steps (Temporal dual — this variant is Prefect-only)",
+    "31-inngest-steps (event+step dual — Prefect Deployment analog)",
+    "klepacz SOUL ticket→PR",
+    "WAVE3_DETERMINISTIC Prefect / durable workflow row"
+  ],
+  "shape_map": {
+    "Mdiamond": "deployment_trigger_labeled_issue",
+    "Msquare": "done_pr_or_escalate",
+    "parallelogram": "DET_task",
+    "diamond": "DET_condition_budget",
+    "box": "LLM_task_plan_or_impl",
+    "hexagon": "HITL_artifact_review_merge"
+  },
+  "fixed_pipeline": [
+    "flow_spine",
+    "task_det",
+    "task_llm_plan_impl",
+    "artifacts_pr_ceiling"
+  ],
+  "prefect": {
+    "orchestrator": "@flow klepacz_ticket_to_pr(issue_id) — DET body calls @task",
+    "unit": "@task with retries / cache_key_fn / persist_result",
+    "trigger": "Deployment + Automation on issues.labeled ready-for-agent",
+    "checkpoint": "task result store + flow-run state",
+    "retry_unit": "failed @task only",
+    "llm_placement": "inside plan_issue / implement @task only — never @flow body router",
+    "artifacts": [
+      "create_markdown_artifact(plan)",
+      "create_markdown_artifact(impl_receipt)",
+      "create_link_artifact(pr_url)"
+    ],
+    "coder_ceiling": "open_pr @task — no merge in LLM tasks",
+    "hitl": ["flow pause / wait for approval", "MergePolicy Off|Classify|Always"],
+    "primitives": [
+      "@flow",
+      "@task",
+      "Deployment",
+      "Automation",
+      "create_markdown_artifact",
+      "create_link_artifact",
+      "pause_flow_run / resume",
+      "task retries",
+      "persist_result"
+    ]
+  },
+  "llm_tasks_only": ["plan_issue", "implement"],
+  "det_only": [
+    "hydrate_issue",
+    "claim_one_k1",
+    "worktree_branch",
+    "run_tests",
+    "commit_push",
+    "open_pr",
+    "emit_artifacts",
+    "merge_policy",
+    "pause_for_human"
+  ],
+  "invariants": [
+    "flow_body_is_deterministic",
+    "no_llm_in_flow_body",
+    "llm_tasks_only_plan_and_implement",
+    "no_llm_review_as_merge_judge",
+    "retries_are_task_scoped",
+    "deployment_from_labeled_issue_not_chat_pick",
+    "artifacts_are_observability_not_router",
+    "coder_ceiling_is_open_pr",
+    "no_agent_routing",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always",
+    "not_l5",
+    "not_alias_of_15_or_31"
+  ],
+  "budgets": {
+    "occupancy_k": 1,
+    "impl_repair_n": 3,
+    "task_retries": 2,
+    "flow_run_timeout_h": 24
+  },
+  "merge_policy": ["Off", "Classify", "Always"],
+  "default_merge_policy": "Off",
+  "subgraphs": [
+    "subgraph-flow-spine.md",
+    "subgraph-task-det.md",
+    "subgraph-task-llm.md",
+    "subgraph-artifacts-pr.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-flow-spine.md",
+      "subgraph-task-det.md",
+      "subgraph-task-llm.md",
+      "subgraph-artifacts-pr.md"
+    ],
+    "phase_machine": "label→deployment→flow→det_tasks→llm_plan_impl→artifacts→open_pr→hitl",
+    "orchestrator": "prefect_flow_DET",
+    "react": false,
+    "ticket_to_pr": true
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "slug": "45-gha-native",
+  "persona": "gha-native compose — GitHub Actions is the program: issue_comment|workflow_dispatch → jobs plan|code|test|pr; artifacts between jobs; merge via gh + policy",
+  "approach": "compose",
+  "confidence": 90,
+  "inspired_by": [
+    "GitHub Actions jobs + needs + artifacts",
+    "actions/upload-artifact + actions/download-artifact",
+    "gh pr create / gh pr merge",
+    "issue_comment slash commands",
+    "workflow_dispatch inputs",
+    "KLEPACZ.md Merge Off|Classify|Always",
+    "WORKING_KLEPACZ_GRAPH.md",
+    "23-claude-action",
+    "38-dryvist-gha",
+    "13-merge-policy",
+    "09-label-fsm"
+  ],
+  "reused_patterns": [
+    "issue_comment_slash_or_dispatch_trigger",
+    "fixed_gha_jobs_spine",
+    "needs_chain_plan_code_test_pr",
+    "upload_download_artifact_handoff",
+    "agent_only_inside_plan_or_code_steps",
+    "coder_ceiling_open_pr",
+    "gh_cli_merge_with_policy",
+    "merge_policy_off_classify_always",
+    "det_majority_agent_only_leaves",
+    "k1_branch_per_issue"
+  ],
+  "invariants": [
+    "issue_comment_or_dispatch_is_start_not_chat_pick",
+    "yaml_jobs_are_fixed_det_spine",
+    "llm_does_not_add_jobs_or_needs",
+    "artifacts_are_only_handoff_between_jobs",
+    "plan_artifact_feeds_code",
+    "code_artifact_feeds_test",
+    "test_artifact_feeds_pr",
+    "agent_only_in_plan_and_or_code_steps",
+    "test_job_is_det_or_script_not_llm_judge",
+    "coder_ceiling_is_open_pr",
+    "merge_only_via_gh_plus_policy",
+    "agent_does_not_pick_work",
+    "agent_does_not_route_graph",
+    "det_majority_agent_only_leaves",
+    "meat_equals_ai_same_role",
+    "subgraphs_not_monolith",
+    "not_l5"
+  ],
+  "merge_policy": [
+    "Off",
+    "Classify",
+    "Always"
+  ],
+  "default_merge_policy": "Off",
+  "trigger": {
+    "events": [
+      "issue_comment.created (/klepacz|/plan|/do)",
+      "workflow_dispatch (issue_number + policy inputs)"
+    ],
+    "comment_examples": [
+      "/klepacz",
+      "/plan",
+      "/do",
+      "/klepacz plan",
+      "/klepacz do #N"
+    ]
+  },
+  "jobs": [
+    "plan",
+    "code",
+    "test",
+    "pr"
+  ],
+  "artifacts": {
+    "plan": "plan.json / plan.md",
+    "code": "patch.diff / branch ref",
+    "test": "junit.xml / test-report.md",
+    "pr": "pr-url.txt / pr-number"
+  },
+  "branch_convention": "klepacz/issue-N",
+  "merge_via": "gh pr merge --auto|--squash (gated by MergePolicy)",
+  "subgraphs": [
+    "subgraph-trigger.md",
+    "subgraph-plan.md",
+    "subgraph-code.md",
+    "subgraph-test.md",
+    "subgraph-pr-gh-policy.md"
+  ],
+  "compose": {
+    "top": "README.md",
+    "chain": [
+      "subgraph-trigger.md",
+      "subgraph-plan.md",
+      "subgraph-code.md",
+      "subgraph-test.md",
+      "subgraph-pr-gh-policy.md"
+    ],
+    "trigger": "issue_comment|/klepacz|workflow_dispatch → GHA",
+    "spine": "fixed_jobs_needs_artifacts",
+    "jobs": "plan|code|test|pr",
+    "handoff": "upload-artifact → download-artifact",
+    "agent_seat": "plan_step_and_or_code_step_leaves",
+    "branch": "klepacz/issue-N",
+    "coder_ceiling": "open_pr",
+    "merge_authority": "gh_cli_plus_DET_merge_policy_or_human"
+  }
+}

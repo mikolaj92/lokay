@@ -1,0 +1,54 @@
+{
+  "slug": "15-durable-steps",
+  "persona": "durable-steps compose — Temporal/Inngest: DET Workflow + step/Activity retries; LLM inside one step, never the router",
+  "approach": "compose",
+  "confidence": 92,
+  "inspired_by": [
+    "temporal-workflow-spine (P2.1)",
+    "inngest-step-functions",
+    "Temporal Event History / continue-as-new",
+    "Inngest step.run + step.waitForEvent",
+    "Cursor Cloud Agents Temporal durability (ops proof)",
+    "WAVE3_DETERMINISTIC Temporal row"
+  ],
+  "shape_map": {
+    "Mdiamond": "start_workflow",
+    "Msquare": "done",
+    "parallelogram": "DET_step_activity",
+    "diamond": "DET_condition_budget",
+    "box": "LLM_inside_one_step",
+    "hexagon": "HITL_waitForEvent_signal"
+  },
+  "fixed_pipeline": [
+    "workflow_spine",
+    "det_steps",
+    "llm_activity",
+    "hitl_wait"
+  ],
+  "durable": {
+    "orchestrator": ["Temporal Workflow", "Inngest function"],
+    "checkpoint": "Event History / step memoization",
+    "retry_unit": "failed step/Activity only",
+    "llm_placement": "inside one Activity or step.run — not graph router",
+    "hitl": ["Workflow signal/update", "step.waitForEvent"]
+  },
+  "invariants": [
+    "workflow_body_is_deterministic",
+    "no_llm_in_workflow_body",
+    "llm_inside_one_step_only",
+    "retries_are_step_scoped",
+    "event_history_is_source_of_truth",
+    "no_agent_routing",
+    "coder_ceiling_is_open_pr",
+    "reviewer_separate_from_implementer",
+    "one_ticket_one_pr",
+    "merge_policy_off_classify_always",
+    "not_l5"
+  ],
+  "subgraphs": [
+    "subgraph-workflow-spine.md",
+    "subgraph-det-steps.md",
+    "subgraph-llm-activity.md",
+    "subgraph-hitl-wait.md"
+  ]
+}
