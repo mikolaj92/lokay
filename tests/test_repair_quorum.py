@@ -13,6 +13,13 @@ def test_one_failure_keeps_factory_running():
     assert classify(receipt(1))["route"] == "factory"
 
 
+def test_no_ready_work_stays_in_the_factory():
+    """A pass with nothing ready is not a stall to repair."""
+    rows = [receipt(n, remaining={"ready": 0}) for n in range(5, 0, -1)]
+    out = classify(rows[0], history=rows)
+    assert out["route"] == "factory" and out["reason"] == "nothing_ready"
+
+
 def test_four_matching_failures_in_five_distinct_passes_repair():
     rows = [receipt(n) for n in range(5, 0, -1)]
     rows[2] = receipt(3, health="waiting")
