@@ -62,13 +62,10 @@ HOST_STACK_FORK = re.compile(
     """
 )
 
-# Current immutable upstream COMPAT row. Only app-factory is installed because
-# the local status host has no identity routes.
-COMPAT_BOM = {
-    "app-factory": "v0.6.22",
-    "my-auth": "v0.4.8",
-    "my-usermanager": "v0.5.11",
-}
+# Host pin, not the current COMPAT row. Lokay installs only app-factory.
+# The upstream current row is newer (see docs/PLATFORM_UI.md). Bumping this
+# floor is a separate change; do not pretend the host pin is current COMPAT.
+HOST_APP_FACTORY = "v0.6.22"
 
 
 def _iter_files(globs: tuple[str, ...]) -> list[Path]:
@@ -100,30 +97,33 @@ def test_platform_ui_binding_doc_exists():
         "Alpine",
         "COMPAT",
         "v0.6.22",
-        "v0.4.8",
-        "v0.5.11",
+        "v0.7.7",
+        "host pin",
+        "not installed",
         "Same-origin",
         "CDN",
     ):
         assert needle in text, f"docs/PLATFORM_UI.md missing rule text: {needle}"
 
 
-def test_compat_bom_pins_documented():
-    """Document the exact immutable COMPAT row used by the status host."""
+def test_host_pin_is_documented_separately_from_current_compat():
+    """The installed tag is a host floor. Docs must not call it current COMPAT."""
     doc = (DOCS / "PLATFORM_UI.md").read_text(encoding="utf-8")
-    for package, tag in COMPAT_BOM.items():
-        assert package in doc, f"COMPAT pin package missing: {package}"
-        assert tag in doc, f"COMPAT pin tag missing for {package}: {tag}"
-    # Do not recommend floating main for production host auth packages.
-    assert 'branch = "main"' not in doc or "Do not float" in doc or "not float" in doc.lower()
+    assert HOST_APP_FACTORY in doc
+    assert "host pin" in doc
+    assert "not installed" in doc
+    assert "v0.7.7" in doc
+    for stale in ("v0.4.8", "v0.5.11", "v0.5.31"):
+        assert stale not in doc
+    assert 'branch = "main"' not in doc or "not float" in doc.lower()
 
 
-def test_status_host_pins_current_app_factory_tag():
+def test_status_host_pins_app_factory_floor():
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     source = pyproject["tool"]["uv"]["sources"]["app-factory"]
     assert source == {
         "git": "https://github.com/mikolaj92/app-factory.git",
-        "tag": COMPAT_BOM["app-factory"],
+        "tag": HOST_APP_FACTORY,
     }
 
 
