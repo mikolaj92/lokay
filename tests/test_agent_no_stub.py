@@ -55,17 +55,17 @@ def test_pi_argv_uses_session_id_not_session():
         "pi",
         "-p",
         "implement issue",
-        "--model",
-        "omniroute/pi",
         "--approve",
         "--session-id",
         argv[-1],
     ]
+    assert "--model" not in argv
     assert argv[-2] == "--session-id"
     assert argv[-1].startswith("lokay-")
 
 
-def test_optional_model_in_template_when_set():
+def test_model_stays_with_the_harness_even_when_configured():
+    """executor.model never reaches argv. The harness picks its own model."""
     cfg = Config(
         agent="alt",
         agent_command="alt-agent",
@@ -73,7 +73,8 @@ def test_optional_model_in_template_when_set():
         agent_args=list(ALT_ARGS),
     )
     argv = build_agent_argv(cfg, worktree=Path("/tmp/wt"), prompt="x")
-    assert argv[argv.index("--model") + 1] == "some-model"
+    assert "--model" not in argv
+    assert "some-model" not in argv
 
 
 def test_empty_model_drops_flag_pair():

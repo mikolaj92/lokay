@@ -30,6 +30,9 @@ def coding_profile(*, worktree: Path, scratch: Path, executable: Path | None) ->
         f'(allow file-read* (subpath "{runtime}"))',
     ] if executable else []
     gitconfig = Path.home() / ".gitconfig"
+    # The harness reads its own model catalog and credentials from its home.
+    # Lokay does not supply either, so the seatbelt only grants the read.
+    harness_state = Path.home() / ".pi"
     # Local git (commit inside the worktree) is an edit. Publication is not:
     # network stays on localhost, so push/fetch have no route out.
     return "\n".join([
@@ -39,6 +42,7 @@ def coding_profile(*, worktree: Path, scratch: Path, executable: Path | None) ->
         *harness,
         f'(allow file-read* (subpath "{ancestors}"))',
         *( [f'(allow file-read* (literal "{_path(gitconfig)}"))'] if gitconfig.is_file() else [] ),
+        *( [f'(allow file-read* (subpath "{_path(harness_state)}"))'] if harness_state.is_dir() else [] ),
         '(allow process-exec (subpath "/usr/bin"))',
         '(allow process-exec (subpath "/bin"))',
         '(allow process-exec (subpath "/usr/local/bin"))',
