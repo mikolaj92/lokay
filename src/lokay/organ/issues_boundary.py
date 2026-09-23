@@ -32,7 +32,9 @@ def handle_issues(
     if atom == "issues_run_triage":
         from lokay.proc.run_issue_triage_subflow import run
 
-        return run(up.get("select_next_issue") or {}, config_path=config)
+        return run(
+            up.get("select_next_issue") or {}, config_path=config, live=live
+        )
     if atom == "select_issue_executor":
         from lokay.config import department_enabled, load_config
         from lokay.proc.select_issue_executor import select
@@ -60,5 +62,6 @@ def handle_issues(
         return launch(
             up.get("select_issue_executor") or {},
             config_path=config,
+            live=live,
         )
     return None

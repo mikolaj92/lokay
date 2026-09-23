@@ -11,6 +11,7 @@ def handle_implementation_dispatch(
 ) -> dict[str, Any] | None:
     pass_dir = str(inputs.get("pass_dir") or "")
     config = str(inputs.get("config_path") or "") or None
+    live = bool(inputs.get("live"))
     if atom == "select_implementation_candidate":
         from lokay.proc.select_implementation_candidate import select
 
@@ -52,7 +53,9 @@ def handle_implementation_dispatch(
     if atom == "launch_issue_to_pr":
         from lokay.proc.launch_issue_to_pr import launch
 
-        return launch(up.get("select_ready_outcome") or {}, config_path=config)
+        return launch(
+            up.get("select_ready_outcome") or {}, config_path=config, live=live
+        )
     if atom == "keep_busy_launch":
         from lokay.proc.keep_busy_launch import apply
 

@@ -89,9 +89,9 @@ def test_prepare_resumes_cursor_without_rescanning(tmp_path: Path):
     assert out["spent"] == 5
 
 
-def test_slot_one_always_runs_even_on_zero_budget():
+def test_slot_one_skips_when_budget_is_zero():
     prepared = {"ok": True, "budget": 0}
-    assert select_slot(prepared, {}, slot=1)["route"] == "run"
+    assert select_slot(prepared, {}, slot=1)["route"] == "empty"
     assert select_slot(prepared, {"route": "continue"}, slot=2)["route"] == "empty"
 
 
