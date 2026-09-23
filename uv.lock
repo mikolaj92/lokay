@@ -190,11 +190,6 @@ dev = [
     { name = "pytest" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "httpx2" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "app-factory", extras = ["platform"], git = "https://github.com/mikolaj92/app-factory.git?tag=v0.6.22" },
@@ -206,9 +201,6 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.52.4" },
 ]
 provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "httpx2", specifier = ">=2.12.0" }]
 
 [[package]]
 name = "markupsafe"

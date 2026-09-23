@@ -135,17 +135,13 @@ lokay-select-release-action = "lokay.proc.select_release_action:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[dependency-groups]
-dev = [
-    "httpx2>=2.12.0",
-]
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/lokay"]
 
 [tool.lokay]
 # Repository-declared local verifier for lokay-test-local. Missing this table
-# is an honest skip — the lokay must not invent `uv run --extra dev pytest`.
+# is an honest skip — the lokay must not invent a test command for a checkout
+# that has none. This repo's own verifier is the dev extra below.
 test = ["uv", "run", "--extra", "dev", "pytest", "-q"]
 
 [tool.pytest.ini_options]
