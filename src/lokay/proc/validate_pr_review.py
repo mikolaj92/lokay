@@ -40,9 +40,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
     if not isinstance(engine, Mapping) or not isinstance(requested_engine, Mapping):
         return err("review engine identity is missing", route="fail_closed")
     if (
-        engine.get("name") != "open-code-review"
-        or engine.get("version") != "v1.12.7"
-        or engine.get("binary_sha256") != requested_engine.get("binary_sha256")
+        engine.get("binary_sha256") != requested_engine.get("binary_sha256")
         or engine.get("provider") != requested_engine.get("provider")
         or engine.get("model") != requested_engine.get("model")
         or engine.get("config_sha256") != request.get("review_config_sha256")
@@ -84,7 +82,8 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
     if not isinstance(evidence, Mapping) or not isinstance(coverage, Mapping):
         return err("review evidence or coverage is missing", route="fail_closed")
     if (
-        evidence.get("manifest_schema") != "ocr.run-manifest/v1"
+        not isinstance(evidence.get("manifest_schema"), str)
+        or not evidence.get("manifest_schema")
         or evidence.get("tool_failure_count") != 0
         or evidence.get("resolved_head_sha") != request.get("head_sha")
         or evidence.get("resolved_base_sha") != request.get("comparison_base_sha")

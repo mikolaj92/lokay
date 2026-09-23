@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -186,11 +188,11 @@ def test_sandboxed_review_can_git_grep_changed_file(tmp_path: Path, monkeypatch)
     repo = Path(request["repo_path"])
     (repo / "file.py").write_text("review me\n")
     subprocess.run(
-        ["/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo), "init", "-q"],
+        ["git", "-C", str(repo), "init", "-q"],
         check=True,
     )
     subprocess.run(
-        ["/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo), "add", "file.py"],
+        ["git", "-C", str(repo), "add", "file.py"],
         check=True,
         env={"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"},
     )
@@ -200,17 +202,19 @@ def test_sandboxed_review_can_git_grep_changed_file(tmp_path: Path, monkeypatch)
     argv = build_ocr_argv(
         request, background=home / "background.md", preview=False, provider_proxy_port=43127,
     )
+    from lokay_review_open_code_review.git_evidence import _git_binary
+
+    git_bin = _git_binary()
     result = subprocess.run(
         [
             "/usr/bin/sandbox-exec", "-f", argv[2], "--",
-            "/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo),
+            git_bin, "-C", str(repo),
             "grep", "-n", "review me", "--", "file.py",
         ],
         capture_output=True,
         env={
             "HOME": str(home),
-            "PATH": "/Library/Developer/CommandLineTools/usr/bin:/usr/bin:/bin",
-            "DEVELOPER_DIR": "/Library/Developer/CommandLineTools",
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": "/dev/null",
             "GIT_TERMINAL_PROMPT": "0",
@@ -266,8 +270,8 @@ def test_runtime_uses_same_git_binary_as_independent_checkout_verifier(tmp_path:
     import lokay_review_open_code_review.git_evidence as evidence
     import lokay_review_open_code_review.cli as cli
 
-    monkeypatch.setattr(cli.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/git")
-    monkeypatch.setattr(evidence.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/git")
+    monkeypatch.setattr(cli.shutil, "which", lambda *_args, **_kwargs: "/opt/homebrew/bin/git")
+    monkeypatch.setattr(evidence.shutil, "which", lambda *_args, **_kwargs: "/opt/homebrew/bin/git")
     monkeypatch.setattr(evidence.os.path, "isfile", lambda _path: True)
     monkeypatch.setattr(evidence.os, "access", lambda _path, _mode: True)
     request = _request(tmp_path)
@@ -278,8 +282,11 @@ def test_runtime_uses_same_git_binary_as_independent_checkout_verifier(tmp_path:
     cli.build_ocr_argv(request, background=home / "background.md", preview=True)
 
     profile = (home / "review.sb").read_text()
-    assert evidence._git_binary() == evidence._FALLBACK_GIT
-    assert evidence._FALLBACK_GIT in profile
+    git_bin = evidence._git_binary()
+    assert git_bin == "/opt/homebrew/bin/git"
+    assert git_bin in profile
+    assert "Xcode-beta" not in profile
+    assert "CommandLineTools" not in profile
 
 
 def test_preview_uses_same_scope_and_never_claims_runtime_validation(tmp_path: Path):
@@ -328,24 +335,27 @@ def test_sandboxed_process_can_read_repo_with_git_but_cannot_write_or_exec_unapp
     repo.mkdir()
     home.mkdir(mode=0o700)
     home.chmod(0o700)
-    subprocess.run(["/Library/Developer/CommandLineTools/usr/bin/git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
     (repo / "change.txt").write_text("review me")
     profile = tmp_path / "git.sb"
+    from lokay_review_open_code_review.git_evidence import _git_binary, _git_runtime_paths
+
+    git_bin = _git_binary()
     profile.write_text(review_profile(
         repository=repo, home=home, provider_endpoint_host="localhost:55555",
-        git_executable="/Library/Developer/CommandLineTools/usr/bin/git",
-        git_runtime_paths=("/Library/Developer/CommandLineTools",),
-        allowed_executables=("/Library/Developer/CommandLineTools/usr/bin/git",),
+        git_executable=git_bin,
+        git_runtime_paths=_git_runtime_paths(git_bin),
+        allowed_executables=(git_bin,),
     ))
     env = {
-        "HOME": str(home), "PATH": "/usr/bin:/bin",
-        "DEVELOPER_DIR": "/Applications/Xcode-beta.app/Contents/Developer",
+        "HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
         "GIT_TERMINAL_PROMPT": "0",
     }
+    git_bin = _git_binary()
     status = subprocess.run(
         ["/usr/bin/sandbox-exec", "-f", str(profile), "--",
-         "/Library/Developer/CommandLineTools/usr/bin/git", "-C", str(repo), "status", "--porcelain"],
+         git_bin, "-C", str(repo), "status", "--porcelain"],
         capture_output=True, env=env,
     )
     assert status.returncode == 0 and status.stdout.decode().strip() == "?? change.txt"
@@ -605,7 +615,9 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
     env = observed["env"]
     assert env["OCR_PROVIDER_KEY"] == "secret-key"
     assert env["GIT_PAGER"] == ""
-    assert env["PATH"].split(":", 1)[0] == "/Library/Developer/CommandLineTools/usr/bin"
+    assert "CommandLineTools" not in env["PATH"]
+    assert "Xcode-beta" not in env["PATH"]
+    assert "DEVELOPER_DIR" not in env
     assert "GH_TOKEN" not in env
     assert "LOKAY_HEALTH_LEASE" not in env
     assert env["HOME"] != str(Path.home())
@@ -613,17 +625,20 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
     assert observed["timeout"] == 60 * request["engine"]["timeout_minutes"] + 120
     runtime_profile = Path(observed["argv"][2])
     assert runtime_profile.parent == Path(observed["cwd"])
+    from lokay_review_open_code_review.git_evidence import _git_binary, _git_runtime_paths
+
+    git_bin = _git_binary()
     assert observed["profile"] == review_profile(
         repository=Path(request["repo_path"]),
         home=Path(observed["cwd"]),
         provider_endpoint_host=f"localhost:{int(env['HTTPS_PROXY'].rsplit(':', 1)[1])}",
-        git_executable="/Library/Developer/CommandLineTools/usr/bin/git",
-        git_runtime_paths=("/Library/Developer/CommandLineTools",),
+        git_executable=git_bin,
+        git_runtime_paths=_git_runtime_paths(git_bin),
         readable_files=(
             request["engine"]["rule_path"], request["engine"]["tools_path"],
             request["engine"]["ocr_config_path"],
         ),
-        allowed_executables=(request["engine"]["binary_path"], "/usr/bin/grep"),
+        allowed_executables=(request["engine"]["binary_path"], git_bin, "/usr/bin/grep"),
     )
 
     def fail_run(*_args, **_kwargs):

@@ -417,3 +417,12 @@ def test_review_agent_archives_redacted_vendor_warnings_on_contract_reject(monke
     payload = json.loads(artifacts[0].read_text())
     assert payload["schema"] == "lokay.review-rejection/1"
     assert payload["warnings"] == [{"type": "token_budget_reached", "file": "src/demo.py"}]
+
+
+def test_host_accepts_a_neutral_engine_when_sha_and_coverage_match():
+    request, result = _result()
+    result["engine"]["name"] = "neutral-reviewer"
+    result["engine"]["version"] = "v9"
+    result["evidence"]["manifest_schema"] = "neutral.run-manifest/v1"
+    selected = validate_result(result, request)
+    assert selected["route"] == "valid"
