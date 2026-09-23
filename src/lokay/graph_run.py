@@ -62,33 +62,15 @@ _PR_JOURNAL_FAMILIES = {
 }
 
 
-_REVIEW_PATH_IDS = frozenset({"pr_triage", "pr_repair"})
-
-
 @contextmanager
 def _review_credential_scope(*, path_id: str, live: bool):
-    """Resolve the review credential only around the Fala host snapshot.
+    """Do not resolve the review credential around the host snapshot.
 
-    Fala receives the host environment and later materializes only the
-    adapter's declared ``inherit_env``.  Keep the resolver result out of the
-    process until a live review path is actually being driven, and restore the
-    caller environment even when Fala raises.
+    The invoked review adapter resolves its own provider key. Cache hits
+    and CI-only reviews never reach that boundary.
     """
-    if not live or path_id not in _REVIEW_PATH_IDS:
-        yield
-        return
-    from lokay.pr_review_credential import resolve_pi_api_key
-
-    previous = os.environ.get("OCR_LLM_API_KEY")
-    credential = resolve_pi_api_key()
-    os.environ["OCR_LLM_API_KEY"] = credential
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("OCR_LLM_API_KEY", None)
-        else:
-            os.environ["OCR_LLM_API_KEY"] = previous
+    del path_id, live
+    yield
 
 
 def issue_journal_dir(
@@ -372,8 +354,7 @@ def run_path(
         # be hundreds of kilobytes and must not leak into the daemon log.
         with _review_credential_scope(path_id=path_id, live=live):
             # Fala requires every declared optional capability key to exist.
-            # For non-review paths this is an empty declaration; the review
-            # scope has already installed the resolved value when applicable.
+            # The value stays empty until the review adapter resolves its own.
             os.environ.setdefault("OCR_LLM_API_KEY", "")
             with open(os.devnull, "w", encoding="utf-8") as sink, redirect_stdout(sink):
                 result = host_run_package(
