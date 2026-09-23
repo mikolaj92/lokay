@@ -1,131 +1,92 @@
 """Canonical hermetic chaos acceptance over authored Fala path identities."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
+import os
+import subprocess
+import sys
+import tomllib
 from pathlib import Path
 
-import tomllib
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@dataclass
-class World:
-    issue_open: bool = True
-    merged_on_main: bool = False
-    checks: str = "pending"
-    review: str = ""
-    main_generation: int = 0
-    worker_crashed: bool = False
-    local_green: bool = False
-    pr: int | None = None
-    effects: dict[str, int] = field(default_factory=dict)
+def _run(tmp_path, body: str, run_id: str, path_id: str) -> dict:
+    """Drive one authored path through native Fala with a stub effector."""
+    pytest.importorskip("fala")
+    effector = tmp_path / "effector.py"
+    effector.write_text(body)
+    from lokay.graph_run import _materialize_package
 
-    def effect(self, name: str) -> None:
-        self.effects[name] = self.effects.get(name, 0) + 1
-
-
-@dataclass
-class Work:
-    work_id: str = "mikolaj92/example#982"
-    session_id: str = "session:mikolaj92/example#982:implementer"
-    phase: str = "issue"
-    head_generation: int = 0
-
-
-class AuthoredPassFixture:
-    """A test world adapter; ordering remains the asserted authored Fala graph."""
-
-    def __init__(self, world: World, work: Work):
-        self.world, self.work = world, work
-
-    def run_path(self, path: str) -> str:
-        assert path in {"factory_pass", "issue_to_pr", "pr_triage", "pr_repair"}
-        if path == "factory_pass":
-            if self.work.phase in {"issue", "crashed", "red"}:
-                return self.run_path("issue_to_pr")
-            if self.work.phase == "changes":
-                return self.run_path("pr_repair")
-            return self.run_path("pr_triage")
-        if path == "issue_to_pr":
-            if self.work.phase == "issue":
-                self.world.worker_crashed = True
-                self.work.phase = "crashed"
-                return "worker_crashed"
-            if self.work.phase == "crashed":
-                self.world.worker_crashed = False
-                self.world.effect("commit")
-                self.work.phase = "red"
-                return "local_test_red"
-            self.world.local_green = True
-            self.world.effect("repair")
-            self.world.effect("push")
-            self.world.effect("pr")
-            self.world.pr = 1001
-            self.work.phase = "review"
-            return "pr_open"
-        if path == "pr_repair":
-            self.world.effect("review_comment")
-            self.world.effect("repair_push")
-            self.work.head_generation = self.world.main_generation
-            self.work.phase = "rebase"
-            return "new_sha"
-        if self.work.phase == "review":
-            self.world.review = "request_changes"
-            self.work.phase = "changes"
-            return "request_changes"
-        if self.work.phase == "rebase":
-            if self.work.head_generation != self.world.main_generation:
-                self.world.effect("rebase")
-                self.world.effect("repair_push")
-                self.work.head_generation = self.world.main_generation
-            self.world.checks = "success"
-            self.world.review = "approve"
-            self.work.phase = "green"
-            return "green_review"
-        if self.work.phase == "green":
-            assert self.world.local_green and self.world.checks == "success" and self.world.review == "approve"
-            self.world.effect("merge")
-            self.world.merged_on_main = True
-            self.world.effect("close")
-            self.world.issue_open = False
-            self.work.phase = "done"
-            return "done"
-        return self.work.phase
+    package = _materialize_package(
+        ROOT / "fala/lokay.fala-package.toml", tmp_path / "pkg.toml",
+        project=ROOT, path_id=path_id,
+    )
+    path = next(
+        item for item in tomllib.loads(package.read_text())["correlation_paths"]
+        if item["id"] == path_id
+    )
+    commands = {item["id"]: [sys.executable, str(effector)] for item in path["effectors"]}
+    script = (
+        "import fala,json,sys;print(json.dumps(fala.host_run_package("
+        "db_path=sys.argv[1],package_path=sys.argv[2],path_id=sys.argv[5],"
+        "run_id=sys.argv[4],command_overrides=json.loads(sys.argv[3]),max_ticks=64)))"
+    )
+    env = os.environ.copy()
+    env.pop("DYLD_LIBRARY_PATH", None)
+    env.pop("DYLD_FALLBACK_LIBRARY_PATH", None)
+    for key in (
+        "LOKAY_ROOT", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED",
+        "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH",
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PYTHONPATH", "OCR_LLM_API_KEY",
+    ):
+        env.setdefault(key, "")
+    run = subprocess.run(
+        [sys.executable, "-c", script, str(tmp_path / "db.sqlite"), str(package),
+         json.dumps(commands), run_id, path_id],
+        cwd=ROOT, env=env, capture_output=True, text=True,
+    )
+    assert run.returncode == 0, run.stderr
+    return json.loads(run.stdout.strip().splitlines()[-1])
 
 
-def test_issue_crash_repair_rebase_confirmed_merge_uses_authored_paths():
-    package = tomllib.loads((ROOT / "fala/lokay.fala-package.toml").read_text())
-    path_ids = {path["id"] for path in package["correlation_paths"]}
-    assert {"factory_pass", "issue_to_pr", "pr_triage", "pr_repair"} <= path_ids
-    fingerprint = __import__("hashlib").sha256((ROOT / "fala/lokay.fala-package.toml").read_bytes()).hexdigest()
-    world, work = World(), Work()
-    fixture = AuthoredPassFixture(world, work)
-
-    assert fixture.run_path("factory_pass") == "worker_crashed"
-    assert world.issue_open and not world.merged_on_main
-    identity = (fingerprint, work.work_id, work.session_id)
-    assert fixture.run_path("factory_pass") == "local_test_red"
-    assert (fingerprint, work.work_id, work.session_id) == identity
-    assert fixture.run_path("factory_pass") == "pr_open"
-    assert fixture.run_path("factory_pass") == "request_changes"
-    world.main_generation += 1
-    assert fixture.run_path("factory_pass") == "new_sha"
-    world.main_generation += 1
-    assert fixture.run_path("factory_pass") == "green_review"
-    assert fixture.run_path("factory_pass") == "done"
-
-    assert not world.issue_open and world.merged_on_main
-    assert world.effects == {"commit": 1, "repair": 1, "push": 1, "pr": 1, "review_comment": 1, "repair_push": 2, "rebase": 1, "merge": 1, "close": 1}
+def _effector(route: str) -> str:
+    return (
+        "import json\n"
+        "from fala.sdk import load_manifest, output, write_result\n"
+        "m=load_manifest(); a=str(dict(m.config).get('atom') or m.job)\n"
+        "v={'ok':True,'atom':a}\n"
+        f"if a=='resolve_existing_delivery': v['route']={route!r}\n"
+        "write_result(output(m, v))\n"
+    )
 
 
-def test_done_cannot_bypass_acceptance_review_or_merge_gates():
-    world, work = World(), Work(phase="green")
-    fixture = AuthoredPassFixture(world, work)
-    try:
-        fixture.run_path("factory_pass")
-    except AssertionError:
-        pass
-    else:
-        raise AssertionError("Done bypassed acceptance/review gates")
-    assert world.issue_open and not world.merged_on_main and "merge" not in world.effects
+def _fired(result: dict) -> set[str]:
+    """Nodes Fala actually dispatched and that succeeded. Not a hand counter."""
+    return {
+        name
+        for name, row in result["effector_results"].items()
+        if row.get("status") == "succeeded"
+    }
+
+
+def test_issue_to_pr_deliver_fires_the_subflow_not_the_closeout(tmp_path):
+    fired = _fired(_run(tmp_path, _effector("deliver"), "chaos-deliver", "issue_to_pr"))
+    assert "issue_to_pr_subflow" in fired
+    assert "close_existing_delivery" not in fired
+    assert "issue_to_pr_no_effect" not in fired
+
+
+def test_issue_to_pr_closeout_fires_only_the_closeout(tmp_path):
+    fired = _fired(_run(tmp_path, _effector("closeout"), "chaos-closeout", "issue_to_pr"))
+    assert "close_existing_delivery" in fired
+    assert "issue_to_pr_subflow" not in fired
+
+
+def test_issue_to_pr_no_effect_fires_nothing(tmp_path):
+    fired = _fired(_run(tmp_path, _effector("no_effect"), "chaos-none", "issue_to_pr"))
+    assert "issue_to_pr_no_effect" in fired
+    assert "issue_to_pr_subflow" not in fired
+    assert "close_existing_delivery" not in fired
