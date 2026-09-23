@@ -284,3 +284,41 @@ def decide_auto_merge(
         return blocked
 
     return AutoMergeDecision(action="merge", reason="approve_green", merge_ok=True)
+
+
+MergeMode = Literal["off", "classify", "always"]
+
+
+def decide_merge(
+    *,
+    mode: str = "off",
+    require_checks: bool = True,
+    checks: Mapping[str, Any] | None = None,
+    review: Mapping[str, Any] | None = None,
+) -> AutoMergeDecision:
+    """Apply one named merge mode. Off is the default and never merges.
+
+    Classify merges only a low-risk approval on green checks. Always merges
+    any approval on green checks, and still refuses a rejection or high-risk
+    classify hold. The mode picks; decide_auto_merge stays the matrix.
+    """
+    chosen = str(mode or "off").strip().lower()
+    if chosen not in {"off", "classify", "always"}:
+        raise ValueError(f"unknown merge mode: {mode!r}")
+    if chosen == "off":
+        return AutoMergeDecision(action="disabled", reason="merge_disabled", waiting=True)
+    reviewed = _as_mapping(review)
+    risk = str(
+        reviewed.get("risk") or _as_mapping(reviewed.get("decision")).get("risk") or "medium"
+    ).strip().lower()
+    if chosen == "classify" and risk != "low":
+        return AutoMergeDecision(
+            action="blocked", reason="risk_not_low", needs_review=True
+        )
+    return decide_auto_merge(
+        merge_enabled=True,
+        require_checks=require_checks,
+        require_llm_review=True,
+        checks=checks,
+        review=review,
+    )
