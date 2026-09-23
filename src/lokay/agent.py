@@ -115,6 +115,7 @@ def _values(
     command: str,
     session_kind: str = "code",
     timeout_seconds: int | None = None,
+    session: str = "",
 ) -> dict[str, str]:
     timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
     return {
@@ -124,7 +125,7 @@ def _values(
         "model": (config.agent_model or "").strip(),
         "max_turns": str(int(config.max_turns)),
         "timeout": str(timeout),
-        "session": session_id_for_worktree(worktree, kind=session_kind),
+        "session": session or session_id_for_worktree(worktree, kind=session_kind),
     }
 
 
@@ -168,6 +169,7 @@ def _build_agent_invocation(
     prompt: str,
     session_kind: str,
     timeout_seconds: int | None,
+    session: str = "",
 ) -> tuple[list[str], str]:
     """Return argv and the session explicitly bound by the trusted template.
 
@@ -193,6 +195,7 @@ def _build_agent_invocation(
         command=command,
         session_kind=session_kind,
         timeout_seconds=timeout_seconds,
+        session=session,
     )
     argv: list[str] = [command]
     session = ""
@@ -230,18 +233,40 @@ def run_agent(
     session_kind: str = "code",
     timeout_seconds: int | None = None,
     attach_collector_boundary: bool = True,
+    session_policy: str = "",
+    session_role: str = "",
+    repo: str = "",
+    issue: int | None = None,
+    branch: str = "",
+    head_sha: str = "",
+    base_sha: str = "",
+    prior_session: dict | None = None,
 ) -> dict:
     """Run configured harness. execute=False → plan only."""
     kind = resolve_agent_kind(config)
     effective_prompt = (
         with_collector_boundary(prompt) if attach_collector_boundary else (prompt or "")
     )
+    receipt = ""
+    bound_session = ""
+    if session_policy:
+        import json as _json
+        from lokay.session_policy import resolve_session
+
+        resolved = resolve_session(
+            policy=session_policy, repo=repo, role=session_role or "builder",
+            issue=issue, branch=branch, head_sha=head_sha, base_sha=base_sha,
+            prior=prior_session,
+        )
+        bound_session = str(resolved["session_id"])
+        receipt = _json.dumps(resolved, sort_keys=True)
     argv, session = _build_agent_invocation(
         config,
         worktree=worktree,
         prompt=effective_prompt,
         session_kind=session_kind,
         timeout_seconds=timeout_seconds,
+        session=bound_session,
     )
     harness = list(argv)
     display = [("<prompt>" if p == effective_prompt else p) for p in harness]
@@ -310,6 +335,7 @@ def run_agent(
         "factory_workflow_boundary": bool(attach_collector_boundary),
         "worktree": str(worktree),
         "session": session if getattr(result, "executed", False) else "",
+        "session_receipt": receipt,
     }
     if role == "builder":
         # The result document rides its own bounded channel; the tail stays

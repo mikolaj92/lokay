@@ -18,10 +18,23 @@ from lokay.organ.common import (
     _require_real_diff,
     _require_test_local,
     _resume_after_timeout,
-    _run_atom_main,
-    _test_local_ok,
     _worktree_path,
 )
+
+
+def _session_flags(inputs: dict[str, Any]) -> list[str]:
+    """The node-authored session policy, forwarded as executor arguments."""
+    flags = []
+    for name in ("session_policy", "session_role", "repo", "branch", "head_sha", "base_sha"):
+        value = str(inputs.get(name) or "")
+        if value:
+            flags += [f"--{name.replace('_', '-')}", value]
+    if inputs.get("issue") is not None:
+        flags += ["--issue", str(inputs["issue"])]
+    prior = inputs.get("prior_session")
+    if isinstance(prior, dict) and prior:
+        flags += ["--prior-session", json.dumps(prior, sort_keys=True)]
+    return flags
 from lokay.prompts import (
     issue_fix_prompt,
     local_test_repair_prompt,
@@ -136,7 +149,8 @@ def handle_agent(
         try:
             return _run_atom_main(
                 run_agent.main,
-                [*cfg, *live, "--worktree", worktree, "--prompt-file", prompt_path],
+                [*cfg, *live, "--worktree", worktree, "--prompt-file", prompt_path,
+                 *_session_flags(inputs)],
             )
         finally:
             Path(prompt_path).unlink(missing_ok=True)
