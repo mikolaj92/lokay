@@ -66,7 +66,7 @@ def verified_target(*, inputs: dict, run_ref: dict, worktree: str,
     Historical runs lacking these observations cannot be upgraded from HEAD or
     ancestry. The caller journals the returned target; tests bind it separately.
     """
-    from lokay.proc.pr_repair_checkpoint import _IDENTITY, _output, _rows
+    from lokay.proc.pr_repair_checkpoint import _IDENTITY, _output, _rows, admitted_head
 
     rows = _rows(run_ref, 'pr_repair')
     admission = _output(rows, 'worktree_add')
@@ -74,13 +74,9 @@ def verified_target(*, inputs: dict, run_ref: dict, worktree: str,
     start = inputs['head_sha']
     if (any(original.get(k) != inputs.get(k) for k in _IDENTITY)
             or admission.get('route') != 'ready'
-            or admission.get('worktree') != worktree
-            or any(admission.get(k) != v for k, v in {
-                'repo': inputs['repo'], 'pr': inputs['pr'], 'branch': inputs['branch'],
-                'repair_start_head_sha': start, 'worktree_head_sha': start,
-            }.items())):
+            or admission.get('worktree') != worktree):
         raise ValueError('agent revision admission mismatch')
-    head = start
+    head = admitted_head(inputs, admission)
     found = False
     for name in ('run_agent', 'pr_repair_retry_agent', 'evidence_repair_agent',
                  'commit_initial_repair', 'pr_test_repair_agent'):
