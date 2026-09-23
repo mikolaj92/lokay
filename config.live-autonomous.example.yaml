@@ -35,18 +35,8 @@ executor:
   enabled: true  # real agent only — docs/NO_STUBS.md
   agent: pi                  # log label only
   command: pi               # harness binary — swap to change implementation
-  model: omniroute/pi
-  # args after binary — placeholders: {cwd} {prompt} {model} {max_turns} {timeout} {session}
-  # --session-id creates the corner session if missing and resumes it after timeout.
-  # --session dies on the first ticket ("No session found matching 'lokay-…'").
-  args:
-    - -p
-    - "{prompt}"
-    - --model
-    - "{model}"
-    - --approve
-    - --session-id
-    - "{session}"
+  # One task, final response on stdout; harness settings stay with the harness.
+  args: [-p, "{prompt}"]
   max_turns: 40
   timeout_seconds: 1800
 

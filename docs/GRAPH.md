@@ -560,7 +560,7 @@ The executor department launches `issue_to_pr` only after a do mark.
 
 ### `pr_repair` (red checks on open ai/fix PR)
 
-Repair coding slots (`run_agent` + `run_coding_retry_agent` / evidence / test-repair) use the same builder deny-bin `gh` PATH and `FACTORY_WORKFLOW_BOUNDARY` as coding; product AGENTS.md publication rules are superseded.
+Repair coding slots (`run_agent` + `run_coding_retry_agent` / evidence / test-repair) invoke the harness directly with the inherited environment and the same `FACTORY_WORKFLOW_BOUNDARY` task instructions as coding; product AGENTS.md publication rules are superseded. This is not OS isolation: publication remains a separate graph step, while the harness runs with user permissions.
 
 Parent department lifetime K=1 is enforced with a durable receipt under the config state dir (`pr-repair-receipts/<owner>__<repo>__<pr>.json`, else `~/.lokay/pr-repair-receipts`). Each compose attempt stamps `attempts`; when `attempts >= budget` (default `limits.max_repairs_per_tick` = 1) select returns `fail_closed` / `pr_repair_budget_exhausted` and parks — no next-tick repair limbo when non-test CI stays red. Fleet `max_repairs_per_tick` remains the per-tick cap; the receipt is the per-PR lifetime gate. Admission skip for an already-MERGED PR does not stamp attempts.
 

@@ -122,20 +122,13 @@ def _values(
         "command": command,
         "cwd": str(worktree),
         "prompt": prompt,
-        # The harness owns its model. A configured name is never forwarded:
-        # `{model}` renders empty, so the flag pair drops.
-        "model": "",
         "max_turns": str(int(config.max_turns)),
         "timeout": str(timeout),
         "session": session or session_id_for_worktree(worktree, kind=session_kind),
     }
 
 
-def _render_arg(token: str, values: dict[str, str]) -> str | None:
-    # Drop optional model flag pair handled by caller; drop bare {model} if empty.
-    if token == "{model}" and not values.get("model"):
-        return None
-
+def _render_arg(token: str, values: dict[str, str]) -> str:
     def repl(m: re.Match[str]) -> str:
         key = m.group(1)
         if key not in values:
@@ -188,7 +181,7 @@ def _build_agent_invocation(
     if not raw_args:
         raise AgentError(
             "executor.args is empty — set argv template "
-            "({cwd} {prompt} {model} {max_turns} {timeout} {session})"
+            "({cwd} {prompt} {max_turns} {timeout} {session})"
         )
     values = _values(
         config,
@@ -201,27 +194,11 @@ def _build_agent_invocation(
     )
     argv: list[str] = [command]
     session = ""
-    i = 0
-    tokens = [str(t) for t in raw_args]
-    while i < len(tokens):
-        tok = tokens[i]
-        # If a flag is followed by {model} and model is empty, drop both.
-        if (
-            i + 1 < len(tokens)
-            and tokens[i + 1] == "{model}"
-            and not values.get("model")
-            and tok.startswith("-")
-        ):
-            i += 2
-            continue
-        rendered = _render_arg(tok, values)
-        if rendered is None:
-            i += 1
-            continue
-        argv.append(rendered)
+    for token in raw_args:
+        tok = str(token)
+        argv.append(_render_arg(tok, values))
         if "session" in _PLACEHOLDER_RE.findall(tok):
             session = values["session"]
-        i += 1
     return argv, session
 
 
@@ -294,22 +271,7 @@ def run_agent(
         )
 
     timeout = int(config.timeout_seconds if timeout_seconds is None else timeout_seconds)
-    from lokay.capabilities import executor_environment
-    if str(session_kind).startswith("review"):
-        role = "reviewer"
-    else:
-        role = "builder"
-    capability_env = executor_environment(role, os.environ)
-    capability_env["LOKAY_HEALTH_LEASE"] = ""
-    if session_kind == "code":
-        from lokay.coding_sandbox import coding_argv
-        try:
-            argv, scratch = coding_argv(argv, worktree=worktree)
-        except ValueError as exc:
-            raise AgentError(str(exc)) from exc
-        # Scratch is the temp dir only. HOME stays the harness home: its model
-        # catalog and credentials live there, and Lokay does not supply them.
-        capability_env["TMPDIR"] = str(scratch)
+    role = "reviewer" if str(session_kind).startswith("review") else "builder"
     from lokay.proc.repair_agent_revision import observe
 
     before = observe(runner, worktree) if session_kind == "code" else {}
@@ -317,10 +279,10 @@ def run_agent(
         CommandSpec(
             argv=tuple(argv),
             cwd=str(worktree),
-            # Never delegate GitHub credentials or orchestration authority.
-            env=capability_env,
+            # Inherit the harness runtime unchanged; only Lokay's host lease
+            # stays with the orchestrator, never its child process.
+            env={"LOKAY_HEALTH_LEASE": ""},
             timeout_seconds=timeout,
-            inherit_env=False,
         ),
         live=True,
     )
@@ -338,7 +300,7 @@ def run_agent(
         "factory_workflow_boundary": bool(attach_collector_boundary),
         "worktree": str(worktree),
         "session": session if getattr(result, "executed", False) else "",
-        "session_receipt": receipt,
+        "session_receipt": receipt if session and getattr(result, "executed", False) else "",
     }
     if role == "builder":
         # The result document rides its own bounded channel; the tail stays

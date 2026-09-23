@@ -1,12 +1,10 @@
-"""pr_repair coding retry slots inherit deny-bin gh + factory workflow boundary (#1043)."""
+"""Repair retry passes the task boundary without replacing the harness runtime."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from lokay.agent import FACTORY_WORKFLOW_BOUNDARY
-from lokay.capabilities import coding_path
 from lokay.config import Config
 from lokay.proc import run_coding_retry_agent
 from lokay.runner import CommandResult, CommandSpec
@@ -65,14 +63,9 @@ def test_run_coding_retry_agent_execute_builder_env_and_boundary(
     assert out["agent"]["status"] == "completed"
     assert out["agent"].get("factory_workflow_boundary") is True
     assert len(seen) == 1
-    env = seen[0].env
-    assert env["LOKAY_CAPABILITIES"] == "code.write"
-    assert env["PATH"] == coding_path("/bin")
-    deny_first = env["PATH"].split(os.pathsep)[0]
-    assert (Path(deny_first) / "gh").is_file()
-    assert "GH_TOKEN" not in env
-    assert "GITHUB_TOKEN" not in env
-    assert not any(k.startswith("GH_") or k.startswith("GITHUB_") for k in env)
+    assert seen[0].inherit_env is True
+    assert seen[0].env == {"LOKAY_HEALTH_LEASE": ""}
+    assert seen[0].argv[0] == "real-agent"
     prompt = seen[0].argv[-1]
     assert FACTORY_WORKFLOW_BOUNDARY in prompt
     assert "call `gh`" in prompt or "`gh`" in prompt
