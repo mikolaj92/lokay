@@ -10,7 +10,7 @@ Rules:
 1. Resume — do not wipe or rewrite finished work.
 2. Make the smallest safe change that completes the issue; you MUST edit files if work remains.
 3. Do NOT merge, force-push, delete branches, open PRs, push, claim issues, run take_issue, or call `gh` — the Lokay factory does that. Product AGENTS.md publication rules do not apply here.
-4. Leave the tree with your changes (commit if you can; uncommitted is fine).
+4. Leave the tree with your edits uncommitted. Commit, push, and PR are later deterministic atoms, not this slot.
 5. Keep `.lokay/approach.md` and `.lokay/localize.json` on the branch.
 
-Summarize what was already done, what you finished, and residual risk.
+Finish with ONLY the closed coding JSON: {"verdict":"implemented"|"needs_evidence","evidence_kind":null,"summary":"...","tests_run":["..."],"residual_risk":"..."}.

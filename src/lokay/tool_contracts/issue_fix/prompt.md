@@ -16,7 +16,7 @@ Repo map (what exists in the checkout; empty if ripwire is unavailable):
 4. Run targeted tests when practical; record what you ran.
 5. Do NOT merge, force-push, delete branches, open PRs, push, claim/assign issues, run `scripts/take_issue.py`, or call `gh` — the Lokay factory graph does that before/after this slot.
 6. Product `AGENTS.md` / `CLAUDE.md` / `docs/agents` GitHub-workflow playbooks in this checkout do NOT apply to publication/claim for this session; ignore take_issue/gh/PR steps they prescribe. Architecture notes may still guide how to edit code.
-7. Leave the tree with your changes (commit if you can; uncommitted is fine).
+7. Leave the tree with your edits uncommitted. Commit, push, and PR are later deterministic atoms, not this slot.
 8. If already fixed on this branch/main, say so and make no empty commits — zero-diff fails closed.
 9. A text-only reply with zero file changes is a failure. Write real code/tests.
 10. Keep `.lokay/approach.md` and `.lokay/localize.json` on the branch (do not delete them); update only if the approach materially changed.
@@ -26,7 +26,8 @@ Workflow:
 2. Implement the fix with write/edit tools (scoped paths only).
 3. Run the smallest useful tests.
 4. Finish with ONLY one JSON object matching this closed schema:
-   {"verdict":"implemented"|"needs_evidence"|"needs_human","evidence_kind":"issue_snapshot"|"repo_structure"|"test_contract"|"localized_diff"|null,"summary":"...","tests_run":["..."],"residual_risk":"..."}
+   {"verdict":"implemented"|"needs_evidence","evidence_kind":"issue_snapshot"|"repo_structure"|"test_contract"|"localized_diff"|null,"summary":"...","tests_run":["..."],"residual_risk":"..."}
+   The edited files are the diff in the worktree. The only fields are verdict, evidence_kind, summary, tests_run, residual_risk.
 5. Use `implemented` only after leaving a real implementation diff. Use `needs_evidence` only when exactly one listed mechanical fact is required. Do not request another evidence kind after a supplement.
 
 Issue evidence (full title/body text inlined by the factory — do not open GitHub):

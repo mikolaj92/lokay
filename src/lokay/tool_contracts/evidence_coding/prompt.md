@@ -2,4 +2,4 @@ This is the only evidence supplement round. Continue the existing implementation
 <additional-evidence>
 <<evidence>>
 </additional-evidence>
-Finish the implementation and return ONLY the required closed coding JSON. `needs_evidence` is no longer allowed; choose `implemented` or `needs_human`.
+Finish the implementation and return ONLY the required closed coding JSON. `needs_evidence` is no longer allowed; the only remaining verdict is `implemented`.
