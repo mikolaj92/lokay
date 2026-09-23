@@ -104,9 +104,8 @@ i zwraca jeden wynik z zamkniętego schematu. Recenzja PR może poprosić o dok�
 jeden dodatkowy fakt: `pr_metadata`, `changed_files`, `diff_tail` albo
 `commit_summary`. Każdy rodzaj ma osobny kolektor Unixowy. Fala uruchamia tylko
 wybrany kolektor, a druga prośba o dowody trafia do terminala ręcznego. Recenzja
-`select_pr_review_scope` używa OCR v1.12.7 `review --preview` bez LLM,
-aby sprawdzić zakres przed kosztowną recenzją. Dopiero zgodny zakres uruchamia
-`pr_review_agent` (`ocr review`); coverage pochodzi z evidence hosta i manifestu vendora.
+`select_pr_review_scope` bierze zakres z diffu hosta, bez drugiego OCR.
+Dopiero zgodny zakres uruchamia `pr_review_agent` (`ocr review`).
 Błędny wynik kończy się fail-closed, bez generatywnego retry.
 
 `status=complete` zamyka decyzję, nie fałszuje wykonania silnika. Poprawnie
@@ -1463,7 +1462,7 @@ stateDiagram-v2
     ResolveShaReview --> ReviewVerdict: zweryfikowany artifact dla tego SHA i OPEN tasku
     ResolveShaReview --> SelectPrReviewScope: brak zweryfikowanego artifactu
     SelectPrReviewScope --> OpenCodeReview: zakres zgodny z exact diff; jedno ocr review
-    SelectPrReviewScope --> HumanTerminal: preview error / pominięty wymagany plik; fail-closed, no retry
+    SelectPrReviewScope --> HumanTerminal: pusty diff; fail-closed, no retry
     OpenCodeReview --> ValidateReviewResult: lokay.review-result/1 + host/manifest coverage
     ValidateReviewResult --> ReviewVerdict: kompletne exact-SHA review bez findings lub z findings
     ValidateReviewResult --> HumanTerminal: error / drift / niepełne coverage / invalid result (fail-closed, no retry)
@@ -1518,22 +1517,21 @@ stateDiagram-v2
 
 Alibaba OpenCodeReview (`ocr`) to ciała atomów, nie drugi pipeline. Jedna rzecz
 z libki = jeden job. Checkout zostaje w `collect_pr_review_evidence`.
-Węzeł `select_pr_review_scope` używa `ocr review --preview` jako deterministycznej
-implementacji sprawdzenia zakresu; `pr_review_agent` używa `ocr review`.
-Preview nie jest recenzją ani zgodą na merge. Cached review pomija oba wywołania.
+Węzeł `select_pr_review_scope` bierze zakres z diffu hosta i nie woła OCR.
+`pr_review_agent` używa `ocr review`. Cached review pomija to jedno wywołanie.
 Zakres nadal wymaga wszystkich nieusuniętych plików, w tym testów; nie wolno
 cicho zaakceptować nowych wyłączeń vendora po aktualizacji.
 
 | Węzeł w `pr_triage` | Implementacja | Kontrakt |
 | --- | --- | --- |
-| `select_pr_review_scope` | izolowany OCR v1.12.7 `review --preview` | exact diff → ready / fail_closed; bez LLM |
+| `select_pr_review_scope` | diff hosta, bez OCR | niepusty diff → ready / fail_closed; bez LLM |
 | `pr_review_agent` | izolowany OCR v1.12.7 `review` | exact SHA → neutralny wynik lub sklasyfikowany błąd |
 | `validate_pr_review` | walidator Lokaya, bez importu pluginu | neutralny wynik → decyzja polityki |
 
 ```mermaid
 stateDiagram-v2
-    [*] --> OcrScope: ocr review --preview — ciało select_pr_review_scope
-    OcrScope --> OcrReview: zakres zgodny; kolejność należy do Fali
+    [*] --> HostScope: diff hosta — ciało select_pr_review_scope
+    HostScope --> OcrReview: zakres zgodny; kolejność należy do Fali
     OcrReview: ocr review — entropy, ciało pr_review_agent
     OcrReview --> ValidateReviewResult
     [*] --> OcrScan: ocr scan — cały plik, bez diffa PR; poza passem

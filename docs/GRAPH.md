@@ -588,7 +588,7 @@ pr_checks
         ├─ wait     → summarize (pending / offline; do not fail the pass)
         ├─ repair   → summarize repair verdict (red CI; no executor)
         └─ review   → collect evidence → resolve cached SHA
-                       → select_pr_review_scope (`ocr review --preview`, no LLM)
+                       → select_pr_review_scope (diff hosta, bez OCR)
                        → ready: one `ocr review` → validate → publish verdict
                        → fail_closed: terminal, no LLM
               ├─ needs_evidence → review_evidence_catalog (one atom: collect_* + SHA verify)
@@ -638,10 +638,10 @@ when-gated `collect_review_*` nodes plus `verify_review_evidence_sha`.
 `ocr` is not a Lokay pipeline. Each Alibaba command is a possible Unix job;
 `ocr review` is the body of `pr_review_agent`. Host checkout
 (`collect_pr_review_evidence`) already has the diff. `select_pr_review_scope`
-uses OCR v1.12.7 `review --preview` as a deterministic selection check after
-`resolve_sha_review`; only ready conducts the expensive review. Cached review
-skips both. Vendor exclusions cannot silently drop required files, including
-Python tests. Preview does not supply review approval. `ocr scan`, `delegate`, `session`, `viewer`, `rules`,
+uses that host diff as the scope check after `resolve_sha_review` and does
+not call OCR. Only ready conducts the one review. Cached review skips that
+call. Vendor exclusions cannot silently drop required files, including
+Python tests. The scope node does not supply review approval. `ocr scan`, `delegate`, `session`, `viewer`, `rules`,
 `config`, and `llm` stay outside the factory pass. Do not fold those commands
 into the five departments.
 
