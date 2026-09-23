@@ -11,16 +11,20 @@ def run(
     config_path: str | None,
     live: bool,
     slot: int,
+    budget: int | None = None,
 ) -> dict:
     del slot
+    extra = {
+        "pass_dir": pass_dir,
+        "listed": listed,
+        "last": last or {},
+    }
+    if budget is not None:
+        extra["budget"] = budget
     return run_path(
         path_id="executor_row",
         repo="local/executor-row",
         config_path=config_path,
         live=live,
-        extra_inputs={
-            "pass_dir": pass_dir,
-            "listed": listed,
-            "last": last or {},
-        },
+        extra_inputs=extra,
     )

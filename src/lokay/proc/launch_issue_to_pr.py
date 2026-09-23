@@ -13,13 +13,34 @@ def leftover_without_repo(candidate: dict, repo: str) -> tuple[int, list[dict]]:
     return len(leftover_issues), leftover_issues
 
 
-def launch(candidate: dict, *, config_path: str | None, live: bool = True) -> dict:
+def launch(
+    candidate: dict,
+    *,
+    config_path: str | None,
+    live: bool = True,
+    budget: int | None = None,
+    live_count: int | None = None,
+) -> dict:
     if not live:
         return {
             **dict(candidate),
             "ok": True,
             "route": "skipped",
             "reason": "dry_run",
+        }
+    occupied = live_count
+    if occupied is None and budget is not None:
+        from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
+
+        occupied = len(live_issue_to_pr_receipts())
+    if occupied is not None and int(occupied) > 0:
+        return {
+            **dict(candidate),
+            "ok": True,
+            "route": "busy",
+            "reason": "global_occupancy",
+            "spent": int(occupied),
+            "budget": None if budget is None else max(0, int(budget)),
         }
     result = detach_issue_to_pr(
         repo=str(candidate["repo"]),

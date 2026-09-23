@@ -1096,6 +1096,7 @@ issue od najstarszego numeru; nie dziedziczy newest-first API. Istniejący
 kursor nadal zachowuje kolejność rozpoczętej pracy. To nie jest rozwiązywanie
 zależności między issue.
 Nie jest triage. Nie scala. Python nie prowadzi pętli wierszy.
+Budżet K liczy, ile startów wolno zaplanować. Start i tak czeka, aż poprzedni worker się skończy: jeden żywy paragon issue→PR zamyka kolejny, także przy K>1 i innym repo. Domyślne K=1 zostaje. Martwy worker nie trzyma slotu.
 
 ### Iteracja executora — `executor_rows`
 
