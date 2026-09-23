@@ -12,4 +12,4 @@
 | OpenHands | Task | Nie | Delegacje | SDK/server | n/a | Niski (platforma) |
 | SWE-agent | Bench/issue | Nie | 1 | Lokalnie | n/a | Niski (research) |
 
-\*Dark score = jak blisko lights-out mill bez ciągłego pilota (subiektywne).
+\*Dark score = jak blisko Lokaja bez ciągłego pilota (subiektywne).

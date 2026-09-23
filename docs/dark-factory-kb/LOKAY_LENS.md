@@ -19,7 +19,7 @@ Bez recepty „przepisz lokaja”. Tylko mapowanie.
 | Executor | Docker CLI lub Actions | Daemon + LaunchAgent na mini-m4-0 |
 | Escape limbo | Label po N retry | Walka z park labels / stuck.json |
 | Spec scenarios | Human scenario → ephemeral tests | Issue text + Done means |
-| Single-repo focus | Często 1 repo | Świadomy multi-repo mill |
+| Single-repo focus | Często 1 repo | Świadomy multi-repo Lokaj |
 
 ## Wnioski miękkie
 

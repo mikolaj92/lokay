@@ -1,6 +1,6 @@
 # Working klepacz graph — design (2026-09-10)
 
-Status: **design kanon** pod działający mill. Nie L5. Nie „cały bank”.
+Status: **design kanon** pod działającego Lokaja. Nie L5. Nie „cały bank”.
 Cel: issue (z etykietą) → worktree → diff → test → PR → merge policy.
 Graf = kod. LLM tylko w liściach ze **structured output**.
 
