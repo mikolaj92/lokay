@@ -18,6 +18,11 @@ def _department_enabled(config: str | None, name: str) -> bool:
         return True
 
 
+def _repair_selected(up: dict[str, dict[str, Any]]) -> bool:
+    route = str((up.get("select_self_repair_department") or {}).get("route") or "")
+    return route == "run"
+
+
 def _host_stop(up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     from lokay.host_gate import stopped
 
@@ -76,7 +81,10 @@ def handle_departments(
             return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_issue_triage_department import select
 
-        return select(enabled=_department_enabled(config, "issue_triage"))
+        return select(
+            enabled=_department_enabled(config, "issue_triage"),
+            repair_selected=_repair_selected(up),
+        )
     if atom == "run_issue_triage_department":
         from lokay.proc.run_issue_triage_department import run
 
@@ -86,7 +94,10 @@ def handle_departments(
             return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_executor_department import select
 
-        return select(enabled=_department_enabled(config, "executor"))
+        return select(
+            enabled=_department_enabled(config, "executor"),
+            repair_selected=_repair_selected(up),
+        )
     if atom == "run_executor_department":
         from lokay.proc.run_executor_department import run
         from lokay.sieve_decision import envelope
@@ -104,7 +115,10 @@ def handle_departments(
             return {**stop, "ok": True, "route": "skip"}
         from lokay.proc.select_pr_triage_department import select
 
-        return select(enabled=_department_enabled(config, "pr_triage"))
+        return select(
+            enabled=_department_enabled(config, "pr_triage"),
+            repair_selected=_repair_selected(up),
+        )
     if atom == "run_pr_triage_department":
         from lokay.proc.run_pr_triage_department import run
 
@@ -115,6 +129,11 @@ def handle_departments(
         from lokay.proc.select_pr_repair_department import select
 
         select_pr = up.get("select_pr_triage_department") or {}
+        if (
+            str(select_pr.get("reason") or "") == "self_repair_selected"
+            or _repair_selected(up)
+        ):
+            return {"ok": True, "route": "skip", "reason": "self_repair_selected"}
         triage = up.get("run_pr_triage_department") or {}
         return select(
             triage,
