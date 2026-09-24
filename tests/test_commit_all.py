@@ -155,6 +155,38 @@ def test_commit_all_token_mismatch_still_refuses_configured_main(
     assert _git(clone, "status", "--short").splitlines() == [" M src/foo.py"]
 
 
+def test_commit_all_ignores_generated_localization_paths(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    (repo / ".gitignore").write_text("*.egg-info/\nignored.txt\n")
+    (repo / "README.md").write_text("base\n")
+    (repo / "ignored.txt").write_text("tracked despite ignore\n")
+    _git(repo, "add", ".")
+    _git(repo, "add", "-f", "ignored.txt")
+    _git(repo, "commit", "-m", "base")
+    (repo / "README.md").write_text("repair\n")
+    (repo / "ignored.txt").unlink()
+    generated = repo / "src" / "example.egg-info"
+    generated.mkdir(parents=True)
+    (generated / "PKG-INFO").write_text("generated metadata\n")
+    (repo / "new.py").write_text("# new source\n")
+    evidence = repo / ".lokay"
+    evidence.mkdir()
+    (evidence / "localize.json").write_text(json.dumps({"paths": [
+        "README.md", "src/example.egg-info", "src/example.egg-info/PKG-INFO",
+        "ignored.txt", "new.py",
+    ]}))
+
+    assert commit_all(Runner(), repo, "repair", live=True)
+
+    assert set(_git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines()) == {
+        "README.md", "ignored.txt", "new.py",
+    }
+    assert (generated / "PKG-INFO").read_text() == "generated metadata\n"
+    assert _git(repo, "ls-files", "src/example.egg-info") == ""
+    assert (evidence / "localize.json").exists()
+
+
 def test_commit_all_commits_only_localized_changes(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)

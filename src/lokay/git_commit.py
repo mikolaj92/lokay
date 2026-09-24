@@ -166,14 +166,16 @@ def commit_all(
 
     localized = _localized_paths(worktree)
     if localized is not None:
-        tracked = runner.run_checked(
-            git_spec(["ls-files", "-z"], cwd=worktree), live=True
+        # Localization can name generated/ignored files. Stage only paths Git
+        # considers tracked (including deletions) or non-ignored untracked files.
+        available = runner.run_checked(
+            git_spec(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=worktree),
+            live=True,
         ).stdout.split("\0")
         actionable = [
             rel
             for rel in localized
-            if (worktree / rel).exists()
-            or any(path == rel or path.startswith(f"{rel}/") for path in tracked)
+            if any(path == rel or path.startswith(f"{rel}/") for path in available)
         ]
         # Done-means stamp files must ride with the implementation commit even
         # when localize omitted them (Fala#222: dirty README green on worktree,
