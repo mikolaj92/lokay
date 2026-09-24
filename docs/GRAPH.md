@@ -574,7 +574,7 @@ admit_pr_repair   ← probe state/mergedAt (path-visible); compose skips run_pat
                           └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
                                 └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
                                       └─→ commit_all
-                                            └─→ test_local   ← local pytest; skip if no suite
+                                            └─→ test_local   ← declared command; missing declaration cannot publish
                                                   └─→ assert_real_diff
                                                         └─→ push   ← published tip; never rebase (force-push forbidden)
 # Mid-flight organ: mutating atoms re-probe; MERGED refuses (reason=pr_already_merged).

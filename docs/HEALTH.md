@@ -194,4 +194,5 @@ exception mailbox signal, not a lokay brake.
 Lokay nie używa GitHub Actions ani zdalnego CI. Każde zarządzane repozytorium
 deklaruje własne lokalne polecenie testowe w `[tool.lokay] test`. Fala uruchamia
 je w worktree przed `push` i ponownie przed `merge`. Brak deklaracji jest jawnym
-`skipped`, a nie domyślnym `pytest`.
+`skipped`, a nie domyślnym `pytest`. Dostawa może zachować to pominięcie, ale
+naprawa PR nie może na nim opublikować wyniku.

@@ -59,6 +59,13 @@ def test_one_evidence_round():
     )
 
 
+def test_undeclared_repair_test_does_not_publish():
+    skipped = select_test(
+        {"ok": True, "skipped": True, "tested": False, "reason": "no_declared_test"}
+    )
+    assert skipped["route"] == "fail"
+
+
 def test_test_repair_is_bounded():
     red = select_test({"ok": True, "tested": True, "recorded_red": True})
     green = select_test({"ok": True, "tested": True})
