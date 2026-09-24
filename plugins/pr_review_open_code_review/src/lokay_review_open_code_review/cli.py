@@ -258,7 +258,9 @@ def build_ocr_argv(
             Path("/usr/bin/printenv"), Path("/bin/sh"), Path("/bin/bash"),
         )
     # code_search shells `git grep`, which execs /usr/bin/grep.
-    search_runtime = (Path("/usr/bin/grep"),)
+    # OCR itself looks up git on a /usr/bin PATH and execs that shim even
+    # when evidence verification uses the Command Line Tools git.
+    search_runtime = (Path("/usr/bin/git"), Path("/usr/bin/grep"))
     allowed_runtime_executables = (Path(binary), *credential_runtime, *search_runtime)
     runtime_profile_text = review_profile(
         repository=Path(repo), home=scratch,
