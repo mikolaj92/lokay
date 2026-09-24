@@ -54,7 +54,7 @@ survey/plan path part of the live department spine; see `docs/UNIX.md`.
 - `fala/lokay.fala-package.toml`: authored parent `factory_pass` plus child conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
 - `src/lokay/compose/`: thin graph and read-only status entrypoints; product ordering stays in Fala.
 - `executor.command` and `executor.args`: the sole nondeterministic coding slot. Lokay rejects fake, stub, and no-op agents.
-- Local verification is repository-declared (`[tool.lokay] test` in the worktree `pyproject.toml`). No declaration is an honest skip — Lokay does not invent `pytest` from `pyproject` / `tests/`.
+- Local verification is repository-declared (`[tool.lokay] test` in the worktree `pyproject.toml`). Lokay does not invent `pytest` from `pyproject` / `tests/`. Missing declaration stays an honest skip for delivery, but PR repair cannot publish it.
 - `repos.mikolaj92.yaml`: managed repository scope.
 
 There is no alternate Python fallback graph and no Hermes/Kanban execution ledger.

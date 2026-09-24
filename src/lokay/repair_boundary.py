@@ -120,8 +120,9 @@ def select_test(test: Mapping[str, Any], *, applicable: bool = True) -> dict[str
         return {"ok": True, "route": "not_applicable"}
     passed = (
         bool(test.get("ok"))
+        and bool(test.get("tested"))
         and not bool(test.get("recorded_red"))
-        and (bool(test.get("tested")) or bool(test.get("skipped")))
+        and not bool(test.get("skipped"))
     )
     return {"ok": True, "route": "pass" if passed else "fail"}
 
