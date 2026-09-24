@@ -155,6 +155,31 @@ def test_commit_all_token_mismatch_still_refuses_configured_main(
     assert _git(clone, "status", "--short").splitlines() == [" M src/foo.py"]
 
 
+def test_commit_all_excludes_host_evidence_from_localized_directories(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    readme = repo / "README.md"
+    readme.write_text("base\n")
+    evidence = repo / ".lokay"
+    evidence.mkdir()
+    approach = evidence / "approach.md"
+    approach.write_text("host evidence\n")
+    _git(repo, "add", "README.md", ".lokay/approach.md")
+    _git(repo, "commit", "-m", "base")
+    readme.write_text("repair\n")
+    approach.write_text("updated host evidence\n")
+    (evidence / "localize.json").write_text(json.dumps({"paths": ["README.md", ".lokay"]}))
+
+    assert commit_all(Runner(), repo, "repair", live=True)
+
+    committed = set(_git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines())
+    assert committed == {"README.md"}
+    assert set(_git(repo, "status", "--short").splitlines()) == {
+        " M .lokay/approach.md",
+        "?? .lokay/localize.json",
+    }
+
+
 def test_commit_all_ignores_generated_localization_paths(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)
