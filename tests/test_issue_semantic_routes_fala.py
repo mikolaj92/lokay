@@ -72,8 +72,10 @@ up = _conduction_values(m)
 if a == 'select_next_issue':
     v.update(route='issue', repo='o/r', issue=1172, labels=[])
 elif a == 'issues_run_triage':
-    with patch('lokay.proc.run_issue_triage_subflow.run_path', return_value={terminal!r}):
-        v.update(handle_issues(a, {{}}, up, {{}}))
+    with patch('lokay.proc.run_issue_triage_subflow.run_path', return_value={terminal!r}) as invoke:
+        v.update(handle_issues(a, {{'live': True}}, up, {{}}))
+        invoke.assert_called_once_with(path_id='issue_triage', repo='o/r', issue=1172,
+                                       config_path=None, live=True)
 else:
     def split_child(**kwargs):
         Path({str(tmp_path / 'split.json')!r}).write_text(json.dumps(kwargs))
