@@ -60,7 +60,7 @@ else:
         assert [row["issue"] for row in cursor["decisions"]] == picked
 
 
-def test_native_executor_preserves_spent_budget_across_skip(tmp_path):
+def test_native_executor_preserves_spent_budget_while_worker_is_live(tmp_path):
     body = base_effector(
         """from unittest.mock import patch
 from lokay.organ.common import _conduction_values
@@ -72,8 +72,8 @@ up = _conduction_values(m)
 def row(**kwargs):
     slot = kwargs['slot']
     (pd / ('ran-' + str(slot))).write_text('visited')
-    return {'ok': True, 'result': {'route': 'skip' if slot == 2 else 'do',
-            'launched': None if slot == 2 else 'started',
+    return {'ok': True, 'result': {'route': 'do',
+            'launched': 'started',
             'leftover': 1, 'leftover_issues': [{'repo': 'o/r', 'issue': slot + 1}]}}
 
 if a == 'prepare_executor_rows':
@@ -85,10 +85,15 @@ else:
     )
     result = run_graph(tmp_path, body, 'cursor-budget', path_id='executor_rows')
     statuses = {k: v['status'] for k, v in result['effector_results'].items()}
-    assert statuses['run_executor_row_3'] == 'succeeded'
+    assert statuses['run_executor_row_1'] == 'succeeded'
+    assert statuses['run_executor_row_2'] == 'succeeded'  # reports busy, no second child
+    assert statuses['run_executor_row_3'] == 'skipped'
     assert statuses['run_executor_row_4'] == 'skipped'
+    assert (tmp_path / 'ran-1').exists()
+    assert not (tmp_path / 'ran-2').exists()
+    assert not (tmp_path / 'ran-3').exists()
     cursor = json.loads((tmp_path / 'executor-rows.json').read_text())
-    assert cursor['spent'] == 2
+    assert cursor['spent'] == 1
 
 
 def test_executor_row_consumes_bound_skip_decision(tmp_path):
