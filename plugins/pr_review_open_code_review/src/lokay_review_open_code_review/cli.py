@@ -330,7 +330,15 @@ def _environment(engine: Mapping[str, Any], *, home: Path) -> dict[str, str]:
     missing = [name for name in names if not os.environ.get(name)]
     if missing:
         raise ReviewFailure("allowlisted provider credential is missing")
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home),
+    # OCR execs whichever git PATH finds. /usr/bin/git is an arm64e shim that
+    # the sandbox cannot run; Command Line Tools git is a normal arm64 binary.
+    env = {
+        "PATH": os.pathsep.join((
+            "/Library/Developer/CommandLineTools/usr/bin",
+            "/usr/bin",
+            "/bin",
+        )),
+        "HOME": str(home),
            "TMPDIR": str(home / "tmp"), "LANG": "C.UTF-8", "NO_COLOR": "1",
            "CLICOLOR_FORCE": "0", "FORCE_COLOR": "0", "TERM": "dumb"}
     env.update({name: os.environ[name] for name in names})

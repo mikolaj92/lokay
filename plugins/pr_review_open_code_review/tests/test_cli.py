@@ -627,7 +627,9 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
     env = observed["env"]
     assert env["OCR_PROVIDER_KEY"] == "secret-key"
     assert env["GIT_PAGER"] == ""
-    assert "CommandLineTools" not in env["PATH"]
+    assert env["PATH"].split(os.pathsep)[0] == (
+        "/Library/Developer/CommandLineTools/usr/bin"
+    )
     assert "Xcode-beta" not in env["PATH"]
     assert "DEVELOPER_DIR" not in env
     assert "GH_TOKEN" not in env
