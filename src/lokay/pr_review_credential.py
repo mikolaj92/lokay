@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Sequence
 
 DEFAULT_PI_COMMAND = (
-    "/Users/mini-m4-0/.local/share/mise/installs/pi/0.87.0/pi/pi",
     "auth",
     "print-api-key",
     "--provider",
@@ -22,8 +21,9 @@ _ALLOWED_ENVIRONMENT = frozenset({"HOME", "PATH", "LANG", "NO_COLOR", "TERM"})
 
 
 def default_resolver_command() -> tuple[str, ...]:
-    """Return the pinned Pi auth command used by production."""
-    return DEFAULT_PI_COMMAND
+    """Return the Pi auth command through mise's stable installation alias."""
+    executable = resolver_home() / ".local/share/mise/installs/pi/latest/pi/pi"
+    return (str(executable), *DEFAULT_PI_COMMAND)
 
 
 def resolver_home() -> Path:

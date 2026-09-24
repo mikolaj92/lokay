@@ -152,6 +152,27 @@ def test_pi_resolver_uses_the_default_command_factory_for_production(monkeypatch
         resolve_pi_api_key()
 
 
+def test_default_production_resolver_uses_stable_mise_entrypoint(monkeypatch, tmp_path):
+    from lokay.pr_review_credential import default_resolver_command, resolve_pi_api_key
+
+    monkeypatch.setattr("lokay.pr_review_credential.resolver_home", lambda: tmp_path)
+    calls = []
+
+    def run_resolver(argv, *, environment, timeout=10.0):
+        calls.append((argv, environment, timeout))
+        return b"live-review-key"
+
+    monkeypatch.setattr("lokay.pr_review_credential._run_resolver", run_resolver)
+
+    assert resolve_pi_api_key() == "live-review-key"
+    argv, environment, timeout = calls[0]
+    assert argv == [*default_resolver_command()]
+    assert argv[0] == str(tmp_path / ".local/share/mise/installs/pi/latest/pi/pi")
+    assert argv[1:] == ["auth", "print-api-key", "--provider", "omniroute"]
+    assert environment["HOME"] == str(tmp_path)
+    assert timeout == 10.0
+
+
 def test_pi_resolver_rejects_noncanonical_command_without_runner(tmp_path: Path):
     from lokay.pr_review_credential import PiCredentialError, resolve_pi_api_key
 
