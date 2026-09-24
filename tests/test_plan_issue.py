@@ -250,9 +250,12 @@ def test_commit_all_uses_localize_paths_instead_of_evidence(tmp_path: Path):
     class FakeRunner:
         def run_checked(self, spec, *, live):
             seen.append(list(spec.argv))
-            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+            stdout = "src/x.py\0" if spec.argv[:2] == ("git", "ls-files") else ""
+            return type("R", (), {"returncode": 0, "stdout": stdout, "stderr": ""})()
 
         def run(self, spec, *, live):
+            if spec.argv[:2] == ("git", "ls-files"):
+                return type("R", (), {"returncode": 0, "stdout": "src/x.py\0", "stderr": ""})()
             if tuple(spec.argv[:3]) == ("git", "diff", "--cached"):
                 return type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
             return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()

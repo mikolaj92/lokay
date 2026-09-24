@@ -166,15 +166,23 @@ def commit_all(
 
     localized = _localized_paths(worktree)
     if localized is not None:
-        tracked = runner.run_checked(
-            git_spec(["ls-files", "-z"], cwd=worktree), live=True
+        # Localization can name generated/ignored files. Stage only paths Git
+        # considers tracked (including deletions) or non-ignored untracked files.
+        available = runner.run_checked(
+            git_spec(["ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=worktree),
+            live=True,
         ).stdout.split("\0")
-        actionable = [
-            rel
-            for rel in localized
-            if (worktree / rel).exists()
-            or any(path == rel or path.startswith(f"{rel}/") for path in tracked)
-        ]
+        actionable: list[str] = []
+        for rel in localized:
+            for path in available:
+                if path != rel and not path.startswith(f"{rel}/"):
+                    continue
+                # Expand directory selections to concrete files and never let
+                # localized directories sweep host evidence into a product commit.
+                if path == ".lokay" or path.startswith(".lokay/"):
+                    continue
+                if path not in actionable:
+                    actionable.append(path)
         # Done-means stamp files must ride with the implementation commit even
         # when localize omitted them (Fala#222: dirty README green on worktree,
         # check_stamps red vs HEAD).
@@ -182,6 +190,8 @@ def commit_all(
             git_spec(["status", "--porcelain", "-u"], cwd=worktree), live=True
         ).stdout
         for rel in dirty_stamp_paths(worktree, porcelain=porcelain):
+            if (rel == ".lokay" or rel.startswith(".lokay/")):
+                continue
             if rel not in actionable:
                 actionable.append(rel)
         # Done-means source left dirty outside localize.json (Fala#223:
