@@ -36,6 +36,7 @@ def handle_plan_issue(
             request,
             config_path=str(inputs.get("config_path") or "") or None,
             live=bool(inputs.get("live")),
+            approach=approach,
         )
     if atom == "write_issue_approach":
         from lokay.proc.write_issue_approach import write
