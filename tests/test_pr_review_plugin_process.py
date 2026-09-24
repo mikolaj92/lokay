@@ -100,6 +100,26 @@ def test_process_boundary_drains_output_while_streaming_large_request(monkeypatc
     assert result == {"ok": True}
 
 
+def test_absolute_plugin_can_run_git_without_inheriting_host_path(monkeypatch, tmp_path):
+    import sys
+
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "provider-secret")
+    monkeypatch.setenv("PATH", str(tmp_path / "untrusted-host-bin"))
+    plugin = tmp_path / "review-plugin"
+    plugin.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, subprocess\n"
+        "git = subprocess.run(['git', '--version'], capture_output=True, check=True)\n"
+        "print(json.dumps({'ok': True, 'git': git.stdout.decode(), 'path': os.environ['PATH']}))\n"
+    )
+    plugin.chmod(0o700)
+
+    result = invoke_plugin(_config(pr_review_plugin_command=str(plugin)), {})
+
+    assert result["git"].startswith("git version ")
+    assert str(tmp_path / "untrusted-host-bin") not in result["path"].split(os.pathsep)
+
+
 def test_process_boundary_resolves_pi_credential_at_plugin_boundary(monkeypatch):
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
     monkeypatch.setattr(

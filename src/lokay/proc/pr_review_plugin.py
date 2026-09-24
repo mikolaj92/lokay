@@ -149,7 +149,9 @@ def _plugin_env(cfg: Config) -> dict[str, str]:
         if not value:
             raise _host_failure("review plugin provider credential is missing")
         values[name] = value
-    path_dirs = [os.path.dirname(cfg.pr_review_plugin_command)] if os.path.sep in cfg.pr_review_plugin_command else ["/usr/local/bin", "/usr/bin", "/bin"]
+    path_dirs = ["/usr/local/bin", "/usr/bin", "/bin"]
+    if os.path.sep in cfg.pr_review_plugin_command:
+        path_dirs.insert(0, os.path.dirname(cfg.pr_review_plugin_command))
     return {
         "PATH": os.pathsep.join(path_dirs),
         "HOME": os.path.expanduser("~"),
