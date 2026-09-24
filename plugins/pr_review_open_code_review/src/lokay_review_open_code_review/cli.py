@@ -258,7 +258,9 @@ def build_ocr_argv(
             Path("/usr/bin/printenv"), Path("/bin/sh"), Path("/bin/bash"),
         )
     # code_search shells `git grep`, which execs /usr/bin/grep.
-    search_runtime = (Path("/usr/bin/grep"),)
+    # OCR itself looks up git on a /usr/bin PATH and execs that shim even
+    # when evidence verification uses the Command Line Tools git.
+    search_runtime = (Path("/usr/bin/git"), Path("/usr/bin/grep"))
     allowed_runtime_executables = (Path(binary), *credential_runtime, *search_runtime)
     runtime_profile_text = review_profile(
         repository=Path(repo), home=scratch,
@@ -328,7 +330,15 @@ def _environment(engine: Mapping[str, Any], *, home: Path) -> dict[str, str]:
     missing = [name for name in names if not os.environ.get(name)]
     if missing:
         raise ReviewFailure("allowlisted provider credential is missing")
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(home),
+    # OCR execs whichever git PATH finds. /usr/bin/git is an arm64e shim that
+    # the sandbox cannot run; Command Line Tools git is a normal arm64 binary.
+    env = {
+        "PATH": os.pathsep.join((
+            "/Library/Developer/CommandLineTools/usr/bin",
+            "/usr/bin",
+            "/bin",
+        )),
+        "HOME": str(home),
            "TMPDIR": str(home / "tmp"), "LANG": "C.UTF-8", "NO_COLOR": "1",
            "CLICOLOR_FORCE": "0", "FORCE_COLOR": "0", "TERM": "dumb"}
     env.update({name: os.environ[name] for name in names})
