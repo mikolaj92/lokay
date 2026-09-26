@@ -70,6 +70,7 @@ class Config:
     pr_review_provider: str = ""
     pr_review_provider_endpoint_url: str = ""
     pr_review_model: str = ""
+    pr_review_models: tuple[str, ...] = ()
     pr_review_config_sha256: str = ""
     pr_review_ocr_config: Path | None = None
     pr_review_manifest: Path | None = None
@@ -462,6 +463,9 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_review_provider=str(review.get("provider") or ""),
         pr_review_provider_endpoint_url=str(review.get("provider_endpoint_url") or ""),
         pr_review_model=str(review.get("model") or ""),
+        pr_review_models=tuple(
+            str(item).strip() for item in (review.get("models") or []) if str(item).strip()
+        ),
         pr_review_config_sha256=str(review.get("config_sha256") or "").lower(),
         pr_review_ocr_config=_expand(review["ocr_config"]) if review.get("ocr_config") else None,
         pr_review_manifest=_expand(review["manifest"]) if review.get("manifest") else None,

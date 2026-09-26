@@ -55,6 +55,43 @@ def plugin_request(cfg: Config, repo: str, pr: int, evidence: dict[str, Any]) ->
     return request
 
 
+def review_requests(cfg: Config, repo: str, pr: int, evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    """One request per lens, all on the same SHA. The primary model is always first."""
+    extra = tuple(getattr(cfg, "pr_review_models", ()) or ())
+    models = [str(getattr(cfg, "pr_review_model", "") or "")]
+    for model in extra:
+        name = str(model).strip()
+        if name and name not in models:
+            models.append(name)
+    base = plugin_request(cfg, repo, pr, evidence)
+    return [
+        {**base, "engine": {**dict(base.get("engine") or {}), "model": model}}
+        for model in models
+    ]
+
+
+def collapse(lenses: list[dict[str, Any]], *, sha: str) -> dict[str, Any]:
+    """Many lenses, one JSON. Any incomplete lens or a foreign SHA is not a review."""
+    closed = {"approve", "request_changes"}
+    if not lenses or any(
+        row.get("head_sha") != sha
+        or row.get("verdict") not in closed
+        or not isinstance(row.get("findings"), list)
+        for row in lenses
+    ):
+        return {"ok": False, "route": "fail_closed", "head_sha": sha, "verdict": "", "findings": []}
+    findings = [item for row in lenses for item in row["findings"]]
+    verdict = "request_changes" if findings or any(row["verdict"] == "request_changes" for row in lenses) else "approve"
+    return {
+        "ok": True,
+        "route": "complete",
+        "head_sha": sha,
+        "verdict": verdict,
+        "findings": findings,
+        "lenses": [{"model": row.get("model", ""), "verdict": row["verdict"]} for row in lenses],
+    }
+
+
 def run_review_agent(
     *,
     config_path: str | None,
@@ -76,7 +113,21 @@ def run_review_agent(
         before = revalidate_pr_identity(
             gh_runner, evidence, live=live, cfg=cfg, branch_prefix=cfg.branch_prefix
         )
-        result = invoke_plugin(cfg, request)
+        sha = str(evidence.get("head_sha") or "")
+        lenses = []
+        result: dict[str, Any] = {}
+        for request in review_requests(cfg, repo, pr, evidence):
+            result = invoke_plugin(cfg, request)
+            lenses.append({
+                "model": request["engine"]["model"],
+                "head_sha": result.get("head_sha"),
+                "verdict": result.get("verdict"),
+                "findings": result.get("findings") if isinstance(result.get("findings"), list) else None,
+            })
+        folded = collapse(lenses, sha=sha)
+        if folded["route"] != "complete":
+            raise PluginFailure("review lenses did not collapse to one verdict")
+        result = {**result, "verdict": folded["verdict"], "findings": folded["findings"], "lenses": folded["lenses"]}
         after = revalidate_pr_identity(
             gh_runner, evidence, live=live, cfg=cfg, branch_prefix=cfg.branch_prefix
         )
