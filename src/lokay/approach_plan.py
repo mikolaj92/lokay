@@ -204,6 +204,15 @@ def build_approach(
     ]
     if not paths:
         notes.append("No explicit file paths in issue; infer from repo inspection.")
+    feature = (
+        worktree / ".lokay" / "memory" / "feature-map.md"
+        if worktree is not None
+        else None
+    )
+    if feature is not None and feature.is_file():
+        text = feature.read_text(encoding="utf-8").strip()
+        if text:
+            notes.append(f"Feature map (.lokay/memory/feature-map.md): {text}")
     return ApproachPlan(
         repo=issue.repo,
         issue=int(issue.number),

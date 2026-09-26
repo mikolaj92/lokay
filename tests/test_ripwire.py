@@ -122,6 +122,40 @@ def test_map_repo_missing_binary_is_empty(tmp_path: Path, monkeypatch):
     assert out["paths"] == []
 
 
+def test_map_repo_reads_committed_memory_as_evidence(tmp_path: Path, monkeypatch):
+    from lokay.proc.map_repo import map_repo
+
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    (tmp_path / "empty").mkdir()
+    memory = tmp_path / ".lokay" / "memory"
+    memory.mkdir(parents=True)
+    (memory / "feature-map.md").write_text("door opens from the hall\n", encoding="utf-8")
+    (memory / "paved-path.md").write_text("one hinge, then the latch\n", encoding="utf-8")
+    (tmp_path / ".lokay" / "skills").mkdir()
+    (tmp_path / ".lokay" / "skills" / "bug.md").write_text("reproduce first\n", encoding="utf-8")
+    (tmp_path / ".lokay" / "lessons").mkdir()
+    (tmp_path / ".lokay" / "lessons" / "latch.md").write_text("latch was the defect\n", encoding="utf-8")
+    out = map_repo(worktree=str(tmp_path), title="door")
+    assert out["ok"] is True
+    assert out["memory"] == [
+        ".lokay/lessons/latch.md",
+        ".lokay/memory/feature-map.md",
+        ".lokay/memory/paved-path.md",
+        ".lokay/skills/bug.md",
+    ]
+    assert "door opens from the hall" in out["feature_map"]
+
+
+def test_map_repo_without_memory_does_not_invent_it(tmp_path: Path, monkeypatch):
+    from lokay.proc.map_repo import map_repo
+
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    (tmp_path / "empty").mkdir()
+    out = map_repo(worktree=str(tmp_path), title="door")
+    assert out["memory"] == []
+    assert out["feature_map"] == ""
+
+
 def test_prepare_localization_does_not_invoke_ripwire(tmp_path: Path, monkeypatch):
     from lokay.proc.prepare_localization_request import prepare
 

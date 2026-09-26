@@ -184,6 +184,47 @@ new file mode 100644
     assert approach_present_in_diff("diff --git a/src/x.py b/src/x.py\n") is False
 
 
+def test_plan_cites_feature_map_only_when_the_tree_has_one(tmp_path: Path):
+    bare = build_approach(_issue(), worktree=tmp_path)
+    assert all("feature-map" not in note for note in bare.notes)
+    memory = tmp_path / ".lokay" / "memory"
+    memory.mkdir(parents=True)
+    (memory / "feature-map.md").write_text("door opens from the hall\n", encoding="utf-8")
+    cited = build_approach(_issue(), worktree=tmp_path)
+    rendered = render_approach_md(cited)
+    assert any("door opens from the hall" in note for note in cited.notes)
+    assert ".lokay/memory/feature-map.md" in rendered
+
+
+def test_review_prompt_keeps_memory_and_strips_only_the_plan():
+    diff = (
+        "diff --git a/.lokay/approach.md b/.lokay/approach.md\n"
+        "--- /dev/null\n+++ b/.lokay/approach.md\n"
+        "@@ -0,0 +1,2 @@\n+# Approach plan\n+SECRET_PLAN_GOAL\n"
+        "diff --git a/.lokay/memory/feature-map.md b/.lokay/memory/feature-map.md\n"
+        "--- /dev/null\n+++ b/.lokay/memory/feature-map.md\n"
+        "@@ -0,0 +1 @@\n+FEATURE_MAP_EVIDENCE\n"
+        "diff --git a/.lokay/memory/paved-path.md b/.lokay/memory/paved-path.md\n"
+        "--- /dev/null\n+++ b/.lokay/memory/paved-path.md\n"
+        "@@ -0,0 +1 @@\n+PAVED_PATH_EVIDENCE\n"
+        "diff --git a/.lokay/lessons/latch.md b/.lokay/lessons/latch.md\n"
+        "--- /dev/null\n+++ b/.lokay/lessons/latch.md\n"
+        "@@ -0,0 +1 @@\n+LESSON_EVIDENCE\n"
+        "diff --git a/verify-receipt.json b/verify-receipt.json\n"
+        "--- /dev/null\n+++ b/verify-receipt.json\n"
+        "@@ -0,0 +1 @@\n+VERIFY_RECEIPT\n"
+    )
+    text = review_prompt(
+        repo="owner/repo", pr_number=9, title="x", body="y",
+        head_ref="ai/fix/9-x", diff_text=diff, checks_text="",
+    )
+    assert "SECRET_PLAN_GOAL" not in text
+    assert "FEATURE_MAP_EVIDENCE" in text
+    assert "PAVED_PATH_EVIDENCE" in text
+    assert "LESSON_EVIDENCE" in text
+    assert "VERIFY_RECEIPT" in text
+
+
 def test_review_prompt_stays_blind_when_approach_missing():
     text = review_prompt(
         repo="owner/repo",
