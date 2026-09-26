@@ -211,6 +211,7 @@ def plan_split(
         "multi_epic_blob",
         "triage_split_candidate",
         "too_large_split",
+        "three_bounded_contexts",
     }:
         # Inventory/epic without parts: still file two scoped children so work moves.
         candidates = _inventory_slices(issue)
