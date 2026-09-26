@@ -34,6 +34,7 @@ def handle_plan_issue(
 
         return authorize(
             request,
+            approach,
             config_path=str(inputs.get("config_path") or "") or None,
             live=bool(inputs.get("live")),
         )
