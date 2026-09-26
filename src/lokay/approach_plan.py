@@ -77,6 +77,7 @@ class ApproachPlan:
     non_goals: tuple[str, ...] = ()
     source: str = "deterministic"
     notes: tuple[str, ...] = ()
+    kind: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -213,6 +214,15 @@ def build_approach(
         text = feature.read_text(encoding="utf-8").strip()
         if text:
             notes.append(f"Feature map (.lokay/memory/feature-map.md): {text}")
+    from lokay.proc.classify_ticket_kind import classify
+
+    kind = classify(issue)
+    playbook = worktree / ".lokay" / "skills" / f"{kind}.md" if worktree and kind else None
+    skill = ""
+    if playbook is not None and playbook.is_file():
+        skill = playbook.read_text(encoding="utf-8").strip()
+        if skill:
+            notes.append(f"Playbook (.lokay/skills/{kind}.md): {skill}")
     return ApproachPlan(
         repo=issue.repo,
         issue=int(issue.number),
@@ -223,6 +233,7 @@ def build_approach(
         non_goals=_non_goals(sections),
         source="deterministic",
         notes=tuple(notes),
+        kind=kind,
     )
 
 
