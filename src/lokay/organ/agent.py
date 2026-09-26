@@ -140,6 +140,7 @@ def handle_agent(
                     or (up.get("map_repo") or {}).get("map")
                     or ""
                 ),
+                worktree=worktree,
             )
         with tempfile.NamedTemporaryFile(
             "w", suffix=".md", delete=False, encoding="utf-8"
