@@ -196,6 +196,42 @@ def test_plan_cites_feature_map_only_when_the_tree_has_one(tmp_path: Path):
     assert ".lokay/memory/feature-map.md" in rendered
 
 
+def test_one_declared_kind_loads_only_that_playbook(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    skills = tmp_path / ".lokay" / "skills"
+    skills.mkdir(parents=True)
+    (skills / "bug.md").write_text("reproduce first\n", encoding="utf-8")
+    (skills / "feat.md").write_text("name the user path\n", encoding="utf-8")
+    issue = _issue(body="Kind: bug\n\n" + _issue().body, labels=["kind:feat", "ai:ready"])
+    assert classify(issue) == "bug"
+    plan = build_approach(issue, worktree=tmp_path)
+    rendered = render_approach_md(plan)
+    assert plan.kind == "bug"
+    assert "reproduce first" in rendered
+    assert "name the user path" not in rendered
+
+
+def test_missing_kind_loads_no_playbook(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    skills = tmp_path / ".lokay" / "skills"
+    skills.mkdir(parents=True)
+    (skills / "bug.md").write_text("reproduce first\n", encoding="utf-8")
+    issue = _issue()
+    assert classify(issue) == ""
+    plan = build_approach(issue, worktree=tmp_path)
+    assert plan.kind == ""
+    assert "reproduce first" not in render_approach_md(plan)
+
+
+def test_unknown_kind_fails_closed(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    assert classify(_issue(body="Kind: garden\n\nfix it")) == ""
+    assert classify(_issue(labels=["kind:bug", "kind:feat"])) == ""
+
+
 def test_review_prompt_keeps_memory_and_strips_only_the_plan():
     diff = (
         "diff --git a/.lokay/approach.md b/.lokay/approach.md\n"
