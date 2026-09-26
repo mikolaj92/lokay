@@ -10,7 +10,7 @@ import re
 
 from lokay.models import Issue
 
-KINDS = frozenset({"bug", "fix", "feat", "perf", "refactor", "chore"})
+KINDS = frozenset({"bug", "fix", "feat", "perf", "refactor", "chore", "garden"})
 _LINE = re.compile(r"(?mi)^kind:\s*([a-z]+)\s*$")
 
 
