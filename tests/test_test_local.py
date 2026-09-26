@@ -94,3 +94,56 @@ def test_terminal_preserves_red_failure():
     inspected = {"route": "test", "worktree": "/w", "test_argv": ["true"]}
     out = red(inspected, {"route": "red", "returncode": 1, "tests": "true"}, {})
     assert out["result"]["ok"] is False and out["result"]["returncode"] == 1
+
+
+def test_missing_verify_is_honest_skip(tmp_path):
+    from lokay.proc.inspect_verify_declaration import inspect
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.lokay]\ntest = ["true"]\n', encoding="utf-8"
+    )
+    out = inspect(worktree=str(tmp_path))
+    assert out["route"] == "terminal"
+    assert out["result"]["skipped"] is True
+    assert out["result"]["reason"] == "no_declared_verify"
+
+
+def test_declared_verify_is_a_command_not_a_harness(tmp_path):
+    from lokay.proc.inspect_verify_declaration import inspect
+
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.lokay]\nverify = ["uv", "run", "verify-app"]\n', encoding="utf-8"
+    )
+    out = inspect(worktree=str(tmp_path))
+    assert out["route"] == "verify"
+    assert out["verify_argv"] == ["uv", "run", "verify-app"]
+
+
+def test_invalid_verify_fails_closed(tmp_path):
+    from lokay.proc.inspect_verify_declaration import inspect
+
+    (tmp_path / "pyproject.toml").write_text("[tool.lokay]\nverify = 12\n")
+    out = inspect(worktree=str(tmp_path))
+    assert out["route"] == "terminal"
+    assert out["result"]["ok"] is False
+    assert out["result"]["reason"] == "invalid_verify_declaration"
+
+
+def test_green_declared_verify_is_product_proof():
+    from lokay.proc.run_declared_verify import run
+
+    out = run(
+        {"route": "verify", "worktree": "/w", "verify_argv": ["true"]},
+        {"route": "green", "returncode": 0, "tests": "true"},
+    )
+    assert out["ok"] is True and out["verified"] is True and out["skipped"] is False
+
+
+def test_skipped_verify_is_not_product_proof():
+    from lokay.proc.run_declared_verify import run
+
+    out = run(
+        {"route": "terminal", "result": {"skipped": True, "reason": "no_declared_verify"}},
+        {"route": "green"},
+    )
+    assert out["verified"] is False and out["reason"] == "no_declared_verify"

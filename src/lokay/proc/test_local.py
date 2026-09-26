@@ -23,7 +23,7 @@ TEST_TIMEOUT_SECONDS = 1800
 MINI_LOKAY_REPO_SCOPE = "mikolaj92/lokay"
 
 
-def _argv_from_raw(raw: object) -> tuple[str, ...] | None:
+def _argv_from_raw(raw: object, key: str = "test") -> tuple[str, ...] | None:
     if raw is None:
         return None
     if isinstance(raw, str):
@@ -33,9 +33,9 @@ def _argv_from_raw(raw: object) -> tuple[str, ...] | None:
         if not raw:
             return None
         if not all(isinstance(item, str) and item.strip() for item in raw):
-            raise ValueError("tool.lokay.test must be a string or list of strings")
+            raise ValueError(f"tool.lokay.{key} must be a string or list of strings")
         return tuple(str(item) for item in raw)
-    raise ValueError("tool.lokay.test must be a string or list of strings")
+    raise ValueError(f"tool.lokay.{key} must be a string or list of strings")
 
 
 def _changed_pytest_argv(
@@ -67,22 +67,27 @@ def _changed_pytest_argv(
     return (*test_argv, *sorted(tests))
 
 
-def declared_test_argv(worktree: Path) -> tuple[str, ...] | None:
-    """Return the repo-declared test argv, or None when none is declared."""
+def declared_argv(worktree: Path, key: str) -> tuple[str, ...] | None:
+    """Return one repo-declared argv, or None when that key is absent."""
     pyproject = worktree / "pyproject.toml"
     if not pyproject.is_file():
         return None
     try:
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
-        raise ValueError(f"cannot read tool.lokay.test: {exc}") from exc
+        raise ValueError(f"cannot read tool.lokay.{key}: {exc}") from exc
     tool = data.get("tool")
     if not isinstance(tool, dict):
         return None
     lokay = tool.get("lokay")
-    if not isinstance(lokay, dict):
+    if not isinstance(lokay, dict) or key not in lokay:
         return None
-    return _argv_from_raw(lokay.get("test"))
+    return _argv_from_raw(lokay.get(key), key)
+
+
+def declared_test_argv(worktree: Path) -> tuple[str, ...] | None:
+    """Return the repo-declared test argv, or None when none is declared."""
+    return declared_argv(worktree, "test")
 
 
 def main(argv: list[str] | None = None) -> int:
