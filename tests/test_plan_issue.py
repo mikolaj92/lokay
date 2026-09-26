@@ -118,6 +118,25 @@ def test_plan_issue_planned_record_does_not_write():
     assert record({"route": "planned"}, {})["route"] == "planned"
 
 
+def test_incomplete_plan_routes_to_terminal_before_a_live_write(tmp_path: Path):
+    """A rejected plan never authorizes the approach file, even live."""
+    from lokay.proc.authorize_issue_plan_write import authorize
+    from lokay.proc.issue_plan_terminal import terminal
+    from lokay.proc.record_issue_approach_write import record
+
+    request = {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+               "issue": {"repo": "o/r", "number": 35}}
+    approach = {"ok": False, "reason": "plan_incomplete", "plan": {"files_likely": []}}
+    authorized = authorize(request, approach, config_path=None, live=True)
+    assert authorized["route"] == "terminal"
+    assert authorized["reason"] == "plan_incomplete"
+    assert not (tmp_path / ".lokay" / "approach.md").exists()
+    recorded = record(authorized, {})
+    result = terminal(request, approach, authorized, recorded)["result"]
+    assert result["ok"] is False and result["reason"] == "plan_incomplete"
+    assert result["wrote"] is False and "content" not in str(result.get("error"))
+
+
 def test_issue_plan_terminal_reports_written():
     from lokay.proc.issue_plan_terminal import terminal
 
