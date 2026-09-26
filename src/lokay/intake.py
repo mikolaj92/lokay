@@ -564,7 +564,27 @@ def check_satisfied(issue: Issue, *, clone_path: Path | None) -> CheckResult:
     return CheckResult(check="satisfied", verdict=PASS, reason="work_still_needed", detail=detail)
 
 
-def check_ambiguity(issue: Issue) -> CheckResult:
+def _bounded_contexts(body: str) -> tuple[str, ...]:
+    """Second path segment under src/ is the bounded context. Nothing is invented."""
+    found: list[str] = []
+    for line in (body or "").splitlines():
+        match = re.search(r"(?:^|[\s`])src/([A-Za-z0-9_.-]+)/", line)
+        if match:
+            found.append(match.group(1))
+    return tuple(dict.fromkeys(found))
+
+
+def _has_typed_edge(body: str) -> bool:
+    return bool(re.search(r"(?i)\btyped edge\b", body or ""))
+
+
+def _has_feature_map(root: Path | None) -> bool:
+    if root is None:
+        return False
+    return (Path(root) / ".lokay/memory/feature-map.md").is_file()
+
+
+def check_ambiguity(issue: Issue, root: Path | None = None) -> CheckResult:
     """Oversized/multi-part → SPLIT when possible; residual ambiguity → PARK."""
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
@@ -573,6 +593,15 @@ def check_ambiguity(issue: Issue) -> CheckResult:
     technical = classify_technical_route(title, body)
     if technical["route"] == "split":
         return CheckResult(check="ambiguity", verdict=SPLIT, reason=technical["reason"], detail={})
+
+    contexts = _bounded_contexts(body)
+    if len(contexts) >= 3 and not _has_typed_edge(body) and not _has_feature_map(root):
+        return CheckResult(
+            check="ambiguity",
+            verdict=SPLIT,
+            reason="three_bounded_contexts",
+            detail={"contexts": list(contexts)},
+        )
 
     if _INVENTORY_BLOB.search(blob):
         return CheckResult(
@@ -852,7 +881,7 @@ def decide_intake(
         check_essence_objection(issue, trusted_assignee=trusted_assignee),
         check_shape(issue, shape),
         check_satisfied(issue, clone_path=clone_path),
-        check_ambiguity(issue),
+        check_ambiguity(issue, root=clone_path),
     )
     return aggregate_intake(
         checks,

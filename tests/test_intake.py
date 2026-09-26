@@ -158,6 +158,53 @@ def test_ambiguity_too_many_checkboxes_splits():
     assert result.reason == "too_many_checkboxes"
 
 
+def test_three_contexts_without_edge_or_map_split():
+    body = "\n".join(
+        [
+            "- src/billing/invoice.py",
+            "- src/shipping/label.py",
+            "- src/catalog/product.py",
+        ]
+    )
+    result = check_ambiguity(_issue(body=body))
+    assert result.verdict == "split"
+    assert result.reason == "three_bounded_contexts"
+
+
+def test_three_contexts_with_a_feature_map_stay_one_ticket(tmp_path):
+    (tmp_path / ".lokay/memory").mkdir(parents=True)
+    (tmp_path / ".lokay/memory/feature-map.md").write_text("billing -> shipping\n", encoding="utf-8")
+    body = "\n".join(
+        [
+            "- src/billing/invoice.py",
+            "- src/shipping/label.py",
+            "- src/catalog/product.py",
+        ]
+    )
+    result = check_ambiguity(_issue(body=body), root=tmp_path)
+    assert result.verdict == "pass"
+
+
+def test_two_contexts_do_not_split():
+    body = "\n".join(["- src/billing/invoice.py", "- src/shipping/label.py"])
+    result = check_ambiguity(_issue(body=body))
+    assert result.verdict == "pass"
+
+
+def test_typed_edge_keeps_three_contexts_together():
+    body = "\n".join(
+        [
+            "- src/billing/invoice.py",
+            "- src/shipping/label.py",
+            "- src/catalog/product.py",
+            "",
+            "typed edge: billing -> shipping -> catalog",
+        ]
+    )
+    result = check_ambiguity(_issue(body=body))
+    assert result.verdict == "pass"
+
+
 def test_duplicate_ai_pr_closes():
     issue = _issue(number=12)
     result = check_duplicate_ai_pr(
