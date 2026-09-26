@@ -228,8 +228,24 @@ def test_missing_kind_loads_no_playbook(tmp_path: Path):
 def test_unknown_kind_fails_closed(tmp_path: Path):
     from lokay.proc.classify_ticket_kind import classify
 
-    assert classify(_issue(body="Kind: garden\n\nfix it")) == ""
+    assert classify(_issue(body="Kind: essay\n\nfix it")) == ""
     assert classify(_issue(labels=["kind:bug", "kind:feat"])) == ""
+
+
+def test_garden_is_one_kind_and_loads_only_its_playbook(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    skills = tmp_path / ".lokay" / "skills"
+    skills.mkdir(parents=True)
+    (skills / "garden.md").write_text("one small debt, then stop\n", encoding="utf-8")
+    (skills / "chore.md").write_text("sweep the repo\n", encoding="utf-8")
+    issue = _issue(labels=["kind:garden"])
+    assert classify(issue) == "garden"
+    plan = build_approach(issue, worktree=tmp_path)
+    rendered = render_approach_md(plan)
+    assert plan.kind == "garden"
+    assert "one small debt, then stop" in rendered
+    assert "sweep the repo" not in rendered
 
 
 def test_review_prompt_keeps_memory_and_strips_only_the_plan():
