@@ -23,6 +23,9 @@ fi
 if [[ -z "${OCR_LLM_API_KEY:-}" && -n "${TDAI_MEMORY_API_KEY:-}" ]]; then
   export OCR_LLM_API_KEY="${TDAI_MEMORY_API_KEY}"
 fi
+# pi hangs instead of picking a model unless the provider is named.
+export PI_PROVIDER="${PI_PROVIDER:-omniroute}"
+export PI_MODEL="${PI_MODEL:-pi}"
 
 export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
 ROOT="${LOKAY_ROOT}"
