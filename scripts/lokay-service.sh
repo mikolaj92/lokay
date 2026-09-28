@@ -11,6 +11,11 @@ export HOME
 export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${ROOT}/.venv/bin:${PATH:-}"
 export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
+# The review reads OCR_LLM_API_KEY. The machine holds that key under the memory
+# gateway name; omniroute accepts it. Map it across when the review name is unset.
+if [[ -z "${OCR_LLM_API_KEY:-}" && -n "${TDAI_MEMORY_API_KEY:-}" ]]; then
+  export OCR_LLM_API_KEY="${TDAI_MEMORY_API_KEY}"
+fi
 
 export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
 ROOT="${LOKAY_ROOT}"

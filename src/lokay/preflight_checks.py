@@ -58,6 +58,10 @@ def check_pr_review_credential(*, cfg: Any) -> Finding:
     names = tuple(cfg.pr_review_provider_env or ())
     if len(names) != 1 or names[0] != "OCR_LLM_API_KEY":
         return finding("pr_review_credential", False, "credential_allowlist_invalid")
+    # The review reads OCR_LLM_API_KEY. When the machine already holds it, that is
+    # the credential. The Pi store is only the fallback for a host that saved one.
+    if os.environ.get("OCR_LLM_API_KEY", "").strip():
+        return finding("pr_review_credential", True, "ok")
     try:
         from lokay.pr_review_credential import resolve_pi_api_key
 
