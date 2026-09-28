@@ -48,7 +48,10 @@ def _agent_verdict(request: dict, issue: Issue, worktree: Path | None, execute) 
     else:
         result = _run(request, issue, worktree, prompt)
     if result.get("status") != "completed":
-        return {"failed": True, "reason": str(result.get("status") or "executor_failed")}
+        tail = str(result.get("stdout_tail") or "").strip().splitlines()
+        last = tail[-1][:180] if tail else ""
+        reason = str(result.get("status") or "executor_failed")
+        return {"failed": True, "reason": f"{reason}: {last}" if last else reason}
     try:
         data = extract_json_object(str(result.get("result_stdout") or result.get("stdout_tail") or ""))
     except PrReviewError:
