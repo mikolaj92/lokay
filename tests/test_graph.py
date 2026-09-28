@@ -518,6 +518,7 @@ def test_parent_factory_inherits_health_lease():
     assert "LOKAY_HEALTH_LEASE" in inherited
     assert "LOKAY_HEALTH_LEASE_PATH" in inherited
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
+    assert {"PI_PROVIDER", "PI_MODEL", "TDAI_MEMORY_API_KEY"} <= set(inherited)
     assert "PYTHONPATH" in inherited
     assert "LOKAY_PROCESS_HEAD" in inherited
     assert "LOKAY_HOST_FF_FETCHED" in inherited
@@ -531,6 +532,9 @@ def test_pr_review_agent_receives_ocr_credential_through_fala_capability():
         item for item in package["capabilities"] if item["id"] == "lokay_atom"
     )
     assert "OCR_LLM_API_KEY" in capability["secret_handles"]
+    # pi reads its provider and key only from the environment and hangs when
+    # either is absent. The daemon has both; every atom subprocess must keep them.
+    assert {"PI_PROVIDER", "PI_MODEL", "TDAI_MEMORY_API_KEY"} <= set(capability["secret_handles"])
 
     review = next(
         path for path in package["correlation_paths"] if path["id"] == "pr_triage"
