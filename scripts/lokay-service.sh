@@ -11,8 +11,15 @@ export HOME
 export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
-# The review reads OCR_LLM_API_KEY. The machine holds that key under the memory
-# gateway name; omniroute accepts it. Map it across when the review name is unset.
+# The review reads OCR_LLM_API_KEY. launchd starts this script with a clean
+# environment, so load the key file the session uses and map the name across.
+CLIENT_ENV="${HOME}/.config/agent-memory/client.env"
+if [[ -f "${CLIENT_ENV}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${CLIENT_ENV}"
+  set +a
+fi
 if [[ -z "${OCR_LLM_API_KEY:-}" && -n "${TDAI_MEMORY_API_KEY:-}" ]]; then
   export OCR_LLM_API_KEY="${TDAI_MEMORY_API_KEY}"
 fi
