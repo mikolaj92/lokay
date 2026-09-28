@@ -67,7 +67,7 @@ def _run(request: dict, issue: Issue, worktree: Path | None, prompt: str) -> dic
         return {"status": "disabled"}
     return run_agent(
         runner(cfg), cfg, worktree=worktree, prompt=prompt, execute=True,
-        session_kind="plan", timeout_seconds=110, attach_collector_boundary=False,
+        session_kind="plan", timeout_seconds=180, attach_collector_boundary=False,
         repo=issue.repo, issue=int(issue.number),
     )
 
