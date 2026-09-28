@@ -8,7 +8,7 @@ set -euo pipefail
 
 HOME="${HOME:-${TMPDIR:-/tmp}/lokay-${UID:-unknown}}"
 export HOME
-export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${ROOT}/.venv/bin:${PATH:-}"
+export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
 # The review reads OCR_LLM_API_KEY. The machine holds that key under the memory
@@ -19,6 +19,7 @@ fi
 
 export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
 ROOT="${LOKAY_ROOT}"
+export PATH="${ROOT}/.venv/bin:${PATH}"
 UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${ROOT}/.venv}"
 export UV_PROJECT_ENVIRONMENT
 export LOKAY_CONFIG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"
