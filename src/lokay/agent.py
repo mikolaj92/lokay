@@ -280,9 +280,11 @@ def run_agent(
             argv=tuple(argv),
             cwd=str(worktree),
             # Inherit the harness runtime unchanged; only Lokay's host lease
-            # stays with the orchestrator, never its child process.
-            env={"LOKAY_HEALTH_LEASE": ""},
+            # stays with the orchestrator, never its child process. pi reads its
+            # provider key only on a real terminal and hangs forever on TERM=dumb.
+            env={"LOKAY_HEALTH_LEASE": "", "TERM": "xterm-256color"},
             timeout_seconds=timeout,
+            pty=True,
         ),
         live=True,
     )
