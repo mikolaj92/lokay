@@ -57,18 +57,18 @@ def _agent_verdict(request: dict, issue: Issue, worktree: Path | None, execute) 
 
 
 def _run(request: dict, issue: Issue, worktree: Path | None, prompt: str) -> dict:
-    from lokay.proc._issue_triage_agent_runtime import execute
+    from lokay.agent import run_agent
+    from lokay.proc._common import runner, semantic_agent_allowed
 
     cfg = _config(request)
-    if cfg is None:
+    if cfg is None or worktree is None:
         return {"status": "no_config"}
-    return execute(
-        cfg=cfg,
-        repo=issue.repo,
-        issue=int(issue.number),
-        clone_path=str(worktree) if worktree else "",
-        prompt=prompt,
-        live=bool(request.get("live")),
+    if not semantic_agent_allowed(cfg, live_flag=bool(request.get("live"))):
+        return {"status": "disabled"}
+    return run_agent(
+        runner(cfg), cfg, worktree=worktree, prompt=prompt, execute=True,
+        session_kind="plan", timeout_seconds=110, attach_collector_boundary=False,
+        repo=issue.repo, issue=int(issue.number),
     )
 
 

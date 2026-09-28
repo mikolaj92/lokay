@@ -86,6 +86,18 @@ def test_backtick_line_range_reaches_the_agent_and_survives(tmp_path: Path):
     assert out["source"] == "agent"
 
 
+def test_a_planned_agent_call_is_not_a_plan(tmp_path: Path):
+    """The live failure: the runtime returned status=planned and the plan died."""
+    from lokay.proc.build_issue_approach import build
+
+    out = build(
+        {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+         "issue": {"repo": "o/r", "number": 35, "title": "init", "body": "x"}},
+        execute=lambda prompt: {"status": "planned", "result_stdout": ""},
+    )
+    assert out["ok"] is False and out["reason"] == "planned"
+
+
 def _issue(**kwargs) -> Issue:
     base = dict(
         repo="owner/repo",
