@@ -23,7 +23,7 @@ COLLECTOR_BOUNDARY_NOTE = (
 
 _HEADING = re.compile(r"(?m)^(#{1,6})\s+(.+?)\s*$")
 _PATH_TICK = re.compile(
-    r"`((?:[\w.-]+/)*[\w.-]+\.[A-Za-z0-9]{1,12})`"
+    r"`((?:[\w.-]+/)*[\w.-]+\.[A-Za-z0-9]{1,12})(?::\d+(?:-\d+)?)?`"
 )
 _PATH_BARE = re.compile(
     r"(?<![`\w/])((?:src|tests|docs|fala|scripts|config)(?:/[\w.-]+)+\.[A-Za-z0-9]{1,12})"
@@ -193,18 +193,27 @@ def build_approach(
     issue: Issue,
     *,
     worktree: Path | None = None,
+    agent: dict[str, Any] | None = None,
 ) -> ApproachPlan:
-    """Pure deterministic plan from issue body (+ optional worktree path hints)."""
-    sections = _sections(issue.body or "")
-    blob = f"{issue.title or ''}\n{issue.body or ''}"
-    paths = repo_file_hints(worktree, extract_paths(blob))
+    """Plan from one agent verdict.
+
+    ``agent`` is the closed JSON the executor returned: ``goal``, ``files``,
+    ``test_plan``, ``non_goals``, ``notes``. Issue prose is not parsed. Without
+    an agent verdict the plan carries no files, and the validator rejects it.
+    """
+    verdict = agent or {}
+    paths = repo_file_hints(worktree, verdict.get("files") or ())
     notes: list[str] = [
         "Trust intentional issue; this plan is evidence for later review, not a human gate.",
         "Coding agent may refine details but should stay on the stated goal and non-goals.",
         COLLECTOR_BOUNDARY_NOTE,
     ]
     if not paths:
-        notes.append("No explicit file paths in issue; infer from repo inspection.")
+        notes.append("Agent named no files; plan is incomplete.")
+    for item in verdict.get("notes") or ():
+        text = str(item).strip()
+        if text:
+            notes.append(text)
     feature = (
         worktree / ".lokay" / "memory" / "feature-map.md"
         if worktree is not None
@@ -227,11 +236,11 @@ def build_approach(
         repo=issue.repo,
         issue=int(issue.number),
         title=(issue.title or "").strip(),
-        goal=_goal_from_issue(issue, sections),
+        goal=str(verdict.get("goal") or "").strip()[:800],
         files_likely=paths,
-        test_plan=_test_plan(sections, issue.body or ""),
-        non_goals=_non_goals(sections),
-        source="deterministic",
+        test_plan=tuple(str(t) for t in (verdict.get("test_plan") or ()) if str(t).strip())[:12],
+        non_goals=tuple(str(n) for n in (verdict.get("non_goals") or ()) if str(n).strip())[:12],
+        source="agent" if agent else "no_agent",
         notes=tuple(notes),
         kind=kind,
     )

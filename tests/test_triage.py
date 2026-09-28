@@ -93,26 +93,15 @@ def test_decide_body_short():
     assert d.add_labels == ()
 
 
-def test_decide_oos_title_marker():
-    d = decide_issue(
-        _issue(
-            title="Please ignore [oos]",
-            body="Please add feature X with acceptance: does Y when Z.",
-        )
-    )
-    assert d.decision == "out_of_scope"
-    assert d.close is True
-
-
-def test_decide_oos_status_line():
-    d = decide_issue(
-        _issue(
-            title="Legacy widget removal",
-            body="Status: out of scope\n\nWe will not ship this path.",
-        )
-    )
-    assert d.decision == "out_of_scope"
-    assert d.reason == "oos_marker"
+def test_decide_oos_prose_does_not_close():
+    """Out of scope and wontfix are the triage agent's verdict, not a regex."""
+    for title, body in (
+        ("Please ignore [oos]", "Please add feature X with acceptance: does Y when Z."),
+        ("Legacy widget removal", "Status: out of scope\n\nWe will not ship this path."),
+        ("Drop the widget wontfix", "will not fix this path, enough body text here."),
+    ):
+        d = decide_issue(_issue(title=title, body=body))
+        assert d.decision == "ready", (title, d)
 
 
 def test_decide_ready_despite_out_of_scope_section():
@@ -172,24 +161,15 @@ Adopt full Basecoat + HTMX + Alpine stack via product_shell.
     assert "ai:ready" in d.add_labels
 
 
-def test_decide_split_title_epic():
-    d = decide_issue(
-        _issue(
-            title="[Pad Audit] Platform UI + Fala unix processes + no-legacy epic (app-factory)",
-            body="## Goal\nTrack child issues for platform audit.\n\n## Done means\n- [ ] children filed\n",
-        )
-    )
-    assert d.decision == "split"
-    assert d.reason == "too_large_split"
-    assert d.add_labels == ()
-
-
-def test_decide_too_large_splits():
-    body = "\n".join(f"- [ ] task {i} more text here" for i in range(8))
-    d = decide_issue(_issue(body=body))
-    assert d.decision == "split"
-    assert d.reason == "too_large_split"
-    assert d.add_labels == ()
+def test_decide_epic_and_checkbox_prose_does_not_split():
+    """Epic and oversized prose split through the agent, not decide_issue."""
+    epic = decide_issue(_issue(
+        title="[Pad Audit] Platform UI + Fala unix processes + no-legacy epic (app-factory)",
+        body="## Goal\nTrack child issues for platform audit.\n\n## Done means\n- [ ] children filed\n",
+    ))
+    assert epic.decision == "ready"
+    many = decide_issue(_issue(body="\n".join(f"- [ ] task {i} more text here" for i in range(8))))
+    assert many.decision == "ready"
 
 
 def test_decide_skip_already_ready():

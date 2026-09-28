@@ -64,11 +64,14 @@ def handle_intake_check(
     if atom == "run_intake_satisfied_check":
         from lokay.proc.run_intake_satisfied_check import run
 
-        return run(issue, clone)
+        return run(
+            {**issue, "config_path": inputs.get("config_path"), "live": bool(inputs.get("live"))},
+            clone,
+        )
     if atom == "run_intake_ambiguity_check":
         from lokay.proc.run_intake_ambiguity_check import run
 
-        return run(issue)
+        return run({**issue, "config_path": inputs.get("config_path"), "live": bool(inputs.get("live"))})
     if atom == "parse_intake_covering_prs":
         from lokay.proc.parse_intake_covering_prs import parse
 

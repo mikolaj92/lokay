@@ -50,7 +50,8 @@ def handle_issue_split(
                 "child_5": "absent",
             }
         return plan(
-            issue_data=issue, reason=str(decision.get("reason") or "agent_split")
+            issue_data={**issue, "config_path": inputs.get("config_path"), "live": bool(inputs.get("live"))},
+            reason=str(decision.get("reason") or "agent_split"),
         )
     if atom.startswith("create_issue_split_child_"):
         from lokay.proc.create_issue_split_child import create

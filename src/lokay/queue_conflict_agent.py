@@ -21,7 +21,6 @@ from lokay.queue_conflict import (
     READY,
     SKIP,
     ConflictVerdict,
-    evaluate_queue_conflict,
 )
 from lokay.runner import Runner
 from lokay.safety import untrusted_issue_block
@@ -215,16 +214,11 @@ def evaluate_queue_conflict_with_agent(
         )
         return traced(value, "bypass", "completed")
 
-    fallback = evaluate_queue_conflict(
-        issue,
-        open_prs=prs,
-        peer_issues=peers,
-        branch_prefix=branch_prefix,
-        ready_label=ready_label,
-        tracker_label=tracker_label,
-    )
+    def no_agent(status: str) -> ConflictVerdict:
+        return ConflictVerdict(outcome=SKIP, reason=f"agent_{status}", detail={"issue": issue.number})
+
     if not execute or runner is None or config is None:
-        return traced(fallback, "fallback", "disabled")
+        return traced(no_agent("disabled"), "no_agent", "disabled")
 
     prompt = queue_conflict_prompt(issue, open_prs=prs, peer_issues=peers)
     cwd = worktree if worktree and Path(worktree).is_dir() else Path.cwd()
@@ -240,17 +234,17 @@ def evaluate_queue_conflict_with_agent(
             attach_collector_boundary=False,
         )
     except Exception:  # noqa: BLE001
-        return traced(fallback, "fallback", "executor_failed")
+        return traced(no_agent("executor_failed"), "no_agent", "executor_failed")
     if agent_out.get("status") != "completed":
         status = "timeout" if agent_out.get("status") == "timeout" else "executor_failed"
-        return traced(fallback, "fallback", status)
+        return traced(no_agent(status), "no_agent", status)
     try:
         parsed = parse_queue_conflict_output(str(agent_out.get("stdout_tail") or ""))
     except (QueueConflictAgentError, PrReviewError):
-        return traced(fallback, "fallback", "invalid_json")
+        return traced(no_agent("invalid_json"), "no_agent", "invalid_json")
     reason_blob = parsed["reason"].lower()
     if any(marker in reason_blob for marker in _POLICY_REASON_MARKERS):
-        return traced(fallback, "fallback", "rejected")
+        return traced(no_agent("rejected"), "no_agent", "rejected")
     value = _verdict_from_agent(
         parsed,
         issue=issue,

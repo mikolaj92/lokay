@@ -79,6 +79,14 @@ def test_semantic_sessions_do_not_share_coding_session(tmp_path: Path):
     assert argv[-1] == intake
 
 
+def test_queue_without_an_agent_defers_instead_of_guessing():
+    v = evaluate_queue_conflict_with_agent(
+        _issue(number=12), open_prs=[], peer_issues=[], runner=None, config=None, execute=False,
+    )
+    assert v.outcome == "skip" and v.reason == "agent_disabled"
+    assert v.semantic["source"] == "no_agent"
+
+
 def test_queue_covering_pr_still_closes_without_agent():
     v = evaluate_queue_conflict_with_agent(
         _issue(number=12),

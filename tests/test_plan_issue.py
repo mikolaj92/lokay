@@ -50,12 +50,40 @@ def test_a_built_plan_must_carry_a_goal_and_files():
 
 
 def test_building_a_plan_with_no_files_fails_closed(tmp_path: Path):
-    """An issue that names no file does not become a plan."""
+    """An agent that names no file does not become a plan."""
     from lokay.proc.build_issue_approach import build
 
-    out = build({"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
-                 "issue": {"repo": "o/r", "number": 1, "title": "Do a thing", "body": ""}})
+    out = build(
+        {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+         "issue": {"repo": "o/r", "number": 1, "title": "Do a thing", "body": ""}},
+        execute=lambda prompt: {"status": "completed", "result_stdout": '{"ok": true, "goal": "x", "files": []}'},
+    )
     assert out["ok"] is False and out["reason"] == "plan_incomplete"
+
+
+def test_backtick_line_range_reaches_the_agent_and_survives(tmp_path: Path):
+    """PunkRecords #35: `models.py:124-131` died as plan_incomplete before any agent ran."""
+    import json
+    from lokay.proc.build_issue_approach import build
+
+    body = "- `src/punkrecords/models.py:124-131` — init\n"
+    seen = {}
+
+    def execute(prompt: str) -> dict:
+        seen["prompt"] = prompt
+        return {"status": "completed", "result_stdout": json.dumps(
+            {"ok": True, "goal": "fix init", "files": ["src/punkrecords/models.py"],
+             "test_command": "pytest -q"})}
+
+    out = build(
+        {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+         "issue": {"repo": "o/r", "number": 35, "title": "init", "body": body}},
+        execute=execute,
+    )
+    assert "models.py:124-131" in seen["prompt"]
+    assert out["ok"] is True, json.dumps(out)
+    assert out["plan"]["files_likely"] == ("src/punkrecords/models.py",)
+    assert out["source"] == "agent"
 
 
 def _issue(**kwargs) -> Issue:
@@ -85,9 +113,41 @@ def _issue(**kwargs) -> Issue:
     return Issue(**base)
 
 
-def test_build_approach_extracts_sections_and_paths():
+def _verdict(**overrides) -> dict:
+    base = {
+        "goal": "Write approach.md before the coding agent.",
+        "files": [
+            "src/lokay/proc/plan_issue.py",
+            "fala/lokay.fala-package.toml",
+            "tests/test_plan_issue.py",
+        ],
+        "test_plan": ["hermetic atom test", "graph order plan before agent"],
+        "non_goals": ["merge/wait health fix", "parallel agents"],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_build_approach_uses_the_agent_verdict_not_the_issue_prose():
+    """A backtick path with a line range survives because the agent names it.
+
+    The issue body is the PunkRecords shape that the regex gate dropped.
+    """
+    issue = _issue(body="- `src/punkrecords/models.py:124-131` — init\n")
+    plan = build_approach(issue, agent=_verdict(files=["src/punkrecords/models.py"]))
+    assert plan.source == "agent"
+    assert plan.files_likely == ("src/punkrecords/models.py",)
+    assert "approach.md" in plan.goal.lower()
+
+
+def test_build_approach_without_an_agent_names_no_files():
     plan = build_approach(_issue())
-    assert plan.source == "deterministic"
+    assert plan.source == "no_agent" and plan.files_likely == ()
+
+
+def test_build_approach_keeps_the_agent_plan():
+    plan = build_approach(_issue(), agent=_verdict())
+    assert plan.source == "agent"
     assert "approach.md" in plan.goal.lower() or "Write approach" in plan.goal
     assert "src/lokay/proc/plan_issue.py" in plan.files_likely
     assert "fala/lokay.fala-package.toml" in plan.files_likely
@@ -102,7 +162,7 @@ def test_build_approach_extracts_sections_and_paths():
 
 
 def test_render_and_write_approach_file(tmp_path: Path):
-    plan = build_approach(_issue())
+    plan = build_approach(_issue(), agent=_verdict())
     content = render_approach_md(plan)
     assert "# Approach plan" in content
     assert "lokay-approach" in content
@@ -185,12 +245,12 @@ new file mode 100644
 
 
 def test_plan_cites_feature_map_only_when_the_tree_has_one(tmp_path: Path):
-    bare = build_approach(_issue(), worktree=tmp_path)
+    bare = build_approach(_issue(), worktree=tmp_path, agent=_verdict())
     assert all("feature-map" not in note for note in bare.notes)
     memory = tmp_path / ".lokay" / "memory"
     memory.mkdir(parents=True)
     (memory / "feature-map.md").write_text("door opens from the hall\n", encoding="utf-8")
-    cited = build_approach(_issue(), worktree=tmp_path)
+    cited = build_approach(_issue(), worktree=tmp_path, agent=_verdict())
     rendered = render_approach_md(cited)
     assert any("door opens from the hall" in note for note in cited.notes)
     assert ".lokay/memory/feature-map.md" in rendered
@@ -205,7 +265,7 @@ def test_one_declared_kind_loads_only_that_playbook(tmp_path: Path):
     (skills / "feat.md").write_text("name the user path\n", encoding="utf-8")
     issue = _issue(body="Kind: bug\n\n" + _issue().body, labels=["kind:feat", "ai:ready"])
     assert classify(issue) == "bug"
-    plan = build_approach(issue, worktree=tmp_path)
+    plan = build_approach(issue, worktree=tmp_path, agent=_verdict())
     rendered = render_approach_md(plan)
     assert plan.kind == "bug"
     assert "reproduce first" in rendered
@@ -220,7 +280,7 @@ def test_missing_kind_loads_no_playbook(tmp_path: Path):
     (skills / "bug.md").write_text("reproduce first\n", encoding="utf-8")
     issue = _issue()
     assert classify(issue) == ""
-    plan = build_approach(issue, worktree=tmp_path)
+    plan = build_approach(issue, worktree=tmp_path, agent=_verdict())
     assert plan.kind == ""
     assert "reproduce first" not in render_approach_md(plan)
 
@@ -241,7 +301,7 @@ def test_garden_is_one_kind_and_loads_only_its_playbook(tmp_path: Path):
     (skills / "chore.md").write_text("sweep the repo\n", encoding="utf-8")
     issue = _issue(labels=["kind:garden"])
     assert classify(issue) == "garden"
-    plan = build_approach(issue, worktree=tmp_path)
+    plan = build_approach(issue, worktree=tmp_path, agent=_verdict())
     rendered = render_approach_md(plan)
     assert plan.kind == "garden"
     assert "one small debt, then stop" in rendered
