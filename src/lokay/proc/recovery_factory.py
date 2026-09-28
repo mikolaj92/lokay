@@ -25,7 +25,16 @@ def main(argv: list[str] | None = None) -> int:
         config_path=args.config,
         live=bool(args.live),
     )
-    return emit_exit({"ok": True, "factory": result})
+    # Downstream summarize only needs the factory verdict, not its full 30+ MiB
+    # Fala effector journal. Keep the detailed result on its own journal.
+    factory = {
+        key: result[key]
+        for key in ("ok", "health", "reason", "kind", "engine", "planned", "progress", "outcome", "pass_receipt_path")
+        if key in result
+    }
+    factory["db"] = result.get("db")
+    factory["run_id"] = result.get("run_id")
+    return emit_exit({"ok": True, "factory": factory})
 
 
 if __name__ == "__main__":

@@ -208,7 +208,13 @@ class Config:
 
 
 def _expand(path: str | Path) -> Path:
-    return Path(os.path.expanduser(str(path))).resolve()
+    candidate = Path(os.path.expanduser(str(path)))
+    if not candidate.is_absolute():
+        import shutil
+        found = shutil.which(str(candidate)) or shutil.which(candidate.name)
+        if found:
+            return Path(found).resolve()
+    return candidate.resolve()
 
 
 _TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})

@@ -506,7 +506,7 @@ def test_every_subprocess_atom_inherits_pythonpath():
     assert missing == []
 
 
-def test_parent_factory_inherits_fala_home_and_health_lease():
+def test_parent_factory_inherits_health_lease():
     import tomllib
 
     package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
@@ -514,7 +514,7 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
         path for path in package["correlation_paths"] if path["id"] == "factory_pass"
     )
     inherited = factory["effectors"][0]["adapter"]["inherit_env"]
-    assert "FALA_HOME" in inherited
+    assert "FALA_HOME" not in inherited
     assert "LOKAY_HEALTH_LEASE" in inherited
     assert "LOKAY_HEALTH_LEASE_PATH" in inherited
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited

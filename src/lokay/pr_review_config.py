@@ -53,6 +53,19 @@ def _trusted_path(path: Path | None, *, executable: bool = False) -> Path:
     return resolved
 
 
+def _trusted_executable(path: Path | None) -> Path:
+    if path is None:
+        raise ReviewConfigError("trusted_file_missing")
+    candidate = Path(path).expanduser()
+    if candidate.is_absolute() or candidate.parent != Path("."):
+        return _trusted_path(candidate, executable=True)
+    import shutil
+    found = shutil.which(candidate.name)
+    if found is None:
+        raise ReviewConfigError("trusted_file_missing")
+    return _trusted_path(Path(found), executable=True)
+
+
 def _credential_keys(value: Any) -> bool:
     if isinstance(value, Mapping):
         forbidden = {
@@ -92,8 +105,8 @@ def _file_digests(cfg: Config) -> dict[str, str]:
 
 def canonical_review_payload(cfg: Config) -> dict[str, Any]:
     """Return the secret-free identity covered by ``config_sha256``."""
-    binary = _trusted_path(cfg.pr_review_binary, executable=True)
-    plugin = _trusted_path(Path(cfg.pr_review_plugin_command), executable=True)
+    binary = _trusted_executable(cfg.pr_review_binary)
+    plugin = _trusted_executable(Path(cfg.pr_review_plugin_command))
     provider_config = _trusted_path(cfg.pr_review_ocr_config)
     provider_value = _json_file(provider_config)
     if not isinstance(provider_value, dict) or _credential_keys(provider_value):

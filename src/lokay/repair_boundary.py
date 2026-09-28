@@ -128,9 +128,14 @@ def select_test(test: Mapping[str, Any], *, applicable: bool = True) -> dict[str
 
 
 def select_test_repair(
-    validation: Mapping[str, Any], *, applicable: bool = True
+    initial_test: Mapping[str, Any],
+    validation: Mapping[str, Any],
+    *,
+    applicable: bool = True,
 ) -> dict[str, Any]:
     if not applicable:
+        return {"ok": True, "route": "not_applicable"}
+    if initial_test.get("route") != "fail":
         return {"ok": True, "route": "not_applicable"}
     if (
         validation.get("route") != "valid"
@@ -149,6 +154,8 @@ def finalize_tests(
 ) -> dict[str, Any]:
     if not applicable:
         return {"ok": True, "route": "not_applicable"}
-    if first.get("route") == "pass" or second.get("route") == "pass":
+    if first.get("route") == "pass":
+        return {"ok": True, "route": "publish"}
+    if first.get("route") == "fail" and second.get("route") == "pass":
         return {"ok": True, "route": "publish"}
     return {"ok": True, "route": "terminal"}

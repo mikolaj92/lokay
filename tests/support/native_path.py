@@ -11,6 +11,7 @@ from typing import Any, Mapping
 
 _INHERIT = (
     "LOKAY_ROOT",
+    "FALA_HOME",
     "LOKAY_PROCESS_HEAD",
     "LOKAY_HOST_FF_FETCHED",
     "LOKAY_HEALTH_LEASE",

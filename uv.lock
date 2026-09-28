@@ -180,6 +180,8 @@ dependencies = [
     { name = "app-factory", extra = ["platform"] },
     { name = "fala" },
     { name = "kofte" },
+    { name = "lokay-review-open-code-review" },
+    { name = "mojo" },
     { name = "pyyaml" },
     { name = "uvicorn" },
 ]
@@ -196,11 +198,18 @@ requires-dist = [
     { name = "fala", git = "https://github.com/mikolaj92/Fala.git?rev=4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd" },
     { name = "httpx2", marker = "extra == 'dev'", specifier = ">=2.12.0" },
     { name = "kofte", git = "https://github.com/mikolaj92/Kofte.git?rev=cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" },
+    { name = "lokay-review-open-code-review", editable = "plugins/pr_review_open_code_review" },
+    { name = "mojo", specifier = "==1.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "uvicorn", specifier = ">=0.52.4" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "lokay-review-open-code-review"
+version = "0.1.0"
+source = { editable = "plugins/pr_review_open_code_review" }
 
 [[package]]
 name = "markupsafe"
@@ -266,12 +275,99 @@ wheels = [
 ]
 
 [[package]]
+name = "mblack"
+version = "26.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "mypy-extensions" },
+    { name = "pathspec" },
+    { name = "platformdirs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/36/8147d0627cde9043557f7906eabe64ff6295ec910dade5251e5703f0f6d9/mblack-26.5.0-py3-none-any.whl", hash = "sha256:072b304646c277979e6a1d19b086ef226bb7381810902e975cf1c3886d1d7883", size = 155289, upload-time = "2026-08-11T14:33:49.308Z" },
+]
+
+[[package]]
+name = "mojo"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mblack" },
+    { name = "mojo-compiler" },
+    { name = "mojo-lldb-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/f0/80f6d88e19c038b2ef251b137379663a61227d6918602d8d3f702121b7cf/mojo-1.0.0-py3-none-macosx_13_0_arm64.whl", hash = "sha256:69413fee96dfd43c4955ace56e4bb0f89401098daf61538a563c82571bc9d984", size = 34984043, upload-time = "2026-08-11T14:33:45.545Z" },
+    { url = "https://files.pythonhosted.org/packages/31/e3/d429fb53aa018e592dc378def8a92c67d0978078c8c30d089019195a285f/mojo-1.0.0-py3-none-manylinux_2_34_aarch64.whl", hash = "sha256:a6db18b2846ec4877c5cd43a2dce1556400520dc0d4450dc8b4703dab569e9a2", size = 46662292, upload-time = "2026-08-11T14:34:48.124Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/89/326637e71282288e7d3a8ef2990dbf9fbfb07c1b3d21b836ffe2ee3111a9/mojo-1.0.0-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:725d6b7f29a5a3334e3c225f35f2b709fd46151a0a31a2c22738b1937dfc83d9", size = 47843328, upload-time = "2026-08-11T14:34:11.448Z" },
+]
+
+[[package]]
+name = "mojo-compiler"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mojo-compiler-mojo-libs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/59/c11cf3129d4bc77b1604ac3a84bee51ee1a7cd8a3a8fa25c14528f4bd51e/mojo_compiler-1.0.0-py3-none-macosx_13_0_arm64.whl", hash = "sha256:5077ee27c0dfbbdf138a11ec12838b0d3f10148a874cf95040c9ca2332ae2622", size = 70979164, upload-time = "2026-08-11T14:34:51.281Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/f9/cbfe2bf947d0926ad57599513d898f1e02ee0c60af1253b779ecaa810235/mojo_compiler-1.0.0-py3-none-manylinux_2_34_aarch64.whl", hash = "sha256:3ae3eb0c58a8956f542e324f736866df0ae2f9f875e8a279cbeea961ec4e9ee8", size = 76295262, upload-time = "2026-08-11T14:34:22.131Z" },
+    { url = "https://files.pythonhosted.org/packages/f0/5f/f38fefe327d1c81e28def69c4a52ae4f75e389cb6e613a2c04ca8d68d582/mojo_compiler-1.0.0-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:e9e60f9638e69ca0f4be7292468523fc98a143f58dbf9024f60ed68b874a867e", size = 79142588, upload-time = "2026-08-11T14:34:05.301Z" },
+]
+
+[[package]]
+name = "mojo-compiler-mojo-libs"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/99/ea401ff1db56a4af8607283b95627e01b986fc67f510715b07f100118105/mojo_compiler_mojo_libs-1.0.0-py3-none-any.whl", hash = "sha256:20a92e37ecbd19e2dbb1a525612a8de4c9f266f5536def55c5e2b0786320e8b3", size = 3187048, upload-time = "2026-08-11T14:33:53.171Z" },
+]
+
+[[package]]
+name = "mojo-lldb-libs"
+version = "1.0.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ee/2c/b862539eb138fdbb934321f11fe13d67ceb0d8bebcc8351bc88b0ca4f8c2/mojo_lldb_libs-1.0.0-py3-none-macosx_13_0_arm64.whl", hash = "sha256:b8f417c3c2c64058c1c11467086c2e64464abcd91dba938c659b49d94cc75c5b", size = 89030854, upload-time = "2026-08-11T14:34:37.154Z" },
+    { url = "https://files.pythonhosted.org/packages/38/e1/a7c6c73c875f5692587beda9ca68773bae069d60b1c79d9fffd8a2840f4d/mojo_lldb_libs-1.0.0-py3-none-manylinux_2_34_aarch64.whl", hash = "sha256:7eb1f204829f031fda8cc9ee4e7f461f1ca3ddf1c8fb509abf2eb6f02c9de4f5", size = 88995473, upload-time = "2026-08-11T14:34:28.231Z" },
+    { url = "https://files.pythonhosted.org/packages/12/a0/8280a1869d017102d50e0dcf1962e0bc59834f8fe07b435e1a575bb5c923/mojo_lldb_libs-1.0.0-py3-none-manylinux_2_34_x86_64.whl", hash = "sha256:de151c87f3fb4d184a85e735eae05bf43f9a9deb4cb8f2b07cf6b59cb769d93f", size = 91857746, upload-time = "2026-08-11T14:33:56.4Z" },
+]
+
+[[package]]
+name = "mypy-extensions"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/6e/371856a3fb9d31ca8dac321cda606860fa4548858c0cc45d9d1d4ca2628b/mypy_extensions-1.1.0.tar.gz", hash = "sha256:52e68efc3284861e772bbcd66823fde5ae21fd2fdb51c62a211403730b916558", size = 6343, upload-time = "2025-04-22T14:54:24.164Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/7b/2c79738432f5c924bef5071f933bcc9efd0473bac3b4aa584a6f7c1c8df8/mypy_extensions-1.1.0-py3-none-any.whl", hash = "sha256:1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505", size = 4963, upload-time = "2025-04-22T14:54:22.983Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", size = 129956, upload-time = "2026-08-04T18:15:27.159Z" },
+]
+
+[[package]]
+name = "pathspec"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
+]
+
+[[package]]
+name = "platformdirs"
+version = "4.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/23/4d/e78afe1b449720c481884ca0a2f960f85f9ffdaa34b2d127b5427422c564/platformdirs-4.12.0.tar.gz", hash = "sha256:095be5c143382b1bee917c4f3e9987a0d8d6a582261f1d061ad0c403b7695b5b", size = 58964, upload-time = "2026-09-26T15:26:00.937Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/60/3a/723ad221b7fef91ccd947f9fddbe84d38fa573e2723317aaa67bfde41015/platformdirs-4.12.0-py3-none-any.whl", hash = "sha256:f6fb2960f2f2eb0870f820f7e49e49e6c0f0589c637f34d33b260b07591327c9", size = 32965, upload-time = "2026-09-26T15:25:59.496Z" },
 ]
 
 [[package]]

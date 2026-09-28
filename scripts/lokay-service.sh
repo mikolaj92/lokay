@@ -13,8 +13,9 @@ export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
 
 export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
-export FALA_HOME="${FALA_HOME:-${HOME}/Developer/OSS/Fala}"
 ROOT="${LOKAY_ROOT}"
+UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${ROOT}/.venv}"
+export UV_PROJECT_ENVIRONMENT
 export LOKAY_CONFIG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"
 CFG="${LOKAY_CONFIG}"
 LOKAY_HOME="${HOME}/.lokay"

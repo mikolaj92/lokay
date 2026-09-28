@@ -337,13 +337,6 @@ def run_path(
     had_review_credential = "OCR_LLM_API_KEY" in os.environ
     previous_review_credential = os.environ.get("OCR_LLM_API_KEY")
 
-    # Fala Mojo sources: FALA_HOME env, else sibling ../Fala only (no machine hardcodes).
-    if not os.environ.get("FALA_HOME"):
-        for candidate in (root.parent / "Fala", Path.cwd().parent / "Fala"):
-            if (candidate / "mojo" / "fala").is_dir():
-                os.environ["FALA_HOME"] = str(candidate.resolve())
-                break
-
     previous_issue_guard = os.environ.get("LOKAY_DISABLE_HEALTH_LEASE_ISSUE")
     dynamic_library_keys = ("DYLD_LIBRARY_PATH", "DYLD_FALLBACK_LIBRARY_PATH")
     dynamic_library_env = {key: os.environ.get(key) for key in dynamic_library_keys}

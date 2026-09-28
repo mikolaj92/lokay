@@ -1,6 +1,7 @@
 """Read-only compatibility facade for the authored status snapshot."""
 
 import argparse
+from pathlib import Path
 from typing import Any
 
 from lokay.compose.human_mailbox import compose_human_mailbox

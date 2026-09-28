@@ -213,17 +213,21 @@ def handle_repair_boundary(
     if atom == "select_test_repair_result":
         from lokay.proc.select_test_repair_result import select
 
+        initial_test = up.get("select_repair_test") or {}
+        validation = up.get("validate_test_repair") or {}
         return select(
-            up.get("validate_test_repair") or {},
-            applicable=(up.get("select_repair_test") or {}).get("route") == "fail",
+            initial_test,
+            validation,
+            applicable=True,
         )
     if atom == "finalize_repair_tests":
         from lokay.proc.finalize_repair_tests import finalize
 
+        initial_test = up.get("select_repair_test") or {}
+        recheck_test = up.get("select_repair_test_recheck") or {}
         return finalize(
-            up.get("select_repair_test") or {},
-            up.get("select_repair_test_recheck") or {},
-            applicable=(up.get("finalize_repair_result") or {}).get("route")
-            == "repaired",
+            initial_test,
+            recheck_test,
+            applicable=True,
         )
     raise AssertionError(atom)

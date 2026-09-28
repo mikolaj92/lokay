@@ -9,6 +9,8 @@ license-files = ["LICENSE"]
 dependencies = [
   "pyyaml>=6.0",
   "fala",
+  "mojo==1.0.0",
+  "lokay-review-open-code-review",
   "app-factory[platform]",
   "uvicorn>=0.52.4",
   "kofte",
@@ -21,6 +23,7 @@ dev = ["pytest>=8.0", "httpx2>=2.12.0"]
 fala = { git = "https://github.com/mikolaj92/Fala.git", rev = "4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd" }
 app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.22" }
 kofte = { git = "https://github.com/mikolaj92/Kofte.git", rev = "cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" }
+lokay-review-open-code-review = { path = "plugins/pr_review_open_code_review", editable = true }
 
 [project.scripts]
 lokay-atom-inventory = "lokay.proc.atom_inventory:main"
