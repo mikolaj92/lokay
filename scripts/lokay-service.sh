@@ -8,7 +8,7 @@ set -euo pipefail
 
 HOME="${HOME:-${TMPDIR:-/tmp}/lokay-${UID:-unknown}}"
 export HOME
-export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${ROOT}/.venv/bin:${PATH:-}"
 export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
 
