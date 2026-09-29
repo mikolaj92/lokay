@@ -6,6 +6,12 @@ import os
 
 import pytest
 
+# Fala adapters inherit these keys. A missing host env is a native miss,
+# not an empty string default inside the subprocess copy.
+os.environ.setdefault("PI_PROVIDER", "test")
+os.environ.setdefault("PI_MODEL", "test")
+os.environ.setdefault("TMPDIR", os.environ.get("TMPDIR") or "/tmp")
+
 _LOKAY_LEASE_KEYS = (
     "LOKAY_HEALTH_LEASE",
     "LOKAY_HEALTH_LEASE_PATH",

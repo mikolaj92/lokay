@@ -20,6 +20,11 @@ _INHERIT = (
     "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
     "PYTHONPATH",
     "OCR_LLM_API_KEY",
+    "PI_PROVIDER",
+    "PI_MODEL",
+    "TMPDIR",
+    "USER",
+    "LANG",
 )
 
 
