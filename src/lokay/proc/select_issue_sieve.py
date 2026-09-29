@@ -61,7 +61,18 @@ def select(
     listed_map = dict(listed or {})
     picked_route = str(picked.get("route") or "")
     if picked_route == "ready":
+        sieve = classify_sieve(triage_run, picked)
         leftover, leftover_issues = leftover_of(dict(picked), listed_map, consume=True)
+        if sieve["route"] == "skip":
+            return ok(
+                route="skip",
+                reason=sieve.get("reason"),
+                verdict=sieve.get("verdict"),
+                repo=picked.get("repo"),
+                issue=picked.get("issue"),
+                leftover=leftover,
+                leftover_issues=leftover_issues,
+            )
         return ok(
             route="do",
             reason="already_ready",

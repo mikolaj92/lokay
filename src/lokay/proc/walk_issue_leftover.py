@@ -30,7 +30,14 @@ def consumes(reason: object) -> bool:
 def row_is_ready(row: dict | None) -> bool:
     if not isinstance(row, dict):
         return False
-    labels = {str(item) for item in list(row.get("labels") or [])}
+    labels: set[str] = set()
+    for item in list(row.get("labels") or []):
+        if isinstance(item, dict):
+            name = str(item.get("name") or "")
+        else:
+            name = str(item or "")
+        if name:
+            labels.add(name)
     return bool(labels & READY_LABELS)
 
 
@@ -70,10 +77,9 @@ def keep(rows: list | None, picked: dict | None) -> list[dict]:
 
 
 def ready_first(rows: list[dict] | None) -> list[dict]:
-    """Dual-ready / ai:ready wins. Unlabeled leftover must not starve issue→PR."""
+    """Dual-ready / ai:ready wins. Unlabeled leftover is not start fuel."""
     listed = [dict(row) for row in list(rows or []) if isinstance(row, dict)]
-    ready = [row for row in listed if row_is_ready(row)]
-    return ready or listed
+    return [row for row in listed if row_is_ready(row)]
 
 
 def product_first(rows: list[dict] | None, *, self_id: str = "") -> list[dict]:
@@ -117,17 +123,14 @@ def queue(
     """
     last = last if isinstance(last, dict) else {}
     lokay_login = lokay or lokay_of(last)
-    leftover = [
-        row for row in list(last.get("leftover_issues") or []) if isinstance(row, dict)
-    ]
+    leftover_raw = last.get("leftover_issues")
+    leftover = [row for row in list(leftover_raw or []) if isinstance(row, dict)]
     live_rows = [dict(row) for row in list(listed_rows or []) if identity(row)]
     live = {identity(row): row for row in live_rows}
-    if leftover:
+    if leftover_raw is not None:
         kept = [live[key] for row in leftover if (key := identity(row)) in live]
-        # Ready labels win over unlabeled leftover; product still beats the self repo.
-        ranked = product_first(ready_first(kept))
-        candidates = ranked if ranked else product_first(ready_first(live_rows) or kept)
-        return unoccupied(ownable(candidates, lokay_login), occupied)
+        # Labeled remainder only. Empty leftover_issues means the list is exhausted.
+        return unoccupied(ownable(product_first(ready_first(kept)), lokay_login), occupied)
     return unoccupied(
         ownable(
             product_first(ready_first(after(listed_rows, last) or live_rows)),

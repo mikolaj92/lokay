@@ -1,9 +1,10 @@
-"""Pick one listed issue. Two small functions: leftover walk, then pick."""
+"""Pick one listed issue. Labeled start only; unlabeled is never fuel."""
 
 import os
 
 from lokay.proc.classify_issue_assignee import lokay_of, takeable
 from lokay.proc.classify_open_issues import classify
+from lokay.proc.pick_one_labeled import READY_LABELS
 from lokay.proc.walk_issue_leftover import queue, row_is_ready
 
 
@@ -20,6 +21,38 @@ def occupied_repos_of(occupied=None) -> set[str]:
         for row in live_issue_to_pr_receipts()
         if row.get("repo")
     }
+
+
+def _label_names(row: dict) -> list[str]:
+    names: list[str] = []
+    for item in list(row.get("labels") or []):
+        if isinstance(item, dict):
+            name = str(item.get("name") or "")
+        else:
+            name = str(item or "")
+        if name:
+            names.append(name)
+    return names
+
+
+def _admit_sieve_do(rows: list) -> list[dict]:
+    """Sieve do is this pass's ready stamp. Do not re-list GitHub to see it."""
+    admitted: list[dict] = []
+    for raw in rows:
+        row = dict(raw)
+        decision = row.get("sieve_decision") or {}
+        if isinstance(decision, dict) and decision.get("route") == "do":
+            labels = _label_names(row)
+            if not (set(labels) & READY_LABELS):
+                labels.append("ai:ready")
+            row["labels"] = labels
+        admitted.append(row)
+    return admitted
+
+
+def _none(*, reason: str) -> dict:
+    # leftover:0 without leftover_issues=[] lets record_pass keep prior fuel (#1067).
+    return {"ok": True, "route": "none", "reason": reason, "leftover": 0}
 
 
 def pick(classified: dict) -> dict:
@@ -51,34 +84,24 @@ def select(listed: dict, last: dict | None = None, occupied=None) -> dict:
     occupied_repos = occupied_repos_of(occupied)
     from lokay.proc.pick_one_labeled import pick_one_labeled
 
-    labeled = pick_one_labeled(
-        [
-            row for row in classified.get("issues") or []
-            if takeable(row, lokay) and str(row.get("repo") or "") not in occupied_repos
-        ]
-    )
+    listed_rows = _admit_sieve_do(list(classified.get("issues") or []))
+    candidates = queue(listed_rows, last, lokay=lokay, occupied=occupied_repos)
+    labeled = pick_one_labeled(candidates)
     if labeled["reason"] == "picked":
         chosen = dict(labeled["issue"])
         rest = [
-            dict(row) for row in classified.get("issues") or []
+            dict(row)
+            for row in candidates
             if row is not labeled["issue"]
-            and takeable(row, lokay)
-            and str(row.get("repo") or "") not in occupied_repos
         ]
         return pick({"route": "listed", "issues": [chosen, *rest]})
-    rows = queue(classified.get("issues"), last, lokay=lokay, occupied=occupied_repos)
-    if not rows:
-        listed_rows = list(classified.get("issues") or [])
-        takeable_rows = [row for row in listed_rows if takeable(row, lokay)]
-        if listed_rows and not takeable_rows:
-            reason = "foreign_assignee"
-        elif takeable_rows and occupied_repos and all(
-            str(row.get("repo") or "") in occupied_repos for row in takeable_rows
-        ):
-            reason = "occupied"
-        else:
-            reason = "exhausted"
-        # Nothing takeable now (#1017). Do not emit leftover_issues=[] — a bare
-        # leftover:0 without the list lets record_pass keep prior fuel (#1067).
-        return {"ok": True, "route": "none", "reason": reason, "leftover": 0}
-    return pick({**classified, "issues": rows, "route": "listed"})
+    if labeled["reason"] == "occupied":
+        return _none(reason="occupied")
+    takeable_rows = [row for row in listed_rows if takeable(row, lokay)]
+    if listed_rows and not takeable_rows:
+        return _none(reason="foreign_assignee")
+    if takeable_rows and occupied_repos and all(
+        str(row.get("repo") or "") in occupied_repos for row in takeable_rows
+    ):
+        return _none(reason="occupied")
+    return _none(reason="none_ready")

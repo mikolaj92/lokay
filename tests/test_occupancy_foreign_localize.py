@@ -261,7 +261,9 @@ def test_seed_and_select_start_next_when_live_pid_has_zero_worktree(
         {
             "working": {
                 "ready_by_repo": {
-                    "mikolaj92/lokay": [{"number": 865, "title": "plugin"}]
+                    "mikolaj92/lokay": [
+                        {"number": 865, "title": "plugin", "labels": ["ai:ready"]}
+                    ]
                 },
                 "occupied_repos": [],
                 "live_issue_to_pr_repos": [],
@@ -293,7 +295,9 @@ def test_seed_and_select_start_next_when_live_pid_has_leftover_localize(
         {
             "working": {
                 "ready_by_repo": {
-                    "mikolaj92/lokay": [{"number": 865, "title": "plugin"}]
+                    "mikolaj92/lokay": [
+                        {"number": 865, "title": "plugin", "labels": ["ai:ready"]}
+                    ]
                 },
                 "occupied_repos": [],
                 "live_issue_to_pr_repos": [],
@@ -426,7 +430,9 @@ def test_seed_when_starting_has_zero_worktree(tmp_path, monkeypatch):
         {
             "working": {
                 "ready_by_repo": {
-                    "mikolaj92/lokay": [{"number": 865, "title": "plugin"}]
+                    "mikolaj92/lokay": [
+                        {"number": 865, "title": "plugin", "labels": ["ai:ready"]}
+                    ]
                 },
                 "occupied_repos": [],
                 "live_issue_to_pr_repos": [],

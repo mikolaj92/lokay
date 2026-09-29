@@ -6,21 +6,21 @@ GitHub Issue jest księgą **decyzji**. Etykiety `ai:*` na issue to wyłącznie 
 
 | Stan | Etykieta | Kto widzi | Co wolno |
 | --- | --- | --- | --- |
-| **undecided** | brak etykiety decyzyjnej | `list_inbox` | triage **oraz** `issue_to_pr` — otwarte issue jest pracą; `work:ready` nie jest bramką |
-| **ready** | otwarte issue (ślad `ai:ready` / `work:ready` opcjonalny) | `list_ready` / `survey_ready` (pełna strona, nie newest-50) | `issue_to_pr`, o ile brak human stop, żywego joba i covering open PR |
+| **undecided** | brak etykiety decyzyjnej | `list_inbox` | triage only — unlabeled is never `issue_to_pr` fuel; Label = start (`ai:ready` / `ready-for-agent`) |
+| **ready** | `ai:ready` / `ready-for-agent` (ślad `work:ready` opcjonalny) | `list_ready` / leftover dual-ready | `issue_to_pr`, o ile brak human stop, żywego joba i covering open PR |
 | **blocked** | `ai:blocked` | nikt | człowiek |
 | **needs-feedback** | `ai:needs-feedback` | nikt | człowiek |
 | **parked** | `frozen` / `ai:frozen` / `ai:tracker` | nikt | człowiek / rodzic splitu |
 | **closed** | issue closed | nikt | koniec |
 
-Otwarte issue **jest kolejką**. `ai:ready` / `work:ready` są **śladem ledgeru**, nie biletem wstępu. Wejście to otwarte issue na repo z katalogu. Human stop (`ai:blocked` / `ai:needs-feedback` / park) wyklucza, nie wpuszcza.
+Otwarte issue **czeka na sito**. `ai:ready` / `ready-for-agent` **są biletem startu** (WORKING Label = start). `work:ready` jest śladem ledgeru po mark, nie substytutem unlabeled. Human stop (`ai:blocked` / `ai:needs-feedback` / park) wyklucza.
 
 Chrom **PR** (`ai:generated`, `ai:pr-opened`) zostaje na pull requescie.
 
 ## Mutex (fakt, nie etykieta)
 
 ```text
-wolno brać  =  otwarte issue
+wolno brać  =  otwarte issue z etykietą startu (`ai:ready` / `ready-for-agent`)
             ∧  brak human stop (blocked / needs-feedback / park)
             ∧  brak żywego issue_to_pr na repo#n
             ∧  brak otwartego covering AI PR
@@ -38,6 +38,7 @@ otwarte, bez decyzji  --triage-->  ready | blocked | needs-feedback | close | sp
 ready + brak mutexu   --dispatch-->  issue_to_pr   (ai:ready zostaje)
 ready + otwarty AI PR --survey-->  skip implement  (ai:ready zostaje; closeout włada PR)
 ready + occupied repo --select-->  skip implement  (health=waiting, nie stall)
+unlabeled             --select-->  none            (nie paliwo implement)
 PR zmergowany         --stage_clear + close-->  closed
 konflikt PR           --close PR-->  ready zostaje, następny pass bierze od main
 timeout + issue CLOSED --skip-->  issue_closed (nie continue, nie drugi PR)

@@ -9,7 +9,9 @@
 mode: dry-run  # dry-run | live  (dry-run = no mutations; still real agent if invoked)
 # Env override: LOKAY_MODE=live|dry-run
 
-# Catalog = which repos we manage (not a denylist).
+# Catalog = which repos we manage (not a denylist). Empty LOKAY_REPO_SCOPE
+# delivers every enabled row here (~30). Set LOKAY_REPO_SCOPE only to clamp
+# a canary; oil-only mikolaj92/lokay is that clamp, not the default.
 repos_file: repos.mikolaj92.yaml
 
 github:

@@ -111,7 +111,8 @@ def is_open_work_issue(
 ) -> bool:
     """Open catalog issue is work unless a human stop excludes it.
 
-    ``work:ready`` / ``ai:ready`` are optional ledger traces, not a gate.
+    Ready labels (`ai:ready` / `ready-for-agent`) are the start ticket for
+    implement. This helper is open-minus-human-stop hygiene, not intake.
     """
     if str(state or "OPEN").upper() == "CLOSED":
         return False

@@ -4,12 +4,11 @@ from __future__ import annotations
 _PATH_ID = 'executor_department'
 _NODE_ID = 'summarize_executor_department'
 _ATOM = 'summarize_executor_department'
-_CONDUCTION = ['list_open_issues', 'run_executor_rows']
+_CONDUCTION = ['run_executor_rows']
 _WHEN = None
 _REQUIRED_WHEN_FIELDS = []
-_EFFECTORS = [{'conduction': [], 'id': 'list_open_issues', 'when': None},
- {'conduction': ['list_open_issues'], 'id': 'run_executor_rows', 'when': None},
- {'conduction': ['list_open_issues', 'run_executor_rows'],
+_EFFECTORS = [{'conduction': [], 'id': 'run_executor_rows', 'when': None},
+ {'conduction': ['run_executor_rows'],
   'id': 'summarize_executor_department',
   'when': None}]
 
@@ -28,4 +27,3 @@ def test_model_status_for_this_node():
     status = run_model(_EFFECTORS, {})
     assert _NODE_ID in status
     assert status[_NODE_ID] in {"succeeded", "skipped"}
-

@@ -41,7 +41,7 @@ def envelope(triage: dict | None) -> dict:
     blob = dict(triage or {})
     inner = blob.get("result")
     if isinstance(inner, dict) and any(
-        key in inner for key in ("decisions", "leftover", "leftover_issues")
+        key in inner for key in ("decisions", "leftover", "leftover_issues", "listed")
     ):
         return inner
     return blob
@@ -69,5 +69,29 @@ def attach(listed: dict, triage: dict) -> dict:
         decision = decisions.get((row.get("repo"), row.get("issue")))
         if decision:
             row["sieve_decision"] = decision
+            if decision["route"] == "do":
+                labels = [str(item) for item in list(row.get("labels") or []) if str(item)]
+                if "ai:ready" not in labels and "ready-for-agent" not in labels:
+                    labels.append("ai:ready")
+                row["labels"] = labels
         rows.append(row)
     return {**listed, "issues": rows}
+
+
+def listed_of(triage: dict | None, last: dict | None = None) -> dict:
+    """One-pass issue snapshot for executor. Never a second GitHub list."""
+    blob = envelope(triage)
+    listed = blob.get("listed")
+    if isinstance(listed, dict) and list(listed.get("issues") or []):
+        return listed
+    leftover = list(blob.get("leftover_issues") or [])
+    if not leftover and isinstance(last, dict):
+        leftover = [row for row in list(last.get("leftover_issues") or []) if isinstance(row, dict)]
+    if leftover:
+        return {
+            "ok": True,
+            "issues": leftover,
+            "count": len(leftover),
+            "overflow": False,
+        }
+    return listed if isinstance(listed, dict) else {}

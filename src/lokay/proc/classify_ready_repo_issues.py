@@ -1,6 +1,7 @@
 """Purely reduce one repo listing against PR and stuck physical state."""
 
 from lokay.passkit.working import load_begin_working
+from lokay.proc.walk_issue_leftover import row_is_ready
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 from lokay.triage import is_open_work_issue
 
@@ -56,7 +57,11 @@ def classify(*, pass_dir: str, selected: dict, listed: dict) -> dict:
     covered = [row for row in issues if int(row.get("number", -1)) in covered_numbers]
     blocked = [row for row in issues if int(row.get("number", -1)) in blocked_numbers]
     excluded = covered_numbers | blocked_numbers
-    ready = [row for row in issues if int(row.get("number", -1)) not in excluded]
+    ready = [
+        row
+        for row in issues
+        if int(row.get("number", -1)) not in excluded and row_is_ready(row)
+    ]
     return {
         "ok": True,
         "route": "blocked" if blocked else "record",

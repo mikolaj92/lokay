@@ -49,7 +49,7 @@ def test_run_wraps_facts_as_ok_envelope(monkeypatch):
     assert "skipped" not in out
 
 
-def test_labels_are_not_a_gate(monkeypatch):
+def test_list_includes_issues_without_ready_labels(monkeypatch):
     issue = SimpleNamespace(repo="o/r", number=4, title="x", labels=["bug"])
     _patch_list(monkeypatch, [issue])
     out = run(config_path=None, live=True)

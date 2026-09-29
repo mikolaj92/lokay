@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from lokay.graph_run import run_path
+from lokay.sieve_decision import listed_of
 
 
 def child_graph(
@@ -11,13 +12,18 @@ def child_graph(
     config_path: str | None,
     live: bool,
     triage: dict | None = None,
+    listed: dict | None = None,
 ) -> dict:
     return run_path(
         path_id="executor_department",
         repo="local/executor-department",
         config_path=config_path,
         live=live,
-        extra_inputs={"pass_dir": pass_dir, "triage": triage or {}},
+        extra_inputs={
+            "pass_dir": pass_dir,
+            "triage": triage or {},
+            "listed": listed or {},
+        },
     )
 
 
@@ -36,6 +42,7 @@ def run(
             config_path=config_path,
             live=live,
             triage=triage,
+            listed=listed_of(triage),
         ),
         "body": "child",
     }

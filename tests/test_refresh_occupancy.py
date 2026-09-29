@@ -253,7 +253,11 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
                     }
                 ]
             },
-            "ready_by_repo": {"mikolaj92/lokay": [{"number": 70, "title": "next"}]},
+            "ready_by_repo": {
+                "mikolaj92/lokay": [
+                    {"number": 70, "title": "next", "labels": ["ai:ready"]}
+                ]
+            },
             "remaining_ready": 1,
             "remaining_prs": 1,
             "actionable_prs": 0,

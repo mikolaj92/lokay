@@ -45,7 +45,7 @@ def reduce_state(*, prepared: dict, results: list[dict], working: dict) -> dict:
         if parked:
             actions.append({"step": "park_stuck", "repo": repo, **parked})
             progress += int(bool(parked.get("applied")))
-    # Inbox is work. A leftover ready-only catalog would ignore unlabeled issues.
+    # Inbox is not implement fuel. A leftover ready-only catalog is the start queue.
     ready = work_by_repo({**working, "ready_by_repo": ready})
     remaining = remaining_ready_count(ready)
     return {

@@ -5130,20 +5130,11 @@ retry_policy = "none"
 [[correlation_paths]]
 id = "executor_department"
 title = "Executor department"
-description = "From a do issue: branch, code, local test, PR. Not sieve. Not merge."
-
-[[correlation_paths.effectors]]
-id = "list_open_issues"
-capability = "lokay_atom"
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 1800, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PI_PROVIDER", "PI_MODEL"] }
-config = { atom = "list_open_issues" }
-output_schema = { type = "object", required = ["ok"] }
-retry_policy = "none"
+description = "From a do issue: branch, code, local test, PR. Not sieve. Not merge. Consumes triage list; no second list_open_issues."
 
 [[correlation_paths.effectors]]
 id = "run_executor_rows"
 capability = "lokay_atom"
-conduction = ["list_open_issues"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PI_PROVIDER", "PI_MODEL"] }
 config = { atom = "run_executor_rows" }
 output_schema = { type = "object", required = ["ok"] }
@@ -5152,7 +5143,7 @@ retry_policy = "none"
 [[correlation_paths.effectors]]
 id = "summarize_executor_department"
 capability = "lokay_atom"
-conduction = ["list_open_issues", "run_executor_rows"]
+conduction = ["run_executor_rows"]
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 120, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PI_PROVIDER", "PI_MODEL"] }
 config = { atom = "summarize_executor_department" }
 output_schema = { type = "object", required = ["ok"] }

@@ -21,7 +21,7 @@ def test_overflow_without_rows_is_none():
     assert out["reason"] == "overflow"
 
 
-def test_overflow_with_rows_picks_one():
+def test_overflow_with_rows_without_ready_labels_is_none():
     out = select(
         _listed(
             {"repo": "o/r", "issue": 9, "title": "x", "labels": []},
@@ -29,16 +29,28 @@ def test_overflow_with_rows_picks_one():
         )
     )
     assert out["ok"] is True
-    assert out["route"] == "issue"
+    assert out["route"] == "none"
+    assert out["reason"] == "none_ready"
+
+
+def test_overflow_with_ready_row_picks_one():
+    out = select(
+        _listed(
+            {"repo": "o/r", "issue": 9, "title": "x", "labels": ["ai:ready"]},
+            overflow=True,
+        )
+    )
+    assert out["ok"] is True
+    assert out["route"] == "ready"
     assert out["issue"] == 9
     assert out["leftover"] == 0
 
 
 def test_consumed_host_ops_leftover_does_not_starve_listed_issues():
     listed = _listed(
-        {"repo": "mikolaj92/OpenAPITransportKit", "issue": 22, "title": "code"},
-        {"repo": "mikolaj92/dotfiles", "issue": 47, "title": "parent skip"},
-        {"repo": "mikolaj92/dotfiles", "issue": 48, "title": "host/ops evidence"},
+        {"repo": "mikolaj92/OpenAPITransportKit", "issue": 22, "title": "code", "labels": ["ai:ready"]},
+        {"repo": "mikolaj92/dotfiles", "issue": 47, "title": "parent skip", "labels": ["ai:ready"]},
+        {"repo": "mikolaj92/dotfiles", "issue": 48, "title": "host/ops evidence", "labels": ["ai:ready"]},
     )
     last = {
         "leftover": 0,
@@ -46,7 +58,7 @@ def test_consumed_host_ops_leftover_does_not_starve_listed_issues():
         "skipped_repo": "mikolaj92/dotfiles",
     }
     out = select(listed, last=last)
-    assert out["route"] == "issue"
+    assert out["route"] == "ready"
     assert out["repo"] == "mikolaj92/OpenAPITransportKit"
     assert out["issue"] == 22
 
@@ -54,34 +66,33 @@ def test_consumed_host_ops_leftover_does_not_starve_listed_issues():
 def test_picks_first_and_leaves_leftover():
     out = select(
         _listed(
-            {"repo": "o/r", "issue": 2, "title": "a"},
-            {"repo": "o/r", "issue": 3, "title": "b"},
+            {"repo": "o/r", "issue": 2, "title": "a", "labels": ["ai:ready"]},
+            {"repo": "o/r", "issue": 3, "title": "b", "labels": ["ai:ready"]},
         )
     )
-    assert out["route"] == "issue"
+    assert out["route"] == "ready"
     assert out["issue"] == 2
     assert out["leftover"] == 1
     assert out["title"] == "a"
 
 
 def test_one_issue_leftover_is_zero():
-    out = select(_listed({"repo": "o/r", "issue": 4, "title": "solo"}))
-    assert out["route"] == "issue"
+    out = select(_listed({"repo": "o/r", "issue": 4, "title": "solo", "labels": ["ai:ready"]}))
+    assert out["route"] == "ready"
     assert out["issue"] == 4
     assert out["leftover"] == 0
 
 
-def test_labels_are_not_a_gate():
+def test_none_ready_is_none_unlabeled_is_not_fuel():
     out = select(
         _listed(
             {"repo": "o/r", "issue": 7, "title": "plain", "labels": []},
             {"repo": "o/r", "issue": 8, "title": "second plain", "labels": []},
         )
     )
-    assert out["route"] == "issue"
-    assert out["issue"] == 7
-    assert out["labels"] == []
-    assert out["leftover"] == 1
+    assert out["route"] == "none"
+    assert out["reason"] == "none_ready"
+    assert out.get("issue") is None
 
 
 def test_ready_labels_are_route_ready():
@@ -104,9 +115,11 @@ def test_ready_labels_are_route_ready():
     ai_only = select(_listed({"repo": "o/r", "issue": 1, "labels": ["ai:ready"]}))
     assert ai_only["route"] == "ready"
     work_only = select(_listed({"repo": "o/r", "issue": 2, "labels": ["work:ready"]}))
-    assert work_only["route"] == "ready"
+    assert work_only["route"] == "none"
+    assert work_only["reason"] == "none_ready"
     unlabeled = select(_listed({"repo": "o/r", "issue": 3, "labels": []}))
-    assert unlabeled["route"] == "issue"
+    assert unlabeled["route"] == "none"
+    assert unlabeled["reason"] == "none_ready"
 
 
 def test_classified_skip_is_none_not_error():
@@ -117,32 +130,33 @@ def test_classified_skip_is_none_not_error():
 
 
 def test_select_composes_classify_then_pick():
-    listed = _listed({"repo": "o/r", "issue": 2, "title": "a"})
+    listed = _listed({"repo": "o/r", "issue": 2, "title": "a", "labels": ["ai:ready"]})
     assert classify(listed)["route"] == "listed"
-    assert select(listed) == pick(classify(listed))
+    assert select(listed)["route"] == "ready"
+    assert select(listed)["issue"] == 2
 
 
 def test_row_cannot_overwrite_route():
-    out = select(_listed({"repo": "o/r", "issue": 1, "route": "skip", "ok": False}))
+    out = select(_listed({"repo": "o/r", "issue": 1, "route": "skip", "ok": False, "labels": ["ai:ready"]}))
     assert out["ok"] is True
-    assert out["route"] == "issue"
+    assert out["route"] == "ready"
     assert out["issue"] == 1
 
 
 def test_does_not_pick_lokay_self_as_the_product_slot():
     listed = _listed(
-        {"repo": "mikolaj92/lokay", "issue": 848, "title": "self-repair stall"},
-        {"repo": "Temida/Temida", "issue": 5001, "title": "product"},
+        {"repo": "mikolaj92/lokay", "issue": 848, "title": "self-repair stall", "labels": ["ai:ready"]},
+        {"repo": "Temida/Temida", "issue": 5001, "title": "product", "labels": ["ai:ready"]},
     )
     first = select(listed)
-    assert first["route"] == "issue"
+    assert first["route"] == "ready"
     assert first["repo"] == "Temida/Temida"
     assert first["issue"] == 5001
     leftover = {
         "leftover": 2,
         "leftover_issues": [
-            {"repo": "mikolaj92/lokay", "issue": 848},
-            {"repo": "Temida/Temida", "issue": 5001},
+            {"repo": "mikolaj92/lokay", "issue": 848, "labels": ["ai:ready"]},
+            {"repo": "Temida/Temida", "issue": 5001, "labels": ["ai:ready"]},
         ],
     }
     walked = select(listed, last=leftover)
@@ -152,9 +166,9 @@ def test_does_not_pick_lokay_self_as_the_product_slot():
 
 def test_sito_miss_keeps_leftover_and_the_first_row():
     listed = _listed(
-        {"repo": "o/r", "issue": 1},
-        {"repo": "o/r", "issue": 2},
-        {"repo": "o/r", "issue": 3},
+        {"repo": "o/r", "issue": 1, "labels": ["ai:ready"]},
+        {"repo": "o/r", "issue": 2, "labels": ["ai:ready"]},
+        {"repo": "o/r", "issue": 3, "labels": ["ai:ready"]},
     )
     first = select(listed)
     assert first["issue"] == 1
@@ -163,26 +177,25 @@ def test_sito_miss_keeps_leftover_and_the_first_row():
 
     skipped = select_do(first, {"route": "failed"}, listed)
     assert skipped["ok"] is True
-    assert skipped["route"] == "skip"
-    assert skipped["reason"] == "triage_not_done"
+    assert skipped["route"] == "do"
     assert skipped["leftover"] == 3
     assert skipped["leftover_issues"][0]["issue"] == 1
     second = select(listed, last=skipped)
-    assert second["route"] == "issue"
+    assert second["route"] == "ready"
     assert second["issue"] == 1
     assert second["leftover"] == 2
 
 
 def test_authored_skip_consumes_leftover():
     listed = _listed(
-        {"repo": "o/r", "issue": 1},
-        {"repo": "o/r", "issue": 2},
-        {"repo": "o/r", "issue": 3},
+        {"repo": "o/r", "issue": 1, "labels": ["ai:ready"]},
+        {"repo": "o/r", "issue": 2, "labels": ["ai:ready"]},
+        {"repo": "o/r", "issue": 3, "labels": ["ai:ready"]},
     )
     first = select(listed)
-    from lokay.proc.select_issue_do import select as select_do
+    from lokay.proc.select_issue_sieve import select as select_sieve
 
-    skipped = select_do(
+    skipped = select_sieve(
         first,
         {
             "route": "completed",
@@ -202,9 +215,8 @@ def test_authored_skip_consumes_leftover():
 def test_parked_factory_stop_already_excluded_by_list_facts():
     listed = _listed({"repo": "o/r", "issue": 9, "title": "open", "labels": []})
     out = select(listed)
-    assert out["route"] == "issue"
-    assert out["issue"] == 9
-    assert out["leftover"] == 0
+    assert out["route"] == "none"
+    assert out["reason"] == "none_ready"
 
 
 def test_takes_empty_and_lokaj_skips_pawel():
@@ -214,26 +226,29 @@ def test_takes_empty_and_lokaj_skips_pawel():
             "issue": 1,
             "title": "empty",
             "assignees": [],
+            "labels": ["ai:ready"],
         },
         {
             "repo": "Temida/Temida",
             "issue": 2,
             "title": "lokaj",
             "assignees": ["mikolaj92"],
+            "labels": ["ai:ready"],
         },
         {
             "repo": "Temida/Temida",
             "issue": 3,
             "title": "pawel",
             "assignees": ["PSyron"],
+            "labels": ["ai:ready"],
         },
     )
     first = select(listed)
-    assert first["route"] == "issue"
+    assert first["route"] == "ready"
     assert first["issue"] == 1
     assert [row["issue"] for row in first["leftover_issues"]] == [2]
     second = select(listed, last=first)
-    assert second["route"] == "issue"
+    assert second["route"] == "ready"
     assert second["issue"] == 2
     assert second["leftover"] == 0
     assert second["leftover_issues"] == []
@@ -250,16 +265,18 @@ def test_skips_leading_pawel_and_takes_empty():
             "issue": 5072,
             "title": "pawel",
             "assignees": ["PSyron"],
+            "labels": ["ai:ready"],
         },
         {
             "repo": "Temida/Temida",
             "issue": 1,
             "title": "empty",
             "assignees": [],
+            "labels": ["ai:ready"],
         },
     )
     out = select(listed)
-    assert out["route"] == "issue"
+    assert out["route"] == "ready"
     assert out["issue"] == 1
     assert out["leftover"] == 0
 
@@ -271,6 +288,7 @@ def test_skips_pawel_beside_lokaj():
             "issue": 5072,
             "title": "shared",
             "assignees": ["PSyron", "mikolaj92"],
+            "labels": ["ai:ready"],
         }
     )
     out = select(listed)

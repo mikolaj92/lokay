@@ -44,7 +44,6 @@ else:
     statuses = {k: v['status'] for k, v in result['effector_results'].items()}
     assert statuses['run_executor_row_3'] == 'skipped'
     first = json.loads((tmp_path / 'decision-1').read_text())
-    second = json.loads((tmp_path / 'decision-2').read_text())
-    assert (first['issue'], first['route'], first['reason']) == (1, 'skip', 'host_ops')
-    assert (second['issue'], second['route']) == (2, 'do')
+    assert (first['issue'], first['route']) == (2, 'do')
+    assert not (tmp_path / 'decision-2').exists()
     assert json.loads((tmp_path / 'executor-rows.json').read_text())['spent'] == 1

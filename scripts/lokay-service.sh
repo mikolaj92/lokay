@@ -34,6 +34,8 @@ UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${ROOT}/.venv}"
 export UV_PROJECT_ENVIRONMENT
 export LOKAY_CONFIG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"
 CFG="${LOKAY_CONFIG}"
+# Do not default LOKAY_REPO_SCOPE. Empty = full catalog (~30). Oil-only
+# mikolaj92/lokay is an explicit clamp, not the LaunchAgent default.
 LOKAY_HOME="${HOME}/.lokay"
 LOG_DIR="${LOKAY_LOG_DIR:-${LOKAY_HOME}/logs}"
 OUTBOX="${LOKAY_HOME}/preflight-bootstrap-incidents.log"

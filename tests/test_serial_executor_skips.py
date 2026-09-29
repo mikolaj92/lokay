@@ -7,7 +7,7 @@ from lokay.sieve_decision import decision_of
 
 def test_serial_executor_slots_walk_past_all_skips():
     rows = [
-        {"repo": "o/r", "issue": n, "labels": [], "sieve_decision": decision_of({"repo": "o/r", "issue": n, "route": "skip", "reason": "host_ops"})}
+        {"repo": "o/r", "issue": n, "labels": ["ai:ready"], "sieve_decision": decision_of({"repo": "o/r", "issue": n, "route": "skip", "reason": "host_ops"})}
         for n in range(1, 9)
     ]
     listed = {"ok": True, "issues": rows}
