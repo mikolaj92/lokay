@@ -55,7 +55,11 @@ def test_classify_is_pure_and_closed(tmp_path):
         selected={"route": "survey", "repo": "a/one"},
         listed={
             "route": "listed",
-            "issues": [{"number": 7}, {"number": 8}, {"number": 9}],
+            "issues": [
+                {"number": 7, "labels": ["ai:ready"]},
+                {"number": 8, "labels": ["ai:ready"]},
+                {"number": 9, "labels": ["ai:ready"]},
+            ],
         },
     )
     assert result["route"] == "blocked"
@@ -64,7 +68,7 @@ def test_classify_is_pure_and_closed(tmp_path):
     assert [x["number"] for x in result["implementable"]] == [9]
 
 
-def test_classify_excludes_human_stops_and_keeps_unlabeled(tmp_path):
+def test_classify_excludes_human_stops_and_unlabeled_is_not_implement_fuel(tmp_path):
     from lokay.proc.classify_ready_repo_issues import classify
 
     path = workspace(tmp_path)
@@ -82,7 +86,7 @@ def test_classify_excludes_human_stops_and_keeps_unlabeled(tmp_path):
             ],
         },
     )
-    assert [x["number"] for x in result["implementable"]] == [1, 5]
+    assert [x["number"] for x in result["implementable"]] == [5]
 
 
 def test_reduce_does_not_fold_inbox_only_unlabeled_into_ready(tmp_path):
@@ -122,7 +126,7 @@ def test_finalize_only_materializes_reactions(tmp_path):
             {
                 "repo": "a/one",
                 "route": "record",
-                "implementable": [{"number": 9}],
+                "implementable": [{"number": 9, "labels": ["ai:ready"]}],
                 "covered": [],
             },
             {"repo": "a/two", "route": "failed"},
@@ -131,7 +135,7 @@ def test_finalize_only_materializes_reactions(tmp_path):
     out = finalize(pass_dir=str(path), reduced=reduced)
     survey = pass_io.read_json(pass_io.survey_path(path))
     assert out["remaining_ready"] == 1 and out["probe_failed"] is True
-    assert survey["ready_by_repo"]["a/one"] == [{"number": 9}]
+    assert survey["ready_by_repo"]["a/one"][0]["number"] == 9
     assert survey["ready_survey_failed"] == ["a/two"]
 
 

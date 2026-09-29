@@ -78,13 +78,16 @@ def test_leftover_labeled_remainder_walks_after_skip():
     }
     first = select(listed)
     assert first["issue"] == 1
-    from lokay.proc.select_issue_do import select as select_do
+    from lokay.proc.select_issue_sieve import select as select_sieve
 
-    skipped = select_do(
+    skipped = select_sieve(
         first,
         {"route": "completed", "triage": {"decision": {"verdict": "park"}}},
         listed,
     )
+    assert skipped["route"] == "skip"
+    assert skipped["reason"] == "park"
+    assert skipped["leftover_issues"][0]["issue"] == 2
     second = select(listed, last=skipped)
     assert second["route"] == "ready"
     assert second["issue"] == 2

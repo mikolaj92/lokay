@@ -145,7 +145,9 @@ def test_manual_needs_review_does_not_block_same_repo_ready(tmp_path):
                     }
                 ]
             },
-            "ready_by_repo": {"a/one": [{"number": 70, "title": "next ready"}]},
+            "ready_by_repo": {
+                "a/one": [{"number": 70, "title": "next ready", "labels": ["ai:ready"]}]
+            },
             "remaining_ready": 1,
             "remaining_prs": 1,
             "actionable_prs": 0,
@@ -173,7 +175,9 @@ def test_actionable_ai_pr_still_blocks_same_repo_ready(tmp_path):
                     {"number": 1, "head_ref": "ai/fix/1-x", "labels": ["ai:generated"]}
                 ]
             },
-            "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
+            "ready_by_repo": {
+                "a/one": [{"number": 2, "title": "next", "labels": ["ai:ready"]}]
+            },
             "remaining_ready": 1,
             "actionable_prs": 1,
         },
@@ -238,7 +242,10 @@ def test_compute_health_ready_behind_actionable_pr_is_waiting_not_stall(tmp_path
                 ]
             },
             "ready_by_repo": {
-                "a/one": [{"number": n, "title": f"r{n}"} for n in range(28, 33)]
+                "a/one": [
+                    {"number": n, "title": f"r{n}", "labels": ["ai:ready"]}
+                    for n in range(28, 33)
+                ]
             },
             "remaining_ready": 5,
             "remaining_prs": 1,
@@ -265,7 +272,9 @@ def test_compute_health_ready_on_occupied_repo_is_waiting_not_stall(tmp_path):
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"a/one": [{"number": 29, "title": "next"}]},
+            "ready_by_repo": {
+                "a/one": [{"number": 29, "title": "next", "labels": ["ai:ready"]}]
+            },
             "remaining_ready": 1,
             "occupied_repos": ["a/one"],
             "live_issue_to_pr_repos": ["a/one"],

@@ -177,8 +177,7 @@ def test_sito_miss_keeps_leftover_and_the_first_row():
 
     skipped = select_do(first, {"route": "failed"}, listed)
     assert skipped["ok"] is True
-    assert skipped["route"] == "skip"
-    assert skipped["reason"] == "triage_not_done"
+    assert skipped["route"] == "do"
     assert skipped["leftover"] == 3
     assert skipped["leftover_issues"][0]["issue"] == 1
     second = select(listed, last=skipped)
@@ -194,9 +193,9 @@ def test_authored_skip_consumes_leftover():
         {"repo": "o/r", "issue": 3, "labels": ["ai:ready"]},
     )
     first = select(listed)
-    from lokay.proc.select_issue_do import select as select_do
+    from lokay.proc.select_issue_sieve import select as select_sieve
 
-    skipped = select_do(
+    skipped = select_sieve(
         first,
         {
             "route": "completed",

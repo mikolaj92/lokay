@@ -30,7 +30,14 @@ def consumes(reason: object) -> bool:
 def row_is_ready(row: dict | None) -> bool:
     if not isinstance(row, dict):
         return False
-    labels = {str(item) for item in list(row.get("labels") or [])}
+    labels: set[str] = set()
+    for item in list(row.get("labels") or []):
+        if isinstance(item, dict):
+            name = str(item.get("name") or "")
+        else:
+            name = str(item or "")
+        if name:
+            labels.add(name)
     return bool(labels & READY_LABELS)
 
 

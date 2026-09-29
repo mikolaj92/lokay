@@ -30,7 +30,7 @@ def workspace(tmp_path, repos=("a/one",)):
         {
             "actions": [],
             "remaining_ready": 1,
-            "ready_by_repo": {"a/one": [{"number": 7}]},
+            "ready_by_repo": {"a/one": [{"number": 7, "labels": ["ai:ready"]}]},
             "prs_by_repo": {},
             "pr_survey_failed": [],
             "occupied_repos": [],
@@ -143,8 +143,8 @@ def test_self_stays_eligible_when_product_queue(tmp_path):
             "actions": [],
             "remaining_ready": 2,
             "ready_by_repo": {
-                "mikolaj92/lokay": [{"number": 1}],
-                "a/product": [{"number": 2}],
+                "mikolaj92/lokay": [{"number": 1, "labels": ["ai:ready"]}],
+                "a/product": [{"number": 2, "labels": ["ai:ready"]}],
             },
             "prs_by_repo": {},
             "pr_survey_failed": [],
@@ -196,7 +196,10 @@ def test_reduce_selects_first_eligible_and_removes_blocked():
         working={
             "actions": [],
             "remaining_ready": 2,
-            "ready_by_repo": {"a/one": [{"number": 7}], "a/two": [{"number": 8}]},
+                "ready_by_repo": {
+                    "a/one": [{"number": 7, "labels": ["ai:ready"]}],
+                    "a/two": [{"number": 8, "labels": ["ai:ready"]}],
+                },
         },
     )
     assert (
@@ -229,8 +232,8 @@ def test_reduce_product_and_self_selects_product():
             "actions": [],
             "remaining_ready": 2,
             "ready_by_repo": {
-                _self(): [{"number": 1}],
-                "a/product": [{"number": 2}],
+                _self(): [{"number": 1, "labels": ["ai:ready"]}],
+                "a/product": [{"number": 2, "labels": ["ai:ready"]}],
             },
         },
     )
@@ -251,7 +254,7 @@ def test_reduce_self_only_selects_self():
         working={
             "actions": [],
             "remaining_ready": 1,
-            "ready_by_repo": {_self(): [{"number": 1}]},
+            "ready_by_repo": {_self(): [{"number": 1, "labels": ["ai:ready"]}]},
         },
     )
     assert out["clean_repos"] == [_self()] and out["lane"] == "self"
@@ -339,45 +342,6 @@ def test_inbox_only_unlabeled_eligibility_is_not_implement_fuel(tmp_path):
     assert out["reason"] == "no_ready"
     assert out["implementable"] == []
     assert prepared["product_queue"] is False
-    from lokay.proc.inspect_implementation_eligibility import inspect
-    from lokay.proc.prepare_implementation_selection import prepare
-
-    path = workspace(tmp_path, repos=("mikolaj92/Temida",))
-    pass_io.write_json(
-        pass_io.begin_path(path),
-        {
-            "repos": ["mikolaj92/Temida"],
-            "live": True,
-            "issue_budget": 1,
-            "executor_enabled": True,
-            "incident_repo": "mikolaj92/lokay",
-            "stuck_path": str(tmp_path / "stuck.json"),
-        },
-    )
-    pass_io.write_json(
-        pass_io.working_path(path),
-        {
-            "actions": [],
-            "remaining_ready": 0,
-            "ready_by_repo": {},
-            "inbox_issues_by_repo": {
-                "mikolaj92/Temida": [{"number": 4968, "labels": []}]
-            },
-            "prs_by_repo": {},
-            "pr_survey_failed": [],
-            "occupied_repos": [],
-        },
-    )
-    prepared = prepare(pass_dir=str(path), slot_count=30)
-    out = inspect(
-        pass_dir=str(path),
-        prepared=prepared,
-        selected={"repo": "mikolaj92/Temida", "slot": 1},
-    )
-    assert out["route"] == "ineligible"
-    assert out["reason"] == "no_ready"
-    assert out["implementable"] == []
-    assert prepared["product_queue"] is False
 
 
 def test_reduce_falls_through_to_self_when_product_queue_but_none_eligible():
@@ -399,8 +363,8 @@ def test_reduce_falls_through_to_self_when_product_queue_but_none_eligible():
             "actions": [],
             "remaining_ready": 2,
             "ready_by_repo": {
-                "a/product": [{"number": 2}],
-                _self(): [{"number": 1}],
+                "a/product": [{"number": 2, "labels": ["ai:ready"]}],
+                _self(): [{"number": 1, "labels": ["ai:ready"]}],
             },
         },
     )
