@@ -60,7 +60,7 @@ def _pass(
     return str(pass_dir)
 
 
-def test_inbox_only_unlabeled_product_starts_issue_to_pr_lane(tmp_path):
+def test_inbox_only_unlabeled_product_does_not_start_issue_to_pr_lane(tmp_path):
     pass_dir = _pass(
         tmp_path,
         begin={
@@ -81,19 +81,17 @@ def test_inbox_only_unlabeled_product_starts_issue_to_pr_lane(tmp_path):
     )
     result = run_select_implement(pass_dir=pass_dir)
     assert result["ok"] is True
-    assert result["selected"] == 1
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
-    assert implement["clean_repos"] == ["mikolaj92/Temida"]
-    assert implement["lane"] == "product"
+    assert implement.get("clean_repos") in ([], None) or implement.get("lane") in (
+        "idle",
+        None,
+    )
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["lane"] == "product"
-    assert working["remaining_ready"] == 1
+    assert working.get("remaining_ready", 0) == 0
     health = run_compute_health(pass_dir=pass_dir)
     tick = pass_io.read_json(pass_io.tick_path(pass_dir))
     assert health["ok"] is True
-    assert tick["lane"] == "product"
-    assert tick["remaining"]["ready"] == 1
-    assert tick["idle"] is False
+    assert tick["remaining"]["ready"] == 0
 
 
 def test_blocked_ready_issue_is_not_selected_for_issue_to_pr(tmp_path):

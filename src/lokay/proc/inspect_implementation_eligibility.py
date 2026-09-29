@@ -2,30 +2,22 @@
 
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import is_manual_pr
-from lokay.proc.catalog_work import implementable_rows, work_by_repo
-from lokay.proc.pass_lane import self_repo
-from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
+from lokay.proc.catalog_work import work_by_repo
+from lokay.stuck import excluded_numbers
 
 
 def inspect(*, pass_dir: str, prepared: dict, selected: dict) -> dict:
     repo = str(selected["repo"])
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     begin = pass_io.read_json(pass_io.begin_path(pass_dir))
-    prefix = str(begin.get("branch_prefix") or "ai/fix/")
     work = work_by_repo(
         working,
         stuck=prepared.get("stuck"),
-        branch_prefix=prefix,
+        branch_prefix=str(begin.get("branch_prefix") or "ai/fix/"),
     )
-    raw = list((working.get("ready_by_repo") or {}).get(repo) or []) + list(
-        (working.get("inbox_issues_by_repo") or {}).get(repo) or []
-    )
+    implementable = list(work.get(repo) or [])
     excluded = excluded_numbers(dict(prepared.get("stuck") or {}), repo)
-    covered = issue_numbers_covered_by_prs(
-        list((working.get("prs_by_repo") or {}).get(repo) or []),
-        branch_prefix=prefix,
-    )
-    implementable = implementable_rows(raw, covered=covered, blocked=excluded)
+    raw = list((working.get("ready_by_repo") or {}).get(repo) or [])
     blocked = [
         row
         for row in raw

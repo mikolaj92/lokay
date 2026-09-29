@@ -1,4 +1,4 @@
-"""Test mixed sieve decisions and unlabeled fallback in serial executor slots."""
+"""Test mixed sieve decisions: unlabeled skip is not start fuel; sieve do is."""
 
 from lokay.proc.select_issue_do_row import select as select_do
 from lokay.proc.select_next_issue import select as pick
@@ -38,11 +38,6 @@ def test_mixed_decisions_sieve_to_executor_handoff():
         outcomes.append({"slot": slot, "issue": picked["issue"], "route": outcome["route"], "reason": outcome.get("reason")})
         last = outcome
 
-    # Slot 1..4 should be skip (host_ops)
-    for i in range(4):
-        assert outcomes[i]["route"] == "skip"
-        assert outcomes[i]["reason"] == "host_ops"
-
-    # Slot 5 should be do (Docxtor #161)
-    assert outcomes[4]["issue"] == 161
-    assert outcomes[4]["route"] == "do"
+    assert outcomes[0]["issue"] == 161
+    assert outcomes[0]["route"] == "do"
+    assert all(row.get("issue") not in {153, 155, 157, 159, 162, 163} for row in outcomes)

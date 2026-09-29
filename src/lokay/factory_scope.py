@@ -1,8 +1,9 @@
 """Configured delivery-catalog membership helpers.
 
-The production lokay delivers every enabled repository in its configured catalog.
-``LOKAY_REPO_SCOPE`` remains an optional single-repository override for isolated
-canaries and hermetic tests; it is not the production default scope.
+Empty ``LOKAY_REPO_SCOPE`` is the production default: every enabled row in the
+configured catalog (``repos.mikolaj92.yaml``, ~30). That is Scope C law, not a
+bug and not oil-only ``mikolaj92/lokay``. Set the env to clamp a canary or a
+hermetic test to one repository. Do not treat a missing env as lokay-only.
 """
 
 from __future__ import annotations

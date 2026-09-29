@@ -890,10 +890,9 @@ Pod-Fala ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
 w procesie sprawdza kwalifikację każdego repo i redukuje wybór, persist oraz
 summarize. Nie ma 30-slotowego rozwinięcia Fali. Overflow katalogu jest
 fail-closed. Atom katalogu sprawdza twardy zestaw faktów: zakres, kompletność
-survey PR, PR-first, occupancy, stuck ledger, obecność otwartego issue (inbox
-albo ready; `work:ready` nie jest bramką) i dostępność executora. Otwarte
-issue z inboxu jest pracą: nie wolno ignorować inboxu, bo brak drugiej
-etykiety ready. Czysty reduktor wybiera pierwsze kwalifikujące się repo w
+survey PR, PR-first, occupancy, stuck ledger, obecność labeled ready
+(`ai:ready` / `ready-for-agent`) i dostępność executora. Unlabeled inbox
+nie jest paliwem implement. Czysty reduktor wybiera pierwsze kwalifikujące się repo w
 kolejności konfiguracji; nie uruchamia procesu ani mutacji. Osobny efekt
 materializuje plan implementacji. Brak live budget kończy się w procesie
 katalogu, nie osobną krawędzią Fali.

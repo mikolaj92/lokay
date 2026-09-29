@@ -84,7 +84,7 @@ def test_skipped_triage_envelope_does_not_fail_the_pass():
     assert out["route"] == "skip"
 
 
-def test_labels_are_not_a_gate():
+def test_published_triage_ready_does_not_require_a_second_label_gate():
     unlabeled = {**PICKED, "labels": []}
     labeled = {**PICKED, "labels": ["work:ready", "ai:ready"]}
     ready = {"route": "completed", "triage": {"implementable": True}}

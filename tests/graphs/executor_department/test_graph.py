@@ -4,9 +4,8 @@ from __future__ import annotations
 import pytest
 
 _PATH_ID = 'executor_department'
-_EFFECTORS = [{'conduction': [], 'id': 'list_open_issues', 'when': None},
- {'conduction': ['list_open_issues'], 'id': 'run_executor_rows', 'when': None},
- {'conduction': ['list_open_issues', 'run_executor_rows'],
+_EFFECTORS = [{'conduction': [], 'id': 'run_executor_rows', 'when': None},
+ {'conduction': ['run_executor_rows'],
   'id': 'summarize_executor_department',
   'when': None}]
 _MATCH = {}

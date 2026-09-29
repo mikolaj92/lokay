@@ -104,6 +104,12 @@ def test_factory_pass_has_no_unrolled_catalog_slots():
         "run_issue_sieve_rows",
         "summarize_issue_triage_department",
     ]
+    executor = next(row for row in desc["paths"] if row["id"] == "executor_department")
+    assert [node["id"] for node in executor["nodes"]] == [
+        "run_executor_rows",
+        "summarize_executor_department",
+    ]
+    assert "list_open_issues" not in [node["id"] for node in executor["nodes"]]
 
 
 def test_describe_parent_factory_graph():

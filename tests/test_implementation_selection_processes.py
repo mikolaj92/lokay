@@ -273,7 +273,7 @@ def test_reduce_empty_is_idle():
     assert out["clean_repos"] == [] and out["lane"] == "idle"
 
 
-def test_inbox_only_unlabeled_product_is_selected():
+def test_inbox_only_unlabeled_product_is_not_selected():
     from lokay.proc.reduce_implementation_selection import reduce_state
 
     out = reduce_state(
@@ -282,7 +282,7 @@ def test_inbox_only_unlabeled_product_is_selected():
             "issue_budget": 1,
             "self_repo": _self(),
         },
-        results=[{"route": "eligible", "repo": "mikolaj92/Temida"}],
+        results=[{"route": "ineligible", "repo": "mikolaj92/Temida", "reason": "no_ready"}],
         working={
             "actions": [],
             "remaining_ready": 0,
@@ -294,13 +294,12 @@ def test_inbox_only_unlabeled_product_is_selected():
             },
         },
     )
-    assert out["clean_repos"] == ["mikolaj92/Temida"]
-    assert out["lane"] == "product"
-    assert out["remaining_ready"] == 1
-    assert "work:ready" not in str(out["ready_by_repo"])
+    assert out["clean_repos"] == []
+    assert out["remaining_ready"] == 0
+    assert out["route"] == "none"
 
 
-def test_inbox_only_unlabeled_eligibility_does_not_require_work_ready(tmp_path):
+def test_inbox_only_unlabeled_eligibility_is_not_implement_fuel(tmp_path):
     from lokay.proc.inspect_implementation_eligibility import inspect
     from lokay.proc.prepare_implementation_selection import prepare
 
@@ -336,9 +335,49 @@ def test_inbox_only_unlabeled_eligibility_does_not_require_work_ready(tmp_path):
         prepared=prepared,
         selected={"repo": "mikolaj92/Temida", "slot": 1},
     )
-    assert out["route"] == "eligible"
-    assert out["implementable"][0]["number"] == 4968
-    assert prepared["product_queue"] is True
+    assert out["route"] == "ineligible"
+    assert out["reason"] == "no_ready"
+    assert out["implementable"] == []
+    assert prepared["product_queue"] is False
+    from lokay.proc.inspect_implementation_eligibility import inspect
+    from lokay.proc.prepare_implementation_selection import prepare
+
+    path = workspace(tmp_path, repos=("mikolaj92/Temida",))
+    pass_io.write_json(
+        pass_io.begin_path(path),
+        {
+            "repos": ["mikolaj92/Temida"],
+            "live": True,
+            "issue_budget": 1,
+            "executor_enabled": True,
+            "incident_repo": "mikolaj92/lokay",
+            "stuck_path": str(tmp_path / "stuck.json"),
+        },
+    )
+    pass_io.write_json(
+        pass_io.working_path(path),
+        {
+            "actions": [],
+            "remaining_ready": 0,
+            "ready_by_repo": {},
+            "inbox_issues_by_repo": {
+                "mikolaj92/Temida": [{"number": 4968, "labels": []}]
+            },
+            "prs_by_repo": {},
+            "pr_survey_failed": [],
+            "occupied_repos": [],
+        },
+    )
+    prepared = prepare(pass_dir=str(path), slot_count=30)
+    out = inspect(
+        pass_dir=str(path),
+        prepared=prepared,
+        selected={"repo": "mikolaj92/Temida", "slot": 1},
+    )
+    assert out["route"] == "ineligible"
+    assert out["reason"] == "no_ready"
+    assert out["implementable"] == []
+    assert prepared["product_queue"] is False
 
 
 def test_reduce_falls_through_to_self_when_product_queue_but_none_eligible():

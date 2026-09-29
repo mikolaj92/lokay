@@ -3,9 +3,9 @@
 Lokay is **working as an autonomous lokay** when it continuously turns human-authored
 issues into **merged quality code on `main`** across its delivery catalog — without
 new human gates, without freezing clean repos behind a busy peer, and without
-treating honest waits as recovery stalls. Catalog is `repos.mikolaj92.yaml`;
-this host's mini lokay (`factory_scope`, default `mikolaj92/lokay`) delivers that
-one repo. Un-clamping the rest is a host decision.
+treating honest waits as recovery stalls. Catalog is `repos.mikolaj92.yaml`.
+Empty `LOKAY_REPO_SCOPE` (`factory_scope`) delivers every enabled catalog row
+(~30). That is the intentional default. Set the env only to clamp a canary.
 
 That merge is the **only Definition of Done** ([`WORKING.md`](WORKING.md)).
 A green agent, a plan-only worktree, a pass receipt, or a green test suite is
@@ -61,7 +61,7 @@ The issue is the conversation for **decisions**. In-flight work is a fact
 
 | Stage | Label | Set by |
 | --- | --- | --- |
-| ready | open issue (`ai:ready` optional trace) | survey of catalog issues — stays through implement / PR |
+| ready | `ai:ready` / `ready-for-agent` (`work:ready` optional co-stamp) | intake READY — Label = start |
 | clear | (removes ready) | `pr_triage` → `stage_clear` then `close_issue` |
 
 Reuse: `ai:blocked`, `ai:needs-feedback`, `ai:needs-review`, `ai:tracker`.
@@ -144,6 +144,7 @@ Profile knobs (also overridable via env):
 | Knob | Live autonomous |
 | --- | --- |
 | `mode` | `live` (`LOKAY_MODE=live`) |
+| `LOKAY_REPO_SCOPE` | empty = full catalog (~30 from `repos.mikolaj92.yaml`). Set only to clamp a canary. LaunchAgent must not default this to oil-only `mikolaj92/lokay`. |
 | `executor.enabled` | `true` (`LOKAY_EXECUTOR_ENABLED=1`) |
 | `merge.enabled` | `true` (`LOKAY_MERGE_ENABLED=1`) |
 | `merge.require_checks` | `false` — GitHub Actions nie są używane |
