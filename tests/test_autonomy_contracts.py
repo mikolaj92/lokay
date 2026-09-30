@@ -153,6 +153,7 @@ def test_contract_intake_split_not_park(tmp_path: Path):
             body="Please inventory everything in the tree and list follow-ups.\n" * 2,
         ),
         clone_path=tmp_path,
+        agent={"verdict": "split", "reason": "inventory_requires_slices"},
     )
     assert d.decision == "split"
     assert d.implementable is False
@@ -161,7 +162,7 @@ def test_contract_intake_split_not_park(tmp_path: Path):
 
 def test_contract_park_is_factory_terminal_only(tmp_path: Path):
     """NEEDS_HUMAN only when evidence is missing — not distrust of the author."""
-    # Removal paths named but clone missing → fail closed residual.
+    # Agent names removal paths but clone is missing → fail closed residual.
     d = decide_intake(
         _issue(
             title="Remove legacy shim file",
@@ -169,6 +170,7 @@ def test_contract_park_is_factory_terminal_only(tmp_path: Path):
             assignees=["mikolaj92"],
         ),
         clone_path=None,
+        agent={"remove_paths": ["src/legacy/shim.py"]},
     )
     assert d.decision == "skip"
     assert d.implementable is False

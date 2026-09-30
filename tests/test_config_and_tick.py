@@ -252,18 +252,18 @@ merge:
     assert cfg.active_repos() == []
 
 
-def test_committed_live_config_requires_llm_review(monkeypatch):
+def test_live_example_config_requires_llm_review(monkeypatch):
     """Quality gate: lokay must not merge without a structured reviewer."""
     from pathlib import Path
 
     from lokay.config import load_config
 
     monkeypatch.delenv("LOKAY_REQUIRE_LLM_REVIEW", raising=False)
-    cfg = load_config(Path(__file__).resolve().parents[1] / "config.yaml")
+    cfg = load_config(Path(__file__).resolve().parents[1] / "config.live-autonomous.example.yaml")
     assert cfg.require_llm_review is True
 
 
-def test_committed_live_config_keeps_serial_issue_delivery_budget(monkeypatch):
+def test_live_example_config_keeps_serial_issue_delivery_budget(monkeypatch):
     """Production follows the documented one-ticket-at-a-time contract."""
     from pathlib import Path
 
@@ -271,7 +271,7 @@ def test_committed_live_config_keeps_serial_issue_delivery_budget(monkeypatch):
 
     for name in ("LOKAY_MAX_ISSUE_TO_PR_PER_PASS", "LOKAY_MAX_ISSUES_PER_TICK"):
         monkeypatch.delenv(name, raising=False)
-    cfg = load_config(Path(__file__).resolve().parents[1] / "config.yaml")
+    cfg = load_config(Path(__file__).resolve().parents[1] / "config.live-autonomous.example.yaml")
     assert cfg.max_issue_to_pr_per_pass == 1
     assert cfg.max_issues_per_tick == 1
 
@@ -307,7 +307,7 @@ def test_dead_require_test_evidence_knob_is_gone():
     from lokay import safety
 
     root = Path(__file__).resolve().parents[1]
-    yaml = (root / "config.yaml").read_text(encoding="utf-8")
+    yaml = (root / "config.live-autonomous.example.yaml").read_text(encoding="utf-8")
     assert "require_test_evidence" not in yaml
     assert "require_test_evidence" not in Config.__dataclass_fields__
     assert not hasattr(safety, "looks_like_test_evidence")

@@ -58,6 +58,8 @@ def compose_issue_to_pr(
 ) -> dict:
     if not _await_detach_activation():
         return {"ok": False, "reason": "detachment_not_activated"}
+    if live and not os.environ.get("LOKAY_HEALTH_LEASE"):
+        return {"ok": False, "reason": "capability_missing"}
     cfg = load_config(config_path) if live else None
     if live and cfg is not None and cfg.mode != "live":
         return {
@@ -72,8 +74,6 @@ def compose_issue_to_pr(
             heartbeat_delegated_lease,
         )
 
-        if not os.environ.get("LOKAY_HEALTH_LEASE"):
-            return {"ok": False, "reason": "capability_missing"}
         heartbeat_delegated_lease()
         healthy, reason = health_lease_status()
         if not healthy:
