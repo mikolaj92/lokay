@@ -130,6 +130,21 @@ stop_cycle_tree() {
   uv run python -m lokay.proc.stop_cycle_tree "$1" "${LOKAY_HOME}/cycle" >/dev/null 2>&1 || true
 }
 
+shutdown_service() {
+  trap - TERM INT
+  if [[ -n "${WATCHDOG_PID:-}" ]]; then
+    pkill -P "${WATCHDOG_PID}" 2>/dev/null || true
+    kill "${WATCHDOG_PID}" 2>/dev/null || true
+    wait "${WATCHDOG_PID}" 2>/dev/null || true
+  fi
+  if [[ -n "${DAEMON_PID:-}" ]]; then
+    stop_cycle_tree "${DAEMON_PID}"
+    wait "${DAEMON_PID}" 2>/dev/null || true
+  fi
+  exit 0
+}
+trap shutdown_service TERM INT
+
 set +e
 # Job control gives the daemon its own process group. Without it the group
 # watchdog also terminates this caretaker before it can record pass_ceiling.

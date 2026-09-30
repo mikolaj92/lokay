@@ -34,7 +34,10 @@ def check_required_environment(*, repaired: set[str]) -> Finding:
 
 def check_config(*, cfg: Any) -> Finding:
     errors = cfg.validate()
-    return finding("config", not errors, "ok" if not errors else "invalid")
+    out = finding("config", not errors, "ok" if not errors else "invalid")
+    if errors:
+        out["detail"] = "; ".join(str(error) for error in errors)[:1000]
+    return out
 
 
 def check_pr_review_config(*, cfg: Any) -> Finding:
@@ -42,11 +45,21 @@ def check_pr_review_config(*, cfg: Any) -> Finding:
     if not armed:
         return finding("pr_review_config", True, "not_required")
     try:
-        from lokay.pr_review_config import verify_review_config
+        from lokay.pr_review_config import ReviewConfigError, verify_review_config
 
         verify_review_config(cfg)
+    except ReviewConfigError as exc:
+        return {**finding("pr_review_config", False, "untrusted_review_config"), "detail": exc.code}
     except Exception:
         return finding("pr_review_config", False, "untrusted_review_config")
+    try:
+        from lokay_review_open_code_review.tools import validate_tools
+
+        validate_tools(cfg.pr_review_tools_file)
+    except (ValueError, TypeError):
+        return {**finding("pr_review_config", False, "untrusted_review_config"), "detail": "tools_allowlist_invalid"}
+    except (ImportError, AttributeError):
+        return finding("pr_review_config", False, "review_tools_validator_unavailable")
     return finding("pr_review_config", True, "ok")
 
 
