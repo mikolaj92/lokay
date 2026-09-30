@@ -60,6 +60,29 @@ def compose_issue_to_pr(
         return {"ok": False, "reason": "detachment_not_activated"}
     if live and not os.environ.get("LOKAY_HEALTH_LEASE"):
         return {"ok": False, "reason": "capability_missing"}
+    try:
+        return _compose_activated_issue_to_pr(
+            config_path=config_path, repo=repo, issue_number=issue_number,
+            live=live, incident_fingerprint=incident_fingerprint,
+            package_path=package_path,
+        )
+    finally:
+        if live:
+            from lokay.proc.health_delegation import complete_delegated_lease
+            import warnings
+
+            try:
+                completion = complete_delegated_lease()
+                if completion.get("ok") is False:
+                    warnings.warn(f"delegated lease completion failed: {completion.get('reason')}", RuntimeWarning)
+            except Exception as exc:
+                warnings.warn(f"delegated lease completion failed: {exc}", RuntimeWarning)
+
+
+def _compose_activated_issue_to_pr(
+    *, config_path: str | None, repo: str, issue_number: int, live: bool,
+    incident_fingerprint: str, package_path: str | None,
+) -> dict:
     cfg = load_config(config_path) if live else None
     if live and cfg is not None and cfg.mode != "live":
         return {
@@ -70,7 +93,6 @@ def compose_issue_to_pr(
     if live:
         from lokay.preflight import health_lease_status
         from lokay.proc.health_delegation import (
-            complete_delegated_lease,
             heartbeat_delegated_lease,
         )
 
@@ -120,11 +142,6 @@ def compose_issue_to_pr(
             append_event(cfg.state_path, result)
     except Exception:
         pass
-    if live:
-        try:
-            complete_delegated_lease()
-        except Exception:
-            pass
     return result
 
 
