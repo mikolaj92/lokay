@@ -61,6 +61,20 @@ def test_building_a_plan_with_no_files_fails_closed(tmp_path: Path):
     assert out["ok"] is False and out["reason"] == "plan_incomplete"
 
 
+def test_incomplete_plan_is_not_authorized_for_write(tmp_path: Path):
+    """A live gate must not write an approach that failed validation."""
+    from lokay.proc.authorize_issue_plan_write import authorize
+
+    out = authorize(
+        {"worktree": str(tmp_path)},
+        config_path=None,
+        live=True,
+        approach={"ok": False, "reason": "plan_incomplete"},
+    )
+    assert out["route"] == "terminal"
+    assert out["reason"] == "plan_incomplete"
+
+
 def test_backtick_line_range_reaches_the_agent_and_survives(tmp_path: Path):
     """PunkRecords #35: `models.py:124-131` died as plan_incomplete before any agent ran."""
     import json

@@ -7,7 +7,7 @@ from lokay.proc._common import load_cfg, mutations_allowed
 
 
 def authorize(request: dict, approach: dict, *, config_path: str | None, live: bool) -> dict:
-    if approach.get("ok") is False:
+    if approach.get("ok") is not True:
         return {
             "ok": True,
             "route": "terminal",
