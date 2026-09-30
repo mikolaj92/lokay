@@ -28,7 +28,7 @@ def is_evidence_path(path: str) -> bool:
 
 
 _DISPOSABLE_IGNORED_PARTS = frozenset(
-    {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".uv", ".build"}
+    {".venv", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".uv", ".build", ".pixi"}
 )
 _DISPOSABLE_IGNORED_NAMES = frozenset({"dist", "build"})
 

@@ -335,6 +335,24 @@ def test_review_agent_revalidates_pr_after_plugin_before_returning_result(monkey
     assert len(calls) == 2
 
 
+def test_review_agent_accepts_neutral_completed_plugin_result(monkeypatch):
+    from lokay.proc import run_pr_review_agent as agent
+    request, result = _result()
+    evidence = {**request, 'task': request['task']}
+    identity = {k: evidence[k] for k in ('repo', 'pr', 'head_ref', 'head_repo', 'head_sha',
+        'base_ref', 'base_ref_sha', 'comparison_base_sha', 'diff_sha256', 'task_identity_sha256',
+        'diff_paths', 'changed_ranges') if k in evidence}
+    monkeypatch.setattr(agent, 'load_config', lambda _: SimpleNamespace(
+        branch_prefix='ai/fix', pr_review_model=request['engine']['model']))
+    monkeypatch.setattr(agent, 'plugin_request', lambda *args: request)
+    monkeypatch.setattr(agent, 'invoke_plugin', lambda *args: result)
+    monkeypatch.setattr('lokay.pr_review_io.revalidate_pr_identity', lambda *a, **kw: identity)
+    out = agent.run_review_agent(config_path=None, repo=request['repo'], pr=request['pr'], evidence=evidence, live=True)
+    assert out['ok'] is True, out
+    assert out['result']['status'] == 'complete'
+    assert out['result']['verdict'] == 'request_changes'
+
+
 def test_review_task_is_not_truncated_in_plugin_request(monkeypatch):
     from lokay.proc.run_pr_review_agent import plugin_request
     from types import SimpleNamespace

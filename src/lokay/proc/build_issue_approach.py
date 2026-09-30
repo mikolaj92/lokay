@@ -9,7 +9,10 @@ from lokay.pr_review import PrReviewError, extract_json_object
 _PROMPT = """Read the issue and the repository. Reply with one JSON object and nothing else:
 {{"ok": true, "goal": "...", "files": ["relative/path.py"], "test_plan": ["..."],
 "non_goals": ["..."], "test_command": "..."}}
-files are paths you will change. Name none when you cannot tell.
+files are paths you will change or verify for this delivery. Inspect git status and diff:
+this may resume an unpublished implementation already in this worktree. When existing edits
+satisfy the issue, name their goal-relevant paths and plan verification/publication instead
+of returning an empty file list or duplicating the implementation. Name none only when you cannot tell.
 Or, when the issue should not be implemented: {{"ok": false, "reason": "underspecified"|"too_large"|"dangerous"}}
 
 Issue #{number} — {title}
