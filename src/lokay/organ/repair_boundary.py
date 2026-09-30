@@ -66,7 +66,6 @@ def handle_repair_boundary(
             return probe_pr(repo=repo, pr=pr, live=live)
         return admit_live(repo=repo, pr=pr, live=live)
     worktree = Path(str((up.get("worktree_add") or {}).get("worktree") or ""))
-    cfg = load_config(inputs.get("config_path") or inputs.get("config"))
     live = bool(inputs.get("live"))
     repo = ctx["repo"]
     pr = int(ctx["pr_number"] or 0)
@@ -87,6 +86,7 @@ def handle_repair_boundary(
         value = up.get(source) or {}
         return validate(str(value.get("stdout") or value.get("stdout_tail") or ""))
     if atom == "pr_repair_retry_agent":
+        cfg = load_config(inputs.get("config_path") or inputs.get("config"))
         from lokay.proc.run_pr_repair_retry_agent import execute
 
         value = up.get("validate_initial_repair") or {}
@@ -116,6 +116,7 @@ def handle_repair_boundary(
         module = __import__(f"lokay.proc.{atom}", fromlist=["collect"])
         return module.collect(repo=repo, pr=pr, live=live)
     if atom == "evidence_repair_agent":
+        cfg = load_config(inputs.get("config_path") or inputs.get("config"))
         from lokay.proc.run_evidence_repair_agent import execute
 
         names = (
@@ -205,6 +206,7 @@ def handle_repair_boundary(
             == "repaired",
         )
     if atom == "pr_test_repair_agent":
+        cfg = load_config(inputs.get("config_path") or inputs.get("config"))
         from lokay.proc.run_pr_test_repair_agent import execute
 
         return execute(
