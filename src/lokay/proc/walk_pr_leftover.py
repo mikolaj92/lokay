@@ -193,7 +193,7 @@ def leftover_after(
         if picked.get(key) is not None
     }
     if head.get("repo") is not None and head.get("pr") is not None:
-        if incomplete_retry_position == "tail" and classify_occupancy(receipt)["class"] == "incomplete":
+        if incomplete_retry_position == "tail" and classify_occupancy(receipt)["class"] in {"incomplete", "repair"}:
             return [*rest, head]
         return [head, *rest]
     return rest
