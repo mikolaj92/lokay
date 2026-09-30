@@ -59,11 +59,28 @@ def test_one_evidence_round():
     )
 
 
+def test_undeclared_repair_test_does_not_publish():
+    skipped = select_test(
+        {"ok": True, "skipped": True, "tested": False, "reason": "no_declared_test"}
+    )
+    assert skipped["route"] == "fail"
+    assert finalize_tests(skipped, {"route": "not_applicable"})["route"] == "terminal"
+
+
 def test_test_repair_is_bounded():
     red = select_test({"ok": True, "tested": True, "recorded_red": True})
     green = select_test({"ok": True, "tested": True})
     assert red["route"] == "fail" and green["route"] == "pass"
-    repaired = select_test_repair(validate_output(valid()))
-    assert repaired["route"] == "repaired"
+    failed_repair = select_test_repair(red, validate_output(valid()))
+    assert failed_repair["route"] == "repaired"
+    assert select_test_repair(green, validate_output(valid()))["route"] == "not_applicable"
+    skipped = select_test({"ok": True, "tested": False, "skipped": True})
+    assert skipped["route"] == "fail"
+    assert select_test_repair(skipped, {})["route"] == "terminal"
+    assert select_test_repair(red, {})["route"] == "terminal"
     assert finalize_tests(red, green)["route"] == "publish"
     assert finalize_tests(red, red)["route"] == "terminal"
+    assert finalize_tests(red, {"route": "not_applicable"})["route"] == "terminal"
+    assert finalize_tests(green, {"route": "not_applicable"})["route"] == "publish"
+    assert finalize_tests({"route": "not_applicable"}, {"route": "not_applicable"})["route"] == "terminal"
+    assert finalize_tests({"route": "not_applicable"}, green)["route"] == "terminal"

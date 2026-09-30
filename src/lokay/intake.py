@@ -48,20 +48,7 @@ _PLATFORM_HOST_WORK = re.compile(
     r")\b"
 )
 
-_INVENTORY_BLOB = re.compile(
-    r"(?i)\b("
-    r"inventory\s+(?:everything|all|the\s+whole)"
-    r"|audit\s+(?:everything|all\s+repos?|the\s+entire)"
-    r"|enumerate\s+(?:every|all)"
-    r"|catalog\s+(?:every|all)"
-    r")\b"
-)
-
-_MULTI_EPIC = re.compile(r"(?i)\bepic\b")
 _TRACKER_TITLE = re.compile(r"(?i)\b(?:tracker|epic)\b")
-_TITLE_ONLY_BODY = re.compile(
-    r"(?i)^\s*(?:(?:todo|tbd|see\s+title|as\s+title)\.?)\s*$"
-)
 
 # Concrete removal/delete of a path named in the issue.
 _REMOVE_QUOTED = re.compile(
@@ -445,12 +432,8 @@ def check_essence_objection(
     issue: Issue,
     *,
     trusted_assignee: str = "mikolaj92",
+    agent: dict | None = None,
 ) -> CheckResult:
-    """CLOSE foreign objections to what the lokay is. Operator tickets stay.
-
-    Others may report that it hangs or does not work as described. They may
-    not file against the soul / quintessence / product law. Those close.
-    """
     if _issue_is_operator(issue, trusted_assignee=trusted_assignee):
         return CheckResult(
             check="essence",
@@ -458,27 +441,11 @@ def check_essence_objection(
             reason="operator_authored",
             detail={"author": issue.author, "assignees": list(issue.assignees or [])},
         )
-    blob = f"{issue.title or ''}\n{issue.body or ''}"
-    if _OPERATIONAL_REPORT.search(blob):
-        return CheckResult(
-            check="essence",
-            verdict=PASS,
-            reason="operational_report",
-            detail={"author": issue.author},
-        )
-    if _ESSENCE_OBJECTION.search(blob):
-        return CheckResult(
-            check="essence",
-            verdict=CLOSE,
-            reason="foreign_essence_objection",
-            detail={"author": issue.author},
-        )
-    return CheckResult(
-        check="essence",
-        verdict=PASS,
-        reason="not_essence_objection",
-        detail={"author": issue.author},
-    )
+    if agent is None:
+        return CheckResult(check="essence", verdict=PASS, reason="no_agent", detail={"author": issue.author})
+    verdict = CLOSE if str(agent.get("verdict") or "").strip().lower() == "close" else PASS
+    reason = str(agent.get("reason") or "agent_essence").strip() or "agent_essence"
+    return CheckResult(check="essence", verdict=verdict, reason=reason, detail={"author": issue.author})
 
 
 def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
@@ -505,19 +472,15 @@ def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
     )
 
 
-def check_satisfied(issue: Issue, *, clone_path: Path | None) -> CheckResult:
-    """Already-satisfied: removals absent, adds present, or explicit already-on-main."""
-    blob = f"{issue.title or ''}\n{issue.body or ''}"
-    if _ALREADY_ON_MAIN.search(blob):
-        return CheckResult(
-            check="satisfied",
-            verdict=CLOSE,
-            reason="already_on_main_marker",
-            detail={},
-        )
+def check_satisfied(issue: Issue, *, clone_path: Path | None, agent: dict | None = None) -> CheckResult:
+    """Already-satisfied from the agent's paths, checked against the tree."""
+    del issue
+    verdict = agent or {}
+    if verdict.get("already_on_main") is True:
+        return CheckResult(check="satisfied", verdict=CLOSE, reason="already_on_main_marker", detail={})
 
-    remove_paths = named_removal_paths(issue)
-    add_paths = named_add_paths(issue)
+    remove_paths = [str(p) for p in (verdict.get("remove_paths") or []) if str(p).strip()]
+    add_paths = [str(p) for p in (verdict.get("add_paths") or []) if str(p).strip()]
     if not remove_paths and not add_paths:
         return CheckResult(check="satisfied", verdict=PASS, reason="no_concrete_paths")
 
@@ -564,62 +527,36 @@ def check_satisfied(issue: Issue, *, clone_path: Path | None) -> CheckResult:
     return CheckResult(check="satisfied", verdict=PASS, reason="work_still_needed", detail=detail)
 
 
-def check_ambiguity(issue: Issue) -> CheckResult:
-    """Oversized/multi-part → SPLIT when possible; residual ambiguity → PARK."""
-    title = (issue.title or "").strip()
-    body = (issue.body or "").strip()
-    blob = f"{title}\n{body}"
-    from lokay.technical_route import classify_technical_route
-    technical = classify_technical_route(title, body)
-    if technical["route"] == "split":
-        return CheckResult(check="ambiguity", verdict=SPLIT, reason=technical["reason"], detail={})
+def _bounded_contexts(body: str) -> tuple[str, ...]:
+    """Second path segment under src/ is the bounded context. Nothing is invented."""
+    found: list[str] = []
+    for line in (body or "").splitlines():
+        match = re.search(r"(?:^|[\s`])src/([A-Za-z0-9_.-]+)/", line)
+        if match:
+            found.append(match.group(1))
+    return tuple(dict.fromkeys(found))
 
-    if _INVENTORY_BLOB.search(blob):
-        return CheckResult(
-            check="ambiguity",
-            verdict=SPLIT,
-            reason="inventory_everything",
-            detail={},
-        )
 
-    epic_hits = len(_MULTI_EPIC.findall(blob))
-    title_is_epic = bool(re.search(r"(?i)\bepic\b", title))
-    if title_is_epic or epic_hits >= 3 or (epic_hits >= 2 and " and " in title.lower()):
-        return CheckResult(
-            check="ambiguity",
-            verdict=SPLIT,
-            reason="multi_epic_blob",
-            detail={"epic_mentions": epic_hits, "title_is_epic": title_is_epic},
-        )
+def _has_typed_edge(body: str) -> bool:
+    return bool(re.search(r"(?i)\btyped edge\b", body or ""))
 
-    boxes = checkbox_count(body)
-    if boxes > MAX_CHECKBOXES_ONE_PASS and not is_bug_issue(issue):
-        return CheckResult(
-            check="ambiguity",
-            verdict=SPLIT,
-            reason="too_many_checkboxes",
-            detail={"checkboxes": boxes},
-        )
 
-    if body and _TITLE_ONLY_BODY.match(body):
-        return CheckResult(
-            check="ambiguity",
-            verdict=PARK,
-            reason="title_only_body",
-            detail={},
-        )
+def _has_feature_map(root: Path | None) -> bool:
+    if root is None:
+        return False
+    return (Path(root) / ".lokay/memory/feature-map.md").is_file()
 
-    # Very wide "audit all" without acceptance criteria bullets — cannot auto-split.
-    if re.search(r"(?i)\baudit\b", title) and not re.search(r"(?m)^\s*[-*]\s*\[[ xX]\]", body):
-        if len(body) < 120:
-            return CheckResult(
-                check="ambiguity",
-                verdict=PARK,
-                reason="audit_without_acceptance",
-                detail={},
-            )
 
-    return CheckResult(check="ambiguity", verdict=PASS, reason="spec_clear_enough")
+def check_ambiguity(issue: Issue, root: Path | None = None, *, agent: dict | None = None) -> CheckResult:
+    """Ambiguity comes from the agent. No agent verdict passes."""
+    del issue, root
+    verdict = str((agent or {}).get("verdict") or "pass").strip().lower()
+    if verdict not in {SPLIT, PARK}:
+        verdict = PASS
+    reason = str((agent or {}).get("reason") or "agent_ambiguity").strip() or "agent_ambiguity"
+    if agent is None:
+        reason = "no_agent"
+    return CheckResult(check="ambiguity", verdict=verdict, reason=reason, detail={})
 
 
 def aggregate_intake(
@@ -828,6 +765,7 @@ def decide_intake(
     run: bool = True,
     skip_reason: str = "",
     force_split: bool = False,
+    agent: dict | None = None,
 ) -> IntakeDecision:
     """Run all deterministic checks and aggregate (pure aside from provided evidence)."""
     if not run:
@@ -849,10 +787,10 @@ def decide_intake(
             tracker_refs=tracker_refs,
         ),
         check_duplicate_ai_pr(issue, covering_prs=covering_prs),
-        check_essence_objection(issue, trusted_assignee=trusted_assignee),
+        check_essence_objection(issue, trusted_assignee=trusted_assignee, agent=agent),
         check_shape(issue, shape),
-        check_satisfied(issue, clone_path=clone_path),
-        check_ambiguity(issue),
+        check_satisfied(issue, clone_path=clone_path, agent=agent),
+        check_ambiguity(issue, root=clone_path, agent=agent),
     )
     return aggregate_intake(
         checks,

@@ -54,14 +54,14 @@ survey/plan path part of the live department spine; see `docs/UNIX.md`.
 - `fala/lokay.fala-package.toml`: authored parent `factory_pass` plus child conduction for `issue_triage`, `pr_triage`, `pr_repair`, and `issue_to_pr`.
 - `src/lokay/compose/`: thin graph and read-only status entrypoints; product ordering stays in Fala.
 - `executor.command` and `executor.args`: the sole nondeterministic coding slot. Lokay rejects fake, stub, and no-op agents.
-- Local verification is repository-declared (`[tool.lokay] test` in the worktree `pyproject.toml`). No declaration is an honest skip — Lokay does not invent `pytest` from `pyproject` / `tests/`.
+- Local verification is repository-declared (`[tool.lokay] test` in the worktree `pyproject.toml`). Lokay does not invent `pytest` from `pyproject` / `tests/`. Missing declaration stays an honest skip for delivery, but PR repair cannot publish it.
 - `repos.mikolaj92.yaml`: managed repository scope.
 
 There is no alternate Python fallback graph and no Hermes/Kanban execution ledger.
 
 ## Quick start
 
-Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), and authenticated GitHub CLI `gh`. The Python Fala dependency is pinned to an immutable git revision (`origin/main` lock #240); a Mojo source checkout is located separately through `FALA_HOME` (the daemon sets it explicitly) when graph execution needs the native toolchain. Verification is local; Lokay does not use GitHub Actions.
+Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), and authenticated GitHub CLI `gh`. `uv sync --extra dev` installs the pinned Python dependencies and Mojo 1.0.0 toolchain; no separate Fala checkout or Pixi environment is needed. Verification is local; Lokay does not use GitHub Actions.
 
 ```bash
 uv sync
@@ -890,10 +890,9 @@ Pod-Fala ma cztery kroki: przygotowanie katalogu, jeden atom katalogu, który
 w procesie sprawdza kwalifikację każdego repo i redukuje wybór, persist oraz
 summarize. Nie ma 30-slotowego rozwinięcia Fali. Overflow katalogu jest
 fail-closed. Atom katalogu sprawdza twardy zestaw faktów: zakres, kompletność
-survey PR, PR-first, occupancy, stuck ledger, obecność otwartego issue (inbox
-albo ready; `work:ready` nie jest bramką) i dostępność executora. Otwarte
-issue z inboxu jest pracą: nie wolno ignorować inboxu, bo brak drugiej
-etykiety ready. Czysty reduktor wybiera pierwsze kwalifikujące się repo w
+survey PR, PR-first, occupancy, stuck ledger, obecność labeled ready
+(`ai:ready` / `ready-for-agent`) i dostępność executora. Unlabeled inbox
+nie jest paliwem implement. Czysty reduktor wybiera pierwsze kwalifikujące się repo w
 kolejności konfiguracji; nie uruchamia procesu ani mutacji. Osobny efekt
 materializuje plan implementacji. Brak live budget kończy się w procesie
 katalogu, nie osobną krawędzią Fali.

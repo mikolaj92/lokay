@@ -6,14 +6,8 @@ from pathlib import Path
 from lokay.proc._common import load_cfg, mutations_allowed
 
 
-def authorize(
-    request: dict,
-    *,
-    config_path: str | None,
-    live: bool,
-    approach: dict | None = None,
-) -> dict:
-    if approach is not None and approach.get("ok") is not True:
+def authorize(request: dict, approach: dict, *, config_path: str | None, live: bool) -> dict:
+    if approach.get("ok") is not True:
         return {
             "ok": True,
             "route": "terminal",

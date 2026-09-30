@@ -72,48 +72,12 @@ def _git_head(path: Path) -> str:
     return run.stdout.strip()
 
 
-def test_sibling_fala_checkout_matches_pinned_revision():
-    """graph_run falls back to ../Fala when FALA_HOME is unset.
+def test_uv_manages_mojo_toolchain_and_fala_sources():
+    import shlex
+    import shutil
 
-    A stale 0.9.3 sibling mixes wheel 0.9.4 with native 0.9.3 and skips `when`.
-    """
-    sibling = ROOT.parent / "Fala"
-    assert sibling.is_dir(), f"canonical Fala checkout missing at {sibling}"
-    assert _git_head(sibling) == PINNED_FALA, (
-        f"{sibling} HEAD is {_git_head(sibling)}; pin is {PINNED_FALA} "
-        f"({PINNED_FALA_VERSION})"
-    )
-    pixi = tomllib.loads((sibling / "pixi.toml").read_text(encoding="utf-8"))
-    assert pixi["workspace"]["version"] == PINNED_FALA_VERSION
-
-
-def test_service_default_fala_home_is_the_canonical_checkout():
-    script = (ROOT / "scripts" / "lokay-service.sh").read_text(encoding="utf-8")
-    assert 'FALA_HOME="${FALA_HOME:-${HOME}/Developer/OSS/Fala}"' in script
-
-
-def _plist_fala_home(path: Path) -> str | None:
-    if not path.is_file():
-        return None
-    run = subprocess.run(
-        ["/usr/bin/plutil", "-extract", "EnvironmentVariables.FALA_HOME", "raw", str(path)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if run.returncode != 0:
-        return None
-    return run.stdout.strip() or None
-
-
-def test_host_launchagents_use_canonical_fala_checkout():
-    """A /tmp worktree is a pin scratchpad, not the host native home."""
-    canonical = Path.home() / "Developer" / "OSS" / "Fala"
-    agents = Path.home() / "Library" / "LaunchAgents"
-    for name in ("ai.mikolaj.lokay.plist", "ai.mikolaj.lokay-status.plist"):
-        home = _plist_fala_home(agents / name)
-        if home is None:
-            continue
-        assert home == str(canonical), (
-            f"{name} FALA_HOME={home!r}; expected canonical {canonical}"
-        )
+    repo = ROOT
+    package = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = package["project"]["dependencies"]
+    assert "mojo==1.0.0" in dependencies
+    assert shutil.which("mojo") is not None

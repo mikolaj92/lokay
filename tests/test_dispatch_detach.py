@@ -6,7 +6,7 @@ def test_selects_only_one_candidate(tmp_path):
     pass_io.write_json(pass_io.begin_path(tmp_path), {"live": True, "stuck": {}})
     pass_io.write_json(
         pass_io.working_path(tmp_path),
-        {"ready_by_repo": {"a/b": [{"number": 2}, {"number": 1}]}},
+        {"ready_by_repo": {"a/b": [{"number": 2, "labels": ["ai:ready"]}, {"number": 1, "labels": ["ai:ready"]}]}},
     )
     pass_io.write_json(
         pass_io.implement_path(tmp_path), {"issue_budget": 4, "clean_repos": ["a/b"]}

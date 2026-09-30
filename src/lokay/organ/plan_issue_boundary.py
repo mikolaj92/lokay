@@ -28,15 +28,15 @@ def handle_plan_issue(
     if atom == "build_issue_approach":
         from lokay.proc.build_issue_approach import build
 
-        return build(request)
+        return build({**request, "config_path": inputs.get("config_path"), "live": bool(inputs.get("live"))})
     if atom == "authorize_issue_plan_write":
         from lokay.proc.authorize_issue_plan_write import authorize
 
         return authorize(
             request,
+            approach,
             config_path=str(inputs.get("config_path") or "") or None,
             live=bool(inputs.get("live")),
-            approach=approach,
         )
     if atom == "write_issue_approach":
         from lokay.proc.write_issue_approach import write

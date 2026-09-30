@@ -319,6 +319,7 @@ def test_review_agent_revalidates_pr_after_plugin_before_returning_result(monkey
         "head_sha": "b" * 40, "base_ref_sha": "a" * 40,
         "comparison_base_sha": "c" * 40, "diff_sha256": "d" * 64,
         "task_identity_sha256": "e" * 64,
+        "verdict": "approve", "findings": [],
     })
     monkeypatch.setattr(
         "lokay.pr_review_io.revalidate_pr_identity",
@@ -426,3 +427,53 @@ def test_host_accepts_a_neutral_engine_when_sha_and_coverage_match():
     result["evidence"]["manifest_schema"] = "neutral.run-manifest/v1"
     selected = validate_result(result, request)
     assert selected["route"] == "valid"
+
+
+def test_one_model_stays_one_request(monkeypatch):
+    from lokay.proc import run_pr_review_agent
+
+    cfg = SimpleNamespace(pr_review_model="primary", pr_review_models=())
+    base = {"head_sha": "a" * 40, "engine": {"model": "ignored"}}
+    monkeypatch.setattr(run_pr_review_agent, "plugin_request", lambda *_args: dict(base))
+    built = run_pr_review_agent.review_requests(cfg, "acme/demo", 7, {"task": {}})
+    assert len(built) == 1
+    assert built[0]["engine"]["model"] == "primary"
+    assert built[0]["head_sha"] == "a" * 40
+
+
+def test_several_models_share_one_sha_and_collapse_to_one_json(monkeypatch):
+    from lokay.proc import run_pr_review_agent
+
+    cfg = SimpleNamespace(pr_review_model="primary", pr_review_models=("second", "third"))
+    base = {"head_sha": "b" * 40, "engine": {}}
+    monkeypatch.setattr(run_pr_review_agent, "plugin_request", lambda *_args: dict(base))
+    built = run_pr_review_agent.review_requests(cfg, "acme/demo", 8, {"task": {}})
+    assert [row["engine"]["model"] for row in built] == ["primary", "second", "third"]
+    assert {row["head_sha"] for row in built} == {"b" * 40}
+    from lokay.proc.run_pr_review_agent import collapse
+
+    lenses = [
+        {"head_sha": "b" * 40, "verdict": "approve", "findings": []},
+        {"head_sha": "b" * 40, "verdict": "request_changes", "findings": [{"path": "a.py"}]},
+    ]
+    one = collapse(lenses, sha="b" * 40)
+    assert one["ok"] is True
+    assert one["head_sha"] == "b" * 40
+    assert one["verdict"] == "request_changes"
+    assert one["findings"] == [{"path": "a.py"}]
+    assert len(one["lenses"]) == 2
+
+
+def test_incomplete_or_drifted_lens_is_not_a_review():
+    from lokay.proc.run_pr_review_agent import collapse
+
+    assert collapse([{"head_sha": "c" * 40}], sha="c" * 40)["route"] == "fail_closed"
+    drifted = collapse(
+        [
+            {"head_sha": "c" * 40, "verdict": "approve", "findings": []},
+            {"head_sha": "d" * 40, "verdict": "approve", "findings": []},
+        ],
+        sha="c" * 40,
+    )
+    assert drifted["route"] == "fail_closed"
+    assert drifted["verdict"] == ""

@@ -408,8 +408,9 @@ The catalog loop is the authored `issue_sieve_rows` child, not a daemon tick
 and not a Python `while`. Leftover is consumed only on an authored skip
 (`park`, `blocked`, already-closed). `triage_not_done` / adapter
 fail keep the row. `leftover=0` only when the takeable list is exhausted.
-Sieve already-ready consumes the current row so the next slot can sito an
-unlabeled leftover. Executor `select_issue_do_row` keeps a ready leftover
+Sieve already-ready consumes the current row so the next slot can sito
+labeled leftover. Unlabeled open issues are never start fuel
+(`select_next_issue` `none_ready` → `route=none`). Executor `select_issue_do_row` keeps a ready leftover
 (`consume=False`) so the same ticket becomes do without issue triage.
 
 ### `executor_department` (code and PR)
@@ -418,10 +419,12 @@ Two small blocks plus graph. Not issue sieve. Not PR sieve. Not merge.
 Parent `run_executor_department` invokes this child whenever the switch is on.
 
 ```text
-list_open_issues
-  → run_executor_rows         child Fala executor_rows
-    → summarize_executor_department   merged is always false
+run_executor_rows         child Fala executor_rows
+  → summarize_executor_department   merged is always false
 ```
+
+Executor consumes the triage list / leftover snapshot. It does not call
+`list_open_issues` a second time.
 
 `executor_rows`:
 
@@ -574,7 +577,7 @@ admit_pr_repair   ← probe state/mergedAt (path-visible); compose skips run_pat
                           └─→ localize    ← when worktree route=ready; paths from checks/review seed + tree. Never ok=false.
                                 └─→ run_agent   ← when localize route=ready; repair prompt (only non-deterministic node)
                                       └─→ commit_all
-                                            └─→ test_local   ← local pytest; skip if no suite
+                                            └─→ test_local   ← declared command; missing declaration cannot publish
                                                   └─→ assert_real_diff
                                                         └─→ push   ← published tip; never rebase (force-push forbidden)
 # Mid-flight organ: mutating atoms re-probe; MERGED refuses (reason=pr_already_merged).

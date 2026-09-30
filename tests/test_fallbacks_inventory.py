@@ -70,17 +70,17 @@ def test_no_pr_checks_green_compat_wrapper():
 
 
 def test_no_machine_hardcoded_fala_home_in_graph_run():
-    """Deleted: /Users/mikomac/... super-fallback; sibling + FALA_HOME only."""
+    """Mojo toolchain is provisioned by uv; no external Fala source fallback."""
     src = inspect.getsource(graph_run)
     assert "/Users/mikomac" not in src
     assert "Developer/OSS/Fala" not in src
 
 
-def test_run_path_fala_home_candidates_are_relative_only():
-    """Sibling layout discovery only — no absolute user paths in candidate list."""
+def test_run_path_has_no_external_fala_checkout_fallback():
+    """Fala sources and Mojo compiler come from the uv-installed package/toolchain."""
     src = inspect.getsource(graph_run.run_path)
-    assert 'root.parent / "Fala"' in src or "root.parent / 'Fala'" in src
-    assert 'Path("/Users/' not in src
+    assert 'root.parent / "Fala"' not in src
+    assert "FALA_HOME" not in src
 
 
 def test_no_runtime_engine_selector():
@@ -91,5 +91,5 @@ def test_no_runtime_engine_selector():
 def test_fallbacks_doc_exists():
     assert (ROOT / "docs" / "FALLBACKS.md").is_file()
     text = (ROOT / "docs" / "FALLBACKS.md").read_text(encoding="utf-8")
-    assert "pr_checks_green" in text
-    assert "Deleted" in text
+    assert "uv.lock" in text
+    assert "no external Fala source checkout" in text

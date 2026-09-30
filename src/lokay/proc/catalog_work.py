@@ -1,4 +1,4 @@
-"""Open catalog work: inbox ∪ ready. Lokay labels are not a gate."""
+"""Open catalog work: labeled ready and leftover ready. Inbox unlabeled is not implement fuel."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from typing import Any
 
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 from lokay.triage import is_open_work_issue
+from lokay.proc.walk_issue_leftover import row_is_ready
 
 
 def issue_labels(row: dict[str, Any]) -> list[str]:
@@ -52,16 +53,15 @@ def work_by_repo(
     stuck: dict[str, Any] | None = None,
     branch_prefix: str = "ai/fix/",
 ) -> dict[str, list[dict[str, Any]]]:
-    """Union ready survey and inbox. ``work:ready`` is not a gate."""
+    """Labeled ready survey and leftover ready. Unlabeled inbox is not a start ticket."""
     state = dict(working or {})
     ledger = dict(stuck if stuck is not None else state.get("stuck") or {})
     prs_by_repo = dict(state.get("prs_by_repo") or {})
     ready_by_repo = dict(state.get("ready_by_repo") or {})
-    inbox_by_repo = dict(state.get("inbox_issues_by_repo") or {})
     leftover_ready = ready_by_repo_from_leftover(state.get("leftover_issues"))
     repos = {
         str(name).strip()
-        for name in list(ready_by_repo) + list(inbox_by_repo) + list(leftover_ready)
+        for name in list(ready_by_repo) + list(leftover_ready)
         if str(name).strip()
     }
     out: dict[str, list[dict[str, Any]]] = {}
@@ -74,9 +74,9 @@ def work_by_repo(
         rows = (
             list(ready_by_repo.get(repo) or [])
             + list(leftover_ready.get(repo) or [])
-            + list(inbox_by_repo.get(repo) or [])
         )
-        out[repo] = implementable_rows(rows, covered=covered, blocked=blocked)
+        kept = implementable_rows(rows, covered=covered, blocked=blocked)
+        out[repo] = [row for row in kept if row_is_ready(row)]
     return out
 
 

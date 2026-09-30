@@ -104,6 +104,12 @@ def test_factory_pass_has_no_unrolled_catalog_slots():
         "run_issue_sieve_rows",
         "summarize_issue_triage_department",
     ]
+    executor = next(row for row in desc["paths"] if row["id"] == "executor_department")
+    assert [node["id"] for node in executor["nodes"]] == [
+        "run_executor_rows",
+        "summarize_executor_department",
+    ]
+    assert "list_open_issues" not in [node["id"] for node in executor["nodes"]]
 
 
 def test_describe_parent_factory_graph():
@@ -506,7 +512,7 @@ def test_every_subprocess_atom_inherits_pythonpath():
     assert missing == []
 
 
-def test_parent_factory_inherits_fala_home_and_health_lease():
+def test_parent_factory_inherits_health_lease():
     import tomllib
 
     package = tomllib.loads(find_default_package().read_text(encoding="utf-8"))
@@ -514,10 +520,11 @@ def test_parent_factory_inherits_fala_home_and_health_lease():
         path for path in package["correlation_paths"] if path["id"] == "factory_pass"
     )
     inherited = factory["effectors"][0]["adapter"]["inherit_env"]
-    assert "FALA_HOME" in inherited
+    assert "FALA_HOME" not in inherited
     assert "LOKAY_HEALTH_LEASE" in inherited
     assert "LOKAY_HEALTH_LEASE_PATH" in inherited
     assert "LOKAY_DISABLE_HEALTH_LEASE_ISSUE" in inherited
+    assert {"PI_PROVIDER", "PI_MODEL"} <= set(inherited)
     assert "PYTHONPATH" in inherited
     assert "LOKAY_PROCESS_HEAD" in inherited
     assert "LOKAY_HOST_FF_FETCHED" in inherited
@@ -531,6 +538,9 @@ def test_pr_review_agent_receives_ocr_credential_through_fala_capability():
         item for item in package["capabilities"] if item["id"] == "lokay_atom"
     )
     assert "OCR_LLM_API_KEY" in capability["secret_handles"]
+    # pi reads its provider only from the environment and hangs when it is
+    # absent. The daemon has it; every atom subprocess must keep it.
+    assert {"PI_PROVIDER", "PI_MODEL"} <= set(capability["secret_handles"])
 
     review = next(
         path for path in package["correlation_paths"] if path["id"] == "pr_triage"

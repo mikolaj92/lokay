@@ -183,6 +183,18 @@ def test_runtime_allows_only_the_exact_credential_command_for_custom_provider(
     assert "secret-key" not in profile
 
 
+def test_sandboxed_review_allows_the_git_ocr_execs(tmp_path: Path, monkeypatch):
+    """OCR looks up git on a /usr/bin PATH and execs that file, not PATH's CLT git."""
+    request = _request(tmp_path)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    home.chmod(0o700)
+    argv = build_ocr_argv(request, background=home / "background.md", preview=True)
+    profile = Path(argv[2]).read_text()
+    assert '(allow process-exec (literal "/usr/bin/git"))' in profile
+
+
 def test_sandboxed_review_can_git_grep_changed_file(tmp_path: Path, monkeypatch):
     request = _request(tmp_path)
     repo = Path(request["repo_path"])
@@ -615,7 +627,9 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
     env = observed["env"]
     assert env["OCR_PROVIDER_KEY"] == "secret-key"
     assert env["GIT_PAGER"] == ""
-    assert "CommandLineTools" not in env["PATH"]
+    assert env["PATH"].split(os.pathsep)[0] == (
+        "/Library/Developer/CommandLineTools/usr/bin"
+    )
     assert "Xcode-beta" not in env["PATH"]
     assert "DEVELOPER_DIR" not in env
     assert "GH_TOKEN" not in env
@@ -638,7 +652,9 @@ def test_invoke_ocr_uses_isolated_allowlisted_environment_and_redacts_errors(tmp
             request["engine"]["rule_path"], request["engine"]["tools_path"],
             request["engine"]["ocr_config_path"],
         ),
-        allowed_executables=(request["engine"]["binary_path"], git_bin, "/usr/bin/grep"),
+        allowed_executables=(
+            request["engine"]["binary_path"], "/usr/bin/git", git_bin, "/usr/bin/grep",
+        ),
     )
 
     def fail_run(*_args, **_kwargs):

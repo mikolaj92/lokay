@@ -127,6 +127,7 @@ def evaluate_queue_conflict(
     branch_prefix: str = "ai/fix/",
     ready_label: str = "ai:ready",
     tracker_label: str = "ai:tracker",
+    agent: dict | None = None,
 ) -> ConflictVerdict:
     """Deterministic contradiction check for one ready candidate.
 
@@ -144,6 +145,7 @@ def evaluate_queue_conflict(
         if int((_peer_dict(p).get("number") or -1)) != int(issue.number)
     ]
     blob = _blob(issue)
+    facts = agent or {}
     covered = issue_numbers_covered_by_prs(prs, branch_prefix=branch_prefix)
 
     # 1) Open AI PR already covers this issue number (branch or Fixes #N).

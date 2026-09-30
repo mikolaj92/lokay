@@ -5,12 +5,14 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Mapping
 
 
 _INHERIT = (
     "LOKAY_ROOT",
+    "FALA_HOME",
     "LOKAY_PROCESS_HEAD",
     "LOKAY_HOST_FF_FETCHED",
     "LOKAY_HEALTH_LEASE",
@@ -18,6 +20,11 @@ _INHERIT = (
     "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
     "PYTHONPATH",
     "OCR_LLM_API_KEY",
+    "PI_PROVIDER",
+    "PI_MODEL",
+    "TMPDIR",
+    "USER",
+    "LANG",
 )
 
 
@@ -113,6 +120,7 @@ def run_overridden_path(
     env = os.environ.copy()
     env.pop("DYLD_LIBRARY_PATH", None)
     env.pop("DYLD_FALLBACK_LIBRARY_PATH", None)
+    env.setdefault("TMPDIR", os.environ.get("TMPDIR") or tempfile.gettempdir())
     for key in _INHERIT:
         env.setdefault(key, "")
     run = subprocess.run(

@@ -53,7 +53,7 @@ def test_native_repair_authorization_reaches_receipt(tmp_path, case, reason):
     }
     if case == "published":
         child.update(route="completed", repair={
-            "ok": True, "terminal": "publish", "published": True,
+            "ok": True, "route": "completed", "terminal": "publish", "published": True,
             "repaired": True, "head_sha": "b" * 40,
         })
     body = base_effector(f'''

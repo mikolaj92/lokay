@@ -117,5 +117,8 @@ def handle_issue_triage_department(
     if atom == "summarize_issue_triage_department":
         from lokay.proc.summarize_issue_triage_department import summarize
 
-        return summarize(up.get("run_issue_sieve_rows") or {})
+        return summarize(
+            up.get("run_issue_sieve_rows") or {},
+            listed=up.get("list_open_issues") or {},
+        )
     return None

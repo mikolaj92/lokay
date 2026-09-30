@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 from lokay.models import Issue
-from lokay.split import plan_split, validate_split_plan
+from lokay.proc._prose_agent import ask
+from lokay.split import plan_from_agent, validate_split_plan
+
+_PROMPT = """Read the issue. Reply with one JSON object and nothing else:
+{{"children": [{{"title": "one slice", "detail": "what this slice changes"}}]}}
+Split only when the issue is several pieces of work. One piece means {{"children": []}}.
+
+Issue #{number} — {title}
+
+{body}
+"""
 
 
-def plan(*, issue_data: dict, reason: str) -> dict:
+def plan(*, issue_data: dict, reason: str, execute=None) -> dict:
     split_reason = reason or "agent_split"
-    value = plan_split(Issue.from_dict(issue_data), reason=split_reason)
+    item = Issue.from_dict(issue_data)
+    prompt = _PROMPT.format(number=item.number, title=item.title or "", body=item.body or "")
+    agent = ask(item, issue_data, prompt, execute)
+    value = plan_from_agent(item, agent or {}, reason=split_reason)
     if value is None:
         # Host-ops monolith without extractable code+ops children → skip (no limbo).
         park_reason = (

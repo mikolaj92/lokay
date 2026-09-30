@@ -135,6 +135,10 @@ def handle_factory(
         out = _run_atom_main(host_ff.main, argv)
         if checkout and out.get("ok"):
             snapshot_process_head(Path(str(checkout)), refresh=True)
+        if out.get("ok") is not True:
+            # Conduct the failed sync fact to the host gate; adapter errors
+            # otherwise erase its named reason from the pass receipt.
+            return {**out, "ok": True, "_exit": 0, "route": "blocked"}
         return out
 
     if atom == "factory_begin_host_gate":

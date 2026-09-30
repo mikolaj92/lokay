@@ -157,6 +157,25 @@ def _filter_code_children(children: list[ChildSpec]) -> list[ChildSpec]:
     return [c for c in children if not line_is_host_ops_only(c.title)]
 
 
+def plan_from_agent(issue: Issue, agent: dict, *, reason: str) -> SplitPlan | None:
+    """Children come from the agent's list. Fewer than two is no split."""
+    children = []
+    for raw in (agent or {}).get("children") or []:
+        title = _clip_title(str(raw.get("title") or ""))
+        detail = str(raw.get("detail") or "").strip()
+        if not title:
+            continue
+        children.append(ChildSpec(title=title, body=_child_body(issue, title, detail), source="agent"))
+        if len(children) == MAX_CHILDREN:
+            break
+    if len(children) < MIN_CHILDREN:
+        return None
+    return SplitPlan(
+        reason=reason, children=tuple(children), demote_parent=True, close_parent=True,
+        detail={"extracted": len(children), "parent": f"{issue.repo}#{issue.number}", "source": "agent"},
+    )
+
+
 def plan_split(
     issue: Issue,
     *,
@@ -211,6 +230,7 @@ def plan_split(
         "multi_epic_blob",
         "triage_split_candidate",
         "too_large_split",
+        "three_bounded_contexts",
     }:
         # Inventory/epic without parts: still file two scoped children so work moves.
         candidates = _inventory_slices(issue)

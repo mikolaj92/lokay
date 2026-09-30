@@ -3,18 +3,14 @@ from __future__ import annotations
 import json
 
 _PATH_ID = 'executor_department'
-_NODES = {'list_open_issues': {'atom': 'list_open_issues', 'conduction': [], 'when': None},
- 'run_executor_rows': {'atom': 'run_executor_rows', 'conduction': ['list_open_issues'], 'when': None},
+_NODES = {'run_executor_rows': {'atom': 'run_executor_rows', 'conduction': [], 'when': None},
  'summarize_executor_department': {'atom': 'summarize_executor_department',
-                                   'conduction': ['list_open_issues', 'run_executor_rows'],
+                                   'conduction': ['run_executor_rows'],
                                    'when': None}}
-_COND_EDGES = [('list_open_issues', 'run_executor_rows'),
- ('list_open_issues', 'summarize_executor_department'),
- ('run_executor_rows', 'summarize_executor_department')]
+_COND_EDGES = [('run_executor_rows', 'summarize_executor_department')]
 _WHEN_BRANCHES = []
-_EFFECTORS = [{'conduction': [], 'id': 'list_open_issues', 'when': None},
- {'conduction': ['list_open_issues'], 'id': 'run_executor_rows', 'when': None},
- {'conduction': ['list_open_issues', 'run_executor_rows'],
+_EFFECTORS = [{'conduction': [], 'id': 'run_executor_rows', 'when': None},
+ {'conduction': ['run_executor_rows'],
   'id': 'summarize_executor_department',
   'when': None}]
 
@@ -37,4 +33,3 @@ def test_unconditional_nodes_succeed_without_outputs():
     for nid, meta in _NODES.items():
         if meta["when"] is None:
             assert status[nid] == "succeeded"
-

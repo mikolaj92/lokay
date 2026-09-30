@@ -3,11 +3,11 @@
 The expanded Fala catalog is the authority for generated graph suites. Native tests drive `host_run_package` with a Fala fixture organ. `host_drive` with pre-registered outputs is not a `when` proof.
 
 - Paths: **46**
-- Expanded nodes and per-node suites: **627**
-- Conduction edges: **1395**
+- Expanded nodes and per-node suites: **626**
+- Conduction edges: **1393**
 - `when` branches: **246**
 - Authored effectors with `output_schema`: **555** / missing **0**.
-- Authored (before expansion): 527 nodes / 1174 edges / 221 `when` branches.
+- Authored (before expansion): 526 nodes / 1172 edges / 221 `when` branches.
 
 Each path has `test_<atom>.py`, `test_transitions.py`, and `test_graph.py`. The audit compares node metadata and transition metadata against `fala/lokay.expanded.golden.json`; it does not treat file names as proof of execution.
 
@@ -54,7 +54,7 @@ Each path has `test_<atom>.py`, `test_transitions.py`, and `test_graph.py`. The 
 | `issue_triage_department` | 3 | 3 | 0 |
 | `issue_sieve_row` | 5 | 8 | 2 |
 | `issue_sieve_rows` | 17 | 48 | 5 |
-| `executor_department` | 3 | 3 | 0 |
+| `executor_department` | 2 | 1 | 0 |
 | `executor_rows` | 26 | 78 | 8 |
 | `executor_row` | 5 | 7 | 1 |
 | `pr_triage_department` | 6 | 10 | 1 |

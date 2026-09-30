@@ -126,7 +126,12 @@ def test_sieve_select_never_launches() -> None:
     out = select(
         {"route": "issue", "repo": "o/r", "issue": 3},
         {"route": "completed", "triage": {"result": {"implementable": True}}},
-        {"issues": [{"repo": "o/r", "issue": 3}, {"repo": "o/r", "issue": 4}]},
+        {
+            "issues": [
+                {"repo": "o/r", "issue": 3, "labels": ["ai:ready"]},
+                {"repo": "o/r", "issue": 4, "labels": ["ai:ready"]},
+            ]
+        },
     )
     assert out["route"] == "do"
     assert "launched" not in out

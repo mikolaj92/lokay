@@ -102,7 +102,10 @@ def test_satisfied_closes_when_paths_already_gone(tmp_path: Path):
         title="Remove legacy shim",
         body="Please remove `src/legacy/shim.py` and delete src/old/compat.py from main.",
     )
-    result = check_satisfied(issue, clone_path=tmp_path)
+    result = check_satisfied(
+        issue, clone_path=tmp_path,
+        agent={"remove_paths": ["src/legacy/shim.py", "src/old/compat.py"]},
+    )
     assert result.verdict == "close"
     assert result.reason == "already_satisfied_on_main"
 
@@ -115,7 +118,9 @@ def test_satisfied_closes_when_feature_present(tmp_path: Path):
         title="Add feature module",
         body="Please add `src/feature/new.py` for the parser.",
     )
-    result = check_satisfied(issue, clone_path=tmp_path)
+    result = check_satisfied(
+        issue, clone_path=tmp_path, agent={"add_paths": ["src/feature/new.py"]},
+    )
     assert result.verdict == "close"
     assert result.reason == "feature_already_present"
 
@@ -125,7 +130,7 @@ def test_satisfied_closes_already_on_main_marker():
         title="Wire parser",
         body="This is already on main after the last merge.\n\nNo further work.",
     )
-    result = check_satisfied(issue, clone_path=None)
+    result = check_satisfied(issue, clone_path=None, agent={"already_on_main": True})
     assert result.verdict == "close"
     assert result.reason == "already_on_main_marker"
 
@@ -138,24 +143,36 @@ def test_satisfied_passes_when_target_still_present(tmp_path: Path):
         title="Remove legacy shim",
         body="Please remove `src/legacy/shim.py` now.",
     )
-    assert check_satisfied(issue, clone_path=tmp_path).verdict == "pass"
+    assert check_satisfied(
+        issue, clone_path=tmp_path, agent={"remove_paths": ["src/legacy/shim.py"]},
+    ).verdict == "pass"
 
 
-def test_ambiguity_inventory_splits_not_human():
-    issue = _issue(
-        title="Inventory everything in the monorepo",
-        body="Please inventory everything and audit all modules for legacy.\n" * 3,
-    )
-    result = check_ambiguity(issue)
-    assert result.verdict == "split"
-    assert result.reason == "inventory_everything"
+def test_ambiguity_follows_the_agent_verdict():
+    result = check_ambiguity(_issue(), agent={"verdict": "split", "reason": "several_pieces"})
+    assert result.verdict == "split" and result.reason == "several_pieces"
 
 
-def test_ambiguity_too_many_checkboxes_splits():
-    body = "\n".join(f"- [ ] task {i} more text here for slice" for i in range(8))
-    result = check_ambiguity(_issue(body=body))
-    assert result.verdict == "split"
-    assert result.reason == "too_many_checkboxes"
+def test_ambiguity_without_an_agent_passes():
+    result = check_ambiguity(_issue(body="inventory everything and audit all modules"))
+    assert result.verdict == "pass" and result.reason == "no_agent"
+
+
+def test_ambiguity_check_asks_the_agent(tmp_path):
+    import json
+    from lokay.proc.run_intake_ambiguity_check import run
+
+    seen = {}
+
+    def execute(prompt):
+        seen["prompt"] = prompt
+        return {"status": "completed", "result_stdout": json.dumps(
+            {"verdict": "split", "reason": "agent_saw_three_contexts"})}
+
+    out = run({"issue": _issue(body="src/a/x.py src/b/y.py src/c/z.py").to_dict()}, execute=execute)
+    assert "src/a/x.py" in seen["prompt"]
+    assert out["check"]["verdict"] == "split"
+    assert out["check"]["reason"] == "agent_saw_three_contexts"
 
 
 def test_duplicate_ai_pr_closes():
@@ -182,10 +199,11 @@ def test_essence_closes_foreign_soul_objection():
         title="Lokay should be a kanban not a lokay",
         body="Wrong philosophy. Change the soul / kwintesencja of the product.",
     )
-    result = check_essence_objection(issue)
+    verdict = {"verdict": "close", "reason": "foreign_essence_objection"}
+    result = check_essence_objection(issue, agent=verdict)
     assert result.verdict == "close"
     assert result.reason == "foreign_essence_objection"
-    d = decide_intake(issue, clone_path=None, state="OPEN")
+    d = decide_intake(issue, clone_path=None, state="OPEN", agent=verdict)
     assert d.decision == "close"
     assert d.reason == "foreign_essence_objection"
     assert "hangs" in (d.comment or "")
@@ -210,7 +228,7 @@ def test_essence_keeps_foreign_hang_report():
         title="Lokay hangs on issue_to_pr",
         body="Does not work as described: daemon stuck after survey, no merge.",
     )
-    result = check_essence_objection(issue)
+    result = check_essence_objection(issue, agent={"verdict": "pass", "reason": "operational_report"})
     assert result.verdict == "pass"
     assert result.reason == "operational_report"
 
@@ -273,7 +291,8 @@ def test_decide_intake_obsolete_close_on_library(tmp_path: Path):
     )
 
 
-def test_decide_intake_split_on_inventory(tmp_path: Path):
+def test_decide_intake_does_not_split_on_prose(tmp_path: Path):
+    """Inventory prose is the agent's call. decide_intake no longer reads it."""
     (tmp_path / "README.md").write_text("# App\n", encoding="utf-8")
     (tmp_path / "src").mkdir()
     d = decide_intake(
@@ -283,19 +302,15 @@ def test_decide_intake_split_on_inventory(tmp_path: Path):
         ),
         clone_path=tmp_path,
     )
-    assert d.decision == "split"
-    assert d.implementable is False
-    assert "Split" in (d.comment or "")
+    assert d.decision == "ready"
 
 
 def test_decide_intake_never_ready_on_inconclusive(tmp_path: Path):
     # Removal paths named but clone missing → fail closed, not READY.
     d = decide_intake(
-        _issue(
-            title="Remove legacy shim file",
-            body="Please remove `src/legacy/shim.py` from the tree now.",
-        ),
+        _issue(title="Remove legacy shim file", body="Please remove the shim."),
         clone_path=None,
+        agent={"remove_paths": ["src/legacy/shim.py"]},
     )
     assert d.decision == "skip"
     assert d.implementable is False

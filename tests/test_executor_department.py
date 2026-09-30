@@ -101,7 +101,6 @@ def test_department_receipt_never_merges() -> None:
 def test_department_graph_is_list_nest_receipt() -> None:
     ids = [str(node["id"]) for node in _path("executor_department")["effectors"]]
     assert ids == [
-        "list_open_issues",
         "run_executor_rows",
         "summarize_executor_department",
     ]

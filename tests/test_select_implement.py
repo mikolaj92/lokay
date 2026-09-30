@@ -60,7 +60,7 @@ def _pass(
     return str(pass_dir)
 
 
-def test_inbox_only_unlabeled_product_starts_issue_to_pr_lane(tmp_path):
+def test_inbox_only_unlabeled_product_does_not_start_issue_to_pr_lane(tmp_path):
     pass_dir = _pass(
         tmp_path,
         begin={
@@ -81,19 +81,17 @@ def test_inbox_only_unlabeled_product_starts_issue_to_pr_lane(tmp_path):
     )
     result = run_select_implement(pass_dir=pass_dir)
     assert result["ok"] is True
-    assert result["selected"] == 1
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
-    assert implement["clean_repos"] == ["mikolaj92/Temida"]
-    assert implement["lane"] == "product"
+    assert implement.get("clean_repos") in ([], None) or implement.get("lane") in (
+        "idle",
+        None,
+    )
     working = pass_io.read_json(pass_io.working_path(pass_dir))
-    assert working["lane"] == "product"
-    assert working["remaining_ready"] == 1
+    assert working.get("remaining_ready", 0) == 0
     health = run_compute_health(pass_dir=pass_dir)
     tick = pass_io.read_json(pass_io.tick_path(pass_dir))
     assert health["ok"] is True
-    assert tick["lane"] == "product"
-    assert tick["remaining"]["ready"] == 1
-    assert tick["idle"] is False
+    assert tick["remaining"]["ready"] == 0
 
 
 def test_blocked_ready_issue_is_not_selected_for_issue_to_pr(tmp_path):
@@ -147,7 +145,9 @@ def test_manual_needs_review_does_not_block_same_repo_ready(tmp_path):
                     }
                 ]
             },
-            "ready_by_repo": {"a/one": [{"number": 70, "title": "next ready"}]},
+            "ready_by_repo": {
+                "a/one": [{"number": 70, "title": "next ready", "labels": ["ai:ready"]}]
+            },
             "remaining_ready": 1,
             "remaining_prs": 1,
             "actionable_prs": 0,
@@ -175,7 +175,9 @@ def test_actionable_ai_pr_still_blocks_same_repo_ready(tmp_path):
                     {"number": 1, "head_ref": "ai/fix/1-x", "labels": ["ai:generated"]}
                 ]
             },
-            "ready_by_repo": {"a/one": [{"number": 2, "title": "next"}]},
+            "ready_by_repo": {
+                "a/one": [{"number": 2, "title": "next", "labels": ["ai:ready"]}]
+            },
             "remaining_ready": 1,
             "actionable_prs": 1,
         },
@@ -240,7 +242,10 @@ def test_compute_health_ready_behind_actionable_pr_is_waiting_not_stall(tmp_path
                 ]
             },
             "ready_by_repo": {
-                "a/one": [{"number": n, "title": f"r{n}"} for n in range(28, 33)]
+                "a/one": [
+                    {"number": n, "title": f"r{n}", "labels": ["ai:ready"]}
+                    for n in range(28, 33)
+                ]
             },
             "remaining_ready": 5,
             "remaining_prs": 1,
@@ -267,7 +272,9 @@ def test_compute_health_ready_on_occupied_repo_is_waiting_not_stall(tmp_path):
     pass_dir = _pass(
         tmp_path,
         working={
-            "ready_by_repo": {"a/one": [{"number": 29, "title": "next"}]},
+            "ready_by_repo": {
+                "a/one": [{"number": 29, "title": "next", "labels": ["ai:ready"]}]
+            },
             "remaining_ready": 1,
             "occupied_repos": ["a/one"],
             "live_issue_to_pr_repos": ["a/one"],

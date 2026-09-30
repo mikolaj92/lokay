@@ -11,12 +11,31 @@ export HOME
 export PATH="${HOME}/.local/bin:${HOME}/.local/share/mise/shims:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 export LANG="${LANG:-C.UTF-8}"
 export TMPDIR="${TMPDIR:-/tmp}"
+# The review reads OCR_LLM_API_KEY. launchd starts this script with a clean
+# environment, so load the key file the session uses and map the name across.
+CLIENT_ENV="${HOME}/.config/agent-memory/client.env"
+if [[ -f "${CLIENT_ENV}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${CLIENT_ENV}"
+  set +a
+fi
+if [[ -z "${OCR_LLM_API_KEY:-}" && -n "${TDAI_MEMORY_API_KEY:-}" ]]; then
+  export OCR_LLM_API_KEY="${TDAI_MEMORY_API_KEY}"
+fi
+# pi hangs instead of picking a model unless the provider is named.
+export PI_PROVIDER="${PI_PROVIDER:-omniroute}"
+export PI_MODEL="${PI_MODEL:-pi}"
 
 export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
-export FALA_HOME="${FALA_HOME:-${HOME}/Developer/OSS/Fala}"
 ROOT="${LOKAY_ROOT}"
+export PATH="${ROOT}/.venv/bin:${PATH}"
+UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${ROOT}/.venv}"
+export UV_PROJECT_ENVIRONMENT
 export LOKAY_CONFIG="${LOKAY_CONFIG:-${ROOT}/config.yaml}"
 CFG="${LOKAY_CONFIG}"
+# Do not default LOKAY_REPO_SCOPE. Empty = full catalog (~30). Oil-only
+# mikolaj92/lokay is an explicit clamp, not the LaunchAgent default.
 LOKAY_HOME="${HOME}/.lokay"
 LOG_DIR="${LOKAY_LOG_DIR:-${LOKAY_HOME}/logs}"
 OUTBOX="${LOKAY_HOME}/preflight-bootstrap-incidents.log"

@@ -16,7 +16,10 @@
 
 mode: live  # Env override still honored: LOKAY_MODE=live|dry-run
 
-# Catalog = which repos we manage (not a denylist).
+# Catalog = which repos we manage (not a denylist). Empty LOKAY_REPO_SCOPE
+# delivers this whole file (~30 enabled rows). That is the production default.
+# Set LOKAY_REPO_SCOPE=owner/name only to clamp a canary. Do not default the
+# LaunchAgent env to oil-only mikolaj92/lokay.
 repos_file: repos.mikolaj92.yaml
 
 github:

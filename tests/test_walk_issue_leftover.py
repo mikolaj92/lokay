@@ -84,9 +84,19 @@ def test_self_repo_yields_to_product_in_queue():
 
 def test_queue_drops_foreign_assignee():
     listed = [
-        {"repo": "Temida/Temida", "issue": 1, "assignees": []},
-        {"repo": "Temida/Temida", "issue": 2, "assignees": ["mikolaj92"]},
-        {"repo": "Temida/Temida", "issue": 3, "assignees": ["PSyron"]},
+        {"repo": "Temida/Temida", "issue": 1, "assignees": [], "labels": ["ai:ready"]},
+        {
+            "repo": "Temida/Temida",
+            "issue": 2,
+            "assignees": ["mikolaj92"],
+            "labels": ["ai:ready"],
+        },
+        {
+            "repo": "Temida/Temida",
+            "issue": 3,
+            "assignees": ["PSyron"],
+            "labels": ["ai:ready"],
+        },
     ]
     out = queue(listed, None, lokay="mikolaj92")
     assert [row["issue"] for row in out] == [1, 2]

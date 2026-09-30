@@ -59,10 +59,10 @@ pass health are not a representation of whether the lokay works. Merges of
 intended issues are.
 
 Lokay is **working** only if it continuously lokays its **delivery catalog**
-**to that DoD**. Catalog is `repos.mikolaj92.yaml`; this host's mini lokay
-(`factory_scope`, `LOKAY_REPO_SCOPE`, default `mikolaj92/lokay`) delivers only
-that one repo. Product lokay for Temida and the rest is a host/CEO decision,
-not an un-clamp on this machine. Order: survey →
+**to that DoD**. Catalog is `repos.mikolaj92.yaml`. Empty `LOKAY_REPO_SCOPE`
+(`factory_scope`) delivers every enabled catalog row (~30). That is the
+intentional default (Scope C), not oil-only `mikolaj92/lokay`. Set
+`LOKAY_REPO_SCOPE` only to clamp a canary or a hermetic test. Order: survey →
 **per-repo PR-first** (close-out) → inbox triage / implement in repos with no
 open AI PR. Agent must be **real** ([`NO_STUBS.md`](NO_STUBS.md)). Minimize
 human: humans write issues; the lokay consumes them to merged results — do not

@@ -13,7 +13,7 @@ from lokay.git_host_ff import process_head_moved
 def gate(host: dict, *, live: bool, checkout: str) -> dict:
     if not live:
         return {"ok": True, "route": "begin"}
-    if host.get("ok") is not True:
+    if host.get("ok") is not True or host.get("route") == "blocked":
         return {
             "ok": True, "route": "blocked", "health": "host_behind",
             "reason": str(host.get("reason") or "host_sync_missing"),

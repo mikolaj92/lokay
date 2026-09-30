@@ -10,45 +10,15 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable
 
-from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY, LEDGER_ACTIVE_LABELS
 
 _PREFLIGHT_MARKER = re.compile(r"<!--\s*lokay-preflight:[0-9a-fA-F]+\s*-->")
 _PREFLIGHT_TITLE = re.compile(r"(?i)^preflight failure\b")
 
-# Title markers for whole-issue OOS (substring match on title only).
-OOS_TITLE_MARKERS = (
-    "out of scope",
-    "out-of-scope",
-    "[oos]",
-    "wontfix",
-    "won't fix",
-    "will not fix",
-)
-
-# Explicit whole-issue status in body (not section headings).
-_OOS_STATUS_LINE = re.compile(
-    r"(?im)^\s*(?:status|decision)\s*:\s*out[\s-]*of[\s-]*scope\b"
-)
-_OOS_STANDALONE = re.compile(
-    r"(?im)^\s*(?:\[oos\]|out[\s-]*of[\s-]*scope|wontfix|won't fix|will not fix)\s*$"
-)
-_OOS_INLINE_TAG = re.compile(r"(?i)\[oos\]")
-_WONTFIX = re.compile(r"(?i)\b(?:wontfix|won't fix|will not fix)\b")
-
-# Strip non-goal sections so "Out of scope" headings never close real bugs.
-_NONGOAL_SECTION = re.compile(
-    r"(?ims)^#{1,6}\s*(?:"
-    r"out\s*of\s*scope|out-of-scope|non-?goals|not\s+in\s+(?:this\s+)?scope|"
-    r"explicitly\s+not\s+in\s+this\s+issue"
-    r")\s*\n.*?(?=^#{1,6}\s|\Z)"
-)
-
-# Title/body heuristics for "enough spec".
+# Title/body length is mechanical. Prose classification belongs to the agent.
 MIN_TITLE_LEN = 8
 MIN_BODY_LEN = 40
-MAX_CHECKBOXES = 5
 
 
 @dataclass(frozen=True)
@@ -141,7 +111,8 @@ def is_open_work_issue(
 ) -> bool:
     """Open catalog issue is work unless a human stop excludes it.
 
-    ``work:ready`` / ``ai:ready`` are optional ledger traces, not a gate.
+    Ready labels (`ai:ready` / `ready-for-agent`) are the start ticket for
+    implement. This helper is open-minus-human-stop hygiene, not intake.
     """
     if str(state or "OPEN").upper() == "CLOSED":
         return False
@@ -158,39 +129,6 @@ def is_preflight_incident(*, title: str, body: str) -> bool:
     if _PREFLIGHT_MARKER.search(body or ""):
         return True
     return bool(_PREFLIGHT_TITLE.search((title or "").strip()))
-
-
-def _checkbox_count(body: str) -> int:
-    return work_checkbox_count(body)
-
-
-def _strip_nongoal_sections(body: str) -> str:
-    """Remove markdown sections that list non-goals (not issue status)."""
-    return _NONGOAL_SECTION.sub("", body or "")
-
-
-def _is_out_of_scope(title: str, body: str) -> bool:
-    """Whole-issue OOS only — never ## Out of scope non-goal sections.
-
-    True when:
-    - title contains an OOS marker, or
-    - body (after stripping non-goal sections) has explicit status/decision
-      line, standalone OOS line, [oos] tag, or wontfix wording.
-    """
-    title_l = (title or "").lower()
-    if any(m in title_l for m in OOS_TITLE_MARKERS):
-        return True
-
-    rest = _strip_nongoal_sections(body or "")
-    if _OOS_STATUS_LINE.search(rest):
-        return True
-    if _OOS_STANDALONE.search(rest):
-        return True
-    if _OOS_INLINE_TAG.search(rest):
-        return True
-    if _WONTFIX.search(rest):
-        return True
-    return False
 
 
 def decide_issue(
@@ -220,7 +158,6 @@ def decide_issue(
 
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
-    blob = f"{title}\n{body}".lower()
 
     if is_preflight_incident(title=title, body=body):
         return TriageDecision(
@@ -230,18 +167,6 @@ def decide_issue(
             comment=(
                 "Skipped (factory): lokay preflight incident. Self-repair owns this, "
                 "not issue_to_pr. No limbo label — issue stays open in queue."
-            ),
-        )
-
-    if _is_out_of_scope(title, body):
-        return TriageDecision(
-            decision="out_of_scope",
-            reason="oos_marker",
-            close=True,
-            comment=(
-                "Closed as out of scope by Lokay inbox triage "
-                "(explicit OOS marker in title or status — not a Non-goals section). "
-                "Reopen with a clear in-scope ask if needed."
             ),
         )
 
@@ -265,21 +190,6 @@ def decide_issue(
                 f"Skipped (factory): body shorter than {MIN_BODY_LEN} chars. "
                 "No limbo label — add acceptance criteria, split, or leave open for later."
             ),
-        )
-
-    boxes = _checkbox_count(body)
-    # "epic" only in TITLE means the whole issue is an epic tracker.
-    # Body phrases like "Parent epic" / "child of epic" must NOT block implementable issues
-    # (Pad Audit wave: 362 false needs-feedback from "## Parent epic" footers).
-    # Oversized work → SPLIT (auto child issues), not human-mailbox brake.
-    # A bug is one symptom / one fix — never an epic of template checkboxes.
-    title_is_epic = bool(re.search(r"\bepic\b", title.lower()))
-    if (boxes > MAX_CHECKBOXES and not is_bug_issue(issue)) or title_is_epic:
-        return TriageDecision(
-            decision="split",
-            reason="too_large_split",
-            add_labels=(),
-            comment=None,
         )
 
     return TriageDecision(

@@ -24,7 +24,7 @@ sieve = family == 'sieve'
 handler = handle_issue_triage_department if sieve else handle_executor_department
 prepare_id = 'prepare_issue_sieve' if sieve else 'prepare_executor_rows'
 module = 'lokay.proc.run_issue_sieve_row.run' if sieve else 'lokay.proc.run_executor_row.run'
-issues = [{'repo': 'o/r', 'issue': n} for n in range(1, count + 2)]
+issues = [{'repo': 'o/r', 'issue': n, 'labels': ['ai:ready']} for n in range(1, count + 2)]
 inputs = {'listed': {'ok': True, 'issues': issues, 'count': len(issues), 'overflow': False},
           'last': {}, 'pass_dir': str(pd), 'live': False, 'budget': count}
 up = _conduction_values(m)
@@ -106,7 +106,7 @@ from lokay.organ.executor_department_boundary import handle_executor_department
 from lokay.proc.select_next_issue import select
 pd = Path(%r)
 count = %r
-issues = [{"repo": "o/r", "issue": n, "labels": []} for n in range(1, count + 2)]
+issues = [{"repo": "o/r", "issue": n, "labels": ["ai:ready"]} for n in range(1, count + 2)]
 listed = {"ok": True, "issues": issues, "count": len(issues), "overflow": False}
 decisions = [{"repo": "o/r", "issue": n, "route": "skip", "reason": "host_ops"}
              for n in range(1, count + 1)]

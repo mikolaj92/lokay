@@ -1,4 +1,4 @@
-"""Open catalog issue is the queue. Lokay labels are not a gate."""
+"""Open catalog issue is listed. Ready labels are the implement start ticket."""
 
 from pathlib import Path
 
@@ -18,7 +18,7 @@ def test_unlabeled_is_open_work_and_human_stops_are_not() -> None:
     assert is_human_stopped(["ai:blocked"]) is True
 
 
-def test_inbox_only_unlabeled_product_is_catalog_work() -> None:
+def test_inbox_only_unlabeled_product_is_not_catalog_work() -> None:
     from lokay.proc.catalog_work import remaining_ready_count, work_by_repo
 
     work = work_by_repo(
@@ -29,13 +29,13 @@ def test_inbox_only_unlabeled_product_is_catalog_work() -> None:
             },
         }
     )
-    assert remaining_ready_count(work) == 1
+    assert remaining_ready_count(work) == 0
     assert (
-        product_candidates(ready_by_repo=work, self_id="mikolaj92/lokay") is True
+        product_candidates(ready_by_repo=work, self_id="mikolaj92/lokay") is False
     )
     assert (
         classify_pass_lane(self_id="mikolaj92/lokay", ready_by_repo=work)
-        == "product"
+        == "idle"
     )
 
 

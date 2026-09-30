@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+import pty
 import re
+import select
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -40,6 +42,9 @@ class CommandSpec:
     env: Mapping[str, str] = field(default_factory=dict)
     timeout_seconds: int = 120
     inherit_env: bool = True
+    # pi reads its provider key only when attached to a terminal and hangs
+    # forever otherwise. The daemon has no terminal, so those calls opt in.
+    pty: bool = False
 
     def display(self) -> str:
         return " ".join(self.argv)
@@ -98,6 +103,8 @@ class Runner:
         if spec.argv and spec.argv[0] == "gh":
             attempts = 1 + self.gh_retry_max
 
+        if spec.pty:
+            return _run_pty(spec, env)
         last = CommandResult(spec=spec, executed=True, returncode=1)
         for attempt in range(attempts):
             try:
@@ -158,3 +165,46 @@ class Runner:
                 f"stdout: {result.stdout[-2000:]}\nstderr: {result.stderr[-2000:]}"
             )
         return result
+
+
+def _run_pty(spec: CommandSpec, env: Mapping[str, str]) -> CommandResult:
+    """Run a command on a pseudo-terminal and return its combined output.
+
+    pi refuses to resolve its provider key without a terminal and hangs. A pty
+    satisfies that without giving the daemon a real one.
+    """
+    master, slave = pty.openpty()
+    try:
+        proc = subprocess.Popen(
+            list(spec.argv), cwd=spec.cwd, env=dict(env),
+            stdin=slave, stdout=slave, stderr=slave,
+        )
+        os.close(slave)
+        slave = -1
+        chunks: list[bytes] = []
+        deadline = time.monotonic() + spec.timeout_seconds
+        while proc.poll() is None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                proc.kill()
+                proc.wait()
+                return CommandResult(
+                    spec=spec, executed=True, returncode=124,
+                    stderr=f"timed out after {spec.timeout_seconds} seconds",
+                    timed_out=True,
+                )
+            ready, _, _ = select.select([master], [], [], min(remaining, 2))
+            if ready:
+                try:
+                    chunks.append(os.read(master, 65536))
+                except OSError:
+                    break
+        proc.wait()
+        return CommandResult(
+            spec=spec, executed=True, returncode=proc.returncode or 0,
+            stdout=strip_ansi(b"".join(chunks).decode("utf-8", "replace")),
+        )
+    finally:
+        if slave >= 0:
+            os.close(slave)
+        os.close(master)

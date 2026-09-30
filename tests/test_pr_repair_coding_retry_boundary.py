@@ -64,7 +64,7 @@ def test_run_coding_retry_agent_execute_builder_env_and_boundary(
     assert out["agent"].get("factory_workflow_boundary") is True
     assert len(seen) == 1
     assert seen[0].inherit_env is True
-    assert seen[0].env == {"LOKAY_HEALTH_LEASE": ""}
+    assert seen[0].env == {"LOKAY_HEALTH_LEASE": "", "TERM": "xterm-256color"}
     assert seen[0].argv[0] == "real-agent"
     prompt = seen[0].argv[-1]
     assert FACTORY_WORKFLOW_BOUNDARY in prompt

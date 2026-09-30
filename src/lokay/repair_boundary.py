@@ -120,16 +120,22 @@ def select_test(test: Mapping[str, Any], *, applicable: bool = True) -> dict[str
         return {"ok": True, "route": "not_applicable"}
     passed = (
         bool(test.get("ok"))
+        and bool(test.get("tested"))
         and not bool(test.get("recorded_red"))
-        and (bool(test.get("tested")) or bool(test.get("skipped")))
+        and not bool(test.get("skipped"))
     )
     return {"ok": True, "route": "pass" if passed else "fail"}
 
 
 def select_test_repair(
-    validation: Mapping[str, Any], *, applicable: bool = True
+    initial_test: Mapping[str, Any],
+    validation: Mapping[str, Any],
+    *,
+    applicable: bool = True,
 ) -> dict[str, Any]:
     if not applicable:
+        return {"ok": True, "route": "not_applicable"}
+    if initial_test.get("route") != "fail":
         return {"ok": True, "route": "not_applicable"}
     if (
         validation.get("route") != "valid"
@@ -148,6 +154,8 @@ def finalize_tests(
 ) -> dict[str, Any]:
     if not applicable:
         return {"ok": True, "route": "not_applicable"}
-    if first.get("route") == "pass" or second.get("route") == "pass":
+    if first.get("route") == "pass":
+        return {"ok": True, "route": "publish"}
+    if first.get("route") == "fail" and second.get("route") == "pass":
         return {"ok": True, "route": "publish"}
     return {"ok": True, "route": "terminal"}

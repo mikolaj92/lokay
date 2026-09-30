@@ -50,11 +50,14 @@ def test_a_built_plan_must_carry_a_goal_and_files():
 
 
 def test_building_a_plan_with_no_files_fails_closed(tmp_path: Path):
-    """An issue that names no file does not become a plan."""
+    """An agent that names no file does not become a plan."""
     from lokay.proc.build_issue_approach import build
 
-    out = build({"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
-                 "issue": {"repo": "o/r", "number": 1, "title": "Do a thing", "body": ""}})
+    out = build(
+        {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+         "issue": {"repo": "o/r", "number": 1, "title": "Do a thing", "body": ""}},
+        execute=lambda prompt: {"status": "completed", "result_stdout": '{"ok": true, "goal": "x", "files": []}'},
+    )
     assert out["ok"] is False and out["reason"] == "plan_incomplete"
 
 
@@ -70,6 +73,43 @@ def test_incomplete_plan_is_not_authorized_for_write(tmp_path: Path):
     )
     assert out["route"] == "terminal"
     assert out["reason"] == "plan_incomplete"
+
+
+def test_backtick_line_range_reaches_the_agent_and_survives(tmp_path: Path):
+    """PunkRecords #35: `models.py:124-131` died as plan_incomplete before any agent ran."""
+    import json
+    from lokay.proc.build_issue_approach import build
+
+    body = "- `src/punkrecords/models.py:124-131` — init\n"
+    seen = {}
+
+    def execute(prompt: str) -> dict:
+        seen["prompt"] = prompt
+        return {"status": "completed", "result_stdout": json.dumps(
+            {"ok": True, "goal": "fix init", "files": ["src/punkrecords/models.py"],
+             "test_command": "pytest -q"})}
+
+    out = build(
+        {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+         "issue": {"repo": "o/r", "number": 35, "title": "init", "body": body}},
+        execute=execute,
+    )
+    assert "models.py:124-131" in seen["prompt"]
+    assert out["ok"] is True, json.dumps(out)
+    assert out["plan"]["files_likely"] == ("src/punkrecords/models.py",)
+    assert out["source"] == "agent"
+
+
+def test_a_planned_agent_call_is_not_a_plan(tmp_path: Path):
+    """The live failure: the runtime returned status=planned and the plan died."""
+    from lokay.proc.build_issue_approach import build
+
+    out = build(
+        {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+         "issue": {"repo": "o/r", "number": 35, "title": "init", "body": "x"}},
+        execute=lambda prompt: {"status": "planned", "result_stdout": ""},
+    )
+    assert out["ok"] is False and out["reason"] == "planned"
 
 
 def _issue(**kwargs) -> Issue:
@@ -99,9 +139,41 @@ def _issue(**kwargs) -> Issue:
     return Issue(**base)
 
 
-def test_build_approach_extracts_sections_and_paths():
+def _verdict(**overrides) -> dict:
+    base = {
+        "goal": "Write approach.md before the coding agent.",
+        "files": [
+            "src/lokay/proc/plan_issue.py",
+            "fala/lokay.fala-package.toml",
+            "tests/test_plan_issue.py",
+        ],
+        "test_plan": ["hermetic atom test", "graph order plan before agent"],
+        "non_goals": ["merge/wait health fix", "parallel agents"],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_build_approach_uses_the_agent_verdict_not_the_issue_prose():
+    """A backtick path with a line range survives because the agent names it.
+
+    The issue body is the PunkRecords shape that the regex gate dropped.
+    """
+    issue = _issue(body="- `src/punkrecords/models.py:124-131` — init\n")
+    plan = build_approach(issue, agent=_verdict(files=["src/punkrecords/models.py"]))
+    assert plan.source == "agent"
+    assert plan.files_likely == ("src/punkrecords/models.py",)
+    assert "approach.md" in plan.goal.lower()
+
+
+def test_build_approach_without_an_agent_names_no_files():
     plan = build_approach(_issue())
-    assert plan.source == "deterministic"
+    assert plan.source == "no_agent" and plan.files_likely == ()
+
+
+def test_build_approach_keeps_the_agent_plan():
+    plan = build_approach(_issue(), agent=_verdict())
+    assert plan.source == "agent"
     assert "approach.md" in plan.goal.lower() or "Write approach" in plan.goal
     assert "src/lokay/proc/plan_issue.py" in plan.files_likely
     assert "fala/lokay.fala-package.toml" in plan.files_likely
@@ -116,7 +188,7 @@ def test_build_approach_extracts_sections_and_paths():
 
 
 def test_render_and_write_approach_file(tmp_path: Path):
-    plan = build_approach(_issue())
+    plan = build_approach(_issue(), agent=_verdict())
     content = render_approach_md(plan)
     assert "# Approach plan" in content
     assert "lokay-approach" in content
@@ -130,6 +202,25 @@ def test_plan_issue_planned_record_does_not_write():
     from lokay.proc.record_issue_approach_write import record
 
     assert record({"route": "planned"}, {})["route"] == "planned"
+
+
+def test_incomplete_plan_routes_to_terminal_before_a_live_write(tmp_path: Path):
+    """A rejected plan never authorizes the approach file, even live."""
+    from lokay.proc.authorize_issue_plan_write import authorize
+    from lokay.proc.issue_plan_terminal import terminal
+    from lokay.proc.record_issue_approach_write import record
+
+    request = {"worktree": str(tmp_path), "rel_path": ".lokay/approach.md",
+               "issue": {"repo": "o/r", "number": 35}}
+    approach = {"ok": False, "reason": "plan_incomplete", "plan": {"files_likely": []}}
+    authorized = authorize(request, approach, config_path=None, live=True)
+    assert authorized["route"] == "terminal"
+    assert authorized["reason"] == "plan_incomplete"
+    assert not (tmp_path / ".lokay" / "approach.md").exists()
+    recorded = record(authorized, {})
+    result = terminal(request, approach, authorized, recorded)["result"]
+    assert result["ok"] is False and result["reason"] == "plan_incomplete"
+    assert result["wrote"] is False and "content" not in str(result.get("error"))
 
 
 def test_issue_plan_terminal_reports_written():
@@ -177,6 +268,99 @@ new file mode 100644
     excerpt = approach_excerpt_from_diff(diff)
     assert "Approach plan" in excerpt
     assert approach_present_in_diff("diff --git a/src/x.py b/src/x.py\n") is False
+
+
+def test_plan_cites_feature_map_only_when_the_tree_has_one(tmp_path: Path):
+    bare = build_approach(_issue(), worktree=tmp_path, agent=_verdict())
+    assert all("feature-map" not in note for note in bare.notes)
+    memory = tmp_path / ".lokay" / "memory"
+    memory.mkdir(parents=True)
+    (memory / "feature-map.md").write_text("door opens from the hall\n", encoding="utf-8")
+    cited = build_approach(_issue(), worktree=tmp_path, agent=_verdict())
+    rendered = render_approach_md(cited)
+    assert any("door opens from the hall" in note for note in cited.notes)
+    assert ".lokay/memory/feature-map.md" in rendered
+
+
+def test_one_declared_kind_loads_only_that_playbook(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    skills = tmp_path / ".lokay" / "skills"
+    skills.mkdir(parents=True)
+    (skills / "bug.md").write_text("reproduce first\n", encoding="utf-8")
+    (skills / "feat.md").write_text("name the user path\n", encoding="utf-8")
+    issue = _issue(body="Kind: bug\n\n" + _issue().body, labels=["kind:feat", "ai:ready"])
+    assert classify(issue) == "bug"
+    plan = build_approach(issue, worktree=tmp_path, agent=_verdict())
+    rendered = render_approach_md(plan)
+    assert plan.kind == "bug"
+    assert "reproduce first" in rendered
+    assert "name the user path" not in rendered
+
+
+def test_missing_kind_loads_no_playbook(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    skills = tmp_path / ".lokay" / "skills"
+    skills.mkdir(parents=True)
+    (skills / "bug.md").write_text("reproduce first\n", encoding="utf-8")
+    issue = _issue()
+    assert classify(issue) == ""
+    plan = build_approach(issue, worktree=tmp_path, agent=_verdict())
+    assert plan.kind == ""
+    assert "reproduce first" not in render_approach_md(plan)
+
+
+def test_unknown_kind_fails_closed(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    assert classify(_issue(body="Kind: essay\n\nfix it")) == ""
+    assert classify(_issue(labels=["kind:bug", "kind:feat"])) == ""
+
+
+def test_garden_is_one_kind_and_loads_only_its_playbook(tmp_path: Path):
+    from lokay.proc.classify_ticket_kind import classify
+
+    skills = tmp_path / ".lokay" / "skills"
+    skills.mkdir(parents=True)
+    (skills / "garden.md").write_text("one small debt, then stop\n", encoding="utf-8")
+    (skills / "chore.md").write_text("sweep the repo\n", encoding="utf-8")
+    issue = _issue(labels=["kind:garden"])
+    assert classify(issue) == "garden"
+    plan = build_approach(issue, worktree=tmp_path, agent=_verdict())
+    rendered = render_approach_md(plan)
+    assert plan.kind == "garden"
+    assert "one small debt, then stop" in rendered
+    assert "sweep the repo" not in rendered
+
+
+def test_review_prompt_keeps_memory_and_strips_only_the_plan():
+    diff = (
+        "diff --git a/.lokay/approach.md b/.lokay/approach.md\n"
+        "--- /dev/null\n+++ b/.lokay/approach.md\n"
+        "@@ -0,0 +1,2 @@\n+# Approach plan\n+SECRET_PLAN_GOAL\n"
+        "diff --git a/.lokay/memory/feature-map.md b/.lokay/memory/feature-map.md\n"
+        "--- /dev/null\n+++ b/.lokay/memory/feature-map.md\n"
+        "@@ -0,0 +1 @@\n+FEATURE_MAP_EVIDENCE\n"
+        "diff --git a/.lokay/memory/paved-path.md b/.lokay/memory/paved-path.md\n"
+        "--- /dev/null\n+++ b/.lokay/memory/paved-path.md\n"
+        "@@ -0,0 +1 @@\n+PAVED_PATH_EVIDENCE\n"
+        "diff --git a/.lokay/lessons/latch.md b/.lokay/lessons/latch.md\n"
+        "--- /dev/null\n+++ b/.lokay/lessons/latch.md\n"
+        "@@ -0,0 +1 @@\n+LESSON_EVIDENCE\n"
+        "diff --git a/verify-receipt.json b/verify-receipt.json\n"
+        "--- /dev/null\n+++ b/verify-receipt.json\n"
+        "@@ -0,0 +1 @@\n+VERIFY_RECEIPT\n"
+    )
+    text = review_prompt(
+        repo="owner/repo", pr_number=9, title="x", body="y",
+        head_ref="ai/fix/9-x", diff_text=diff, checks_text="",
+    )
+    assert "SECRET_PLAN_GOAL" not in text
+    assert "FEATURE_MAP_EVIDENCE" in text
+    assert "PAVED_PATH_EVIDENCE" in text
+    assert "LESSON_EVIDENCE" in text
+    assert "VERIFY_RECEIPT" in text
 
 
 def test_review_prompt_stays_blind_when_approach_missing():

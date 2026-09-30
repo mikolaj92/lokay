@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from lokay.intake import check_ambiguity
 from lokay.issue_checkboxes import (
     is_bug_issue,
     iter_work_checkboxes,
@@ -10,7 +9,7 @@ from lokay.issue_checkboxes import (
 )
 from lokay.models import Issue
 from lokay.queue_conflict import is_epic_like
-from lokay.split import plan_split
+from lokay.split import plan_from_agent, plan_split
 from lokay.triage import decide_issue
 
 # Shape of Temida#4710 / #4671: one bug + product-routing form + Done means.
@@ -77,10 +76,9 @@ def test_subsystem_tags_are_not_work_checkboxes():
     assert any("root cause" in x for x in items)
 
 
-def test_intake_does_not_split_template_bug_as_epic():
-    result = check_ambiguity(_issue())
-    assert result.verdict != "split", result
-    assert result.reason != "too_many_checkboxes"
+def test_agent_does_not_split_a_single_bug():
+    plan = plan_from_agent(_issue(), {"children": []}, reason="agent_split")
+    assert plan is None
 
 
 def test_triage_does_not_split_template_bug():
@@ -103,15 +101,16 @@ def test_queue_conflict_template_bug_is_not_epic_like():
     assert is_epic_like(_issue()) is False
 
 
-def test_real_work_checkboxes_still_split():
-    body = "\n".join(f"- [ ] deliverable {i} with enough text" for i in range(8))
-    feature = _issue(title="Ship eight slices", body=body, labels=[])
-    result = check_ambiguity(feature)
-    assert result.verdict == "split"
-    assert result.reason == "too_many_checkboxes"
-    plan = plan_split(feature, reason="too_many_checkboxes")
+def test_agent_children_split_a_wide_issue():
+    """Eight deliverables split because the agent lists them, not a checkbox count."""
+    feature = _issue(title="Ship eight slices", body="eight deliverables", labels=[])
+    plan = plan_from_agent(
+        feature,
+        {"children": [{"title": f"deliverable {i}", "detail": "one slice"} for i in range(8)]},
+        reason="agent_split",
+    )
     assert plan is not None
-    assert plan.children[0].source == "checkbox"
+    assert plan.children[0].source == "agent"
     assert "deliverable" in plan.children[0].title
 
 
@@ -159,9 +158,7 @@ def test_intake_does_not_split_bold_template_bug():
         body=_TEMIDA_TEMPLATE,
         labels=["bug"],
     )
-    result = check_ambiguity(issue)
-    assert result.verdict != "split", result
-    assert result.reason != "too_many_checkboxes"
+    assert plan_from_agent(issue, {"children": []}, reason="agent_split") is None
     assert is_bug_issue(issue) is True
     assert plan_split(issue, reason="too_many_checkboxes") is None
     d = decide_issue(issue)
@@ -176,8 +173,6 @@ def test_bug_with_many_work_boxes_stays_one_issue():
         body=body,
         labels=["bug"],
     )
-    result = check_ambiguity(issue)
-    assert result.verdict != "split"
-    assert plan_split(issue, reason="too_many_checkboxes") is None
+    assert plan_from_agent(issue, {"children": [{"title": "the one fix"}]}, reason="agent_split") is None
     d = decide_issue(_issue(title=issue.title, body=body, labels=["bug"]))
     assert d.decision != "split"

@@ -15,7 +15,7 @@ from lokay.proc.select_executor_slot import select as select_slot
 
 
 def _listed(*issues: int, repo: str = "o/r") -> dict:
-    rows = [{"repo": repo, "issue": n} for n in issues]
+    rows = [{"repo": repo, "issue": n, "labels": ["ai:ready"]} for n in issues]
     return {"ok": True, "issues": rows, "count": len(rows)}
 
 

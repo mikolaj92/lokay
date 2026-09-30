@@ -201,7 +201,9 @@ def test_seed_and_select_start_next_open_when_live_pid_issue_is_closed(
         {
             "working": {
                 "ready_by_repo": {
-                    "mikolaj92/lokay": [{"number": 861, "title": "next open"}]
+                    "mikolaj92/lokay": [
+                        {"number": 861, "title": "next open", "labels": ["ai:ready"]}
+                    ]
                 },
                 "occupied_repos": [],
                 "live_issue_to_pr_repos": [],
