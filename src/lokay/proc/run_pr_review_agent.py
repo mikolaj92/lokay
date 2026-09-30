@@ -118,6 +118,14 @@ def run_review_agent(
         result: dict[str, Any] = {}
         for request in review_requests(cfg, repo, pr, evidence):
             result = invoke_plugin(cfg, request)
+            # The plugin returns neutral findings, not Lokay policy verdicts.
+            # Validate its complete identity/coverage before deriving a verdict.
+            if result.get("schema") == "lokay.review-result/1":
+                from lokay.proc.validate_pr_review import validate_result
+                validated = validate_result(result, request)
+                if validated.get("route") != "valid":
+                    raise PluginFailure(str(validated.get("error") or "review result invalid"))
+                result = {**result, "verdict": validated["decision"]["verdict"]}
             lenses.append({
                 "model": request["engine"]["model"],
                 "head_sha": result.get("head_sha"),
