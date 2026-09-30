@@ -292,9 +292,16 @@ def normalize_result(
     origin_sha = hashlib.sha256(expected_origin.encode("utf-8")).hexdigest()
     config_hash = _digest(engine.get("config_sha256"), "review configuration")
     reviewable, excluded, inventory = _diff_coverage(normalized_request)
-    if not isinstance(upstream.get("comments"), list):
+    comments = upstream.get("comments")
+    # Go encoding/json emits null for a nil []LlmComment. Accept only the
+    # explicit zero-findings representation; all completion gates below stay.
+    if "comments" in upstream and comments is None:
+        summary_count = _required_mapping(upstream.get("summary"), "review summary").get("comments")
+        if type(summary_count) is not int or summary_count != 0:
+            raise ContractError("null review comments require explicit zero count")
+        comments = []
+    if not isinstance(comments, list):
         raise ContractError("review comments array is required")
-    comments = upstream["comments"]
     closed_by_findings = bool(comments)
     manifest = _required_mapping(upstream.get("manifest"), "run manifest")
     if manifest.get("schema_version") != MANIFEST_SCHEMA:

@@ -81,6 +81,43 @@ def _normalize(request: dict | None = None, preview: dict | None = None, upstrea
     )
 
 
+def test_v1127_complete_review_accepts_nil_go_comments_slice():
+    # Pinned output.go jsonOutput.Comments is []model.LlmComment without
+    # omitempty: encoding/json serializes a nil zero-findings slice as null.
+    _, upstream = _upstream()
+    upstream["comments"] = None
+    upstream["summary"]["comments"] = 0
+    result = _normalize(upstream=upstream)
+    assert result["status"] == "complete"
+    assert result["findings"] == []
+
+
+@pytest.mark.parametrize("count", [1, None, False, "0"])
+def test_null_vendor_comments_require_explicit_zero_count(count):
+    _, upstream = _upstream()
+    upstream["comments"] = None
+    upstream["summary"]["comments"] = count
+    with pytest.raises(ContractError, match="explicit zero count"):
+        _normalize(upstream=upstream)
+
+
+def test_null_vendor_comments_do_not_bypass_terminal_gate():
+    _, upstream = _upstream()
+    upstream["comments"] = None
+    upstream["summary"]["comments"] = 0
+    upstream["status"] = "failed"
+    with pytest.raises(ContractError, match="terminal state"):
+        _normalize(upstream=upstream)
+
+
+def test_missing_vendor_comments_is_not_nil_slice():
+    _, upstream = _upstream()
+    upstream.pop("comments")
+    upstream["summary"]["comments"] = 0
+    with pytest.raises(ContractError, match="comments array"):
+        _normalize(upstream=upstream)
+
+
 def test_v1127_complete_review_accepts_vendor_omitted_false():
     request = _request()
     _, upstream = _upstream()
