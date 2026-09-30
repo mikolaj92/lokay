@@ -51,6 +51,9 @@ def select(
             repair_start_head_sha=str(review_gate.get("reviewed_head_sha") or ""),
         )
     if not _skipped(test):
+        if test.get("waiting") is True:
+            return ok(route="wait", waiting=True,
+                      reason=str(test.get("reason") or "test_local_unverified"))
         if test.get("recorded_red") is True or test.get("passed") is False:
             return ok(route="repair", reason="test_local_failed", repairable=True, repair_kind="ci", head_sha=head_sha)
         return ok(route="merge", reason="approve_green")
