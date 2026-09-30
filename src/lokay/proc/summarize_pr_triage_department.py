@@ -124,10 +124,6 @@ def summarize(
     if replay_pending:
         head = {key: picked[key] for key in ('repo', 'pr', 'branch', 'head_sha') if key in picked}
         leftover_prs = [*list(picked.get('leftover_prs') or []), head]
-    if (not replay_pending and incomplete_retry_position == "tail" and recovery_route == "fail_closed"
-            and str(picked.get("route") or "") == "pr" and leftover_prs):
-        # Uncertainty is KEEP, but it cannot pin the fleet's next selection.
-        leftover_prs = [*leftover_prs[1:], leftover_prs[0]]
     if str(picked.get("route") or "") == "pr" or "leftover_prs" in picked:
         receipt["leftover_prs"] = leftover_prs
         receipt["leftover"] = len(leftover_prs)
