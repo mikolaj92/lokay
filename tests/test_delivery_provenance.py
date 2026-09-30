@@ -322,3 +322,4 @@ def test_publication_leaves_incomplete_provenance_pending():
     assert out['confirmed'] is False
     assert out['reason'] == 'receipt_provenance_incomplete'
     assert out['issue_closed'] is True
+    assert out['terminal_unattributed'] is True

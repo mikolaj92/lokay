@@ -61,7 +61,7 @@ def pending(state_path: Path) -> list[dict]:
         for line in stream:
             try:
                 event = json.loads(line)
-                if event.get('kind') in {'delivery_closeout_complete', 'delivery_closeout_superseded'}:
+                if event.get('kind') in {'delivery_closeout_complete', 'delivery_closeout_superseded', 'delivery_closeout_unattributed'}:
                     completed.add(event['intent_sha256'])
                 elif event.get('kind') == 'delivery_closeout_intent':
                     intent = validate(event['intent'])
@@ -169,6 +169,14 @@ def publish(*, picked: dict, config_path: str | None, live: bool) -> dict:
         repo=intent['repo'], pr=intent['pr'], issue=intent['issue'],
         merge={'merged': True}, close={}, review=intent['review'], tests=intent['tests'],
     )
+    if result.get('terminal_unattributed'):
+        try:
+            append_event(load_config(config_path).state_path, {
+                'kind': 'delivery_closeout_unattributed', 'repo': intent['repo'], 'pr': intent['pr'],
+                'intent_sha256': intent['sha256'], 'reason': result['reason'],
+            }, durable=True)
+        except OSError as exc:
+            return {**observed, 'route': 'pending', 'reason': 'delivery_completion_record_failed', 'detail': str(exc)}
     if result.get('confirmed'):
         try:
             complete(load_config(config_path).state_path, intent)
@@ -182,7 +190,7 @@ def triage(observed: dict, closed: dict, published: dict) -> dict:
     intent = observed.get('intent') or {}
     issue_closed = result.get('issue_closed', closed.get('issue_closed')) is True
     return {'ok': True, 'route': 'completed', 'triage': {
-        'merged': observed.get('merged') is True, 'repairable': False,
+        'merged': False, 'merge_observed': observed.get('merged') is True, 'repairable': False,
         'delivery_confirmed': result.get('confirmed') is True,
         'delivery_receipt': dict(result.get('receipt') or {}),
         'issue_closed': issue_closed,

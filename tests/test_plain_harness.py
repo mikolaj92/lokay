@@ -9,13 +9,18 @@ from lokay.config import Config, load_config
 from lokay.runner import Runner
 
 
-def test_default_and_shipped_executor_only_pass_the_task():
+def test_default_executor_only_passes_the_task():
     root = Path(__file__).resolve().parents[1]
-    configs = [Config(), *(load_config(root / name) for name in (
-        "config.example.yaml", "config.live-autonomous.example.yaml"
-    ))]
-    for cfg in configs:
-        assert build_agent_argv(cfg, worktree=root, prompt="task") == ["pi", "-p", "task"]
+    assert build_agent_argv(Config(), worktree=root, prompt="task") == ["pi", "-p", "task"]
+
+
+def test_shipped_executor_binds_provenance_not_harness_runtime():
+    from lokay.agent import session_id_for_worktree
+    root = Path(__file__).resolve().parents[1]
+    for name in ("config.example.yaml", "config.live-autonomous.example.yaml"):
+        cfg = load_config(root / name)
+        assert build_agent_argv(cfg, worktree=root, prompt="task") == [
+            "pi", "-p", "--session-id", session_id_for_worktree(root), "task"]
         assert not hasattr(cfg, "agent_model")
 
 

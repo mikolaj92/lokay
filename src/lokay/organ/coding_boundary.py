@@ -238,6 +238,7 @@ def handle_coding_boundary(
             branch=up.get("make_branch") or {},
             pr_create=up.get("pr_create") or {},
             pr_label=up.get("pr_label") or {},
+            coding=up.get("coding_execution") or {},
             acceptance=up.get("finalize_acceptance")
             or up.get("verify_acceptance_recheck")
             or up.get("verify_acceptance")

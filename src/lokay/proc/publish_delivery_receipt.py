@@ -139,7 +139,11 @@ def publish(
         )
     except ValueError as exc:
         return {"ok": True, "route": "pending", "confirmed": False,
-                "reason": str(exc), "issue_closed": issue_closed}
+                "reason": str(exc), "issue_closed": issue_closed,
+                "terminal_unattributed": str(exc) == "receipt_provenance_incomplete" and (
+                    provisional.get("builder_session") in (None, "", "unavailable")
+                    or provisional.get("graph_digest") == "pending"
+                )}
     final_body = PATTERN.sub(lambda _match: marker(complete), body, count=1)
     if final_body != body:
         edit_pr(repo, pr, final_body)
