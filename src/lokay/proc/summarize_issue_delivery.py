@@ -1,7 +1,7 @@
 """Return the authored issue-delivery terminal envelope."""
 
 
-def summarize(*, branch: dict, pr_create: dict, pr_label: dict, acceptance: dict | None = None) -> dict:
+def summarize(*, branch: dict, pr_create: dict, pr_label: dict, acceptance: dict | None = None, coding: dict | None = None) -> dict:
     """delivered=true only with a real PR *and* accepted verify_acceptance (#1015)."""
     pr = pr_create.get("pr") or pr_label.get("pr")
     acceptance = dict(acceptance or {})
@@ -34,6 +34,9 @@ def summarize(*, branch: dict, pr_create: dict, pr_label: dict, acceptance: dict
                 "failed_evidence": list(acceptance.get("failed_evidence") or []),
             },
         }
+    if pr in (None, "", 0) and (coding or {}).get("reason"):
+        return {"ok": True, "result": {"branch": branch.get("branch"), "pr": pr,
+                "delivered": False, "stopped": True, "reason": coding["reason"]}}
     delivered = pr not in (None, "", 0) and accepted
     return {
         "ok": True,

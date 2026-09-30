@@ -24,7 +24,7 @@ def summarize(*, delivery: dict, closeout: dict, no_effect: dict) -> dict:
                 "reason": closeout.get("reason") or "delivery_pr_exists",
             },
         }
-    reason = no_effect.get("reason")
+    reason = delivery.get("reason") or no_effect.get("reason")
     if reason in (None, "", "condition_not_met"):
         reason = "no_delivery"
     return {

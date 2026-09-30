@@ -31,6 +31,9 @@ Workflow:
 4. Finish with ONLY one JSON object matching this closed schema:
    {"verdict":"implemented"|"needs_evidence","evidence_kind":"issue_snapshot"|"repo_structure"|"test_contract"|"localized_diff"|null,"summary":"...","tests_run":["..."],"residual_risk":"..."}
    The edited files are the diff in the worktree. The only fields are verdict, evidence_kind, summary, tests_run, residual_risk.
+   For implemented, evidence_kind MUST be JSON null and MUST NOT be omitted. A non-null kind requests missing evidence, not evidence already used.
+   Valid implementation result:
+   {"verdict":"implemented","evidence_kind":null,"summary":"Describe the implementation diff","tests_run":["Actual test command and result"],"residual_risk":"Describe remaining risk"}
 5. Use `implemented` only after leaving a real implementation diff. Use `needs_evidence` only when exactly one listed mechanical fact is required. Do not request another evidence kind after a supplement.
 
 Issue evidence (full title/body text inlined by the factory — do not open GitHub):

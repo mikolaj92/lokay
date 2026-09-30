@@ -48,7 +48,7 @@ executor:
   agent: pi                  # log label only
   command: pi               # harness binary — swap to change implementation
   # One task, final response on stdout; harness settings stay with the harness.
-  args: [-p, "{prompt}"]
+  args: [-p, --session-id, "{session}", "{prompt}"]
   max_turns: 40
   timeout_seconds: 1800
 
