@@ -24,6 +24,7 @@ def classify(selected: dict, row: dict, *, prepared: dict, previous: dict | None
     leftover = int(decision.get("leftover") or result.get("leftover") or 0)
     last = {
         **result,
+        "department": "issue_triage",
         "launched": None,
         "leftover": leftover,
         "leftover_issues": leftover_issues,
@@ -36,6 +37,11 @@ def classify(selected: dict, row: dict, *, prepared: dict, previous: dict | None
         str(prepared.get("pass_dir") or ""),
         {"last": last, "spent": spent, "route": decision.get("route"), "decisions": decisions},
     )
+    if prepared.get("live") and prepared.get("config_path"):
+        from lokay.passkit.io import write_json
+        from lokay.proc.prepare_issue_sieve import tail_path
+
+        write_json(tail_path(prepared["config_path"]), last)
     return {
         "ok": True,
         "route": str(decision.get("route") or "idle"),

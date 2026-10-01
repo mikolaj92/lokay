@@ -6,7 +6,6 @@ import argparse
 
 from lokay.graph_run import run_path
 from lokay.proc._common import load_cfg
-from lokay.proc.seed_issue_queue import seed as seed_queue
 
 
 def budget_of(*, config_path: str | None, live: bool, budget: int | None) -> int:
@@ -25,7 +24,6 @@ def run(
     budget: int | None = None,
     last: dict | None = None,
 ) -> dict:
-    last = seed_queue(last)
     cap = budget_of(config_path=config_path, live=live, budget=budget)
     extra = {
         "pass_dir": pass_dir,

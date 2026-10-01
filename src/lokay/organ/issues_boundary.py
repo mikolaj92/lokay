@@ -25,6 +25,10 @@ def handle_issues(
         from lokay.proc.list_open_issues import run
 
         return run(config_path=config, live=live)
+    if atom == "select_issue_sieve_candidate":
+        from lokay.proc.select_issue_sieve_candidate import select
+
+        return select(_listed_of(inputs, up), _last_of(inputs))
     if atom == "select_next_issue":
         from lokay.proc.select_next_issue import select
 
@@ -55,6 +59,11 @@ def handle_issues(
             selected["pr_admission"] = admission
             if not admission["allowed"]:
                 selected.update(route="skip", reason=admission["reason"])
+            else:
+                from lokay.proc.check_executor_queue import check
+
+                selected = check(cfg=cfg, selected=selected,
+                                 listed=_listed_of(inputs, up), runner=runner(), live=live)
         return selected
     if atom == "issues_launch_pr":
         from lokay.proc.launch_issue_to_pr import launch

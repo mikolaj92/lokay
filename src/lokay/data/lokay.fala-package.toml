@@ -4932,7 +4932,7 @@ description = "Select, one triage verdict, optional split. Published verdict fin
 id = "select_next_issue"
 capability = "lokay_atom"
 adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 60, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PI_PROVIDER", "PI_MODEL"] }
-config = { atom = "select_next_issue" }
+config = { atom = "select_issue_sieve_candidate" }
 output_schema = { type = "object", required = ["ok", "route"] }
 retry_policy = "none"
 
