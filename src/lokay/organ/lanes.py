@@ -35,6 +35,25 @@ def run_merge_tests(run, *, review: dict, **kwargs) -> dict:
 
     try:
         head = require_head_sha((review.get("decision") or {}).get("reviewed_head_sha"))
+        local_head = subprocess.check_output(
+            ["git", "-C", kwargs["worktree"], "rev-parse", "HEAD"],
+            text=True, stderr=subprocess.PIPE, timeout=30,
+        ).strip()
+        if local_head != head:
+            # Never reset a coding worktree: it may contain unpublished commits
+            # or product dirt. Verify the approved commit in an isolated clone.
+            import tempfile
+            with tempfile.TemporaryDirectory(prefix="lokay-merge-tests-") as directory:
+                checkout = str(Path(directory) / "checkout")
+                subprocess.run(
+                    ["git", "clone", "--shared", "--no-checkout", "--", kwargs["worktree"], checkout],
+                    check=True, capture_output=True, timeout=180,
+                )
+                subprocess.run(
+                    ["git", "-C", checkout, "checkout", "--detach", head],
+                    check=True, capture_output=True, timeout=60,
+                )
+                return run_merge_tests(run, review=review, **{**kwargs, "worktree": checkout})
         if _clean_head(kwargs["worktree"]) != head:
             raise ValueError("local test head differs from reviewed head")
         result = run(**kwargs)

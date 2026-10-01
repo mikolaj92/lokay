@@ -169,7 +169,13 @@ def publish(*, picked: dict, config_path: str | None, live: bool) -> dict:
         repo=intent['repo'], pr=intent['pr'], issue=intent['issue'],
         merge={'merged': True}, close={}, review=intent['review'], tests=intent['tests'],
     )
-    if result.get('terminal_unattributed'):
+    # Replaying immutable pre-merge evidence cannot turn an explicitly skipped
+    # test into a verified test. Retire this merged identity, never invent proof.
+    missing_test = (result.get('reason') == 'receipt_review_test_unverified'
+                    and intent['tests'].get('skipped') is True
+                    and intent['tests'].get('tested') is False
+                    and intent['tests'].get('reason') == 'no_declared_test')
+    if result.get('terminal_unattributed') or missing_test:
         try:
             append_event(load_config(config_path).state_path, {
                 'kind': 'delivery_closeout_unattributed', 'repo': intent['repo'], 'pr': intent['pr'],

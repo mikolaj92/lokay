@@ -149,7 +149,13 @@ def test_local_test_attests_only_unchanged_clean_head(tmp_path, monkeypatch, mut
             git("commit", "-qam", "drift")
 
     def tests(**kwargs):
-        assert not mutation.startswith("initial_"), "must refuse before executing tests"
+        if mutation == "initial_drift":
+            assert kwargs["worktree"] != str(tmp_path)
+            assert subprocess.check_output(
+                ["git", "-C", kwargs["worktree"], "rev-parse", "HEAD"], text=True
+            ).strip() == head
+            return {**test_result, "worktree": kwargs["worktree"]}
+        assert mutation != "initial_dirty", "must refuse dirty exact-head checkout"
         if mutation not in {"none", "host_evidence"}:
             (tmp_path / "code.py").write_text("after\n")
             if mutation == "commit":
@@ -161,7 +167,7 @@ def test_local_test_attests_only_unchanged_clean_head(tmp_path, monkeypatch, mut
         "publish_pr_review": {"decision": {"verdict": "approve", "reviewed_head_sha": head}},
         "worktree_add": {"ok": True, "worktree": str(tmp_path)},
     })
-    if mutation in {"none", "host_evidence"}:
+    if mutation in {"none", "host_evidence", "initial_drift"}:
         assert out["tested_head_sha"] == head
     else:
         assert not out.get("tested_head_sha")
