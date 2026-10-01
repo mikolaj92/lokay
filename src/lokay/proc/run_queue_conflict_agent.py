@@ -20,6 +20,11 @@ def prompt(target: dict) -> str:
 
 
 def run(*, cfg, target: dict, live: bool, retry_feedback: dict | None = None) -> dict:
+    from lokay.typed_decisions import configured
+
+    if configured(cfg, "queue_conflict"):
+        from lokay.proc.semantic_decision import queue
+        return queue(cfg=cfg, target=target, live=live, retry_feedback=retry_feedback)
     text = prompt(target)
     if retry_feedback:
         from lokay.review_boundary import validation_feedback_prompt

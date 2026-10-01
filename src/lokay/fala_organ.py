@@ -285,6 +285,7 @@ ORGAN_BINDINGS: tuple[Binding, ...] = (
     Binding('collect_issue_repo_shape', handle_issue_triage),
     Binding('finalize_issue_triage', handle_issue_triage),
     Binding('issue_evidence_agent', handle_issue_triage),
+    Binding('issue_scope_decision', handle_issue_triage),
     Binding('issue_triage_agent', handle_issue_triage),
     Binding('issue_triage_retry_agent', handle_issue_triage),
     Binding('resolve_issue_candidate', handle_issue_triage),

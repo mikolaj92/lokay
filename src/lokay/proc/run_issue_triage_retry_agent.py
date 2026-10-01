@@ -18,6 +18,14 @@ def run(
     live: bool,
     repo_map: str = "",
 ) -> dict:
+    from lokay.typed_decisions import configured
+
+    if configured(cfg, "issue_triage"):
+        import json
+        return {"ok": True, "route": "completed", "stdout": json.dumps({
+            "verdict": "skip", "reason": "decision_retry_not_allowed", "evidence": [],
+            "evidence_kind": None, "summary": "Typed decisions do not retry invalid output.",
+        })}
     text = (
         prompt(issue_data, hard_facts, repo_map=repo_map or "")
         + "\n\n"

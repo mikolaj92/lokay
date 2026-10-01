@@ -111,6 +111,8 @@ class Config:
     department_executor: bool = True
     department_pr_triage: bool = True
     department_pr_repair: bool = True
+    decision_endpoints: dict[str, dict[str, Any]] = field(default_factory=dict)
+    decision_routes: dict[str, str] = field(default_factory=dict)
     config_path: Path | None = None
 
     @property
@@ -421,6 +423,7 @@ def load_config(path: str | Path | None = None) -> Config:
     st = data.get("state") or {}
     lim = data.get("limits") or {}
     review = data.get("pr_review") or {}
+    decisions = data.get("decisions") or {}
 
     repos = _load_repos(data, cfg_path)
 
@@ -530,8 +533,13 @@ def load_config(path: str | Path | None = None) -> Config:
             True,
             field="departments.pr_repair",
         ),
+        decision_endpoints=dict(decisions.get("endpoints") or {}),
+        decision_routes=dict(decisions.get("routes") or {}),
         config_path=cfg_path,
     )
+    from lokay.typed_decisions import validate_configuration
+
+    validate_configuration(cfg.decision_endpoints, cfg.decision_routes)
     return apply_env_overrides(cfg)
 
 

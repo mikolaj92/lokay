@@ -20,7 +20,8 @@ def handle_relocalize(
         from lokay.proc.inspect_relocalization_evidence import inspect
 
         return {**inspect(worktree=str(inputs.get("worktree") or "")),
-                "issue_raw": dict(inputs.get("issue_raw") or {})}
+                "issue_raw": dict(inputs.get("issue_raw") or {}),
+                "base": str(inputs.get("base") or "origin/main")}
     if atom == "read_relocalization_changed_paths":
         from lokay.proc.read_relocalization_changed_paths import read
 
