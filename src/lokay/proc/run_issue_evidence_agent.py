@@ -17,6 +17,12 @@ def run(
     live: bool,
     repo_map: str = "",
 ) -> dict:
+    from lokay.typed_decisions import configured
+
+    if configured(cfg, "issue_triage"):
+        from lokay.proc.semantic_decision import triage
+        return triage(cfg=cfg, repo=repo, issue=issue, issue_data=issue_data,
+                      hard_facts=hard_facts, live=live, repo_map=repo_map, additional=additional)
     return execute(
         cfg=cfg,
         repo=repo,

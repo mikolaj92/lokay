@@ -16,6 +16,10 @@ aggregates traces/failures from the existing compacted state JSONL and reads
 merged PR / closed issue throughput from GitHub, the production source of truth. Before commit, one bounded
 semantic relocalization may admit a necessary source/test neighbour outside the
 initial scope; Python validates it and `assert_real_diff` remains the hard gate.
+Closed semantic choices can use explicit typed decision endpoints (local Plumb
+SystemOne / GB10 GLM decisions); discovery, planning, coding and PR review remain
+agents. See [`DECISIONS.md`](DECISIONS.md) for route ownership, one-call contracts,
+abstentions and the durable `decisions.jsonl` evidence journal.
 
 The coding slot must actually run. Default Pi argv uses `--session-id`
 `{session}` so the first ticket *creates* the per-corner session and a

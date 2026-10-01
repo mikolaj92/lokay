@@ -12,6 +12,7 @@ OWNED = frozenset(
         "collect_issue_linked_prs",
         "collect_issue_covering_prs",
         "resolve_issue_hard_facts",
+        "issue_scope_decision",
         "issue_triage_agent",
         "validate_issue_triage",
         "issue_triage_retry_agent",
@@ -100,6 +101,13 @@ def handle_issue_triage(
             }
         return resolve_hard_facts(issue, candidate, linked, covering)
     hard = up.get("resolve_issue_hard_facts") or {}
+    if atom == "issue_scope_decision":
+        from lokay.proc.run_intake_ambiguity_check import run
+        from lokay.typed_decisions import configured
+
+        if not configured(cfg, "intake_ambiguity"):
+            return {"ok": True, "route": "unused"}
+        return run({"issue": issue, "config_path": str(cfg.config_path), "live": live})
     if atom == "issue_triage_agent":
         from lokay.proc.run_issue_triage_agent import run
 
@@ -108,7 +116,7 @@ def handle_issue_triage(
             repo=repo,
             issue=number,
             issue_data=issue,
-            hard_facts=hard,
+            hard_facts={**hard, "scope_decision": up.get("issue_scope_decision") or {}},
             clone_path=clone,
             live=live,
             repo_map=str((up.get("map_repo") or {}).get("map") or ""),
@@ -165,7 +173,7 @@ def handle_issue_triage(
             issue=number,
             issue_data=issue,
             hard_facts=hard,
-            additional=additional,
+            additional={**additional, "scope_decision": up.get("issue_scope_decision") or {}},
             clone_path=clone,
             live=live,
             repo_map=str((up.get("map_repo") or {}).get("map") or ""),

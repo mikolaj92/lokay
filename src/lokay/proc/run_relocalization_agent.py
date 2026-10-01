@@ -7,6 +7,11 @@ from lokay.proc._common import runner
 
 
 def run(evidence: dict, request: dict, *, config: object, feedback: str = "") -> dict:
+    from lokay.typed_decisions import configured
+
+    if configured(config, "relocalization"):
+        from lokay.proc.semantic_relocalization import run as decide_scope
+        return decide_scope(evidence, request, config=config, feedback=feedback)
     try:
         out = run_agent(
             runner(config),

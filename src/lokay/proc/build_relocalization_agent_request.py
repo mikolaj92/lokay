@@ -14,6 +14,7 @@ def build(evidence: dict, offgoal: dict) -> dict:
     return {
         "ok": True,
         "route": "agent" if offgoal.get("route") == "agent" else "unused",
+        "off_goal_paths": list(off),
         "prompt": localize_prompt(
             seed_text=seed, tree_sample=off, extra_paths=[], max_paths=40
         ),
