@@ -310,6 +310,7 @@ ORGAN_BINDINGS: tuple[Binding, ...] = (
     Binding('issues_run_triage', handle_issues),
     Binding('list_open_issues', handle_issues),
     Binding('select_issue_executor', handle_issues),
+    Binding('select_issue_sieve_candidate', handle_issues),
     Binding('select_next_issue', handle_issues),
     Binding('close_issue', handle_lanes),
     Binding('get_issue', handle_lanes),

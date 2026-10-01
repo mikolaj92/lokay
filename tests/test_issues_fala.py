@@ -175,7 +175,7 @@ if a=='summarize_issue_triage_department':v.update(department='issue_triage',lau
 def test_empty_sieve_row_skips_split_and_writes_receipt(tmp_path):
     _require_fala_host()
     body = base_effector(
-        """if a=='select_next_issue':v.update(route='none',reason='empty')
+        """if a=='select_issue_sieve_candidate':v.update(route='none',reason='empty')
 if a=='select_issue_sieve':v.update(route='skip',reason='no_issue')
 if a=='summarize_issue_sieve_row':v.update(route='none')"""
     )
@@ -192,7 +192,7 @@ def test_triage_skip_does_not_launch(tmp_path):
     _require_fala_host()
     launched = tmp_path / "launched"
     body = base_effector(
-        f"""if a=='select_next_issue':v.update(route='issue',repo='o/r',issue=2)
+        f"""if a=='select_issue_sieve_candidate':v.update(route='issue',repo='o/r',issue=2)
 if a=='issues_run_triage':v.update(route='completed',triage={{'result':{{'implementable':False}}}})
 if a=='select_issue_sieve':v.update(route='skip',reason='triage_skip')
 if a=='issues_launch_pr':Path({str(launched)!r}).write_text('launched')

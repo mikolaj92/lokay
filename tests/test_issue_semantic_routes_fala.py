@@ -69,7 +69,7 @@ from lokay.organ.common import _conduction_values
 from lokay.organ.issues_boundary import handle_issues
 from lokay.organ.issue_triage_department_boundary import handle_issue_triage_department
 up = _conduction_values(m)
-if a == 'select_next_issue':
+if a == 'select_issue_sieve_candidate':
     v.update(route='issue', repo='o/r', issue=1172, labels=[])
 elif a == 'issues_run_triage':
     with patch('lokay.proc.run_issue_triage_subflow.run_path', return_value={terminal!r}) as invoke:

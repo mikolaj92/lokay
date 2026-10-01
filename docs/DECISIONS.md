@@ -8,16 +8,26 @@ With a route, **no generative fallback or hidden retry** is allowed.
 |---|---|---|
 | `intake_ambiguity` | local Plumb MLX `/v1/systemone` | pass / split / insufficient scope; explicit `issue_scope_decision` atom before GLM triage |
 | `issue_triage` | GB10 GLM `/v1/decisions` | ready / split / live host-ops routing / named evidence request / skip |
-| `queue_conflict` | local Plumb MLX `/v1/systemone` | independent / contradictory / superseded / tracker with children |
+| `queue_conflict` | local Plumb MLX `/v1/systemone` | independent / contradictory / superseded / tracker with children; configured executor admission uses the actual candidate and fresh peer/PR evidence |
 | `relocalization` | agent retained; typed route available but NOT enabled | all off-goal changes necessary / unrelated / insufficient evidence |
 
 One invocation sends **one question in one HTTP POST**, not one request per path.
-Evidence enrichment is the existing separate authored node and can run once;
+Evidence enrichment is the existing separate authored node and can run once.
 The factory issue-triage graph invokes Plumb in `issue_scope_decision` after hard
 facts and before the GLM node; its result is advisory scope evidence, not a second
 source of authority for ready/host-ops routing. This ensures the local model is used
 by the real factory path, not only the standalone intake CLI. Evidence enrichment
 reuses this scope result instead of calling Plumb again.
+
+The live sieve selects **undecided inbox issues**, not the executor's ready-only
+queue. Its `issue-sieve-tail.json` beside `state_path` rotates remaining inbox
+work across passes; `issue-sieve.json` inside each pass retains the original
+finite budget on resume. Neither is an executor authorization or a budget reset.
+The executor remains ready-only. After physical PR-first admission, a configured
+queue check uses the real candidate body and fresh source peer/PR evidence in one
+model call; anything other than accepted `ready` skips that candidate and advances
+the pass tail. It does not close GitHub issues or add tracker labels. The legacy
+standalone queue graph retains its existing readiness-demotion effects.
 Transport errors and malformed responses are terminal outcomes, not invitations
 to retry. Relocalization approves the complete off-goal set or none, preserving
 actual diff, HEAD/base identities and untracked contents before/after scoring.
