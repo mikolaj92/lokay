@@ -67,7 +67,11 @@ It carries node, endpoint alias, served model, repo/issue/PR/HEAD/base identitie
 when supplied, evidence and complete request SHA-256, probabilities, confidence,
 usage, duration and a named result. No fabricated PR/SHA for pre-coding issue-only
 nodes. Full raw issue/diff text and credentials are not written to this journal.
-If evidence cannot be recorded, the decision fails closed.
+If evidence cannot be recorded, the decision fails closed. Full numeric values
+remain in this journal. On the Fala transport boundary, floating-point evidence
+is carried as exact decimal strings: Python/native float spellings otherwise
+produce different content-addressed result digests. No probabilities are rounded
+and Fala digest validation remains enabled.
 
 The known Plumb 4-bit initial smoke was 6/7; one misdelivery was misclassified
 at confidence 0.403. That is below the configured acceptance threshold, but does

@@ -140,4 +140,8 @@ def _record(cfg, trace: dict, started: float) -> dict:
         append_event(cfg.state_path.with_name('decisions.jsonl'), trace, durable=True)
     except OSError:
         trace.update(status='failed', reason='decision_record_failed')
-    return trace
+    # Native Fala and Python spell floating-point numbers differently when
+    # content-addressing results (notably exponent-form probabilities). Keep
+    # the exact numeric evidence in the durable journal, but carry exact decimal
+    # strings across Fala; do not round probabilities or bypass digest checks.
+    return json.loads(json.dumps(trace), parse_float=str)
