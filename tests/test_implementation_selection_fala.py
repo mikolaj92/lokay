@@ -32,6 +32,7 @@ def run_graph(tmp_path, body, run_id, path_id="select_implement"):
         "LOKAY_HEALTH_LEASE",
         "LOKAY_HEALTH_LEASE_PATH",
         "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
+        "LOKAY_PASS_CEILING_SECONDS",
         "PYTHONPATH",
         "OCR_LLM_API_KEY",
     ):

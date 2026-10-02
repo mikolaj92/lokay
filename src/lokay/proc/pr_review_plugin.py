@@ -166,35 +166,24 @@ def _read_bounded(process: subprocess.Popen[bytes], limit: int, timeout: int) ->
     assert process.stdout is not None
     output = bytearray()
     deadline = __import__("time").monotonic() + timeout
-    try:
-        with selectors.DefaultSelector() as selector:
-            selector.register(process.stdout, selectors.EVENT_READ)
-            while True:
-                remaining = deadline - __import__("time").monotonic()
-                if remaining <= 0:
-                    raise _host_failure("review plugin failed or timed out")
-                if not selector.select(min(remaining, 0.25)):
-                    if process.poll() is not None:
-                        break
-                    continue
-                chunk = os.read(process.stdout.fileno(), min(65536, limit + 1 - len(output)))
-                if not chunk:
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stdout, selectors.EVENT_READ)
+        while True:
+            remaining = deadline - __import__("time").monotonic()
+            if remaining <= 0:
+                raise _host_failure("review plugin failed or timed out")
+            if not selector.select(min(remaining, 0.25)):
+                if process.poll() is not None:
                     break
-                output.extend(chunk)
-                if len(output) > limit:
-                    raise _host_failure("review plugin output exceeded size limit")
-        returncode = process.wait(timeout=max(0.1, deadline - __import__("time").monotonic()))
-        return bytes(output), returncode
-    except Exception:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except OSError:
-            process.kill()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            pass
-        raise
+                continue
+            chunk = os.read(process.stdout.fileno(), min(65536, limit + 1 - len(output)))
+            if not chunk:
+                break
+            output.extend(chunk)
+            if len(output) > limit:
+                raise _host_failure("review plugin output exceeded size limit")
+    returncode = process.wait(timeout=max(0.1, deadline - __import__("time").monotonic()))
+    return bytes(output), returncode
 
 
 def invoke_plugin(
@@ -252,9 +241,15 @@ def invoke_plugin(
                 except OSError:
                     pass
 
-        writer = threading.Thread(target=write_request, daemon=True)
-        writer.start()
+        def cancel_review(signum, _frame):
+            raise SystemExit(128 + signum)
+
+        previous_term = None
         try:
+            if threading.current_thread() is threading.main_thread():
+                previous_term = signal.signal(signal.SIGTERM, cancel_review)
+            writer = threading.Thread(target=write_request, daemon=True)
+            writer.start()
             output, returncode = _read_bounded(process, _MAX_OUTPUT_BYTES, timeout)
             writer.join(timeout=1)
             if writer.is_alive():
@@ -262,7 +257,7 @@ def invoke_plugin(
             if writer_error:
                 raise _host_failure("review plugin failed to read request")
             return _decode_plugin_envelope(output, returncode)
-        except (BrokenPipeError, OSError, subprocess.TimeoutExpired, PluginFailure) as exc:
+        except BaseException as exc:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except OSError:
@@ -271,6 +266,9 @@ def invoke_plugin(
                 process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 pass
-            if isinstance(exc, PluginFailure):
+            if not isinstance(exc, (OSError, subprocess.TimeoutExpired)):
                 raise
             raise _host_failure("review plugin failed or timed out") from exc
+        finally:
+            if previous_term is not None:
+                signal.signal(signal.SIGTERM, previous_term)

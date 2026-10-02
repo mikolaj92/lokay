@@ -83,7 +83,7 @@ class _PassCeiling(BaseException):
 
 
 
-DEFAULT_PASS_CEILING_SECONDS = 2400.0
+DEFAULT_PASS_CEILING_SECONDS = 7200.0
 
 
 def resolve_pass_ceiling_seconds(
@@ -91,7 +91,7 @@ def resolve_pass_ceiling_seconds(
     *,
     env: Mapping[str, str] | None = None,
 ) -> float:
-    """Same ceiling as LaunchAgent / lokay-service.sh (default 2400, never silent 180)."""
+    """Same finite ceiling as lokay-service.sh, covering the review plugin budget."""
     if explicit is not None:
         try:
             value = float(explicit)

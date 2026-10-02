@@ -9,7 +9,7 @@ description = "Guarded issue-to-PR graph. Order is the product; agent is one nod
 [[capabilities]]
 id = "lokay_atom"
 title = "Run one Lokay atom via Fala organ"
-secret_handles = ["USER", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "OCR_LLM_API_KEY", "PI_PROVIDER", "PI_MODEL"]
+secret_handles = ["USER", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "LOKAY_PASS_CEILING_SECONDS", "OCR_LLM_API_KEY", "PI_PROVIDER", "PI_MODEL"]
 
 [[capabilities]]
 id = "acceptance_write"
@@ -4611,7 +4611,7 @@ id = "run_daemon_product_cycle"
 capability = "lokay_atom"
 conduction = ["classify_daemon_preflight"]
 when = { upstream = "classify_daemon_preflight", path = "route", equals = "product" }
-adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PI_PROVIDER", "PI_MODEL"] }
+adapter = { kind = "subprocess", command = ["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python", "-m", "lokay.fala_organ"], cwd = "PLACEHOLDER_PROJECT", timeout_seconds = 7200, inherit_env = ["PATH", "HOME", "USER", "TMPDIR", "LANG", "LOKAY_ROOT", "PYTHONPATH", "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED", "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH", "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "LOKAY_PASS_CEILING_SECONDS", "PI_PROVIDER", "PI_MODEL"] }
 config = { atom = "run_daemon_product_cycle" }
 output_schema = { type = "object", required = ["ok"] }
 retry_policy = "none"

@@ -331,7 +331,7 @@ def run_path(
     for key in (
         "LOKAY_PROCESS_HEAD", "LOKAY_HOST_FF_FETCHED",
         "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH",
-        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE",
+        "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "LOKAY_PASS_CEILING_SECONDS",
     ):
         os.environ.setdefault(key, "")
     had_review_credential = "OCR_LLM_API_KEY" in os.environ

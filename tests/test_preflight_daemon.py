@@ -31,8 +31,8 @@ def test_daemon_is_os_only():
     assert "LOKAY_LOCK" not in script
     assert "uv run lokay-daemon" in script
     assert "LOKAY_PASS_CEILING_SECONDS" in script
-    assert "${LOKAY_PASS_CEILING_SECONDS:-2400}" in script
-    assert "CEILING=2400" in script
+    assert "${LOKAY_PASS_CEILING_SECONDS:-7200}" in script
+    assert "CEILING=7200" in script
     assert "stop_cycle_tree" in script
     assert "lokay.proc.stop_cycle_tree" in script
     assert "start_new_session" in script
