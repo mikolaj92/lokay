@@ -58,7 +58,11 @@ def handle_issues(
             )
             selected["pr_admission"] = admission
             if not admission["allowed"]:
-                selected.update(route="skip", reason=admission["reason"])
+                from lokay.proc.select_issue_do import leftover_of
+
+                leftover, rows = leftover_of(selected, consume=True)
+                selected.update(route="skip", reason=admission["reason"],
+                                leftover=leftover, leftover_issues=rows)
             else:
                 from lokay.proc.check_executor_queue import check
 

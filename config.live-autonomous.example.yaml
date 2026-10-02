@@ -38,8 +38,8 @@ executor:
   enabled: true  # real agent only — docs/NO_STUBS.md
   agent: pi                  # log label only
   command: pi               # harness binary — swap to change implementation
-  # One task, final response on stdout; harness settings stay with the harness.
-  args: [-p, --session-id, "{session}", "{prompt}"]
+  # Pin the GB10 provider model, not the multi-provider `pi` combo.
+  args: [-p, --provider, omniroute, --model, gb10/GLM-5.3-Flash-EXL3, --thinking, "off", --session-id, "{session}", "{prompt}"]
   max_turns: 40
   timeout_seconds: 1800
 
@@ -47,13 +47,6 @@ executor:
 # See docs/DECISIONS.md. Endpoint model identity must match the response exactly.
 decisions:
   endpoints:
-    plumb:
-      url: http://127.0.0.1:8090/v1/systemone
-      protocol: systemone
-      model: /Users/mini-m4-0/.local/share/plumb/mlx-4bit
-      min_confidence: 0.85
-      timeout_seconds: 10
-      max_input_chars: 24000
     gb10:
       url: http://192.168.1.60:8888/v1/decisions
       protocol: decisions
@@ -62,11 +55,10 @@ decisions:
       timeout_seconds: 90
       max_input_chars: 120000
   routes:
-    intake_ambiguity: plumb
+    intake_ambiguity: gb10
     issue_triage: gb10
-    queue_conflict: plumb
-    # relocalization intentionally stays with the agent: GLM scope panel 3/6,
-    # all three necessary changes rejected at the configured threshold.
+    queue_conflict: gb10
+    relocalization: gb10  # uncertain/unrelated retains the off-goal failure
 
 limits:
   max_request_changes_per_pr: 2

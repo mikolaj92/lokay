@@ -14,13 +14,15 @@ def test_default_executor_only_passes_the_task():
     assert build_agent_argv(Config(), worktree=root, prompt="task") == ["pi", "-p", "task"]
 
 
-def test_shipped_executor_binds_provenance_not_harness_runtime():
+def test_shipped_executor_binds_provenance_and_live_model_without_rewriting_runtime():
     from lokay.agent import session_id_for_worktree
     root = Path(__file__).resolve().parents[1]
     for name in ("config.example.yaml", "config.live-autonomous.example.yaml"):
         cfg = load_config(root / name)
+        pinned = (["--provider", "omniroute", "--model", "gb10/GLM-5.3-Flash-EXL3",
+                   "--thinking", "off"] if name == "config.live-autonomous.example.yaml" else [])
         assert build_agent_argv(cfg, worktree=root, prompt="task") == [
-            "pi", "-p", "--session-id", session_id_for_worktree(root), "task"]
+            "pi", "-p", *pinned, "--session-id", session_id_for_worktree(root), "task"]
         assert not hasattr(cfg, "agent_model")
 
 

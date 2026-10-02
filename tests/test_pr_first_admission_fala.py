@@ -70,6 +70,10 @@ def test_native_executor_pr_first(tmp_path, repo, rows, unavailable, launch):
     status = result['effector_results']['issues_launch_pr']['status']
     assert status == ('succeeded' if launch else 'skipped')
     assert gate['repo'] == repo and gate['issue'] == 2
+    if not launch:
+        # The native result must not leave the denied issue at the tail head.
+        assert gate['leftover_issues'] == []
+        assert gate['leftover'] == 0
     if not launch and not unavailable:
         blocker = gate['pr_admission']['blocking_prs'][0]
         assert (blocker['repo'], blocker['head_ref'], blocker['head_sha']) == (
