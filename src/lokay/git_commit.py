@@ -226,18 +226,15 @@ def commit_all(
         )
         return True
 
-    runner.run_checked(git_spec(["add", "-A"], cwd=worktree), live=True)
-    # Legacy runs without localization still keep their plan evidence.
-    for rel in _EVIDENCE_PATHS:
-        if (worktree / rel).is_file():
-            runner.run_checked(
-                git_spec(["add", "-f", "--", rel], cwd=worktree),
-                live=True,
-            )
-    status = runner.run(git_spec(["diff", "--cached", "--quiet"], cwd=worktree), live=True)
+    # Host plans stay local even when localization is absent or already staged.
+    pathspecs = [".", *(f":(exclude,literal){rel}" for rel in sorted(_EVIDENCE_PATHS))]
+    runner.run_checked(git_spec(["add", "-A", "--", *pathspecs], cwd=worktree), live=True)
+    status = runner.run(
+        git_spec(["diff", "--cached", "--quiet", "--", *pathspecs], cwd=worktree), live=True
+    )
     if status.returncode == 0:
         return False
     runner.run_checked(
-        git_spec([*_commit_argv("commit", "-m", message)], cwd=worktree), live=True
+        git_spec([*_commit_argv("commit", "--only", "-m", message, "--", *pathspecs)], cwd=worktree), live=True
     )
     return True
