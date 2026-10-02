@@ -6,18 +6,18 @@ With a route, **no generative fallback or hidden retry** is allowed.
 
 | Route | Production endpoint | Responsibility |
 |---|---|---|
-| `intake_ambiguity` | local Plumb MLX `/v1/systemone` | pass / split / insufficient scope; explicit `issue_scope_decision` atom before GLM triage |
+| `intake_ambiguity` | GB10 GLM `/v1/decisions` | pass / split / insufficient scope; explicit `issue_scope_decision` atom before triage |
 | `issue_triage` | GB10 GLM `/v1/decisions` | ready / split / live host-ops routing / named evidence request / skip |
-| `queue_conflict` | local Plumb MLX `/v1/systemone` | independent / contradictory / superseded / tracker with children; configured executor admission uses the actual candidate and fresh peer/PR evidence |
-| `relocalization` | agent retained; typed route available but NOT enabled | all off-goal changes necessary / unrelated / insufficient evidence |
+| `queue_conflict` | GB10 GLM `/v1/decisions` | independent / contradictory / superseded / tracker with children; configured executor admission uses the actual candidate and fresh peer/PR evidence |
+| `relocalization` | GB10 GLM `/v1/decisions` | all off-goal changes necessary / unrelated / insufficient evidence; fail closed on uncertainty |
 
 One invocation sends **one question in one HTTP POST**, not one request per path.
 Evidence enrichment is the existing separate authored node and can run once.
-The factory issue-triage graph invokes Plumb in `issue_scope_decision` after hard
-facts and before the GLM node; its result is advisory scope evidence, not a second
-source of authority for ready/host-ops routing. This ensures the local model is used
-by the real factory path, not only the standalone intake CLI. Evidence enrichment
-reuses this scope result instead of calling Plumb again.
+The live profile routes **all four decisions to GB10**, with exact served identity
+`GLM-5.3-Flash-EXL3`; no Plumb route or fallback. The factory issue-triage graph
+invokes `issue_scope_decision` after hard facts and before triage; its result is
+advisory scope evidence, not a second source of authority for ready/host-ops routing.
+Evidence enrichment reuses this scope result instead of calling the scope model again.
 
 The live sieve selects **undecided inbox issues**, not the executor's ready-only
 queue. Its `issue-sieve-tail.json` beside `state_path` rotates remaining inbox
@@ -26,7 +26,9 @@ finite budget on resume. Neither is an executor authorization or a budget reset.
 The executor remains ready-only. After physical PR-first admission, a configured
 queue check uses the real candidate body and fresh source peer/PR evidence in one
 model call; anything other than accepted `ready` skips that candidate and advances
-the pass tail. It does not close GitHub issues or add tracker labels. The legacy
+the pass tail. A deterministic PR-first refusal also advances the pass tail before
+any queue-model call, without spending launch budget or mutating the blocked issue.
+It does not close GitHub issues or add tracker labels. The legacy
 standalone queue graph retains its existing readiness-demotion effects.
 Transport errors and malformed responses are terminal outcomes, not invitations
 to retry. Relocalization approves the complete off-goal set or none, preserving
@@ -45,7 +47,8 @@ See `config.live-autonomous.example.yaml`. Routes accept only the four names abo
 Each endpoint requires explicit `url`, `protocol` (`systemone` or `decisions`),
 exact response `model`, positive finite `timeout_seconds` (at most 180),
 `min_confidence` (>0.5 through 1), and `max_input_chars` (at most 200000).
-Use the exact served Plumb model path for its model identity. Do not include
+The live profile uses only the GB10 `decisions` endpoint. The optional `systemone`
+protocol remains supported for other explicit configurations. Do not include
 credentials in URLs. These endpoints are trusted loopback/LAN services; the client
 has no auth fallback and bypasses ambient proxy settings.
 
@@ -59,6 +62,22 @@ non-argmax choices and generated output. Under-threshold or tied choices abstain
 The initial threshold 0.85 is an operational abstention rule, **not measured
 calibration**. Uncertain/unavailable intake is park (aggregate skip, no limbo stamp);
 triage/queue skip; relocalization retains the hard off-goal failure.
+
+## Generative agents and full review
+
+The live executor argv pins `--provider omniroute --model
+gb10/GLM-5.3-Flash-EXL3 --thinking off`. Register that exact model in Pi's
+`~/.pi/agent/models.json` on the host. Discovery, localization, planning, splitting,
+coding and repair all use the shared configured harness; deterministic checks are
+not model calls. Do not use the `pi` combo alias, which can select other providers.
+On the audited host the `gb10` provider points at `192.168.1.60:8888/v1` and has no
+domain fallback chain. The LAN router is used for chat because Node cannot reach
+the GB10 LAN endpoint directly on this Mac; decisions use system curl directly.
+
+Full open-code-review must separately pin `gb10/GLM-5.3-Flash-EXL3` in its trusted
+provider JSON and `pr_review.model`, then regenerate `config_sha256` and the operator
+manifest with `expected_review_manifest`. Do not disable manifest validation.
+A model alias, catalog entry or smoke is not proof of production coding/review use.
 
 ## Evidence
 
@@ -77,9 +96,20 @@ The known Plumb 4-bit initial smoke was 6/7; one misdelivery was misclassified
 at confidence 0.403. That is below the configured acceptance threshold, but does
 not establish model quality in Lokay. A six-case GLM scope panel rejected
 all three necessary changes and admitted none of three unrelated changes: **0 false
-approvals / 3 false rejections**. Consequently the typed relocalization route is
-not enabled in production: the existing agent remains, not a per-call fallback.
-A five-case Plumb queue panel accepted both independent cases; duplicate/conflict/
+approvals / 3 false rejections**. Consequently the typed relocalization route was
+previously disabled. Under the all-GB10 policy it is now configured, with the same
+threshold and fail-closed rule; this routing change does **not** erase the known
+false-rejection risk or establish semantic quality. No generative fallback.
+A historical five-case Plumb queue panel accepted both independent cases; duplicate/conflict/
 tracker cases all abstained below 0.85 and therefore skip. This is a tiny operational
-panel, not calibration. Live passage and corpus validation must be reported
-separately from hermetic contract tests. No 4-bit/BF16 parity claim.
+panel, not calibration. No 4-bit/BF16 parity claim.
+
+The all-GB10 migration panel (2026-10-02) is also diagnostic, not calibration:
+- Scope: two coherent tasks passed; independent products and vague intent abstained.
+- Queue: two independent tasks and a tracker classified as expected; a contradiction
+  abstained; an identical duplicate was incorrectly admitted as independent at
+  confidence 0.9699376838487097. This is a known false admission, not queue-quality PASS.
+- Relocalization: again **0 false approvals / 3 false rejections** across six cases.
+
+Live passage, production delivery and corpus validation must be reported separately
+from these panels and hermetic contract tests.
