@@ -15,6 +15,36 @@ def test_this_repo_declares_pytest():
     )
 
 
+def test_existing_project_declarations_reach_the_test_runner(tmp_path):
+    from lokay.proc.inspect_test_declaration import inspect
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project.optional-dependencies]\ndev = ["pytest"]\n'
+        '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+    )
+    python_tests = ["uv", "run", "--extra", "dev", "pytest", "-q"]
+    assert inspect(worktree=str(tmp_path))["test_argv"] == python_tests
+    (tmp_path / "Package.swift").write_text("// swift-tools-version: 6.0\n")
+    assert inspect(worktree=str(tmp_path))["test_argv"] == [
+        "sh", "-c", "swift test && uv run --extra dev pytest -q",
+    ]
+    (tmp_path / "Package.swift").unlink()
+    (tmp_path / "pixi.toml").write_text('[tasks]\nfull-smoke = "mojo test"\n')
+    assert inspect(worktree=str(tmp_path))["test_argv"] == [
+        "sh", "-c", "pixi run full-smoke && uv run --extra dev pytest -q",
+    ]
+    pyproject.write_text(
+        '[dependency-groups]\ndev = ["pytest"]\n'
+        '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+    )
+    assert inspect(worktree=str(tmp_path))["test_argv"][-1] == (
+        "pixi run full-smoke && uv run --group dev pytest -q"
+    )
+    pyproject.write_text('[tool.lokay]\ntest = ["custom", "suite"]\n')
+    assert inspect(worktree=str(tmp_path))["test_argv"] == ["custom", "suite"]
+
+
 def test_no_declaration_is_closed_skip(tmp_path):
     from lokay.proc.inspect_test_declaration import inspect
 

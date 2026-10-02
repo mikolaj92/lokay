@@ -1,9 +1,8 @@
 """Atomic: run the repository-declared local test command in a worktree.
 
-Verification is declared by the checkout (`[tool.lokay] test` in
-``pyproject.toml``), not inferred from ``pyproject`` / ``tests/``. Missing
-declaration is an honest skip — do not invent a test command for a checkout
-that has none. This repo declares its own verifier under ``[tool.lokay]``.
+Use the checkout's existing pytest, Swift or Pixi declarations.
+An explicit `[tool.lokay] test` overrides those native commands; no declaration
+remains an honest skip. There is only one runner.
 """
 
 from __future__ import annotations
@@ -86,8 +85,31 @@ def declared_argv(worktree: Path, key: str) -> tuple[str, ...] | None:
 
 
 def declared_test_argv(worktree: Path) -> tuple[str, ...] | None:
-    """Return the repo-declared test argv, or None when none is declared."""
-    return declared_argv(worktree, "test")
+    """Use native project declarations unless the repo explicitly overrides them."""
+    explicit = declared_argv(worktree, "test")
+    if explicit:
+        return explicit
+    commands: list[tuple[str, ...]] = []
+    pixi = worktree / "pixi.toml"
+    if pixi.is_file():
+        tasks = tomllib.loads(pixi.read_text(encoding="utf-8")).get("tasks", {})
+        task = next((name for name in ("full-smoke", "test", "core-smoke") if name in tasks), None)
+        if task:
+            commands.append(("pixi", "run", task))
+    if (worktree / "Package.swift").is_file():
+        commands.append(("swift", "test"))
+    pyproject = worktree / "pyproject.toml"
+    data = tomllib.loads(pyproject.read_text(encoding="utf-8")) if pyproject.is_file() else {}
+    if "pytest" in data.get("tool", {}):
+        dev = ("--group", "dev") if "dev" in data.get("dependency-groups", {}) else (
+            ("--extra", "dev") if "dev" in data.get("project", {}).get("optional-dependencies", {}) else ()
+        )
+        commands.append(("uv", "run", *dev, "pytest", "-q"))
+    if not commands:
+        return None
+    if len(commands) == 1:
+        return commands[0]
+    return ("sh", "-c", " && ".join(shlex.join(command) for command in commands))
 
 
 def main(argv: list[str] | None = None) -> int:
