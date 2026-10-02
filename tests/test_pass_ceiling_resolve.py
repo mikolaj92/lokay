@@ -1,4 +1,4 @@
-"""Pass ceiling must match LaunchAgent / lokay-service.sh (default 2400)."""
+"""The cycle must not cut off a review within its declared budget."""
 
 from lokay.compose.daemon_cycle import (
     DEFAULT_PASS_CEILING_SECONDS,
@@ -6,15 +6,24 @@ from lokay.compose.daemon_cycle import (
 )
 
 
-def test_default_ceiling_is_2400_not_180():
-    assert DEFAULT_PASS_CEILING_SECONDS == 2400.0
-    assert resolve_pass_ceiling_seconds(None, env={}) == 2400.0
-    assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": ""}) == 2400.0
+def test_default_ceiling_covers_review_plugin_budget():
+    from lokay.config import Config
+
+    assert DEFAULT_PASS_CEILING_SECONDS >= Config().pr_review_plugin_timeout_seconds
+    assert resolve_pass_ceiling_seconds(None, env={}) == 7200.0
+    assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": ""}) == 7200.0
 
 
 def test_env_ceiling_wins_when_explicit_absent():
     assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": "2400"}) == 2400.0
     assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": "90"}) == 90.0
+    import tomllib
+    from pathlib import Path
+
+    manifest = tomllib.loads((Path(__file__).resolve().parents[1] / "fala/lokay.fala-package.toml").read_text())
+    entry = next(path for path in manifest["correlation_paths"] if path["id"] == "daemon_entry")
+    cycle = next(node for node in entry["effectors"] if node["id"] == "run_daemon_product_cycle")
+    assert "LOKAY_PASS_CEILING_SECONDS" in cycle["adapter"]["inherit_env"]
 
 
 def test_explicit_ceiling_wins_over_env():
@@ -24,9 +33,9 @@ def test_explicit_ceiling_wins_over_env():
     )
 
 
-def test_invalid_env_falls_back_to_2400():
-    assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": "nope"}) == 2400.0
-    assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": "0"}) == 2400.0
+def test_invalid_env_falls_back_to_default():
+    assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": "nope"}) == 7200.0
+    assert resolve_pass_ceiling_seconds(None, env={"LOKAY_PASS_CEILING_SECONDS": "0"}) == 7200.0
 
 
 def test_run_daemon_product_cycle_passes_resolved_ceiling(monkeypatch):

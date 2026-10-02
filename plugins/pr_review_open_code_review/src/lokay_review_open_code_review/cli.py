@@ -357,7 +357,6 @@ def _run_bounded(
             process = subprocess.Popen(
                 argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                 stderr=stderr_file, cwd=str(cwd), env=dict(env),
-                start_new_session=True,
             )
         except OSError as exc:
             raise ReviewFailure("OpenCodeReview invocation failed") from exc
@@ -389,11 +388,8 @@ def _run_bounded(
                         else:
                             break
             returncode = process.wait(timeout=max(0.1, deadline - time.monotonic()))
-        except Exception:
-            try:
-                os.killpg(process.pid, 9)
-            except OSError:
-                process.kill()
+        except BaseException:
+            process.kill()
             process.wait()
             raise
         output = bytes(captured)

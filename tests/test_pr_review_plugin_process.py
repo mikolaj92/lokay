@@ -21,6 +21,83 @@ def _config(**updates):
     return SimpleNamespace(**values)
 
 
+@pytest.mark.parametrize("failure", ["cancel", "timeout", "output"])
+def test_review_failure_stops_ocr_descendants(tmp_path, monkeypatch, failure):
+    import signal
+    import sys
+    import time
+    from pathlib import Path
+
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "test-key")
+    pidfile = tmp_path / "ocr.pid"
+    plugin_src = Path(__file__).resolve().parents[1] / "plugins/pr_review_open_code_review/src"
+    descendant = (
+        "import os,time; from pathlib import Path; "
+        f"Path({str(pidfile)!r}).write_text(f'{{os.getpid()}} {{os.getpgrp()}}'); time.sleep(30)"
+    )
+    ocr = (
+        "import subprocess,sys,time; from pathlib import Path; "
+        f"subprocess.Popen([sys.executable, '-c', {descendant!r}]); "
+        f"p=Path({str(pidfile)!r}); "
+        "exec('while not p.exists(): time.sleep(0.01)'); "
+        + ("sys.stdout.write('x'*100000); sys.stdout.flush(); " if failure == "output" else "")
+        + "time.sleep(30)"
+    )
+    plugin = (
+        "import sys; from pathlib import Path; "
+        f"sys.path.insert(0, {str(plugin_src)!r}); "
+        "from lokay_review_open_code_review.cli import _run_bounded; "
+        f"_run_bounded([sys.executable, '-c', {ocr!r}], "
+        f"cwd=Path({str(tmp_path)!r}), env={{'PATH':'/usr/bin:/bin'}}, "
+        f"timeout_seconds={0.2 if failure == 'timeout' else 30}, max_bytes=32)"
+    )
+    owner_code = (
+        "from types import SimpleNamespace; "
+        "from lokay.proc.pr_review_plugin import invoke_plugin; "
+        f"invoke_plugin(SimpleNamespace(pr_review_plugin_command={sys.executable!r}, "
+        f"pr_review_plugin_args=['-c', {plugin!r}], pr_review_plugin_timeout_seconds=30, "
+        "pr_review_provider_env=['OCR_PROVIDER_KEY']), {})"
+    )
+    owner = subprocess.Popen(
+        [sys.executable, "-c", owner_code], start_new_session=True,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    ocr_pid = 0
+    plugin_pgid = 0
+    try:
+        deadline = time.monotonic() + 5
+        while not pidfile.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert pidfile.exists(), "OCR did not start"
+        ocr_pid, plugin_pgid = map(int, pidfile.read_text().split())
+        if failure == "cancel":
+            os.killpg(owner.pid, signal.SIGTERM)
+        assert owner.wait(timeout=3) != 0
+        stat = "running"
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            stat = subprocess.run(
+                ["ps", "-p", str(ocr_pid), "-o", "stat="], capture_output=True, text=True,
+            ).stdout.strip()
+            if not stat or stat.startswith("Z"):
+                break
+            time.sleep(0.02)
+        assert not stat or stat.startswith("Z"), "failed review left OCR descendants running"
+    finally:
+        for pgid in (owner.pid, plugin_pgid):
+            if pgid:
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                except OSError:
+                    pass
+        if ocr_pid:
+            try:
+                os.kill(ocr_pid, signal.SIGKILL)
+            except OSError:
+                pass
+        owner.wait(timeout=3)
+
+
 def test_process_boundary_sends_one_request_with_minimal_environment(monkeypatch):
     monkeypatch.setenv("OCR_PROVIDER_KEY", "provider-secret")
     monkeypatch.setenv("GH_TOKEN", "github-secret")
