@@ -180,6 +180,32 @@ def test_commit_all_excludes_host_evidence_from_localized_directories(tmp_path: 
     }
 
 
+def test_commit_without_localization_preserves_staged_host_evidence(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_repo(repo)
+    (repo / "README.md").write_text("base\n")
+    evidence = repo / ".lokay"
+    evidence.mkdir()
+    (evidence / "approach.md").write_text("original plan\n")
+    (evidence / "localize.json").write_text('{"paths": ["README.md"]}')
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-m", "base")
+    (repo / "README.md").write_text("product fix\n")
+    (evidence / "approach.md").write_text("new host plan\n")
+    (evidence / "localize.json").unlink()
+    _git(repo, "add", "-A", ".lokay")
+
+    assert commit_all(Runner(), repo, "product only", live=True)
+
+    assert _git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines() == ["README.md"]
+    assert _git(repo, "show", "HEAD:.lokay/approach.md") == "original plan\n"
+    assert _git(repo, "diff", "--cached", "--name-only").splitlines() == [
+        ".lokay/approach.md", ".lokay/localize.json",
+    ]
+    assert (evidence / "approach.md").read_text() == "new host plan\n"
+    assert not (evidence / "localize.json").exists()
+
+
 def test_commit_all_ignores_generated_localization_paths(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_repo(repo)

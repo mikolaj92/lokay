@@ -404,34 +404,6 @@ def test_review_prompt_strips_approach_hunk_from_diff():
     assert "approach.md" not in text.lower()
 
 
-def test_commit_all_force_adds_approach_md(tmp_path: Path, monkeypatch):
-    """Approach evidence must stage even when `.lokay/` is gitignored."""
-    from lokay import git_commit
-
-    wt = tmp_path / "wt"
-    approach = wt / ".lokay" / "approach.md"
-    approach.parent.mkdir(parents=True)
-    approach.write_text("# Approach plan\n", encoding="utf-8")
-    seen: list[list[str]] = []
-
-    class FakeRunner:
-        def run_checked(self, spec, *, live):
-            seen.append(list(spec.argv))
-            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-
-        def run(self, spec, *, live):
-            # cached-diff --quiet → nonzero means dirty index (something to commit).
-            if tuple(spec.argv[:3]) == ("git", "diff", "--cached"):
-                return type("R", (), {"returncode": 1, "stdout": "", "stderr": ""})()
-            return type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})()
-
-    did = git_commit.commit_all(FakeRunner(), wt, "msg", live=True)
-    assert did is True
-    assert ["git", "add", "-A"] in seen
-    assert ["git", "add", "-f", "--", ".lokay/approach.md"] in seen
-    assert any("commit" in a for a in seen)
-
-
 def test_commit_all_uses_localize_paths_instead_of_evidence(tmp_path: Path):
     """A localization file switches commit_all from add-all to scoped paths."""
     from lokay import git_commit
