@@ -485,6 +485,73 @@ if a=='local_repair_execution':Path(%r).write_text(a)"""
     assert st["push"] == "succeeded" and pushed.exists() and not wrong.exists()
 
 
+@pytest.mark.parametrize("approval", ["on_goal", "denied", "approved"])
+def test_native_delivery_preserves_issue_and_authorized_scope(tmp_path, approval):
+    """Real parent bindings and Git diff; only the external judgment is supplied."""
+    import json
+    import subprocess
+
+    worktree = tmp_path / "repo"
+    worktree.mkdir()
+    def git(*args):
+        return subprocess.check_output(["git", "-C", str(worktree), *args], text=True).strip()
+    git("init", "-q")
+    git("config", "user.email", "test@example.com")
+    git("config", "user.name", "Test")
+    (worktree / "app.py").write_text("value = 1\n")
+    (worktree / "caller.py").write_text("value = 1\n")
+    git("add", ".")
+    git("commit", "-qm", "base")
+    git("update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD"))
+    (worktree / "app.py").write_text("value = 2\n")
+    (worktree / ".lokay").mkdir()
+    (worktree / ".lokay/localize.json").write_text(json.dumps({"paths": ["app.py"]}))
+    (worktree / ".lokay/approach.md").write_text("Plan for this issue.\n")
+    if approval != "on_goal":
+        (worktree / "caller.py").write_text("value = 2\n")
+    issue = {"repo": "o/r", "number": 89, "title": "Update value", "body": "Migrate the caller with the product."}
+    body = base_effector(f'''
+from unittest.mock import patch
+from lokay.organ.common import _conduction_values
+from lokay.organ.implement import handle_implement
+from lokay.organ.publication import handle_publication
+from lokay.proc.relocalization_terminal import terminal
+up = _conduction_values(m)
+ctx = dict(cfg=[], live=[], repo='o/r', issue_number=89, pr_number=None, repair_mode=False, branch='test')
+inputs = {{'repo': 'o/r', 'issue': 89, 'live': False}}
+if a=='get_issue':v['issue']={issue!r}
+if a=='resolve_implementation_issue':v['route']='open'
+if a=='worktree_add':v.update(route='ready',worktree={str(worktree)!r})
+if a=='localize':v.update(route='ready',paths=['app.py'])
+if a=='coding_execution':v['route']='implemented'
+if a=='relocalize_off_goal':
+    def judgment(**kwargs):
+        Path({str(tmp_path / 'context.json')!r}).write_text(json.dumps(kwargs['extra_inputs']))
+        if {approval!r}=='approved':return {{'ok':True,'paths':['app.py','caller.py']}}
+        return terminal({{'worktree':{str(worktree)!r},'localized':['app.py']}}, {{}},
+                        {{'route':'terminal' if {approval!r}=='on_goal' else 'agent'}}, {{}}, {{}})['result']
+    with patch('lokay.proc.relocalize_off_goal_subflow.run',judgment):
+        v.update(handle_implement(a,inputs,up,ctx))
+if a=='assert_real_diff':
+    v.update(handle_publication(a,inputs,up,ctx))
+    Path({str(tmp_path / 'diff.json')!r}).write_text(json.dumps(v))
+if a=='select_local_test':v['route']='skip'
+if a=='finalize_local_tests':v['route']='not_applicable'
+''')
+    run_graph(tmp_path, body, "scope-handoff", path_id="issue_to_pr_delivery")
+    context = json.loads((tmp_path / "context.json").read_text())
+    assert context["issue_raw"] == issue
+    result = json.loads((tmp_path / "diff.json").read_text())
+    assert result["real"] is (approval != "denied"), result
+    if approval == "denied":
+        assert result["reason"] == "off_goal"
+        assert result["off_goal_paths"] == ["caller.py"]
+    else:
+        assert result["reason"] == ""
+        assert result.get("off_goal_paths", []) == []
+    assert result["localized_paths"] == (["app.py", "caller.py"] if approval == "approved" else ["app.py"])
+
+
 def test_native_failed_coding_skips_relocalize(tmp_path):
     if not _fala_host_ready():
         pytest.skip("Fala Mojo process host is not available")

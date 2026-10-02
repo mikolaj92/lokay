@@ -29,7 +29,9 @@ def _paths_outside_scope(changed: list[str], scope: list[str]) -> list[str]:
 
 
 def _off_goal_paths(changed: list[str], localized: list[str]) -> list[str]:
-    return _paths_outside_scope(changed, localized)
+    from lokay.git_real_diff import is_evidence_path
+
+    return _paths_outside_scope([path for path in changed if not is_evidence_path(path)], localized)
 
 
 def main(argv: list[str] | None = None) -> int:

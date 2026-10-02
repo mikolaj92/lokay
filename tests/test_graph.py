@@ -738,6 +738,39 @@ def test_run_agent_timeouts_match_pi_budget():
     )
 
 
+def test_authored_graph_outputs_preserve_branch_fields():
+    """Check the real schemas, not a generated inventory of test filenames."""
+    package = tomllib.loads(find_default_package().read_text())
+    nodes = [node for path in package["correlation_paths"]
+             for key in ("effectors", "prefix_effectors", "suffix_effectors")
+             for node in path.get(key, [])]
+    nodes += [node for template in package.get("path_templates", []) for node in template.get("effectors", [])]
+    for node in nodes:
+        assert node.get("output_schema"), node["id"]
+        when = node.get("when") or {}
+        if not when:
+            continue
+        parents = [parent for parent in nodes if parent["id"] == when["upstream"]]
+        assert parents, node["id"]
+        field = when["path"].split(".", 1)[0]
+        for parent in parents:
+            schema = parent["output_schema"]
+            assert field in schema.get("required", []), (parent["id"], field)
+            if "properties" in schema:
+                assert field in schema["properties"], (parent["id"], field)
+
+
+def test_review_adapter_does_not_cut_off_its_configured_engine():
+    from lokay.config import load_config
+
+    cfg = load_config("config.example.yaml")
+    package = tomllib.loads(find_default_package().read_text())
+    path = next(p for p in package["correlation_paths"] if p["id"] == "pr_triage")
+    review = next(node for node in path["effectors"] if node["id"] == "pr_review_agent")
+    assert review["adapter"]["timeout_seconds"] >= cfg.pr_review_plugin_timeout_seconds
+    assert review["adapter"]["timeout_seconds"] > 60 * cfg.pr_review_timeout_minutes + 120
+
+
 def test_test_local_timeouts_are_bounded():
     """Every test_local effector uses the local-suite timeout budget."""
     import tomllib

@@ -15,9 +15,7 @@ _REQUIRED_ENV = (
 
 def authorized_scope(upstream: dict) -> list[str]:
     """The scope the parent already authorized, never the checkout copy."""
-    paths = (
-        upstream.get("relocalize_off_goal") or upstream.get("localize") or {}
-    ).get("paths") or []
+    paths = (upstream.get("relocalize_off_goal") or {}).get("paths") or (upstream.get("localize") or {}).get("paths") or []
     return [str(path) for path in paths if isinstance(path, str)]
 
 
