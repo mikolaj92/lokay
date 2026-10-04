@@ -59,3 +59,11 @@ limits:
   max_repairs_per_tick: 1
   max_failures_before_block: 2
   min_free_gb: 2
+
+# Retention (t_2d81b9c3): execution data is consumable; code lives in git and
+# error logs stay. See config.example.yaml for the field reference.
+retention:
+  max_age_days: 14
+  hard_cap_gb: 10
+  wrapper_keep: 2
+  journal_keep_last: 5

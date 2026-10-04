@@ -1606,7 +1606,7 @@ kontraktu. Aktualny audyt:
 | `uv run lokay-repos --config config.yaml` | List managed repositories |
 | `uv run lokay status --config config.yaml` | Readiness, health, K, per-repo work, human residuals (`--local` / `--human`) |
 | `~/.lokay/last-pass.json` | Compact pass receipt after each tick (LaunchAgent-friendly) |
-| `~/.lokay/fala/<path>/` | Fala pass journals (`state.sqlite` next to the materialized package). Hard 64 MiB ceiling; over-cap is maintained through `fala.maintain_journal`, fail-closed if Fala cannot reclaim the file. Nested children never share the tree-root sqlite |
+| `~/.lokay/fala/<path>/` | Fala pass journals (`state.sqlite` next to the materialized package). Retention (t_2d81b9c3): terminal runs older than `retention.max_age_days` are reclaimed through `fala.maintain_journal` (newest `journal_keep_last` kept, VACUUM), wrapper traces beyond `wrapper_keep` are pruned, and the oldest consumable data is evicted until `~/.lokay` fits `retention.hard_cap_gb`; fail-closed if Fala cannot reclaim the file. Nested children never share the tree-root sqlite |
 | `uv run lokay path --describe` | Inspect materialized workflow paths |
 | `uv run lokay work --config config.yaml --live --max-passes 8` | Run a bounded live lokay |
 | `src/lokay/proc/` | Unix atoms |

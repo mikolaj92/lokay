@@ -94,18 +94,21 @@ def test_expired_recovery_archive_without_completion_is_retained(tmp_path):
     assert result['retained'] == [str(archive)]
 
 
-def test_wrapper_rollover_does_not_erase_unfinished_evidence(tmp_path):
+def test_wrapper_rollover_prunes_consumed_traces_beyond_keep(tmp_path):
+    """t_2d81b9c3: wrapper traces are consumable; keep window is total."""
     from lokay.fala_journal import wrapper_journal_dir
     root = tmp_path / '.lokay' / 'fala'
     paths = []
     for n in range(5):
         path = root / f'factory-pass-old-{n}'
         path.mkdir(parents=True)
-        (path / 'state.sqlite').write_bytes(b'incomplete journal')
+        (path / 'state.sqlite').write_bytes(b'consumed one-tick trace')
         os.utime(path, (n + 1, n + 1))
         paths.append(path)
     wrapper_journal_dir('factory_pass', home=tmp_path)
-    assert all((p / 'state.sqlite').exists() for p in paths)
+    remaining = {p.name for p in root.iterdir() if p.is_dir()}
+    assert len(remaining) == 2  # newest consumed trace + fresh allocation
+    assert sum(p.name.startswith('factory-pass-old-') for p in root.iterdir()) == 1
 
 
 def test_journal_maintenance_does_not_finalize_active_runs(tmp_path, monkeypatch):
@@ -124,7 +127,8 @@ def test_journal_maintenance_does_not_finalize_active_runs(tmp_path, monkeypatch
     maintain_lokay_fala_journals(home=tmp_path, min_bytes=1)
     assert 'finalized' not in calls
     assert 'deleted' not in calls
-    assert calls[0]['dry_run'] is True
+    assert calls[0]['dry_run'] is False
+    assert calls[0]['older_than_days'] == 14
 
 
 def test_self_repair_reclaim_does_not_invent_timeouts(tmp_path, monkeypatch):
@@ -151,8 +155,8 @@ def test_native_maintenance_preserves_terminal_and_incomplete_runs(tmp_path):
     before = fala.list_runs(db)
     result = maintain_lokay_fala_journals(home=tmp_path, min_bytes=1, keep=0)
     after = fala.list_runs(db)
+    # Runs created now are younger than max_age_days: nothing to reclaim yet.
     assert after == before
-    assert result['maintained'][0]['planned'] is True
     assert result['maintained'][0]['deleted_run_count'] == 0
 
 

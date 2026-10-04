@@ -54,10 +54,10 @@ def test_over_cap_journal_uses_fala_maintain_not_rename(tmp_path: Path, monkeypa
     assert calls == [
         {
             "db_path": db,
-            "older_than_days": 0,
-            "keep_last": 1,
-            "vacuum": False,
-            "dry_run": True,
+            "older_than_days": 14.0,
+            "keep_last": 5,
+            "vacuum": True,
+            "dry_run": False,
         }
     ]
     assert wal.exists()
@@ -78,9 +78,10 @@ def test_maintain_every_fala_journal_including_nested(tmp_path: Path, monkeypatc
     out = maintain_lokay_fala_journals(home=home, min_bytes=50, keep=1)
     assert out["ok"] is True
     assert small.exists()
+    # Age-based policy maintains every live journal; the ceiling only gates
+    # the "nothing happened" report for tiny, untouched journals.
     maintained = {Path(row["path"]) for row in out["maintained"]}
-    assert maintained == {root, daemon, factory, i2pr, slot}
-    assert small not in maintained
+    assert maintained == {root, daemon, factory, i2pr, slot, small}
     assert {call["db_path"] for call in calls} == maintained
     assert all(path.exists() for path in maintained)
 
@@ -175,7 +176,7 @@ def test_daemon_cycle_maintains_before_run_path(monkeypatch, tmp_path):
     cfg.write_text("mode: dry-run\n", encoding="utf-8")
     calls: list[str] = []
 
-    def maintain():
+    def maintain(*_args, **_kwargs):
         calls.append("maintain")
         return {"ok": True, "maintained": []}
 
@@ -196,7 +197,7 @@ def test_daemon_cycle_fail_closed_when_maintain_cannot_run(monkeypatch, tmp_path
     cfg.write_text("mode: dry-run\n", encoding="utf-8")
     calls: list[str] = []
 
-    def maintain():
+    def maintain(*_args, **_kwargs):
         raise RuntimeError("fala.maintain_journal failed")
 
     def run_path(**_kwargs):
@@ -422,4 +423,4 @@ def test_self_repair_incomplete_runs_keep_their_original_status(tmp_path: Path, 
     assert public["ok"] is True
     assert public["reclaimed"] == []
     assert calls == []
-    assert all(call["dry_run"] is True for call in maintain_calls)
+    assert all(call["dry_run"] is False for call in maintain_calls)

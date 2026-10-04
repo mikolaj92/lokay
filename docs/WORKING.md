@@ -317,17 +317,21 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Fala inherit_env is a whitelist: every atom, including nested `recovery_factory`,
   must inherit `LOKAY_HOST_FF_FETCHED`. Missing key aborts the lokay.
   Every live Fala sqlite under `~/.lokay/fala/<path>/` is maintained through
-  `fala.maintain_journal` when oversized (default 64 MiB) so idle ticks do
+  `fala.maintain_journal`: terminal runs older than `retention.max_age_days`
+  (default 14 days) are deleted natively with the newest
+  `retention.journal_keep_last` kept and a VACUUM, so idle ticks do
   not reopen a multi-GB journal. Heartbeat journals also finalize and delete
   `created` leftovers left by a 180s SIGKILL, through `finalize_run` then
   `delete_terminal_run`. Reclaim is capped at eight rows per heartbeat journal
   per tick, so old debris drains without consuming the next 180s product slot.
   Detached issue-to-PR journals are not finalized. `daemon_entry` /
   `daemon_cycle` / `factory_pass` open a fresh wrapper sqlite per tick and
-  prune old wrapper dirs; they do not reopen the shared lokay journals. Each
+  prune old wrapper dirs beyond `retention.wrapper_keep`; they do not reopen the shared lokay journals. Each
   host materializes only the requested path. Nested children never share the tree-root
   sqlite or overwrite a sibling materialized package. The journal is a pass
-  trace, not world history. Product recovery stays on `state.jsonl`.
+  trace, not world history. Product recovery stays on `state.jsonl`. The
+  oldest consumable data is evicted until `~/.lokay` fits
+  `retention.hard_cap_gb` (default 10) — see docs/RETENTION.md.
   Over-cap is fail-closed if Fala cannot maintain the file.
   In the CLI product budget, after each factory pass, leftover closeout parks leftover `work:ready` /
   `ai:ready` on GitHub-CLOSED lokay issues. That is not a second hunt through
