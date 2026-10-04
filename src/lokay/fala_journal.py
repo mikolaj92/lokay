@@ -19,6 +19,13 @@ DEFAULT_MIN_BYTES = 64 * 1024 * 1024
 KEEP_ROTATED = 1
 WRAPPER_KEEP = 2
 DEFAULT_VACUUM_HEADROOM_BYTES = 16 * 1024 * 1024
+# Retention policy (t_2d81b9c3): execution data is consumable. Age policy on
+# terminal runs plus a hard cap on ~/.lokay; the four maintenance protections
+# below (probe/apply, one journal per tick, vacuum headroom gate, self-repair
+# reclaim) are kept verbatim from the pre-retention contract.
+DEFAULT_MAX_AGE_DAYS = 14.0
+DEFAULT_HARD_CAP_BYTES = 10 * 1024 * 1024 * 1024
+DEFAULT_JOURNAL_KEEP_LAST = 5
 _LIVE_JOURNAL = "state.sqlite"
 _WRAPPER_PREFIXES = {
     "daemon_entry": "daemon-entry",
@@ -51,12 +58,18 @@ def maintain_lokay_fala_journals(
     home: Path | None = None,
     min_bytes: int = DEFAULT_MIN_BYTES,
     keep: int = KEEP_ROTATED,
+    max_age_days: float = DEFAULT_MAX_AGE_DAYS,
+    journal_keep_last: int = DEFAULT_JOURNAL_KEEP_LAST,
+    hard_cap_bytes: int = DEFAULT_HARD_CAP_BYTES,
+    wrapper_keep: int = WRAPPER_KEEP,
 ) -> dict[str, Any]:
     """Apply native terminal retention to one oversized journal per tick.
 
     Call while lokay.lock is held. Fala owns SQLite and sidecar handling.
-    Incomplete runs stay. VACUUM runs only when remaining free space can hold
-    the compact copy plus a 16 MiB safety margin. Pytest without an explicit
+    Terminal runs older than ``max_age_days`` are deletion candidates, with
+    the newest ``journal_keep_last`` terminal runs always kept. Incomplete
+    runs stay. VACUUM runs only when remaining free space can hold the
+    compact copy plus a 16 MiB safety margin. Pytest without an explicit
     home never inspects operator journals.
     """
     if os.environ.get("PYTEST_CURRENT_TEST") and home is None:
@@ -64,6 +77,8 @@ def maintain_lokay_fala_journals(
     root = (home or Path.home()) / ".lokay" / "fala"
     ceiling = max(0, int(min_bytes))
     retained = max(0, int(keep))
+    age_days = max(0.0, float(max_age_days))
+    keep_last = max(-1, int(journal_keep_last))
     ranked: list[tuple[int, Path]] = []
     for db in _iter_live_journals(root):
         try:
@@ -76,7 +91,10 @@ def maintain_lokay_fala_journals(
     maintained: list[dict[str, Any]] = []
     applied = False
     for size, db in ranked:
-        probe = _maintain_sqlite(db, min_bytes=ceiling, keep=retained, apply=False)
+        probe = _maintain_sqlite(
+            db, min_bytes=ceiling, keep=retained,
+            max_age_days=age_days, journal_keep_last=keep_last, apply=False,
+        )
         if probe is None:
             continue
         candidates = int(probe.get("candidate_run_count") or 0)
@@ -86,11 +104,26 @@ def maintain_lokay_fala_journals(
                 probe = {**probe, "reason": "no_terminal_candidates"}
             maintained.append(probe)
             continue
-        result = _maintain_sqlite(db, min_bytes=ceiling, keep=retained, apply=True)
+        result = _maintain_sqlite(
+            db, min_bytes=ceiling, keep=retained,
+            max_age_days=age_days, journal_keep_last=keep_last, apply=True,
+        )
         maintained.append(result if result is not None else probe)
         applied = True
     lokay_home = (home or Path.home()) / ".lokay"
+    from lokay import retention
+
+    pruned_wrappers = retention.prune_wrapper_journals(
+        root, keep=max(0, int(wrapper_keep))
+    )
     pruned = prune_stale_fala_journals(root)
+    pruned_dirs = retention.prune_stale_journal_dirs(
+        root, max_age_days=age_days
+    )
+    pruned_root = retention.prune_stale_root_artifacts(
+        lokay_home, max_age_days=age_days
+    )
+    hard_cap = retention.enforce_hard_cap(lokay_home, cap_bytes=hard_cap_bytes)
     pruned_logs = prune_stale_logs(lokay_home / "logs")
     pruned_tmp = prune_stale_tmp_dirs(lokay_home)
     from lokay.state_compact import compact_state
@@ -99,7 +132,11 @@ def maintain_lokay_fala_journals(
     return {
         "ok": True,
         "maintained": maintained,
+        "pruned_wrappers": pruned_wrappers,
         "pruned_journals": pruned,
+        "pruned_journal_dirs": pruned_dirs,
+        "pruned_root_artifacts": pruned_root,
+        "hard_cap": hard_cap,
         "pruned_logs": pruned_logs,
         "pruned_tmp": pruned_tmp,
         "compacted_state": compacted,
@@ -167,11 +204,15 @@ def wrapper_journal_dir(path_id: str, *, home: Path | None = None) -> Path:
 def _prune_wrapper_journals(
     root: Path, *, prefix: str, keep_path: Path, keep: int
 ) -> None:
-    """A newer wrapper does not prove older runs or child receipts are done.
+    """Older wrapper traces are consumable pass data (t_2d81b9c3).
 
-    Retain traces until the parent/child recovery dependencies are classified.
+    The freshly allocated ``keep_path`` and the newest quiet dirs per prefix
+    survive; anything beyond the keep window is a consumed one-tick trace.
+    Live writers inside the 1h grace are never touched (retention module).
     """
-    return
+    from lokay import retention
+
+    retention.prune_wrapper_journals(root, keep=keep)
 
 
 def _iter_live_journals(root: Path) -> list[Path]:
@@ -258,7 +299,13 @@ def _reclaim_created_runs(db: Path) -> int:
 
 
 def _maintain_sqlite(
-    db: Path, *, min_bytes: int, keep: int, apply: bool = False,
+    db: Path,
+    *,
+    min_bytes: int,
+    keep: int,
+    max_age_days: float,
+    journal_keep_last: int,
+    apply: bool = False,
 ) -> dict[str, Any] | None:
     if not db.is_file():
         return None
@@ -288,11 +335,14 @@ def _maintain_sqlite(
     can_vacuum = _can_vacuum(db, size)
     dry_run = not apply
     vacuum = bool(apply and can_vacuum)
+    # Retention policy rides on the native maintain: only terminal runs older
+    # than max_age_days are candidates, newest journal_keep_last always kept.
+    # The vacuum headroom gate above is untouched.
     try:
         applied = fala.maintain_journal(
             db,
-            older_than_days=0,
-            keep_last=keep,
+            older_than_days=max_age_days,
+            keep_last=journal_keep_last,
             vacuum=vacuum,
             dry_run=dry_run,
         )

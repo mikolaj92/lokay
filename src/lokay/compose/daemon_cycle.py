@@ -112,6 +112,35 @@ def resolve_pass_ceiling_seconds(
     return value
 
 
+def _retention_kwargs(config_path: str | None) -> dict[str, Any]:
+    """Retention overrides for ``maintain_lokay_fala_journals``.
+
+    Empty unless the config's ``retention:`` section is present: a config
+    without retention keeps the exact pre-retention maintain signature (code
+    defaults live in lokay.fala_journal). Any load failure falls back to no
+    overrides — a bad config must never break the tick.
+    """
+    try:
+        import yaml
+
+        path = Path(config_path) if config_path is not None else None
+        if path is None or not path.is_file():
+            return {}
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        from lokay.config import _retention_config
+
+        parsed = _retention_config(data)
+    except Exception:
+        return {}
+    mapping = {
+        "retention_max_age_days": "max_age_days",
+        "retention_hard_cap_bytes": "hard_cap_bytes",
+        "retention_wrapper_keep": "wrapper_keep",
+        "retention_journal_keep_last": "journal_keep_last",
+    }
+    return {mapping[key]: value for key, value in parsed.items() if key in mapping}
+
+
 def compose_daemon_cycle(
     *,
     config_path: str,
@@ -119,6 +148,9 @@ def compose_daemon_cycle(
     pass_ceiling_seconds: float | None = None,
 ) -> dict[str, Any]:
     ceiling = resolve_pass_ceiling_seconds(pass_ceiling_seconds)
+    # Retention policy is resolved before the pass ceiling is armed: a config
+    # load must never consume the ceiling or the tick loses its run_path.
+    retention_kwargs = _retention_kwargs(config_path)
     previous_handler = signal.getsignal(signal.SIGALRM)
     ceiling_expired = False
 
@@ -132,7 +164,7 @@ def compose_daemon_cycle(
     try:
         try:
             try:
-                maintain_lokay_fala_journals()
+                maintain_lokay_fala_journals(**retention_kwargs)
             except Exception as exc:
                 return err(str(exc), reason="journal_rotate")
             return finalize_daemon_payload(

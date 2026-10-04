@@ -266,7 +266,10 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Every live Fala sqlite under `~/.lokay/fala/<path>/` is maintained through
   `fala.maintain_journal` when oversized (default 64 MiB) so idle ticks do
   not reopen a multi-GB journal. One oversized journal per tick, smallest
-  first, deletes only terminal runs. A journal with no terminal-run candidates
+  first. Retention (t_2d81b9c3): terminal runs older than
+  `retention.max_age_days` (default 14) are deletion candidates with the
+  newest `retention.journal_keep_last` (default 5) always kept; nonterminal
+  runs are never candidates. A journal with no terminal-run candidates
   does not consume the apply slot. VACUUM is Fala-owned and runs only when
   remaining free space can hold the compact copy plus a 16 MiB safety margin.
   Maintenance does not finalize `created` leftovers; that stays on the owning
@@ -274,9 +277,11 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   Detached issue-to-PR journals are not finalized. `daemon_entry` /
   `daemon_cycle` / `factory_pass` open a fresh wrapper sqlite per tick and
   prune old wrapper dirs; they do not reopen the shared lokay journals.
-  Wrapper directories are retained until completion and recovery dependencies
-  are known: allocating a newer wrapper does not delete the older ones.
-  Each
+  Wrapper traces beyond `retention.wrapper_keep` (default 2) are consumed
+  one-tick data: live writers inside the 1h grace are never touched. Under
+  `retention.hard_cap_gb` (default 10) the oldest consumable `~/.lokay`
+  data is evicted oldest-first instead of failing the pass — see
+  `docs/RETENTION.md`. Each
   host materializes only the requested path. Nested children never share the tree-root
   sqlite or overwrite a sibling materialized package. The journal is a pass
   trace, not world history. Product recovery stays on `state.jsonl`.

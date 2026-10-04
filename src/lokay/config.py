@@ -100,6 +100,12 @@ class Config:
     max_request_changes_per_pr: int = 2  # then escalate to ai:needs-review
     max_failures_before_block: int = 2
     min_free_gb: float = 2.0
+    # Retention (t_2d81b9c3): execution data is consumable; code and error
+    # logs stay. Oldest consumable data is evicted under the hard home cap.
+    retention_max_age_days: float = 14.0
+    retention_hard_cap_bytes: int = 10 * 1024 * 1024 * 1024
+    retention_wrapper_keep: int = 2
+    retention_journal_keep_last: int = 5
     # Incident filing target + spam control (preflight / recovery).
     incident_repo: str = "mikolaj92/lokay"
     incident_cooldown_hours: float = 12.0
@@ -256,6 +262,25 @@ def _yaml_bool(value: Any, default: bool, *, field: str) -> bool:
         if token in _FALSE_TOKENS:
             return False
     raise ValueError(f"{field} must be a boolean, got {value!r}")
+
+
+def _retention_config(data: dict[str, Any]) -> dict[str, Any]:
+    """Parse the optional ``retention:`` section (t_2d81b9c3 policy)."""
+    raw = data.get("retention") or {}
+    if not isinstance(raw, dict):
+        raise ValueError("retention must be a YAML mapping")
+    out: dict[str, Any] = {}
+    if "max_age_days" in raw:
+        out["retention_max_age_days"] = float(raw["max_age_days"])
+    if "hard_cap_gb" in raw:
+        out["retention_hard_cap_bytes"] = int(float(raw["hard_cap_gb"]) * 1024 * 1024 * 1024)
+    elif "hard_cap_bytes" in raw:
+        out["retention_hard_cap_bytes"] = int(raw["hard_cap_bytes"])
+    if "wrapper_keep" in raw:
+        out["retention_wrapper_keep"] = int(raw["wrapper_keep"])
+    if "journal_keep_last" in raw:
+        out["retention_journal_keep_last"] = int(raw["journal_keep_last"])
+    return out
 
 
 def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
@@ -520,6 +545,7 @@ def load_config(path: str | Path | None = None) -> Config:
         max_request_changes_per_pr=int(lim.get("max_request_changes_per_pr", 2)),
         max_failures_before_block=int(lim.get("max_failures_before_block", 2)),
         min_free_gb=float(lim.get("min_free_gb", 2)),
+        **_retention_config(data),
         incident_repo=str(gh.get("incident_repo") or "mikolaj92/lokay").strip()
         or "mikolaj92/lokay",
         incident_cooldown_hours=float(gh.get("incident_cooldown_hours", 12)),

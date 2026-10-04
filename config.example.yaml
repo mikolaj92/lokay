@@ -78,6 +78,17 @@ limits:
   # Still one open ai/fix/* PR per repo. Legacy alias: max_issues_per_tick.
   max_issue_to_pr_per_pass: 1
 
+# Retention (t_2d81b9c3): execution data is consumable; code lives in git and
+# error logs stay. Terminal Fala runs older than max_age_days are reclaimed
+# natively (newest journal_keep_last kept, VACUUM), wrapper traces beyond
+# wrapper_keep are pruned, and under the hard cap the oldest consumable data
+# is evicted instead of failing the pass.
+retention:
+  max_age_days: 14
+  hard_cap_gb: 10
+  wrapper_keep: 2
+  journal_keep_last: 5
+
 # Trusted auto-merge (humans write issues; lokay closes the loop to main).
 #
 # Code defaults stay safe for dry-run / local copies:

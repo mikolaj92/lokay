@@ -29,6 +29,7 @@ lokay-review-open-code-review = { path = "plugins/pr_review_open_code_review", e
 lokay-atom-inventory = "lokay.proc.atom_inventory:main"
 lokay-readme-check = "lokay.readme_state_machine:main"
 lokay = "lokay.cli:main"
+lokay-retention = "lokay.proc.run_retention:main"
 # Atomic processes (one job each)
 lokay-list-issues = "lokay.proc.list_issues:main"
 lokay-list-inbox = "lokay.proc.list_inbox:main"
