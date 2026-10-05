@@ -1,7 +1,7 @@
+import tomllib
 from pathlib import Path
 
 import pytest
-import tomllib
 
 from lokay.graph_run import (
     _materialize_package,
@@ -434,9 +434,7 @@ def test_factory_pass_supplies_global_live_inputs(monkeypatch, tmp_path):
         return {"ok": True, "run_status": "completed", "effector_results": {}}
 
     monkeypatch.setattr("fala.host_run_package", fake_host_run_package)
-    desc = describe_package()
-    path = next(item for item in desc["paths"] if item["id"] == "factory_pass")
-    ids = [node["id"] for node in path["nodes"]]
+    describe_package()
     graph_run.run_path(
         path_id="factory_pass",
         repo="mikolaj92/lokay",
@@ -962,8 +960,9 @@ def test_completed_effector_without_output_fails_closed():
 
 
 def test_run_path_passes_global_inputs_to_fala(tmp_path, monkeypatch):
-    import lokay.graph_run as graph_run
     import tomllib
+
+    from lokay import graph_run
 
     package = Path(__file__).resolve().parents[1] / "fala" / "lokay.fala-package.toml"
     authored = [
@@ -1040,7 +1039,7 @@ def test_factory_path_uses_authored_record_pass_result():
 
 
 def test_run_path_rejects_unknown_path_before_fala(tmp_path, monkeypatch):
-    import lokay.graph_run as graph_run
+    from lokay import graph_run
 
     called = False
 

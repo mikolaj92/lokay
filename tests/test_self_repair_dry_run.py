@@ -2,10 +2,11 @@
 
 from lokay.organ.daemon_entry_boundary import handle_daemon_entry
 from lokay.organ.departments_boundary import handle_departments
-from lokay.proc import invoke_self_repair
-from lokay.proc import run_initial_self_repair
-from lokay.proc import run_self_repair_department
-
+from lokay.proc import (
+    invoke_self_repair,
+    run_initial_self_repair,
+    run_self_repair_department,
+)
 
 INCIDENT = {"route": "run", "fingerprint": "did_not_move", "incident_url": "u"}
 

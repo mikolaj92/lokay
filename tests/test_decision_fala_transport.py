@@ -1,7 +1,6 @@
 """Real probability floats must survive native Fala decision conduction."""
 
 import json
-from pathlib import Path
 
 import pytest
 from test_implementation_selection_fala import run_graph

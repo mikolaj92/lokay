@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -60,7 +60,7 @@ def write_digest(state_dir: Path | str | None, envelope: Any) -> Path | None:
             return None
         root = Path(state_dir).expanduser()
         text = build_digest(envelope)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         run_id = _safe_slug(_first_str(envelope, "run_id") or _first_str(envelope, "path_id") or "unknown")
         archive_dir = root / DIGEST_DIR
         archive_dir.mkdir(parents=True, exist_ok=True)
@@ -289,10 +289,10 @@ def _exit_signal(envelope: dict[str, Any]) -> str:
             if value not in (None, "") and f"{key}=" not in " ".join(parts):
                 parts.append(f"{key}={value}")
     text = _flatten_text(envelope)
-    match = re.search(r"\bexit(?:_code)?[=:\s]+(-?\d+)", text, re.I)
+    match = re.search(r"\bexit(?:_code)?[=:\s]+(-?\d+)", text, re.IGNORECASE)
     if match and "exit" not in " ".join(parts):
         parts.append(f"exit={match.group(1)}")
-    match = re.search(r"\bsignal[=:\s]+([A-Za-z0-9_]+)", text, re.I)
+    match = re.search(r"\bsignal[=:\s]+([A-Za-z0-9_]+)", text, re.IGNORECASE)
     if match and "signal" not in " ".join(parts):
         parts.append(f"signal={match.group(1)}")
     return ", ".join(parts)

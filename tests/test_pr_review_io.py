@@ -5,14 +5,11 @@ import pytest
 from lokay import pr_review_io
 
 
-
-
-
-
 class _EvidenceRunner:
     def run_checked(self, spec, *, live):
-        from lokay.runner import CommandResult
         import json
+
+        from lokay.runner import CommandResult
 
         return CommandResult(
             spec=spec,
@@ -52,8 +49,9 @@ def test_pr_review_uses_only_the_exact_local_checkout_patch(monkeypatch) -> None
             from lokay.runner import CommandResult
             return CommandResult(spec, True, 0, stdout='{"number":84,"title":"fix","body":"description","headRefName":"ai/fix/42-x","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","baseRefName":"main","baseRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","url":"https://github.com/acme/demo/pull/84","headRepository":{"nameWithOwner":"contributor/demo"},"comments":[]}')
         def run(self, spec, *, live):
-            from lokay.runner import CommandResult
             import json
+
+            from lokay.runner import CommandResult
             if spec.argv[1:3] == ("api", "graphql"):
                 payload = {"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","number":42,"title":"task","body":"body","state":"OPEN","url":"https://github.com/acme/demo/issues/42","repository":{"nameWithOwner":"acme/demo"}}}}}
                 return CommandResult(spec, True, 0, stdout=json.dumps(payload))
@@ -89,8 +87,8 @@ def test_pr_review_does_not_request_a_second_unverified_diff() -> None:
                 return CommandResult(spec, True, 0, stdout="green")
             return super().run(spec, live=live)
 
-    from lokay.config import Config
     import lokay.pr_review_io as io
+    from lokay.config import Config
     original = io._review_checkout_evidence
     io._review_checkout_evidence = lambda *a, **k: {"patch": "exact", "repo_path": "/isolated"}
     try:

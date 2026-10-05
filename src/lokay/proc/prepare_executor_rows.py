@@ -9,7 +9,6 @@ from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 from lokay.proc.run_executor_rows import budget_of
 from lokay.proc.seed_issue_queue import seed as seed_queue
 
-
 CURSOR = "executor-rows.json"
 
 

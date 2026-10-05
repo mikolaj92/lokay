@@ -1,6 +1,7 @@
 """Collect an existing open or merged pull request that closes one issue."""
 
 from __future__ import annotations
+
 from lokay.config import Config
 from lokay.gh_prs import find_pr_fixing_issue
 from lokay.proc.inspect_repo_pr_admission import inspect

@@ -8,16 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from lokay.models import Issue
-from lokay.organ.agent_evidence import head_has_on_goal_src
 from lokay.organ.common import (
-    _issue_no_longer_open,
     _issue_raw,
     _localize_conduction,
     _localize_paths,
-    _require_push,
-    _require_real_diff,
-    _require_test_local,
-    _resume_after_timeout,
     _worktree_path,
 )
 
@@ -38,7 +32,6 @@ def _session_flags(inputs: dict[str, Any]) -> list[str]:
 from lokay.prompts import (
     issue_fix_prompt,
     local_test_repair_prompt,
-    pr_body,
     repair_pr_prompt,
 )
 
@@ -50,32 +43,20 @@ def handle_agent(
     ctx: dict[str, Any],
 ) -> dict[str, Any] | None:
     from lokay.proc import (
-        assert_real_diff,
-        commit_all,
-        get_issue,
-        pr_create,
-        push_branch,
-        rebase_onto_base,
         run_agent,
-        test_local,
     )
-    from lokay.git_commit import branch_ahead_of_upstream
-    from lokay.proc._common import runner
 
     cfg = ctx["cfg"]
     live = ctx["live"]
     repo = ctx["repo"]
-    repo_flags = ["--repo", repo] if repo else []
     issue_number = ctx["issue_number"]
     pr_number = ctx["pr_number"]
     repair_mode = ctx["repair_mode"]
     branch = ctx["branch"]
 
     from lokay.atom_runtime import run_atom_main
-    from lokay.git_commit import branch_ahead_of_upstream as _branch_ahead
 
     _run_atom_main = ctx.get("run_atom_main") or run_atom_main
-    branch_ahead_of_upstream = ctx.get("branch_ahead_of_upstream") or _branch_ahead
 
     if atom == "run_agent":
         worktree = _worktree_path(up, inputs)

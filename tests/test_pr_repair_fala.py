@@ -1,7 +1,6 @@
 """Native Fala proofs for explicit PR repair routing."""
 
-from pathlib import Path
-from test_issue_triage_fala import run_graph, base_effector
+from test_issue_triage_fala import base_effector, run_graph
 
 
 def defaults():

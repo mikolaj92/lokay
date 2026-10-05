@@ -64,8 +64,8 @@ def test_final_merge_is_bound_to_review_and_local_test(monkeypatch, remote_head)
         assert summary["waiting"] is True
         assert not consumes(summary)
         # Approval of A cannot authorize B on the next pass.
-        from lokay.proc.resolve_sha_review import resolve
         from lokay.pr_review import format_review_marker
+        from lokay.proc.resolve_sha_review import resolve
         marker = format_review_marker(head_sha=A, verdict="approve", merge_ok=True)
         assert resolve({"head_sha": B, "comments": [marker]})["route"] == "agent"
 

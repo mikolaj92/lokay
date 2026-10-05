@@ -1,9 +1,17 @@
 """Atomic reserve, spawn, publish, and activate transaction for one delivery child."""
 
 from __future__ import annotations
-import os, secrets, subprocess, sys, time
+
+import os
+import secrets
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
+
+from lokay.preflight import health_lease_status
+from lokay.proc.health_delegation import abandon_delegated_lease, issue_delegated_lease
 from lokay.proc.issue_delivery_process import _terminate_detached_process_group
 from lokay.proc.issue_delivery_receipts import (
     _ACTIVATION_PROTOCOL,
@@ -11,9 +19,7 @@ from lokay.proc.issue_delivery_receipts import (
     issue_to_pr_log_path,
     write_issue_to_pr_receipt,
 )
-from lokay.proc.health_delegation import abandon_delegated_lease, issue_delegated_lease
 from lokay.proc.repo_lock import acquire_repo_lock, repo_lock_dir, repo_lock_path
-from lokay.preflight import health_lease_status
 
 
 def _close_lock(handle) -> None:

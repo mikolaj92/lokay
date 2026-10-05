@@ -7,7 +7,6 @@ from pathlib import Path
 
 from lokay.proc.run_issue_sieve_rows import budget_of
 
-
 CURSOR = "issue-sieve.json"
 
 

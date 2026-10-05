@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 
 from lokay.config import Config, RepoConfig
-from lokay.pr_review_checkout import prepare_review_checkout, verify_review_checkout_unchanged
+from lokay.pr_review_checkout import (
+    prepare_review_checkout,
+    verify_review_checkout_unchanged,
+)
 from lokay.runner import Runner
 
 

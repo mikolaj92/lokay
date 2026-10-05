@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from lokay.catalog import CatalogBinding
 from lokay.code import (
     CodeContractError,
     CodeSlot,
@@ -17,7 +18,6 @@ from lokay.code import (
     parse_code_slot,
     slot_from_repo,
 )
-from lokay.catalog import CatalogBinding
 from lokay.config import Config, RepoConfig
 from lokay.runner import CommandResult, CommandSpec
 

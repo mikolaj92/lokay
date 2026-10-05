@@ -1,8 +1,8 @@
 """Check the hard fact that an open PR already covers one candidate."""
 
+from lokay.models import Issue
 from lokay.passkit.io import begin_path, read_json, working_path
 from lokay.queue_conflict_agent import covering_pr_numbers
-from lokay.models import Issue
 
 
 def check(*, pass_dir: str, target: dict) -> dict:

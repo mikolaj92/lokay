@@ -1,6 +1,8 @@
 import json
-from lokay.proc.delivery_closeout import prepare, publish, pending
+
 import pytest
+
+from lokay.proc.delivery_closeout import pending, prepare, publish
 
 
 @pytest.mark.parametrize('reason,terminal', [

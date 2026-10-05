@@ -24,27 +24,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from lokay.envelope import emit_exit, err, ok
+from lokay.envelope import emit_exit
 from lokay.git_real_diff import classify_changed_paths, list_uncommitted_paths
-from lokay.git_worktree import (
-    iter_worktrees,
-    leftover_status,
-    remote_heads,
-    remove_worktree,
-)
-from lokay.passkit.hot import survey_scope
-from lokay.passkit.working import load_begin_working, save_begin_working
 from lokay.proc._common import (
     add_config_live,
-    load_cfg,
-    mutations_allowed,
-    runner as make_runner,
 )
-from lokay.proc.detach_issue_to_pr import (
-    has_unreadable_issue_to_pr_receipts,
-    live_issue_to_pr_receipts,
-)
-from lokay.runner import Runner, git_spec
+from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts  # noqa: F401 — patch seam (conftest)
+from lokay.runner import Runner
 from lokay.stuck import issue_number_from_branch
 
 # leftover_status is seconds each (rev-list + ls-files). 66 leftovers

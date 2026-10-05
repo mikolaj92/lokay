@@ -9,7 +9,7 @@ from lokay.pass_receipt import (
     receipt_path_for,
     write_pass_receipt,
 )
-from lokay.recovery_history import observe_run, record_observation, history_path_for
+from lokay.recovery_history import history_path_for, observe_run, record_observation
 
 
 def test_build_and_write_pass_receipt_roundtrip(tmp_path: Path):

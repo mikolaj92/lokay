@@ -1,14 +1,12 @@
-from pathlib import Path
 import json
 import os
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from lokay import preflight
-from lokay.compose import tick
-
 
 _HOST_HEALTH_LEASE = Path.home() / ".lokay" / "health-lease"
 
@@ -1269,7 +1267,8 @@ def test_no_repair_keeps_missing_locale_unhealthy(tmp_path, monkeypatch):
 
 
 def test_real_os_lock_rejects_competitor(tmp_path):
-    import subprocess, sys
+    import subprocess
+    import sys
 
     lock = tmp_path / "run.lock"
     assert preflight.acquire_run_lock(lock) is True
@@ -1615,8 +1614,8 @@ def test_fala_smoke_requires_the_complete_lokay_workflow_manifest(
 
 
 def test_direct_live_mutation_uses_health_gate(tmp_path, monkeypatch):
-    from lokay.proc import _common
     from lokay.config import Config
+    from lokay.proc import _common
 
     cfg = Config(mode="live", config_path=tmp_path / "config.yaml")
     monkeypatch.setattr(
@@ -1631,7 +1630,9 @@ def test_direct_live_mutation_uses_health_gate(tmp_path, monkeypatch):
 
 
 def test_inherited_health_lease_allows_child_behind_parent_lock(tmp_path, monkeypatch):
-    import subprocess, sys, os
+    import os
+    import subprocess
+    import sys
 
     monkeypatch.setenv("HOME", str(tmp_path))
     lock = tmp_path / ".lokay" / "lokay.lock"
@@ -1663,7 +1664,8 @@ def test_health_lease_path_survives_changed_home(tmp_path, monkeypatch):
 
 
 def test_default_health_lease_covers_long_agent_pass(tmp_path, monkeypatch):
-    import json, time
+    import json
+    import time
 
     monkeypatch.setenv("HOME", str(tmp_path))
     preflight.issue_health_lease()
@@ -1729,7 +1731,8 @@ def test_commit_and_push_dry_run_do_not_require_config(tmp_path, monkeypatch, ca
 
 
 def test_expired_and_revoked_health_leases_fail(tmp_path, monkeypatch):
-    import json, time
+    import json
+    import time
 
     monkeypatch.setenv("HOME", str(tmp_path))
     preflight.issue_health_lease()

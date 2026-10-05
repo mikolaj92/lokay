@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 
 from lokay.proc._common import runner
-from lokay.runner import CommandSpec
 from lokay.proc.test_local import TEST_TIMEOUT_SECONDS
+from lokay.runner import CommandSpec
 
 # These values locate ordinary user tools and temporary files. Fala protocol
 # variables, credentials, harness state, and application-specific state are not

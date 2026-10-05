@@ -1,6 +1,7 @@
 """Prepare bounded catalog, scope, ledger, and TTL facts for inbox survey."""
 
 from pathlib import Path
+
 from lokay.factory_scope import factory_repo, scoped_repos
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.working import load_begin_working

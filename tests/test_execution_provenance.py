@@ -41,8 +41,8 @@ def test_identity_changes_with_implementation():
 
 
 def test_organ_metadata_pins_binding_and_attempt_without_inputs():
-    from lokay.fala_organ import organ_envelope
     from lokay.execution_provenance import implementation_identity
+    from lokay.fala_organ import organ_envelope
     from lokay.organ.map_repo import handle_map_repo
 
     evidence = implementation_identity(handle_map_repo)
@@ -58,6 +58,7 @@ def test_organ_metadata_pins_binding_and_attempt_without_inputs():
 
 def test_checkout_change_after_execution_does_not_mutate_recorded_provenance(tmp_path):
     import importlib.util
+
     from lokay.execution_provenance import implementation_identity
 
     file_a = tmp_path / "handler_v1.py"
@@ -69,7 +70,6 @@ def test_checkout_change_after_execution_does_not_mutate_recorded_provenance(tmp
     recorded = implementation_identity(mod_a.run)
     file_a.write_text("def run():\n    return 'v2_modified'\n")
 
-    current_on_disk_code = file_a.read_text()
     assert recorded["symbol"] == "mod_v1:run"
     assert "v2_modified" not in str(recorded)
     assert len(recorded["code_sha256"]) == 64

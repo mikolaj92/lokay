@@ -11,12 +11,15 @@ from pathlib import Path
 from typing import Any
 
 from fala import sdk
-from lokay.atom_runtime import (  # noqa: F401 — tests patch these names
+from lokay.atom_bindings import Binding, BindingError, resolve
+from lokay.atom_runtime import (
     branch_ahead_of_upstream,
+)
+from lokay.atom_runtime import (
     run_atom_main as _run_atom_main,
 )
-from lokay.organ.agent import handle_agent
 from lokay.organ.acceptance_boundary import handle_acceptance
+from lokay.organ.agent import handle_agent
 from lokay.organ.child_harvest_boundary import handle_child_harvest
 from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.organ.common import (  # noqa: F401
@@ -29,6 +32,8 @@ from lokay.organ.common import (  # noqa: F401
     _test_local_ok,
 )
 from lokay.organ.daemon_entry_boundary import handle_daemon_entry
+from lokay.organ.departments_boundary import handle_departments
+from lokay.organ.executor_department_boundary import handle_executor_department
 from lokay.organ.factory import handle_factory
 from lokay.organ.factory_begin_boundary import handle_factory_begin
 from lokay.organ.implement import handle_implement
@@ -39,10 +44,7 @@ from lokay.organ.implementation_selection_boundary import (
 from lokay.organ.intake_check_boundary import handle_intake_check
 from lokay.organ.issue_split_boundary import handle_issue_split
 from lokay.organ.issue_triage_boundary import handle_issue_triage
-from lokay.organ.departments_boundary import handle_departments
 from lokay.organ.issue_triage_department_boundary import handle_issue_triage_department
-from lokay.organ.executor_department_boundary import handle_executor_department
-from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
 from lokay.organ.issues_boundary import handle_issues
 from lokay.organ.lanes import handle_lanes
 from lokay.organ.leftover_closeout_boundary import handle_leftover_closeout
@@ -53,6 +55,7 @@ from lokay.organ.pr_closeout_boundary import handle_pr_closeout
 from lokay.organ.pr_create_boundary import handle_pr_create
 from lokay.organ.pr_finalize import handle_pr_finalize
 from lokay.organ.pr_outcome import handle_pr_outcome
+from lokay.organ.pr_triage_department_boundary import handle_pr_triage_department
 from lokay.organ.product_budget_boundary import handle_product_budget
 from lokay.organ.product_entry_boundary import handle_product_entry
 from lokay.organ.publication import handle_publication
@@ -73,7 +76,6 @@ from lokay.organ.stale_worktree_boundary import handle_stale_worktree
 from lokay.organ.status_boundary import handle_status
 from lokay.organ.test_local_boundary import handle_test_local
 from lokay.organ.triage_dispatch_boundary import handle_triage_dispatch
-from lokay.atom_bindings import Binding, BindingError, resolve
 
 _MUTATING_ATOMS = frozenset(
     {
@@ -780,7 +782,7 @@ def organ_envelope(atom: str, result: dict[str, Any]) -> dict[str, Any]:
 def _request_job(manifest: Any) -> str:
     """Full Fala process id from a Request (``path:atom``)."""
     if hasattr(manifest, "job"):
-        return str(getattr(manifest, "job") or "")
+        return str(manifest.job or "")
     if isinstance(manifest, dict):
         return str(manifest.get("job") or manifest.get("process_id") or "")
     return ""

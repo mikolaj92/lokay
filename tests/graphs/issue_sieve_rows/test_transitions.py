@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for issue_sieve_rows."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'issue_sieve_rows'

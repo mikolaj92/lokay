@@ -1,9 +1,12 @@
 """Read-only CLI verifier for one autonomous-delivery marker."""
 from __future__ import annotations
-import argparse,json
+
+import argparse
 from pathlib import Path
-from lokay.delivery_receipt import parse_marker,verify_receipt
-from lokay.envelope import emit_exit,ok,err
+
+from lokay.delivery_receipt import parse_marker, verify_receipt
+from lokay.envelope import emit_exit, err, ok
+
 
 def main(argv=None):
     p=argparse.ArgumentParser();p.add_argument('--body-file',required=True);p.add_argument('--head',required=True);p.add_argument('--require-delivered',action='store_true');a=p.parse_args(argv)

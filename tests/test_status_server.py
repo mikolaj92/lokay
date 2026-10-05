@@ -1,11 +1,10 @@
+from datetime import UTC
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from lokay.proc.status_server import create_app
-
-
-import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -87,7 +86,8 @@ def test_transport_errors_and_health_after_error(tmp_path: Path, monkeypatch):
 
 def test_artifact_http_reads_without_computation_and_reloads_replacement(tmp_path, monkeypatch):
     import json
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
+
     from lokay.proc import status_server
     from lokay.status_dashboard import dashboard_snapshot
 
@@ -109,7 +109,7 @@ def test_artifact_http_reads_without_computation_and_reloads_replacement(tmp_pat
         assert health["snapshot_stale"] is False
         assert health["generated_at"] == data["generated_at"]
 
-        data["generated_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        data["generated_at"] = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         replacement = tmp_path / "replacement.json"
         replacement.write_text(json.dumps(data))
         replacement.replace(path)

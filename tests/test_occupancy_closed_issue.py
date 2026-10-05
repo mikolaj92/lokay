@@ -8,10 +8,10 @@ from typing import Any
 
 from lokay.passkit import io as pass_io
 from lokay.proc import repo_mutex
-from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
-from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 from lokay.proc.implementation_selection_catalog import run as _catalog
+from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 from lokay.proc.persist_implementation_selection import persist as _persist_selection
+from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 from lokay.proc.reduce_occupancy_facts import reduce_state as reduce_facts
 from lokay.proc.seed_factory_occupancy import run as seed_occupancy
 

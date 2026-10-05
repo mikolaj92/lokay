@@ -227,8 +227,7 @@ def revalidate_pr_identity(
     ):
         raise ValueError("PR or canonical task identity drifted during review")
     if cfg is not None:
-        from lokay.pr_review_checkout import recompute_review_evidence
-        from lokay.pr_review_checkout import ReviewCheckout
+        from lokay.pr_review_checkout import ReviewCheckout, recompute_review_evidence
 
         checkout = ReviewCheckout(
             path=Path(str(evidence["repo_path"])),

@@ -1,8 +1,12 @@
 """Select cached, first-valid, retried-valid, or exhausted PR review."""
 from __future__ import annotations
-import argparse, json
+
+import argparse
+import json
+
 from lokay.envelope import emit_exit, err
 from lokay.review_boundary import select_review_decision
+
 
 def main(argv=None):
     p=argparse.ArgumentParser(prog="lokay-select-pr-review")

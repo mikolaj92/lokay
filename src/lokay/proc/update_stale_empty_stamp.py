@@ -1,6 +1,7 @@
 """Update the empty-probe stamp after complete reduction."""
 
 from pathlib import Path
+
 from lokay.proc.stale_implementing_stamp import clear_stale_stamp, touch_stale_stamp
 
 

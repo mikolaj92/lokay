@@ -1,13 +1,13 @@
 """Completed department evidence must reach the real pass receipt (#920)."""
 
 import pytest
+from test_departments_fala import _factory_path
+from test_record_pass import _begin
 
 from lokay.organ.factory import handle_factory
 from lokay.pass_receipt import read_pass_receipt
 from lokay.passkit import io as pass_io
 from lokay.proc.select_repair_route import classify
-from test_departments_fala import _factory_path
-from test_record_pass import _begin
 
 
 @pytest.mark.parametrize("delivery", ["executor", "pr_triage", "none"])

@@ -9,10 +9,10 @@ import yaml
 
 from lokay.catalog import (
     CATALOG_FIELDS,
+    KNOWN_PLUGINS,
     CatalogBinding,
     CatalogError,
     CatalogRow,
-    KNOWN_PLUGINS,
     compose_catalog,
     parse_catalog_row,
 )

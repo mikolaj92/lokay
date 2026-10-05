@@ -1,11 +1,12 @@
 """Prepare bounded catalog, labels, TTL route, and mutation policy for leftover closeout."""
 
 import argparse
+
 from lokay.proc._common import load_cfg, mutations_allowed
 from lokay.proc.closeout import (
+    WORK_READY_LABEL,
     leftover_recently_empty,
     leftover_stamp_path,
-    WORK_READY_LABEL,
 )
 
 

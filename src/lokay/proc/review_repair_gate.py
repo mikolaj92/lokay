@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 

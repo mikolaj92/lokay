@@ -1,7 +1,13 @@
 """Apply the READY effect for one issue."""
 
 from __future__ import annotations
-from lokay.gh_issues import WORK_READY_LABEL, add_issue_labels, assign_issue, remove_issue_labels
+
+from lokay.gh_issues import (
+    WORK_READY_LABEL,
+    add_issue_labels,
+    assign_issue,
+    remove_issue_labels,
+)
 from lokay.proc.classify_issue_assignee import takeable
 
 

@@ -928,8 +928,9 @@ def test_organ_envelope_keeps_fallback_status_failed():
 
 
 def test_organ_envelope_still_raises_on_not_ok():
-    from lokay.fala_organ import organ_envelope
     import pytest
+
+    from lokay.fala_organ import organ_envelope
 
     with pytest.raises(RuntimeError) as caught:
         organ_envelope("run_agent", {"ok": False, "status": "failed", "error": "agent failed"})

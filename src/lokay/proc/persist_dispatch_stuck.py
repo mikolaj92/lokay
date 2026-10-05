@@ -1,6 +1,7 @@
 """Persist the pass stuck ledger after one dispatch outcome."""
 
 from pathlib import Path
+
 from lokay.passkit import io as pass_io
 from lokay.stuck import save_stuck
 

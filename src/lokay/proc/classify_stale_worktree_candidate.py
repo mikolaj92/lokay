@@ -1,7 +1,9 @@
 """Classify one bounded stale-worktree candidate into keep or remove."""
 
 from __future__ import annotations
+
 from pathlib import Path
+
 from lokay.git_worktree import leftover_status, remote_heads
 from lokay.localize import localize_belongs_to_issue
 from lokay.proc._common import runner

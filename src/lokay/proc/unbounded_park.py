@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-from typing import Sequence
+from collections.abc import Sequence
 
 from lokay.envelope import emit_exit, err, ok
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed

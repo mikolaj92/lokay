@@ -3,8 +3,8 @@
 from lokay.fala_organ import _handle as fala_handle
 from lokay.pass_receipt import build_pass_receipt
 from lokay.proc.classify_last_pass_progress import classify, leftover_skip_signal
-from lokay.proc.last_pass_moving import classify as classify_moving
 from lokay.proc.last_pass_moving import claims_dod_progress, moved_forward
+from lokay.proc.last_pass_moving import classify as classify_moving
 
 
 def _receipt(**fields):

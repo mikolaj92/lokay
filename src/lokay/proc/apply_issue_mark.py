@@ -6,9 +6,9 @@ stale limbo and does not stamp ai:frozen. Issue stays OPEN in queue.
 
 from __future__ import annotations
 
-from lokay.tasks import TaskId
 from lokay.github_tasks import catalog_row
 from lokay.source import load_tasks
+from lokay.tasks import TaskId
 
 
 def apply(*, runner, cfg, repo: str, issue: int, issue_data: dict, decision: dict, live: bool) -> dict:

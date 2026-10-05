@@ -1,7 +1,7 @@
 """Multiple dashboard windows share a complete streaming read."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lokay.proc import yield_report
@@ -17,9 +17,9 @@ def test_windows_read_history_once_without_materializing_whole_file(tmp_path, mo
     ]
     path.write_text("\n".join(json.dumps(row) for row in rows))
     windows = {
-        "1h": datetime(2026, 9, 2, 10, 30, tzinfo=timezone.utc),
-        "24h": datetime(2026, 9, 2, tzinfo=timezone.utc),
-        "7d": datetime(2026, 8, 26, tzinfo=timezone.utc),
+        "1h": datetime(2026, 9, 2, 10, 30, tzinfo=UTC),
+        "24h": datetime(2026, 9, 2, tzinfo=UTC),
+        "7d": datetime(2026, 8, 26, tzinfo=UTC),
     }
     expected = {label: yield_report.build_report(path, since=since)
                 for label, since in windows.items()}
@@ -46,7 +46,7 @@ def test_windows_read_history_once_without_materializing_whole_file(tmp_path, mo
 
 
 def test_missing_history_has_empty_report_for_each_window(tmp_path):
-    since = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    since = datetime(2026, 9, 1, tzinfo=UTC)
     path = tmp_path / "missing"
     expected = yield_report.build_report(path, since=since)
     assert yield_report.build_reports(path, windows={"day": since}) == {"day": expected}

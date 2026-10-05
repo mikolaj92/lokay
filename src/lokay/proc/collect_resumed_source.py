@@ -1,8 +1,10 @@
 """Collect whether the current resumed issue branch already contains source code."""
 
 from __future__ import annotations
+
 import re
 from pathlib import Path
+
 from lokay.runner import CommandSpec
 
 

@@ -5,7 +5,11 @@ from pathlib import Path
 from lokay.pass_history import read_pass_history
 from lokay.pass_receipt import read_pass_receipt
 from lokay.passkit import io as pass_io
-from lokay.proc.record_pass import classify_outcome, leftover_overflowed, run_record_pass
+from lokay.proc.record_pass import (
+    classify_outcome,
+    leftover_overflowed,
+    run_record_pass,
+)
 
 
 def _begin(tmp_path: Path, **extra) -> Path:

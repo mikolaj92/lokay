@@ -9,7 +9,8 @@ import selectors
 import signal
 import subprocess
 import threading
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.config import Config
 from lokay.pr_review_credential import resolve_pi_api_key

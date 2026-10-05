@@ -3,8 +3,6 @@
 from lokay.passkit import io as pass_io
 
 
-
-
 def test_reduce_honors_global_triage_budget():
     from lokay.proc.reduce_pass_plan import reduce_state
 

@@ -61,6 +61,7 @@ def test_localize_scope_rejects_off_goal_source():
 def test_scope_holds_for_every_layout_and_comes_from_the_parent(tmp_path):
     """Scope is not a src/fala/tests shortcut, and the worker cannot widen it."""
     import json
+
     from lokay.proc.classify_localized_diff_scope import classify
     from lokay.proc.read_real_diff_localize_scope import read
 

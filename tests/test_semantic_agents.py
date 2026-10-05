@@ -140,7 +140,7 @@ def test_existing_localize_json_skips_semantic_agent(tmp_path: Path, monkeypatch
     def boom(*_args, **_kwargs):
         raise AssertionError("semantic localize must not start when localize.json has paths")
 
-    import lokay.localize_agent as localize_agent
+    from lokay import localize_agent
 
     monkeypatch.setattr(localize_agent, "run_agent", boom)
     loc = build_localization_with_agent(

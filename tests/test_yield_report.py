@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lokay.proc.yield_report import build_report
@@ -42,7 +42,7 @@ def test_yield_report_counts_repo_and_semantic_trace(tmp_path: Path):
     state.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
     report = build_report(
         state,
-        since=datetime(2026, 8, 19, 9, tzinfo=timezone.utc),
+        since=datetime(2026, 8, 19, 9, tzinfo=UTC),
     )
     assert report["by_repo"]["a/b"]["starts"] == 1
     assert report["by_repo"]["a/b"]["prs"] == 1

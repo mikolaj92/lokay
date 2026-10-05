@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Iterable
 
 from lokay.agent import run_agent
 from lokay.config import Config

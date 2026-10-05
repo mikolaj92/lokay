@@ -1,13 +1,11 @@
 """P0 intake law: labeled start, one list, no unlabeled catalog implement fuel."""
 
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 from lokay.proc.catalog_work import remaining_ready_count, work_by_repo
 from lokay.proc.select_next_issue import select
 from lokay.sieve_decision import listed_of
-
 
 ROOT = Path(__file__).resolve().parents[1]
 

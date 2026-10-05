@@ -40,14 +40,13 @@ def handle_departments(
     if atom == "select_self_repair_department":
         if stop := _host_stop(up):
             return {**stop, "ok": True, "route": "skip"}
+        from lokay.config import load_config
+        from lokay.pass_history import read_pass_history
         from lokay.pass_receipt import read_pass_receipt
         from lokay.proc.last_pass_moving import classify as classify_moving
         from lokay.proc.leftover_skip import classify as classify_leftover
-        from lokay.proc.select_self_repair_department import select
-
-        from lokay.config import load_config
-        from lokay.pass_history import read_pass_history
         from lokay.proc.read_self_repair_attempt import read_started_at
+        from lokay.proc.select_self_repair_department import select
 
         state_path = load_config(config).state_path
         receipt = read_pass_receipt(state_path=state_path)

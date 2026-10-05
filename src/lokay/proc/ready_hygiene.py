@@ -12,13 +12,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from lokay.envelope import emit_exit, err, ok
-from lokay.gh_issues import (
-    is_github_rate_limit_error,
-    list_labeled_issues,
-    remove_issue_labels,
-)
-from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.envelope import emit_exit, err
+from lokay.proc._common import add_config_live
 
 WORK_READY_LABEL = "work:ready"
 HYGIENE_TTL_SECONDS = 300

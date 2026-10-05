@@ -5,14 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from lokay.config import load_config
+from lokay.delivery_receipt import parse_marker
 from lokay.envelope import emit_exit, err, ok
 from lokay.github_yield import catalog_delivery
-from lokay.delivery_receipt import parse_marker
 from lokay.proc._common import runner
 
 
@@ -122,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     hours = max(0.0, args.hours)
     cfg = load_config(args.config)
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    since = datetime.now(UTC) - timedelta(hours=hours)
     report = build_report(cfg.state_path, since=since)
     if not args.local_only:
         try:

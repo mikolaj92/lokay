@@ -1,6 +1,7 @@
 """Mechanically derive changed pytest targets after one red full suite."""
 
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.proc.test_local import _changed_pytest_argv
 

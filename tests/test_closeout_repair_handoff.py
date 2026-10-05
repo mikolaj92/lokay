@@ -148,12 +148,14 @@ def test_closeout_admission_skip_does_not_start_native_child(compose_boundary, m
 @pytest.mark.parametrize("outcome", ["blocked", "attempted", "agent_failed"])
 def test_closeout_compose_native_child_worktree_handoff(kind, outcome, compose_boundary, monkeypatch, tmp_path):
     """Run actual compose + run_path + native child; replace all effectors' I/O."""
-    import fala
-    from contextlib import nullcontext
-    from lokay import graph_run
-    from test_issue_triage_fala import base_effector
     import sys
     import tomllib
+    from contextlib import nullcontext
+
+    from test_issue_triage_fala import base_effector
+
+    import fala
+    from lokay import graph_run
 
     capture = tmp_path / "worktree.json"
     body = base_effector('''

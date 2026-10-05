@@ -1,6 +1,6 @@
-from pathlib import Path
 import os
 import time
+from pathlib import Path
 
 from lokay.passkit import io as pass_io
 from lokay.proc import survey_ttl

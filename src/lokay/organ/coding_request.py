@@ -1,5 +1,6 @@
 """Bind one coding request from authored inputs and upstream evidence."""
-from lokay.organ.common import _worktree_path, _issue_raw
+from lokay.organ.common import _issue_raw, _worktree_path
+
 
 def prepare_request(inputs, up, ctx):
     from lokay.proc.prepare_coding_request import prepare

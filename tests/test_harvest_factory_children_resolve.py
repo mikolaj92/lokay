@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from lokay.proc import harvest_factory_children as harvest_mod
 
 

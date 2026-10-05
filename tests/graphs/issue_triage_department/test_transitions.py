@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for issue_triage_department."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'issue_triage_department'

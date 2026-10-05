@@ -6,13 +6,13 @@ its task and code contracts on demand; it does not mirror the source model.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from lokay.catalog import CatalogError
-from lokay.code import CodeContract
+from lokay.code import CodeContract, slot_from_repo
 from lokay.code import load_code as _load_code
-from lokay.code import slot_from_repo
 from lokay.models import Issue
 from lokay.tasks import Task, Tasks
 

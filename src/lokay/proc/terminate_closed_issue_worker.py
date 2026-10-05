@@ -1,6 +1,7 @@
 """Terminate one worker whose issue is authoritatively closed."""
 
-import os, signal
+import os
+import signal
 
 
 def terminate(inspected: dict) -> dict:

@@ -17,9 +17,10 @@ work that can be auto-split. Legal exits: ready | split | skip | close.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from lokay.issue_checkboxes import work_checkbox_count
 from lokay.models import Issue

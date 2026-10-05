@@ -1,8 +1,8 @@
 """Semantics of minimal stale implementation-stage recovery processes."""
 
-import os, time
-from pathlib import Path
-from types import SimpleNamespace
+import os
+import time
+
 from lokay.passkit import io as pass_io
 from lokay.proc import stale_implementing_stamp as stamp
 

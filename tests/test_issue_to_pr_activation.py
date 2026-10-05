@@ -1,9 +1,11 @@
 """Detached issue-to-PR activation barrier and Fala entry contract."""
 
 from __future__ import annotations
+
 import os
 from types import SimpleNamespace
-import lokay.compose.issue_to_pr as issue_to_pr
+
+from lokay.compose import issue_to_pr
 from lokay.compose.issue_to_pr import _await_detach_activation
 
 

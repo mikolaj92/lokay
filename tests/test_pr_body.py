@@ -46,7 +46,7 @@ def test_pr_body_explicitly_marks_ticket_truncation() -> None:
 
 
 def test_pr_body_pins_ticket_review_semantics() -> None:
-    import lokay.prompts as prompts
+    from lokay import prompts
 
     source = Path(prompts.__file__).read_text(encoding="utf-8")
     assert "PR review receives the ticket body, not only the builder's summary." in source

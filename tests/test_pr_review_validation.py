@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import json
 import sys
-
-import pytest
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 PLUGIN_SRC = Path(__file__).parents[1] / "plugins/pr_review_open_code_review/src"
 sys.path.insert(0, str(PLUGIN_SRC))
 
-from lokay_review_open_code_review.contract import normalize_result, sha256_json  # noqa: E402
-from lokay.proc.validate_pr_review import validate_result  # noqa: E402
-from lokay.proc.publish_pr_review import publish  # noqa: E402
+from lokay_review_open_code_review.contract import (
+    normalize_result,
+    sha256_json,
+)
+
+from lokay.proc.publish_pr_review import publish
+from lokay.proc.validate_pr_review import validate_result
 
 FIXTURES = Path(__file__).parents[1] / "plugins/pr_review_open_code_review/tests/fixtures/upstream_v1_12"
 
@@ -143,7 +147,6 @@ def test_policy_maps_every_finding_even_low_severity_to_request_changes():
 
 
 def test_publish_fails_closed_if_durable_artifact_cannot_be_written(monkeypatch):
-    from pathlib import Path
 
     request, result = _result()
     selected = validate_result(result, request)
@@ -291,9 +294,9 @@ def test_review_repair_freshness_rechecks_the_canonical_open_issue(monkeypatch):
 
 
 def test_review_agent_revalidates_pr_after_plugin_before_returning_result(monkeypatch):
-    from lokay.proc import run_pr_review_agent
-
     from types import SimpleNamespace
+
+    from lokay.proc import run_pr_review_agent
     cfg = SimpleNamespace(branch_prefix="ai/fix")
     evidence = {
         "repo": "acme/demo", "pr": 84, "head_ref": "ai/fix/42-demo",
@@ -354,8 +357,9 @@ def test_review_agent_accepts_neutral_completed_plugin_result(monkeypatch):
 
 
 def test_review_task_is_not_truncated_in_plugin_request(monkeypatch):
-    from lokay.proc.run_pr_review_agent import plugin_request
     from types import SimpleNamespace
+
+    from lokay.proc.run_pr_review_agent import plugin_request
 
     body = "acceptance requirement " * 1000
     task = {"repo":"acme/demo", "type":"Issue", "state":"OPEN", "number":42,

@@ -1,9 +1,10 @@
 """Recheck that one selected issue is still open work, not a human stop."""
 
+import argparse
+
 from lokay.gh_issues import get_issue
 from lokay.proc._common import load_cfg, runner
 from lokay.triage import is_open_work_issue
-import argparse
 
 
 def verify(candidate: dict, *, config_path: str | None) -> dict:

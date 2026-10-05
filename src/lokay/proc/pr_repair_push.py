@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from lokay.proc import pr_repair_receipts
 from lokay.repair_worktree_dirt import repair_worktree_dirt
@@ -38,7 +39,8 @@ def prepare_live_push(
 ) -> dict[str, Any]:
     """Persist+fsync exact target and mark attempt before the caller can push."""
     from lokay.config import load_config
-    from lokay.proc._common import mutations_allowed, runner as make_runner
+    from lokay.proc._common import mutations_allowed
+    from lokay.proc._common import runner as make_runner
 
     start = str(start_head_sha or "").lower()
     if not _SHA.fullmatch(start) or pr <= 0 or not repo or not branch:

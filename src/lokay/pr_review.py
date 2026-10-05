@@ -6,11 +6,12 @@ Fail-closed: invalid/missing JSON is never treated as approve.
 from __future__ import annotations
 
 import json
-from lokay.prompts import _clip
-from lokay.tool_contracts import render_contract
 import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
+
+from lokay.prompts import _clip
+from lokay.tool_contracts import render_contract
 
 Verdict = Literal["approve", "request_changes", "needs_evidence", "fail_closed"]
 Risk = Literal["low", "medium", "high"]

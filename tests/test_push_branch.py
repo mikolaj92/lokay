@@ -7,8 +7,6 @@ import pytest
 from lokay.proc import push_branch
 
 
-
-
 def test_factory_repo_still_pushes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,

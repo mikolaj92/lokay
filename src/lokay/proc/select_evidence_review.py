@@ -1,8 +1,12 @@
 """Select the bounded evidence-review result."""
 from __future__ import annotations
-import argparse,json
-from lokay.envelope import emit_exit,err
+
+import argparse
+import json
+
+from lokay.envelope import emit_exit, err
 from lokay.review_boundary import select_evidence_review
+
 
 def main(argv=None):
     p=argparse.ArgumentParser(prog="lokay-select-evidence-review"); p.add_argument("--selected-json",required=True); p.add_argument("--validation-json",required=True); a=p.parse_args(argv)

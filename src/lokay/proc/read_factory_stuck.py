@@ -1,6 +1,7 @@
 """Read one factory stuck ledger."""
 
 from pathlib import Path
+
 from lokay.stuck import load_stuck, stuck_path_for
 
 

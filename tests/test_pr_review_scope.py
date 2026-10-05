@@ -1,7 +1,6 @@
 """Selection preflight is an authored graph gate, not a Python review pipeline."""
 import tomllib
 from pathlib import Path
-from types import SimpleNamespace
 
 from lokay.organ.review_boundary import handle_review_boundary
 

@@ -86,10 +86,11 @@ def handle_implementation_dispatch(
 
         return apply(pass_dir=pass_dir)
     if atom == "label_blocked_dispatch":
-        from lokay.proc._common import load_cfg, mutations_allowed, runner
-        from lokay.gh_issues import add_issue_labels
-        from lokay.triage import MACHINE_PARK_LABEL
         import argparse
+
+        from lokay.gh_issues import add_issue_labels
+        from lokay.proc._common import load_cfg, mutations_allowed, runner
+        from lokay.triage import MACHINE_PARK_LABEL
 
         failure = up.get("select_dispatch_outcome") or {}
         cfg = load_cfg(argparse.Namespace(config=config))
@@ -124,8 +125,8 @@ def handle_implementation_dispatch(
             up.get("select_dispatch_outcome") or {},
         )
     if atom == "park_plan_only_dispatch":
-        from lokay.proc._common import run_proc
         from lokay.proc import unbounded_park
+        from lokay.proc._common import run_proc
 
         f = up.get("select_blocked_dispatch") or {}
         args = (

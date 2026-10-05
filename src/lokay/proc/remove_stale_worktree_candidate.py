@@ -1,14 +1,15 @@
 """Remove one fully classified stale worktree, with a live-receipt recheck."""
 
+import argparse
 import os
 from pathlib import Path
+
 from lokay.git_worktree import remove_worktree
 from lokay.proc._common import load_cfg, mutations_allowed, runner
 from lokay.proc.detach_issue_to_pr import (
     has_unreadable_issue_to_pr_receipts,
     live_issue_to_pr_receipts,
 )
-import argparse
 
 
 def defer_failed_removal(path: Path) -> bool:

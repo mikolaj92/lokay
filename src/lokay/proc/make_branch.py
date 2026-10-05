@@ -8,8 +8,6 @@ from lokay.envelope import emit_exit, ok
 from lokay.git_branch import branch_for_issue
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-make-branch")
     p.add_argument("--prefix", default="ai/fix")

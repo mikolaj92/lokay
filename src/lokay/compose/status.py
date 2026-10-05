@@ -34,8 +34,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--publish-snapshot", type=Path, help="Atomically write dashboard snapshot JSON")
     args = p.parse_args(argv)
     if args.publish_snapshot:
-        from lokay.status_dashboard import dashboard_snapshot
         from lokay.status_artifact import write_snapshot
+        from lokay.status_dashboard import dashboard_snapshot
 
         data = dashboard_snapshot(args.config)
         published = write_snapshot(args.publish_snapshot, data)

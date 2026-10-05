@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 from lokay.proc import pr_repair_receipts as receipts
-from lokay.proc.run_parent_pr_repair_subflow import _repair_meta, run as run_parent
+from lokay.proc.run_parent_pr_repair_subflow import _repair_meta
+from lokay.proc.run_parent_pr_repair_subflow import run as run_parent
 from lokay.proc.run_pr_repair_department import run as run_department
 from lokay.proc.select_pr_repair_department import select
 

@@ -1,6 +1,7 @@
 """Verify the canonical physical Git origin."""
 
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.runner import git_spec
 

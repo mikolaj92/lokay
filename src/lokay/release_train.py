@@ -1,6 +1,8 @@
 """Pure selector for a serial, dependency-aware cross-repo release train."""
 from __future__ import annotations
+
 from typing import Any
+
 
 def next_release_action(plan:dict[str,Any],state:dict[str,Any])->dict[str,Any]:
  source=plan['source'];cursor=int(state.get('cursor') or 0)

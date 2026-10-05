@@ -210,7 +210,6 @@ def queue(listed_rows: list | None, last: dict | None) -> list[dict]:
     """Live open PRs minus a consumed (repo, pr, sha). New SHA is a new identity."""
     last = last if isinstance(last, dict) else {}
     live_rows = [dict(row) for row in list(listed_rows or []) if identity(row)]
-    live = {identity(row): row for row in live_rows}
     leftover = [
         row for row in list(last.get("leftover_prs") or []) if isinstance(row, dict)
     ]

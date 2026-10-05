@@ -230,6 +230,7 @@ def run_agent(
     bound_session = ""
     if session_policy:
         import json as _json
+
         from lokay.session_policy import resolve_session
 
         resolved = resolve_session(

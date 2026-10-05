@@ -1,6 +1,7 @@
 """Close one split parent after child and tracker effects succeed."""
 
 from __future__ import annotations
+
 from lokay.gh_issues import close_issue
 
 

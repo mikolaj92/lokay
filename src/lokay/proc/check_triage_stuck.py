@@ -1,6 +1,7 @@
 """Check one triage target against the physical stuck ledger."""
 
 from pathlib import Path
+
 from lokay.passkit import io as pass_io
 from lokay.stuck import is_blocked_in_ledger, load_stuck
 

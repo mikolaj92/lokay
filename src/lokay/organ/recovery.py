@@ -3,29 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
-from pathlib import Path
 from typing import Any
-
-from lokay.models import Issue
-from lokay.organ.common import (
-    _cfg_flags,
-    _live_flags,
-    _localize_paths,
-    _require_push,
-    _require_real_diff,
-    _require_test_local,
-    _run_atom_main,
-    _test_local_ok,
-)
-from lokay.prompts import (
-    issue_fix_prompt,
-    local_test_repair_prompt,
-    pr_body,
-    repair_pr_prompt,
-    self_repair_prompt,
-)
 
 
 def handle_recovery(
@@ -35,65 +13,20 @@ def handle_recovery(
     ctx: dict[str, Any],
 ) -> dict[str, Any] | None:
     from lokay.proc import (
-        assign_issue,
-        close_issue,
-        commit_all,
-        compute_health,
-        cycle_end,
-        cycle_start,
-        dispatch_implement,
-        dispatch_triage,
-        factory_begin,
-        factory_tick,
-        get_issue,
-        host_ff,
-        list_prs,
-        make_branch,
-        plan_issue,
-        localize,
-        pi_budget,
-        pr_checks,
-        pr_create,
-        pr_label,
-        pr_merge,
-        push_branch,
-        record_pass,
         recovery_begin,
-        recovery_incident,
         recovery_factory,
+        recovery_incident,
         recovery_observe,
         recovery_record,
         recovery_run_self_repair,
-        run_agent,
-        select_implement,
-        queue_conflict,
-        stage_label,
-        test_local,
-        worktree_add,
-        assert_real_diff,
-        self_repair_activate,
-        self_repair_close,
-        self_repair_prepare,
-        self_repair_preflight,
-        self_repair_push_main,
-        self_repair_validate,
     )
-    from lokay.stuck import issue_number_from_branch
 
     cfg = ctx["cfg"]
     live = ctx["live"]
-    repo = ctx["repo"]
-    issue_number = ctx["issue_number"]
-    pr_number = ctx["pr_number"]
-    repair_mode = ctx["repair_mode"]
-    branch = ctx["branch"]
 
     from lokay.atom_runtime import run_atom_main
-    from lokay.git_commit import branch_ahead_of_upstream as _branch_ahead
 
     _run_atom_main = ctx.get("run_atom_main") or run_atom_main
-    branch_ahead_of_upstream = ctx.get("branch_ahead_of_upstream") or _branch_ahead
-    known = False
 
     if atom == "summarize_daemon_cycle":
         from lokay.proc.summarize_daemon_cycle import summarize

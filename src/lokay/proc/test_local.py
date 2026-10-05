@@ -12,11 +12,9 @@ import shlex
 import tomllib
 from pathlib import Path
 
-from lokay.envelope import emit_exit, err, ok
+from lokay.envelope import emit_exit
 from lokay.git_real_diff import list_changed_paths
-from lokay.proc._common import runner
-from lokay.runner import CommandSpec, Runner
-from lokay.test_cache import cache_key, read_green, write_green
+from lokay.runner import Runner
 
 TEST_TIMEOUT_SECONDS = 1800
 MINI_LOKAY_REPO_SCOPE = "mikolaj92/lokay"

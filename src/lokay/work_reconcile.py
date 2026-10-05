@@ -1,6 +1,8 @@
 """Pure observe-first reducer for one work unit."""
 from __future__ import annotations
+
 from typing import Any
+
 
 def reconcile_work(facts: dict[str,Any])->dict[str,Any]:
     if facts.get('issue_read')!='ok': return {'state':'unknown','route':'survey_error','effect':None,'reason':'authoritative_read_failed'}

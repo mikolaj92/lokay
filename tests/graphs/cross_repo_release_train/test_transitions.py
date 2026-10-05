@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for cross_repo_release_train."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'cross_repo_release_train'

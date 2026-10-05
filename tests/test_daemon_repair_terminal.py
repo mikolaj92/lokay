@@ -1,6 +1,7 @@
 """A repair-only cycle must retain its outcome without another factory pass."""
 
 import pytest
+
 from lokay.proc.summarize_daemon_cycle import summarize
 
 
@@ -18,8 +19,8 @@ def test_repair_route_has_terminal_without_factory(repair, health):
 
 @pytest.mark.parametrize("failed", [False, True])
 def test_native_repair_cycle_never_enters_factory(tmp_path, failed):
-    from test_issue_triage_fala import base_effector
     from test_implementation_selection_fala import run_graph
+    from test_issue_triage_fala import base_effector
 
     body = base_effector(
         """if a == 'select_repair_route': v['route'] = 'repair'

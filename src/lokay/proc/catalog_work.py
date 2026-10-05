@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from lokay.proc.walk_issue_leftover import row_is_ready
 from lokay.stuck import excluded_numbers, issue_numbers_covered_by_prs
 from lokay.triage import is_open_work_issue
-from lokay.proc.walk_issue_leftover import row_is_ready
 
 
 def issue_labels(row: dict[str, Any]) -> list[str]:

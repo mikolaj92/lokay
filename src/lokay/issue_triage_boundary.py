@@ -1,16 +1,18 @@
 """Pure closed contracts for issue-triage domain outcomes."""
 
 from __future__ import annotations
-from typing import Any, Mapping
+
+from collections.abc import Mapping
+from typing import Any
+
 from lokay.intake import (
-    CheckResult,
     check_duplicate_ai_pr,
     check_open,
     check_preflight_incident,
     check_superseded,
 )
 from lokay.models import Issue
-from lokay.pr_review import extract_json_object, PrReviewError
+from lokay.pr_review import PrReviewError, extract_json_object
 from lokay.triage import is_parked, is_undecided
 
 VERDICTS = frozenset({"ready", "close", "needs_evidence", "park", "skip", "split"})

@@ -6,7 +6,8 @@ MERGED (and CLOSED) → route=skip. Probe flake → fail-open (route=open).
 from __future__ import annotations
 
 import argparse
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.envelope import emit_exit, ok
 from lokay.proc._common import add_config_read, read_live

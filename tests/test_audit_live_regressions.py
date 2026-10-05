@@ -22,8 +22,9 @@ def test_failed_delivery_preserves_named_cause():
 
 
 def test_unattributed_replay_is_retired_without_fabricating_delivery(tmp_path, monkeypatch):
-    from lokay.proc import delivery_closeout as dc
     from types import SimpleNamespace
+
+    from lokay.proc import delivery_closeout as dc
     state = tmp_path / 'state.jsonl'
     intent = dc.prepare(state_path=state, repo='o/r', pr=58, issue=43,
                         branch='ai/fix/43', review={'decision': {'verdict': 'approve', 'reviewed_head_sha': 'a' * 40}},
@@ -51,8 +52,9 @@ def test_skipped_verification_is_not_a_transport_failure():
 
 
 def test_retry_prompt_includes_valid_complete_implemented_example():
-    from lokay.tool_contracts import render_contract
     import json
+
+    from lokay.tool_contracts import render_contract
     prompt = render_contract('coding_retry', feedback='evidence_kind is only valid with needs_evidence', response='{}')
     example = next(line for line in prompt.splitlines() if line.startswith('{"verdict"'))
     from lokay.coding_boundary import parse_output

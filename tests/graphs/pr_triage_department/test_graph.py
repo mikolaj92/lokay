@@ -1,8 +1,6 @@
 """Native Fala host_run_package proofs for pr_triage_department."""
 from __future__ import annotations
 
-import pytest
-
 _PATH_ID = 'pr_triage_department'
 _EFFECTORS = [{'conduction': [], 'id': 'list_pr_sieve', 'when': None},
  {'conduction': ['list_pr_sieve'], 'id': 'select_pr_sieve', 'when': None},

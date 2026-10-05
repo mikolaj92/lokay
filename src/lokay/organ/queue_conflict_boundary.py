@@ -30,9 +30,10 @@ def handle_queue_conflict(
             up.get("check_queue_covering_pr") or {},
         )
     if atom in {"queue_conflict_agent", "queue_conflict_retry_agent"}:
+        import argparse
+
         from lokay.proc._common import load_cfg
         from lokay.proc.run_queue_conflict_agent import run
-        import argparse
 
         config = load_cfg(
             argparse.Namespace(config=str(inputs.get("config_path") or "") or None)

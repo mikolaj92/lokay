@@ -1,6 +1,7 @@
 """Production tick and factory-pass use one authored Fala graph."""
 
 import inspect
+
 from lokay.compose import factory as factory_mod
 from lokay.proc import factory_tick
 

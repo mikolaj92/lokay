@@ -1,9 +1,10 @@
 """Negative audit findings: harvest switches main; next pass reseeds ready."""
+from test_host_ff import _git, _pair
+
 from lokay.git_host_ff import fast_forward_origin_main
 from lokay.proc.record_pass import _issues_leftover_remaining
 from lokay.proc.walk_issue_leftover import queue
 from lokay.runner import Runner
-from test_host_ff import _pair, _git
 
 
 def test_harvest_at_current_sha_still_switches_main(tmp_path):

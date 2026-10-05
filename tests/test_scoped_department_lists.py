@@ -69,7 +69,7 @@ def test_empty_scope_keeps_the_full_catalog(monkeypatch):
     monkeypatch.setattr(
         list_open_issues,
         "load_tasks",
-        lambda repo, **_: seen.append(repo.name) or SimpleNamespace(list_open=lambda: []),
+        lambda repo, **_: seen.append(repo.name) or SimpleNamespace(list_open=list),
     )
     list_open_issues.run(config_path=None, live=False)
     assert seen == ["o/a", "o/b"]

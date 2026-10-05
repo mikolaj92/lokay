@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-
 from lokay.models import Issue
+from lokay.proc.queue_conflict import evaluate_stdin
 from lokay.queue_conflict import (
     CLOSE,
     READY,
     SKIP,
     evaluate_queue_conflict,
 )
-from lokay.proc.queue_conflict import evaluate_stdin
 
 
 def _issue(**kwargs) -> Issue:

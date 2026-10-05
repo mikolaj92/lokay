@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.proc.select_issue_do import select as select_do
 from lokay.proc.select_next_issue import select as select_next
@@ -15,8 +16,8 @@ def pick(listed: Mapping[str, Any], last: Mapping[str, Any] | None = None) -> di
 
 def select(picked: Mapping[str, Any], listed: Mapping[str, Any] | None = None) -> dict:
     """Second block: ready leftover becomes do. No triage. No merge."""
-    from lokay.sieve_decision import decision_of
     from lokay.proc.select_issue_do import leftover_of
+    from lokay.sieve_decision import decision_of
 
     decision = decision_of(picked.get("sieve_decision") or {})
     if decision and (decision["repo"], decision["issue"]) == (picked.get("repo"), picked.get("issue")):

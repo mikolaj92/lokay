@@ -1,7 +1,12 @@
 """Native Fala proofs for one implementation-selection catalog atom."""
 
-import json, os, subprocess, sys, tomllib
+import json
+import os
+import subprocess
+import sys
+import tomllib
 from pathlib import Path
+
 import pytest
 from test_issue_triage_fala import base_effector
 

@@ -1,8 +1,10 @@
 """Compatibility CLI: invoke the authored parent factory-pass Fala."""
 
 from __future__ import annotations
+
 import argparse
 from typing import Any
+
 from lokay.envelope import emit_exit
 from lokay.proc._common import add_config_live
 

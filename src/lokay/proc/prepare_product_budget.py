@@ -1,6 +1,7 @@
 """Validate one bounded serial product-pass budget."""
 
 import argparse
+
 from lokay.proc._common import load_cfg
 
 

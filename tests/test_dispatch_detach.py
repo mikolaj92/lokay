@@ -1,5 +1,5 @@
-from lokay.proc.select_implementation_candidate import select
 from lokay.passkit import io as pass_io
+from lokay.proc.select_implementation_candidate import select
 
 
 def test_selects_only_one_candidate(tmp_path):

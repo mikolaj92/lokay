@@ -1,8 +1,8 @@
 """Contracts for minimal authored ready-hygiene atoms."""
 
-import os, time
-from pathlib import Path
-from types import SimpleNamespace
+import os
+import time
+
 from lokay.proc import ready_hygiene
 
 

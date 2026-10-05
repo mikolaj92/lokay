@@ -7,8 +7,9 @@ do not invent NEEDS_HUMAN distrust for intentional owner/assignee tickets.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
 from lokay.models import Issue
@@ -142,10 +143,9 @@ def evaluate_queue_conflict(
     peers = [
         _peer_dict(p)
         for p in peer_issues
-        if int((_peer_dict(p).get("number") or -1)) != int(issue.number)
+        if int(_peer_dict(p).get("number") or -1) != int(issue.number)
     ]
     blob = _blob(issue)
-    facts = agent or {}
     covered = issue_numbers_covered_by_prs(prs, branch_prefix=branch_prefix)
 
     # 1) Open AI PR already covers this issue number (branch or Fixes #N).

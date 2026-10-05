@@ -330,7 +330,7 @@ def test_issue_journal_dir_isolates_test_local_execution(tmp_path):
 
 
 def test_pr_journal_dir_isolates_pr_triage(tmp_path):
-    from lokay.graph_run import pr_journal_dir, path_journal_dir, issue_journal_dir
+    from lokay.graph_run import issue_journal_dir, path_journal_dir, pr_journal_dir
 
     first = pr_journal_dir("pr_triage", "mikolaj92/Fala", 187, home=tmp_path)
     second = pr_journal_dir("pr_triage", "mikolaj92/Temida", 5195, home=tmp_path)
@@ -349,7 +349,7 @@ def test_pr_journal_dir_isolates_pr_triage(tmp_path):
 
 
 def test_path_journal_dir_isolates_child_packages(tmp_path):
-    from lokay.graph_run import path_journal_dir, _materialize_package
+    from lokay.graph_run import _materialize_package, path_journal_dir
 
     shared = tmp_path / ".lokay" / "fala"
     status = path_journal_dir("status_snapshot", home=tmp_path)
@@ -443,6 +443,7 @@ def test_run_path_supplies_project_root_for_fala_inherit_env(
     monkeypatch, tmp_path
 ):
     import os
+
     from lokay import graph_run
 
     monkeypatch.delenv("LOKAY_ROOT", raising=False)
@@ -468,6 +469,7 @@ def test_run_path_does_not_resolve_credential_for_non_review_paths(
     monkeypatch, tmp_path
 ):
     import os
+
     from lokay import graph_run
 
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
@@ -497,6 +499,7 @@ def test_run_path_resolves_review_credential_only_for_review_paths(
     monkeypatch, tmp_path, path_id
 ):
     import os
+
     from lokay import graph_run
 
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
@@ -530,6 +533,7 @@ def test_run_path_restores_review_credential_after_host_failure(
     monkeypatch, tmp_path, path_id
 ):
     import os
+
     from lokay import graph_run
 
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
@@ -560,6 +564,7 @@ def test_run_path_declares_missing_review_credential_as_empty_for_fala(
     monkeypatch, tmp_path
 ):
     import os
+
     from lokay import graph_run
 
     monkeypatch.delenv("OCR_LLM_API_KEY", raising=False)
@@ -583,6 +588,7 @@ def test_run_path_declares_missing_review_credential_as_empty_for_fala(
 
 def test_run_path_restores_dynamic_library_environment(monkeypatch, tmp_path):
     import os
+
     from lokay import graph_run
 
     monkeypatch.setenv("DYLD_LIBRARY_PATH", "/operator/lib")

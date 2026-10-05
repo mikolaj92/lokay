@@ -1,7 +1,6 @@
 """Branch checks use the authored delivery graph, not copied snapshots."""
 
 import pytest
-
 from support.graph_model import node_status_map, run_model
 from test_issue_to_pr_fala import _package
 from test_issue_triage_fala import base_effector, run_graph

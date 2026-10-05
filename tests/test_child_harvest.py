@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-
 import json
 import sqlite3
 import time
+from datetime import UTC
 from pathlib import Path
 from types import SimpleNamespace
 
-import lokay.child_harvest as child_harvest
+from lokay import child_harvest
 from lokay.child_harvest import harvest_fail_closed_children
 from lokay.stuck import excluded_numbers, load_stuck, stuck_path_for
 
@@ -560,7 +560,7 @@ def test_ok_true_no_delivery_dead_pid_is_fail_closed(tmp_path: Path):
 
 def test_reaped_fail_closed_receipt_does_not_renew_cooldown(tmp_path: Path, monkeypatch):
     """lokay#1084: same dead receipt must not roll a fresh 5min cooldown forever."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     import lokay.stuck as stuck_mod
     from lokay.stuck import TRANSIENT_COOLDOWN_SECONDS, is_blocked_in_ledger
@@ -587,7 +587,7 @@ def test_reaped_fail_closed_receipt_does_not_renew_cooldown(tmp_path: Path, monk
             + "\n"
         )
 
-    fixed = datetime(2026, 9, 7, 17, 40, tzinfo=timezone.utc)
+    fixed = datetime(2026, 9, 7, 17, 40, tzinfo=UTC)
     monkeypatch.setattr(stuck_mod, "_utcnow", lambda: fixed)
     stuck = {"issues": {}}
     harvest_fail_closed_children(
@@ -636,7 +636,7 @@ def test_reaped_fail_closed_receipt_does_not_renew_cooldown(tmp_path: Path, monk
 
 def test_condition_not_met_corpse_does_not_roll_cooldown(tmp_path: Path, monkeypatch):
     """lokay#1084: condition_not_met delivered:false corpses must not loop cooldown."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     import lokay.stuck as stuck_mod
     from lokay.stuck import TRANSIENT_COOLDOWN_SECONDS, is_blocked_in_ledger
@@ -663,7 +663,7 @@ def test_condition_not_met_corpse_does_not_roll_cooldown(tmp_path: Path, monkeyp
             + "\n"
         )
 
-    fixed = datetime(2026, 9, 7, 17, 0, tzinfo=timezone.utc)
+    fixed = datetime(2026, 9, 7, 17, 0, tzinfo=UTC)
     monkeypatch.setattr(stuck_mod, "_utcnow", lambda: fixed)
     stuck = {"issues": {}}
     harvest_fail_closed_children(

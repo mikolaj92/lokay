@@ -6,8 +6,6 @@ import json
 import os
 from pathlib import Path
 
-import pytest
-
 from lokay.preflight import acquire_run_lock, has_health_lease, issue_health_lease
 from lokay.proc.issue_delivery_launch import detach_issue_to_pr
 

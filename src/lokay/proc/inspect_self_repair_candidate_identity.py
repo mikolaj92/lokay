@@ -1,6 +1,7 @@
 """Read HEAD, ahead count, and subject for one exact candidate."""
 
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.runner import git_spec
 

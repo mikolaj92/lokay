@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+
 def default_path() -> Path:
     return Path.home() / ".lokay" / "last-pass.json"
 

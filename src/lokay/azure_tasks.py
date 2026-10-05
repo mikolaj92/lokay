@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.azure_boards import AzureBoardsClient, AzureLoginError, WorkItem
 from lokay.tasks import Task, TaskId, _require_mark

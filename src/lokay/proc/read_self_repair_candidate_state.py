@@ -1,6 +1,7 @@
 """Read initial tracked status and committed path class for a recovery candidate."""
 
 from pathlib import Path
+
 from lokay.git_real_diff import classify_changed_paths, list_committed_paths
 from lokay.proc._common import runner
 from lokay.runner import git_spec

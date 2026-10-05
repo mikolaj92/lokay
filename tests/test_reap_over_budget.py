@@ -1,7 +1,6 @@
 """Contracts for minimal detached-worker budget processes."""
 
 import json
-from pathlib import Path
 
 
 def test_under_budget_routes_keep(monkeypatch):

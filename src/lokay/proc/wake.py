@@ -8,15 +8,15 @@ self-hosted Actions runner on the lokay host (see docs/AUTONOMY.md).
 from __future__ import annotations
 
 import argparse
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from lokay.compose.run import compose_run
 from lokay.compose.pr_triage import compose_pr_triage
+from lokay.compose.run import compose_run
 from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.wake import WakePlan, route_wake
-
 
 _REPO_SKIP_REASON = "repo_not_delivered_by_mini_lokay"
 
@@ -154,7 +154,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    repo = str(args.repo or "").strip()
 
     plan = route_wake(
         reason=str(args.reason),

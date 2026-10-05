@@ -4,9 +4,8 @@ import tomllib
 from pathlib import Path
 
 from test_factory_pass_fala import _require_fala_host
-from test_issue_triage_fala import base_effector
 from test_implementation_selection_fala import run_graph
-
+from test_issue_triage_fala import base_effector
 
 NODES = (
     "probe_factory_host",

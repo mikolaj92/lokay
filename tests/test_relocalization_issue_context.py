@@ -1,6 +1,6 @@
+from lokay.git_real_diff import is_disposable_ignored_path
 from lokay.organ.relocalize_boundary import handle_relocalize
 from lokay.proc.build_relocalization_agent_request import build
-from lokay.git_real_diff import is_disposable_ignored_path
 
 
 def test_relocalization_receives_issue_and_diff_goal(tmp_path):

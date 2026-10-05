@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
-
 from lokay.models import Issue
 from lokay.proc import list_inbox
 

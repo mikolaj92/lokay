@@ -1,7 +1,10 @@
 """Vendor-neutral executor continuity derived from durable work identity."""
 from __future__ import annotations
-import hashlib,json
+
+import hashlib
+import json
 from typing import Any
+
 
 def _identity(**values: Any) -> str:
     body=json.dumps(values,sort_keys=True,separators=(",",":"))

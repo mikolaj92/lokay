@@ -1,6 +1,7 @@
 """Build one bounded deterministic issue-split plan."""
 
 from __future__ import annotations
+
 from lokay.models import Issue
 from lokay.proc._prose_agent import ask
 from lokay.split import plan_from_agent, validate_split_plan

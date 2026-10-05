@@ -18,6 +18,7 @@ def test_factory_authors_departments_in_canon_order():
 
 def test_tick_is_only_a_factory_fala_facade():
     import inspect
+
     from lokay.compose import tick
 
     src = inspect.getsource(tick)

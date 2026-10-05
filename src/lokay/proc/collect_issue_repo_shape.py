@@ -1,6 +1,7 @@
 """Collect deterministic repository-shape evidence for issue triage."""
 
 from __future__ import annotations
+
 from lokay.intake import probe_repo_shape
 
 

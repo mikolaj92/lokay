@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 from lokay.agent import COLLECTOR_BOUNDARY, FACTORY_WORKFLOW_BOUNDARY, run_agent
-from lokay.compose import tick
 from lokay.config import Config
 from lokay.runner import CommandSpec
 

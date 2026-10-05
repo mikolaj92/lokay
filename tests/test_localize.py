@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import json
 from pathlib import Path
 
@@ -18,7 +17,6 @@ from lokay.localize import (
     write_localize_file,
 )
 from lokay.models import Issue
-from lokay.proc import localize
 from lokay.prompts import issue_fix_prompt, repair_pr_prompt
 
 

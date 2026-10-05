@@ -8,8 +8,6 @@ import pytest
 from lokay.proc import assign_issue
 
 
-
-
 def test_assign_issue_still_assigns_lokay(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

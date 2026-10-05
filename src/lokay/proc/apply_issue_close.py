@@ -6,6 +6,7 @@ issues are the only remaining exception, and never for obsolete_*.
 """
 
 from __future__ import annotations
+
 from lokay.gh_issues import close_issue, comment_issue
 
 

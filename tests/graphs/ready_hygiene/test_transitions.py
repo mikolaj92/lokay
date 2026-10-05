@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for ready_hygiene."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'ready_hygiene'

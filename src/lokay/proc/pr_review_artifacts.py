@@ -6,8 +6,9 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from lokay.config import Config
 
@@ -70,7 +71,6 @@ def _artifact(cfg: Config, repo: str, pr: int, evidence: Mapping[str, Any], deci
         raise ValueError("canonical task digest is missing")
     if hashlib.sha256(_canonical(task)).hexdigest() != hashes["task_identity_sha256"]:
         raise ValueError("canonical task digest mismatch")
-    sanitized_task = _sanitize(task)
     return {
         "schema": "lokay.review-artifact/1", "repo": repo, "pr": int(pr),
         "head_ref": str(evidence.get("head_ref") or ""),

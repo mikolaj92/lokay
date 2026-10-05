@@ -5,10 +5,11 @@ import subprocess
 import sys
 
 import pytest
-from test_host_ff import _pair, _git
-from lokay.proc.gate_factory_begin_host import gate
+from test_host_ff import _git, _pair
+
 from lokay.organ.departments_boundary import handle_departments
 from lokay.organ.factory import handle_factory
+from lokay.proc.gate_factory_begin_host import gate
 
 
 @pytest.mark.parametrize('host', [{}, {'ok': False, 'reason': 'host_behind'}, {'updated': False}])

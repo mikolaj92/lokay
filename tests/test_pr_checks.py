@@ -11,8 +11,6 @@ from lokay.proc.pr_route import run_pr_route
 from lokay.runner import CommandResult, CommandSpec
 
 
-
-
 def test_factory_repo_still_checks(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

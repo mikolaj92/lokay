@@ -1,6 +1,9 @@
 """Run exactly one authored bounded daemon product/recovery cycle."""
 
-from lokay.compose.daemon_cycle import compose_daemon_cycle, resolve_pass_ceiling_seconds
+from lokay.compose.daemon_cycle import (
+    compose_daemon_cycle,
+    resolve_pass_ceiling_seconds,
+)
 
 
 def run(

@@ -1,6 +1,7 @@
 """Load one factory configuration snapshot."""
 
 import argparse
+
 from lokay.proc._common import load_cfg
 
 

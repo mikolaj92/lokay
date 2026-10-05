@@ -1,6 +1,7 @@
 """Classify one authored executor slot. Skip does not spend the launch budget."""
 
-from lokay.proc.classify_issue_row import classify as classify_row, launched_of
+from lokay.proc.classify_issue_row import classify as classify_row
+from lokay.proc.classify_issue_row import launched_of
 from lokay.proc.prepare_executor_rows import write_cursor
 
 

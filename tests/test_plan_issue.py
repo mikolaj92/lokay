@@ -78,6 +78,7 @@ def test_incomplete_plan_is_not_authorized_for_write(tmp_path: Path):
 def test_backtick_line_range_reaches_the_agent_and_survives(tmp_path: Path):
     """PunkRecords #35: `models.py:124-131` died as plan_incomplete before any agent ran."""
     import json
+
     from lokay.proc.build_issue_approach import build
 
     body = "- `src/punkrecords/models.py:124-131` — init\n"

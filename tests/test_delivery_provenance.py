@@ -150,7 +150,6 @@ else:
 
 @pytest.mark.parametrize('length', ['under', 'over', 'beyond'])
 def test_coding_result_survives_transport_tail(tmp_path, monkeypatch, length):
-    import json
     import sys
 
     from lokay.agent import run_agent

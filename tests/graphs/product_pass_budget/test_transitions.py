@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for product_pass_budget."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'product_pass_budget'

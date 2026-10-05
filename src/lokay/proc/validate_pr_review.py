@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
 
@@ -90,7 +91,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         or evidence.get("requested_from") != request.get("base_ref_sha")
         or evidence.get("requested_head") != request.get("head_sha")
         or evidence.get("repository_identity_sha256") != __import__("hashlib").sha256(
-            f"github.com/{request.get('repo')}".encode("utf-8")
+            f"github.com/{request.get('repo')}".encode()
         ).hexdigest()
         or not isinstance(evidence.get("preview_sha256"), str)
         or not __import__("re").fullmatch(r"[a-f0-9]{64}", str(evidence.get("preview_sha256") or ""))

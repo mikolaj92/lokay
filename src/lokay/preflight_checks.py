@@ -5,10 +5,10 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from lokay.gh_rate import is_transient_github_text
-
 
 Finding = dict[str, Any]
 Check = Callable[..., Finding]

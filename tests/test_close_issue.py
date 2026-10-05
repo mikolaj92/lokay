@@ -7,8 +7,6 @@ import pytest
 from lokay.proc import close_issue
 
 
-
-
 def test_close_issue_still_closes_lokay(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

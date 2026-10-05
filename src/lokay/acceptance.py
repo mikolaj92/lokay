@@ -1,6 +1,9 @@
 """Protected, pre-builder acceptance artifacts."""
 from __future__ import annotations
-import hashlib, json, os
+
+import hashlib
+import json
+import os
 from pathlib import Path
 from typing import Any
 

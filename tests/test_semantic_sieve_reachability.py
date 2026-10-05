@@ -4,10 +4,9 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from test_typed_decisions import endpoint, config
-
 from test_implementation_selection_fala import run_graph
 from test_issue_triage_fala import base_effector
+from test_typed_decisions import config, endpoint  # noqa: F401 — pytest fixture
 
 
 def test_native_inbox_sieve_reaches_triage_but_executor_stays_ready_only(tmp_path):
@@ -51,8 +50,8 @@ def test_sieve_does_not_inherit_executor_ready_only_leftover(tmp_path):
 
 
 def test_sieve_tail_rotates_across_passes_and_preserves_resume_budget(tmp_path):
-    from lokay.proc.prepare_issue_sieve import prepare
     from lokay.proc.classify_issue_sieve_row import classify
+    from lokay.proc.prepare_issue_sieve import prepare
     from lokay.proc.select_issue_sieve_candidate import select
 
     cfg = tmp_path / 'config.yaml'
@@ -120,11 +119,11 @@ def test_malformed_durable_tail_does_not_crash_or_admit_missing_work(tmp_path):
 
 
 @pytest.mark.parametrize('choice,route', [('ready', 'do'), ('skip', 'skip')])
-def test_executor_admission_uses_one_configured_queue_decision(tmp_path, endpoint, monkeypatch, choice, route):
+def test_executor_admission_uses_one_configured_queue_decision(tmp_path, endpoint, monkeypatch, choice, route):  # noqa: F811 — endpoint is a pytest fixture
     from lokay.config import RepoConfig
-    from lokay.tasks import MemoryTasks
     from lokay.organ.issues_boundary import handle_issues
     from lokay.proc.semantic_decision import QUEUE_OPTIONS
+    from lokay.tasks import MemoryTasks
 
     url, calls, response = endpoint
     cfg = config(tmp_path, url)
@@ -141,7 +140,7 @@ def test_executor_admission_uses_one_configured_queue_decision(tmp_path, endpoin
                         lambda **_: {'allowed': True, 'reason': 'pr_first_clear'})
     monkeypatch.setattr('lokay.proc.check_executor_queue.load_tasks', lambda *a, **kw: source)
     monkeypatch.setattr('lokay.proc.check_executor_queue.load_code', lambda *a, **kw:
-                        SimpleNamespace(pr=SimpleNamespace(list_open=lambda: [])))
+                        SimpleNamespace(pr=SimpleNamespace(list_open=list)))
     out = handle_issues('select_issue_executor', {'config_path': str(cfg.config_path), 'live': True}, {
         'select_issue_do_row': {'route': 'do', 'repo': 'o/r', 'issue': 2,
                                'leftover': 2, 'leftover_issues': [
@@ -160,8 +159,10 @@ def test_executor_admission_uses_one_configured_queue_decision(tmp_path, endpoin
 
 
 def test_three_sieve_slots_spend_exactly_three_without_reset(tmp_path):
+    from lokay.organ.issue_triage_department_boundary import (
+        handle_issue_triage_department,
+    )
     from lokay.proc.prepare_issue_sieve import prepare
-    from lokay.organ.issue_triage_department_boundary import handle_issue_triage_department
 
     prepared = prepare(listed={'issues': [{'repo': 'o/r', 'issue': n} for n in range(1, 5)]},
                        last={}, pass_dir=str(tmp_path), config_path=None,
@@ -184,7 +185,7 @@ def test_three_sieve_slots_spend_exactly_three_without_reset(tmp_path):
     assert resumed['spent'] == 3 and resumed['budget'] == 0
 
 
-def test_queue_evidence_failure_skips_without_http_or_consuming_next_candidate(tmp_path, endpoint, monkeypatch):
+def test_queue_evidence_failure_skips_without_http_or_consuming_next_candidate(tmp_path, endpoint, monkeypatch):  # noqa: F811 — endpoint is a pytest fixture
     from lokay.config import RepoConfig
     from lokay.proc.check_executor_queue import check
 

@@ -1,6 +1,7 @@
 """Run the initial semantic issue-triage agent call."""
 
 from __future__ import annotations
+
 from lokay.issue_triage_agent import prompt
 from lokay.proc._issue_triage_agent_runtime import execute
 

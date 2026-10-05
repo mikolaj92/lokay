@@ -16,8 +16,6 @@ from lokay.gh_prs import list_open_ai_prs
 from lokay.proc._common import load_cfg, runner
 
 
-
-
 def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict[str, Any]:
     cfg = load_cfg(argparse.Namespace(config=config_path))
     r = runner(cfg)

@@ -1,6 +1,7 @@
-from lokay.proc.summarize_pr_triage_department import summarize
-from lokay.proc.select_next_pr import select
 import pytest
+
+from lokay.proc.select_next_pr import select
+from lokay.proc.summarize_pr_triage_department import summarize
 
 
 @pytest.mark.parametrize('verdict', [

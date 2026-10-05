@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+
 from lokay.git_real_diff import classify_changed_paths, list_changed_paths
 from lokay.proc._common import runner
 from lokay.proc.detach_issue_to_pr import _child_pids, _pid_command, is_coding_command

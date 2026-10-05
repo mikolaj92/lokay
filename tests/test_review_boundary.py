@@ -1,8 +1,12 @@
 """Closed PR-review boundary contracts."""
 
 from lokay.review_boundary import (
-    finalize_review_selection, resolve_sha_review, select_evidence_review,
-    select_review_decision, validate_review_output, validation_feedback_prompt,
+    finalize_review_selection,
+    resolve_sha_review,
+    select_evidence_review,
+    select_review_decision,
+    validate_review_output,
+    validation_feedback_prompt,
 )
 
 

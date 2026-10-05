@@ -18,6 +18,7 @@ from lokay.code.repo import RepoBlock
 
 __all__ = (
     "CODE_BLOCKS",
+    "AzureCode",
     "Change",
     "ChangeChecks",
     "CodeContract",
@@ -25,7 +26,6 @@ __all__ = (
     "CodeError",
     "CodeSlot",
     "CodeTarget",
-    "AzureCode",
     "GithubCode",
     "MemoryCode",
     "PrBlock",

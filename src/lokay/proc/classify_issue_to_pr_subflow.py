@@ -41,9 +41,7 @@ def classify(out: object = None, error: object = None) -> dict:
             delivered = result.get("delivered")
         if pr not in (None, "", 0) or delivered:
             route = "deliver"
-        elif isinstance(result, dict) and result.get("stopped"):
-            route = "no_effect"
-        elif isinstance(result, dict) and result:
+        elif isinstance(result, dict) and result.get("stopped") or isinstance(result, dict) and result:
             route = "no_effect"
         elif "delivered" in out and out.get("delivered") is False:
             # Authored summarize_issue_delivery is a complete terminal even

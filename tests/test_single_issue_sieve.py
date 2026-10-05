@@ -4,6 +4,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+
 from lokay.proc.select_issue_sieve import classify_sieve
 
 ROOT = Path(__file__).resolve().parents[1]

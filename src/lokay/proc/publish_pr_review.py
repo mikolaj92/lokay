@@ -7,10 +7,15 @@ import json
 from typing import Any
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.pr_review import PrReviewDecision, decide_review_merge, format_review_marker, labels_for_review
+from lokay.pr_review import (
+    PrReviewDecision,
+    decide_review_merge,
+    format_review_marker,
+    labels_for_review,
+)
 from lokay.pr_review_io import publish_fail_closed, publish_review
-from lokay.proc.pr_review_artifacts import persist_result
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.proc.pr_review_artifacts import persist_result
 
 
 def _decision(value: dict[str, Any]) -> PrReviewDecision:

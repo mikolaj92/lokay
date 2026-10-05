@@ -4,7 +4,6 @@ from lokay.organ.common import _require_test_local
 from lokay.proc.coding_execution_terminal import terminal as coding_terminal
 from lokay.proc.local_repair_terminal import terminal as repair_terminal
 from lokay.proc.prepare_coding_request import prepare as prepare_coding
-from lokay.proc.prepare_local_repair_request import prepare as prepare_repair
 
 
 def test_prepare_coding_request_keeps_issue_and_localize():

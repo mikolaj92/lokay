@@ -3,7 +3,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +11,7 @@ from typing import Any
 def append_event(path: Path, event: dict[str, Any], *, durable: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         **event,
     }
     lock_path = path.with_suffix(path.suffix + ".lock")

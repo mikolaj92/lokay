@@ -1,7 +1,7 @@
 """Issue-bound sieve decisions survive the department boundary (#1105)."""
 
-from lokay.proc.select_issue_sieve_result import select as reduce_sieve
 from lokay.proc.select_issue_do_row import select as select_do
+from lokay.proc.select_issue_sieve_result import select as reduce_sieve
 from lokay.proc.select_next_issue import select as pick
 
 
@@ -64,6 +64,7 @@ def test_executor_rows_attach_decisions_to_fresh_issue_list(monkeypatch):
 def test_authored_parent_conducts_completed_sieve_to_executor(monkeypatch):
     import tomllib
     from pathlib import Path
+
     from lokay.organ.departments_boundary import handle_departments
     package = tomllib.loads((Path(__file__).parents[1] / 'fala/lokay.fala-package.toml').read_text())
     path = next(p for p in package['correlation_paths'] if p['id'] == 'factory_pass')
@@ -87,6 +88,7 @@ def test_authored_parent_conducts_completed_sieve_to_executor(monkeypatch):
 def test_authored_parent_conducts_fala_flat_sieve_to_executor(monkeypatch):
     import tomllib
     from pathlib import Path
+
     from lokay.organ.departments_boundary import handle_departments
     package = tomllib.loads((Path(__file__).parents[1] / 'fala/lokay.fala-package.toml').read_text())
     path = next(p for p in package['correlation_paths'] if p['id'] == 'factory_pass')
@@ -119,9 +121,9 @@ def test_sieve_resume_retains_decisions_from_earlier_slots(tmp_path):
     listed = {'ok': True, 'issues': [{'repo': 'o/r', 'issue': n} for n in (1, 2, 3)]}
     initial = prepare(listed=listed, last={}, pass_dir=str(tmp_path), config_path=None,
                       live=False, budget=5, slot_count=5)
-    first = classify({'route': 'run', 'slot': 1},
-                     {'result': {**decision(1, 'do', 'ready'), 'leftover': 2,
-                                 'leftover_issues': listed['issues'][1:]}}, prepared=initial)
+    classify({'route': 'run', 'slot': 1},
+             {'result': {**decision(1, 'do', 'ready'), 'leftover': 2,
+                         'leftover_issues': listed['issues'][1:]}}, prepared=initial)
     resumed = prepare(listed=listed, last={}, pass_dir=str(tmp_path), config_path=None,
                       live=False, budget=5, slot_count=5)
     assert resumed['decisions'] == [decision(1, 'do', 'ready')]

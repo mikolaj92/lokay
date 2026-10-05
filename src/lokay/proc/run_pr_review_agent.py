@@ -106,8 +106,8 @@ def run_review_agent(
     try:
         cfg = load_config(config_path)
         request = plugin_request(cfg, repo, pr, evidence)
-        from lokay.proc._common import runner as make_runner
         from lokay.pr_review_io import revalidate_pr_identity
+        from lokay.proc._common import runner as make_runner
 
         gh_runner = make_runner(cfg)
         before = revalidate_pr_identity(

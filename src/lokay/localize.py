@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from lokay.approach_plan import extract_paths
 
@@ -187,7 +188,6 @@ _STOP_TOKENS = frozenset(
         "step",
         "node",
         "pass",
-        "lokay",
         "tick",
         "live",
         "mode",
@@ -220,19 +220,15 @@ _STOP_TOKENS = frozenset(
         "method",
         "return",
         "import",
-        "from",
         "def",
-        "class",
         "self",
         "type",
         "str",
         "int",
         "bool",
         "dict",
-        "list",
         "set",
         "tuple",
-        "path",
         "read",
         "write",
         "edit",
@@ -249,7 +245,6 @@ _STOP_TOKENS = frozenset(
         "text",
         "content",
         "seed",
-        "issue",
         "ticket",
         "task",
         "todo",
@@ -281,7 +276,6 @@ _STOP_TOKENS = frozenset(
         "cli",
         "api",
         "url",
-        "http",
         "html",
         "css",
         "js",

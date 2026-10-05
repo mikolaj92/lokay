@@ -11,7 +11,6 @@ from lokay.proc._common import add_config_live
 from lokay.state import append_event
 
 
-
 def compose_pr_triage(
     *,
     config_path: str | None,

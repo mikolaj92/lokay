@@ -1,6 +1,7 @@
 """Remove one orphan configured-ready label, or report the planned effect."""
 
 import argparse
+
 from lokay.gh_issues import remove_issue_labels
 from lokay.proc._common import load_cfg, runner
 

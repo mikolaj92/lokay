@@ -1,6 +1,7 @@
 """Read exact ownership of one existing recovery worktree."""
 
 from pathlib import Path
+
 from lokay.git_worktree import worktree_owned_by_clone
 from lokay.proc._common import runner
 

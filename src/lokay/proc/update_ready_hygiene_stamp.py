@@ -1,6 +1,7 @@
 """Apply ready-hygiene empty-probe TTL effect."""
 
 import argparse
+
 from lokay.proc._common import load_cfg
 from lokay.proc.ready_hygiene import (
     _clear_hygiene_stamp,

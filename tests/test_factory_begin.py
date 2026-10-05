@@ -17,7 +17,7 @@ def test_composed_begin_atoms_write_pass_dir_not_idle(tmp_path, monkeypatch):
     state.write_text("", encoding="utf-8")
     monkeypatch.setattr(
         "lokay.proc.seed_prior_catalog.live_issue_to_pr_receipts",
-        lambda: [],
+        list,
     )
     workspace = {"pass_dir": str(tmp_path / "factory-pass-now")}
     Path(workspace["pass_dir"]).mkdir()
@@ -46,8 +46,9 @@ def test_composed_begin_atoms_write_pass_dir_not_idle(tmp_path, monkeypatch):
 
 
 def test_persist_begin_writes_only_begin_json(tmp_path):
-    from lokay.proc.persist_factory_begin_state import persist
     import inspect
+
+    from lokay.proc.persist_factory_begin_state import persist
 
     source = inspect.getsource(persist)
     assert "build_begin" not in source

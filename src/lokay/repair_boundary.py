@@ -1,8 +1,11 @@
 """Pure closed contracts for repairing one reviewed PR head."""
 
 from __future__ import annotations
-from typing import Any, Mapping
-from lokay.pr_review import extract_json_object, PrReviewError
+
+from collections.abc import Mapping
+from typing import Any
+
+from lokay.pr_review import PrReviewError, extract_json_object
 
 VERDICTS = frozenset({"repaired", "needs_evidence"})
 EVIDENCE_KINDS = frozenset(

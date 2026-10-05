@@ -1,11 +1,8 @@
 """Contracts for minimal occupancy-refresh processes."""
 
-import inspect
 
 from lokay.proc.reduce_occupancy_facts import reduce_state as reduce_facts
 from lokay.proc.reduce_occupancy_refresh import reduce_state
-
-
 
 
 def test_catalog_fail_closed_when_prepare_failed():

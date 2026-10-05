@@ -1,7 +1,9 @@
 """Collect one bounded current diff for the localized coding scope."""
 
 from __future__ import annotations
+
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.runner import CommandSpec
 

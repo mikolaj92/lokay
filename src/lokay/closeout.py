@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.envelope import ok
 from lokay.merge_policy import WAITING_REASONS, WAITING_REMAINING_FIELDS

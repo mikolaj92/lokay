@@ -1,8 +1,10 @@
 """Verify that supplemental PR evidence still belongs to the reviewed SHA."""
 from __future__ import annotations
+
 from lokay.envelope import ok
 from lokay.gh_prs import gh_json
 from lokay.proc._common import runner
+
 
 def verify(*, repo: str, pr: int, expected_sha: str, live: bool) -> dict:
     try:
@@ -18,6 +20,7 @@ def verify(*, repo: str, pr: int, expected_sha: str, live: bool) -> dict:
 
 def main(argv=None):
     import argparse
+
     from lokay.envelope import emit_exit
     from lokay.proc._common import add_config_read
     parser=argparse.ArgumentParser(prog="lokay-verify-review-evidence-sha"); add_config_read(parser)

@@ -1,6 +1,7 @@
 """Find an origin/main commit carrying the exact recovery fingerprint."""
 
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.runner import git_spec
 

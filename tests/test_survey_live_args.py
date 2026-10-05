@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lokay.envelope import emit_exit, ok
 from lokay.passkit import io as pass_io
 from lokay.passkit.support import run_proc
 from lokay.proc import list_inbox, list_issues, list_prs

@@ -1,6 +1,7 @@
 """Collect complete merged-state evidence for PRs referenced by one issue."""
 
 from __future__ import annotations
+
 from lokay.intake import referenced_pr_numbers
 from lokay.intake_io import merged_prs
 from lokay.models import Issue

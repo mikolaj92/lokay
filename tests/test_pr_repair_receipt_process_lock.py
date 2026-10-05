@@ -1,7 +1,6 @@
 """Repair receipt file locks serialize updates across processes."""
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys

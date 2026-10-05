@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from lokay.compose.daemon_cycle import finalize_daemon_payload
-from lokay.fail_digest import DIGEST_NAME, DIGEST_DIR, build_digest, write_digest
+from lokay.fail_digest import DIGEST_DIR, DIGEST_NAME, build_digest, write_digest
 
 
 def test_nested_adapter_failed_host_ff_dirty_mentions_dirty(tmp_path: Path):
@@ -171,6 +171,7 @@ def test_explain_failure_distinguishes_local_upstream_and_unknown():
 
 def test_explain_failure_uses_execution_provenance_not_current_head(tmp_path):
     import importlib.util
+
     from lokay.execution_provenance import implementation_identity
     from lokay.fail_digest import explain_failure
 

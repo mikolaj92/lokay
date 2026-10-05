@@ -1,8 +1,10 @@
 """Fala bindings for the explicit PR-repair boundary."""
 
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
+
 from lokay.config import load_config
 
 _ATOMS = frozenset(

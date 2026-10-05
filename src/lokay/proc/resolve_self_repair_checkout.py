@@ -1,6 +1,7 @@
 """Resolve the canonical Lokay checkout and recovery worktree paths."""
 
 import argparse
+
 from lokay.proc._common import load_cfg
 
 REPO = "mikolaj92/lokay"

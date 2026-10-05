@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.factory_scope import factory_repo, scoped_repos
+from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.proc.detach_issue_to_pr import (
     coding_live_for_issue,
     is_live_issue_to_pr_pid,
@@ -514,7 +515,7 @@ def _drop_out_of_scope_stuck_rows(
     allowed = {str(name).strip() for name in repos if str(name).strip()}
     if not allowed:
         return
-    for key in list((stuck.get("issues") or {})):
+    for key in list(stuck.get("issues") or {}):
         repo, sep, num_s = str(key).rpartition("#")
         issue = _as_int(num_s)
         if not sep or not repo or issue is None:

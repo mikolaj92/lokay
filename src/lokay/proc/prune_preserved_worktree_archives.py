@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from lokay.git_worktree import _is_quarantine_name, reclaim_preserved_archive
+from lokay.git_worktree import _is_quarantine_name
 from lokay.proc.stale_worktree_catalog import SLOTS as ARCHIVE_GC_SLOTS
 
 # Age selects inspection candidates only, never deletion permission.

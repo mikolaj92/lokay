@@ -1,6 +1,13 @@
 """Closed issue-triage state boundary."""
-from lokay.issue_triage_boundary import resolve_candidate, resolve_hard_facts, select_evidence, select_initial, validate_output
+from lokay.issue_triage_boundary import (
+    resolve_candidate,
+    resolve_hard_facts,
+    select_evidence,
+    select_initial,
+    validate_output,
+)
 from lokay.proc.apply_issue_skip import apply as apply_skip
+
 
 def issue(**extra):
     value={"repo":"a/b","number":7,"title":"Implement useful feature","body":"A sufficiently detailed body with clear acceptance criteria.","labels":[],"assignees":["mikolaj92"],"url":"u","state":"OPEN","author":"mikolaj92"}; value.update(extra); return value

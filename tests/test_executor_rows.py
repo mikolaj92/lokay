@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 from lokay.proc.classify_executor_row import classify as classify_slot
 from lokay.proc.prepare_executor_rows import prepare
@@ -35,7 +34,7 @@ def _row(*, issue: int, leftover: list[dict], launched: str | None = "started", 
 
 def test_prepare_seeds_serial_budget(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(
-        "lokay.proc.prepare_executor_rows.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_executor_rows.live_issue_to_pr_receipts", list
     )
     out = prepare(
         listed=_listed(2, 3),

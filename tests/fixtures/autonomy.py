@@ -6,8 +6,9 @@ and stub envelopes for pytest. No network, no gh mutation.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 
 def write_lokay_config(

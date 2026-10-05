@@ -1,6 +1,8 @@
 """Pure checks of publication evidence; no effects or process ordering."""
 from __future__ import annotations
+
 from typing import Any
+
 
 def _test_local_ok(env: dict[str, Any] | None) -> bool:
     """Green suite, or an honest skip (no Python suite), counts as success.

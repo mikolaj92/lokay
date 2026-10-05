@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import json
 
 from lokay.gh_prs import find_pr_fixing_issue

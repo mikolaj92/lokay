@@ -1,10 +1,9 @@
 import json
 from pathlib import Path
 
-from lokay.status_dashboard import dashboard_snapshot
-
-
 import pytest
+
+from lokay.status_dashboard import dashboard_snapshot
 
 
 @pytest.fixture(autouse=True)

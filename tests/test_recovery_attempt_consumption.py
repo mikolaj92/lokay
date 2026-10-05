@@ -3,10 +3,11 @@
 import sqlite3
 from types import SimpleNamespace
 
+from test_repair_quorum import receipt
+
 from lokay.fala_organ import _handle
 from lokay.pass_history import append_pass_receipt
 from lokay.pass_receipt import write_pass_receipt
-from test_repair_quorum import receipt
 
 
 def test_both_bindings_require_fresh_passes_after_repair(tmp_path, monkeypatch):

@@ -9,10 +9,9 @@ close+reason — verify / no_pr failures must not permanently bury OPEN ready.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-
 
 # Local cooldown for verify / no_delivery / no_pr fail-closed rows.
 # Never a permanent ledger bury (lokay#1082).
@@ -43,7 +42,7 @@ def is_transient_ledger_reason(reason: str | None) -> bool:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _parse_ts(raw: Any) -> datetime | None:
@@ -70,7 +69,7 @@ def block_active(row: dict[str, Any] | None, *, now: datetime | None = None) -> 
     if cooldown_until is not None:
         stamp = now or _utcnow()
         if stamp.tzinfo is None:
-            stamp = stamp.replace(tzinfo=timezone.utc)
+            stamp = stamp.replace(tzinfo=UTC)
         return cooldown_until > stamp
     # Legacy eternal transient limbo → treat as expired (auto-clear path).
     if is_transient_ledger_reason(reason):

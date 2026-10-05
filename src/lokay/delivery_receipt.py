@@ -1,7 +1,11 @@
 """Canonical provenance marker for autonomous PR delivery."""
 from __future__ import annotations
-import hashlib,json,re
+
+import hashlib
+import json
+import re
 from typing import Any
+
 PREFIX='<!-- lokay-autonomous-delivery:'
 PATTERN=re.compile(r'<!-- lokay-autonomous-delivery:(\{.*?\}) -->')
 REQUIRED={'repo','issue','work_id','graph_digest','path_digest','run_refs','builder_session','reviewer_session','acceptance_digest','head_sha'}

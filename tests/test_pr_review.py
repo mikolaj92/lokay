@@ -1,6 +1,5 @@
 """Structured PR review parse + policy and repository boundary."""
 
-import json
 
 import pytest
 
@@ -14,13 +13,11 @@ from lokay.pr_review import (
     labels_for_review,
     parse_review_markers,
     parse_review_output,
+    review_prompt,
     should_escalate_request_changes,
     should_merge,
     should_repair,
-    review_prompt,
 )
-
-
 
 
 def test_parse_plain_json():

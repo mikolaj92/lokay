@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ def build_event(
     repo_s = str(repo).strip() if repo is not None else ""
     err_s = str(error).strip() if error is not None else ""
     return {
-        "ts": datetime.now(timezone.utc).isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
         "atom": str(atom).strip(),
         "repo": repo_s or None,
         "issue": int(issue) if issue is not None else None,

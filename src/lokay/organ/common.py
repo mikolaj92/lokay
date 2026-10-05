@@ -2,31 +2,21 @@
 
 from __future__ import annotations
 
-import json
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from fala import sdk
-
-from lokay.git_commit import branch_ahead_of_upstream
-from lokay.models import Issue
-from lokay.proc._common import runner
 from lokay.prompts import (
-    issue_fix_prompt,
-    local_test_repair_prompt,
-    pr_body,
-    repair_pr_prompt,
-    self_repair_prompt,
     timeout_resume_prompt,
 )
 
-from lokay.organ.publication_gates import (
+from lokay.organ.publication_gates import (  # noqa: F401 — re-exported for fala_organ/publication
     _test_local_ok, _finalize_local_tests_ok, _test_local_probe,
     _require_test_local, _require_push, _require_real_diff,
     _require_acceptance, _require_publish_gate,
 )
+
 
 def _request_blob(up: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return dict(

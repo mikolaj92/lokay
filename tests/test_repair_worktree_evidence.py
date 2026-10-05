@@ -9,7 +9,11 @@ import pytest
 
 from lokay.config import Config, RepoConfig
 from lokay.git_commit import commit_all
-from lokay.git_worktree import _repair_worktree_identity, ensure_repair_worktree, worktree_dir
+from lokay.git_worktree import (
+    _repair_worktree_identity,
+    ensure_repair_worktree,
+    worktree_dir,
+)
 from lokay.proc.worktree_add import verify_repair_start_identity
 from lokay.runner import CommandResult, Runner
 

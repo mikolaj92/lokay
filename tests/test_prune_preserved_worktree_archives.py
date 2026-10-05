@@ -2,7 +2,6 @@
 
 import os
 import time
-from pathlib import Path
 
 from lokay.proc.prune_preserved_worktree_archives import (
     PRESERVED_ARCHIVE_TTL_SECONDS,

@@ -14,23 +14,16 @@ from pathlib import Path
 
 import pytest
 import yaml
+from fixtures.autonomy import (
+    review_envelope,
+)
 
-from lokay.compose import tick
 from lokay.config import load_config
 from lokay.intake import decide_intake
 from lokay.merge_policy import decide_auto_merge
 from lokay.models import Issue
 from lokay.pass_receipt import build_pass_receipt
-from lokay.recovery_history import observe_run, record_observation, history_path_for
-
-from fixtures.autonomy import (
-    intake_ready_envelope,
-    intake_reject_envelope,
-    open_ai_pr,
-    review_envelope,
-    step_names,
-    write_lokay_config,
-)
+from lokay.recovery_history import history_path_for, observe_run, record_observation
 
 ROOT = Path(__file__).resolve().parents[1]
 

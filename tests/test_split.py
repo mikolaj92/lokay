@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-
-
 from lokay.models import Issue
 from lokay.proc import issue_split as atom
 from lokay.split import plan_split

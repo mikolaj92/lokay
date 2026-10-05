@@ -5,7 +5,6 @@ from pathlib import Path
 from lokay.organ.coding_boundary import handle_coding_boundary
 from lokay.proc.coding_execution_subflow import failed, run
 
-
 FIRE_STEP = "sqlite.fire: failed to step query"
 
 

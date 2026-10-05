@@ -4,7 +4,6 @@ from lokay.proc.select_issue_do import select as select_do
 from lokay.proc.select_next_issue import select as pick
 from lokay.proc.summarize_issues import envelope
 
-
 TARGET = {"ok": True, "route": "issue", "repo": "Temida/Temida", "issue": 5005}
 
 

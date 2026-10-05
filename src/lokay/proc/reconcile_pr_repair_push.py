@@ -100,11 +100,7 @@ def reconcile_pending(
         or not str(selected.get("pr") or "").isdigit()
         or int(selected.get("pr") or 0) <= 0
         or not str(selected.get("branch") or "").strip()
-    ):
-        selected_route = "invalid"
-    elif selected_route not in {"pr", "none"}:
-        selected_route = "invalid"
-    elif selected_route == "none" and selected.get("ok") is not True:
+    ) or selected_route not in {"pr", "none"} or selected_route == "none" and selected.get("ok") is not True:
         selected_route = "invalid"
     budget = pr_repair_receipts.resolve_budget(config_path)
     recovered: list[dict[str, Any]] = []

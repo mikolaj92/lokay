@@ -1,6 +1,7 @@
 """Park readiness and clear stuck state for one physically closed issue."""
 
 from pathlib import Path
+
 from lokay.passkit.support import run_proc
 from lokay.proc import unbounded_park
 from lokay.stuck import clear_issue, load_stuck, save_stuck

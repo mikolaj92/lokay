@@ -11,7 +11,6 @@ from lokay.agent import run_agent
 from lokay.config import Config
 from lokay.runner import CommandSpec
 
-
 ROOT = Path(__file__).resolve().parents[1]
 LLM_SLOT = (
     ROOT / "src" / "lokay" / "agent.py",
@@ -62,7 +61,7 @@ def test_run_agent_timeout_is_ok_structured_state(monkeypatch, capsys, tmp_path)
     def boom(*_a, **_k):
         raise AssertionError("LLM slot must not persist a revision")
 
-    import lokay.git_commit as git_commit
+    from lokay import git_commit
 
     monkeypatch.setattr(git_commit, "commit_all", boom)
     assert not hasattr(proc, "commit_all")

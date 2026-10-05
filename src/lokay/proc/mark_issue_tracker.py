@@ -1,6 +1,7 @@
 """Replace parent work labels with the tracker label."""
 
 from __future__ import annotations
+
 from lokay.gh_issues import add_issue_labels, remove_issue_labels
 
 

@@ -177,10 +177,7 @@ def test_hx_target_uses_stable_ids_when_present():
             if target in {"this", "body", "html"}:
                 continue
             # Allow CSS id-less but simple class? Prefer ban non-id for stability.
-            if target.startswith(".") or " " in target or target.startswith("closest"):
-                rel = path.relative_to(ROOT)
-                bad.append(f"{rel}: hx-target={target!r} — prefer #id")
-            elif target.startswith("find") or target.startswith("next") or target.startswith(
+            if target.startswith(".") or " " in target or target.startswith("closest") or target.startswith("find") or target.startswith("next") or target.startswith(
                 "previous"
             ):
                 rel = path.relative_to(ROOT)

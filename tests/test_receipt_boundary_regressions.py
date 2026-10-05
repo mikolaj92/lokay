@@ -1,6 +1,8 @@
 """Factory conduction -> durable receipt -> next PR selection regressions."""
 
 import pytest
+from test_departments_fala import _factory_path
+from test_record_pass import _begin
 
 from lokay.organ.factory import handle_factory
 from lokay.pass_history import read_pass_history
@@ -9,8 +11,6 @@ from lokay.passkit import io as pass_io
 from lokay.proc.select_next_pr import select
 from lokay.proc.summarize_pr_triage_department import summarize
 from lokay.proc.walk_pr_leftover import skipped_identity
-from test_departments_fala import _factory_path
-from test_record_pass import _begin
 
 OLD, NEW = "a" * 40, "b" * 40
 PR = {"repo": "acme/pr-repo", "pr": 84, "head_sha": OLD, "branch": "ai/fix/84"}

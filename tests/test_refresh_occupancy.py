@@ -11,8 +11,8 @@ import pytest
 from lokay.passkit import io as pass_io
 from lokay.proc import detach_issue_to_pr
 from lokay.proc.implementation_selection_catalog import run as _catalog
-from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 from lokay.proc.persist_implementation_selection import persist as _persist_selection
+from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 
 
 def run_select_implement(*, pass_dir: str):
@@ -172,8 +172,8 @@ def test_refresh_occupancy_uses_worker_liveness(
 
 
 def test_refresh_live_receipt_for_closed_issue_is_cleared(monkeypatch):
-    from lokay.proc.terminate_closed_issue_worker import terminate
     from lokay.proc.clear_closed_issue_receipt import clear
+    from lokay.proc.terminate_closed_issue_worker import terminate
 
     receipt = {"repo": "mikolaj92/lokay", "issue": 2, "pid": 9}
     killed = []
@@ -204,7 +204,7 @@ def test_refresh_occupancy_failed_relist_blocks_repo(tmp_path, monkeypatch):
         lambda fn, argv: {"ok": False, "error": "gh failed"},
     )
     monkeypatch.setattr(
-        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", list
     )
     out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
@@ -274,7 +274,7 @@ def test_refresh_keeps_local_needs_review_park(tmp_path, monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", list
     )
     out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
@@ -302,7 +302,7 @@ def test_refresh_skips_empty_idle_repo(tmp_path, monkeypatch):
 
     monkeypatch.setattr("lokay.proc.list_occupancy_pull_requests.run_proc", fake_run)
     monkeypatch.setattr(
-        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", list
     )
     out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
@@ -337,7 +337,7 @@ def test_refresh_failed_relist_keeps_snapshot(tmp_path, monkeypatch):
         lambda fn, argv: {"ok": False, "error": "gh rate limit exhausted"},
     )
     monkeypatch.setattr(
-        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", list
     )
     out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
@@ -371,7 +371,7 @@ def test_refresh_keeps_survey_error_on_skipped_failed_repo(tmp_path, monkeypatch
 
     monkeypatch.setattr("lokay.proc.list_occupancy_pull_requests.run_proc", fake_run)
     monkeypatch.setattr(
-        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", list
     )
     out = _run_refresh(pass_dir=pass_dir, config_path=None, live=True)
     assert out["ok"] is True
@@ -401,7 +401,7 @@ def test_refresh_unknown_receipt_state_does_not_occupy_catalog(tmp_path, monkeyp
         lambda: True,
     )
     monkeypatch.setattr(
-        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", lambda: []
+        "lokay.proc.prepare_occupancy_refresh.live_issue_to_pr_receipts", list
     )
     monkeypatch.setattr(
         "lokay.proc.list_occupancy_pull_requests.run_proc",

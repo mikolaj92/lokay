@@ -1,6 +1,7 @@
 """Read whether live mutations are currently permitted for self-repair."""
 
 import argparse
+
 from lokay.proc._common import load_cfg, mutations_allowed
 
 

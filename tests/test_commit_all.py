@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-
 from lokay.git_commit import commit_all
 from lokay.runner import Runner
 

@@ -1,7 +1,7 @@
 """Dashboard speed must not change the durable history projection (#1097)."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from lokay.proc.yield_report import build_report
 from lokay.work_units import project_work_units
@@ -29,7 +29,7 @@ def test_yield_counts_first_record(tmp_path):
                                "ts": "2026-09-01T12:00:00Z",
                                "ok": True, "merged": True}) + "\n")
 
-    report = build_report(path, since=datetime(2026, 9, 1, tzinfo=timezone.utc))
+    report = build_report(path, since=datetime(2026, 9, 1, tzinfo=UTC))
 
     assert report["events"] == 1
     assert report["by_repo"]["a/b"]["merges"] == 1
@@ -44,7 +44,7 @@ def test_yield_does_not_assume_timestamp_order(tmp_path):
     ]
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
-    report = build_report(path, since=datetime(2026, 9, 1, tzinfo=timezone.utc))
+    report = build_report(path, since=datetime(2026, 9, 1, tzinfo=UTC))
 
     assert report["events"] == 2
     assert report["by_repo"]["a/b"]["starts"] == 2

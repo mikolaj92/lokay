@@ -1,6 +1,7 @@
 """Collect a bounded repository tree for one coding evidence round."""
 
 from __future__ import annotations
+
 from pathlib import Path
 
 

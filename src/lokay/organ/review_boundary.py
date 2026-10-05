@@ -1,5 +1,6 @@
 """Fala bindings for the SHA-bound PR-review subgraph."""
 from __future__ import annotations
+
 from typing import Any
 
 OWNED = frozenset({

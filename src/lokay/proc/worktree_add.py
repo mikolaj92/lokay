@@ -15,8 +15,8 @@ from typing import Any
 
 from lokay.code.github import InvalidBranchRef
 from lokay.envelope import emit_exit, ok
-from lokay.repair_continuation import repair_head_continues
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
+from lokay.repair_continuation import repair_head_continues
 from lokay.repair_worktree_dirt import repair_worktree_dirt
 from lokay.runner import git_spec
 from lokay.source import load_code

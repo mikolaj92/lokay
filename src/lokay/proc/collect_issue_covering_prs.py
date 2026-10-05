@@ -1,6 +1,7 @@
 """Collect complete covering-AI-PR evidence for one issue."""
 
 from __future__ import annotations
+
 from lokay.intake_io import covering_ai_prs
 
 

@@ -1,4 +1,5 @@
 from lokay.release_train import next_release_action
+
 PLAN={'source':{'repo':'mikolaj92/Fala','sha':'abc','tag':'v1'},'consumers':[{'repo':'mikolaj92/lokay','verify':['uv','run','pytest']},{'repo':'mikolaj92/app','verify':['true']}]}
 def test_source_must_be_confirmed_main_and_release_is_idempotent():
  assert next_release_action(PLAN,{'source_on_main':False})['route']=='wait_source'

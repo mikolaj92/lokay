@@ -7,8 +7,6 @@ import pytest
 from lokay.proc import make_branch
 
 
-
-
 def test_make_branch_still_makes_lokay_branch(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

@@ -7,7 +7,8 @@ through one coding monolith. Zero needs_human.
 from __future__ import annotations
 
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.models import Issue
 

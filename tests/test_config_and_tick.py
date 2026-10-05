@@ -36,7 +36,7 @@ def _run_pr_survey(module, pass_dir):
 def _run_closeout(module, pass_dir):
     from lokay.passkit.support import is_manual_pr
 
-    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))  # noqa: F841 — begin.json must exist
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     prs = dict(working.get("prs_by_repo") or {})
     actions = list(working.get("actions") or [])

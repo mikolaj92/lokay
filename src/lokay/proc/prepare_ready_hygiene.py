@@ -1,6 +1,8 @@
 """Prepare bounded repositories, TTL route, and mutation policy for ready hygiene."""
 
-import argparse, os
+import argparse
+import os
+
 from lokay.proc._common import load_cfg, mutations_allowed
 from lokay.proc.ready_hygiene import (
     IDLE_HYGIENE_TTL_SECONDS,

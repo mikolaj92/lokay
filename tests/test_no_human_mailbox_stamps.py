@@ -13,7 +13,6 @@ from lokay.proc.select_park_stop import select as select_park_stop
 from lokay.tasks import MemoryTasks, TaskId, sito_park
 from lokay.triage import decide_issue
 
-
 FORBIDDEN = frozenset({"ai:needs-feedback", "ai:blocked", "ai:frozen"})
 
 
@@ -59,7 +58,7 @@ def test_decide_issue_never_stamps_limbo():
 
 
 def test_aggregate_intake_park_and_blocked_skip_no_labels():
-    from lokay.intake import CheckResult, BLOCKED, PARK, INCONCLUSIVE
+    from lokay.intake import BLOCKED, INCONCLUSIVE, PARK, CheckResult
 
     blocked = aggregate_intake(
         [CheckResult(check="preflight", verdict=BLOCKED, reason="preflight_incident")]

@@ -5,14 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import time
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from lokay.state import append_event
-
 
 NODES = frozenset({'intake_ambiguity', 'issue_triage', 'queue_conflict', 'relocalization'})
 

@@ -6,13 +6,20 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-from app_factory.platform import MenuItem, PlatformConfig, PlatformPaths, PlatformUser, build_platform_context, install_platform
+from app_factory.platform import (
+    MenuItem,
+    PlatformConfig,
+    PlatformPaths,
+    PlatformUser,
+    build_platform_context,
+    install_platform,
+)
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
-from lokay.status_dashboard import dashboard_snapshot
 from lokay.status_artifact import SnapshotUnavailable, read_snapshot
+from lokay.status_dashboard import dashboard_snapshot
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
 # The Python snapshot schema and its template form one release. During a live
@@ -80,9 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8766)
     args = parser.parse_args(argv)
-    import uvicorn
-
     import math
+
+    import uvicorn
 
     if not math.isfinite(args.max_snapshot_age) or args.max_snapshot_age <= 0:
         parser.error("--max-snapshot-age must be finite and positive")

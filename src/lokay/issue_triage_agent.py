@@ -1,7 +1,9 @@
 """Prompt contract for one semantic issue-triage agent call."""
 
 from __future__ import annotations
+
 import json
+
 from lokay.models import Issue
 from lokay.safety import untrusted_issue_block
 from lokay.tool_contracts import render_contract

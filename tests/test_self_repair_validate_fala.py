@@ -1,9 +1,8 @@
 """Native Fala proof for explicit self-repair validation branches."""
 
 import pytest
-
-from test_issue_triage_fala import base_effector
 from test_implementation_selection_fala import run_graph
+from test_issue_triage_fala import base_effector
 
 
 def test_clean_candidate_without_untracked_paths(tmp_path):

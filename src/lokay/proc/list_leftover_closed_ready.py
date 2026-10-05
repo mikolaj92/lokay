@@ -1,9 +1,10 @@
 """List CLOSED issues for one repository and one ready label."""
 
 import argparse
+
+from lokay.gh_issues import is_github_rate_limit_error
 from lokay.proc._common import load_cfg, runner
 from lokay.proc.closeout import closed_ready_numbers
-from lokay.gh_issues import is_github_rate_limit_error
 
 
 def fetch(selected: dict, *, config_path: str | None, live: bool) -> dict:

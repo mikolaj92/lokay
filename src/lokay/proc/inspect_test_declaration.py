@@ -1,6 +1,7 @@
 """Inspect one repository-declared local test command."""
 
 from pathlib import Path
+
 from lokay.proc.test_local import declared_test_argv
 
 

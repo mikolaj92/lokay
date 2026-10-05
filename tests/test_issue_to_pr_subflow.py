@@ -5,7 +5,6 @@ from lokay.proc.classify_issue_to_pr_subflow import classify, failed
 from lokay.proc.issue_to_pr_subflow import invoke
 from lokay.proc.select_local_test import select
 
-
 FIRE_STEP = "sqlite.fire: failed to step query"
 SOURCE = "condition_source_not_succeeded"
 

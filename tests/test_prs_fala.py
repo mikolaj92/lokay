@@ -7,7 +7,6 @@ from test_factory_pass_fala import _require_fala_host
 from test_implementation_selection_fala import run_graph
 from test_issue_triage_fala import base_effector
 
-
 PR_TRIAGE_ATOMS = (
     "list_pr_sieve",
     "select_pr_sieve",

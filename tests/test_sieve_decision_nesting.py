@@ -1,6 +1,6 @@
 """Nested and flat sieve decision handoff (#1105 continuation)."""
 
-from lokay.sieve_decision import attach, collect, decision_of
+from lokay.sieve_decision import attach
 
 
 def _d(issue, route="skip", reason="host_ops", repo="o/r"):

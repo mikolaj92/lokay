@@ -1,6 +1,8 @@
 """Deterministic routing of technical difficulty away from human residuals."""
 from __future__ import annotations
+
 import re
+
 
 def classify_technical_route(title:str,body:str)->dict[str,str]:
  text=f'{title}\n{body}'.lower()

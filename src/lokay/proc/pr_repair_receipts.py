@@ -13,10 +13,11 @@ import os
 import re
 import stat
 import tempfile
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Mapping
+from typing import Any
 
 
 def receipts_dir(
@@ -471,7 +472,7 @@ def _mark_push_attempted_unlocked(
     if pending.get("push_attempted"):
         return {"ok": True, "route": "fail_closed", "reason": "repair_push_attempt_already_started"}
     pending = {**dict(pending), "push_attempted": True,
-               "push_attempted_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+               "push_attempted_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}
     receipt["pending_push"] = pending
     try:
         _write_unlocked(repo, pr, receipt, home=home, state_dir=state_dir)
@@ -527,7 +528,7 @@ def _confirm_pending_push_unlocked(
         "last_terminal": "publish", "last_intent_sha256": pending["intent_sha256"],
         "last_repair_kind": pending["repair_kind"],
         "parked": parked, "pending_push": None,
-        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     })
     try:
         _write_unlocked(repo, pr, receipt, home=home, state_dir=state_dir)
@@ -578,7 +579,7 @@ def _stamp_unlocked(
         "last_reviewed_sha": str(reviewed_sha or base.get("last_reviewed_sha") or ""),
         "last_head_sha": str(head_sha or base.get("last_head_sha") or ""),
         "last_terminal": str(terminal or base.get("last_terminal") or ""),
-        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "parked": parked,
     }
     try:

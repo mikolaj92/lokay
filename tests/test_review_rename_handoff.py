@@ -3,10 +3,10 @@ import hashlib
 import json
 
 import pytest
-
-from test_pr_review_validation import FIXTURES, _request
-from lokay.proc.validate_pr_review import validate_result
 from lokay_review_open_code_review.contract import normalize_result
+from test_pr_review_validation import FIXTURES, _request
+
+from lokay.proc.validate_pr_review import validate_result
 
 
 def renamed_review(*, findings=True):

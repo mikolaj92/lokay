@@ -1,8 +1,10 @@
 """Collect refreshed files evidence for one PR."""
 from __future__ import annotations
+
 from lokay.envelope import ok
 from lokay.gh_prs import gh_text
 from lokay.proc._common import runner
+
 
 def collect(*, repo: str, pr: int, live: bool) -> dict:
     try:
@@ -14,6 +16,7 @@ def collect(*, repo: str, pr: int, live: bool) -> dict:
 
 def main(argv=None):
     import argparse
+
     from lokay.envelope import emit_exit
     from lokay.proc._common import add_config_read
     parser=argparse.ArgumentParser(prog="lokay-collect-review-changed-files"); add_config_read(parser)

@@ -10,8 +10,6 @@ from lokay.git_rebase import RebaseConflict, RebaseError, rebase_onto_base
 from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-rebase-onto-base")
     add_config(parser)

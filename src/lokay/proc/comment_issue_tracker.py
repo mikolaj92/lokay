@@ -1,6 +1,7 @@
 """Publish the one parent-tracker child reference comment."""
 
 from __future__ import annotations
+
 from lokay.gh_issues import comment_issue
 from lokay.split import ChildSpec, SplitPlan, parent_tracker_comment
 

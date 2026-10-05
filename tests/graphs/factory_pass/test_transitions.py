@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for factory_pass."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'factory_pass'

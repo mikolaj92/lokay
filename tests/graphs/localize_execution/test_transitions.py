@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for localize_execution."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'localize_execution'

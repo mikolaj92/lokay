@@ -1,9 +1,10 @@
 """Prepare bounded pass-planning inputs and durable stuck state."""
 
 from pathlib import Path
+
+from lokay.factory_scope import factory_repo, scoped_repos
 from lokay.passkit import io as pass_io
 from lokay.stuck import load_stuck
-from lokay.factory_scope import factory_repo, scoped_repos
 
 
 def prepare(*, pass_dir: str, slot_count: int) -> dict:

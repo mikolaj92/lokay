@@ -2,7 +2,6 @@
 
 from lokay.organ.departments_boundary import handle_departments
 
-
 REPAIR = {"select_self_repair_department": {"route": "run"}}
 
 

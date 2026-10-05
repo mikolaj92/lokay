@@ -1,6 +1,7 @@
 """CLI facade for the authored serial inbox-triage dispatch Fala."""
 
 import argparse
+
 from lokay.envelope import emit_exit, err
 from lokay.proc._common import add_config_live
 

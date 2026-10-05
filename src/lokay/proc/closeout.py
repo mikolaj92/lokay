@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, ok
-from lokay.gh_issues import is_github_rate_limit_error
 from lokay.gh_prs import find_pr_fixing_issue
 from lokay.gh_rate import parse_survey_list, survey_list_cap
 from lokay.passkit.support import run_proc

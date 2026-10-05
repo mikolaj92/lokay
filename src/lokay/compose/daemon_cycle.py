@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
 import signal
-from typing import Any, Mapping
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
 
 from lokay.envelope import err, lokay_glance
 from lokay.fala_journal import maintain_lokay_fala_journals, wrapper_journal_dir
 from lokay.graph_run import run_path
-from lokay.preflight import trusted_fala_manifest
 from lokay.pass_receipt import read_pass_receipt
+from lokay.preflight import trusted_fala_manifest
 from lokay.proc.classify_leftover_remaining import (
     remaining_from_receipt,
     remaining_has_inbox,

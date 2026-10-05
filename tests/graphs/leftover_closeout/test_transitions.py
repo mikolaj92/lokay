@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for leftover_closeout."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'leftover_closeout'

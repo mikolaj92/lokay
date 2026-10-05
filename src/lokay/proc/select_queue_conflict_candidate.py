@@ -4,7 +4,7 @@ from lokay.passkit import io as pass_io
 
 
 def select(*, pass_dir: str) -> dict:
-    begin = pass_io.read_json(pass_io.begin_path(pass_dir))
+    begin = pass_io.read_json(pass_io.begin_path(pass_dir))  # noqa: F841 — begin.json must exist
     working = pass_io.read_json(pass_io.working_path(pass_dir))
     implement = pass_io.read_json(pass_io.implement_path(pass_dir))
     ready = dict(working.get("ready_by_repo") or {})

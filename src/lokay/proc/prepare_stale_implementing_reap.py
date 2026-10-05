@@ -1,13 +1,15 @@
 """Prepare bounded catalog and TTL facts for stale-stage recovery."""
 
-import argparse, os
-from lokay.proc._common import load_cfg
+import argparse
+import os
+
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.working import load_begin_working
+from lokay.proc._common import load_cfg
 from lokay.proc.stale_implementing_stamp import (
-    stale_stamp_path,
-    stale_recently_empty,
     IDLE_STALE_TTL_SECONDS,
+    stale_recently_empty,
+    stale_stamp_path,
 )
 
 

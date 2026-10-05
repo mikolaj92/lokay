@@ -10,9 +10,9 @@ import pytest
 import yaml
 
 from lokay.config import load_config
+from lokay.github_tasks import GitHubTasks, issue_to_task, load_tasks
 from lokay.proc import apply_issue_mark, get_issue, list_issues, list_open_issues
 from lokay.tasks import MARKS, TaskId, sito_park
-from lokay.github_tasks import GitHubTasks, issue_to_task, load_tasks
 
 
 def _imports(mod) -> set[str]:

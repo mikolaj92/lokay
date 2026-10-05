@@ -4,8 +4,9 @@ from lokay.passkit import io as pass_io
 
 
 def test_select_implement_subflow_uses_handful_of_ticks():
-    from lokay.proc.select_implement_subflow import run
     import inspect
+
+    from lokay.proc.select_implement_subflow import run
 
     source = inspect.getsource(run)
     assert "max_ticks=16" in source
@@ -168,8 +169,8 @@ def test_self_stays_eligible_when_product_queue(tmp_path):
 
 
 def test_eligibility_is_closed_physical_gate(tmp_path):
-    from lokay.proc.prepare_implementation_selection import prepare
     from lokay.proc.inspect_implementation_eligibility import inspect
+    from lokay.proc.prepare_implementation_selection import prepare
 
     path = workspace(tmp_path)
     prepared = prepare(pass_dir=str(path), slot_count=30)

@@ -1,5 +1,5 @@
 from lokay.models import Issue
-from lokay.split import plan_split, validate_split_plan, stable_child_marker
+from lokay.split import plan_split, stable_child_marker, validate_split_plan
 
 
 def test_trusted_large_issue_gets_bounded_acyclic_implementable_children():

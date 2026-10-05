@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for stale_worktree_reap."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'stale_worktree_reap'

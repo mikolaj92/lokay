@@ -10,7 +10,6 @@ from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, run
 from lokay.proc.classify_issue_assignee import takeable
 
 
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-assign-issue")
     add_config_live(p)

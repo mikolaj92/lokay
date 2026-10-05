@@ -10,8 +10,6 @@ import pytest
 from lokay.proc import pr_label
 
 
-
-
 def test_factory_repo_still_adds_labels(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

@@ -550,7 +550,6 @@ def normalize_path_result(result: dict[str, Any]) -> dict[str, Any]:
     if authored_results:
         out.update(authored_results[-1])
         return out
-    path_id = str(result.get("path_id") or "")
     return out
 
 

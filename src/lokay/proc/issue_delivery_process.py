@@ -1,7 +1,12 @@
 """Physical process liveness for detached issue delivery."""
 
 from __future__ import annotations
-import os, re, signal, subprocess, time
+
+import os
+import re
+import signal
+import subprocess
+import time
 from typing import Any
 
 

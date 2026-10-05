@@ -1,7 +1,9 @@
 """Fala bindings for bounded issue-split physical effects."""
 
 from __future__ import annotations
+
 from typing import Any
+
 from lokay.config import load_config
 from lokay.proc._common import mutations_allowed, runner
 

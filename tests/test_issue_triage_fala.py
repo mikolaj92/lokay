@@ -1,7 +1,13 @@
 """Native Fala proofs for explicit issue-triage branches."""
-import json,os,subprocess,sys,tomllib
+import json
+import os
+import subprocess
+import sys
+import tomllib
 from pathlib import Path
+
 import pytest
+
 
 def run_graph(tmp_path, body: str, run_id: str, path_id: str = "issue_triage"):
     pytest.importorskip("fala"); root=Path(__file__).resolve().parents[1]; effector=tmp_path/"effector.py"; effector.write_text(body)

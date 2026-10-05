@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 
+
 def _paths_outside_scope(changed: list[str], scope: list[str]) -> list[str]:
     allowed = [item.removeprefix("./").rstrip("/") for item in scope]
 

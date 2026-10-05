@@ -1,6 +1,5 @@
 """Contracts for minimal inbox-survey processes."""
 
-from pathlib import Path
 from lokay.passkit import io as pass_io
 
 
@@ -17,9 +16,8 @@ def test_classification_skips_blocked_issue():
 
 
 def test_failed_listing_increments_probe_error():
-    from lokay.proc.reduce_inbox_survey import reduce_state
-
     from lokay.proc.record_inbox_repo_result import record
+    from lokay.proc.reduce_inbox_survey import reduce_state
 
     row = record(
         {"mini_repo": "mikolaj92/lokay"},

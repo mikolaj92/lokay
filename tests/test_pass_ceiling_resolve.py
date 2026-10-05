@@ -59,6 +59,7 @@ def test_run_daemon_product_cycle_passes_resolved_ceiling(monkeypatch):
 
 def test_compose_default_no_longer_silent_180():
     import inspect
+
     from lokay.compose import daemon_cycle
 
     src = inspect.getsource(daemon_cycle.compose_daemon_cycle)

@@ -45,7 +45,7 @@ def test_classify_is_pure_and_closed(tmp_path):
     from lokay.proc.classify_ready_repo_issues import classify
 
     path = workspace(tmp_path)
-    begin = pass_io.read_json(pass_io.begin_path(path))
+    begin = pass_io.read_json(pass_io.begin_path(path))  # noqa: F841 — begin.json must exist
     working = pass_io.read_json(pass_io.working_path(path))
     working["prs_by_repo"] = {"a/one": [{"head_ref": "ai/fix/7-x"}]}
     working["stuck"] = {"issues": {"a/one#8": {"blocked": True}}}

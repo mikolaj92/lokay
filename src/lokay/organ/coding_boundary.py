@@ -1,8 +1,10 @@
 """Fala bindings for the explicit issue implementation boundary."""
 
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
+
 from lokay.config import load_config
 from lokay.organ.common import _issue_raw, _worktree_path
 
@@ -169,8 +171,8 @@ def handle_coding_boundary(
         }[atom]
         return validate_source(up.get(source) or {}, validate)
     if atom == "collect_existing_delivery_pr":
-        from lokay.proc.collect_existing_delivery_pr import collect
         from lokay.proc._common import runner
+        from lokay.proc.collect_existing_delivery_pr import collect
 
         return collect(
             runner=runner(),
@@ -180,8 +182,8 @@ def handle_coding_boundary(
             config=load_config(inputs.get("config_path") or inputs.get("config")),
         )
     if atom == "collect_resumed_source":
-        from lokay.proc.collect_resumed_source import collect
         from lokay.proc._common import runner
+        from lokay.proc.collect_resumed_source import collect
 
         return collect(
             runner=runner(),

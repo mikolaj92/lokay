@@ -1,11 +1,12 @@
 """Apply the leftover-closeout empty-probe TTL effect."""
 
 import argparse
+
 from lokay.proc._common import load_cfg
 from lokay.proc.closeout import (
-    leftover_stamp_path,
     _clear_leftover_stamp,
     _touch_leftover_stamp,
+    leftover_stamp_path,
 )
 
 

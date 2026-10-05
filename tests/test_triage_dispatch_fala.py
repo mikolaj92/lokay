@@ -1,12 +1,10 @@
 """Native Fala proofs for serial inbox-triage dispatch."""
 
-from pathlib import Path
-from test_issue_triage_fala import run_graph, base_effector
+from test_issue_triage_fala import base_effector, run_graph
 
 
 def test_triage_target_runs_subflow_and_records(tmp_path):
     sub = tmp_path / "sub"
-    wrong = tmp_path / "wrong"
     body = base_effector(
         """if a=='select_triage_target':v.update(route='target',repo='a/b',issue=1)
 if a=='check_triage_stuck':v['route']='run'

@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for assert_real_diff_execution."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'assert_real_diff_execution'

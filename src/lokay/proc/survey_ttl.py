@@ -19,11 +19,12 @@ import os
 import re
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.factory_scope import factory_repo
+from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.triage import is_open_work_issue
 
 _CSI = re.compile(r"\[[0-9;]*[mK]")

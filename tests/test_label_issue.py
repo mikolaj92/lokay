@@ -7,8 +7,6 @@ import pytest
 from lokay.proc import label_issue
 
 
-
-
 @pytest.mark.parametrize("remove", [False, True])
 def test_label_issue_still_updates_lokay(
     remove: bool,

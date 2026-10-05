@@ -17,7 +17,6 @@ def _keep_parked(previous: list[dict], rows: list[dict]) -> list[dict]:
 
 def reduce_state(*, facts: dict, results: list[dict], working: dict) -> dict:
     actions = list(working.get("actions") or [])
-    previous = dict(working.get("prs_by_repo") or {})
     prs = {}
     failed = set(working.get("pr_survey_failed") or [])
     for receipt in facts.get("cleared") or []:

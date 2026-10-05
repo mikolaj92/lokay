@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ def reset_activity(*, config_path: str | None = None) -> dict[str, Any] | None:
         state_dir = _state_dir(payload_inputs)
         if state_dir is None:
             return None
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         payload: dict[str, Any] = {
             "transitions": 0,
             "last_activity_at": now,
@@ -114,7 +114,7 @@ def record_atom_start(
             transitions = int(previous.get("transitions") or 0) + 1
         except (TypeError, ValueError):
             transitions = 1
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         payload: dict[str, Any] = {
             "atom": str(atom or "").strip() or None,
             "path": _path_id(process_id, payload_inputs),

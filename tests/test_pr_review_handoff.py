@@ -1,7 +1,7 @@
 """Authored conduction must carry review findings into repair receipts."""
 
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -18,7 +18,8 @@ def test_authored_review_handoff_retains_blockers(atom):
             "title": "Task", "body": "Acceptance", "url": "https://github.com/o/r/issues/9"}
     finding = {"path": "src/a.py", "start_line": 2, "end_line": 2,
                "category": "bug", "severity": "high", "content": "Root mount hides health endpoint"}
-    import hashlib, json
+    import hashlib
+    import json
     task_digest = hashlib.sha256(json.dumps(task, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     decision = {"verdict": "request_changes", "blocking": ["Root mount hides health endpoint"],
                 "task": task, "findings": [finding], "reviewed_head_sha": "a" * 40,
@@ -51,12 +52,16 @@ def test_two_repairs_force_fresh_sha_three_review_before_one_merge(monkeypatch, 
 
     from lokay.config import Config, RepoConfig
     from lokay.organ.pr_outcome import handle_pr_outcome
-    from lokay.pr_review import PrReviewDecision, decide_review_merge, format_review_marker
+    from lokay.pr_review import (
+        PrReviewDecision,
+        decide_review_merge,
+        format_review_marker,
+    )
     from lokay.proc import pr_merge
+    from lokay.proc.review_repair_gate import route_review_repair
     from lokay.proc.run_parent_pr_repair_subflow import run as run_parent_repair
     from lokay.proc.select_pr_repair_department import select as select_repair
     from lokay.proc.select_pr_triage_outcome import select as select_triage_outcome
-    from lokay.proc.review_repair_gate import route_review_repair
     from lokay.review_boundary import resolve_sha_review
 
     repo, pr, branch = "acme/demo", 84, "ai/fix/42-demo"

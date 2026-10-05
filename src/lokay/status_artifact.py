@@ -1,11 +1,11 @@
 """Read an already prepared dashboard; never start product computation."""
 
-from datetime import datetime, timezone
-from pathlib import Path
-import uuid
-from typing import Any
 import json
 import math
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024
 
@@ -73,7 +73,7 @@ def read_snapshot(path: Path, *, max_age: float = 120, now: datetime | None = No
         generated = datetime.fromisoformat(data["generated_at"])
         if generated.tzinfo is None:
             raise ValueError("timestamp requires timezone")
-        age = ((now or datetime.now(timezone.utc)) - generated).total_seconds()
+        age = ((now or datetime.now(UTC)) - generated).total_seconds()
         if age < 0:
             raise ValueError("snapshot timestamp is in the future")
     except (OSError, ValueError, TypeError, KeyError, OverflowError, RecursionError) as exc:

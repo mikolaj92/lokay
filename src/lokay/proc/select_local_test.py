@@ -1,6 +1,7 @@
 """Reduce one physical local-test result to a direct Fala route."""
 
 from __future__ import annotations
+
 from lokay.coding_boundary import select_test
 
 

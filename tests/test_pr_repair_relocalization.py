@@ -1,7 +1,6 @@
 """PR repair reconciles scope before each post-agent diff gate."""
 
 import pytest
-
 from test_issue_triage_fala import base_effector, run_graph
 from test_pr_repair_fala import defaults
 

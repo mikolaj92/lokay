@@ -4,7 +4,6 @@ from lokay.organ.factory import handle_factory
 from lokay.proc.classify_stale_worktree_reap import classify, failed
 from lokay.proc.reap_stale_worktrees_subflow import run
 
-
 FIRE_STEP = "sqlite.fire: failed to step query"
 
 

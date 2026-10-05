@@ -6,13 +6,13 @@ import re
 import select
 import subprocess
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Mapping, Sequence
 
 from lokay.gh_rate import backoff_seconds, is_rate_limit_text
-from lokay.safety import validate_argv
 from lokay.process_timeout import run_process
+from lokay.safety import validate_argv
 
 # Force machine-readable CLI output. Host shells often export CLICOLOR_FORCE /
 # FORCE_COLOR which make modern `gh --json` emit ANSI and break json.loads.

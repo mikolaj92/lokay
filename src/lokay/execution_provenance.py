@@ -4,7 +4,8 @@ from __future__ import annotations
 import hashlib
 import marshal
 import sys
-from typing import Callable, Any
+from collections.abc import Callable
+from typing import Any
 
 
 def implementation_identity(handler: Callable[..., Any]) -> dict[str, Any]:

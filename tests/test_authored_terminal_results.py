@@ -1,5 +1,5 @@
-from lokay.proc.summarize_issue_triage import summarize as issue_triage
 from lokay.proc.summarize_issue_split import summarize as issue_split
+from lokay.proc.summarize_issue_triage import summarize as issue_triage
 from lokay.proc.summarize_pr_triage import summarize as pr_triage
 
 

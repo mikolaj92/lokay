@@ -4,11 +4,10 @@ Native Fala host proofs run when the Mojo process host is available.
 Authored conduction + when is always simulated from the package.
 """
 
+import tomllib
 from pathlib import Path
 
 import pytest
-import tomllib
-
 from test_issue_triage_fala import base_effector, run_graph
 
 ROOT = Path(__file__).resolve().parents[1]

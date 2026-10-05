@@ -21,6 +21,7 @@ def ask(issue: Issue, raw: dict, prompt: str, execute) -> dict | None:
 
 def _run(issue: Issue, raw: dict, prompt: str) -> dict:
     from pathlib import Path
+
     from lokay.agent import run_agent
     from lokay.proc._common import load_cfg, runner, semantic_agent_allowed
 

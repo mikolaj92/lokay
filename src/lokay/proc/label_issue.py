@@ -9,8 +9,6 @@ from lokay.gh_issues import add_issue_labels, remove_issue_labels
 from lokay.proc._common import add_config_live, load_cfg, mutations_allowed, runner
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-label-issue")
     add_config_live(p)

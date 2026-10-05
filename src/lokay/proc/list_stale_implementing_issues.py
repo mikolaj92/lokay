@@ -1,8 +1,9 @@
 """List one active ledger label for one selected repository."""
 
 import argparse
-from lokay.proc._common import load_cfg, runner
+
 from lokay.gh_issues import is_github_rate_limit_error, list_labeled_issues
+from lokay.proc._common import load_cfg, runner
 
 
 def fetch(selected: dict, *, config_path: str | None, live: bool, label: str) -> dict:

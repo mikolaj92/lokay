@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +46,7 @@ def run_cycle_start(
 
     dest = Path(cycle_dir).expanduser() if cycle_dir else default_cycle_dir()
     path = cycle_receipt_path(dest, repo, n)
-    started_ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    started_ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     payload = {"repo": str(repo).strip(), "issue": n, "started_ts": started_ts}
     try:
         dest.mkdir(parents=True, exist_ok=True)

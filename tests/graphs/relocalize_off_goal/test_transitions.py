@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for relocalize_off_goal."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'relocalize_off_goal'

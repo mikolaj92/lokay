@@ -1,7 +1,7 @@
 """Native Fala proof for explicit serial product-pass slots."""
 
-from test_issue_triage_fala import base_effector
 from test_implementation_selection_fala import run_graph
+from test_issue_triage_fala import base_effector
 
 
 def test_idle_first_pass_skips_remaining_slots(tmp_path):

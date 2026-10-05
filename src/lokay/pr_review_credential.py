@@ -7,8 +7,9 @@ import selectors
 import signal
 import subprocess
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 DEFAULT_PI_COMMAND = (
     "auth",

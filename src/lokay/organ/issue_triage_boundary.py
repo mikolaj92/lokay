@@ -1,8 +1,10 @@
 """Fala bindings for the explicit issue-triage state boundary."""
 
 from __future__ import annotations
+
 import os
 from typing import Any
+
 from lokay.config import load_config
 from lokay.proc._common import mutations_allowed, resolve_repo_clone, runner
 

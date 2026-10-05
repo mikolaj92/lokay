@@ -44,7 +44,6 @@ def test_classify_open() -> None:
 
 def test_live_probe_returns_identity_required_for_repair_push_recovery(monkeypatch) -> None:
     from lokay.config import Config
-    from lokay.runner import CommandResult
 
     seen = []
     monkeypatch.setattr("lokay.proc.probe_pr_state.load_config", lambda _path: Config())

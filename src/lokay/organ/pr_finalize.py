@@ -6,7 +6,6 @@ from typing import Any
 
 from lokay.atom_runtime import run_atom_main as _run_atom_main
 
-
 _PR_FINALIZE_ATOMS = frozenset({"list_prs", "pr_label"})
 
 

@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import quote, urlencode
 
 from lokay.azure_boards import AzureLoginError, UrlLibTransport, read_azure_token

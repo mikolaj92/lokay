@@ -1,7 +1,9 @@
 """Collect named-path presence facts for one issue without semantic judgment."""
 
 from __future__ import annotations
+
 from pathlib import Path
+
 from lokay.intake import named_add_paths, named_removal_paths
 from lokay.models import Issue
 

@@ -200,9 +200,9 @@ def test_triage_does_not_duplicate_issue_evidence_into_policy(tmp_path, endpoint
 
 
 def test_issue_triage_uses_decision_verdict_and_handles_evidence_without_agent(tmp_path, endpoint, monkeypatch):
-    from lokay.proc.run_issue_triage_agent import run
-    from lokay.proc.run_issue_evidence_agent import run as evidence_run
     from lokay.issue_triage_boundary import validate_output
+    from lokay.proc.run_issue_evidence_agent import run as evidence_run
+    from lokay.proc.run_issue_triage_agent import run
     url, calls, response = endpoint
     cfg = config(tmp_path, url)
     cfg.decision_routes = {'issue_triage': 'local'}
@@ -237,8 +237,8 @@ def test_queue_evidence_excludes_candidate_from_its_own_peers(tmp_path, endpoint
 
 
 def test_queue_decision_abstention_is_valid_skip_not_retry(tmp_path, endpoint, monkeypatch):
-    from lokay.proc.run_queue_conflict_agent import run
     from lokay.proc.queue_conflict_boundary import validate
+    from lokay.proc.run_queue_conflict_agent import run
     url, calls, response = endpoint
     cfg = config(tmp_path, url)
     cfg.decision_routes = {'queue_conflict': 'local'}
@@ -275,8 +275,9 @@ def test_relocalization_missing_worktree_is_named_terminal(tmp_path):
 
 
 def test_system_curl_is_the_single_request_transport(tmp_path, endpoint, monkeypatch):
-    from lokay.typed_decisions import decide
     import subprocess
+
+    from lokay.typed_decisions import decide
     url, calls, response = endpoint
     cfg = config(tmp_path, url)
     commands = []
@@ -293,8 +294,9 @@ def test_system_curl_is_the_single_request_transport(tmp_path, endpoint, monkeyp
 
 def test_relocalization_reads_actual_diff_in_one_request_and_keeps_source(tmp_path, endpoint, monkeypatch):
     import subprocess
-    from lokay.proc.run_relocalization_agent import run
+
     from lokay.proc.build_relocalization_agent_request import build
+    from lokay.proc.run_relocalization_agent import run
     from lokay.proc.validate_localization_agent_json import validate
     url, calls, response = endpoint
     cfg = config(tmp_path, url)
@@ -331,6 +333,7 @@ def test_relocalization_reads_actual_diff_in_one_request_and_keeps_source(tmp_pa
 
 def test_relocalization_untracked_file_change_during_request_is_rejected(tmp_path, monkeypatch):
     import subprocess
+
     from lokay.proc.semantic_relocalization import run
     root = tmp_path / 'repo'; root.mkdir()
     def git(*args):

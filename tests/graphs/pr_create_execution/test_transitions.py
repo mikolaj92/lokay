@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for pr_create_execution."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'pr_create_execution'

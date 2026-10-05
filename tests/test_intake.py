@@ -160,6 +160,7 @@ def test_ambiguity_without_an_agent_passes():
 
 def test_ambiguity_check_asks_the_agent(tmp_path):
     import json
+
     from lokay.proc.run_intake_ambiguity_check import run
 
     seen = {}

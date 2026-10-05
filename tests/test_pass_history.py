@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from lokay.pass_history import append_pass_receipt, read_pass_history

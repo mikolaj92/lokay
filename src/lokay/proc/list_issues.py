@@ -10,8 +10,6 @@ from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 from lokay.source import issue_from_task, load_tasks
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-list-issues")
     add_config_read(p)

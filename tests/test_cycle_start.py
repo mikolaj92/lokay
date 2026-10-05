@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lokay.proc import cycle_start
@@ -30,7 +30,7 @@ def test_writes_receipt_under_dir(tmp_path: Path, capsys):
     assert out["started_ts"] == data["started_ts"]
     parsed = datetime.fromisoformat(data["started_ts"].replace("Z", "+00:00"))
     assert parsed.tzinfo is not None
-    assert parsed.utcoffset() == timezone.utc.utcoffset(parsed)
+    assert parsed.utcoffset() == UTC.utcoffset(parsed)
     assert data["started_ts"].endswith("Z")
 
 

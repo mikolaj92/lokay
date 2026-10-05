@@ -5,7 +5,8 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 
 def is_manual_pr(pr: dict[str, Any]) -> bool:

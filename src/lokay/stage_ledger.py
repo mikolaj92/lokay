@@ -7,8 +7,9 @@ keep `ai:ready` and `work:ready`. Mutex is the live job or covering open PR.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable
+from typing import Any
 
 LABEL_READY = "ai:ready"
 LABEL_WORK_READY = "work:ready"

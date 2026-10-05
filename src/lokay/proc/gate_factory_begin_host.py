@@ -7,6 +7,7 @@ record_pass persists the gate health before reporting the result.
 """
 
 from pathlib import Path
+
 from lokay.git_host_ff import process_head_moved
 
 

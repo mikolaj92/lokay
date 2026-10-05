@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from lokay.proc.write_pass_ceiling_receipt import fresh_completed_receipt, write
@@ -31,7 +31,7 @@ state:
 
 
 def _write_receipt(tmp_path: Path, *, health: str, age_seconds: float) -> dict:
-    ts = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+    ts = datetime.now(UTC) - timedelta(seconds=age_seconds)
     payload = {
         "kind": "pass_receipt",
         "health": health,

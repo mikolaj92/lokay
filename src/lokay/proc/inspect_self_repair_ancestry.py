@@ -1,6 +1,7 @@
 """Read whether current origin/main is an ancestor of the candidate HEAD."""
 
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.proc.read_self_repair_validation_outcome import read_for_head
 from lokay.runner import git_spec

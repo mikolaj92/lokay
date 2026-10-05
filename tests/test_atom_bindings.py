@@ -38,7 +38,7 @@ def test_exact_family_overlap_is_conflict_not_precedence():
 
 def test_dispatch_uses_explicit_owner_without_probing_other_handlers(monkeypatch):
     from lokay import fala_organ
-    from lokay.atom_bindings import Binding, BindingError
+    from lokay.atom_bindings import Binding
 
     probed = []
 
@@ -91,10 +91,11 @@ def test_conflicting_registry_fails_before_any_effect(monkeypatch):
 
 
 def test_active_atoms_have_unique_owners():
-    from lokay.fala_organ import ORGAN_BINDINGS
-    from lokay.atom_bindings import BindingError, resolve
-    from lokay.proc.atom_inventory import inventory
     from pathlib import Path
+
+    from lokay.atom_bindings import BindingError, resolve
+    from lokay.fala_organ import ORGAN_BINDINGS
+    from lokay.proc.atom_inventory import inventory
 
     report = inventory(Path("fala/lokay.fala-package.toml"), Path("src/lokay"))
     atoms = sorted(

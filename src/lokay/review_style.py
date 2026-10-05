@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from lokay.pr_review import PrReviewDecision, build_review_comment_body, format_review_marker
+from lokay.pr_review import (
+    PrReviewDecision,
+    build_review_comment_body,
+    format_review_marker,
+)
 
 Stylist = Callable[[str, str], str]
 

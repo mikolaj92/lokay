@@ -5,7 +5,6 @@ def select(prepared: dict, previous: dict, *, slot: int) -> dict:
     if not prepared.get("ok"):
         return {"ok": True, "route": "empty", "slot": slot}
     remaining = int(prepared.get("budget") or 0)
-    spent = int(prepared.get("spent") or 0)
     if slot == 1:
         if remaining == 0:
             return {"ok": True, "route": "empty", "slot": slot}

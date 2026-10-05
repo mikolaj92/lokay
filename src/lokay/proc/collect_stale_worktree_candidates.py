@@ -1,10 +1,13 @@
 """Collect a bounded inventory for the stale-worktree child (worktrees only)."""
 
 from __future__ import annotations
+
+import argparse
 from pathlib import Path
+
+from lokay.git_worktree import iter_worktrees
 from lokay.passkit.hot import survey_scope
 from lokay.passkit.working import load_begin_working
-from lokay.git_worktree import iter_worktrees
 from lokay.proc._common import load_cfg
 from lokay.proc.detach_issue_to_pr import (
     has_unreadable_issue_to_pr_receipts,
@@ -12,7 +15,6 @@ from lokay.proc.detach_issue_to_pr import (
 )
 from lokay.proc.reap_stale_worktrees import _covering, _live_keys, _names
 from lokay.stuck import issue_number_from_branch
-import argparse
 
 SLOTS = 4
 

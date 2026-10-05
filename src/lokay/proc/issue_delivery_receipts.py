@@ -1,15 +1,17 @@
 """Atomic lifecycle receipt storage for detached issue delivery."""
 
 from __future__ import annotations
-import fcntl, json, os, secrets
-from collections.abc import Iterable
+
+import fcntl
+import json
+import os
+import secrets
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
 from typing import Any
+
 from lokay.proc.issue_delivery_process import (
     is_live_issue_to_pr_pid,
-    coding_live_for_issue,
     pid_is_alive,
 )
 

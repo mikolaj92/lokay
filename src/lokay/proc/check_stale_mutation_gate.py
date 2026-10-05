@@ -1,6 +1,7 @@
 """Read the physical mutation capability for stale-stage recovery."""
 
 import argparse
+
 from lokay.proc._common import load_cfg, mutations_allowed
 
 

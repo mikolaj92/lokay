@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 RECEIPT_NAME = "last-pass.json"
 _TOY_REPOS = frozenset({"o/r", "a/three", "a/clean", "a/two", "a/four", "a/b"})
@@ -187,7 +186,7 @@ def build_pass_receipt(
         human = {"count": int(remaining.get("human_residuals") or 0)}
     return {
         "kind": "pass_receipt",
-        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "ts": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "config": config_path,
         "ok": bool(tick.get("ok")),
         "health": tick.get("health"),

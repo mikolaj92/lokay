@@ -2,7 +2,11 @@
 
 from lokay.agent import FACTORY_WORKFLOW_BOUNDARY, with_coding_boundaries
 from lokay.models import Issue
-from lokay.prompts import issue_fix_prompt, local_test_repair_prompt, timeout_resume_prompt
+from lokay.prompts import (
+    issue_fix_prompt,
+    local_test_repair_prompt,
+    timeout_resume_prompt,
+)
 
 
 def test_factory_workflow_boundary_bans_take_and_gh():

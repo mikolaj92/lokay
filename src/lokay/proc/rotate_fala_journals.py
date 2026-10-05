@@ -6,7 +6,11 @@ import argparse
 from pathlib import Path
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.fala_journal import DEFAULT_MIN_BYTES, KEEP_ROTATED, maintain_lokay_fala_journals
+from lokay.fala_journal import (
+    DEFAULT_MIN_BYTES,
+    KEEP_ROTATED,
+    maintain_lokay_fala_journals,
+)
 
 
 def main(argv: list[str] | None = None) -> int:

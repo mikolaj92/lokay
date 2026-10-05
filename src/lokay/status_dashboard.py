@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from lokay.compose.status import compose_status
@@ -65,7 +64,7 @@ def dashboard_snapshot(config_path: str | None, *, history_limit: int = 50) -> d
     """Combine authoritative local status, event yield, catalog and pass history."""
     cfg = load_config(config_path)
     status = compose_status(config_path=config_path, survey=False)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     windows: dict[str, Any] = {}
     windows_spec = (
         ("1h", timedelta(hours=1)),

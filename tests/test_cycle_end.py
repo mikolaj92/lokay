@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from lokay.proc import cycle_end
@@ -121,7 +121,7 @@ def test_default_dir_is_home_lokay_cycle(tmp_path: Path, monkeypatch, capsys):
 
 
 def test_now_when_pr_opened_ts_omitted(tmp_path: Path, capsys):
-    started = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    started = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     _write_start(tmp_path, repo="owner/name", issue=5, started_ts=started)
     code = cycle_end.main(
         ["--repo", "owner/name", "--issue", "5", "--dir", str(tmp_path)]

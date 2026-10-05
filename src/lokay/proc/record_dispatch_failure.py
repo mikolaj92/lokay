@@ -1,6 +1,6 @@
 """Persist one bounded implementation launch failure and select its Fala route."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from lokay.passkit import io as pass_io
 from lokay.stuck import (
@@ -31,7 +31,7 @@ def apply(*, pass_dir: str, launched: dict) -> dict:
     # immediately so the same ticket cannot monopolize the single product slot.
     if is_transient_ledger_reason(reason) or reason == "local_repair_exhausted":
         if not row.get("blocked"):
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             row["blocked"] = True
             row["blocked_ts"] = now.isoformat()
             row["cooldown_seconds"] = TRANSIENT_COOLDOWN_SECONDS

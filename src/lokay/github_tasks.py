@@ -13,10 +13,12 @@ from lokay.config import Config, RepoConfig
 from lokay.gh_issues import (
     add_issue_labels,
     comment_issue,
-    get_issue as view_issue,
     list_issues_with_label,
     list_ready_issues,
     remove_issue_labels,
+)
+from lokay.gh_issues import (
+    get_issue as view_issue,
 )
 from lokay.models import Issue
 from lokay.tasks import Task, TaskId, _require_mark

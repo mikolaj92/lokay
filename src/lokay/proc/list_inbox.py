@@ -11,8 +11,6 @@ from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 from lokay.stuck import is_blocked_in_ledger, load_stuck, stuck_path_for
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-list-inbox")
     add_config_read(p)

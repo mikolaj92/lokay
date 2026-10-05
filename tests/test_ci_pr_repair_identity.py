@@ -81,6 +81,7 @@ def test_pr_checks_report_head_drift_is_not_repair_evidence():
 
 def test_exact_repair_worktree_is_checked_out_at_published_branch_sha(tmp_path):
     import subprocess
+
     from lokay.config import Config, RepoConfig
     from lokay.git_worktree import ensure_repair_worktree
     from lokay.runner import Runner
@@ -107,7 +108,7 @@ def test_exact_repair_worktree_is_checked_out_at_published_branch_sha(tmp_path):
     cfg = Config(worktrees_root=worktrees)
     repo = RepoConfig(name="o/r", clone_path=clone)
 
-    import lokay.git_worktree as git_worktree
+    from lokay import git_worktree
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
         git_worktree, "_repair_head_repository_url", lambda _repo: str(bare), raising=False,
@@ -125,6 +126,7 @@ def test_exact_repair_worktree_is_checked_out_at_published_branch_sha(tmp_path):
 
 def test_exact_repair_worktree_rejects_remote_sha_drift_without_creating_worktree(tmp_path):
     import subprocess
+
     from lokay.config import Config, RepoConfig
     from lokay.git_worktree import ensure_repair_worktree
     from lokay.runner import Runner
@@ -145,7 +147,7 @@ def test_exact_repair_worktree_rejects_remote_sha_drift_without_creating_worktre
     subprocess.run(["git", "clone", "-q", str(bare), str(clone)], check=True)
     worktrees = tmp_path / "worktrees"
 
-    import lokay.git_worktree as git_worktree
+    from lokay import git_worktree
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
         git_worktree, "_repair_head_repository_url", lambda _repo: str(bare), raising=False,
@@ -332,7 +334,9 @@ def test_ci_head_sha_flows_from_checks_through_factory_repair_selection(tmp_path
     from lokay.proc.select_pr_repair_department import select as select_repair
     from lokay.proc.select_pr_triage_outcome import select as select_outcome
     from lokay.proc.select_pr_triage_verdict import select as select_verdict
-    from lokay.proc.summarize_pr_triage_department import summarize as summarize_department
+    from lokay.proc.summarize_pr_triage_department import (
+        summarize as summarize_department,
+    )
 
     head = "b" * 40
     checks = classify({"status": "failed", "require_checks": True, "head_sha": head})

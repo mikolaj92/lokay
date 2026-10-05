@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -112,7 +112,7 @@ def record(*, pass_dir: str, state_path: str | None = None) -> dict[str, Any]:
     receipt = dict(existing) if isinstance(existing, dict) else {"kind": "pass_receipt"}
     receipt.pop("remaining", None)
     receipt["kind"] = receipt.get("kind") or "pass_receipt"
-    receipt["ts"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    receipt["ts"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     receipt["remaining"] = remaining
     receipt["remaining_source"] = "inflight_working"
     receipt["by_repo"] = list(remaining.get("by_repo") or [])

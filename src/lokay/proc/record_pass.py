@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit, ok
-from lokay.passkit import io as pass_io
 from lokay.pass_history import append_pass_receipt
 from lokay.pass_receipt import write_pass_receipt
+from lokay.passkit import io as pass_io
 from lokay.proc._common import add_config_live
 from lokay.proc.walk_pr_leftover import skipped_fields
 

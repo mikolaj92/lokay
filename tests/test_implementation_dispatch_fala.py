@@ -1,7 +1,6 @@
 """Native Fala proofs for serial implementation dispatch."""
 
-from pathlib import Path
-from test_issue_triage_fala import run_graph, base_effector
+from test_issue_triage_fala import base_effector, run_graph
 
 
 def test_success_runs_one_launch_and_receipt(tmp_path):

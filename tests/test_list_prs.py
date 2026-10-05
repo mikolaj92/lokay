@@ -7,8 +7,8 @@ from types import SimpleNamespace
 import pytest
 
 from lokay.code import github as github_code
-from lokay.proc import list_prs
 from lokay.models import PullRequest
+from lokay.proc import list_prs
 
 
 def _cfg(tmp_path: Path) -> SimpleNamespace:

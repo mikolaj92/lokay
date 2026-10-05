@@ -5,8 +5,7 @@ from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
 
 from lokay.runner import Runner, git_spec
-from lokay.stamp_paths import dirty_stamp_paths, is_stamp_rel
-
+from lokay.stamp_paths import dirty_stamp_paths
 
 _EVIDENCE_PATHS = {".lokay/approach.md", ".lokay/localize.json"}
 

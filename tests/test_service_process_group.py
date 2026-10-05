@@ -1,9 +1,9 @@
 """The real shell launch must isolate the daemon from its caretaker."""
 
 import os
-from pathlib import Path
 import signal
 import subprocess
+from pathlib import Path
 
 
 def test_daemon_launch_has_separate_process_group():

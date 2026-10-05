@@ -1,7 +1,7 @@
 """Native Fala proof for declared local-test execution."""
 
-from test_issue_triage_fala import base_effector
 from test_implementation_selection_fala import run_graph
+from test_issue_triage_fala import base_effector
 
 
 def test_green_full_suite_skips_scope_and_writes_cache(tmp_path):

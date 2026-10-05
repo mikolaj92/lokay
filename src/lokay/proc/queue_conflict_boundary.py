@@ -1,6 +1,6 @@
 """Closed schema and bounded selectors for semantic queue hygiene."""
 
-from lokay.pr_review import extract_json_object, PrReviewError
+from lokay.pr_review import PrReviewError, extract_json_object
 
 OUTCOMES = frozenset({"ready", "skip", "close", "park"})
 

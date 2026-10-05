@@ -60,7 +60,6 @@ def test_harvest_factory_wrapper_contains_no_routing():
 def test_reaped_fail_closed_skips_record_failure(tmp_path):
     """lokay#1084: reconcile must not renew cooldown from a reaped receipt."""
     import json
-    from pathlib import Path
 
     from lokay.proc.reconcile_dead_child_receipts import reconcile
 

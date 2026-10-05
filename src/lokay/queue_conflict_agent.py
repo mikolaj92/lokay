@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from lokay.agent import run_agent
 from lokay.config import Config
@@ -25,8 +26,8 @@ from lokay.queue_conflict import (
 from lokay.runner import Runner
 from lokay.safety import untrusted_issue_block
 from lokay.semantic_trace import SemanticTrace
+from lokay.stuck import issue_number_from_branch
 from lokay.tool_contracts import render_contract
-from lokay.stuck import issue_number_from_branch, issue_numbers_covered_by_prs
 
 VALID_OUTCOMES = frozenset({"ready", "skip", "close"})
 # These are orchestration facts, not semantic queue evidence. If a harness
@@ -62,7 +63,6 @@ def covering_pr_numbers(
     branch_prefix: str,
 ) -> list[int]:
     prs = [dict(p) for p in open_prs if isinstance(p, Mapping)]
-    covered = issue_numbers_covered_by_prs(prs, branch_prefix=branch_prefix)
     covering = sorted(
         int(p["number"])
         for p in prs
@@ -198,7 +198,7 @@ def evaluate_queue_conflict_with_agent(
     peers = [
         dict(p) if isinstance(p, Mapping) else p.to_dict()  # type: ignore[union-attr]
         for p in peer_issues
-        if int((p.number if isinstance(p, Issue) else (p.get("number") or -1))) != int(issue.number)
+        if int(p.number if isinstance(p, Issue) else (p.get("number") or -1)) != int(issue.number)
     ]
     covering = covering_pr_numbers(issue, prs, branch_prefix=branch_prefix)
     if covering:

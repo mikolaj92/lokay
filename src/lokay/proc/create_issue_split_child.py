@@ -1,6 +1,7 @@
 """Create exactly one indexed child from an authored split plan."""
 
 from __future__ import annotations
+
 from lokay.gh_issues import create_issue
 from lokay.models import Issue
 from lokay.split import stable_child_marker

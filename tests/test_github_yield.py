@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,7 +28,7 @@ def test_github_delivery_counts_dod_and_excludes_pr_shaped_issues():
     out = github_delivery(
         Run(),
         "mikolaj92/lokay",
-        since=datetime(2026, 8, 19, 9, tzinfo=timezone.utc),
+        since=datetime(2026, 8, 19, 9, tzinfo=UTC),
         hours=8,
     )
     assert out["merged_prs"]["count"] == 1
@@ -56,7 +56,7 @@ def test_github_delivery_flattens_paginated_json_streams():
     out = github_delivery(
         PaginatedRun(),
         "mikolaj92/lokay",
-        since=datetime(2026, 8, 19, 9, tzinfo=timezone.utc),
+        since=datetime(2026, 8, 19, 9, tzinfo=UTC),
         hours=1,
     )
     assert out["merged_prs"]["count"] == 2

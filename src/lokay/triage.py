@@ -7,8 +7,9 @@ Pure rules only — no coding harness.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY, LEDGER_ACTIVE_LABELS

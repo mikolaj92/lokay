@@ -1,5 +1,7 @@
 import pytest
+
 from lokay.technical_route import classify_technical_route
+
 
 @pytest.mark.parametrize('title,body,route',[('Bump BOM dependency','Update foo from 1 to 2','implement'),('Migrate identity adapters','Replace legacy adapter identity mechanically','implement'),('Split god file','Break src/app.py into focused modules','split'),('Move UI to HTMX fragments','Replace client state with server-rendered fragments','implement')])
 def test_trusted_technical_work_never_needs_human(title,body,route):assert classify_technical_route(title,body)=={'route':route,'reason':'technical_'+route}

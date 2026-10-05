@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for daemon_entry."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'daemon_entry'

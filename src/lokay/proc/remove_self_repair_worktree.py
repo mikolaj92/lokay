@@ -1,6 +1,7 @@
 """Remove one confirmed disposable recovery worktree."""
 
 from pathlib import Path
+
 from lokay.git_worktree import remove_worktree
 from lokay.proc._common import runner
 

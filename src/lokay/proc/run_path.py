@@ -8,8 +8,6 @@ from lokay.envelope import emit_exit, err, ok
 from lokay.graph_run import describe_package, run_path
 
 
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lokay-run-path")
     p.add_argument("--config", help="lokay config.yaml")

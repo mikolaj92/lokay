@@ -1,13 +1,15 @@
 """Fala-only composition for issue → PR."""
 
 from __future__ import annotations
-import argparse, os
+
+import argparse
+import os
+
 from lokay.config import load_config
 from lokay.envelope import emit_exit
 from lokay.graph_run import run_path
 from lokay.proc._common import add_config_live
 from lokay.state import append_event
-
 
 _HELD_REPO_LOCK_FDS: list[int] = []
 
@@ -68,8 +70,9 @@ def compose_issue_to_pr(
         )
     finally:
         if live:
-            from lokay.proc.health_delegation import complete_delegated_lease
             import warnings
+
+            from lokay.proc.health_delegation import complete_delegated_lease
 
             try:
                 completion = complete_delegated_lease()

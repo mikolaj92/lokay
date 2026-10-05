@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-
 from pathlib import Path
 from typing import Any
 
 from lokay.passkit import io as pass_io
 from lokay.proc.compute_health import run_compute_health
 from lokay.proc.implementation_selection_catalog import run as _catalog
-from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 from lokay.proc.persist_implementation_selection import persist as _persist_selection
+from lokay.proc.prepare_implementation_selection import prepare as _prepare_selection
 
 
 def run_select_implement(*, pass_dir: str):

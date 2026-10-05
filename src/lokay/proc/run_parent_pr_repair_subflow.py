@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.compose.pr_repair import compose_pr_repair
 from lokay.proc import pr_repair_push, pr_repair_receipts
@@ -85,6 +86,7 @@ def _remote_head(repo: str, pr: int, *, config_path: str | None, live: bool) -> 
     if not live:
         return "planned"
     import re
+
     from lokay.config import load_config
     from lokay.gh_prs import gh_json
     from lokay.proc._common import runner as make_runner
@@ -124,8 +126,8 @@ def _review_task_is_current(
         return False
     try:
         from lokay.config import load_config
-        from lokay.proc._common import runner as make_runner
         from lokay.pr_review_io import resolve_canonical_task
+        from lokay.proc._common import runner as make_runner
 
         cfg = load_config(config_path)
         canonical = resolve_canonical_task(
@@ -191,7 +193,7 @@ def run(selected: dict[str, Any], *, config_path: str | None, live: bool) -> dic
             repair_start_head_sha=str(selected.get("repair_start_head_sha") or ""),
             live=live,
         )
-    except Exception as exc:  # noqa: BLE001 — fail closed without consuming an attempt
+    except Exception:  # noqa: BLE001 — fail closed without consuming an attempt
         result = {"ok": False, "error": "compose_error", "terminal": "compose_error"}
     nested = result.get("result") if isinstance(result.get("result"), Mapping) else {}
     skipped = bool(result.get("skipped") or (nested or {}).get("skipped"))

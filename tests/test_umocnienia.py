@@ -26,7 +26,6 @@ from lokay.proc.find_published_self_repair import find as find_published_self_re
 from lokay.recovery_history import observe_run, record_observation
 
 
-
 def _parent_capability(tmp_path, monkeypatch):
     from pr_first_fixtures import empty_pr_survey
 

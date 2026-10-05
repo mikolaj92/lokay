@@ -1,6 +1,7 @@
 """Run the complete local suite with an isolated HOME for one candidate."""
 
 import tempfile
+
 from lokay.proc._common import runner
 from lokay.runner import CommandSpec
 

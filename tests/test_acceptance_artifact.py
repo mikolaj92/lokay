@@ -1,5 +1,7 @@
 from pathlib import Path
+
 import pytest
+
 from lokay.acceptance import prepare_acceptance, verify_acceptance
 
 

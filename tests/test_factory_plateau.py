@@ -1,11 +1,11 @@
 """Contracts for authored product pass-budget evaluation."""
 
 from lokay.proc.apply_product_leftover import apply
-from lokay.proc.record_product_pass import record
 from lokay.proc.classify_product_pass import classify as classify_pass
 from lokay.proc.classify_product_plateau import classify as classify_plateau
 from lokay.proc.decide_product_pass_stop import decide
 from lokay.proc.finalize_product_pass import finalize
+from lokay.proc.record_product_pass import record
 
 
 def evaluate(prepared, selected, tick, leftover, previous):

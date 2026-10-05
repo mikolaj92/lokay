@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for self_repair_activate_execution."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'self_repair_activate_execution'

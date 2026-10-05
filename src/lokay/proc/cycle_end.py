@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +37,8 @@ def parse_ts(raw: str) -> datetime:
         text = text[:-1] + "+00:00"
     dt = datetime.fromisoformat(text)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def run_cycle_end(
@@ -89,7 +89,7 @@ def run_cycle_end(
         )
     try:
         started = parse_ts(str(started_raw))
-        end = parse_ts(pr_opened_ts) if pr_opened_ts else datetime.now(timezone.utc)
+        end = parse_ts(pr_opened_ts) if pr_opened_ts else datetime.now(UTC)
     except ValueError as exc:
         return err(str(exc), repo=str(repo).strip(), issue=n, path=str(path))
 

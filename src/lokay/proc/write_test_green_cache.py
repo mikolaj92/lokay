@@ -1,6 +1,7 @@
 """Write one verified green test cache receipt."""
 
 from pathlib import Path
+
 from lokay.test_cache import write_green
 
 

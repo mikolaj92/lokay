@@ -1,6 +1,7 @@
 """Stuck-issue isolation and select exclude."""
 
 import json
+from datetime import UTC
 from pathlib import Path
 
 from lokay.proc.select_issue import main as select_main
@@ -208,7 +209,7 @@ def test_transient_no_pr_legacy_limbo_is_not_excluded():
 
 def test_verify_fail_cooldown_expires(monkeypatch):
     """Local cooldown auto-clears; never permanent verify limbo."""
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     import lokay.stuck as stuck_mod
     from lokay.stuck import (
@@ -218,7 +219,7 @@ def test_verify_fail_cooldown_expires(monkeypatch):
         record_failure,
     )
 
-    fixed = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
+    fixed = datetime(2026, 9, 7, 12, 0, tzinfo=UTC)
     monkeypatch.setattr(stuck_mod, "_utcnow", lambda: fixed)
     data = {"issues": {}}
     row = record_failure(

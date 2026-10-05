@@ -1,6 +1,7 @@
 """Physical timestamp operations for stale implementation-stage probes."""
 
-import os, time
+import os
+import time
 from pathlib import Path
 from typing import Any
 

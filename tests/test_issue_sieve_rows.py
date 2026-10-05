@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 from lokay.proc.classify_issue_sieve_row import classify as classify_slot
 from lokay.proc.prepare_issue_sieve import prepare
@@ -105,7 +104,6 @@ def test_later_slot_runs_only_after_continue_inside_budget():
 
 def test_classify_persists_cursor_and_caps_at_budget(tmp_path: Path):
     listed = _listed(12)
-    last: dict = {}
     selected = {"route": "run", "slot": 5}
     row = _row_for(
         {

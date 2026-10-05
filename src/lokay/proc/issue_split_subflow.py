@@ -1,6 +1,7 @@
 """Run the authored issue-split Fala subflow from an issue-triage verdict."""
 
 from __future__ import annotations
+
 from lokay.proc.issue_split import run
 
 

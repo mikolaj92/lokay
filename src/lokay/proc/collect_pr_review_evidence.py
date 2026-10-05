@@ -1,9 +1,12 @@
 """Read one PR evidence snapshot for a SHA-bound review."""
 from __future__ import annotations
+
 import argparse
+
 from lokay.envelope import emit_exit, err, ok
 from lokay.pr_review_io import load_pr_evidence
 from lokay.proc._common import add_config_read, runner
+
 
 def collect(*, repo: str, pr: int, branch: str, live: bool, checks_text: str = "", config_path: str | None = None) -> dict:
     try:

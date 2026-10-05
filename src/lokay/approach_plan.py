@@ -7,9 +7,10 @@ Not a human approval gate and not NEEDS_HUMAN by default.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from lokay.models import Issue
 

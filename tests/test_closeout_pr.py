@@ -1,6 +1,7 @@
 """Contracts for authored PR-closeout Unix atoms and subflows."""
 
 from pathlib import Path
+
 from lokay.passkit import io as pass_io
 
 
@@ -27,8 +28,8 @@ def _selected(**pr):
 
 
 def test_manual_pr_gate_is_terminal():
-    from lokay.proc.inspect_closeout_pr import inspect
     from lokay.proc.classify_closeout_gate import classify
+    from lokay.proc.inspect_closeout_pr import inspect
 
     item = inspect(_selected(labels=["ai:needs-review"]))
     out = classify(item, {"route": "open_or_unknown"})
@@ -56,8 +57,8 @@ def test_checks_route_waits():
 
 
 def test_checks_route_repairs_once():
-    from lokay.proc.route_closeout_checks import route
     from lokay.proc.authorize_closeout_repair import authorize
+    from lokay.proc.route_closeout_checks import route
 
     item = _selected() | {
         "pr_number": 7,

@@ -1,6 +1,7 @@
 """Contracts for minimal authored local-test execution atoms."""
 
 from pathlib import Path
+
 from lokay.proc import test_local
 
 
@@ -74,6 +75,7 @@ def test_declared_test_command_does_not_inherit_fala_or_secret_environment(
 ):
     import json
     import sys
+
     from lokay.proc.run_declared_test_command import run
 
     monkeypatch.setenv("FALA_EFFECTOR_INPUT_DIR", "/private/fala/input")

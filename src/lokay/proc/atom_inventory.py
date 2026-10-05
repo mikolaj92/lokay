@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import argparse
 import ast
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
-from lokay.envelope import emit, ok, err
+from lokay.envelope import emit, err, ok
 
 
 def inventory(package: Path, source: Path) -> dict:

@@ -45,6 +45,7 @@ def test_different_failures_do_not_form_one_quorum():
 
 def test_both_production_bindings_read_configured_history(tmp_path, monkeypatch):
     from types import SimpleNamespace
+
     from lokay.fala_organ import _handle
     from lokay.pass_history import append_pass_receipt
     from lokay.pass_receipt import write_pass_receipt

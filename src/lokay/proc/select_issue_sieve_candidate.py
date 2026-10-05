@@ -2,8 +2,8 @@
 
 from lokay.proc.classify_issue_assignee import lokay_of
 from lokay.proc.classify_open_issues import classify
-from lokay.proc.select_next_issue import occupied_repos_of, pick
 from lokay.proc.pick_one_labeled import READY_LABELS
+from lokay.proc.select_next_issue import occupied_repos_of, pick
 from lokay.proc.walk_issue_leftover import identity, ownable, product_first, unoccupied
 from lokay.triage import is_undecided
 

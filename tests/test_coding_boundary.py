@@ -1,11 +1,11 @@
 from lokay.coding_boundary import (
-    validate_output,
-    select_initial,
-    select_evidence,
     finalize,
-    select_test,
     finalize_tests,
+    select_evidence,
+    select_initial,
     select_repair,
+    select_test,
+    validate_output,
 )
 
 

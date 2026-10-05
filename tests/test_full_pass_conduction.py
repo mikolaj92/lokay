@@ -1,23 +1,14 @@
 """End-to-end integration test of factory pass conduction for triage -> executor decision handoff."""
 
-import json
 from unittest.mock import patch
+
 from lokay.organ.departments_boundary import handle_departments
-from lokay.organ.issue_triage_department_boundary import handle_issue_triage_department
-from lokay.organ.executor_department_boundary import handle_executor_department
 from lokay.sieve_decision import decision_of
 
 
 def test_triage_decisions_reach_executor_rows_in_factory_pass(tmp_path):
     pass_dir = tmp_path / "pass"
     pass_dir.mkdir()
-
-    issues = [
-        {"repo": "mikolaj92/msds-portal", "issue": 153, "labels": [], "title": "Park issue"},
-        {"repo": "mikolaj92/msds-portal", "issue": 155, "labels": [], "title": "Skip issue"},
-        {"repo": "mikolaj92/Docxtor", "issue": 161, "labels": [], "title": "Do issue"},
-    ]
-    listed = {"ok": True, "issues": issues, "count": len(issues), "overflow": False}
 
     # Simulate issue_triage_department output (what summarize_issue_triage_department returns)
     triage_decisions = [

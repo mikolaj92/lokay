@@ -5,12 +5,10 @@ from __future__ import annotations
 import argparse
 
 from lokay.envelope import emit_exit, err, ok
-from lokay.proc._common import add_config_read, load_cfg, read_live, runner
-from lokay.tasks import TaskId
 from lokay.github_tasks import catalog_row
+from lokay.proc._common import add_config_read, load_cfg, read_live, runner
 from lokay.source import issue_from_task, load_tasks
-
-
+from lokay.tasks import TaskId
 
 
 def main(argv: list[str] | None = None) -> int:

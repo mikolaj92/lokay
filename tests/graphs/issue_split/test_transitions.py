@@ -1,5 +1,6 @@
 """Independent conduction and when metadata for issue_split."""
 from __future__ import annotations
+
 import json
 
 _PATH_ID = 'issue_split'

@@ -1,6 +1,7 @@
 """List issues carrying the configured ready label in one repository."""
 
 import argparse
+
 from lokay.gh_issues import is_github_rate_limit_error, list_labeled_issues
 from lokay.proc._common import load_cfg, runner
 

@@ -1,7 +1,7 @@
 """The HTTP artifact boundary never recomputes status."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -18,7 +18,7 @@ def snapshot(now):
 
 
 def test_read_retains_data_timestamp_and_marks_age(tmp_path):
-    now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 1, tzinfo=UTC)
     data = snapshot(now - timedelta(seconds=121))
     path = tmp_path / "dashboard.json"
     path.write_text(json.dumps(data))
@@ -34,10 +34,10 @@ def test_read_retains_data_timestamp_and_marks_age(tmp_path):
 
 @pytest.mark.parametrize("content", [
     "broken", "[]", "{}",
-    json.dumps({**snapshot(datetime.now(timezone.utc)), "generated_at": "2026-09-01"}),
-    json.dumps({**snapshot(datetime.now(timezone.utc)), "status": []}),
-    json.dumps({**snapshot(datetime.now(timezone.utc)), "catalog": [None]}),
-    json.dumps({**snapshot(datetime.now(timezone.utc)), "status": {"ok": "yes"}}),
+    json.dumps({**snapshot(datetime.now(UTC)), "generated_at": "2026-09-01"}),
+    json.dumps({**snapshot(datetime.now(UTC)), "status": []}),
+    json.dumps({**snapshot(datetime.now(UTC)), "catalog": [None]}),
+    json.dumps({**snapshot(datetime.now(UTC)), "status": {"ok": "yes"}}),
 ])
 def test_invalid_artifact_is_classified_without_fallback(tmp_path, content):
     path = tmp_path / "dashboard.json"
@@ -56,7 +56,7 @@ def test_missing_and_oversize_artifacts_are_unavailable(tmp_path):
 
 
 def test_future_timestamp_is_unavailable(tmp_path):
-    now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 1, tzinfo=UTC)
     path = tmp_path / "dashboard.json"
     path.write_text(json.dumps(snapshot(now + timedelta(hours=1))))
     with pytest.raises(status_artifact.SnapshotUnavailable):
@@ -71,7 +71,7 @@ def test_future_timestamp_is_unavailable(tmp_path):
     {"history": [{"remaining": "not-an-object"}]},
 ])
 def test_nested_template_inputs_are_validated(tmp_path, changes):
-    data = {**snapshot(datetime.now(timezone.utc)), **changes}
+    data = {**snapshot(datetime.now(UTC)), **changes}
     path = tmp_path / "snapshot.json"
     path.write_text(json.dumps(data))
     with pytest.raises(status_artifact.SnapshotUnavailable):
@@ -79,7 +79,7 @@ def test_nested_template_inputs_are_validated(tmp_path, changes):
 
 
 def test_write_snapshot_is_atomic(tmp_path):
-    now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 1, tzinfo=UTC)
     data = snapshot(now)
     target = tmp_path / "published.json"
     written = status_artifact.write_snapshot(target, data)

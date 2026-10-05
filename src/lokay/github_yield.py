@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import statistics
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from lokay.runner import Runner, gh_spec
@@ -66,7 +66,7 @@ def _flatten_api_pages(stdout: str, *, kind: str) -> list[dict[str, Any]]:
 
 def catalog_delivery(runner: Runner, repos: list[str], *, since: datetime, hours: float, receipt_detector) -> dict[str, Any]:
     """Read every enabled repository; no persistence and no attribution guess."""
-    cutoff = since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    cutoff = since.astimezone(UTC).isoformat().replace("+00:00", "Z")
     result: dict[str, Any] = {}; totals = {"merged":0,"autonomous":0,"unattributed":0,"read_errors":0}
     for repo in repos:
         try:
@@ -83,7 +83,7 @@ def catalog_delivery(runner: Runner, repos: list[str], *, since: datetime, hours
 
 
 def github_delivery(runner: Runner, repo: str, *, since: datetime, hours: float) -> dict[str, Any]:
-    cutoff = since.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    cutoff = since.astimezone(UTC).isoformat().replace("+00:00", "Z")
     pulls = runner.run_checked(
         gh_spec(["api", "--paginate", f"repos/{repo}/pulls?state=closed&per_page=100"], timeout_seconds=120),
         live=True,

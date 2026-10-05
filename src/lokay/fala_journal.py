@@ -296,7 +296,7 @@ def _maintain_sqlite(
             vacuum=vacuum,
             dry_run=dry_run,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if _skip_busy_or_corrupt(exc):
             if reclaimed == 0:
                 return None

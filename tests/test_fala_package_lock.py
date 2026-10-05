@@ -73,7 +73,6 @@ def _git_head(path: Path) -> str:
 
 
 def test_uv_manages_mojo_toolchain_and_fala_sources():
-    import shlex
     import shutil
 
     repo = ROOT

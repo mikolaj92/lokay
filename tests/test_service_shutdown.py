@@ -1,9 +1,9 @@
 """Stopping the caretaker must stop its isolated daemon, not orphan it."""
 import os
-from pathlib import Path
 import signal
 import subprocess
 import time
+from pathlib import Path
 
 
 def test_service_term_stops_daemon(tmp_path):

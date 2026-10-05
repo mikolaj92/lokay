@@ -9,9 +9,9 @@ from typing import Any
 import yaml
 
 from lokay.catalog import (
+    DEFAULT_PLUGIN,
     CatalogBinding,
     CatalogError,
-    DEFAULT_PLUGIN,
     assert_known_plugins,
     parse_catalog_row,
 )

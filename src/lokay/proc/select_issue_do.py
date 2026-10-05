@@ -1,7 +1,14 @@
 """Route do or skip. Two small functions: classify sito, then leftover queue."""
 
 from lokay.proc.classify_issue_do import classify
-from lokay.proc.walk_issue_leftover import after, consumes, identity, keep, row_is_ready, unoccupied
+from lokay.proc.walk_issue_leftover import (
+    after,
+    consumes,
+    identity,
+    keep,
+    row_is_ready,
+    unoccupied,
+)
 
 
 def leftover_of(

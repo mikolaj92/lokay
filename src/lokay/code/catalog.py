@@ -7,9 +7,10 @@ Known plugins: github, azure. No tasks.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from lokay.code.contract import CodeContract, CodeContractError, bind_code
 

@@ -1,5 +1,11 @@
 import pytest
-from lokay.delivery_receipt import marker, parse_marker, verify_receipt, finalize_receipt
+
+from lokay.delivery_receipt import (
+    finalize_receipt,
+    marker,
+    parse_marker,
+    verify_receipt,
+)
 
 
 def base():
@@ -55,10 +61,9 @@ def test_publish_delivery_receipt_replaces_provisional_marker_after_observation(
 
 
 def test_receipt_organ_uses_closed_issue_and_configured_runner(monkeypatch):
+    from lokay import config, gh_prs
     from lokay.organ.lanes import handle_lanes
-    from lokay import gh_prs
     from lokay.proc import _common
-    from lokay import config
 
     configured = object()
     carrier = object()

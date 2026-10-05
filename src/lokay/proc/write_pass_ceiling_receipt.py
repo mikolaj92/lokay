@@ -6,13 +6,16 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from lokay.config import load_config
 from lokay.pass_receipt import read_pass_receipt
-from lokay.proc.classify_leftover_remaining import remaining_from_receipt, remaining_has_inbox
+from lokay.proc.classify_leftover_remaining import (
+    remaining_from_receipt,
+    remaining_has_inbox,
+)
 from lokay.proc.classify_pass_ceiling import classify
 from lokay.proc.merge_leftover_remaining import merge_remaining
 from lokay.proc.record_inflight_remaining import remaining_from_inflight_working

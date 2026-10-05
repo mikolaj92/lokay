@@ -1,6 +1,7 @@
 """Record one terminated plan-only issue in the stuck ledger."""
 
 from pathlib import Path
+
 from lokay.stuck import load_stuck, record_failure, save_stuck
 
 

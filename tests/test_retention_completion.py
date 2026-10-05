@@ -3,10 +3,15 @@
 import os
 
 import pytest
-from lokay.fala_journal import prune_stale_fala_journals, prune_stale_logs, prune_stale_tmp_dirs
+from test_host_ff import _pair
+
+from lokay.fala_journal import (
+    prune_stale_fala_journals,
+    prune_stale_logs,
+    prune_stale_tmp_dirs,
+)
 from lokay.git_worktree import remove_worktree
 from lokay.runner import Runner
-from test_host_ff import _pair
 
 
 @pytest.mark.parametrize('kind', ['journal', 'log', 'backup'])
@@ -142,8 +147,9 @@ def test_self_repair_reclaim_does_not_invent_timeouts(tmp_path, monkeypatch):
 
 
 def test_native_maintenance_preserves_terminal_and_incomplete_runs(tmp_path):
-    import fala
     from fala.journal import ensure_journal, upsert_run_metadata
+
+    import fala
     from lokay.fala_journal import maintain_lokay_fala_journals
     db = tmp_path / '.lokay' / 'fala' / 'daemon-entry' / 'state.sqlite'
     ensure_journal(db)
@@ -156,7 +162,6 @@ def test_native_maintenance_preserves_terminal_and_incomplete_runs(tmp_path):
             "WHERE id IN ('failure-evidence', 'done-evidence')",
             ('2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z', '2020-01-01T00:00:00Z'),
         )
-    before = fala.list_runs(db)
     result = maintain_lokay_fala_journals(home=tmp_path, min_bytes=1, keep=0)
     after = fala.list_runs(db)
     remaining = {row['id']: row['status'] for row in after}

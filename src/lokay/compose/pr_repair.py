@@ -13,7 +13,6 @@ from lokay.proc.admit_pr_repair import admit_live
 from lokay.state import append_event
 
 
-
 def compose_pr_repair(
     *,
     config_path: str | None,

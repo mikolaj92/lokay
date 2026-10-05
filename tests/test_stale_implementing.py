@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_IMPLEMENTING, LABEL_PR_OPEN
 from lokay.stale_implementing import (
@@ -53,10 +51,10 @@ def _issue(number: int, title: str, labels: list[str]) -> Issue:
 
 
 def test_label_probes_reduce_and_each_candidate_restores_ready(monkeypatch):
-    from lokay.proc.reduce_stale_repo_probe import reduce_state as reduce_repo
     from lokay.proc.reduce_stale_implementing_probe import reduce_state as reduce_all
-    from lokay.proc.select_stale_candidate_slot import select
+    from lokay.proc.reduce_stale_repo_probe import reduce_state as reduce_repo
     from lokay.proc.restore_stale_issue_ready import restore
+    from lokay.proc.select_stale_candidate_slot import select
 
     rows = [
         {

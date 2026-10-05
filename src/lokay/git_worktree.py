@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import stat
 from pathlib import Path
-
 from typing import Any
 
 from lokay.config import Config, RepoConfig
-from lokay.repair_continuation import repair_head_continues
 from lokay.git_real_diff import (
     classify_changed_paths,
     list_changed_paths,
     list_uncommitted_paths,
 )
+from lokay.repair_continuation import repair_head_continues
 from lokay.runner import Runner, git_spec
-
 
 _QUARANTINE_SUFFIX = ".lokay-preserved"
 
@@ -497,7 +494,7 @@ def remove_worktree(
         # The pinned source is now the archive; any lexical replacement is
         # foreign and remains untouched. Automated cleanup never restores.
         try:
-            original_now = os.stat(
+            original_now = os.stat(  # noqa: F841 — stat probe: FileNotFoundError is the branch
                 worktree.name,
                 dir_fd=parent_fd,
                 follow_symlinks=False,
@@ -840,7 +837,7 @@ def ensure_worktree(
                 uncommitted = classify_changed_paths(
                     list_uncommitted_paths(runner, worktree)
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise RuntimeError(f"cannot inspect uncommitted worktree changes: {exc}") from exc
             if uncommitted == "real":
                 # A timeout/resume can leave new work on any branch state.

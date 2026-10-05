@@ -11,7 +11,6 @@ from lokay.proc._common import add_config, load_cfg, mutations_allowed, runner
 from lokay.proc.repair_agent_revision import observe
 from lokay.runner import git_spec
 
-
 MINI_LOKAY_REPO_SCOPE = "mikolaj92/lokay"
 
 

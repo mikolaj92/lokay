@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from lokay.session_policy import resolve_session
 
 
@@ -27,6 +28,7 @@ def test_node_session_policy_reaches_the_executor_receipt(tmp_path: Path):
     """The graph's session policy arrives in the harness args and the receipt."""
     import json
     import sys
+
     from lokay.agent import run_agent
     from lokay.config import Config
     from lokay.runner import Runner

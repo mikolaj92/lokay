@@ -1,7 +1,7 @@
 """Closeout and authored leftover-closeout atom contracts."""
 
-from pathlib import Path
 from types import SimpleNamespace
+
 from lokay.proc import closeout
 
 
@@ -91,6 +91,7 @@ def test_dry_run_candidate_is_planned_not_removed():
 
 def test_leftover_closeout_subflow_uses_handful_of_ticks():
     import inspect
+
     from lokay.proc.leftover_closeout_subflow import run
 
     source = inspect.getsource(run)

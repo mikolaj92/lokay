@@ -1,6 +1,7 @@
 """Run diff --no-index --check for one explicit untracked path."""
 
 from pathlib import Path
+
 from lokay.proc._common import runner
 from lokay.runner import git_spec
 

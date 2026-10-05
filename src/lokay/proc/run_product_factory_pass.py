@@ -1,6 +1,7 @@
 """Run one authored parent factory-pass sub-Fala."""
 
 from pathlib import Path
+
 from lokay.compose.factory import compose_factory_pass
 
 

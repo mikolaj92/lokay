@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from pathlib import Path
 
 from lokay.proc import wake as wake_proc

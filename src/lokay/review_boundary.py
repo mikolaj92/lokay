@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from lokay.pr_review import (
-    PrReviewError, coerce_soft_nits, count_request_changes_reviews,
-    find_review_for_head, parse_review_markers, parse_review_output,
+    PrReviewError,
+    coerce_soft_nits,
+    count_request_changes_reviews,
+    find_review_for_head,
+    parse_review_markers,
+    parse_review_output,
 )
 
 

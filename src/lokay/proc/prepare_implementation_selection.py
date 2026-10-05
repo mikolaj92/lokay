@@ -1,11 +1,12 @@
 """Prepare bounded inputs for implementation-repository selection."""
 
 from pathlib import Path
-from lokay.passkit import io as pass_io
-from lokay.stuck import load_stuck
+
 from lokay.factory_scope import factory_repo, scoped_repos
+from lokay.passkit import io as pass_io
 from lokay.proc.catalog_work import work_by_repo
 from lokay.proc.pass_lane import product_candidates, self_repo
+from lokay.stuck import load_stuck
 
 
 def prepare(*, pass_dir: str, slot_count: int) -> dict:

@@ -6,14 +6,14 @@ import argparse
 from typing import Any
 
 from lokay.envelope import emit_exit, ok
-from lokay.pass_receipt import read_pass_receipt
 from lokay.pass_history import read_pass_history
-from lokay.recovery_history import normalize_failure
+from lokay.pass_receipt import read_pass_receipt
 from lokay.proc._common import add_config_live, load_cfg
 from lokay.proc.last_pass_moving import classify as classify_moving
 from lokay.proc.leftover_skip import classify as classify_leftover
 from lokay.proc.leftover_skip import leftover_skip_signal
 from lokay.proc.survey_ttl import last_pass_is_empty_idle
+from lokay.recovery_history import normalize_failure
 
 _SOFT_HEALTH = frozenset(
     {

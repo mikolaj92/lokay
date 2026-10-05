@@ -1,7 +1,9 @@
 """Verify that one selected issue is still open work, not a human stop."""
 
 from __future__ import annotations
+
 import argparse
+
 from lokay.envelope import emit_exit, err, ok
 from lokay.gh_issues import get_issue
 from lokay.proc._common import add_config_read, load_cfg, read_live, runner

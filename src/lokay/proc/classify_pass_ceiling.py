@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from lokay.work_units import project_work_units, status_work_units
-
 
 _WAITING = frozenset(
     {
@@ -64,7 +63,7 @@ def classify(
         "reason": reason,
         "elapsed_seconds": float(elapsed_seconds),
         "transitions": transitions,
-        "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }
     if last_path:
         payload["last_path"] = last_path

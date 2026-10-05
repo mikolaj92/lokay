@@ -1,6 +1,7 @@
 """Persist one harvested factory stuck ledger."""
 
 from pathlib import Path
+
 from lokay.stuck import save_stuck
 
 

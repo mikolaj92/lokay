@@ -2,7 +2,6 @@
 
 from lokay.proc.launch_issue_to_pr import launch
 
-
 CANDIDATE = {
     "ok": True,
     "route": "do",

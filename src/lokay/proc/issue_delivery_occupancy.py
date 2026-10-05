@@ -1,23 +1,25 @@
 """Read, validate, and clear detached issue-delivery occupancy receipts."""
 
 from __future__ import annotations
-import json, os
+
+import json
+import os
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
 from lokay.localize import localize_belongs_to_issue
+from lokay.proc import repo_mutex
 from lokay.proc.issue_delivery_process import (
     coding_live_for_issue,
     is_live_issue_to_pr_pid,
-    pid_is_alive,
 )
 from lokay.proc.issue_delivery_receipts import (
     _receipt_write_lock,
     _starting_receipt_state,
     issue_to_pr_receipt_path,
 )
-from lokay.proc import repo_mutex
 
 
 def _is_cycle_start_metric(data: dict[str, Any], path: Path | None) -> bool:

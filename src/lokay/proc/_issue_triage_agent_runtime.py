@@ -1,7 +1,9 @@
 """Execute one read-only issue-triage prompt through the configured agent."""
 
 from __future__ import annotations
+
 from pathlib import Path
+
 from lokay.agent import run_agent
 from lokay.proc._common import agent_execute_allowed, runner
 

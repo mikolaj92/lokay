@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-
 from pathlib import Path
 from types import SimpleNamespace
-
 
 
 def _repo(name: str, *, enabled: bool = True) -> SimpleNamespace:

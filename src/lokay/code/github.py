@@ -22,7 +22,12 @@ from lokay.gh_prs import (
     pr_checks_report,
     view_pr,
 )
-from lokay.git_worktree import InvalidBranchRef, ensure_repair_worktree, ensure_worktree, worktree_dir
+from lokay.git_worktree import (
+    InvalidBranchRef,
+    ensure_repair_worktree,
+    ensure_worktree,
+    worktree_dir,
+)
 from lokay.models import PullRequest
 from lokay.runner import Runner, gh_spec
 

@@ -1,6 +1,6 @@
 """A blocked repair is not a successful not-applicable repair."""
-from pathlib import Path
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -46,6 +46,7 @@ def test_authored_summary_retains_worktree_blocker(monkeypatch, reason):
 
 def test_native_fala_carries_blocked_summary_to_parent(tmp_path):
     from test_issue_triage_fala import base_effector, run_graph
+
     from lokay.graph_run import normalize_path_result
 
     body = base_effector('''

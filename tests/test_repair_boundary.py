@@ -1,12 +1,13 @@
 import json
+
 from lokay.repair_boundary import (
-    validate_output,
-    select_initial,
-    select_evidence,
     finalize,
+    finalize_tests,
+    select_evidence,
+    select_initial,
     select_test,
     select_test_repair,
-    finalize_tests,
+    validate_output,
 )
 
 

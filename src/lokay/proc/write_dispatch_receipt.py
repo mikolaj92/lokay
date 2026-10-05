@@ -1,6 +1,7 @@
 """Publish one running pass receipt after successful dispatch."""
 
 from pathlib import Path
+
 from lokay.pass_receipt import build_pass_receipt, write_pass_receipt
 from lokay.passkit import io as pass_io
 

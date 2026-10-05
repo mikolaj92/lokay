@@ -18,7 +18,6 @@ from lokay.proc.reduce_status_snapshot import reduce as reduce_status
 from lokay.state import append_event
 from lokay.work_units import project_work_units, status_work_units
 
-
 REPO = "mikolaj92/reviewkit"
 ISSUE = 308
 PR = 309
