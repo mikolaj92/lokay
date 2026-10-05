@@ -20,7 +20,6 @@ from lokay.gh_issues import (
 from lokay.gh_issues import (
     get_issue as view_issue,
 )
-from lokay.models import Issue
 from lokay.tasks import Task, TaskId, _require_mark
 
 PLUGIN = "github"
@@ -104,18 +103,6 @@ def issue_to_task(issue: object, *, plugin: str, target: str) -> Task:
     )
 
 
-def task_to_issue(task: Task) -> Issue:
-    return Issue(
-        repo=task.target,
-        number=task.number,
-        title=task.title,
-        body=task.body,
-        labels=list(task.labels),
-        assignees=list(task.assignees),
-        url=f"https://github.com/{task.target}/issues/{task.number}",
-        state=task.state,
-        author=task.author,
-    )
 
 
 def _mark_from_labels(labels: list[str]) -> str | None:

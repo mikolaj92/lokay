@@ -49,11 +49,3 @@ def scoped_repos(
     ]
 
 
-def in_scope(
-    repo: str,
-    catalog: Iterable[str] | None = None,
-    *,
-    lokay: str | None = None,
-) -> bool:
-    """Return true only for a catalog member (or explicit single-repo override)."""
-    return delivers(repo, catalog=catalog, lokay=lokay)

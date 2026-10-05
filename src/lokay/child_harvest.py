@@ -392,8 +392,6 @@ def _index_issue_to_pr_events(state_path: Path) -> dict[tuple[str, int], dict[st
     return last
 
 
-def _last_issue_to_pr_event(state_path: Path, repo: str, issue: int) -> dict[str, Any] | None:
-    return _index_issue_to_pr_events(state_path).get((repo, issue))
 
 
 def _fala_i2pr_db(repo: str, issue: int, home: Path) -> Path:

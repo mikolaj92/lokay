@@ -152,35 +152,8 @@ def repo_file_hints(worktree: Path | None, candidates: Iterable[str]) -> tuple[s
     return tuple(dict.fromkeys(kept))
 
 
-def _goal_from_issue(issue: Issue, sections: list[tuple[str, str]]) -> str:
-    section = _section_text(sections, _GOAL_HEADINGS)
-    if section:
-        first = section.strip().split("\n\n", 1)[0].strip()
-        return first[:800]
-    # Preamble / first non-empty paragraph after title echo.
-    for heading, body in sections:
-        if heading in _NONGOAL_HEADINGS or heading in _TEST_HEADINGS:
-            continue
-        para = (body or "").strip().split("\n\n", 1)[0].strip()
-        if para and para.lower() != (issue.title or "").strip().lower():
-            return para[:800]
-    title = (issue.title or "").strip()
-    return title or f"Implement {issue.repo}#{issue.number}"
 
 
-def _test_plan(sections: list[tuple[str, str]], body: str) -> tuple[str, ...]:
-    section = _section_text(sections, _TEST_HEADINGS)
-    items = list(_bullet_lines(section)) if section else []
-    if not items:
-        boxes = [m.group(1).strip() for m in _CHECKBOX.finditer(body or "") if m.group(1).strip()]
-        items.extend(boxes[:8])
-    if not items:
-        blob = (body or "").lower()
-        if "pytest" in blob or "uv run pytest" in blob:
-            items.append("Run targeted pytest for touched modules")
-        else:
-            items.append("Run the smallest useful tests for files touched")
-    return tuple(dict.fromkeys(items))[:12]
 
 
 def _non_goals(sections: list[tuple[str, str]]) -> tuple[str, ...]:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from lokay.passkit import io as pass_io
@@ -15,8 +14,6 @@ def load_begin_working(pass_dir: str) -> tuple[dict[str, Any], dict[str, Any]]:
     return begin, working
 
 
-def stuck_path_of(begin: dict[str, Any]) -> Path:
-    return Path(str(begin.get("stuck_path") or ""))
 
 
 def recount_prs(working: dict[str, Any]) -> None:

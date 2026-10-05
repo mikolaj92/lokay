@@ -21,16 +21,6 @@ from lokay.wake import WakePlan, route_wake
 _REPO_SKIP_REASON = "repo_not_delivered_by_mini_lokay"
 
 
-def _repo_skip(repo: str, *, planned: bool, plan_only: bool = False) -> dict[str, Any]:
-    return ok(
-        kind="wake",
-        planned=planned,
-        plan_only=plan_only,
-        skipped=True,
-        path=None,
-        reason=_REPO_SKIP_REASON,
-        repo=repo,
-    )
 
 
 def _parse_labels(raw: str | None) -> list[str]:

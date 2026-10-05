@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 from typing import Any
 
 from fala import sdk
-from lokay.prompts import (
-    timeout_resume_prompt,
-)
 
 from lokay.organ.publication_gates import (  # noqa: F401 — re-exported for fala_organ/publication
     _test_local_ok, _finalize_local_tests_ok, _test_local_probe,
@@ -251,66 +246,4 @@ def _pr_already_merged(
     return _merged_pr_payload(viewed)
 
 
-def _resume_after_timeout(
-    *,
-    run_agent_main,
-    assert_real_diff_main,
-    commit_all_main,
-    cfg: list[str],
-    live: list[str],
-    inputs: dict[str, Any],
-    worktree: str,
-    repo: str,
-    branch: str,
-    issue_number: int | None,
-    issue_raw: dict[str, Any],
-    get_issue_main=None,
-) -> dict[str, Any]:
-    """One continue pass on the same corner after executor timeout."""
-    from lokay.atom_runtime import run_atom_main
-
-    run = run_atom_main
-    refused = _issue_no_longer_open(
-        {"get_issue": {"issue": issue_raw or {}}},
-        cfg=cfg,
-        live=live,
-        repo=repo,
-        issue_number=issue_number,
-        run=run,
-        get_issue_main=get_issue_main,
-    )
-    if refused is not None:
-        return refused
-    prompt = timeout_resume_prompt(
-        repo=repo,
-        branch=branch,
-        issue_number=issue_number,
-        issue_title=str(issue_raw.get("title") or ""),
-    )
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
-        fh.write(prompt)
-        prompt_path = fh.name
-    try:
-        out = run(
-            run_agent_main,
-            [*cfg, *live, "--worktree", worktree, "--prompt-file", prompt_path],
-        )
-    finally:
-        Path(prompt_path).unlink(missing_ok=True)
-    if isinstance(out, dict):
-        out["attempted"] = True
-        out["reason"] = "timeout_resume"
-    if inputs.get("live") and isinstance(out, dict) and out.get("ok") is not False:
-        gate = run(assert_real_diff_main, ["--worktree", worktree])
-        if isinstance(gate, dict) and gate.get("real") is True:
-            n = issue_raw.get("number", issue_number)
-            title = str(issue_raw.get("title") or "")[:60]
-            msg = f"fix: {repo}#{n} {title}".strip()
-            committed = run(
-                commit_all_main,
-                [*cfg, *live, "--worktree", worktree, "--message", msg],
-            )
-            if isinstance(committed, dict):
-                out["committed"] = committed.get("committed")
-    return out
 

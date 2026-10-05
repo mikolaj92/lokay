@@ -18,19 +18,15 @@ four issues and removes only corners whose issues are CLOSED.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
 from lokay.envelope import emit_exit
-from lokay.git_real_diff import classify_changed_paths, list_uncommitted_paths
 from lokay.proc._common import (
     add_config_live,
 )
 from lokay.proc.detach_issue_to_pr import live_issue_to_pr_receipts  # noqa: F401 — patch seam (conftest)
-from lokay.runner import Runner
 from lokay.stuck import issue_number_from_branch
 
 # leftover_status is seconds each (rev-list + ls-files). 66 leftovers
@@ -65,41 +61,10 @@ def _is_operator_lokay_over_cap_stamp(stamp: Path) -> bool:
         return stamp.expanduser() == lokay
 
 
-def over_cap_recently_idle(
-    stamp: Path | None, *, now: float | None = None, ttl: int | None = None
-) -> bool:
-    if stamp is None:
-        return False
-    # Pytest must not skip over-cap GitHub views using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_over_cap_stamp(
-        stamp
-    ):
-        return False
-    try:
-        age = (now if now is not None else time.time()) - stamp.stat().st_mtime
-    except OSError:
-        return False
-    limit = OVER_CAP_TTL_SECONDS if ttl is None else ttl
-    return 0 <= age < limit
 
 
-def _touch_over_cap_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(str(int(time.time())), encoding="utf-8")
-    except OSError:
-        pass
 
 
-def _clear_over_cap_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.unlink()
-    except OSError:
-        pass
 
 
 def _issue_is_closed(repo: str, issue: int) -> bool | None:
@@ -156,48 +121,8 @@ def _oldest_issued(
     return _oldest(issued)
 
 
-def _oldest_issued_clean(
-    leftovers: list[tuple[Path, str]], *, branch_prefix: str
-) -> list[tuple[Path, str]]:
-    """Idle CLASSIFY_CAP skips dirty-real leftovers so KEEP cannot starve lokay issues."""
-    issued = _oldest_issued(leftovers, branch_prefix=branch_prefix)
-    git = Runner()
-    clean: list[tuple[Path, str]] = []
-    for path, branch in issued:
-        if len(clean) >= CLASSIFY_CAP:
-            break
-        try:
-            kind = classify_changed_paths(list_uncommitted_paths(git, path))
-        except (OSError, RuntimeError):
-            continue
-        if kind == "real":
-            continue
-        clean.append((path, branch))
-    return clean
 
 
-def _oldest_empty_no_issue(
-    leftovers: list[tuple[Path, str]], *, branch_prefix: str
-) -> list[tuple[Path, str]]:
-    """Idle CLASSIFY_CAP reaps empty no-issue leftovers so harvest leftovers cannot freeze lokay porcelain."""
-    no_issue = [
-        item
-        for item in leftovers
-        if issue_number_from_branch(item[1], branch_prefix=branch_prefix) is None
-    ]
-    git = Runner()
-    empty: list[tuple[Path, str]] = []
-    for path, branch in _oldest(no_issue):
-        if len(empty) >= CLASSIFY_CAP:
-            break
-        try:
-            kind = classify_changed_paths(list_uncommitted_paths(git, path))
-        except (OSError, RuntimeError):
-            continue
-        if kind != "empty":
-            continue
-        empty.append((path, branch))
-    return empty
 
 
 def _live_keys(rows: list[dict[str, Any]]) -> set[tuple[str, int]]:
@@ -237,23 +162,6 @@ def _covering(
     return issues, heads
 
 
-def _keep_reason(
-    *,
-    repo: str,
-    branch: str,
-    issue: int | None,
-    live: set[tuple[str, int]],
-    covered: set[int],
-    heads: set[str],
-) -> str | None:
-    """Live i2pr KEEP is issue-scoped (repo+issue), never whole-repo."""
-    if issue is not None and (repo, issue) in live:
-        return "live_issue_to_pr"
-    if issue is not None and issue in covered:
-        return "covering_pr"
-    if branch in heads:
-        return "covering_pr"
-    return None
 
 
 def main(argv=None):

@@ -539,14 +539,8 @@ def _bounded_contexts(body: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(found))
 
 
-def _has_typed_edge(body: str) -> bool:
-    return bool(re.search(r"(?i)\btyped edge\b", body or ""))
 
 
-def _has_feature_map(root: Path | None) -> bool:
-    if root is None:
-        return False
-    return (Path(root) / ".lokay/memory/feature-map.md").is_file()
 
 
 def check_ambiguity(issue: Issue, root: Path | None = None, *, agent: dict | None = None) -> CheckResult:
