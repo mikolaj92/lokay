@@ -1,61 +1,45 @@
-"""Verification and synchronization of README.md Mermaid diagrams with authored Fala paths."""
+"""README carries a generated Fala path index; the checker compares, never scrapes.
+
+The authored contract is ``fala/lokay.fala-package.toml``. The README section
+between the markers is a rendered artifact of it: verification regenerates the
+table and compares strings exactly. Per-path design diagrams live in
+``docs/FALA_PATHS.md``.
+"""
 
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any
 
-from lokay.graph_run import find_default_package, _project_root
+from lokay.graph_run import _project_root, find_default_package
+
+BEGIN_MARKER = "<!-- fala-paths:begin (generated from fala/lokay.fala-package.toml) -->"
+END_MARKER = "<!-- fala-paths:end -->"
 
 
-def load_package_paths(package_path: Path | None = None) -> dict[str, dict[str, Any]]:
+def load_package_paths(package_path: Path | None = None) -> list[dict[str, str]]:
+    """Authored path ids and titles, in package order."""
     pkg_file = package_path or find_default_package()
     data = tomllib.loads(pkg_file.read_text(encoding="utf-8"))
-    paths = {}
-    for p in data.get("correlation_paths", []):
-        path_id = str(p["id"])
-        effectors = []
-        for eff in p.get("effectors", []):
-            effectors.append({
-                "id": str(eff["id"]),
-                "atom": str((eff.get("config") or {}).get("atom") or ""),
-                "conduction": [str(c) for c in eff.get("conduction", [])],
-                "when": dict(eff.get("when") or {}),
-            })
-        paths[path_id] = {
-            "id": path_id,
-            "title": str(p.get("title") or ""),
-            "description": str(p.get("description") or ""),
-            "effectors": effectors,
-        }
-    return paths
+    return [
+        {"id": str(p["id"]), "title": str(p.get("title") or "")}
+        for p in data.get("correlation_paths", [])
+    ]
 
 
-def parse_readme_documented_paths(readme_text: str) -> set[str]:
-    pattern = r"\| `[^`]+` \| `([a-z0-9_]+)` \|"
-    return set(re.findall(pattern, readme_text))
+def render_path_index(paths: list[dict[str, str]]) -> str:
+    lines = ["| Ścieżka Fali | Tytuł |", "| --- | --- |"]
+    for path in paths:
+        lines.append(f"| `{path['id']}` | {path['title']} |")
+    return "\n".join(lines)
 
 
-def parse_readme_mermaid_nodes(readme_text: str) -> set[str]:
-    pattern = r"```mermaid\nstateDiagram-v2\n(.*?)```"
-    mermaid_blocks = re.findall(pattern, readme_text, re.DOTALL)
-    nodes = set()
-    for block in mermaid_blocks:
-        for line in block.splitlines():
-            line = line.strip()
-            if "-->" in line:
-                parts = line.split("-->")
-                src = parts[0].strip()
-                dst = parts[1].split(":")[0].strip()
-                if src and src != "[*]":
-                    nodes.add(src)
-                if dst and dst != "[*]":
-                    nodes.add(dst)
-    return nodes
+def _readme_section(readme_text: str) -> str:
+    begin = readme_text.index(BEGIN_MARKER) + len(BEGIN_MARKER)
+    end = readme_text.index(END_MARKER)
+    return readme_text[begin:end].strip()
 
 
 def verify_readme_sync(
@@ -68,39 +52,64 @@ def verify_readme_sync(
         return False, [f"README.md not found at {readme_file}"]
 
     readme_text = readme_file.read_text(encoding="utf-8")
-    pkg_paths = load_package_paths(package_path)
+    errors: list[str] = []
 
-    errors = []
+    try:
+        section = _readme_section(readme_text)
+    except ValueError:
+        return False, [
+            "README.md is missing the fala-paths markers; run: lokay-readme-check --write"
+        ]
 
-    # 1. Verify every authored correlation path is documented in README path table
-    documented_paths = parse_readme_documented_paths(readme_text)
-    authored_paths = set(pkg_paths.keys())
-    missing_paths = authored_paths - documented_paths
-    if missing_paths:
-        errors.append(f"Authored Fala paths missing from README path table: {sorted(missing_paths)}")
+    expected = render_path_index(load_package_paths(package_path))
+    if section != expected.strip():
+        errors.append("README fala-paths section is stale; run: lokay-readme-check --write")
 
-    # 2. Verify headings use authored Fala path IDs
-    heading_pattern = r"^### ([^\\n]+?) — `([a-z0-9_]+)`$"
-    headings = dict(re.findall(heading_pattern, readme_text, re.MULTILINE))
-    heading_path_ids = set(headings.values())
-    invalid_headings = heading_path_ids - authored_paths
-    if invalid_headings:
-        errors.append(f"README section headings use invalid Fala path IDs: {sorted(invalid_headings)}")
-
-    # 3. Verify no GitHub Actions workflows exist
     workflows = root / ".github" / "workflows"
     if workflows.exists() and any(workflows.iterdir()):
-        errors.append("Repository contains .github/workflows; Lokay rules prohibit GitHub Actions workflows.")
+        errors.append(
+            "Repository contains .github/workflows; Lokay rules prohibit GitHub Actions workflows."
+        )
 
-    return len(errors) == 0, errors
+    return not errors, errors
+
+
+def write_readme_section(
+    package_path: Path | None = None,
+    readme_path: Path | None = None,
+) -> None:
+    """Regenerate the marked fala-paths section in place."""
+    root = _project_root()
+    readme_file = readme_path or (root / "README.md")
+    text = readme_file.read_text(encoding="utf-8")
+    rendered = (
+        f"{BEGIN_MARKER}\n{render_path_index(load_package_paths(package_path))}\n{END_MARKER}"
+    )
+    try:
+        begin = text.index(BEGIN_MARKER)
+        end = text.index(END_MARKER) + len(END_MARKER)
+        text = text[:begin] + rendered + text[end:]
+    except ValueError:
+        text = text.rstrip("\n") + "\n\n" + rendered + "\n"
+    readme_file.write_text(text, encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="lokay-readme-check")
     parser.add_argument("--check", action="store_true", help="Check synchronization and exit 1 if stale")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Regenerate the marked fala-paths section in README.md",
+    )
     parser.add_argument("--package", type=Path, help="Path to fala-package.toml")
     parser.add_argument("--readme", type=Path, help="Path to README.md")
     args = parser.parse_args(argv)
+
+    if args.write:
+        write_readme_section(package_path=args.package, readme_path=args.readme)
+        print("README.md fala-paths section regenerated.")
+        return 0
 
     ok, errors = verify_readme_sync(package_path=args.package, readme_path=args.readme)
     if not ok:

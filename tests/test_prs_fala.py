@@ -166,11 +166,11 @@ def test_pr_triage_atoms_include_named_recovery_transitions():
 
 def test_readme_names_the_department_sieve():
     root = Path(__file__).resolve().parents[1]
-    readme = (root / "README.md").read_text(encoding="utf-8")
+    paths_doc = (root / "docs" / "FALA_PATHS.md").read_text(encoding="utf-8")
     graph = (root / "docs" / "GRAPH.md").read_text(encoding="utf-8")
-    assert "ListPrSieve" in readme
-    assert "RunPrSieve" in readme
-    assert "SelectPrTriageVerdict" in readme
+    assert "ListPrSieve" in paths_doc
+    assert "RunPrSieve" in paths_doc
+    assert "SelectPrTriageVerdict" in paths_doc
     assert "run_pr_sieve" in graph
     assert "pr_triage_department" in graph
     assert "### `prs`" not in graph
