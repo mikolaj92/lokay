@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
-from lokay.issue_checkboxes import is_bug_issue, work_checkbox_count
+from lokay.issue_checkboxes import work_checkbox_count
 from lokay.models import Issue
 from lokay.stage_ledger import LABEL_WORK_READY
 from lokay.triage import is_parked, is_preflight_incident, is_undecided
@@ -87,6 +87,7 @@ _ISSUE_HASH = re.compile(r"(?:^|[\s(,])#(\d+)\b")
 _SUPERSEDED_MARKERS = re.compile(
     r"(?i)\b(superseded\s+by|already\s+(?:done|fixed|merged)|duplicate\s+of)\b"
 )
+_MULTI_EPIC = re.compile(r"(?i)\bepic\b")
 
 # Operational reports stay. Essence / soul / "should be something else" does not.
 _OPERATIONAL_REPORT = re.compile(

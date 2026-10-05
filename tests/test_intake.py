@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lokay.graph_run import describe_package, normalize_path_result
+from lokay.graph_run import describe_package
 from lokay.intake import (
     check_ambiguity,
     check_duplicate_ai_pr,
@@ -190,6 +190,14 @@ def test_tracker_closed_superseded():
     result = check_superseded(issue, closed_tracker_done=True)
     assert result.verdict == "close"
     assert result.reason == "tracker_already_done"
+
+
+def test_tracker_done_without_tracker_word_does_not_crash():
+    """closed_tracker_done with a plain title must not raise on _MULTI_EPIC."""
+    issue = _issue(title="Add retry around dispatch", body="Worker restarts mid-tick.")
+    result = check_superseded(issue, closed_tracker_done=True)
+    assert result.verdict == "pass"
+    assert result.reason == "no_supersede_evidence"
 
 
 def test_essence_closes_foreign_soul_objection():
