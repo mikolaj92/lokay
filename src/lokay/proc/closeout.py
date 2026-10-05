@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lokay.operator_stamps import is_operator_stamp
 from lokay.envelope import emit_exit, ok
 from lokay.gh_prs import find_pr_fixing_issue
 from lokay.gh_rate import parse_survey_list, survey_list_cap
@@ -66,26 +67,15 @@ def leftover_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / LEFTOVER_STAMP_NAME
 
 
-def lokay_leftover_stamp_path() -> Path:
-    """Operator lokay leftover stamp beside last-pass / state.jsonl."""
-    return Path.home() / ".lokay" / LEFTOVER_STAMP_NAME
 
 
-def _is_operator_lokay_leftover_stamp(stamp: Path) -> bool:
-    lokay = lokay_leftover_stamp_path()
-    try:
-        return stamp.expanduser().resolve() == lokay.resolve()
-    except OSError:
-        return stamp.expanduser() == lokay
 
 
 def leftover_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
         return False
     # Pytest must not skip leftover GitHub lists using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_leftover_stamp(
-        stamp
-    ):
+    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, LEFTOVER_STAMP_NAME):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -94,23 +84,8 @@ def leftover_recently_empty(stamp: Path | None, *, now: float | None = None) -> 
     return 0 <= age < LEFTOVER_TTL_SECONDS
 
 
-def _touch_leftover_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(str(int(time.time())), encoding="utf-8")
-    except OSError:
-        pass
 
 
-def _clear_leftover_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.unlink()
-    except OSError:
-        pass
 
 
 def closed_ready_numbers(

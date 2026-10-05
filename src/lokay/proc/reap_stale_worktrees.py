@@ -48,17 +48,8 @@ def over_cap_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / OVER_CAP_STAMP_NAME
 
 
-def lokay_over_cap_stamp_path() -> Path:
-    """Operator lokay over-cap stamp beside last-pass / state.jsonl."""
-    return Path.home() / ".lokay" / OVER_CAP_STAMP_NAME
 
 
-def _is_operator_lokay_over_cap_stamp(stamp: Path) -> bool:
-    lokay = lokay_over_cap_stamp_path()
-    try:
-        return stamp.expanduser().resolve() == lokay.resolve()
-    except OSError:
-        return stamp.expanduser() == lokay
 
 
 

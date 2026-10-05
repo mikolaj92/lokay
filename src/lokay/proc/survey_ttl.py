@@ -23,6 +23,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from lokay.operator_stamps import clear_stamp, is_operator_stamp, lokay_home_stamp_path, touch_stamp
 from lokay.factory_scope import factory_repo
 from lokay.gh_rate import SURVEY_LIST_CAP
 from lokay.triage import is_open_work_issue
@@ -47,24 +48,15 @@ def survey_stamp_path(begin: dict[str, Any] | None) -> Path | None:
     return parent / SURVEY_STAMP_NAME
 
 
-def lokay_survey_stamp_path() -> Path:
-    """Operator lokay stamp beside last-pass / state.jsonl."""
-    return Path.home() / ".lokay" / SURVEY_STAMP_NAME
 
 
-def _is_operator_lokay_stamp(stamp: Path) -> bool:
-    lokay = lokay_survey_stamp_path()
-    try:
-        return stamp.expanduser().resolve() == lokay.resolve()
-    except OSError:
-        return stamp.expanduser() == lokay
 
 
 def survey_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
         return False
     # Pytest must not skip GitHub surveys using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_stamp(stamp):
+    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, SURVEY_STAMP_NAME):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -74,22 +66,11 @@ def survey_recently_empty(stamp: Path | None, *, now: float | None = None) -> bo
 
 
 def touch_survey_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(str(int(time.time())), encoding="utf-8")
-    except OSError:
-        pass
+    touch_stamp(stamp)
 
 
 def clear_survey_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.unlink()
-    except OSError:
-        pass
+    clear_stamp(stamp)
 
 
 def last_pass_is_empty_idle(receipt: dict[str, Any] | None) -> bool:
@@ -139,11 +120,11 @@ def skip_idle_factory_pass(
     if not live:
         return None
     if os.environ.get("PYTEST_CURRENT_TEST") and (
-        stamp is None or _is_operator_lokay_stamp(stamp)
+        stamp is None or is_operator_stamp(stamp, SURVEY_STAMP_NAME)
     ):
         return None
     if stamp is None:
-        stamp = lokay_survey_stamp_path()
+        stamp = lokay_home_stamp_path(SURVEY_STAMP_NAME)
     if receipt is None:
         from lokay.pass_receipt import read_pass_receipt
 

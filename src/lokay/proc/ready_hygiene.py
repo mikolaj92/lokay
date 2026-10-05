@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lokay.operator_stamps import is_operator_stamp
 from lokay.envelope import emit_exit, err
 from lokay.proc._common import add_config_live
 
@@ -29,17 +30,8 @@ def hygiene_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / HYGIENE_STAMP_NAME
 
 
-def lokay_hygiene_stamp_path() -> Path:
-    """Operator lokay leftover-ready stamp beside last-pass / state.jsonl."""
-    return Path.home() / ".lokay" / HYGIENE_STAMP_NAME
 
 
-def _is_operator_lokay_hygiene_stamp(stamp: Path) -> bool:
-    lokay = lokay_hygiene_stamp_path()
-    try:
-        return stamp.expanduser().resolve() == lokay.resolve()
-    except OSError:
-        return stamp.expanduser() == lokay
 
 
 def hygiene_recently_empty(
@@ -48,7 +40,7 @@ def hygiene_recently_empty(
     if stamp is None:
         return False
     # Pytest must not skip leftover-ready GitHub lists using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_hygiene_stamp(stamp):
+    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, HYGIENE_STAMP_NAME):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -58,23 +50,8 @@ def hygiene_recently_empty(
     return 0 <= age < limit
 
 
-def _touch_hygiene_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(str(int(time.time())), encoding="utf-8")
-    except OSError:
-        pass
 
 
-def _clear_hygiene_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.unlink()
-    except OSError:
-        pass
 
 
 def run_ready_hygiene(*, config_path: str | None, live: bool) -> dict[str, Any]:

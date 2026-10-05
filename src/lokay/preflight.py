@@ -15,6 +15,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from lokay.operator_stamps import clear_stamp, is_operator_stamp, touch_stamp
 from lokay.config import load_config
 
 _REDACTED = "[redacted]"
@@ -703,17 +704,8 @@ def incident_stamp_path(cfg: Any | None) -> Path | None:
     return Path(path).expanduser().parent / INCIDENT_STAMP_NAME
 
 
-def lokay_incident_stamp_path() -> Path:
-    """Operator lokay leftover-incident stamp beside last-pass / state.jsonl."""
-    return Path.home() / ".lokay" / INCIDENT_STAMP_NAME
 
 
-def _is_operator_lokay_incident_stamp(stamp: Path) -> bool:
-    lokay = lokay_incident_stamp_path()
-    try:
-        return stamp.expanduser().resolve() == lokay.resolve()
-    except OSError:
-        return stamp.expanduser() == lokay
 
 
 def incident_recently_empty(
@@ -722,7 +714,7 @@ def incident_recently_empty(
     if stamp is None:
         return False
     # Pytest must not skip leftover-incident GitHub lists using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_incident_stamp(stamp):
+    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, INCIDENT_STAMP_NAME):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -732,23 +724,8 @@ def incident_recently_empty(
     return 0 <= age < limit
 
 
-def _touch_incident_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(str(int(time.time())), encoding="utf-8")
-    except OSError:
-        pass
 
 
-def _clear_incident_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.unlink()
-    except OSError:
-        pass
 
 
 def _list_open_incidents(repo: str) -> list[dict[str, Any]] | None:
@@ -884,9 +861,9 @@ def _close_resolved_incidents(repo: str, cfg: Any | None = None) -> dict[str, An
         if done.returncode == 0:
             closed.append(issue_n)
     if closed:
-        _clear_incident_stamp(stamp)
+        clear_stamp(stamp)
     else:
-        _touch_incident_stamp(stamp)
+        touch_stamp(stamp)
     # Empty leftover-incident host is not applied.
     # Empty leftover-incident host reports planned=not live.
     # Leftover-incident host reports probe_failed.
@@ -1026,7 +1003,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
                 entry["created_at"] = now
             ledger[fp] = entry
             _write_incident_ledger(cfg, ledger)
-            _clear_incident_stamp(incident_stamp_path(cfg))
+            clear_stamp(incident_stamp_path(cfg))
             return url
 
         cached_url = str(entry.get("incident_url") or "")
@@ -1055,7 +1032,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
                 entry["created_at"] = now
             ledger[fp] = entry
             _write_incident_ledger(cfg, ledger)
-            _clear_incident_stamp(incident_stamp_path(cfg))
+            clear_stamp(incident_stamp_path(cfg))
             return url
 
         made = subprocess.run(
@@ -1095,7 +1072,7 @@ def _github_incident(result: dict[str, Any], cfg: Any | None = None) -> str | No
         )
         ledger[fp] = entry
         _write_incident_ledger(cfg, ledger)
-        _clear_incident_stamp(incident_stamp_path(cfg))
+        clear_stamp(incident_stamp_path(cfg))
         return url
     except (OSError, ValueError, subprocess.TimeoutExpired):
         return None

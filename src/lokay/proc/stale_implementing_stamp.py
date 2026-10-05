@@ -5,6 +5,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from lokay.operator_stamps import clear_stamp, is_operator_stamp, touch_stamp
+
 STALE_TTL_SECONDS = 300
 IDLE_STALE_TTL_SECONDS = 900
 STALE_STAMP_NAME = "reap-stale-implementing.stamp"
@@ -15,15 +17,8 @@ def stale_stamp_path(cfg: Any) -> Path | None:
     return Path(path).expanduser().parent / STALE_STAMP_NAME if path else None
 
 
-def lokay_stale_stamp_path() -> Path:
-    return Path.home() / ".lokay" / STALE_STAMP_NAME
 
 
-def _is_operator_lokay_stale_stamp(stamp: Path) -> bool:
-    try:
-        return stamp.expanduser().resolve() == lokay_stale_stamp_path().resolve()
-    except OSError:
-        return stamp.expanduser() == lokay_stale_stamp_path()
 
 
 def stale_recently_empty(
@@ -31,7 +26,7 @@ def stale_recently_empty(
 ) -> bool:
     if stamp is None:
         return False
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_stale_stamp(stamp):
+    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, STALE_STAMP_NAME):
         return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
@@ -41,19 +36,8 @@ def stale_recently_empty(
 
 
 def touch_stale_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        stamp.write_text(str(int(time.time())), encoding="utf-8")
-    except OSError:
-        pass
+    touch_stamp(stamp)
 
 
 def clear_stale_stamp(stamp: Path | None) -> None:
-    if stamp is None:
-        return
-    try:
-        stamp.unlink()
-    except OSError:
-        pass
+    clear_stamp(stamp)
