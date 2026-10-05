@@ -10,7 +10,8 @@ parent bindings and a real Git diff with approved, denied and on-goal changes.
 The generated per-node copies and their filename inventory audit were removed
 for this path: they could stay green while the runtime lost issue and scope.
 
-Other paths still contain generated graph snapshots. Their fixture-native
-checks describe control-flow geometry, not successful product execution.
+Generated per-node geometry copies and independent metadata snapshots are
+removed across all paths. They tested copied constants against a test model,
+not Lokay's implementation. Keep native graph execution and behavioral tests.
 `tests/test_graph.py` checks authored output schemas used by branch conditions;
 `tests/test_fala_package_lock.py` checks the checkout/package identity.
