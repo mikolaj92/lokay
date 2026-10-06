@@ -1273,7 +1273,7 @@ def require_healthy(config_path: str | None) -> None:
         raise RuntimeError(
             f"preflight failed; live mutation blocked (lease={lease_reason})"
         )
-    result = run_preflight(config_path, remediate=True)
+    result = run_preflight(config_path, remediate=True, issue_lease=True)
     if not result["ok"]:
         raise RuntimeError(
             f"preflight failed; live mutation blocked (lease={lease_reason})"
