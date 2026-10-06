@@ -525,6 +525,9 @@ def test_background_fits_ocr_hard_character_limit(tmp_path: Path, monkeypatch):
     assert "entire inclusive start_line..end_line span" in trusted_tail
     assert "one contiguous changed-line interval on the reviewed head" in trusted_tail
     assert "Unchanged context lines are not valid anchors" in trusted_tail
+    assert "OCR derives both endpoints from existing_code" in trusted_tail
+    assert "existing_code must contain only consecutive changed head-side lines" in trusted_tail
+    assert "Numeric tool arguments do not control the anchor" in trusted_tail
     assert '"diff_sha256":"' + request["diff_sha256"] + '"' in trusted_tail
     assert len(text) <= OCR_BACKGROUND_CHAR_LIMIT
     assert '<task_title untrusted="true">' in text
