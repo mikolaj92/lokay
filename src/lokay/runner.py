@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import errno
 import os
 import pty
 import re
 import select
+import signal
 import subprocess
 import time
 from collections.abc import Mapping, Sequence
@@ -168,43 +170,67 @@ class Runner:
 
 
 def _run_pty(spec: CommandSpec, env: Mapping[str, str]) -> CommandResult:
-    """Run a command on a pseudo-terminal and return its combined output.
-
-    pi refuses to resolve its provider key without a terminal and hangs. A pty
-    satisfies that without giving the daemon a real one.
-    """
     master, slave = pty.openpty()
+    diagnostic_master = diagnostic_slave = -1
+    proc = None
     try:
+        diagnostic_master, diagnostic_slave = pty.openpty()
         proc = subprocess.Popen(
             list(spec.argv), cwd=spec.cwd, env=dict(env),
-            stdin=slave, stdout=slave, stderr=slave,
+            stdin=slave, stdout=slave, stderr=diagnostic_slave,
+            start_new_session=True,
         )
         os.close(slave)
         slave = -1
-        chunks: list[bytes] = []
+        os.close(diagnostic_slave)
+        diagnostic_slave = -1
+        chunks: dict[int, list[bytes]] = {master: [], diagnostic_master: []}
+        active = set(chunks)
         deadline = time.monotonic() + spec.timeout_seconds
-        while proc.poll() is None:
+        timed_out = False
+        while active or proc.poll() is None:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                proc.kill()
-                proc.wait()
-                return CommandResult(
-                    spec=spec, executed=True, returncode=124,
-                    stderr=f"timed out after {spec.timeout_seconds} seconds",
-                    timed_out=True,
-                )
-            ready, _, _ = select.select([master], [], [], min(remaining, 2))
-            if ready:
-                try:
-                    chunks.append(os.read(master, 65536))
-                except OSError:
+                if timed_out:
                     break
-        proc.wait()
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                timed_out = True
+                deadline = time.monotonic() + 5
+                continue
+            ready, _, _ = select.select(list(active), [], [], min(remaining, 0.05))
+            for fd in ready:
+                try:
+                    chunk = os.read(fd, 65536)
+                except OSError as exc:
+                    # Linux PTY masters report EIO when their slaves close.
+                    if exc.errno != errno.EIO:
+                        raise
+                    chunk = b""
+                if chunk:
+                    chunks[fd].append(chunk)
+                else:
+                    active.remove(fd)
+        proc.wait(timeout=5)
+        stderr = b"".join(chunks[diagnostic_master]).decode("utf-8", "replace")
+        if timed_out:
+            stderr += ("\n" if stderr else "") + f"timed out after {spec.timeout_seconds} seconds"
         return CommandResult(
-            spec=spec, executed=True, returncode=proc.returncode or 0,
-            stdout=strip_ansi(b"".join(chunks).decode("utf-8", "replace")),
+            spec=spec, executed=True, returncode=124 if timed_out else proc.returncode,
+            stdout=strip_ansi(b"".join(chunks[master]).decode("utf-8", "replace")),
+            stderr=strip_ansi(stderr), timed_out=timed_out,
         )
     finally:
-        if slave >= 0:
-            os.close(slave)
-        os.close(master)
+        try:
+            if proc is not None and proc.poll() is None:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait(timeout=5)
+        finally:
+            for fd in (slave, diagnostic_slave, master, diagnostic_master):
+                if fd >= 0:
+                    os.close(fd)
