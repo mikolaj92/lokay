@@ -39,6 +39,7 @@ _SKIP_DIR_NAMES = frozenset(
         ".cursor",
         "dist",
         "build",
+        ".build",
         "target",
         "vendor",
         ".eggs",
@@ -1006,7 +1007,7 @@ def load_existing_localize_paths(
     root = Path(worktree)
     # Same-issue evidence is a sieve only when every path exists.
     # A version token or vanished file is leftover, not a cage.
-    if any(not (root / rel).exists() for rel in unique):
+    if any(".build" in Path(rel).parts or not (root / rel).exists() for rel in unique):
         return []
     return unique
 
