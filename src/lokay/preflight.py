@@ -420,11 +420,15 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
     """Validate the inherited capability and its exact bound run lock."""
     import time
 
+    failure_stage = "lease_lstat"
+
     def lock_is_held(candidate: Path, owner_pid: int) -> bool:
+        nonlocal failure_stage
         key = str(candidate)
         if owner_pid == os.getpid() and key in _LOCKS:
             os.fstat(_LOCKS[key].fileno())
             return True
+        failure_stage = "bound_lock_open"
         probe = candidate.open("a+")
         try:
             try:
@@ -440,7 +444,9 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
     path = _lease_path()
     try:
         st = path.lstat()
+        failure_stage = "lease_read"
         record = json.loads(path.read_text(encoding="ascii"))
+        failure_stage = "lease_record"
         owner_pid = int(record["owner_pid"])
         try:
             os.kill(owner_pid, 0)
@@ -473,6 +479,7 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
             lock_held = True
         if not owner_alive and not lock_held:
             return False, "lease_unavailable_ProcessLookupError"
+        failure_stage = "lease_checks"
         now = int(time.time())
         checks = (
             (lock_held, "lock_not_held"),
@@ -494,7 +501,7 @@ def health_lease_status(*, lock_path: Path | None = None) -> tuple[bool, str]:
                 return False, reason
         return True, "ok"
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        return False, f"lease_unavailable_{type(exc).__name__}"
+        return False, f"lease_unavailable_{type(exc).__name__}:{failure_stage}"
 
 
 def has_health_lease() -> bool:
@@ -1275,7 +1282,7 @@ def require_healthy(config_path: str | None) -> None:
         raise RuntimeError(
             f"preflight failed; live mutation blocked (lease={lease_reason})"
         )
-    result = run_preflight(config_path, remediate=True)
+    result = run_preflight(config_path, remediate=True, issue_lease=True)
     if not result["ok"]:
         raise RuntimeError(
             f"preflight failed; live mutation blocked (lease={lease_reason})"

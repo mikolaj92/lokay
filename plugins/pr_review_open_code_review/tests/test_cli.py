@@ -494,13 +494,12 @@ def test_background_keeps_untrusted_text_inside_explicit_data_blocks():
     assert 'shell"' not in text
 
 
-def test_background_fits_ocr_hard_character_limit():
-    from lokay_review_open_code_review.background import (
-        OCR_BACKGROUND_CHAR_LIMIT,
-        render_background,
-    )
+def test_background_fits_ocr_hard_character_limit(tmp_path: Path, monkeypatch):
+    from lokay_review_open_code_review.background import OCR_BACKGROUND_CHAR_LIMIT
 
-    text = render_background({
+    monkeypatch.setenv("OCR_PROVIDER_KEY", "offline-credential")
+    request = _request(tmp_path)
+    request.update({
         "pr_title": "Fix camera fixture",
         "pr_body": "P" * 5000,
         "task": {"title": "splot#40", "body": "T" * 5000},
@@ -511,9 +510,25 @@ def test_background_fits_ocr_hard_character_limit():
         "comparison_base_sha": "c" * 40,
         "diff_sha256": "d" * 64,
         "task_identity_sha256": "e" * 64,
-        "engine": {"config_sha256": "9" * 64},
-    }).decode()
+    })
+    observed = {}
 
+    def capture_background(argv, **kwargs):
+        observed["text"] = Path(argv[argv.index("--background-file") + 1]).read_text()
+        assert argv[argv.index("--from") + 1] == request["base_ref_sha"]
+        assert argv[argv.index("--to") + 1] == request["head_sha"]
+        return subprocess.CompletedProcess(argv, 0, stdout=b'{"status":"complete"}')
+
+    assert invoke_ocr(request, preview=True, runner=capture_background) == {"status": "complete"}
+    text = observed["text"]
+    trusted_tail = text.split('</task_body>', 1)[1]
+    assert "entire inclusive start_line..end_line span" in trusted_tail
+    assert "one contiguous changed-line interval on the reviewed head" in trusted_tail
+    assert "Unchanged context lines are not valid anchors" in trusted_tail
+    assert "OCR derives both endpoints from existing_code" in trusted_tail
+    assert "existing_code must contain only consecutive changed head-side lines" in trusted_tail
+    assert "Numeric tool arguments do not control the anchor" in trusted_tail
+    assert '"diff_sha256":"' + request["diff_sha256"] + '"' in trusted_tail
     assert len(text) <= OCR_BACKGROUND_CHAR_LIMIT
     assert '<task_title untrusted="true">' in text
     assert "mikolaj92/splot" in text
