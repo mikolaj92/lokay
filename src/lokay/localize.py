@@ -80,7 +80,7 @@ _PLATFORM_ALIASES = {
     "x": ("twitter", "tweet"),
 }
 _PATHISH_RE = re.compile(
-    r"(?<![`\w])((?:[\w.-]+/)+[\w.-]+(?:\.[A-Za-z0-9]{1,12})?)"
+    r"(?<![`\w./-])((?:[\w.-]+/)+[\w.-]+(?:\.[A-Za-z0-9]{1,12})?)"
 )
 _FILES_HEADING_RE = re.compile(r"(?im)^\s*#{1,6}\s+files?\s*:?[ \t]*$")
 _LOCALIZATION_HEADING_RE = re.compile(
@@ -423,7 +423,11 @@ class Localization:
 
 
 def _norm_rel(raw: str) -> str:
-    rel = str(raw or "").strip().replace("\\", "/").lstrip("./")
+    rel = str(raw or "").strip().replace("\\", "/")
+    while rel.startswith("./"):
+        rel = rel[2:]
+    if rel.startswith("/") or re.match(r"^[A-Za-z]:", rel) or ".." in rel.split("/"):
+        return ""
     while "//" in rel:
         rel = rel.replace("//", "/")
     return rel
@@ -441,7 +445,7 @@ def walk_repo_tree(worktree: Path, *, max_entries: int = _MAX_WALK_ENTRIES) -> t
             dirnames[:] = sorted(
                 d
                 for d in dirnames
-                if d not in _SKIP_DIR_NAMES and not d.startswith(".git")
+                if d not in _SKIP_DIR_NAMES
             )
             rel_dir = dirpath.relative_to(root).as_posix()
             if rel_dir != ".":
@@ -551,13 +555,15 @@ def extract_seed_paths(text: str) -> tuple[str, ...]:
         found.append(match.group(1))
     cleaned: list[str] = []
     for raw in found:
+        raw = str(raw).strip().replace("\\", "/")
+        # Host traceback hints may identify a repo path, but traversal never does.
+        if raw.startswith("/") and ".." not in raw.split("/"):
+            for marker in ("/src/", "/tests/", "/docs/", "/fala/", "/scripts/"):
+                idx = raw.find(marker)
+                if idx >= 0:
+                    raw = raw[idx + 1 :]
+                    break
         rel = _norm_rel(raw).rstrip(".")
-        # drop absolute host paths down to repo-relative when possible
-        for marker in ("/src/", "/tests/", "/docs/", "/fala/", "/scripts/"):
-            idx = rel.find(marker)
-            if idx >= 0:
-                rel = rel[idx + 1 :]
-                break
         if _looks_like_repo_path(rel):
             cleaned.append(rel)
     return tuple(dict.fromkeys(cleaned))

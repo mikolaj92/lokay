@@ -141,7 +141,9 @@ def repo_file_hints(worktree: Path | None, candidates: Iterable[str]) -> tuple[s
         return tuple(dict.fromkeys(str(c) for c in candidates if str(c).strip()))
     kept: list[str] = []
     for raw in candidates:
-        rel = str(raw).strip().lstrip("./")
+        rel = str(raw).strip()
+        while rel.startswith("./"):
+            rel = rel[2:]
         if not rel:
             continue
         if (worktree / rel).exists():
