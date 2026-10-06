@@ -115,6 +115,31 @@ def _walk_nofollow(names: tuple[str, ...]) -> int:
         raise
 
 
+def prepare_worktree_parent(worktree: Path) -> None:
+    """Create parents through pinned directory descriptors, refusing symlinks."""
+    names = _absolute_posix_names(worktree)
+    current = _open_nofollow_dir(os.sep)
+    try:
+        for name in names[:-1]:
+            try:
+                following = _open_nofollow_dir(name, dir_fd=current)
+            except FileNotFoundError:
+                os.mkdir(name, dir_fd=current)
+                following = _open_nofollow_dir(name, dir_fd=current)
+            os.close(current)
+            current = following
+        try:
+            entry = os.stat(names[-1], dir_fd=current, follow_symlinks=False)
+        except FileNotFoundError:
+            entry = None
+        if entry is not None and stat.S_ISLNK(entry.st_mode):
+            raise RuntimeError("refusing symlink worktree")
+    except OSError as exc:
+        raise RuntimeError(f"unsafe nofollow worktree parent: {exc}") from exc
+    finally:
+        os.close(current)
+
+
 class InvalidBranchRef(ValueError):
     """Git will not accept this as ``refs/heads/*`` (e.g. a ``..`` slug)."""
 
@@ -198,8 +223,14 @@ def _behind_own_remote(
         ) from exc
 
 
+def project_worktree_root(config: Config, repo: RepoConfig) -> Path:
+    if config.worktrees_layout == "clone-siblings":
+        return config.project_worktree_roots.get(repo.name, repo.clone_path.parent)
+    return config.worktrees_root / repo.name.replace("/", "__")
+
+
 def worktree_dir(config: Config, repo: RepoConfig, branch: str) -> Path:
-    return config.worktrees_root / repo.name.replace("/", "__") / branch.replace("/", "__")
+    return project_worktree_root(config, repo) / branch.replace("/", "__")
 
 
 def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
@@ -207,7 +238,49 @@ def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
 
     Nested clones are not lokay leftover worktrees. Lokay worktrees keep a .git file.
     """
-    root = config.worktrees_root / repo.name.replace("/", "__")
+    root = project_worktree_root(config, repo)
+    if config.worktrees_layout == "clone-siblings":
+        try:
+            root_fd = _walk_nofollow(_absolute_posix_names(root))
+        except FileNotFoundError:
+            return []
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"unsafe nofollow project root: {exc}") from exc
+        os.close(root_fd)
+        listed = Runner().run(
+            git_spec(["worktree", "list", "--porcelain", "-z"], cwd=repo.clone_path),
+            live=True,
+        )
+        if listed.returncode != 0 or listed.stderr.strip() or not listed.stdout.endswith("\0\0"):
+            raise RuntimeError("cannot inspect canonical worktree registry")
+        records = [record.split("\0") for record in listed.stdout[:-2].split("\0\0")]
+        if (not any(fields[0] == f"worktree {repo.clone_path.absolute()}" for fields in records)
+            or any(not fields[0].startswith("worktree ")
+                   or not any(re.fullmatch(r"HEAD [a-fA-F0-9]{40}(?:[a-fA-F0-9]{24})?", field) for field in fields[1:])
+                   for fields in records)):
+            raise RuntimeError("incomplete canonical worktree registry")
+        found = []
+        for fields in records:
+            path = Path(fields[0].removeprefix("worktree "))
+            branch = next((f.removeprefix("branch refs/heads/") for f in fields if f.startswith("branch refs/heads/")), "")
+            if (branch.startswith(config.branch_prefix.rstrip("/") + "/")
+                and path == worktree_dir(config, repo, branch).absolute()
+                and path != repo.clone_path.absolute()
+                and not _is_quarantine_name(path.name)
+                and not path.is_symlink() and path.is_dir()
+                and not (path / ".git").is_symlink()
+                and (path / ".git").is_file()):
+                run = Runner()
+                canonical = run.run(git_spec(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=repo.clone_path), live=True)
+                actual = run.run(git_spec(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=path), live=True)
+                head = run.run(git_spec(["symbolic-ref", "--quiet", "HEAD"], cwd=path), live=True)
+                if any(result.returncode != 0 or result.stderr.strip() or not result.stdout.strip()
+                       for result in (canonical, actual, head)):
+                    raise RuntimeError("cannot inspect registered worktree identity")
+                if (canonical.stdout.strip() == actual.stdout.strip()
+                    and head.stdout.strip() == f"refs/heads/{branch}"):
+                    found.append((path, branch))
+        return sorted(found)
     if not root.is_dir():
         return []
     found: list[tuple[Path, str]] = []
@@ -290,6 +363,8 @@ def remove_worktree(
     archive bytes. Failed prune / ownership checks leave the archive in place
     for TTL GC. Never unlinks Fala sqlite/WAL.
     """
+    if worktree.absolute() == clone.absolute() or worktree.resolve() == clone.resolve():
+        return {"ok": False, "removed": False, "error": "refusing canonical checkout removal"}
     if _is_quarantine_name(worktree.name):
         return {
             "ok": False,
@@ -717,8 +792,11 @@ def ensure_repair_worktree(
 ) -> Path:
     """Prepare the existing PR branch only at its exact recorded remote SHA."""
     worktree = worktree_dir(config, repo, branch)
+    if config.worktrees_layout == "clone-siblings" and worktree.absolute() == repo.clone_path.absolute():
+        raise RuntimeError("refusing canonical checkout destination")
     if not live:
         return worktree
+    prepare_worktree_parent(worktree)
     expected = str(expected_sha or "").lower()
     if not re.fullmatch(r"[a-f0-9]{40}", expected):
         raise RuntimeError("repair start SHA is missing or malformed")
@@ -771,7 +849,7 @@ def ensure_repair_worktree(
         if absent.returncode != 128:
             raise RuntimeError("cannot determine local repair branch identity")
         add_args = ["worktree", "add", "-b", branch, str(worktree), tracking_ref]
-    worktree.parent.mkdir(parents=True, exist_ok=True)
+    prepare_worktree_parent(worktree)
     added = runner.run(git_spec(add_args, cwd=clone, timeout_seconds=180), live=True)
     if added.returncode != 0:
         detail = (added.stderr or added.stdout or "").strip()
@@ -798,17 +876,23 @@ def ensure_worktree(
     Unknown ahead state fails closed. Never force-push.
     """
     worktree = worktree_dir(config, repo, branch)
+    if config.worktrees_layout == "clone-siblings" and worktree.absolute() == repo.clone_path.absolute():
+        raise RuntimeError("refusing canonical checkout destination")
     if not live:
         return worktree
 
     clone = repo.clone_path
     assert_valid_branch_ref(runner, branch, cwd=clone if Path(clone).exists() else None)
 
-    worktree.parent.mkdir(parents=True, exist_ok=True)
+    prepare_worktree_parent(worktree)
+    if config.worktrees_layout == "clone-siblings" and worktree.exists():
+        if (worktree, branch) not in iter_worktrees(config, repo):
+            raise RuntimeError("existing worktree identity is not canonical")
     runner.run_checked(
         git_spec(["fetch", "origin", base], cwd=clone, timeout_seconds=300),
         live=True,
     )
+    prepare_worktree_parent(worktree)
     start_ref = f"origin/{base}"
 
     if reset_to_base:
@@ -853,13 +937,14 @@ def ensure_worktree(
                 runner,
                 clone,
                 worktree,
-                managed_root=config.worktrees_root,
+                managed_root=project_worktree_root(config, repo),
             )
             if not removed.get("ok"):
                 raise RuntimeError(
                     f"worktree remove failed: {removed.get('error') or 'still exists'}"
                 )
         # -B: create or reset branch to start_ref at the new worktree path.
+        prepare_worktree_parent(worktree)
         result = runner.run(
             git_spec(
                 ["worktree", "add", "-B", branch, str(worktree), start_ref],
@@ -884,8 +969,11 @@ def ensure_worktree(
         return worktree
 
     if worktree.exists():
+        if config.worktrees_layout == "clone-siblings" and (worktree, branch) not in iter_worktrees(config, repo):
+            raise RuntimeError("existing worktree identity changed after fetch")
         return worktree
 
+    prepare_worktree_parent(worktree)
     result = runner.run(
         git_spec(
             ["worktree", "add", "-b", branch, str(worktree), start_ref],
@@ -895,11 +983,13 @@ def ensure_worktree(
         live=True,
     )
     if result.returncode != 0:
+        prepare_worktree_parent(worktree)
         result2 = runner.run(
             git_spec(["worktree", "add", str(worktree), branch], cwd=clone, timeout_seconds=180),
             live=True,
         )
         if result2.returncode != 0:
+            prepare_worktree_parent(worktree)
             result3 = runner.run(
                 git_spec(
                     [

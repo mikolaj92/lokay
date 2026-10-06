@@ -43,6 +43,20 @@ departments:
   pr_triage: true
   pr_repair: true
 
+# legacy keeps ~/.lokay/worktrees/owner__repo/branch.
+# Opt into clone-siblings for ~/Developer/<project>/main with coding checkouts
+# as direct siblings. Existing worktrees are not moved automatically.
+# Requires trusted ownership of project roots, ancestors, main, and shared Git
+# metadata. Sandboxes must deny writes and renames there. Path checks do not
+# make pathname-based Git safe against concurrent hostile directory swaps.
+worktrees:
+  layout: legacy  # legacy | clone-siblings
+  root: ~/.lokay/worktrees  # used by legacy; retained archive GC in either mode
+  # Override clone.parent only in clone-siblings mode. In particular, a service
+  # clone at ~/.lokay/host can keep its coding worktrees under Developer/lokay.
+  # project_roots:
+  #   mikolaj92/lokay: ~/Developer/lokay
+
 executor:
   enabled: false  # set true (or LOKAY_EXECUTOR_ENABLED=1) for live lokaying
   agent: pi                  # log label only

@@ -32,7 +32,7 @@ def launch(
     if occupied is None and budget is not None:
         from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 
-        occupied = len(live_issue_to_pr_receipts())
+        occupied = len(live_issue_to_pr_receipts(config_path=config_path))
     if occupied is not None and int(occupied) > 0:
         return {
             **dict(candidate),

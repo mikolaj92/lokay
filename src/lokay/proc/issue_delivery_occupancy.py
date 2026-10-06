@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+
+import yaml
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
@@ -126,18 +128,20 @@ def has_unreadable_issue_to_pr_receipts(cycle_dir: Path | None = None) -> bool:
     return False
 
 
-def _worktree_paths_for_live_receipt(repo: str, issue: int) -> list[Path]:
+def _worktree_paths_for_live_receipt(repo: str, issue: int, *, cfg=None, config_path: str | None = None) -> list[Path]:
     """Worktree paths for this receipt issue, same lookup classify uses.
 
     Receipts are ``{repo, issue, pid}``. Paths come from
     ``iter_worktrees`` + ``issue_number_from_branch``.
     """
-    from lokay.config import Config, RepoConfig
+    from lokay.config import load_config
     from lokay.git_worktree import iter_worktrees
     from lokay.stuck import issue_number_from_branch
 
-    cfg = Config()
-    repo_cfg = RepoConfig(name=str(repo), clone_path=Path("."))
+    cfg = cfg if cfg is not None else load_config(config_path)
+    repo_cfg = next((row for row in cfg.repos if row.name == repo), None)
+    if repo_cfg is None:
+        raise ValueError("receipt repository is absent from configured catalog")
     found: list[Path] = []
     for path, branch in iter_worktrees(cfg, repo_cfg):
         numbered = issue_number_from_branch(
@@ -166,6 +170,8 @@ def live_issue_to_pr_receipts(
     pid_alive=None,
     issue_closed=None,
     worktree_for=None,
+    cfg=None,
+    config_path: str | None = None,
 ) -> list[dict[str, Any]]:
     """Live or launching receipts that must keep a repo occupied."""
     root = (
@@ -199,7 +205,11 @@ def live_issue_to_pr_receipts(
             except (TypeError, ValueError):
                 continue
             if worktree_for is None:
-                matches = _worktree_paths_for_live_receipt(str(data["repo"]), issue)
+                try:
+                    matches = _worktree_paths_for_live_receipt(str(data["repo"]), issue, cfg=cfg, config_path=config_path)
+                except (OSError, ValueError, RuntimeError, TypeError, AttributeError, yaml.YAMLError):
+                    live.append(data)
+                    continue
                 if len(matches) == 0:
                     continue
                 wt_path = matches[0] if len(matches) == 1 else None
@@ -232,7 +242,11 @@ def live_issue_to_pr_receipts(
         # occupy. Zero worktrees for this issue also frees the slot (#891).
         # Unreadable localize or several matching worktrees stay occupied.
         if worktree_for is None:
-            matches = _worktree_paths_for_live_receipt(str(data["repo"]), issue)
+            try:
+                matches = _worktree_paths_for_live_receipt(str(data["repo"]), issue, cfg=cfg, config_path=config_path)
+            except (OSError, ValueError, RuntimeError, TypeError, AttributeError, yaml.YAMLError):
+                live.append(data)
+                continue
             if len(matches) == 0:
                 continue
             wt_path = matches[0] if len(matches) == 1 else None

@@ -83,7 +83,7 @@ def collect(*, pass_dir: str, config_path: str | None) -> dict:
     begin, working = load_begin_working(pass_dir)
     scope = survey_scope(begin)
     receipt_unknown = has_unreadable_issue_to_pr_receipts()
-    live_keys = _live_keys(live_issue_to_pr_receipts())
+    live_keys = _live_keys(live_issue_to_pr_receipts(cfg=cfg))
     # live_issue_to_pr_repos is advisory occupancy only — KEEP uses live_keys.
     survey_failed = _names(working, "pr_survey_failed")
     covered, heads = _covering(working, branch_prefix=cfg.branch_prefix)

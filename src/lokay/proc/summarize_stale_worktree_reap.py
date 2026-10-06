@@ -14,7 +14,20 @@ def _archive_gc(*, config_path: str | None, live: bool) -> dict:
     """One job: TTL GC of `.lokay-preserved` under the configured worktrees root."""
     cfg = load_cfg(argparse.Namespace(config=config_path))
     root = Path(cfg.worktrees_root).expanduser()
-    return prune(managed_root=root, live=live)
+    result = prune(managed_root=root, live=live)
+    if cfg.worktrees_layout == "clone-siblings":
+        from lokay.git_worktree import project_worktree_root
+
+        roots = {project_worktree_root(cfg, repo) for repo in cfg.repos}
+        key = "retained" if live else "candidates"
+        paths = list(result.get(key) or [])
+        for project_root in sorted(roots):
+            extra = prune(managed_root=project_root, live=live, direct=True)
+            paths.extend(extra.get(key) or [])
+        result[key] = sorted(set(paths))
+        if not live:
+            result["candidate_count"] = len(result[key])
+    return result
 
 
 def persist_result(
