@@ -514,3 +514,36 @@ def test_stale_removal_rechecks_receipts_with_actual_config(tmp_path, monkeypatc
     assert result["applied"] is False
     assert result["row"]["reason"] == "live_issue_to_pr"
     assert seen == [cfg]
+
+
+@pytest.mark.parametrize("denied", ["worktree", "marker"])
+@pytest.mark.parametrize("starting", [False, True])
+def test_unreadable_registered_entry_retains_receipt(tmp_path, monkeypatch, denied, starting):
+    import json
+    from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
+    clone = make_clone(tmp_path / "project/main")
+    managed = clone.parent / "ai__fix__42-title"
+    git(clone, "worktree", "add", "-b", "ai/fix/42-title", str(managed))
+    cfg = Config(worktrees_layout="clone-siblings", repos=[RepoConfig(name="owner/project", clone_path=clone)])
+    target = managed if denied == "worktree" else managed / ".git"
+    original = Path.stat
+    def stat_path(self, *args, **kwargs):
+        if self == target:
+            raise PermissionError("inspection denied")
+        return original(self, *args, **kwargs)
+    original_lstat = Path.lstat
+    def lstat_path(self, *args, **kwargs):
+        if self == target:
+            raise PermissionError("inspection denied")
+        return original_lstat(self, *args, **kwargs)
+    monkeypatch.setattr(Path, "stat", stat_path)
+    monkeypatch.setattr(Path, "lstat", lstat_path)
+    with pytest.raises(RuntimeError, match="inspect"):
+        iter_worktrees(cfg, cfg.repos[0])
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    receipt = {"repo": "owner/project", "issue": 42, "pid": 999}
+    if starting:
+        receipt["starting"] = True
+    (cycle / "receipt.json").write_text(json.dumps(receipt))
+    assert live_issue_to_pr_receipts(cycle, cfg=cfg, pid_alive=lambda _: True, issue_closed=lambda *_: False) == [receipt]

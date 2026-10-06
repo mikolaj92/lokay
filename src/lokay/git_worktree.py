@@ -266,10 +266,16 @@ def iter_worktrees(config: Config, repo: RepoConfig) -> list[tuple[Path, str]]:
             if (branch.startswith(config.branch_prefix.rstrip("/") + "/")
                 and path == worktree_dir(config, repo, branch).absolute()
                 and path != repo.clone_path.absolute()
-                and not _is_quarantine_name(path.name)
-                and not path.is_symlink() and path.is_dir()
-                and not (path / ".git").is_symlink()
-                and (path / ".git").is_file()):
+                and not _is_quarantine_name(path.name)):
+                try:
+                    entry = path.lstat()
+                    marker = (path / ".git").lstat()
+                except FileNotFoundError:
+                    continue
+                except OSError as exc:
+                    raise RuntimeError(f"cannot inspect registered worktree entry: {exc}") from exc
+                if not stat.S_ISDIR(entry.st_mode) or not stat.S_ISREG(marker.st_mode):
+                    continue
                 run = Runner()
                 canonical = run.run(git_spec(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=repo.clone_path), live=True)
                 actual = run.run(git_spec(["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=path), live=True)
