@@ -29,6 +29,7 @@ _SOFT_HEALTH = frozenset(
         "overlap",
         "plateau",
         "host_updated",
+        "host_behind",
         "pass_ceiling",
         "hosted",
     }
