@@ -52,7 +52,8 @@ def _post(endpoint: dict, payload: dict) -> dict:
             timeout=endpoint['timeout_seconds'] + 2)
         status = int(result.stdout) if result.stdout.isdigit() else 0
         if result.returncode or status != 200:
-            return {'ok': False, 'http_status': status, 'transport_exit': result.returncode}
+            return {'ok': False, 'http_status': status, 'transport_exit': result.returncode,
+                    'transport_error': result.stderr.decode('utf-8', errors='replace')[:1000]}
         return {'ok': True, 'data': json.loads(output.read_bytes())}
 
 
@@ -94,7 +95,9 @@ def decide(cfg, *, node: str, evidence: dict, instructions: str,
         trace['reason'] = 'decision_response_invalid'
         response = _post(endpoint, payload)
         if not response['ok']:
-            trace.update(reason='decision_request_failed', http_status=response['http_status'], transport_exit=response['transport_exit'])
+            trace.update(reason='decision_request_failed', http_status=response['http_status'],
+                         transport_exit=response['transport_exit'],
+                         transport_error=response.get('transport_error', ''))
             return _record(cfg, trace, started)
         trace['reason'] = 'decision_response_invalid'
         trace['http_status'] = 200
