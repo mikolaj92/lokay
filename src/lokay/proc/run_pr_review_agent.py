@@ -178,7 +178,7 @@ def run_review_agent(
             route="complete",
         )
     except (PluginFailure, OSError, ValueError) as exc:
-        if cfg is not None and isinstance(exc, PluginFailure) and getattr(exc, "warnings", None):
+        if cfg is not None and isinstance(exc, PluginFailure):
             from lokay.proc.pr_review_artifacts import persist_rejected_vendor
 
             persist_rejected_vendor(
@@ -188,6 +188,7 @@ def run_review_agent(
                 evidence=evidence,
                 reason=str(exc),
                 warnings=list(exc.warnings),
+                diagnostic=exc.diagnostic,
             )
         return err("OpenCodeReview plugin failed closed", route="fail_closed", reason=str(exc))
 

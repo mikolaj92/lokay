@@ -30,9 +30,11 @@ _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 class ContractError(ValueError):
     """Untrusted upstream output failed the pinned neutral contract."""
 
-    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None):
+    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None,
+                 diagnostic: dict[str, Any] | None = None):
         super().__init__(message)
         self.warnings = list(warnings or [])
+        self.diagnostic = diagnostic
 
 
 _OPERATIONAL_WARNING_TYPES = frozenset({"comment_refiled", "comment_args_repaired"})
@@ -358,7 +360,7 @@ def normalize_result(
     )
     findings: list[dict[str, Any]] = []
     valid_by_path: dict[str, list[tuple[int, int]]] = {}
-    for item in comments:
+    for comment_index, item in enumerate(comments, 1):
         comment = _required_mapping(item, "review finding")
         if "thinking" in comment:
             # It is discarded, never forwarded or persisted.
@@ -392,7 +394,15 @@ def normalize_result(
             and end <= bounds[1]
             for bounds in ranges
         ):
-            raise ContractError("finding anchor is not within changed lines")
+            intervals = [list(bounds) for bounds in (ranges or [])
+                         if isinstance(bounds, (tuple, list)) and len(bounds) == 2
+                         and all(type(n) is int and n > 0 for n in bounds)
+                         and bounds[0] <= bounds[1]]
+            raise ContractError("finding anchor is not within changed lines", diagnostic={
+                "reason": "anchor_outside_changed_lines", "comment_index": comment_index,
+                "path": path, "start_line": start, "end_line": end,
+                "changed_intervals": intervals[:32], "intervals_truncated": len(intervals) > 32,
+            })
         valid_by_path.setdefault(path, []).append((start, end))
         findings.append(
             {

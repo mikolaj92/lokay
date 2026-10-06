@@ -764,6 +764,38 @@ def test_review_request_invokes_one_ocr_review_without_preview(tmp_path, monkeyp
     assert result["findings"]
 
 
+def test_invalid_anchor_retains_only_structural_diagnostic(tmp_path, monkeypatch):
+    from lokay_review_open_code_review import cli
+    from lokay_review_open_code_review.contract import sha256_json
+
+    request = _request(tmp_path)
+    task = {"repo": "acme/demo", "type": "Issue", "state": "OPEN", "number": 42,
+            "title": "Prevent invalid save", "body": "Acceptance: reject blank IDs.",
+            "url": "https://github.com/acme/demo/issues/42"}
+    request.update(repo="acme/demo", pr=84, head_repo="acme/demo", task=task,
+                   task_identity_sha256=sha256_json(task),
+                   diff_paths=[{"path": "src/demo.py", "old_path": "", "status": "modified"}],
+                   changed_ranges={"src/demo.py": [(12, 13)]})
+    request["engine"].update(provider="example-provider", model="example-model")
+    upstream = json.loads((Path(__file__).parent / "fixtures/upstream_v1_12/review-complete.json").read_text())
+    upstream["manifest"]["repository"]["identity_sha256"] = __import__("hashlib").sha256(b"github.com/acme/demo").hexdigest()
+    upstream["comments"][0]["end_line"] = 14
+    monkeypatch.setattr(cli, "verify_checkout", lambda req: {"head": "b" * 40})
+    monkeypatch.setattr(cli, "invoke_ocr", lambda req, **kwargs: upstream)
+    with pytest.raises(ReviewFailure) as caught:
+        cli.review_request(request)
+    error = cli.classified_failure(caught.value)
+    assert error["code"] == "ocr_contract_incomplete"
+    assert error["detail"] == "finding anchor is not within changed lines"
+    assert error["diagnostic"] == {
+        "reason": "anchor_outside_changed_lines", "comment_index": 1,
+        "path": "src/demo.py", "start_line": 12, "end_line": 14,
+        "changed_intervals": [[12, 13]], "intervals_truncated": False,
+    }
+    assert "thinking" not in json.dumps(error)
+    assert "Blank IDs" not in json.dumps(error)
+
+
 def test_changed_line_range_mismatch_is_checkout_invalid_not_default():
     from lokay_review_open_code_review.cli import classified_failure_code
 

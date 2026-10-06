@@ -28,9 +28,11 @@ _FORBIDDEN_ENV_PREFIXES = ("GH_", "GITHUB_", "LOKAY_HEALTH_LEASE")
 class PluginFailure(ValueError):
     """Sanitized plugin process failure."""
 
-    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None):
+    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None,
+                 diagnostic: dict[str, Any] | None = None):
         super().__init__(message)
         self.warnings = list(warnings or [])
+        self.diagnostic = diagnostic
 
 
 def _classified_error_code(decoded: Any) -> str | None:
@@ -118,7 +120,34 @@ def _plugin_failure(decoded: Any, fallback: str) -> PluginFailure:
     )
 
 
-def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
+def sanitize_anchor_diagnostic(raw: Any, request: Mapping[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(raw, dict) or raw.get("reason") != "anchor_outside_changed_lines":
+        return None
+    path = raw.get("path")
+    paths = {row.get("path") for row in request.get("diff_paths", []) if isinstance(row, dict)}
+    if not isinstance(path, str) or path not in paths or len(path) > 255:
+        return None
+    if path.startswith("/") or ".." in path.split("/") or not _WARNING_FILE.fullmatch(path):
+        return None
+    values = [raw.get(key) for key in ("comment_index", "start_line", "end_line")]
+    if not all(type(value) is int and 0 < value <= 2147483647 for value in values):
+        return None
+    if values[1] > values[2]:
+        return None
+    ranges = request.get("changed_ranges", {}).get(path, [])
+    intervals = [list(pair) for pair in ranges if isinstance(pair, (list, tuple))
+                 and len(pair) == 2 and all(type(n) is int and 0 < n <= 2147483647 for n in pair)
+                 and pair[0] <= pair[1]]
+    head = str(request.get("head_sha") or "")
+    if not re.fullmatch(r"[0-9a-f]{40}", head):
+        return None
+    return {"reason": "anchor_outside_changed_lines", "head_sha": head,
+            "comment_index": values[0], "path": path, "start_line": values[1],
+            "end_line": values[2], "changed_intervals": intervals[:32],
+            "intervals_truncated": len(intervals) > 32}
+
+
+def _decode_plugin_envelope(output: Any, returncode: int, *, request: Mapping[str, Any] | None = None) -> dict[str, Any]:
     if not isinstance(output, (bytes, bytearray)) or len(output) > _MAX_OUTPUT_BYTES:
         raise _host_failure("review plugin output exceeded size limit")
     try:
@@ -126,7 +155,10 @@ def _decode_plugin_envelope(output: Any, returncode: int) -> dict[str, Any]:
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise _host_failure("review plugin did not return one JSON envelope") from exc
     if returncode != 0:
-        raise _plugin_failure(decoded, "review plugin returned a failure status")
+        failure = _plugin_failure(decoded, "review plugin returned a failure status")
+        if request is not None and isinstance(decoded, dict) and isinstance(decoded.get("error"), dict):
+            failure.diagnostic = sanitize_anchor_diagnostic(decoded["error"].get("diagnostic"), request)
+        raise failure
     if not isinstance(decoded, dict) or decoded.get("ok") is not True:
         raise _plugin_failure(decoded, "review plugin rejected the request")
     return decoded
@@ -214,7 +246,7 @@ def invoke_plugin(
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise _host_failure("review plugin failed or timed out") from exc
         output = result.stdout
-        return _decode_plugin_envelope(output, result.returncode)
+        return _decode_plugin_envelope(output, result.returncode, request=request)
     else:
         try:
             process = subprocess.Popen(
@@ -257,7 +289,7 @@ def invoke_plugin(
                 raise _host_failure("review plugin did not consume the complete request")
             if writer_error:
                 raise _host_failure("review plugin failed to read request")
-            return _decode_plugin_envelope(output, returncode)
+            return _decode_plugin_envelope(output, returncode, request=request)
         except BaseException as exc:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
