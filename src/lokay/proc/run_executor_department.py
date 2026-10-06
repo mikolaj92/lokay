@@ -36,13 +36,18 @@ def run(
     triage: dict | None = None,
 ) -> dict:
     del triage_ran  # sieve is a sibling department; this slot always codes
+    from pathlib import Path
+    import json
+
+    snapshot = Path(pass_dir) / "listed-issues.json"
+    listed = json.loads(snapshot.read_text()) if snapshot.is_file() else listed_of(triage)
     return {
         **child_graph(
             pass_dir=pass_dir,
             config_path=config_path,
             live=live,
             triage=triage,
-            listed=listed_of(triage),
+            listed=listed,
         ),
         "body": "child",
     }

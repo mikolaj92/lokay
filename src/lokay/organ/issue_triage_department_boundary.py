@@ -117,8 +117,14 @@ def handle_issue_triage_department(
     if atom == "summarize_issue_triage_department":
         from lokay.proc.summarize_issue_triage_department import summarize
 
-        return summarize(
-            up.get("run_issue_sieve_rows") or {},
-            listed=up.get("list_open_issues") or {},
-        )
+        listed = up.get("list_open_issues") or {}
+        from pathlib import Path
+        import json
+
+        # Keep the original snapshot even when the sieve child fails or
+        # exhausts its cursor. Executor readiness is not the sieve cursor.
+        if inputs.get("pass_dir") and listed.get("issues"):
+            snapshot = Path(inputs["pass_dir"]) / "listed-issues.json"
+            snapshot.write_text(json.dumps(listed), encoding="utf-8")
+        return summarize(up.get("run_issue_sieve_rows") or {}, listed=listed)
     return None
