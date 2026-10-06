@@ -17,6 +17,15 @@ def run(target: dict, *, config_path: str | None, live: bool) -> dict:
         live=live,
     )
     result = dict(result)
+    if result.get("ok") is False or result.get("run_status") == "failed":
+        return {
+            "ok": True, **target, "route": "incomplete", "reason": "pr_triage_failed",
+            "triage": {
+                "reason": "pr_triage_failed", "waiting": True,
+                "merged": False, "repairable": False,
+                "head_sha": str(target.get("head_sha") or ""),
+            },
+        }
     published = dict(result.get("publish_pr_review") or {})
     published_reason = str(published.get("reason") or "")
     terminal = result.get("terminal")
