@@ -36,6 +36,20 @@ def test_host_discards_malformed_anchor_metadata(field, value):
     assert sanitize_anchor_diagnostic(raw, request) is None
 
 
+def test_host_bounds_canonical_intervals_and_preserves_rejection_occupancy():
+    from lokay.proc.pr_review_plugin import sanitize_anchor_diagnostic
+    from lokay.proc.walk_pr_leftover import classify_occupancy
+    request = {"head_sha": "b" * 40, "diff_paths": [{"path": "src/demo.py"}],
+               "changed_ranges": {"src/demo.py": [[n, n] for n in range(1, 41)]}}
+    raw = {"reason": "anchor_outside_changed_lines", "comment_index": 1,
+           "path": "src/demo.py", "start_line": 50, "end_line": 51}
+    actual = sanitize_anchor_diagnostic(raw, request)
+    assert len(actual["changed_intervals"]) == 32
+    assert actual["intervals_truncated"] is True
+    occupancy = classify_occupancy({"route": "fail_closed", "reason": "ocr_contract_incomplete: finding anchor is not within changed lines"})
+    assert occupancy == {"class": "incomplete", "keep": True}
+
+
 def test_rejection_archive_retains_verified_anchor_without_vendor_warnings(tmp_path):
     from lokay.config import Config
     from lokay.proc.pr_review_artifacts import persist_rejected_vendor
