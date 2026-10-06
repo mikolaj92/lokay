@@ -15,6 +15,7 @@ def check(*, cfg, selected: dict, listed: dict, runner, live: bool) -> dict:
     repo, number = str(selected['repo']), int(selected['issue'])
     reason = 'queue_evidence_unavailable'
     trace = None
+    consume = False
     try:
         row = next(row for row in cfg.repos if row.name == repo and row.enabled)
         tasks = load_tasks(row, runner=runner, config=cfg, live=True)
@@ -32,14 +33,14 @@ def check(*, cfg, selected: dict, listed: dict, runner, live: bool) -> dict:
             trace = result['decision_trace']
             if trace['status'] == 'completed' and trace['choice'] == 'ready':
                 return {**selected, 'queue_decision': trace}
-            reason = ('decision_' + trace['choice'] if trace['status'] == 'completed'
-                      else trace['reason'])
+            consume = trace['status'] == 'completed'
+            reason = ('decision_' + trace['choice'] if consume else trace['reason'])
         elif task is not None:
             reason = 'queue_candidate_not_takeable'
     except Exception:
         # No generative fallback or another semantic request on evidence failure.
         reason = 'queue_evidence_unavailable'
-    leftover, rows = leftover_of(selected, listed, consume=True)
+    leftover, rows = leftover_of(selected, listed, consume=consume)
     return {**selected, 'route': 'skip', 'reason': reason,
             'leftover': leftover, 'leftover_issues': rows,
             'queue_decision': trace}
