@@ -139,7 +139,7 @@ Path(%r, a + '.json').write_text(json.dumps(v))
 def test_launch_rechecks_after_acquiring_repo_lock(tmp_path, monkeypatch, unavailable):
     from types import SimpleNamespace
 
-    from test_repo_lock import _parent_capability
+    from support.parent_capability import _parent_capability
 
     from lokay.config import Config, RepoConfig
     from lokay.proc.issue_delivery_launch import detach_issue_to_pr
