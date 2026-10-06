@@ -7,7 +7,6 @@ from pathlib import Path
 
 from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 from lokay.proc.run_executor_rows import budget_of
-from lokay.proc.seed_issue_queue import seed as seed_queue
 
 CURSOR = "executor-rows.json"
 
@@ -45,7 +44,7 @@ def prepare(
     budget: int | None = None,
     slot_count: int,
 ) -> dict:
-    last = seed_queue(last)
+    last = last or {}
     cursor = read_cursor(pass_dir)
     if cursor.get("last"):
         last = cursor["last"]

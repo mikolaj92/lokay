@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 
 from lokay.graph_run import run_path
-from lokay.proc.seed_issue_queue import seed as seed_queue
 
 
 def budget_of(*, config_path: str | None, live: bool, budget: int | None) -> int:
@@ -30,7 +29,9 @@ def run(
     from lokay.sieve_decision import attach
 
     listed = attach(listed, triage or {})
-    last = seed_queue(last)
+    # Each pass has a fresh snapshot. A prior pass cursor must not permanently
+    # remove failed deliveries or previously occupied repos from that snapshot.
+    last = last or {}
     cap = budget_of(config_path=config_path, live=live, budget=budget)
     out = run_path(
         path_id="executor_rows",
