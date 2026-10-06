@@ -23,6 +23,14 @@ def parse_output(text: str) -> dict[str, Any]:
     # Pi can wrap its final object in a Markdown fence. Accept one explicit
     # JSON block only; still reject ambiguous blocks and validate every field.
     raw = (text or "").strip()
+    # PTY combines Pi startup diagnostics with stdout. These two known
+    # carrier messages are not part of the model result.
+    lines = raw.splitlines()
+    while lines and (lines[0].startswith("pi: this interface is classic-only;")
+                     or (lines[0].startswith('Warning: Model "')
+                         and lines[0].endswith("Using custom model id."))):
+        lines.pop(0)
+    raw = "\n".join(lines).strip()
     if not raw.startswith("{") and raw.count("```json") == 1:
         before, _, block = raw.partition("```json")
         body, fence, after = block.partition("```")
