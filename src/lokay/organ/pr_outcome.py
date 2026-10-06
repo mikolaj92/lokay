@@ -18,6 +18,8 @@ def handle_pr_outcome(
         merge = up.get('pr_merge') or {}
         if intent.get('route') == 'pending':
             merge = {'skipped': True, 'waiting': True, 'reason': intent.get('reason')}
+        repair = up.get("pr_repair_verdict") or {}
+        outcome = repair if repair.get("route") else up.get("select_pr_triage_outcome") or {}
         return summarize(
             review=up.get("publish_pr_review") or {},
             repair=up.get("pr_repair_verdict") or {},
@@ -26,7 +28,7 @@ def handle_pr_outcome(
             merge=merge,
             close=up.get("close_issue") or {},
             receipt=up.get("publish_delivery_receipt") or {},
-            outcome=up.get("pr_repair_verdict") or up.get("select_pr_triage_outcome") or {},
+            outcome=outcome,
         )
 
     if atom == "classify_pr_triage_checks":
