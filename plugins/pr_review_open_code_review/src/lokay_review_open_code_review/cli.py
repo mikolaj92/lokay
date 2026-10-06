@@ -29,9 +29,11 @@ _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 class ReviewFailure(ValueError):
     """Sanitized process boundary failure; never contains provider output."""
 
-    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None):
+    def __init__(self, message: str = "", *, warnings: list[dict[str, str]] | None = None,
+                 diagnostic: dict[str, Any] | None = None):
         super().__init__(message)
         self.warnings = redact_vendor_warnings(warnings)
+        self.diagnostic = diagnostic
 
 
 _FAILURE_CODES = {
@@ -120,6 +122,8 @@ def classified_failure(exc: ReviewFailure) -> dict[str, Any]:
     warnings = list(getattr(exc, "warnings", []) or [])
     if warnings:
         error["warnings"] = warnings
+    if exc.diagnostic is not None:
+        error["diagnostic"] = exc.diagnostic
     return error
 
 
@@ -581,6 +585,7 @@ def review_request(request: Mapping[str, Any]) -> dict[str, Any]:
         raise ReviewFailure(
             f"OpenCodeReview contract rejected: {exc}",
             warnings=list(getattr(exc, "warnings", []) or []),
+            diagnostic=exc.diagnostic,
         ) from None
 
 

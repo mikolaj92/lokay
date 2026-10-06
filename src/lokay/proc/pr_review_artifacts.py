@@ -141,6 +141,7 @@ def persist_rejected_vendor(
     evidence: Mapping[str, Any],
     reason: str,
     warnings: list[Mapping[str, Any]] | None = None,
+    diagnostic: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         head = str(evidence.get("head_sha") or "").lower()
@@ -167,6 +168,11 @@ def persist_rejected_vendor(
             "diff_sha256": str(evidence.get("diff_sha256") or ""),
             "task_identity_sha256": str(evidence.get("task_identity_sha256") or ""),
         }
+        from lokay.proc.pr_review_plugin import sanitize_anchor_diagnostic
+
+        verified = sanitize_anchor_diagnostic(diagnostic, evidence)
+        if verified is not None:
+            payload["diagnostic"] = verified
         directory = Path(cfg.pr_review_artifacts_dir).expanduser().resolve() / "rejections" / _safe_component(repo) / str(int(pr))
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory.chmod(0o700)
