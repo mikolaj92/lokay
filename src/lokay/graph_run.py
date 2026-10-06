@@ -244,6 +244,8 @@ def run_path(
         from lokay.preflight import require_healthy as _require_healthy
 
         _require_healthy(str(config_path) if config_path else None)
+        if not inherited_health_lease:
+            inherited_health_lease = os.environ.get("LOKAY_HEALTH_LEASE", "")
     try:
         from fala import host_run_package
     except ImportError as exc:  # pragma: no cover
