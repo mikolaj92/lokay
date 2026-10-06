@@ -87,6 +87,8 @@ class Config:
     pr_review_sandbox_command: list[str] = field(default_factory=list)
     pr_review_artifacts_dir: Path = field(default_factory=lambda: Path.home() / ".lokay" / "pr-review-artifacts")
     worktrees_root: Path = field(default_factory=lambda: Path.home() / ".lokay" / "worktrees")
+    worktrees_layout: str = "legacy"
+    project_worktree_roots: dict[str, Path] = field(default_factory=dict)
     state_path: Path = field(default_factory=lambda: Path.home() / ".lokay" / "state.jsonl")
     # K: optional pass budget for issue_to_pr (serial by design; default 1).
     # Not concurrent worktrees / Pi / tmux — ticket after ticket.
@@ -121,6 +123,8 @@ class Config:
 
 
     def __post_init__(self) -> None:
+        if self.worktrees_layout not in ("legacy", "clone-siblings"):
+            raise ValueError("worktrees.layout must be legacy or clone-siblings")
         if self.merge_enabled and self.merge_mode == "off":
             self.merge_mode = "always"
 
@@ -268,7 +272,7 @@ def _limit_issue_to_pr_per_pass(lim: dict[str, Any]) -> int:
     return 1
 
 
-def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
+def _parse_repo_entries(raw_list: list[Any], *, lexical_paths: bool = False) -> list[RepoConfig]:
     repos: list[RepoConfig] = []
     for raw in raw_list or []:
         if not isinstance(raw, dict):
@@ -280,7 +284,7 @@ def _parse_repo_entries(raw_list: list[Any]) -> list[RepoConfig]:
         repos.append(
             RepoConfig(
                 name=row.name,
-                clone_path=_expand(row.clone_path),
+                clone_path=Path(row.clone_path).expanduser().absolute() if lexical_paths else _expand(row.clone_path),
                 priority=int(raw.get("priority", 10)),
                 enabled=_yaml_bool(
                     raw.get("enabled", True), True, field=f"repos[{row.name}].enabled"
@@ -300,6 +304,7 @@ def _load_repos(data: dict[str, Any], cfg_path: Path) -> list[RepoConfig]:
     Catalog entries are base; config `repos:` override/extend by name.
     """
     by_name: dict[str, RepoConfig] = {}
+    lexical_paths = (data.get("worktrees") or {}).get("layout") == "clone-siblings"
 
     catalog_ref = data.get("repos_file") or data.get("repos_catalog")
     if catalog_ref:
@@ -310,10 +315,10 @@ def _load_repos(data: dict[str, Any], cfg_path: Path) -> list[RepoConfig]:
             cat_path = _expand(cat_path)
         if cat_path.is_file():
             cat = yaml.safe_load(cat_path.read_text(encoding="utf-8")) or {}
-            for repo in _parse_repo_entries(list(cat.get("repos") or [])):
+            for repo in _parse_repo_entries(list(cat.get("repos") or []), lexical_paths=lexical_paths):
                 by_name[repo.name] = repo
 
-    for repo in _parse_repo_entries(list(data.get("repos") or [])):
+    for repo in _parse_repo_entries(list(data.get("repos") or []), lexical_paths=lexical_paths):
         by_name[repo.name] = repo  # config wins
 
     repos = list(by_name.values())
@@ -425,6 +430,13 @@ def load_config(path: str | Path | None = None) -> Config:
     review = data.get("pr_review") or {}
     decisions = data.get("decisions") or {}
 
+    project_roots = wt.get("project_roots", {})
+    if not isinstance(project_roots, dict) or any(
+        not isinstance(name, str) or not name.strip()
+        or not isinstance(value, str) or not value.strip()
+        for name, value in project_roots.items()
+    ):
+        raise ValueError("worktrees.project_roots must map repository IDs to paths")
     repos = _load_repos(data, cfg_path)
 
     raw_args = ex.get("args")
@@ -491,6 +503,11 @@ def load_config(path: str | Path | None = None) -> Config:
         pr_review_sandbox_profile=_expand(review["sandbox_profile"]) if review.get("sandbox_profile") else None,
         pr_review_artifacts_dir=_expand(review.get("artifacts_dir", "~/.lokay/pr-review-artifacts")),
         worktrees_root=_expand(wt.get("root", "~/.lokay/worktrees")),
+        worktrees_layout=wt.get("layout", "legacy"),
+        project_worktree_roots={
+            name: Path(value).expanduser().absolute()
+            for name, value in project_roots.items()
+        },
         state_path=_expand(st.get("path", "~/.lokay/state.jsonl")),
         max_issue_to_pr_per_pass=(
             _limit_issue_to_pr_per_pass(lim)

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from lokay.git_worktree import _is_quarantine_name
+from lokay.git_worktree import _absolute_posix_names, _is_quarantine_name, _walk_nofollow
 from lokay.proc.stale_worktree_catalog import SLOTS as ARCHIVE_GC_SLOTS
 
 # Age selects inspection candidates only, never deletion permission.
@@ -33,16 +33,20 @@ def _archive_age_seconds(path: Path, *, now: float) -> float | None:
 
 
 def list_expired_archives(
-    managed_root: Path, *, now: float | None = None, ttl: int | None = None
+    managed_root: Path, *, now: float | None = None, ttl: int | None = None,
+    direct: bool = False
 ) -> list[Path]:
     """Lexical children named `.*.lokay-preserved` older than TTL."""
     limit = PRESERVED_ARCHIVE_TTL_SECONDS if ttl is None else ttl
     stamp = time.time() if now is None else now
-    if not managed_root.exists():
+    try:
+        root_fd = _walk_nofollow(_absolute_posix_names(managed_root))
+    except (OSError, ValueError):
         return []
+    os.close(root_fd)
     found: list[Path] = []
     try:
-        repo_dirs = sorted(managed_root.iterdir(), key=lambda p: p.name)
+        repo_dirs = [managed_root] if direct else sorted(managed_root.iterdir(), key=lambda p: p.name)
     except OSError:
         return []
     for repo_dir in repo_dirs:
@@ -70,6 +74,7 @@ def prune(
     live: bool,
     now: float | None = None,
     ttl: int | None = None,
+    direct: bool = False,
 ) -> dict[str, Any]:
     """List expired archives; retain them without completion evidence."""
     root = Path(managed_root).expanduser()
@@ -83,7 +88,7 @@ def prune(
             "pruned_count": 0,
             "ttl_seconds": limit,
         }
-    expired = list_expired_archives(root, now=now, ttl=limit)
+    expired = list_expired_archives(root, now=now, ttl=limit, direct=direct)
     if not live:
         return {
             "ok": True,

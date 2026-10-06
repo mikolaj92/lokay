@@ -51,7 +51,7 @@ def prepare(
     cap = budget_of(config_path=config_path, live=live, budget=budget)
     spent = max(
         int(cursor.get("spent") or 0),
-        len(live_issue_to_pr_receipts()) if live else 0,
+        len(live_issue_to_pr_receipts(config_path=config_path)) if live else 0,
     )
     remaining = max(0, cap - spent)
     if cap > int(slot_count):

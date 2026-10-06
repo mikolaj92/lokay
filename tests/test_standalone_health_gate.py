@@ -1,7 +1,6 @@
 import os
-from types import SimpleNamespace
-
 from lokay import preflight
+from lokay.config import Config
 
 
 def test_standalone_gate_issues_valid_capability_under_its_checked_lock(tmp_path, monkeypatch):
@@ -11,8 +10,7 @@ def test_standalone_gate_issues_valid_capability_under_its_checked_lock(tmp_path
     monkeypatch.delenv("LOKAY_DISABLE_HEALTH_LEASE_ISSUE", raising=False)
     lock = tmp_path / "configured-state" / "lokay.lock"
     lock.parent.mkdir()
-    cfg = SimpleNamespace(state_path=lock.parent / "state.jsonl", worktrees_root=tmp_path / "worktrees",
-                          live=False, executor_enabled=False)
+    cfg = Config(state_path=lock.parent / "state.jsonl", worktrees_root=tmp_path / "worktrees")
 
     def healthy_check(*args, **kwargs):
         assert preflight.acquire_run_lock(lock)

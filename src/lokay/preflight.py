@@ -525,6 +525,15 @@ def acquire_run_lock(lock_path: Path) -> bool:
         return False
 
 
+def _runtime_dirs(cfg: Any) -> tuple[Path, ...]:
+    from lokay.git_worktree import project_worktree_root
+
+    roots = [cfg.worktrees_root]
+    if cfg.worktrees_layout == "clone-siblings":
+        roots = [project_worktree_root(cfg, repo) for repo in cfg.active_repos()]
+    return tuple(dict.fromkeys([cfg.state_path.parent, *roots, Path(os.environ.get("LOKAY_LOG_DIR", str(Path.home() / ".lokay" / "logs")))]))
+
+
 def _check(
     config_path: str | None,
     repaired: set[str],
@@ -558,7 +567,7 @@ def _check(
     # lokay before `lokay-repos-clone-missing` can repair it.
     findings.append(check_repository_catalog_clones(cfg=cfg))
 
-    runtime_dirs = (cfg.state_path.parent, cfg.worktrees_root, Path(os.environ.get("LOKAY_LOG_DIR", str(Path.home() / ".lokay" / "logs"))))
+    runtime_dirs = _runtime_dirs(cfg)
     paths_ok = all(_safe_owned_path(path) and path.is_dir() and os.access(path, os.W_OK) for path in runtime_dirs)
     findings.append(_finding("writable_runtime_paths", paths_ok, "ok" if paths_ok else "unsafe_or_unwritable", repaired="directories" in repaired))
     try:
@@ -1173,7 +1182,7 @@ def run_preflight(
             os.environ["LANG"] = "C.UTF-8"; repaired.add("locale")
             repairs.append({"kind": "set_process_locale", "ok": True, "value": _REDACTED})
         if cfg is not None:
-            dirs = (cfg.state_path.parent, cfg.worktrees_root, Path(os.environ.get("LOKAY_LOG_DIR", str(Path.home() / ".lokay" / "logs"))))
+            dirs = _runtime_dirs(cfg)
             if all(_safe_owned_path(path) for path in dirs):
                 try:
                     for path in dirs: path.mkdir(parents=True, exist_ok=True)

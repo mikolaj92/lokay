@@ -3,12 +3,13 @@
 from pathlib import Path
 
 from lokay.proc._common import runner
+from lokay.git_worktree import prepare_worktree_parent
 from lokay.runner import git_spec
 
 
 def create(route: dict) -> dict:
     worktree = Path(route["worktree"])
-    worktree.parent.mkdir(parents=True, exist_ok=True)
+    prepare_worktree_parent(worktree)
     runner().run_checked(
         git_spec(
             ["worktree", "add", "--detach", str(worktree), route["base_sha"]],

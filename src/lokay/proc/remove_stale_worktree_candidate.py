@@ -4,7 +4,7 @@ import argparse
 import os
 from pathlib import Path
 
-from lokay.git_worktree import remove_worktree
+from lokay.git_worktree import project_worktree_root, remove_worktree
 from lokay.proc._common import load_cfg, mutations_allowed, runner
 from lokay.proc.detach_issue_to_pr import (
     has_unreadable_issue_to_pr_receipts,
@@ -25,9 +25,10 @@ def apply(classified: dict, *, config_path: str | None, live: bool) -> dict:
     row = dict(classified.get("row") or {})
     repo = str(row.get("repo") or "")
     issue = row.get("issue")
+    cfg = load_cfg(argparse.Namespace(config=config_path))
     occupied = {
         (str(x.get("repo") or ""), int(x.get("issue") or 0))
-        for x in live_issue_to_pr_receipts()
+        for x in live_issue_to_pr_receipts(cfg=cfg)
     }
     if has_unreadable_issue_to_pr_receipts() or (repo, int(issue or 0)) in occupied:
         return {
@@ -35,13 +36,15 @@ def apply(classified: dict, *, config_path: str | None, live: bool) -> dict:
             "applied": False,
             "row": {**row, "kept": True, "reason": "live_issue_to_pr"},
         }
-    cfg = load_cfg(argparse.Namespace(config=config_path))
     mutations_allowed(live_flag=live, cfg=cfg)
+    repo_cfg = next((item for item in cfg.repos if item.name == repo), None)
+    if repo_cfg is None:
+        return {"ok": True, "applied": False, "row": {**row, "kept": True, "reason": "unknown_repository"}}
     out = remove_worktree(
         runner(),
         Path(str(row["clone"])),
         Path(str(row["path"])),
-        managed_root=cfg.worktrees_root,
+        managed_root=project_worktree_root(cfg, repo_cfg),
     )
     if not out.get("ok"):
         deferred = defer_failed_removal(Path(str(row["path"])))
