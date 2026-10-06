@@ -56,6 +56,9 @@ def render_background(request: Mapping[str, Any]) -> bytes:
                 identities,
                 "Finding anchor contract: the entire inclusive start_line..end_line span must fit "
                 "within one contiguous changed-line interval on the reviewed head. Unchanged context lines are not valid anchors. "
+                "OCR derives both endpoints from existing_code: existing_code must contain only consecutive changed head-side lines "
+                "from that single interval, exactly as they appear in the file, without diff prefixes or unchanged closing delimiters. "
+                "Numeric tool arguments do not control the anchor. "
                 "Use the smallest changed span that demonstrates the defect; describe surrounding context in the finding content, "
                 "not by expanding its anchor. Report every actionable finding; do not suppress defects to satisfy anchoring. "
                 "Do not approve by emitting no comments unless every selected file was inspected.",
