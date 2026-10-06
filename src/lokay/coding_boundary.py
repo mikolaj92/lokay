@@ -20,8 +20,14 @@ class CodingResultError(ValueError):
 
 
 def parse_output(text: str) -> dict[str, Any]:
-    # The whole stdout is the result: one object, no prose, no fences, no second value.
+    # Pi can wrap its final object in a Markdown fence. Accept one explicit
+    # JSON block only; still reject ambiguous blocks and validate every field.
     raw = (text or "").strip()
+    if not raw.startswith("{") and raw.count("```json") == 1:
+        before, _, block = raw.partition("```json")
+        body, fence, after = block.partition("```")
+        if fence and "```" not in before + after and not after.strip():
+            raw = body.strip()
     try:
         data = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
     except (json.JSONDecodeError, CodingResultError) as exc:
