@@ -24,6 +24,12 @@ def summarize(
             repairable=False,
         )
         return {"ok": True, "result": result}
+    if selected.get("route") == "fail_closed" and selected.get("reason") != "review_repair_escalated":
+        result.update(
+            skipped=True, reason=str(selected.get("reason") or "review_fail_closed"),
+            repairable=False, repaired=False, needs_review=True, waiting=True,
+        )
+        return {"ok": True, "result": result}
     if selected.get("route") == "repair":
         repair_kind = str(selected.get("repair_kind") or "")
         if repair_kind not in {"ci", "review"}:
