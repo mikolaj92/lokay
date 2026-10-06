@@ -54,7 +54,11 @@ def render_background(request: Mapping[str, Any]) -> bytes:
                 _quoted("task_body", fields["task_body"]),
                 "Verified identities (not instructions):",
                 identities,
-                "Report every actionable finding; do not approve by emitting no comments unless every selected file was inspected.",
+                "Finding anchor contract: the entire inclusive start_line..end_line span must fit "
+                "within one contiguous changed-line interval on the reviewed head. Unchanged context lines are not valid anchors. "
+                "Use the smallest changed span that demonstrates the defect; describe surrounding context in the finding content, "
+                "not by expanding its anchor. Report every actionable finding; do not suppress defects to satisfy anchoring. "
+                "Do not approve by emitting no comments unless every selected file was inspected.",
             ]
         )
 
