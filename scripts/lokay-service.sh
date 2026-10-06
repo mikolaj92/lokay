@@ -27,7 +27,7 @@ fi
 export PI_PROVIDER="${PI_PROVIDER:-omniroute}"
 export PI_MODEL="${PI_MODEL:-pi}"
 
-export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/OSS/lokay}"
+export LOKAY_ROOT="${LOKAY_ROOT:-${HOME}/Developer/lokay/main}"
 ROOT="${LOKAY_ROOT}"
 export PATH="${ROOT}/.venv/bin:${PATH}"
 UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-${ROOT}/.venv}"
