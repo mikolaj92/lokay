@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import uuid
@@ -200,13 +201,20 @@ def _materialize_package(
 ) -> Path:
     """Write the requested path with absolute project path.
 
-    Canonical substitution only: PLACEHOLDER_PROJECT → checkout path.
-    Package adapters hardcode `uv` (never bare python3 / PLACEHOLDER_PYTHON).
+    Resolve the project and use its installed Python directly.
+    uv provisions the environment; it must not wrap every runtime process.
     The authored catalog stays whole; each host file contains one path.
     """
     text = src.read_text(encoding="utf-8")
     if path_id:
         text = _slice_package_text(text, path_id)
+    python = project.resolve() / ".venv" / "bin" / "python"
+    if not python.is_file():
+        raise FileNotFoundError(f"Lokay environment missing: {python}; run uv sync")
+    text = text.replace(
+        '["uv", "run", "--project", "PLACEHOLDER_PROJECT", "python",',
+        f'[{json.dumps(str(python))},',
+    )
     text = text.replace("PLACEHOLDER_PROJECT", str(project.resolve()))
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text, encoding="utf-8")

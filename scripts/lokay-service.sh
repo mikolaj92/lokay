@@ -72,8 +72,8 @@ if ! mkdir -p "${LOG_DIR}"; then
   exit 73
 fi
 # Retain logs: age alone does not prove delivery or release recovery evidence.
-if ! command -v uv >/dev/null 2>&1; then
-  bootstrap_incident "uv_unavailable"
+if [[ ! -x "${ROOT}/.venv/bin/python" ]]; then
+  bootstrap_incident "python_environment_unavailable"
   exit 69
 fi
 if [[ ! -d "${ROOT}" || ! -f "${CFG}" ]]; then
@@ -116,7 +116,7 @@ if [[ "${CEILING}" -lt 1 ]]; then
 fi
 
 write_pass_ceiling_receipt() {
-  uv run python - "${CFG}" "${CEILING}" <<'PY' 2>/dev/null || true
+  "${ROOT}/.venv/bin/python" - "${CFG}" "${CEILING}" <<'PY' 2>/dev/null || true
 from lokay.proc.write_pass_ceiling_receipt import main
 import sys
 raise SystemExit(main(sys.argv[1:]))
@@ -127,7 +127,7 @@ stop_cycle_tree() {
   # Stop every descendant of this daemon except a registered detached
   # issue_to_pr process group created with start_new_session. Fala effectors also use new sessions, so session
   # identity alone cannot prove that a process owns durable work.
-  uv run python -m lokay.proc.stop_cycle_tree "$1" "${LOKAY_HOME}/cycle" >/dev/null 2>&1 || true
+  "${ROOT}/.venv/bin/python" -m lokay.proc.stop_cycle_tree "$1" "${LOKAY_HOME}/cycle" >/dev/null 2>&1 || true
 }
 
 shutdown_service() {
@@ -149,7 +149,7 @@ set +e
 # Job control gives the daemon its own process group. Without it the group
 # watchdog also terminates this caretaker before it can record pass_ceiling.
 set -m
-uv run lokay-daemon --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1 &
+"${ROOT}/.venv/bin/lokay-daemon" --config "${CFG}" --max-passes "${LOKAY_MAX_PASSES:-8}" --outbox "${OUTBOX}" >>"${LOG}" 2>&1 &
 DAEMON_PID=$!
 (
   sleep "${CEILING}"
