@@ -20,8 +20,9 @@ last_pass_moving
 
 The moving gate is one leaf. Repair is its own child graph. `recovery_factory`
 is one parent `factory_pass` — it does not classify, repair, activate, or
-host `product_entry` / `product_pass_budget`. LaunchAgent already re-invokes
-the lokay; a 180s tick must not stack eight factory slots. `product_entry`
+host `product_entry` / `product_pass_budget`. The resident daemon asks Fala
+for the next graph only after this one returns a receipt. One graph is still
+one factory pass, not eight slots. `product_entry`
 stays the CLI multi-pass wrapper. Moving
 forward is only a new PR or a merge on the last receipt. Leftover skip,
 empty survey, and a stale receipt do not count as “not moving” and do not
@@ -39,15 +40,16 @@ adds an idle-skip before Fala.
 
 | Entry | Authored scope |
 | --- | --- |
-| `daemon_cycle` | Recovery XOR one `factory_pass`; LaunchAgent tick. |
+| `daemon_cycle` | Recovery XOR one `factory_pass`. The resident daemon runs this graph again after it completes. |
 | `factory_pass` | `host_ff` first, host gate, workspace, five departments, receipt and terminal; cleanup sibling. |
 | `product_entry` / `product_pass_budget` | Explicit CLI multi-pass budget, currently eight authored slots, each composing factory work and `leftover_closeout`. Not the daemon spine. |
 
-`scripts/lokay-service.sh` owns the OS lock, exec, logs and bounded daemon
-wait (default 180s). It signals the lock-owning session, not detached
-`issue_to_pr` sessions, and may record `health=pass_ceiling`. Busy lock can
+`scripts/lokay-service.sh` owns the OS lock, exec, logs and the pass-ceiling
+watchdog. The daemon process stays up and conducts the next graph. Shutdown
+signals the lock-owning session, not detached `issue_to_pr` sessions, and may
+record `health=pass_ceiling` when one graph exceeds its ceiling. Busy lock can
 skip exec; this is a lease, not product routing. It does not host-ff or
-rewrite the LaunchAgent plist on each tick. Host-ff is the first
+rewrite the LaunchAgent plist on each graph. Host-ff is the first
 `factory_pass` atom; the following host gate chooses begin or restart.
 
 Subprocess atoms pin `cwd` to the Lokay checkout (`PLACEHOLDER_PROJECT`). Fala's
