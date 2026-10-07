@@ -70,7 +70,7 @@ def handle_issues(
                                  listed=_listed_of(inputs, up), runner=runner(), live=live)
         return selected
     if atom == "issues_launch_pr":
-        from lokay.proc.launch_issue_to_pr import launch
+        from lokay.proc.launch_issue_to_pr import launch, merge_ready_count
 
         last = _last_of(inputs)
         return launch(
@@ -79,5 +79,7 @@ def handle_issues(
             live=live,
             budget=inputs.get("budget"),
             live_count=last.get("spent"),
+            merge_ready=merge_ready_count(list(inputs.get("merge_ready_prs") or [])),
+            merge_ready_cap=int(inputs.get("merge_ready_cap") or 0),
         )
     return None

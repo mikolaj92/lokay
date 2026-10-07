@@ -3,6 +3,10 @@
 from lokay.proc.detach_issue_to_pr import detach_issue_to_pr
 
 
+def merge_ready_count(labels: list) -> int:
+    return sum(1 for row in labels if isinstance(row, dict) and "ai:merge-ready" in (row.get("labels") or []))
+
+
 def leftover_without_repo(candidate: dict, repo: str) -> tuple[int, list[dict]]:
     """A live or started receipt occupies the whole repo. Walk past it."""
     leftover_issues = [
