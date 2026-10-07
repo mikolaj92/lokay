@@ -90,6 +90,10 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
                 )
             else:
                 reason = "review_plugin_failed"
+            from lokay.proc.run_pr_review_agent import infra_verdict
+            infra = infra_verdict(reason)
+            if infra is not None:
+                return {"ok": True, "route": "infra", "reason": infra["reason"], "decision": infra}
             return {"ok": True, "route": "fail_closed", "reason": reason}
         if (up.get("resolve_sha_review") or {}).get("route") == "cached":
             return {"ok": True, "route": "not_applicable"}
