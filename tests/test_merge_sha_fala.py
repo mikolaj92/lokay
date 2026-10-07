@@ -70,7 +70,7 @@ if a == 'prepare_delivery_closeout':
 if a == 'pr_merge':
     if {merge_result!r} == 'unverified':
         up = {{**up, 'test_local': {{**up['test_local'], 'tested_head_sha': 'b' * 40}}}}
-    cfg = Config(merge_enabled=True)
+    cfg = Config(merge_enabled=True, merge_mode='always')
     lokay.config.load_config = lambda *_: cfg
     pr_merge.load_cfg = lambda *_: cfg
     pr_merge.mutations_allowed = lambda **_: True
