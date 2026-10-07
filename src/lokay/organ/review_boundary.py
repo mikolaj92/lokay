@@ -51,7 +51,10 @@ def handle_review_boundary(atom: str, inputs: dict[str, Any], up: dict[str, dict
         from lokay.proc.run_pr_review_agent import run_review_agent
         result = run_review_agent(config_path=config,repo=repo,pr=pr,evidence=evidence,live=live)
         if not result.get("ok"):
-            return {"ok": True, "route": "complete", "stdout": "", "plugin_error": str(result.get("reason") or result.get("error") or "plugin failed")}
+            reason = str(result.get("reason") or result.get("error") or "plugin failed")
+            if result.get("route") == "infra":
+                return {"ok": True, "route": "infra", "reason": reason, "decision": result.get("decision")}
+            return {"ok": True, "route": "complete", "stdout": "", "plugin_error": reason}
         return result
     if atom == "pr_review_retry_agent":
         return {"ok": True, "route": "not_applicable", "stdout": ""}
