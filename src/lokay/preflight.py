@@ -525,6 +525,22 @@ def acquire_run_lock(lock_path: Path) -> bool:
         return False
 
 
+def release_run_lock(lock_path: Path) -> None:
+    """Release and forget this process's advisory lock (shutdown path)."""
+    key = str(lock_path.expanduser().absolute())
+    handle = _LOCKS.pop(key, None)
+    if handle is None:
+        return
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        handle.close()
+    except OSError:
+        pass
+
+
 def _runtime_dirs(cfg: Any) -> tuple[Path, ...]:
     from lokay.git_worktree import project_worktree_root
 

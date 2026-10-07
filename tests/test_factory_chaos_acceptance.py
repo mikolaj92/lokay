@@ -42,7 +42,7 @@ def _run(tmp_path, body: str, run_id: str, path_id: str) -> dict:
         "LOKAY_HEALTH_LEASE", "LOKAY_HEALTH_LEASE_PATH",
         "LOKAY_DISABLE_HEALTH_LEASE_ISSUE", "PYTHONPATH", "OCR_LLM_API_KEY",
     ):
-        env.setdefault(key, "")
+        env[key] = ""
     run = subprocess.run(
         [sys.executable, "-c", script, str(tmp_path / "db.sqlite"), str(package),
          json.dumps(commands), run_id, path_id],

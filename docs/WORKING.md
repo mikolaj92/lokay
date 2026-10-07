@@ -151,17 +151,25 @@ Quality that stays, regardless of geometry:
 
 ## Continuous lokay
 
-LaunchAgent (cron heartbeat) is the clock. There is no GitHub Actions wake
-and no self-hosted Actions runner. `lokay-wake` is a local operator command
-that routes one issue or PR into triage or a bounded factory pass; nothing in
-`.github/workflows` calls it. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
-restarts immediately; idle 0 waits the 60s StartInterval. Classified
-`preflight_failed` is a gate and must exit 0 so the interval applies. Plist
-`StartInterval=60` and crash KeepAlive are host `--install` setup
-(`plutil`, not a per-tick rewrite). Missing plists stay missing. The
-LaunchAgent shell leases `lokay.lock` and execs `lokay-daemon`;
-host-ff lives in `factory_pass` (`harvest_factory_children`, then `host_ff`, then `factory_begin_host_gate` begin|restart|blocked, then begin only on begin). Same serial lokay (K=1), same lock —
-not a parallel fleet. Details:
+LaunchAgent starts one resident `lokay-daemon` process. The Fala
+`daemon_entry` graph owns each complete work cycle; the daemon schedules the
+next graph from the existing lifecycle (`--interval`, backoff on failures),
+so there is no minute-based process churn and no handwritten parallel work
+loop. Each graph stays bounded (`max_passes`, SIGALRM pass ceiling) and ends
+with a complete receipt; delivery/merge semantics are unchanged. There is no
+cron heartbeat and no GitHub Actions wake and no self-hosted Actions runner.
+`lokay-wake` is a local operator command that routes one issue or PR into
+triage or a bounded factory pass; nothing in `.github/workflows` calls it.
+Plist is `RunAtLoad` + crash KeepAlive (`SuccessfulExit=false`): the job
+starts at load and restarts only when the daemon exits non-zero; a failed
+graph backs off in-process instead. SIGTERM drains the current bounded
+graph, then the daemon exits 0 and releases `lokay.lock`. Plist keys are
+host `--install` setup (`plutil`, not a per-tick rewrite). Missing plists
+stay missing. The LaunchAgent shell leases `lokay.lock` and execs the
+resident `lokay-daemon`; host-ff lives in `factory_pass`
+(`harvest_factory_children`, then `host_ff`, then `factory_begin_host_gate`
+begin|restart|blocked, then begin only on begin). Same serial lokay (K=1),
+same lock — not a parallel fleet. Details:
 [`AUTONOMY.md`](AUTONOMY.md#event-wake-vs-cron).
 
 LaunchAgent or:
@@ -253,11 +261,12 @@ Kanban ledger; do not grow `compose/*` with GitHub/git/agent scheduling.
   (`did_not_move`) starts self_repair.
   `factory_begin` opens a pass workspace after a short host-alive probe.
   Empty survey snapshots do not idle or skip PRs and issues. Launchd does not exec
-  `lokay-daemon` while `lokay.lock` is held; `LOKAY_PROCESS_HEAD`
+  a second `lokay-daemon` while `lokay.lock` is held; `LOKAY_PROCESS_HEAD`
   still refuses if HEAD moved under the already-imported daemon.
   Host-ff lives only in Fala. The lokay-daemon shell is OS only (lock, exec,
-  logs, bootstrap incident, 180s lock-owner ceiling). Nested Fala SIGALRM
-  does not release `lokay.lock`. Detached `issue_to_pr` survives the ceiling.
+  logs, bootstrap incident, SIGTERM forward). The resident daemon conducts
+  repeated graphs; the nested Fala SIGALRM pass ceiling does not release
+  `lokay.lock`. Detached `issue_to_pr` survives the ceiling.
   Standalone `lokay-daemon` still probes. Healthy first host
   check is not rerun (`gh api user` / ast.parse every lokay module). Repair
   still reruns `_check`.

@@ -41,7 +41,7 @@ def run_graph(tmp_path, body, run_id, path_id="select_implement"):
         "PYTHONPATH",
         "OCR_LLM_API_KEY",
     ):
-        env.setdefault(key, "")
+        env[key] = ""
     run = subprocess.run(
         [
             sys.executable,
