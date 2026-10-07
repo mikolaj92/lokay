@@ -20,7 +20,11 @@ def launch(
     live: bool = True,
     budget: int | None = None,
     live_count: int | None = None,
+    merge_ready: int = 0,
+    merge_ready_cap: int = 0,
 ) -> dict:
+    if merge_ready_cap > 0 and merge_ready >= merge_ready_cap:
+        return {**dict(candidate), "ok": True, "route": "busy", "reason": "merge_ready_cap", "spent": merge_ready}
     if not live:
         return {
             **dict(candidate),
