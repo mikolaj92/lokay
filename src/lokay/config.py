@@ -229,6 +229,10 @@ def _yaml_mode(value: Any, *, merge_enabled: bool) -> str:
     del merge_enabled
     if value is None or value == "":
         return "off"
+    if value is False:
+        value = "off"
+    if value is True:
+        value = "always"
     mode = str(value).strip().lower()
     if mode not in {"off", "classify", "always"}:
         raise ValueError(f"merge.mode must be off, classify, or always, got {value!r}")
