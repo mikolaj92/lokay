@@ -140,6 +140,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lokay"]
+[tool.hatch.build.targets.wheel.force-include]
+"fala/lokay.fala-package.toml" = "lokay/data/lokay.fala-package.toml"
 
 [tool.lokay]
 # Repository-declared local verifier for lokay-test-local. Missing this table

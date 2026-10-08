@@ -35,20 +35,11 @@ def trusted_fala_manifest() -> Path:
     if not packaged.is_file():
         raise RuntimeError("packaged Fala manifest unavailable")
 
-    # Only compare against the checkout that owns this module. An installed
-    # wheel may be started with a checkout as its working directory while that
-    # checkout is being upgraded; treating that unrelated CWD as wheel
-    # provenance makes the otherwise self-contained carrier fail transiently.
-    source_candidate = here.parents[2] / "fala" / "lokay.fala-package.toml"
-    source = source_candidate if source_candidate.is_file() else None
-    if source is not None and source.read_bytes() != packaged.read_bytes():
-        raise RuntimeError("canonical Fala manifests differ")
-
-    trusted = source or packaged
+    trusted = packaged
     override = os.environ.get("LOKAY_FALA_PACKAGE")
     if override:
         selected = Path(override).expanduser().resolve()
-        canonical = {packaged.resolve(), *(set() if source is None else {source.resolve()})}
+        canonical = {packaged.resolve()}
         if selected not in canonical:
             raise RuntimeError("untrusted LOKAY_FALA_PACKAGE override")
         return selected
