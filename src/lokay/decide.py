@@ -1,3 +1,9 @@
+class DecisionInfra(Exception):
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
 import hashlib
 import json
 
@@ -13,7 +19,10 @@ def decide(decision_id, facts, *, post=None, cache=None):
     key = decision_id + ':' + hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
     if cache is not None and key in cache:
         return {'route': cache[key], 'source': 'cache', 'calls': 0}
-    answer = post(options) if post is not None else None
+    try:
+        answer = post(options) if post is not None else None
+    except OSError as exc:
+        raise DecisionInfra(str(exc)) from exc
     confidence = float((answer or {}).get('confidence', 1))
     if confidence <= 0.84:
         return {'route': 'needs_human', 'source': 'abstain', 'calls': 1}

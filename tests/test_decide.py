@@ -24,3 +24,15 @@ def test_low_confidence_abstains():
     out = decide('admission', facts, post=post, cache={})
     assert out['source'] == 'abstain'
     assert out['route'] == 'needs_human'
+
+def test_transport_error_is_infra_not_abstain():
+    from lokay.decide import DecisionInfra
+    def post(options):
+        raise OSError('down')
+    facts = {'free_slots': 1, 'W_global': 1, 'oldest_W_h': 1, 'doctor': 'ok', 'admitted_builds': 1, 'infra_1h': 0}
+    try:
+        decide('admission', facts, post=post, cache={})
+    except DecisionInfra as exc:
+        assert exc.reason == 'down'
+        return
+    raise AssertionError('transport error was returned as a route')
