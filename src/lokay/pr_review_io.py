@@ -16,10 +16,6 @@ from lokay.pr_review import format_review_marker
 from lokay.runner import Runner, gh_spec
 from lokay.stuck import issue_number_from_branch
 
-FAIL_CLOSED = (
-    "Lokay LLM PR review failed closed (invalid structured output): {exc}\n"
-    "Will not auto-merge until a valid review is produced."
-)
 # gh v2.100 accepts the object field and returns nameWithOwner inside it;
 # the older nested selector is rejected by current gh CLI versions.
 _VIEW_FIELDS = (
@@ -353,21 +349,23 @@ def publish_fail_closed(
     head_sha: str = "",
     comments: list[str] | None = None,
 ) -> bool:
+    """Record one infrastructure miss without spending a product review.
+
+    A plugin or host failure is not request_changes and not a completed
+    review of this SHA. The comment names the blocker. It carries no review
+    marker and no ai:needs-review label, so the same SHA can run again
+    after the host is repaired.
+    """
+    del head_sha, comments
     if not mutate:
         return False
-    body = FAIL_CLOSED.format(exc=exc)
-    sha = str(head_sha or "").strip().lower()
-    if sha:
-        from lokay.pr_review import find_review_for_head, parse_review_markers
-
-        prior = find_review_for_head(parse_review_markers(list(comments or [])), sha)
-        if prior is not None and prior.get("verdict") == "fail_closed":
-            return True
-        body = f"{body}\n{format_review_marker(head_sha=sha, verdict='fail_closed', merge_ok=False)}"
+    body = (
+        "Lokay review did not run (infrastructure, not a product verdict): "
+        f"{exc}\nNo review marker. The same head SHA remains eligible after "
+        "the host or plugin failure is repaired."
+    )
     try:
-        publish_review(
-            runner, repo, pr, body, ["ai:needs-review"], live=True
-        )
+        publish_review(runner, repo, pr, body, [], live=True)
         return True
     except Exception:
         return False

@@ -50,18 +50,19 @@ def compose_human_mailbox(*, config_path: str | None, live: bool = True) -> dict
             prs = list_open_ai_prs(r, cfg, repo, live=live)
             for pr in prs:
                 labels = pr.labels or []
-                if "ai:needs-review" not in labels:
-                    continue
-                items.append(
-                    {
-                        "kind": "pr",
-                        "repo": repo.name,
-                        "number": pr.number,
-                        "title": pr.title,
-                        "url": pr.url,
-                        "label": "ai:needs-review",
-                    }
-                )
+                for label in ("ai:needs-review", "ai:merge-ready"):
+                    if label not in labels:
+                        continue
+                    items.append(
+                        {
+                            "kind": "pr",
+                            "repo": repo.name,
+                            "number": pr.number,
+                            "title": pr.title,
+                            "url": pr.url,
+                            "label": label,
+                        }
+                    )
         except Exception as exc:  # noqa: BLE001
             errors.append({"repo": repo.name, "step": "list_needs_review_prs", "error": str(exc)})
 
