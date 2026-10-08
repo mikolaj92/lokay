@@ -26,8 +26,10 @@ def advance(provisional: dict, *, repo: str, pr: int, issue: int,
             or task.get("type") != "Issue"
             or hashlib.sha256(receipts._canonical(task)).hexdigest() != decision.get("task_identity_sha256")
             or not receipts._HASH.fullmatch(str(decision.get("review_result_sha256") or ""))
-            or tests.get("ok") is not True or tests.get("tested") is not True
-            or tests.get("skipped") or tests.get("recorded_red")
+            or tests.get("ok") is not True or tests.get("recorded_red")
+            # An intentional no_declared_test skip is what test_local counts as pass.
+            or not ((tests.get("tested") is True and not tests.get("skipped"))
+                    or (tests.get("skipped") is True and tests.get("reason") == "no_declared_test"))
             or tests.get("tested_head_sha") != head):
         raise ValueError("receipt_review_test_unverified")
     current = provisional["head_sha"]
