@@ -4,11 +4,12 @@ import argparse
 import json
 import os
 import secrets
+import sys
 from pathlib import Path
 
 from lokay.config import load_config
 from lokay.envelope import emit_exit, err, process_exit_code
-from lokay.git_host_ff import snapshot_process_head
+from lokay.git_host_ff import process_head_moved, snapshot_process_head
 from lokay.pass_receipt import read_pass_receipt
 from lokay.preflight import (
     acquire_run_lock,
@@ -70,6 +71,9 @@ def main(argv: list[str] | None = None) -> int:
                     _one_graph,
                     pause_seconds=resolve_pause_seconds(),
                     max_graphs=args.max_graphs or None,
+                    restart_needed=(
+                        (lambda: process_head_moved(Path(root))) if root else None
+                    ),
                 )
         finally:
             revoke_health_lease()
@@ -97,7 +101,20 @@ def main(argv: list[str] | None = None) -> int:
         last_pass = read_pass_receipt(path=lock.parent / "last-pass.json")
     except OSError:
         last_pass = None
-    return emit_exit(payload, code=process_exit_code(payload, last_pass=last_pass))
+    code = process_exit_code(payload, last_pass=last_pass)
+    if argv is None and payload.get("restart_required") is True:
+        # host-ff moved the checkout under this resident process. Re-exec the
+        # same command on the new code: same pid for the caretaker and its
+        # watchdog, independent of the plist KeepAlive policy. The singleton
+        # lock fd is non-inheritable, so exec releases it for the new image.
+        emit_exit(payload, code=code)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        try:
+            os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])
+        except OSError:
+            return 1
+    return emit_exit(payload, code=code)
 
 
 if __name__ == "__main__":

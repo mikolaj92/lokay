@@ -71,16 +71,23 @@ def serve(
     pause_seconds: float,
     sleep: Callable[[float], None] = time.sleep,
     max_graphs: int | None = None,
+    restart_needed: Callable[[], Mapping[str, Any] | None] | None = None,
 ) -> dict[str, Any]:
-    """Conduct graphs until a signal, or until max_graphs in a test.
+    """Conduct graphs until a signal, a host update, or max_graphs in a test.
 
     The stop signal ends the wait. It does not start another graph and it
     does not signal a graph that is already running. The caller still owns
     the singleton lock, so a replacement cannot overlap this process.
+
+    ``restart_needed`` reports when the host checkout moved under this
+    process (host-ff merged new main). The code imported here is stale then,
+    so the process stops conducting graphs and returns ``host_updated`` for
+    the caller to restart on the new code.
     """
     completed = 0
     failures = 0
     last: Mapping[str, Any] = {}
+    moved: Mapping[str, Any] | None = None
     previous = signal.getsignal(signal.SIGTERM)
     previous_int = signal.getsignal(signal.SIGINT)
     stop = False
@@ -95,9 +102,15 @@ def serve(
         while max_graphs is None or completed < max_graphs:
             if stop:
                 break
+            moved = restart_needed() if restart_needed else None
+            if moved:
+                break
             last = run_graph()
             completed += 1
             if stop:
+                break
+            moved = restart_needed() if restart_needed else None
+            if moved:
                 break
             _action, delay, failures = next_pause(
                 last, failures=failures, pause_seconds=pause_seconds
@@ -109,6 +122,17 @@ def serve(
                     sleep(delay)
             except ServiceStop:
                 break
+        if moved and not stop:
+            return {
+                "ok": True,
+                "health": "host_updated",
+                "reason": "host_updated",
+                "restart_required": True,
+                "graphs": completed,
+                "head": moved.get("head"),
+                "process_head": moved.get("process_head"),
+                "last": dict(last),
+            }
         return {
             "ok": True,
             "health": "stopped" if stop else "resident_complete",
