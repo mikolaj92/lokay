@@ -51,6 +51,18 @@ def legal_doctor(facts):
     return options
 
 def legal_failure(facts):
+    """D8. trigger is failure, stall, no_merge, or inconclusive (#1626)."""
+    trigger = facts.get('trigger', 'failure')
+    if trigger == 'stall':
+        if int(facts.get('stall_episode') or 1) <= 1:
+            return ['needs_human', 'retry_later']
+        return ['needs_human']
+    if trigger in {'no_merge', 'inconclusive'}:
+        if int(facts.get('episode') or 1) <= 1:
+            return ['needs_human', 'retry_later']
+        return ['needs_human']
+    if facts.get('klass') == 'contract':
+        return ['needs_human']
     if facts['within_budget']:
         return ['retry_later']
     options = ['needs_human']
