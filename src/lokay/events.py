@@ -84,6 +84,24 @@ class Log:
         ).fetchone()
         return row is not None
 
+    def heartbeat(self, resource, token, ttl_s=300):
+        cur = self.db.execute(
+            "UPDATE leases SET expires_at=datetime('now', ?) WHERE resource=? AND token=? AND expires_at > datetime('now')",
+            (f"+{int(ttl_s)} seconds", resource, token),
+        )
+        self.db.commit()
+        return cur.rowcount == 1
+
+    def release(self, resource, token):
+        self.db.execute("DELETE FROM leases WHERE resource=? AND token=?", (resource, token))
+        self.db.commit()
+
+    def held(self, prefix="repo:"):
+        return self.db.execute(
+            "SELECT resource, holder, token FROM leases WHERE resource LIKE ? AND expires_at > datetime('now')",
+            (prefix + "%",),
+        ).fetchall()
+
 
 def blob_put(data: bytes) -> str:
     import hashlib
