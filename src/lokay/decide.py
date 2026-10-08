@@ -12,8 +12,10 @@ from lokay.legal import legal_admission, legal_admit, legal_after_code, legal_di
 LEGALITY = {'admission': legal_admission, 'admit': legal_admit, 'after_code': legal_after_code, 'disposition': legal_disposition, 'doctor': legal_doctor, 'failure': legal_failure, 'pick': legal_pick, 'stale_pr': legal_stale}
 
 
-def decide(decision_id, facts, *, post=None, cache=None, shadow=False):
-    options = LEGALITY[decision_id](facts)
+def decide(decision_id, facts, *, post=None, cache=None, shadow=False, eval_passed=False):
+    options = [item for item in LEGALITY[decision_id](facts) if eval_passed or item not in destructive_options(decision_id)]
+    if not options:
+        options = [catalog_abstain(decision_id)]
     if len(options) == 1:
         return {'route': options[0], 'source': 'single_legal', 'calls': 0}
     key = decision_id + ':' + hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest()
@@ -46,3 +48,14 @@ def catalog_abstain(decision_id):
     if found is None:
         raise KeyError(decision_id)
     return found
+
+def destructive_options(decision_id):
+    import pathlib
+    text = pathlib.Path(__file__).with_name('decisions.toml').read_text()
+    current = None
+    for line in text.splitlines():
+        if line.startswith('id = '):
+            current = line.split('"')[1]
+        if current == decision_id and line.startswith('destructive = '):
+            return [part.strip().strip('"') for part in line.split('[', 1)[1].rstrip(']').split(',') if part.strip()]
+    return []

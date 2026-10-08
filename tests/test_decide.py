@@ -45,3 +45,13 @@ def test_shadow_records_the_model_and_returns_abstain():
     assert out['source'] == 'shadow'
     assert out['route'] == 'drain'
     assert out['recorded'] == 'admit'
+
+def test_destructive_option_is_not_sent_before_eval():
+    sent = []
+    facts = {'owner': '', 'subissues': False, 'task_lines': 0, 'open_pr': True, 'has_test': True, 'allow_untested': False, 'peers': ['other']}
+    out = decide('admit', facts, post=sent.append, eval_passed=False)
+    assert sent == []
+    assert out['source'] == 'single_legal'
+    wider = {'owner': '', 'subissues': False, 'task_lines': 0, 'open_pr': False, 'has_test': True, 'allow_untested': False, 'peers': ['other']}
+    decide('admit', wider, post=sent.append, eval_passed=False)
+    assert 'duplicate' not in sent[0] and 'not_actionable' not in sent[0]

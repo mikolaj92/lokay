@@ -5,6 +5,7 @@ on_abstain = "drain"
 [[decision]]
 id = "admit"
 on_abstain = "needs_human"
+destructive = ["duplicate", "not_actionable"]
 
 [[decision]]
 id = "after_code"
