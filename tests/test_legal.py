@@ -16,3 +16,13 @@ def test_contract_failure_cannot_retry():
 def test_stale_pr_can_close_when_owner_is_silent():
     from lokay.legal import legal_stale
     assert 'close_pr' in legal_stale({'base_moved': False, 'lease_free': True, 'refreshes': 0, 'owner_silent_days': 7, 'age_days': 15})
+
+def test_owner_skip_is_not_actionable():
+    from lokay.legal import legal_admit
+    assert legal_admit({'owner': 'skip', 'subissues': False, 'task_lines': 0, 'open_pr': False, 'has_test': True, 'allow_untested': False, 'peers': []}) == ['not_actionable']
+
+
+def test_veto_blocks_ready_for_human():
+    from lokay.legal import legal_disposition
+    options = legal_disposition({'veto': True, 'review_round': 0, 'review_rounds_max': 2, 'issue_closed': False, 'superseded': False})
+    assert 'ready_for_human' not in options

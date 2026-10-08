@@ -59,3 +59,38 @@ def legal_stale(facts):
     if facts['owner_silent_days'] >= 7 and facts['age_days'] > 14:
         options.append('close_pr')
     return options
+
+def legal_admit(facts):
+    if facts['owner'] == 'skip' or facts['subissues'] or facts['task_lines'] >= 2:
+        return ['not_actionable']
+    if facts['owner'] == 'build':
+        return ['build']
+    options = ['needs_human']
+    if not facts['open_pr'] and (facts['has_test'] or facts['allow_untested']):
+        options.append('build')
+    if facts['peers']:
+        options.append('duplicate')
+    if facts['owner'] != 'build':
+        options.append('not_actionable')
+    return options
+
+
+def legal_pick(facts):
+    legal = []
+    for item in facts['candidates']:
+        if not item['lease_free'] or item['quarantine'] or item['backoff'] or item['restarts_left'] <= 0:
+            continue
+        if item['kind'] == 'obligation' or (facts['admission'] == 'admit' and item['W_repo'] < 2 and not facts['obligation_waiting']):
+            legal.append(item['id'])
+    return (legal or ['none'])[:8] + (['none'] if legal else [])
+
+
+def legal_disposition(facts):
+    options = ['needs_human']
+    if not facts['veto'] and facts['review_round'] < facts['review_rounds_max']:
+        options.append('ready_for_human')
+    if facts['review_round'] < facts['review_rounds_max']:
+        options.append('repair')
+    if facts['issue_closed'] or facts['superseded']:
+        options.append('close_pr')
+    return options
