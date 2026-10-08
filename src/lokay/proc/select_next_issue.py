@@ -5,7 +5,7 @@ import os
 from lokay.proc.classify_issue_assignee import lokay_of, takeable
 from lokay.proc.classify_open_issues import classify
 from lokay.proc.pick_one_labeled import READY_LABELS
-from lokay.proc.walk_issue_leftover import queue, row_is_ready
+from lokay.proc.walk_issue_leftover import identity, queue, row_is_ready
 
 
 def occupied_repos_of(occupied=None) -> set[str]:
@@ -104,5 +104,8 @@ def select(listed: dict, last: dict | None = None, occupied=None) -> dict:
         return _none(reason="occupied")
     # A listed, takeable, unoccupied issue is the work. No label is required.
     if takeable_rows:
-        return pick({"route": "listed", "issues": takeable_rows})
+        # Honor the last pass's leftover cursor so a consumed skip moves the queue on.
+        cursor = {identity(row) for row in list((last or {}).get("leftover_issues") or []) if isinstance(row, dict)}
+        rest = [row for row in takeable_rows if identity(row) in cursor]
+        return pick({"route": "listed", "issues": rest or takeable_rows})
     return _none(reason="none_ready")
