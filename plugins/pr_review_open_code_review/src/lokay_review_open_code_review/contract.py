@@ -386,23 +386,7 @@ def normalize_result(
         content = str(comment.get("content") or "")
         if not content.strip():
             raise ContractError("finding content is required")
-        ranges = changed_ranges.get(path)
-        if not isinstance(ranges, list) or not any(
-            isinstance(bounds, (tuple, list))
-            and len(bounds) == 2
-            and bounds[0] <= start
-            and end <= bounds[1]
-            for bounds in ranges
-        ):
-            intervals = [list(bounds) for bounds in (ranges or [])
-                         if isinstance(bounds, (tuple, list)) and len(bounds) == 2
-                         and all(type(n) is int and n > 0 for n in bounds)
-                         and bounds[0] <= bounds[1]]
-            raise ContractError("finding anchor is not within changed lines", diagnostic={
-                "reason": "anchor_outside_changed_lines", "comment_index": comment_index,
-                "path": path, "start_line": start, "end_line": end,
-                "changed_intervals": intervals[:32], "intervals_truncated": len(intervals) > 32,
-            })
+        # Off changed lines: forwarded; the Lokay host makes it a nit (#1661 fix 3).
         valid_by_path.setdefault(path, []).append((start, end))
         findings.append(
             {

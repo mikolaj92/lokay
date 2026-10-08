@@ -225,10 +225,9 @@ _FALSE_TOKENS = frozenset({"0", "false", "no", "off"})
 
 
 def _yaml_mode(value: Any, *, merge_enabled: bool) -> str:
-    """Parse merge.mode. Absent stays off. always must be written."""
-    del merge_enabled
+    """Parse merge.mode. Absent follows merge.enabled (control arm, #1661)."""
     if value is None or value == "":
-        return "off"
+        return "always" if merge_enabled else "off"
     if value is False:
         value = "off"
     if value is True:

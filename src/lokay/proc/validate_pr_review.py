@@ -10,6 +10,8 @@ from typing import Any
 from lokay.envelope import emit_exit, err, ok
 
 _SCHEMA = "lokay.review-result/1"
+# A real leaked credential, not any `security` finding (#1661 fix 2).
+_SECRET = __import__("re").compile(r"\b(secret|credential|api[ _-]?key|private[ _-]key|password|access[ _-]token)s?\b", __import__("re").IGNORECASE)
 
 
 def _path_identity(row: Mapping[str, Any]) -> tuple[str, str]:
@@ -103,7 +105,7 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
     ):
         return err("review evidence is incomplete or inconsistent", route="fail_closed")
     warnings = evidence.get("warnings", [])
-    if not has_findings and (
+    execution_incomplete = (
         evidence.get("terminal_state") != "complete"
         or evidence.get("upstream_status", "complete") != "complete"
         or evidence.get("run_failure") not in (None, {})
@@ -113,7 +115,8 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
         or any(not isinstance(w, Mapping) or w.get("type") not in {
             "comment_refiled", "comment_args_repaired"
         } for w in warnings)
-    ):
+    )
+    if not has_findings and execution_incomplete:
         return err("review execution is incomplete", route="fail_closed")
     paths = coverage.get("reviewable_paths")
     selected, completed = coverage.get("selected"), coverage.get("completed")
@@ -134,10 +137,11 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
             identities = {_path_identity(row) for row in rows if isinstance(row, Mapping)}
             if len(identities) != len(rows) or not identities.issubset(selected_set):
                 return err("review coverage identity sets are inconsistent", route="fail_closed")
-        if not has_findings and (
+        coverage_incomplete = (
             selected_set != completed_set or selected_set != expected_set
             or any(coverage[key] for key in ("failed", "waived", "reused"))
-        ):
+        )
+        if not has_findings and coverage_incomplete:
             return err("review coverage is incomplete", route="fail_closed")
     except (TypeError, ValueError):
         return err("review coverage identities are malformed", route="fail_closed")
@@ -169,28 +173,34 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
     } != expected_excluded:
         return err("excluded paths do not match deleted-only diff scope", route="fail_closed")
     changed = request.get("changed_ranges") if isinstance(request.get("changed_ranges"), Mapping) else {}
+    nit_rows: list[dict[str, Any]] = []
     for raw in result["findings"]:
         if not isinstance(raw, Mapping):
             return err("malformed finding", route="fail_closed")
         path = str(raw.get("path") or "")
         start, end = raw.get("start_line"), raw.get("end_line")
-        if sum(candidate == path for candidate, _old in allowed) != 1 or not isinstance(start, int) or isinstance(start, bool) or not isinstance(end, int) or isinstance(end, bool) or start < 1 or end < start:
+        if not isinstance(start, int) or isinstance(start, bool) or not isinstance(end, int) or isinstance(end, bool) or start < 1 or end < start:
             return err("finding anchor is malformed", route="fail_closed")
-        if not any(
+        # Off the PR diff is a nit, never a block and never fail_closed (#1661 fix 3).
+        on_diff = sum(candidate == path for candidate, _old in allowed) == 1 and any(
             isinstance(bounds, (list, tuple)) and len(bounds) == 2 and bounds[0] <= start and end <= bounds[1]
             for bounds in changed.get(path, [])
-        ):
-            return err("finding is not anchored to changed lines", route="fail_closed")
+        )
         if raw.get("severity") not in {"critical", "high", "medium", "low"}:
             return err("unknown finding severity", route="fail_closed")
         if raw.get("category") not in {"bug", "security", "performance", "maintainability", "test", "style", "documentation", "other"}:
             return err("unknown finding category", route="fail_closed")
         if not str(raw.get("content") or "").strip():
             return err("finding content is missing", route="fail_closed")
-        normalized_findings.append({key: raw.get(key, "") for key in (
+        row = {key: raw.get(key, "") for key in (
             "path", "start_line", "end_line", "category", "severity", "content",
             "existing_code", "suggestion_code",
-        )})
+        )}
+        # Severity floor (#1661 fix 2): only critical/high on the diff block.
+        (normalized_findings if on_diff and row["severity"] in {"critical", "high"} else nit_rows).append(row)
+    if not normalized_findings and (execution_incomplete or coverage_incomplete):
+        # Findings excused an incomplete run only while they blocked; nits cannot approve it.
+        return err("review is incomplete and has no blocking finding", route="fail_closed")
     input_fingerprint = str(evidence.get("input_fingerprint_sha256") or "")
     if not __import__("re").fullmatch(r"[a-f0-9]{64}", input_fingerprint):
         return err("review input fingerprint is missing", route="fail_closed")
@@ -202,13 +212,15 @@ def validate_result(result: Mapping[str, Any], request: Mapping[str, Any]) -> di
             return err("upstream config identity is malformed", route="fail_closed")
     decision = {
         "verdict": "request_changes" if normalized_findings else "approve",
-        "risk": "medium",
+        "risk": "high" if normalized_findings else "medium" if any(
+            row["severity"] == "medium" for row in nit_rows) else "low",
         "scope_ok": True,
-        "secrets": any(row["category"] == "security" for row in normalized_findings),
+        "secrets": any(row["category"] == "security" and _SECRET.search(str(row["content"]))
+                       for row in normalized_findings + nit_rows),
         "tests_adequate": True,
         "blocking": [f"{row['path']}:{row['start_line']}-{row['end_line']} [{row['severity']}] {row['content']}" for row in normalized_findings],
         "evidence_kind": None,
-        "nits": [],
+        "nits": [f"{row['path']}:{row['start_line']}-{row['end_line']} [{row['severity']}] {row['content']}" for row in nit_rows],
         "summary": str(result.get("summary") or "Review complete."),
         "findings": normalized_findings,
         "review_evidence": dict(evidence),

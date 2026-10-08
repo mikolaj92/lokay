@@ -90,7 +90,8 @@ def collapse(lenses: list[dict[str, Any]], *, sha: str) -> dict[str, Any]:
     ):
         return {"ok": False, "route": "fail_closed", "head_sha": sha, "verdict": "", "findings": []}
     findings = [item for row in lenses for item in row["findings"]]
-    verdict = "request_changes" if findings or any(row["verdict"] == "request_changes" for row in lenses) else "approve"
+    # Each lens verdict already applies the severity floor; raw findings may be nits.
+    verdict = "request_changes" if any(row["verdict"] == "request_changes" for row in lenses) else "approve"
     return {
         "ok": True,
         "route": "complete",
