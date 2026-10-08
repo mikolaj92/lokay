@@ -29,3 +29,10 @@ on_abstain = "fifo_head"
 [[decision]]
 id = "stale_pr"
 on_abstain = "wait"
+[[decision]]
+id = "lens_score"
+on_abstain = "abstained"
+
+[[decision]]
+id = "lens_severity"
+on_abstain = "abstained"

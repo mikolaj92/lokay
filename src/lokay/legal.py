@@ -94,3 +94,11 @@ def legal_disposition(facts):
     if facts['issue_closed'] or facts['superseded']:
         options.append('close_pr')
     return options
+
+LENSES = ('scope', 'correctness', 'security', 'production', 'alignment', 'testing', 'architecture')
+
+
+def legal_lenses(facts):
+    if facts['docs_only']:
+        return ['scope', 'correctness']
+    return list(LENSES)

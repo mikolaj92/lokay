@@ -26,3 +26,8 @@ def test_veto_blocks_ready_for_human():
     from lokay.legal import legal_disposition
     options = legal_disposition({'veto': True, 'review_round': 0, 'review_rounds_max': 2, 'issue_closed': False, 'superseded': False})
     assert 'ready_for_human' not in options
+
+def test_docs_only_keeps_two_lenses():
+    from lokay.legal import legal_lenses
+    assert legal_lenses({'docs_only': True}) == ['scope', 'correctness']
+    assert len(legal_lenses({'docs_only': False})) == 7
