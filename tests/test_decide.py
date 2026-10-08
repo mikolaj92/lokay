@@ -36,3 +36,12 @@ def test_transport_error_is_infra_not_abstain():
         assert exc.reason == 'down'
         return
     raise AssertionError('transport error was returned as a route')
+
+def test_shadow_records_the_model_and_returns_abstain():
+    def post(options):
+        return {'route': 'admit', 'confidence': 0.99}
+    facts = {'free_slots': 1, 'W_global': 1, 'oldest_W_h': 1, 'doctor': 'ok', 'admitted_builds': 1, 'infra_1h': 0}
+    out = decide('admission', facts, post=post, shadow=True)
+    assert out['source'] == 'shadow'
+    assert out['route'] == 'needs_human'
+    assert out['recorded'] == 'admit'
