@@ -1,5 +1,6 @@
 """One configured queue decision after deterministic executor admission."""
 
+import json
 from dataclasses import asdict
 
 from lokay.proc.classify_issue_assignee import takeable
@@ -9,7 +10,36 @@ from lokay.tasks import TaskId
 from lokay.typed_decisions import configured
 
 
+OFF_GOAL_PARK_AFTER = 3
+
+
+def _off_goal_streak(path, repo: str, number: int) -> int:
+    """Consecutive latest issue_to_pr runs for this issue failing assert_real_diff off_goal."""
+    streak = 0
+    try:
+        lines = open(path, encoding='utf-8').read().splitlines()
+    except OSError:
+        return 0
+    for line in lines:
+        if f'"issue": {number}' not in line or '"issue_to_pr"' not in line:
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get('kind') != 'issue_to_pr' or event.get('repo') != repo or event.get('issue') != number:
+            continue
+        off_goal = event.get('delivered') is not True and '"reason": "off_goal"' in str(event.get('steps'))
+        streak = streak + 1 if off_goal else 0
+    return streak
+
+
 def check(*, cfg, selected: dict, listed: dict, runner, live: bool) -> dict:
+    # Park in lokay state (no labels): N off_goal failures in a row skip the issue.
+    if live and cfg.live and _off_goal_streak(cfg.state_path, str(selected['repo']), int(selected['issue'])) >= OFF_GOAL_PARK_AFTER:
+        leftover, rows = leftover_of(selected, listed, consume=True)
+        return {**selected, 'route': 'skip', 'reason': 'off_goal_parked',
+                'leftover': leftover, 'leftover_issues': rows, 'queue_decision': None}
     if not configured(cfg, 'queue_conflict') or not live or not cfg.live:
         return selected
     repo, number = str(selected['repo']), int(selected['issue'])
