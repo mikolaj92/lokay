@@ -182,7 +182,9 @@ def handle_lanes(
             except ValueError:
                 return {'ok': True, 'skipped': True, 'waiting': True,
                         'reason': 'delivery_closeout_intent_missing'}
-            if (intent['repo'], intent['pr'], intent['issue'], intent['branch'], intent['head_sha']) != (repo, pr_number, issue_number, branch, head):
+            # Same issue derivation as prepare_delivery_closeout (PR triage has no issue input).
+            intent_issue = issue_number if issue_number is not None else (issue_number_from_branch(branch, branch_prefix=str(inputs.get("branch_prefix") or "ai/fix")) or 0)
+            if (intent['repo'], intent['pr'], intent['issue'], intent['branch'], intent['head_sha']) != (repo, pr_number, intent_issue, branch, head):
                 return {'ok': True, 'skipped': True, 'waiting': True, 'reason': 'delivery_closeout_intent_mismatch'}
         cfg = ["--config", str(inputs.get("config_path"))] if inputs.get("config_path") else []
         live = ["--live"] if inputs.get("live") else []
