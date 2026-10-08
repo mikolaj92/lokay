@@ -40,3 +40,22 @@ def legal_doctor(facts):
     if facts['stale_worktrees']:
         options.append('reap_worktrees')
     return options
+
+def legal_failure(facts):
+    if facts['within_budget']:
+        return ['retry_later']
+    options = ['needs_human']
+    if facts['klass'] == 'infra' and facts['infra_attempts'] < 6:
+        options.append('retry_later')
+    if facts['crash_loop'] and not facts['decided_this_episode']:
+        options.append('quarantine_repo')
+    return options
+
+
+def legal_stale(facts):
+    options = ['wait']
+    if facts['base_moved'] and facts['lease_free'] and facts['refreshes'] < 2:
+        options.append('refresh')
+    if facts['owner_silent_days'] >= 7 and facts['age_days'] > 14:
+        options.append('close_pr')
+    return options
