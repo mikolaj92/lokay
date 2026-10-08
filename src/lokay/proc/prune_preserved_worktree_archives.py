@@ -79,15 +79,6 @@ def prune(
     """List expired archives; retain them without completion evidence."""
     root = Path(managed_root).expanduser()
     limit = PRESERVED_ARCHIVE_TTL_SECONDS if ttl is None else ttl
-    if os.environ.get("PYTEST_CURRENT_TEST") and _is_operator_lokay_worktrees(root):
-        return {
-            "ok": True,
-            "skipped": True,
-            "reason": "pytest_refuses_operator_lokay",
-            "pruned": [],
-            "pruned_count": 0,
-            "ttl_seconds": limit,
-        }
     expired = list_expired_archives(root, now=now, ttl=limit, direct=direct)
     if not live:
         return {

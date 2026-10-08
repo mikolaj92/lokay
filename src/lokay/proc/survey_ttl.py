@@ -55,9 +55,6 @@ def survey_stamp_path(begin: dict[str, Any] | None) -> Path | None:
 def survey_recently_empty(stamp: Path | None, *, now: float | None = None) -> bool:
     if stamp is None:
         return False
-    # Pytest must not skip GitHub surveys using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, SURVEY_STAMP_NAME):
-        return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:
@@ -118,10 +115,6 @@ def skip_idle_factory_pass(
     Pytest must not skip the operator lokay. Compose must still host Fala.
     """
     if not live:
-        return None
-    if os.environ.get("PYTEST_CURRENT_TEST") and (
-        stamp is None or is_operator_stamp(stamp, SURVEY_STAMP_NAME)
-    ):
         return None
     if stamp is None:
         stamp = lokay_home_stamp_path(SURVEY_STAMP_NAME)

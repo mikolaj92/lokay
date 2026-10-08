@@ -12,8 +12,6 @@ def occupied_repos_of(occupied=None) -> set[str]:
     """Live receipts occupy a repo. Pytest stays empty unless the test passes a set."""
     if occupied is not None:
         return {str(name) for name in occupied if name}
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return set()
     from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 
     return {

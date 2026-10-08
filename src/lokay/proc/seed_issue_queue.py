@@ -8,8 +8,6 @@ import os
 def seed(last: dict | None) -> dict:
     if isinstance(last, dict) and last:
         return last
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return {}
     from lokay.pass_receipt import read_pass_receipt
 
     receipt = read_pass_receipt() or {}
