@@ -1,4 +1,4 @@
-from lokay.intake import owner_command
+from lokay.owner_commands import owner_command
 
 
 def test_owner_commands():

@@ -1,9 +1,796 @@
-"""Owner command parsing. Not wired into the tick yet."""
+"""Deterministic issue intake: CLOSE | READY | SPLIT | SKIP.
+
+Cheap, testable checks that harden inbox triage before `ai:ready` sticks
+eligible for `issue_to_pr`. Pure rules first; no coding harness.
+
+Product law: humans author intentional issues; the lokay consumes. Trust the
+operator/assignee — prefer READY+implement autonomy; do not invent distrustful
+human gates. CLOSE / SPLIT / READY+implement are the default exits.
+CLOSE is for clear obsolete / wrong-shape / superseded cases only — do not
+bias toward distrusting every ticket. Foreign objections to the lokay's
+essence (what Lokay is) CLOSE; operational reports (hangs / does not work as
+described) stay. Former PARK is skip (no limbo label) after rules fail closed —
+never ai:frozen / needs-feedback / blocked; never the escape hatch for oversized
+work that can be auto-split. Legal exits: ready | split | skip | close.
+"""
+
+from __future__ import annotations
+
 import re
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
 
-_COMMAND = re.compile(r"(?m)^/lokay (build|skip|retry)\b")
+from lokay.issue_checkboxes import work_checkbox_count
+from lokay.models import Issue
+from lokay.stage_ledger import LABEL_WORK_READY
+from lokay.triage import is_parked, is_preflight_incident, is_undecided
+
+# --- Verdicts for one check ---
+PASS = "pass"
+CLOSE = "close"
+SPLIT = "split"
+PARK = "park"  # legacy check token; aggregate maps to skip
+INCONCLUSIVE = "inconclusive"
+BLOCKED = "blocked"
+
+MAX_CHECKBOXES_ONE_PASS = 5
+
+# Issue text that asks for platform-host playbooks (wrong on libraries/kits).
+_PLATFORM_HOST_WORK = re.compile(
+    r"(?i)\b("
+    r"product_shell|basecoat(?:-factory)?"
+    r"|/static/platform|static/platform"
+    r"|platform\s*ui(?:\s*audit)?"
+    r"|adopt\s+(?:full\s+)?(?:basecoat|product_shell|the\s+platform|platform\s+stack)"
+    r"|app[_-]?factory\s+compat"
+    r"|host\s+shell\s+must\s+extend"
+    r")\b"
+)
+
+_TRACKER_TITLE = re.compile(r"(?i)\b(?:tracker|epic)\b")
+
+# Concrete removal/delete of a path named in the issue.
+_REMOVE_QUOTED = re.compile(
+    r"(?i)\b(?:remove|delete|drop|erase)\s+[`'\"]([^`'\"]+)[`'\"]"
+)
+_REMOVE_PATH = re.compile(
+    r"(?i)\b(?:remove|delete|drop)\s+"
+    r"((?:src/|tests/|docs/|scripts/|fala/|compose/)?"
+    r"[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+\.[A-Za-z0-9]+)"
+)
+
+# Concrete add/create of a path (feature already present when file exists).
+_ADD_QUOTED = re.compile(
+    r"(?i)\b(?:add|create|introduce|restore)\s+[`'\"]([^`'\"]+)[`'\"]"
+)
+_ADD_PATH = re.compile(
+    r"(?i)\b(?:add|create|introduce)\s+"
+    r"((?:src/|tests/|docs/|scripts/|fala/)?"
+    r"[A-Za-z0-9_.\-]+(?:/[A-Za-z0-9_.\-]+)+\.[A-Za-z0-9]+)"
+)
+
+_ALREADY_ON_MAIN = re.compile(
+    r"(?i)\b("
+    r"already\s+on\s+main"
+    r"|already\s+(?:merged|implemented|present|landed|shipped)"
+    r"|landed\s+on\s+main"
+    r"|present\s+on\s+main"
+    r")\b"
+)
+
+_PR_URL = re.compile(
+    r"(?i)https?://github\.com/[^/\s]+/[^/\s]+/pull/(\d+)"
+)
+_PR_HASH = re.compile(r"(?i)\b(?:pr|pull\s*request)\s*#(\d+)\b")
+_ISSUE_HASH = re.compile(r"(?:^|[\s(,])#(\d+)\b")
+_SUPERSEDED_MARKERS = re.compile(
+    r"(?i)\b(superseded\s+by|already\s+(?:done|fixed|merged)|duplicate\s+of)\b"
+)
+_MULTI_EPIC = re.compile(r"(?i)\bepic\b")
+
+# Operational reports stay. Essence / soul / "should be something else" does not.
+_OPERATIONAL_REPORT = re.compile(
+    r"(?i)\b("
+    r"hangs?|hung|zawies|freeze[sd]?|stuck|utkn"
+    r"|crash(?:es|ed)?|pad(?:a|nie)|segfault"
+    r"|timeout|deadlock|traceback|exception"
+    r"|does\s+not\s+work|doesn't\s+work|nie\s+działa|nie\s+dziala"
+    r"|as\s+described|jak\s+opis"
+    r"|repro(?:duce)?|steps?\s+to\s+repro"
+    r"|error\s+when|fails?\s+when|failed\s+with"
+    r")\b"
+)
+_ESSENCE_OBJECTION = re.compile(
+    r"(?i)\b("
+    r"should\s+(?:be|not\s+be)\s+(?:a\s+)?(?:factory|lokay|harness|kanban|chat)"
+    r"|wrong\s+(?:product|philosophy|soul|essence|kwintesenc)"
+    r"|instead\s+of\s+(?:a\s+)?(?:lokay|factory|fala\s+graph)"
+    r"|nie\s+powin(?:ien|no)\s+(?:być|byc)\s+(?:młyn|mlynem|fabryk)"
+    r"|kwintesenc(?:ja|ji)|dusza\s+(?:lokaya|produktu)"
+    r"|zmien(?:ić|ic)\s+(?:wizj|dusz|kierunek|istot)"
+    r"|rewrite\s+(?:the\s+)?(?:product|soul|essence|vision)"
+    r"|this\s+should\s+(?:not\s+)?exist"
+    r"|dlaczego\s+(?:w\s+ogóle|w\s+ogole)\s+(?:to|lokay)"
+    r")\b"
+)
+
+_HOST_FILE_MARKERS = (
+    "product_shell",
+    "static/platform",
+    "platform_theme_locale",
+    "platform_auth",
+)
+_HOST_DIR_MARKERS = (
+    "static/platform",
+    "templates",
+)
+_LIBRARY_NAME_HINTS = (
+    "kit",
+    "library",
+    "sdk",
+    "crate",
+    "package",
+)
+_WEB_DEP_MARKERS = (
+    "fastapi",
+    "starlette",
+    "flask",
+    "django",
+    "jinja2",
+    "app-factory",
+    "app_factory",
+)
 
 
-def owner_command(text):
-    found = _COMMAND.findall(text or "")
-    return found[-1] if found else None
+@dataclass(frozen=True)
+class CheckResult:
+    """One deterministic intake check."""
+
+    check: str
+    verdict: str  # pass | close | split | park | inconclusive
+    reason: str
+    detail: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class IntakeDecision:
+    """Aggregated intake outcome for one issue."""
+
+    decision: str  # close | ready | split | park | skip
+    reason: str
+    checks: tuple[CheckResult, ...] = ()
+    add_labels: tuple[str, ...] = ()
+    remove_labels: tuple[str, ...] = ()
+    close: bool = False
+    comment: str | None = None
+    implementable: bool = False
+    semantic: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["checks"] = [c.to_dict() for c in self.checks]
+        return data
+
+
+@dataclass(frozen=True)
+class RepoShape:
+    """Filesystem heuristics for playbook fitness."""
+
+    kind: str  # host | library | empty | unknown
+    signals: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"kind": self.kind, "signals": list(self.signals)}
+
+
+def _bounded_file_signals(root: Path, *, limit: int = 400) -> tuple[list[str], list[Path]]:
+    """Walk a few hundred files for host markers; return signals + html paths."""
+    signals: list[str] = []
+    html: list[Path] = []
+    seen = 0
+    skip_dirs = {".git", ".venv", "node_modules", "dist", "build", ".tox", "__pycache__"}
+    for dirpath, dirnames, filenames in root.walk():
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
+        for name in filenames:
+            seen += 1
+            path = Path(dirpath) / name
+            rel = str(path.relative_to(root)).replace("\\", "/")
+            lower = rel.lower()
+            if lower.endswith(".html"):
+                html.append(path)
+            if "product_shell" in lower:
+                signals.append("file:product_shell")
+            if "static/platform/" in lower or lower.endswith("static/platform"):
+                signals.append("path:static/platform")
+            if seen >= limit:
+                return signals, html
+    return signals, html
+
+
+def probe_repo_shape(clone_path: Path | None) -> RepoShape:
+    """Classify a checkout as host / library / empty / unknown (pure FS)."""
+    if clone_path is None:
+        return RepoShape(kind="unknown", signals=("no_clone_path",))
+    root = Path(clone_path)
+    if not root.is_dir():
+        return RepoShape(kind="unknown", signals=("clone_missing",))
+
+    signals: list[str] = []
+    try:
+        entries = [p for p in root.iterdir() if p.name not in {".git", ".venv", "node_modules"}]
+    except OSError:
+        return RepoShape(kind="unknown", signals=("clone_unreadable",))
+    if not entries:
+        return RepoShape(kind="empty", signals=("no_entries",))
+
+    text_blobs: list[str] = []
+    for rel in ("README.md", "README.rst", "README", "pyproject.toml", "Package.swift"):
+        path = root / rel
+        if path.is_file():
+            try:
+                text_blobs.append(path.read_text(encoding="utf-8", errors="replace")[:8000])
+            except OSError:
+                continue
+
+    joined = "\n".join(text_blobs).lower()
+    host_hits = 0
+    for marker in _HOST_DIR_MARKERS:
+        if (root / marker).exists():
+            host_hits += 1
+            signals.append(f"dir:{marker}")
+    for marker in _HOST_FILE_MARKERS:
+        if marker in joined:
+            host_hits += 1
+            signals.append(f"text:{marker}")
+
+    walk_signals, html_templates = _bounded_file_signals(root)
+    signals.extend(walk_signals)
+    if "file:product_shell" in walk_signals:
+        host_hits += 1
+    if "path:static/platform" in walk_signals:
+        host_hits += 1
+    if html_templates:
+        host_hits += 1
+        signals.append("html_templates")
+
+    web_dep = any(m in joined for m in _WEB_DEP_MARKERS)
+    if web_dep:
+        signals.append("web_dependency")
+
+    uniq = tuple(dict.fromkeys(signals))
+    if host_hits >= 2 or (host_hits >= 1 and web_dep):
+        return RepoShape(kind="host", signals=uniq)
+
+    swift_only = (root / "Package.swift").is_file() and not html_templates and not web_dep
+    lib_hint = any(h in joined for h in _LIBRARY_NAME_HINTS)
+    name_hint = any(h in root.name.lower() for h in ("kit", "lib", "sdk", "crate"))
+    has_src_pkg = (root / "src").is_dir() or (root / "Package.swift").is_file()
+    no_web = not html_templates and not web_dep and "product_shell" not in joined
+    if no_web and (lib_hint or name_hint or has_src_pkg or swift_only):
+        extra = list(uniq)
+        if lib_hint:
+            extra.append("readme_library_hint")
+        if name_hint:
+            extra.append("name_library_hint")
+        if has_src_pkg:
+            extra.append("src_or_swift_package")
+        if swift_only:
+            extra.append("swift_only")
+        return RepoShape(kind="library", signals=tuple(dict.fromkeys(extra)))
+
+    if len(entries) <= 2 and not html_templates:
+        return RepoShape(kind="empty", signals=tuple(dict.fromkeys([*uniq, "sparse_tree"])))
+
+    return RepoShape(kind="unknown", signals=uniq)
+
+
+def issue_requests_platform_host(issue: Issue) -> bool:
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    return bool(_PLATFORM_HOST_WORK.search(blob))
+
+
+def named_removal_paths(issue: Issue) -> list[str]:
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    found: list[str] = []
+    for match in _REMOVE_QUOTED.finditer(blob):
+        found.append(match.group(1).strip())
+    for match in _REMOVE_PATH.finditer(blob):
+        found.append(match.group(1).strip())
+    return list(dict.fromkeys(p for p in found if p and ".." not in p and not p.startswith("/")))
+
+
+def named_add_paths(issue: Issue) -> list[str]:
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    found: list[str] = []
+    for match in _ADD_QUOTED.finditer(blob):
+        found.append(match.group(1).strip())
+    for match in _ADD_PATH.finditer(blob):
+        found.append(match.group(1).strip())
+    return list(dict.fromkeys(p for p in found if p and ".." not in p and not p.startswith("/")))
+
+
+def referenced_pr_numbers(issue: Issue) -> list[int]:
+    blob = f"{issue.title or ''}\n{issue.body or ''}"
+    nums = [int(x) for x in _PR_URL.findall(blob)]
+    nums.extend(int(x) for x in _PR_HASH.findall(blob))
+    return list(dict.fromkeys(nums))
+
+
+def checkbox_count(body: str) -> int:
+    """Work checkboxes only — template Subsystem/Environment tags do not count."""
+    return work_checkbox_count(body)
+
+
+def check_open(*, state: str | None) -> CheckResult:
+    """Issue must still be open upstream."""
+    normalized = (state or "OPEN").strip().upper()
+    if normalized in {"", "OPEN"}:
+        return CheckResult(check="open", verdict=PASS, reason="issue_open", detail={"state": normalized or "OPEN"})
+    return CheckResult(
+        check="open",
+        verdict=CLOSE,
+        reason="issue_already_closed",
+        detail={"state": normalized},
+    )
+
+
+def check_preflight_incident(issue: Issue) -> CheckResult:
+    """Self-repair incidents are not product work for issue_to_pr."""
+    if is_preflight_incident(title=issue.title or "", body=issue.body or ""):
+        return CheckResult(
+            check="preflight_incident",
+            verdict=BLOCKED,
+            reason="preflight_incident",
+            detail={"title": issue.title or ""},
+        )
+    return CheckResult(
+        check="preflight_incident",
+        verdict=PASS,
+        reason="not_preflight_incident",
+    )
+
+
+def check_superseded(
+    issue: Issue,
+    *,
+    merged_prs: Iterable[int] = (),
+    closed_tracker_done: bool = False,
+    tracker_refs: Iterable[str] = (),
+) -> CheckResult:
+    """Superseding evidence: merged linked PR or closed/done tracker/epic."""
+    merged = sorted({int(x) for x in merged_prs})
+    if merged:
+        return CheckResult(
+            check="superseded",
+            verdict=CLOSE,
+            reason="linked_pr_merged",
+            detail={"merged_prs": merged},
+        )
+    title = issue.title or ""
+    blob = f"{title}\n{issue.body or ''}"
+    trackerish = bool(_TRACKER_TITLE.search(title))
+    if closed_tracker_done and (
+        trackerish or _SUPERSEDED_MARKERS.search(blob) or _MULTI_EPIC.search(title)
+    ):
+        return CheckResult(
+            check="superseded",
+            verdict=CLOSE,
+            reason="tracker_already_done",
+            detail={"tracker_refs": list(tracker_refs)},
+        )
+    if _SUPERSEDED_MARKERS.search(blob) and merged:
+        return CheckResult(
+            check="superseded",
+            verdict=CLOSE,
+            reason="explicit_superseded_marker",
+            detail={"tracker_refs": list(tracker_refs), "merged_prs": merged},
+        )
+    return CheckResult(check="superseded", verdict=PASS, reason="no_supersede_evidence")
+
+
+def check_duplicate_ai_pr(
+    issue: Issue,
+    *,
+    covering_prs: Iterable[dict[str, Any]] = (),
+) -> CheckResult:
+    """CLOSE when an open or merged ai/fix PR already covers this issue."""
+    rows = [p for p in covering_prs if isinstance(p, dict) and p.get("number")]
+    if not rows:
+        return CheckResult(check="duplicate_ai_pr", verdict=PASS, reason="no_covering_ai_pr")
+    detail = {
+        "prs": [
+            {
+                "number": int(p["number"]),
+                "state": str(p.get("state") or "OPEN").upper(),
+                "merged": bool(p.get("merged")),
+            }
+            for p in rows
+        ],
+        "issue": int(issue.number),
+    }
+    return CheckResult(
+        check="duplicate_ai_pr",
+        verdict=CLOSE,
+        reason="duplicate_ai_pr_for_issue",
+        detail=detail,
+    )
+
+
+def _issue_is_operator(issue: Issue, *, trusted_assignee: str) -> bool:
+    login = (trusted_assignee or "").strip().lower()
+    if not login:
+        return False
+    if (issue.author or "").strip().lower() == login:
+        return True
+    return login in {a.strip().lower() for a in (issue.assignees or []) if a}
+
+
+def check_essence_objection(
+    issue: Issue,
+    *,
+    trusted_assignee: str = "mikolaj92",
+    agent: dict | None = None,
+) -> CheckResult:
+    if _issue_is_operator(issue, trusted_assignee=trusted_assignee):
+        return CheckResult(
+            check="essence",
+            verdict=PASS,
+            reason="operator_authored",
+            detail={"author": issue.author, "assignees": list(issue.assignees or [])},
+        )
+    if agent is None:
+        return CheckResult(check="essence", verdict=PASS, reason="no_agent", detail={"author": issue.author})
+    verdict = CLOSE if str(agent.get("verdict") or "").strip().lower() == "close" else PASS
+    reason = str(agent.get("reason") or "agent_essence").strip() or "agent_essence"
+    return CheckResult(check="essence", verdict=verdict, reason=reason, detail={"author": issue.author})
+
+
+def check_shape(issue: Issue, shape: RepoShape) -> CheckResult:
+    """Playbook fitness: reject platform-host work on libraries/kits/empty/Swift-only."""
+    wants_host = issue_requests_platform_host(issue)
+    detail = {"repo_kind": shape.kind, "signals": list(shape.signals), "platform_host_work": wants_host}
+    if not wants_host:
+        return CheckResult(check="shape", verdict=PASS, reason="not_platform_host_playbook", detail=detail)
+    if shape.kind == "host":
+        return CheckResult(check="shape", verdict=PASS, reason="host_repo_fit", detail=detail)
+    if shape.kind in {"library", "empty"}:
+        return CheckResult(
+            check="shape",
+            verdict=CLOSE,
+            reason="wrong_product_shape",
+            detail=detail,
+        )
+    # unknown tree — do not READY platform adoption blindly
+    return CheckResult(
+        check="shape",
+        verdict=PARK,
+        reason="host_markers_unclear",
+        detail=detail,
+    )
+
+
+def check_satisfied(issue: Issue, *, clone_path: Path | None, agent: dict | None = None) -> CheckResult:
+    """Already-satisfied from the agent's paths, checked against the tree."""
+    del issue
+    verdict = agent or {}
+    if verdict.get("already_on_main") is True:
+        return CheckResult(check="satisfied", verdict=CLOSE, reason="already_on_main_marker", detail={})
+
+    remove_paths = [str(p) for p in (verdict.get("remove_paths") or []) if str(p).strip()]
+    add_paths = [str(p) for p in (verdict.get("add_paths") or []) if str(p).strip()]
+    if not remove_paths and not add_paths:
+        return CheckResult(check="satisfied", verdict=PASS, reason="no_concrete_paths")
+
+    if clone_path is None or not Path(clone_path).is_dir():
+        return CheckResult(
+            check="satisfied",
+            verdict=INCONCLUSIVE,
+            reason="clone_unavailable_for_path_check",
+            detail={"remove_paths": remove_paths, "add_paths": add_paths},
+        )
+
+    root = Path(clone_path)
+    detail: dict[str, Any] = {
+        "remove_paths": remove_paths,
+        "add_paths": add_paths,
+    }
+
+    if remove_paths:
+        missing = [p for p in remove_paths if not (root / p).exists()]
+        present = [p for p in remove_paths if (root / p).exists()]
+        detail["already_absent"] = missing
+        detail["still_present"] = present
+        if not present:
+            return CheckResult(
+                check="satisfied",
+                verdict=CLOSE,
+                reason="already_satisfied_on_main",
+                detail=detail,
+            )
+
+    if add_paths:
+        present_adds = [p for p in add_paths if (root / p).exists()]
+        missing_adds = [p for p in add_paths if not (root / p).exists()]
+        detail["feature_present"] = present_adds
+        detail["feature_missing"] = missing_adds
+        if present_adds and not missing_adds:
+            return CheckResult(
+                check="satisfied",
+                verdict=CLOSE,
+                reason="feature_already_present",
+                detail=detail,
+            )
+
+    return CheckResult(check="satisfied", verdict=PASS, reason="work_still_needed", detail=detail)
+
+
+def _bounded_contexts(body: str) -> tuple[str, ...]:
+    """Second path segment under src/ is the bounded context. Nothing is invented."""
+    found: list[str] = []
+    for line in (body or "").splitlines():
+        match = re.search(r"(?:^|[\s`])src/([A-Za-z0-9_.-]+)/", line)
+        if match:
+            found.append(match.group(1))
+    return tuple(dict.fromkeys(found))
+
+
+
+
+
+
+def check_ambiguity(issue: Issue, root: Path | None = None, *, agent: dict | None = None) -> CheckResult:
+    """Ambiguity comes from the agent. No agent verdict passes."""
+    del issue, root
+    verdict = str((agent or {}).get("verdict") or "pass").strip().lower()
+    if verdict not in {SPLIT, PARK}:
+        verdict = PASS
+    reason = str((agent or {}).get("reason") or "agent_ambiguity").strip() or "agent_ambiguity"
+    if agent is None:
+        reason = "no_agent"
+    return CheckResult(check="ambiguity", verdict=verdict, reason=reason, detail={})
+
+
+def aggregate_intake(
+    checks: Iterable[CheckResult],
+    *,
+    ready_label: str = "ai:ready",
+    needs_feedback_label: str = "ai:needs-feedback",
+    skip: bool = False,
+    skip_reason: str = "",
+    force_split: bool = False,
+) -> IntakeDecision:
+    """Aggregate check verdicts → CLOSE | READY | SPLIT | PARK | skip."""
+    checked = tuple(checks)
+    if skip:
+        return IntakeDecision(
+            decision="skip",
+            reason=skip_reason or "skip",
+            checks=checked,
+            implementable=False,
+        )
+
+    blocked_hit = next((c for c in checked if c.verdict == BLOCKED), None)
+    if blocked_hit is not None:
+        return IntakeDecision(
+            decision="skip",
+            reason=blocked_hit.reason,
+            checks=checked,
+            add_labels=(),
+            remove_labels=(ready_label, LABEL_WORK_READY, needs_feedback_label, "ai:frozen", "ai:blocked"),
+            comment=(
+                "Skipped (factory): lokay preflight incident. Self-repair owns this, "
+                "not issue_to_pr. No limbo label."
+            ),
+            implementable=False,
+        )
+
+    close_hit = next((c for c in checked if c.verdict == CLOSE), None)
+    if close_hit is not None:
+        comment = _close_comment(close_hit, checked)
+        return IntakeDecision(
+            decision="close",
+            reason=close_hit.reason,
+            checks=checked,
+            remove_labels=(ready_label,),
+            close=True,
+            comment=comment,
+            implementable=False,
+        )
+
+    split_hit = next((c for c in checked if c.verdict == SPLIT), None)
+    if split_hit is not None or force_split:
+        hit = split_hit or CheckResult(
+            check="ambiguity",
+            verdict=SPLIT,
+            reason="triage_split_candidate",
+            detail={},
+        )
+        return IntakeDecision(
+            decision="split",
+            reason=hit.reason,
+            checks=checked,
+            remove_labels=(ready_label,),
+            comment=_split_comment(hit),
+            implementable=False,
+        )
+
+    park_hit = next((c for c in checked if c.verdict == PARK), None)
+    if park_hit is not None:
+        return IntakeDecision(
+            decision="skip",
+            reason=park_hit.reason,
+            checks=checked,
+            add_labels=(),
+            remove_labels=(ready_label, needs_feedback_label, "ai:frozen", "ai:blocked"),
+            comment=_park_comment(park_hit),
+            implementable=False,
+        )
+
+    inconclusive = [c for c in checked if c.verdict == INCONCLUSIVE]
+    if inconclusive:
+        # Fail closed: do not READY when evidence is missing.
+        hit = inconclusive[0]
+        return IntakeDecision(
+            decision="skip",
+            reason=f"inconclusive_{hit.reason}",
+            checks=checked,
+            add_labels=(),
+            remove_labels=(ready_label, needs_feedback_label, "ai:frozen", "ai:blocked"),
+            comment=(
+                f"Skipped (factory): intake check incomplete ({hit.check}: {hit.reason}). "
+                "No limbo label — clarify paths or ensure clone is available."
+            ),
+            implementable=False,
+        )
+
+    return IntakeDecision(
+        decision="ready",
+        reason="intake_ok",
+        checks=checked,
+        add_labels=tuple(dict.fromkeys((ready_label, LABEL_WORK_READY))),
+        implementable=True,
+        comment=None,
+    )
+
+
+def _close_comment(hit: CheckResult, checks: tuple[CheckResult, ...]) -> str:
+    reasons = ", ".join(f"{c.check}={c.reason}" for c in checks if c.verdict == CLOSE)
+    if hit.reason == "wrong_product_shape":
+        kind = (hit.detail or {}).get("repo_kind", "non-host")
+        return (
+            f"Closed (intake): platform-host/Basecoat playbook on {kind!r} repo "
+            "(library/kit/empty/Swift-only). Reopen on a real web host if needed."
+        )
+    if hit.reason == "already_satisfied_on_main":
+        absent = ", ".join((hit.detail or {}).get("already_absent") or []) or "named paths"
+        return f"Closed (intake): removal targets already absent on main ({absent})."
+    if hit.reason == "feature_already_present":
+        present = ", ".join((hit.detail or {}).get("feature_present") or []) or "named paths"
+        return f"Closed (intake): add targets already present on main ({present})."
+    if hit.reason == "already_on_main_marker":
+        return "Closed (intake): issue states work is already on main / implemented."
+    if hit.reason == "linked_pr_merged":
+        prs = ", ".join(f"#{n}" for n in (hit.detail or {}).get("merged_prs") or [])
+        return f"Closed (intake): linked PR(s) merged ({prs or 'see body'})."
+    if hit.reason == "tracker_already_done":
+        return "Closed (intake): tracker/epic already closed or superseded by merged work."
+    if hit.reason == "duplicate_ai_pr_for_issue":
+        prs = ", ".join(
+            f"#{p.get('number')}" for p in (hit.detail or {}).get("prs") or [] if p.get("number")
+        )
+        return f"Closed (intake): duplicate of existing AI PR ({prs or 'see branch'})."
+    if hit.reason == "issue_already_closed":
+        return "Closed (intake): already closed upstream."
+    if hit.reason == "foreign_essence_objection":
+        return (
+            "Closed (intake): objection to what Lokay is, not a report that it "
+            "hangs or does not work as described. Soul / quintessence is set by "
+            "the operator. File a hang or a mismatch with the written contract "
+            "if something is broken."
+        )
+    return f"Closed (intake): {reasons or hit.reason}."
+
+
+def _split_comment(hit: CheckResult) -> str:
+    return (
+        f"Split queued (intake: {hit.reason}). "
+        "Parent will become a tracker; child issues get the implementable slices."
+    )
+
+
+def _park_comment(hit: CheckResult) -> str:
+    return (
+        f"Skipped (factory): intake will not mark ai:ready ({hit.check}: {hit.reason}). "
+        "No limbo label — clarify a single implementable ask, split, or leave open."
+    )
+
+
+def should_run_intake(
+    issue_labels: list[str],
+    *,
+    ready_label: str,
+    needs_feedback_label: str,
+    blocked_label: str,
+    candidate_ready: bool = False,
+    candidate_split: bool = False,
+) -> tuple[bool, str]:
+    """Intake runs for ready/split candidates; skips parked / undecided / human-parked."""
+    if is_parked(issue_labels):
+        return False, "parked_tracker"
+    labels = set(issue_labels)
+    if ready_label in labels:
+        return True, "already_ready"
+    if candidate_split:
+        return True, "triage_split_candidate"
+    if candidate_ready:
+        # Upstream triage decided ready (including dry-run where labels are not applied).
+        return True, "triage_ready_candidate"
+    if blocked_label in labels:
+        return False, "blocked"
+    # Stale needs-feedback is not a human skip-gate; re-triage/intake may strip it.
+    _ = needs_feedback_label
+    # Undecided inbox: triage_issue should have run first in issue_triage.
+    # If somehow still undecided, skip (do not READY from intake alone).
+    if is_undecided(
+        issue_labels,
+        ready_label=ready_label,
+        blocked_label=blocked_label,
+        needs_feedback_label=needs_feedback_label,
+    ):
+        return False, "undecided_await_triage"
+    return False, "not_ready_candidate"
+
+
+def decide_intake(
+    issue: Issue,
+    *,
+    state: str | None = "OPEN",
+    clone_path: Path | None = None,
+    merged_prs: Iterable[int] = (),
+    covering_prs: Iterable[dict[str, Any]] = (),
+    closed_tracker_done: bool = False,
+    tracker_refs: Iterable[str] = (),
+    ready_label: str = "ai:ready",
+    needs_feedback_label: str = "ai:needs-feedback",
+    trusted_assignee: str = "mikolaj92",
+    run: bool = True,
+    skip_reason: str = "",
+    force_split: bool = False,
+    agent: dict | None = None,
+) -> IntakeDecision:
+    """Run all deterministic checks and aggregate (pure aside from provided evidence)."""
+    if not run:
+        return aggregate_intake(
+            (),
+            ready_label=ready_label,
+            needs_feedback_label=needs_feedback_label,
+            skip=True,
+            skip_reason=skip_reason or "not_candidate",
+        )
+    shape = probe_repo_shape(clone_path)
+    checks = (
+        check_open(state=state),
+        check_preflight_incident(issue),
+        check_superseded(
+            issue,
+            merged_prs=merged_prs,
+            closed_tracker_done=closed_tracker_done,
+            tracker_refs=tracker_refs,
+        ),
+        check_duplicate_ai_pr(issue, covering_prs=covering_prs),
+        check_essence_objection(issue, trusted_assignee=trusted_assignee, agent=agent),
+        check_shape(issue, shape),
+        check_satisfied(issue, clone_path=clone_path, agent=agent),
+        check_ambiguity(issue, root=clone_path, agent=agent),
+    )
+    return aggregate_intake(
+        checks,
+        ready_label=ready_label,
+        needs_feedback_label=needs_feedback_label,
+        force_split=force_split,
+    )
