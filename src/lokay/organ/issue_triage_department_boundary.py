@@ -53,6 +53,9 @@ def handle_issue_triage_department(
     if atom.startswith("run_issue_sieve_row_"):
         from lokay.proc.run_issue_sieve_row import run
 
+        selected = up.get(f"select_issue_sieve_slot_{slot}") or {}
+        if selected.get("route") != "run":
+            return {"ok": True, "route": "empty", "slot": slot}
         prepared = up.get("prepare_issue_sieve") or {}
         previous = up.get(f"classify_issue_sieve_row_{slot-1}") or {}
         last = previous.get("result") if previous.get("result") else prepared.get("last")

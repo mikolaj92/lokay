@@ -8,7 +8,7 @@ def classify(selected: dict, row: dict, *, prepared: dict, previous: dict | None
     slot = int(selected.get("slot") or 0)
     if str(selected.get("route") or "") != "run":
         return {"ok": True, "route": "empty", "slot": slot}
-    spent = int(prepared.get("spent") or 0) + slot
+    spent = int(prepared.get("spent") or 0) + 1
     budget = int(prepared.get("cap") or prepared.get("budget") or 0)
     decision = classify_row(
         row,
@@ -25,7 +25,7 @@ def classify(selected: dict, row: dict, *, prepared: dict, previous: dict | None
     last = {
         **result,
         "department": "issue_triage",
-        "launched": None,
+        "launched": result.get("launched"),
         "leftover": leftover,
         "leftover_issues": leftover_issues,
     }
@@ -53,5 +53,5 @@ def classify(selected: dict, row: dict, *, prepared: dict, previous: dict | None
         "result": last,
         "decisions": decisions,
         "department": "issue_triage",
-        "launched": None,
+        "launched": result.get("launched"),
     }

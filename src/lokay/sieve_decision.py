@@ -69,11 +69,6 @@ def attach(listed: dict, triage: dict) -> dict:
         decision = decisions.get((row.get("repo"), row.get("issue")))
         if decision:
             row["sieve_decision"] = decision
-            if decision["route"] == "do":
-                labels = [str(item) for item in list(row.get("labels") or []) if str(item)]
-                if "ai:ready" not in labels and "ready-for-agent" not in labels:
-                    labels.append("ai:ready")
-                row["labels"] = labels
         rows.append(row)
     return {**listed, "issues": rows}
 

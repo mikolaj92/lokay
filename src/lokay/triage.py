@@ -140,23 +140,6 @@ def decide_issue(
     needs_feedback_label: str = "ai:needs-feedback",
 ) -> TriageDecision:
     """Classify one issue. Pure — no I/O."""
-    labels = list(issue.labels or [])
-    if is_parked(labels):
-        return TriageDecision(
-            decision="skip",
-            reason="parked_tracker",
-        )
-    if not is_undecided(
-        labels,
-        ready_label=ready_label,
-        blocked_label=blocked_label,
-        needs_feedback_label=needs_feedback_label,
-    ):
-        return TriageDecision(
-            decision="skip",
-            reason="already_decided",
-        )
-
     title = (issue.title or "").strip()
     body = (issue.body or "").strip()
 
@@ -196,6 +179,6 @@ def decide_issue(
     return TriageDecision(
         decision="ready",
         reason="spec_ok",
-        add_labels=tuple(dict.fromkeys((ready_label, LABEL_WORK_READY))),
+        add_labels=(),
         comment=None,
     )

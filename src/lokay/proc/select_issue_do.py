@@ -71,6 +71,8 @@ def select(picked: dict, triage_run: dict, listed: dict | None = None) -> dict:
             "repo": repo,
             "issue": issue,
         }
+    if picked.get("route") == "issue":
+        return {**base, "route": "do", "repo": repo, "issue": issue}
     if picked.get("route") != "issue":
         return {**base, "route": "skip", "reason": "no_issue"}
     if sito.get("route") == "ready":
