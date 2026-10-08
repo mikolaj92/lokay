@@ -70,6 +70,11 @@ def publish(*, cfg, repo: str, pr: int, evidence: dict, selected: dict, live: bo
             reason=str(selected.get("reason") or "review_not_validated"),
             applied=applied_fail_closed, execution={"source": "open-code-review"},
         )
+    if route == "infra":
+        return ok(repo=repo, pr=pr, head_sha=str(evidence.get("head_sha") or ""),
+                  decision={"verdict": "infra_failure", "reason": str(selected.get("reason") or "infra_failure")},
+                  merge_ok=False, reason=str(selected.get("reason") or "infra_failure"),
+                  applied=False, execution={"source": "open-code-review"})
     if route != "publish":
         return ok(repo=repo, pr=pr, head_sha=str(evidence.get("head_sha") or ""),
                   decision={"verdict": "fail_closed"}, merge_ok=False,

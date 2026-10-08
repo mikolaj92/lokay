@@ -73,6 +73,7 @@ limits:
 # GitHub Actions and remote CI are not used. Secrets / needs_human /
 # escalated ai:needs-review still fail closed.
 merge:
-  enabled: true
+  enabled: false
+  mode: off
   require_checks: false
   require_llm_review: true

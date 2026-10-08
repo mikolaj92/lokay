@@ -125,9 +125,6 @@ class Config:
     def __post_init__(self) -> None:
         if self.worktrees_layout not in ("legacy", "clone-siblings"):
             raise ValueError("worktrees.layout must be legacy or clone-siblings")
-        if self.merge_enabled and self.merge_mode == "off":
-            self.merge_mode = "always"
-
     disabled_repos: list[str] = field(default_factory=list)
 
     def active_repos(self) -> list[RepoConfig]:
@@ -228,9 +225,14 @@ _FALSE_TOKENS = frozenset({"0", "false", "no", "off"})
 
 
 def _yaml_mode(value: Any, *, merge_enabled: bool) -> str:
-    """Parse merge.mode. Absent keeps the old meaning of merge.enabled."""
+    """Parse merge.mode. Absent stays off. always must be written."""
+    del merge_enabled
     if value is None or value == "":
-        return "always" if merge_enabled else "off"
+        return "off"
+    if value is False:
+        value = "off"
+    if value is True:
+        value = "always"
     mode = str(value).strip().lower()
     if mode not in {"off", "classify", "always"}:
         raise ValueError(f"merge.mode must be off, classify, or always, got {value!r}")

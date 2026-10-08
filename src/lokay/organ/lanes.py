@@ -138,10 +138,17 @@ def handle_lanes(
             pr_labels=inputs.get("pr_labels") or inputs.get("labels"),
         )
         if gate.action != "merge":
+            labels: list[str] = []
+            decision = review.get("decision") if isinstance(review, dict) else None
+            if gate.reason == "merge_disabled" and isinstance(decision, dict) and decision.get("merge_ok") is True:
+                labels = ["ai:merge-ready"]
+                from lokay.proc.pr_label import main as label_main
+                label_main(["--repo", repo, "--pr", str(pr_number), "--label", "ai:merge-ready"])
             return {
                 "ok": True,
                 "skipped": True,
                 "reason": gate.reason,
+                "labels": labels,
                 "status": checks.get("status"),
                 "repo": repo,
                 "pr": pr_number,
@@ -172,11 +179,13 @@ def handle_lanes(
             from lokay.proc.delivery_closeout import validate
             try:
                 intent = validate((up.get('prepare_delivery_closeout') or {}).get('intent') or {})
-                if (intent['repo'], intent['pr'], intent['branch'], intent['head_sha']) != (repo, pr_number, branch, head):
-                    raise ValueError('intent identity mismatch')
-            except (ValueError, KeyError, TypeError):
+            except ValueError:
                 return {'ok': True, 'skipped': True, 'waiting': True,
                         'reason': 'delivery_closeout_intent_missing'}
+            if (intent['repo'], intent['pr'], intent['issue'], intent['branch'], intent['head_sha']) != (repo, pr_number, issue_number, branch, head):
+                return {'ok': True, 'skipped': True, 'waiting': True, 'reason': 'delivery_closeout_intent_mismatch'}
+        cfg = ["--config", str(inputs.get("config_path"))] if inputs.get("config_path") else []
+        live = ["--live"] if inputs.get("live") else []
         argv = [*cfg, *live, "--repo", repo, "--pr", str(pr_number),
                 "--expected-head-sha", head]
         if issue_number is not None:
