@@ -39,14 +39,16 @@ def legal_after_code(facts):
 
 
 def legal_doctor(facts):
+    """D9. A red probe, including merge plumbing, makes ok illegal (#1627).
+
+    host_ff is legal only when the checkout is strictly behind, clean, and unleased.
+    """
     if facts['probes_green']:
         return ['ok']
     options = ['wait', 'pause']
-    if not facts['hard_red']:
-        options.append('ok')
-    if facts['behind'] > 0 and facts['ahead'] == 0 and not facts['dirty'] and not facts['lease_held']:
+    if facts['behind'] > 0 and facts['ahead'] == 0 and not facts['dirty'] and not facts['lease_held'] and not facts['hard_red']:
         options.append('host_ff')
-    if facts['stale_worktrees']:
+    if facts['stale_worktrees'] and not facts['hard_red']:
         options.append('reap_worktrees')
     return options
 
