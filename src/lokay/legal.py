@@ -95,14 +95,43 @@ def legal_pick(facts):
 
 
 def legal_disposition(facts):
+    """D7 options. `ready` is the old `ready_for_human` (#1625).
+
+    `repair` needs a blocking finding or a hard fact, a round still left,
+    and progress since the previous round. A grade below its bar is not a veto.
+    """
     options = ['needs_human']
-    if not facts['veto'] and facts['review_round'] < facts['review_rounds_max']:
-        options.append('ready_for_human')
-    if facts['review_round'] < facts['review_rounds_max']:
+    if _ready(facts):
+        options.append('ready')
+    if _repair(facts):
         options.append('repair')
-    if facts['issue_closed'] or facts['superseded']:
+    if facts.get('issue_closed') or facts.get('superseded'):
         options.append('close_pr')
     return options
+
+
+def _ready(facts):
+    if facts.get('veto') or facts.get('blocking') or facts.get('hard_fact') or facts.get('owner_changes'):
+        return False
+    if int(facts.get('review_round') or 0) >= int(facts.get('review_rounds_max') or 3):
+        return False
+    if facts.get('behavior_change') and facts.get('swarm') != 'green':
+        return False
+    if len(facts.get('abstained') or []) >= 2:
+        return False
+    return True
+
+
+def _repair(facts):
+    if facts.get('owner_changes'):
+        return False
+    if int(facts.get('review_round') or 0) >= int(facts.get('review_rounds_max') or 3):
+        return False
+    if not facts.get('blocking') and not facts.get('hard_fact'):
+        return False
+    if int(facts.get('review_round') or 0) >= 2 and not facts.get('progress', True):
+        return False
+    return True
 
 LENSES = ('scope', 'correctness', 'security', 'production', 'alignment', 'testing', 'architecture')
 
