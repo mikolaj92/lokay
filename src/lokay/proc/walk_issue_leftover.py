@@ -14,6 +14,7 @@ CONSUME = frozenset(
         "close",
         "decision_uncertain",
         "decision_input_too_large",
+        "off_goal_parked",
     }
 )
 READY_LABELS = frozenset({"work:ready", "ai:ready", "ready-for-agent"})
