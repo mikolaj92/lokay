@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import selectors
 import signal
 import subprocess
@@ -11,20 +12,32 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-DEFAULT_PI_COMMAND = (
-    "auth",
-    "print-api-key",
-    "--provider",
-    "omniroute",
-)
+# The host names its Pi provider through PI_PROVIDER (the lokay-service and
+# Fala secret handles already carry it). Omniroute stays the last-resort
+# default so a bare host still gets one deterministic command.
+DEFAULT_PI_PROVIDER = "omniroute"
+_PROVIDER_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 _MAX_RESOLVER_OUTPUT_BYTES = 4096
 _ALLOWED_ENVIRONMENT = frozenset({"HOME", "PATH", "LANG", "NO_COLOR", "TERM"})
 
 
+def pi_provider() -> str:
+    """Return the provider Pi is asked about: PI_PROVIDER, else the default."""
+    value = os.environ.get("PI_PROVIDER", "").strip()
+    if not value:
+        return DEFAULT_PI_PROVIDER
+    if not _PROVIDER_PATTERN.fullmatch(value):
+        raise PiCredentialError("Pi credential provider name is invalid")
+    return value
+
+
 def default_resolver_command() -> tuple[str, ...]:
-    """Return the Pi auth command through mise's stable installation alias."""
+    """Return the Pi auth command for the host's provider via mise's alias.
+
+    Raises ``PiCredentialError`` when ``PI_PROVIDER`` holds an unusable name.
+    """
     executable = resolver_home() / ".local/share/mise/installs/pi/latest/pi/pi"
-    return (str(executable), *DEFAULT_PI_COMMAND)
+    return (str(executable), "auth", "print-api-key", "--provider", pi_provider())
 
 
 def resolver_home() -> Path:
@@ -47,6 +60,10 @@ def _production_command(command: Sequence[str] | None) -> tuple[str, ...]:
 
 class PiCredentialError(RuntimeError):
     """The configured Pi resolver did not produce one safe credential."""
+
+
+class PiCredentialUnavailable(PiCredentialError):
+    """Pi ran but holds no credential for the requested provider."""
 
 
 def _resolver_environment(*, home: Path | None = None) -> dict[str, str]:
@@ -121,7 +138,9 @@ def _run_resolver(
                         "Pi credential resolver output exceeded size limit"
                     )
         if process.wait(timeout=max(0.1, deadline - time.monotonic())) != 0:
-            raise PiCredentialError("Pi credential resolver failed")
+            raise PiCredentialUnavailable(
+                "Pi credential resolver did not produce a credential"
+            )
         return bytes(output)
     except PiCredentialError:
         _kill_process_group(process)
@@ -155,7 +174,9 @@ def _run_with_runner(
     if len(stdout) > _MAX_RESOLVER_OUTPUT_BYTES:
         raise PiCredentialError("Pi credential resolver output exceeded size limit")
     if completed.returncode != 0:
-        raise PiCredentialError("Pi credential resolver failed")
+        raise PiCredentialUnavailable(
+            "Pi credential resolver did not produce a credential"
+        )
     return bytes(stdout)
 
 
@@ -167,7 +188,8 @@ def resolve_pi_api_key(
 ) -> str:
     """Resolve Pi's provider key using direct argv and a bounded clean env.
 
-    Production accepts only the pinned ``DEFAULT_PI_COMMAND``. Tests and
+    Production accepts only the pinned resolver command for the host's
+    ``PI_PROVIDER``. Tests and
     deterministic callers may inject a runner seam for synthetic commands.
     The returned value is intentionally kept in the caller's local scope. This
     function does not modify ``os.environ`` or write a credential-bearing file.

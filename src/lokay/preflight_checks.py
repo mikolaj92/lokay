@@ -72,13 +72,22 @@ def check_pr_review_credential(*, cfg: Any) -> Finding:
     if len(names) != 1 or names[0] != "OCR_LLM_API_KEY":
         return finding("pr_review_credential", False, "credential_allowlist_invalid")
     # The review reads OCR_LLM_API_KEY. When the machine already holds it, that is
-    # the credential. The Pi store is only the fallback for a host that saved one.
+    # the credential. The Pi store is only the fallback for a host that saved one;
+    # it asks about the provider the host names through PI_PROVIDER.
     if os.environ.get("OCR_LLM_API_KEY", "").strip():
         return finding("pr_review_credential", True, "ok")
     try:
-        from lokay.pr_review_credential import resolve_pi_api_key
+        from lokay.pr_review_credential import (
+            PiCredentialUnavailable,
+            resolve_pi_api_key,
+        )
 
         credential = resolve_pi_api_key()
+    except PiCredentialUnavailable:
+        # Pi answered but holds no key for the provider. The resolver is
+        # healthy; the operator sets OCR_LLM_API_KEY or stores a provider
+        # credential, so report the state, not a broken resolver.
+        return finding("pr_review_credential", False, "missing_credential")
     except Exception:
         return finding("pr_review_credential", False, "resolver_failed")
     return finding(
