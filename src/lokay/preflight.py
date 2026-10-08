@@ -33,6 +33,10 @@ def trusted_fala_manifest() -> Path:
     here = Path(__file__).resolve()
     packaged = here.parent / "data" / "lokay.fala-package.toml"
     if not packaged.is_file():
+        # Checkout / editable install (the mini host): the wheel force-include
+        # does not exist there, the authored file is the one manifest.
+        packaged = here.parents[2] / "fala" / "lokay.fala-package.toml"
+    if not packaged.is_file():
         raise RuntimeError("packaged Fala manifest unavailable")
 
     trusted = packaged
