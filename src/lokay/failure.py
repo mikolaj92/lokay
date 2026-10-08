@@ -9,9 +9,11 @@ def classify(kind):
     raise ValueError(kind)
 
 
-def next_budget(budget, result):
+def next_budget(budget, result, *, gb10_up=True):
     out = dict(budget)
     out['call_failure_decision'] = False
+    if not gb10_up:
+        return out
     if result['class'] == 'infra':
         out['infra_24h'] = budget['infra_24h'] + 1
         out['call_failure_decision'] = out['infra_24h'] >= 4
