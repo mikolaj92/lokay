@@ -104,4 +104,7 @@ def select(listed: dict, last: dict | None = None, occupied=None) -> dict:
         str(row.get("repo") or "") in occupied_repos for row in takeable_rows
     ):
         return _none(reason="occupied")
+    # A listed, takeable, unoccupied issue is the work. No label is required.
+    if takeable_rows:
+        return pick({"route": "listed", "issues": takeable_rows})
     return _none(reason="none_ready")

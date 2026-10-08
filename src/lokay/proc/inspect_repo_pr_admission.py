@@ -22,8 +22,9 @@ def inspect(*, runner: Runner, config: Config, repo: str, issue: int, live: bool
         rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#{issue}\b", re.IGNORECASE
     )
     blockers = [
-        pr.to_dict() for pr in prs
-        if not is_manual_pr(pr.to_dict()) and not closes_issue.search(pr.body)
+        item for item in (pr.to_dict() for pr in prs)
+        if not is_manual_pr(item)
+        and not closes_issue.search(str(item.get("body") or ""))
     ]
     if blockers:
         return {"allowed": False, "reason": "actionable_pr", "blocking_prs": blockers}

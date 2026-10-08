@@ -118,6 +118,10 @@ def classify_occupancy(receipt: object) -> dict:
     verdict = str(receipt.get("verdict") or "")
     if route in KEEP_ROUTES or reason in KEEP_REASONS:
         return {"class": "pending", "keep": True}
+    if reason == "pr_repair_budget_exhausted" or (
+        route == "fail_closed" and verdict == "feedback" and receipt.get("waiting") is not True
+    ):
+        return {"class": "consumed", "keep": False}
     if verdict in KEEP_VERDICTS or receipt.get("repairable"):
         return {"class": "repair", "keep": True}
     if incomplete_review(reason):
@@ -215,7 +219,10 @@ def queue(listed_rows: list | None, last: dict | None) -> list[dict]:
     ]
     skipped = skipped_identity(last)
     new_sha = [row for row in live_rows if _new_sha_of_skipped(row, skipped)]
-    if leftover:
+    live_ids = {identity(row)[:2] for row in live_rows if identity(row)}
+    leftover_ids = {key[:2] for row in leftover if (key := identity(row))}
+    # A stale leftover cursor must not hide a live open PR that it no longer lists.
+    if leftover and live_ids <= leftover_ids:
         live_prs = {identity(row)[:2]: row for row in live_rows}
         kept = [live_prs[key[:2]] for row in leftover if (key := identity(row)) and key[:2] in live_prs]
         kept = [row for row in kept if identity(row) != skipped and not _new_sha_of_skipped(row, skipped)]

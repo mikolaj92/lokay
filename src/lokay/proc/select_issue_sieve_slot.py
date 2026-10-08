@@ -11,6 +11,6 @@ def select(prepared: dict, previous: dict, *, slot: int) -> dict:
         return {"ok": True, "route": "run", "slot": slot}
     if slot > remaining:
         return {"ok": True, "route": "empty", "slot": slot}
-    if previous.get("route") != "continue":
+    if previous.get("route") != "continue" or not previous.get("launched"):
         return {"ok": True, "route": "empty", "slot": slot}
     return {"ok": True, "route": "run", "slot": slot}

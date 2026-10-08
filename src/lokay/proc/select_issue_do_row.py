@@ -27,4 +27,4 @@ def select(picked: Mapping[str, Any], listed: Mapping[str, Any] | None = None) -
             "route": "do" if decision["route"] == "do" else "skip",
             "reason": decision["reason"], "leftover": leftover, "leftover_issues": rows,
         }
-    return select_do(dict(picked), {}, dict(listed or {}))
+    return select_do(dict(picked), dict(picked), dict(listed or {}))

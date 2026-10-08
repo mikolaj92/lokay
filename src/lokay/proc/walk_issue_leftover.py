@@ -12,6 +12,7 @@ CONSUME = frozenset(
         "issue_already_closed",
         "closed",
         "close",
+        "decision_uncertain",
     }
 )
 READY_LABELS = frozenset({"work:ready", "ai:ready", "ready-for-agent"})
@@ -28,17 +29,7 @@ def consumes(reason: object) -> bool:
 
 
 def row_is_ready(row: dict | None) -> bool:
-    if not isinstance(row, dict):
-        return False
-    labels: set[str] = set()
-    for item in list(row.get("labels") or []):
-        if isinstance(item, dict):
-            name = str(item.get("name") or "")
-        else:
-            name = str(item or "")
-        if name:
-            labels.add(name)
-    return bool(labels & READY_LABELS)
+    return isinstance(row, dict) and str(row.get("route") or "") == "ready"
 
 
 def after(rows: list | None, skipped: dict | None) -> list[dict]:

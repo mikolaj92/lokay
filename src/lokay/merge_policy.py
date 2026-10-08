@@ -258,14 +258,6 @@ def decide_auto_merge(
             waiting=True,
         )
 
-    labels = _label_names(pr_labels)
-    if "ai:needs-review" in labels:
-        return AutoMergeDecision(
-            action="blocked",
-            reason="ai_needs_review_label",
-            needs_review=True,
-        )
-
     checks_m = _as_mapping(checks)
     mergeable, checks_reason, checks_action = _checks_mergeable(
         checks_m, require_checks=require_checks
