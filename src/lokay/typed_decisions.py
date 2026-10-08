@@ -31,7 +31,7 @@ def validate_configuration(endpoints: dict, routes: dict) -> None:
             raise ValueError(f'decisions endpoint {name!r} needs an explicit protocol and URL')
         if not isinstance(item.get('model'), str) or not item['model'].strip():
             raise ValueError(f'decisions endpoint {name!r} requires model identity')
-        for key, low, high in [('timeout_seconds', 0, 180), ('min_confidence', .5, 1), ('max_input_chars', 0, 200000)]:
+        for key, low, high in [('timeout_seconds', 0, 180), ('min_confidence', .5, 1), ('max_input_chars', 0, 1000000)]:
             value = item.get(key)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not low < value <= high:
                 raise ValueError(f'decisions endpoint {name!r} invalid {key}')
