@@ -25,10 +25,24 @@ def decide(decision_id, facts, *, post=None, cache=None, shadow=False):
         raise DecisionInfra(str(exc)) from exc
     confidence = float((answer or {}).get('confidence', 1))
     if confidence <= 0.84:
-        return {'route': 'needs_human', 'source': 'abstain', 'calls': 1}
+        return {'route': catalog_abstain(decision_id), 'source': 'abstain', 'calls': 1}
     route = (answer or {}).get('route', options[0])
     if shadow:
-        return {'route': 'needs_human', 'source': 'shadow', 'recorded': route, 'calls': 1}
+        return {'route': catalog_abstain(decision_id), 'source': 'shadow', 'recorded': route, 'calls': 1}
     if cache is not None:
         cache[key] = route
     return {'route': route, 'source': 'model', 'calls': 1 if post else 0}
+
+def catalog_abstain(decision_id):
+    import pathlib
+    text = pathlib.Path(__file__).with_name('decisions.toml').read_text()
+    current = None
+    found = None
+    for line in text.splitlines():
+        if line.startswith('id = '):
+            current = line.split('"')[1]
+        if line.startswith('on_abstain = ') and current == decision_id:
+            found = line.split('"')[1]
+    if found is None:
+        raise KeyError(decision_id)
+    return found

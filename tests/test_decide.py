@@ -23,7 +23,7 @@ def test_low_confidence_abstains():
     facts = {'free_slots': 1, 'W_global': 1, 'oldest_W_h': 1, 'doctor': 'ok', 'admitted_builds': 1, 'infra_1h': 0}
     out = decide('admission', facts, post=post, cache={})
     assert out['source'] == 'abstain'
-    assert out['route'] == 'needs_human'
+    assert out['route'] == 'drain'
 
 def test_transport_error_is_infra_not_abstain():
     from lokay.decide import DecisionInfra
@@ -43,5 +43,5 @@ def test_shadow_records_the_model_and_returns_abstain():
     facts = {'free_slots': 1, 'W_global': 1, 'oldest_W_h': 1, 'doctor': 'ok', 'admitted_builds': 1, 'infra_1h': 0}
     out = decide('admission', facts, post=post, shadow=True)
     assert out['source'] == 'shadow'
-    assert out['route'] == 'needs_human'
+    assert out['route'] == 'drain'
     assert out['recorded'] == 'admit'
