@@ -14,6 +14,8 @@ def route_review_repair(review: Mapping[str, Any]) -> dict[str, Any]:
     decision = review.get("decision")
     if not isinstance(decision, Mapping):
         return err("review decision required")
+    if decision.get("verdict") == "infra_failure":
+        return ok(route="infra", reason=str(decision.get("reason") or "infra_failure"))
     if decision.get("verdict") != "request_changes":
         return ok(route="not_applicable", reason="review_does_not_request_changes")
     task = decision.get("task")

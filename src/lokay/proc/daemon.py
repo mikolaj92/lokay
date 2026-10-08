@@ -33,6 +33,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", required=True)
     parser.add_argument("--max-passes", type=int, default=8)
     parser.add_argument("--outbox", required=True)
+    parser.add_argument(
+        "--max-graphs",
+        type=int,
+        default=0,
+        help="stop after N completed graphs (0 keeps the process resident)",
+    )
     args = parser.parse_args(argv)
     lock = _lokay_lock_path(args.config)
     prune_stale_health_leases(lock.parent)
@@ -51,11 +57,19 @@ def main(argv: list[str] | None = None) -> int:
                 payload = health
             else:
                 from lokay.proc.daemon_entry_subflow import run
+                from lokay.proc.daemon_service import resolve_pause_seconds, serve
 
-                payload = run(
-                    config_path=args.config,
-                    max_passes=args.max_passes,
-                    preflight=health,
+                def _one_graph() -> dict:
+                    return run(
+                        config_path=args.config,
+                        max_passes=args.max_passes,
+                        preflight=health,
+                    )
+
+                payload = serve(
+                    _one_graph,
+                    pause_seconds=resolve_pause_seconds(),
+                    max_graphs=args.max_graphs or None,
                 )
         finally:
             revoke_health_lease()

@@ -51,10 +51,12 @@ def handle_implementation_dispatch(
             gate=up.get("verify_selected_issue_ready") or {},
         )
     if atom == "launch_issue_to_pr":
-        from lokay.proc.launch_issue_to_pr import launch
+        from lokay.proc.launch_issue_to_pr import launch, merge_ready_count
 
         return launch(
-            up.get("select_ready_outcome") or {}, config_path=config, live=live
+            up.get("select_ready_outcome") or {}, config_path=config, live=live,
+            merge_ready=merge_ready_count(list(inputs.get("merge_ready_prs") or [])),
+            merge_ready_cap=int(inputs.get("merge_ready_cap") or 0),
         )
     if atom == "keep_busy_launch":
         from lokay.proc.keep_busy_launch import apply

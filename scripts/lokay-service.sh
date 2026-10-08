@@ -2,8 +2,8 @@
 # OS caretaker for LaunchAgent ai.mikolaj.lokay.
 # Product idle / host-ff / survey live in Fala. This script only leases the
 # lokay lock, execs lokay-daemon, logs, and records a bootstrap incident if
-# the process cannot start. Plist 60s + crash KeepAlive is host setup
-# (`--install`), not a per-tick rewrite.
+# the process cannot start. One resident daemon conducts the next Fala
+# graph itself. Crash KeepAlive is host setup, not a per-tick rewrite.
 set -euo pipefail
 
 HOME="${HOME:-${TMPDIR:-/tmp}/lokay-${UID:-unknown}}"
@@ -40,7 +40,6 @@ LOKAY_HOME="${HOME}/.lokay"
 LOG_DIR="${LOKAY_LOG_DIR:-${LOKAY_HOME}/logs}"
 OUTBOX="${LOKAY_HOME}/preflight-bootstrap-incidents.log"
 LOKAY_LAUNCHD_LABEL="${LOKAY_LAUNCHD_LABEL:-ai.mikolaj.lokay}"
-LOKAY_LAUNCHD_START_INTERVAL=60
 LOKAY_LAUNCHD_PLIST="${LOKAY_LAUNCHD_PLIST:-${HOME}/Library/LaunchAgents/${LOKAY_LAUNCHD_LABEL}.plist}"
 
 bootstrap_incident() {
@@ -52,11 +51,12 @@ bootstrap_incident() {
 
 write_host_plist() {
   # Host setup only. Missing plist stays missing. Do not invent a job.
-  # plutil only — tick path never rewrites the interval.
+  # One resident process owns the graph clock. A minute StartInterval would
+  # start a second daemon against the same lock.
   local plist="${LOKAY_LAUNCHD_PLIST}"
   [[ -f "${plist}" ]] || return 0
   command -v plutil >/dev/null 2>&1 || return 0
-  plutil -replace StartInterval -integer "${LOKAY_LAUNCHD_START_INTERVAL}" "${plist}" >/dev/null 2>&1 || true
+  plutil -remove StartInterval "${plist}" >/dev/null 2>&1 || true
   plutil -replace KeepAlive -json '{"SuccessfulExit":false}' "${plist}" >/dev/null 2>&1 || true
 }
 
