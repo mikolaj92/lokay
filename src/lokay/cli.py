@@ -53,6 +53,17 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 1 if errors else 0
 
 
+def cmd_labels_strip(args: argparse.Namespace) -> int:
+    from lokay.label_strip import main as strip_main
+
+    forwarded = ["--json", args.items]
+    if args.repo:
+        forwarded[0:0] = ["--repo", args.repo]
+    if args.apply:
+        forwarded[0:0] = ["--apply"]
+    return strip_main(forwarded)
+
+
 def cmd_tick(args: argparse.Namespace) -> int:
     payload = compose_tick(config_path=args.config, live=bool(args.live))
     _print(payload)
@@ -137,6 +148,15 @@ def build_parser() -> argparse.ArgumentParser:
     val = sub.add_parser("validate", help="Validate config")
     add_config(val)
     val.set_defaults(func=cmd_validate)
+
+    labels = sub.add_parser("labels")
+    labels_sub = labels.add_subparsers(dest="labels_command", required=True)
+    strip = labels_sub.add_parser("strip", help="Plan removal of ai:* and work:ready labels")
+    strip.add_argument("--repo")
+    strip.add_argument("--apply", action="store_true")
+    strip.add_argument("--json", action="store_true")
+    strip.add_argument("items")
+    strip.set_defaults(func=cmd_labels_strip)
 
     t = sub.add_parser("tick", help="One factory_pass (compatibility CLI; not a separate survey)")
     add_config(t)
