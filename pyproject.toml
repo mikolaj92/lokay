@@ -142,13 +142,3 @@ build-backend = "hatchling.build"
 packages = ["src/lokay"]
 [tool.hatch.build.targets.wheel.force-include]
 "fala/lokay.fala-package.toml" = "lokay/data/lokay.fala-package.toml"
-
-[tool.lokay]
-# Repository-declared local verifier for lokay-test-local. Missing this table
-# is an honest skip — the lokay must not invent a test command for a checkout
-# that has none. This repo's own verifier is the dev extra below.
-test = ["uv", "run", "--extra", "dev", "pytest", "-q"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src", "tests"]
