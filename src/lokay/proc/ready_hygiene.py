@@ -40,8 +40,6 @@ def hygiene_recently_empty(
     if stamp is None:
         return False
     # Pytest must not skip leftover-ready GitHub lists using the lokay stamp.
-    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, HYGIENE_STAMP_NAME):
-        return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:

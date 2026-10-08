@@ -59,8 +59,6 @@ def maintain_lokay_fala_journals(
     the compact copy plus a 16 MiB safety margin. Pytest without an explicit
     home never inspects operator journals.
     """
-    if os.environ.get("PYTEST_CURRENT_TEST") and home is None:
-        return {"ok": True, "maintained": [], "reason": "pytest"}
     root = (home or Path.home()) / ".lokay" / "fala"
     ceiling = max(0, int(min_bytes))
     retained = max(0, int(keep))
@@ -208,8 +206,6 @@ def reclaim_self_repair_incomplete_journals(
     Maintenance lacks worker-lease evidence needed to finalize any run.
     Pytest without an explicit home must not touch the operator lokay.
     """
-    if os.environ.get("PYTEST_CURRENT_TEST") and home is None:
-        return {"ok": True, "reclaimed": [], "reason": "pytest"}
     root = (home or Path.home()) / ".lokay" / "fala"
     reclaimed: list[dict[str, Any]] = []
     for db in _iter_live_journals(root):

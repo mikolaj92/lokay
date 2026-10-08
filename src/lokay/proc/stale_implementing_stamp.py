@@ -26,8 +26,6 @@ def stale_recently_empty(
 ) -> bool:
     if stamp is None:
         return False
-    if os.environ.get("PYTEST_CURRENT_TEST") and is_operator_stamp(stamp, STALE_STAMP_NAME):
-        return False
     try:
         age = (now if now is not None else time.time()) - stamp.stat().st_mtime
     except OSError:

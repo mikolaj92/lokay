@@ -20,8 +20,6 @@ from lokay.proc.issue_delivery_occupancy import live_issue_to_pr_receipts
 
 
 def _leftover_issues_from_last_pass() -> list[dict[str, Any]]:
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return []
     from lokay.pass_receipt import read_pass_receipt
 
     receipt = read_pass_receipt() or {}
