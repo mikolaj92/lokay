@@ -7,9 +7,9 @@ class DecisionInfra(Exception):
 import hashlib
 import json
 
-from lokay.legal import legal_admission, legal_admit, legal_after_code, legal_disposition, legal_doctor, legal_failure, legal_pick, legal_stale
+from lokay.legal import legal_admission, legal_admit, legal_after_code, legal_disposition, legal_doctor, legal_failure, legal_pick, legal_plan_gate, legal_stale
 
-LEGALITY = {'admission': legal_admission, 'admit': legal_admit, 'after_code': legal_after_code, 'disposition': legal_disposition, 'doctor': legal_doctor, 'failure': legal_failure, 'pick': legal_pick, 'stale_pr': legal_stale}
+LEGALITY = {'admission': legal_admission, 'admit': legal_admit, 'after_code': legal_after_code, 'disposition': legal_disposition, 'doctor': legal_doctor, 'failure': legal_failure, 'pick': legal_pick, 'plan_gate': legal_plan_gate, 'stale_pr': legal_stale}
 
 
 def decide(decision_id, facts, *, post=None, cache=None, shadow=False, eval_passed=False):

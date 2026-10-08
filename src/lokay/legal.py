@@ -3,6 +3,15 @@
 
 def legal_admission(facts):
     options = ['drain']
+
+def legal_plan_gate(facts):
+    if facts.get('plan_gate', 'off') == 'off':
+        return ['proceed']
+    options = ['proceed', 'needs_human']
+    if not facts.get('replanned'):
+        options.insert(1, 'replan')
+    return options
+
     blocked = (
         facts['free_slots'] == 0
         or facts['W_global'] >= 5
