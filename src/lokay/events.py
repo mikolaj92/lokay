@@ -133,8 +133,11 @@ TRANSITIONS = {
     "reviewed": "reviewing",
     "verdict_published": "awaiting_human",
     "pr_merged": "merged",
+    "pr_closed": "dropped",
     "owner_feedback": "needs_human",
     "human_owned": "human_owned",
+    "run_lost": "repairing",
+    "failure_decided": "parked",
     "quarantined": "quarantined",
     "unquarantined": "admitted",
 }
