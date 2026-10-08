@@ -6,7 +6,29 @@ def classify(kind):
         return {'class': 'infra', 'infra': 'timeout'}
     if kind == 'malformed':
         return {'class': 'contract'}
+    if kind == 'inconclusive':
+        return {'class': 'inconclusive'}
     raise ValueError(kind)
+
+
+def due(item, *, now, stall_h=24, paused_h=0):
+    """One stall fact. Held and human-owned states are owned elsewhere."""
+    if item['state'] in {'held', 'needs_human', 'parked', 'human_owned'}:
+        return None
+    quiet_h = (now - item['last_progress']) / 3600 - paused_h
+    if quiet_h < stall_h:
+        return None
+    return {'kind': 'stalled', 'work_id': item['work_id'], 'since': item['last_progress'], 'last_head_sha': item['head_sha']}
+
+
+def no_merge(queue, *, now, alarm_h=6, paused_h=0):
+    """One factory alarm. An empty queue or paused hours do not count."""
+    if alarm_h <= 0 or not queue['depth']:
+        return None
+    quiet_h = (now - max(queue['last_merge'], queue['last_publish'])) / 3600 - paused_h
+    if quiet_h < alarm_h:
+        return None
+    return {'kind': 'factory_stalled', 'since': max(queue['last_merge'], queue['last_publish']), 'queue': queue['depth']}
 
 
 def next_budget(budget, result, *, gb10_up=True):
