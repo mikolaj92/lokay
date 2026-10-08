@@ -151,14 +151,15 @@ Quality that stays, regardless of geometry:
 
 ## Continuous lokay
 
-LaunchAgent (cron heartbeat) is the clock. There is no GitHub Actions wake
+One resident `lokay-daemon` is the clock. There is no GitHub Actions wake
 and no self-hosted Actions runner. `lokay-wake` is a local operator command
 that routes one issue or PR into triage or a bounded factory pass; nothing in
-`.github/workflows` calls it. KeepAlive is crash-only (`SuccessfulExit=false`): a failed tick
-restarts immediately; idle 0 waits the 60s StartInterval. Classified
-`preflight_failed` is a gate and must exit 0 so the interval applies. Plist
-`StartInterval=60` and crash KeepAlive are host `--install` setup
-(`plutil`, not a per-tick rewrite). Missing plists stay missing. The
+`.github/workflows` calls it. KeepAlive is crash-only (`SuccessfulExit=false`):
+a dead process restarts. A completed graph waits inside the same process
+(`LOKAY_GRAPH_PAUSE_SECONDS`, default 60). A failed graph backs off in that
+process instead of starting another one. Classified `preflight_failed` exits 0.
+Host `--install` removes `StartInterval` so launchd cannot overlap the resident
+daemon, and sets crash KeepAlive. Missing plists stay missing. The
 LaunchAgent shell leases `lokay.lock` and execs `lokay-daemon`;
 host-ff lives in `factory_pass` (`harvest_factory_children`, then `host_ff`, then `factory_begin_host_gate` begin|restart|blocked, then begin only on begin). Same serial lokay (K=1), same lock —
 not a parallel fleet. Details:
