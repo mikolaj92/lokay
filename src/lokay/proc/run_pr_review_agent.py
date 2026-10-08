@@ -8,6 +8,15 @@ from lokay.config import Config, load_config
 from lokay.envelope import err, ok
 from lokay.proc.pr_review_plugin import PluginFailure, invoke_plugin
 
+INFRA_CODES = frozenset({"tools_allowlist_invalid", "plugin_timeout", "plugin_unavailable"})
+
+
+def infra_verdict(reason: str) -> dict | None:
+    code = str(reason or "").split(":", 1)[0].strip()
+    if code not in INFRA_CODES:
+        return None
+    return {"verdict": "infra_failure", "reason": code}
+
 
 def plugin_request(cfg: Config, repo: str, pr: int, evidence: dict[str, Any]) -> dict[str, Any]:
     task = evidence.get("task")
@@ -190,6 +199,9 @@ def run_review_agent(
                 warnings=list(exc.warnings),
                 diagnostic=exc.diagnostic,
             )
+        infra = infra_verdict(str(exc))
+        if infra is not None:
+            return err("OpenCodeReview plugin failed closed", route="infra", reason=infra["reason"], decision=infra)
         return err("OpenCodeReview plugin failed closed", route="fail_closed", reason=str(exc))
 
 
