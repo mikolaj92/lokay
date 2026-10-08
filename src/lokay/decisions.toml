@@ -1,4 +1,8 @@
 [[decision]]
+id = "plan_gate"
+on_abstain = "needs_human"
+
+[[decision]]
 id = "admission"
 on_abstain = "drain"
 
