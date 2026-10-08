@@ -33,8 +33,10 @@ def check(*, cfg, selected: dict, listed: dict, runner, live: bool) -> dict:
             trace = result['decision_trace']
             if trace['status'] == 'completed' and trace['choice'] == 'ready':
                 return {**selected, 'queue_decision': trace}
-            consume = trace['status'] == 'completed'
-            reason = ('decision_' + trace['choice'] if consume else trace['reason'])
+            # An oversized input fails the same way every pass: park the issue
+            # (cursor moves past it) instead of re-picking it forever.
+            consume = trace['status'] == 'completed' or trace.get('reason') == 'decision_input_too_large'
+            reason = ('decision_' + trace['choice'] if trace['status'] == 'completed' else trace['reason'])
         elif task is not None:
             reason = 'queue_candidate_not_takeable'
     except Exception:
