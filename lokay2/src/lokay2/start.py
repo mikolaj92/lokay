@@ -13,7 +13,15 @@ from lokay2.run import run_process
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     child = dict(os.environ if env is None else env)
     out: dict[str, str] = {}
-    out["gb10"] = "ok" if child.get("LOKAY2_GB10", "down") == "up" else "fail"
+    if child.get("LOKAY2_GB10") == "down":
+        out["gb10"] = "fail"
+    else:
+        url = (child.get("LOKAY2_DECISION_BASE_URL") or "http://192.168.1.60:8888").rstrip("/") + "/v1/models"
+        try:
+            fetched = run_process(["curl", "-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}", url], env=child, timeout=8)
+            out["gb10"] = "ok" if (fetched.stdout or "").strip() == "200" else "fail"
+        except (FileNotFoundError, OSError):
+            out["gb10"] = "fail"
     out["provider"] = "ok" if child.get("LOKAY2_PROVIDER") and child.get("LOKAY2_PROVIDER") != child.get("PI_PROVIDER", "") else "fail"
     if child.get("LOKAY2_PROVIDER") and "PI_PROVIDER" not in child:
         out["provider"] = "ok"
