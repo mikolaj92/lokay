@@ -1,0 +1,22 @@
+[project]
+name = "lokay2"
+version = "0.1.0"
+description = "Lokay beside the old one. Five nodes, then one nuke."
+requires-python = ">=3.12"
+dependencies = [
+  "pyyaml>=6.0",
+  "fala",
+]
+
+[tool.uv.sources]
+fala = { git = "https://github.com/mikolaj92/Fala.git", rev = "4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd" }
+
+[project.scripts]
+lokay2 = "lokay2.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lokay2"]

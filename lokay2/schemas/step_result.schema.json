@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "required": ["result", "artifact"],
+  "properties": {
+    "result": { "enum": ["done", "failed"] },
+    "artifact": { "type": "string" }
+  },
+  "additionalProperties": false
+}

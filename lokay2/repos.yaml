@@ -1,0 +1,5 @@
+repos:
+  - name: mikolaj92/lokay-sandbox
+    clone_path: ~/Developer/OSS/lokay-sandbox
+    test: []
+    merge: on
