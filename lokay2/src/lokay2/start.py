@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 
 from lokay2.config import load_repos
-from lokay2.gh import issues_with_label, open_pr_for
+from lokay2.gh import gh_bin, issues_with_label, open_pr_for
 from lokay2.lock import acquire, release
 from lokay2.run import run_process
 
@@ -18,8 +18,13 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     else:
         url = (child.get("LOKAY2_DECISION_BASE_URL") or "http://192.168.1.60:8888").rstrip("/") + "/v1/models"
         try:
-            fetched = run_process(["curl", "-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}", url], env=child, timeout=8)
-            out["gb10"] = "ok" if (fetched.stdout or "").strip() == "200" else "fail"
+            fetched = run_process(
+                ["/usr/bin/curl", "-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}", url],
+                env=child,
+                timeout=8,
+            )
+            code = (fetched.stdout or "").strip()
+            out["gb10"] = "ok" if code == "200" else "fail"
         except (FileNotFoundError, OSError):
             out["gb10"] = "fail"
     out["provider"] = "ok" if child.get("LOKAY2_PROVIDER") and child.get("LOKAY2_PROVIDER") != child.get("PI_PROVIDER", "") else "fail"
@@ -29,7 +34,7 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     out["decision"] = "ok" if child.get("LOKAY2_DECISION_API") and child.get("LOKAY2_DECISION_MODEL") else "fail"
     out["pi"] = "ok" if shutil.which("pi", path=child.get("PATH")) else "fail"
     try:
-        gh = run_process(["gh", "auth", "status"], env=child, timeout=15)
+        gh = run_process([gh_bin(), "auth", "status"], env=child, timeout=15)
         out["gh"] = "ok" if gh.returncode == 0 else "fail"
     except FileNotFoundError:
         out["gh"] = "fail"
@@ -43,7 +48,8 @@ def host_ready(report: dict[str, str]) -> bool:
 def pick(env: dict[str, str] | None = None) -> dict:
     report = probes(env)
     if not host_ready(report):
-        return {"result": "idle", "reason": "host"}
+        failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
+        return {"result": "idle", "reason": "host", "failed": failed}
     chosen = None
     for repo in load_repos():
         name = repo["name"]
@@ -87,7 +93,56 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if host_ready(report) else 1
     outcome = pick()
     if outcome["result"] == "idle":
-        print(f"idle {outcome['reason']}", file=sys.stderr)
+        extra = outcome.get("failed") or ""
+        print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return 0
     print(json.dumps(outcome, separators=(",", ":")))
+    if outcome.get("node") == "plan":
+        print(json.dumps(advance(outcome), separators=(",", ":")))
     return 0
+
+
+def advance(picked: dict) -> dict:
+    from lokay2.build import build_code, build_publish
+    from lokay2.git import worktree_add
+    from lokay2.plan import valid_plan
+
+    art = Path.home() / ".lokay2/runs" / f"{picked['repo'].replace('/', '__')}" / str(picked["issue"]) / "plan.md"
+    if not valid_plan(art):
+        from lokay2.plan import plan_write, prompt_for
+
+        art.parent.mkdir(parents=True, exist_ok=True)
+        written = plan_write(prompt_for(f"issue {picked['issue']}", None), art)
+        if written["result"] != "done" or not valid_plan(art):
+            return {"result": "failed", "artifact": ""}
+    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    root = Path(os.path.expanduser(repo["clone_path"]))
+    worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
+    branch = f"lokay/{picked['issue']}"
+    if not worktree.exists():
+        added = worktree_add(root, branch, worktree)
+        if added["result"] != "added":
+            return {"result": "failed", "artifact": ""}
+    built = build_code(worktree, art.read_text(), f"issue {picked['issue']}", None, dict(os.environ))
+    if built["result"] != "done":
+        return built
+    published = build_publish(worktree, branch, None, picked["repo"], int(picked["issue"]), f"feat: issue {picked['issue']}")
+    if published.get("result") != "pr_open" or not published.get("sha"):
+        return published
+    from lokay2.gh import open_pr_for
+    from lokay2.merge import merge_sha
+
+    pr = open_pr_for(picked["repo"], branch)
+    if pr is None or pr.get("headRefOid") != published["sha"]:
+        return published
+    return merge_sha(
+        picked["repo"],
+        pr["number"],
+        published["sha"],
+        {"result": "merge", "sha": published["sha"]},
+        worktree,
+        None,
+        picked["repo"].split("/")[0],
+        int(picked["issue"]),
+        {"plan_rounds": 1, "check_rounds": 0},
+    )

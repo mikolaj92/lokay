@@ -35,6 +35,7 @@ def build_code(worktree: Path, plan: str, title: str, body: str | None, env: dic
     status = _git(worktree, ["status", "--porcelain"])
     if status:
         _git(worktree, ["add", "-A"])
+        _git(worktree, ["reset", "-q", "--", "__pycache__"])
         _git(worktree, ["commit", "-m", "lokay2 build"])
     log = _git(worktree, ["log", "--oneline", "origin/main..HEAD"])
     if not log:
