@@ -152,7 +152,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list) ->
     from lokay.run import run_process
 
     rounds = 0
-    while rounds < 3:
+    while True:
         diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
         rows = hunks(diff.stdout or "")
         failed = []
@@ -181,8 +181,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list) ->
         if pushed["result"] != "pushed":
             return pushed
         sha = pushed["sha"]
-    else:
-        return {"result": "failed", "artifact": sha}
     pr = open_pr_for(picked["repo"], branch)
     if pr is None or pr.get("headRefOid") != sha:
         return {"result": "pr_open", "sha": sha}
