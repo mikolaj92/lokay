@@ -57,7 +57,7 @@ def reap_worktrees(repo: Path, root: Path, ttl_seconds: float, now: float | None
 def remote_sha(repo: Path, branch: str) -> str | None:
     code, out, err = _git(repo, ["ls-remote", "origin", f"refs/heads/{branch}"])
     if code != 0:
-        raise RuntimeError(err.strip() or "ls-remote failed")
+        return None
     line = out.strip().splitlines()
     if not line or not line[0].strip():
         return None
