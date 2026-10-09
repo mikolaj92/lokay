@@ -1,4 +1,8 @@
 repos:
+- name: mikolaj92/lokay-sandbox
+  clone_path: ~/Developer/OSS/lokay-sandbox
+  test: []
+  merge: 'on'
 - name: mikolaj92/lokay
   clone_path: /Users/mini-m4-0/.lokay/host
   test: []
