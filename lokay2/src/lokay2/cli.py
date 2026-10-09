@@ -48,8 +48,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.probe:
             sys.argv = ["lokay2", "--probe"]
         return decide_main()
-    print("not implemented", file=sys.stderr)
-    return 2
+    from lokay2.nodes import COMMANDS
+
+    return COMMANDS[args.node]()
 
 
 if __name__ == "__main__":

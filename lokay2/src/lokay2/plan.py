@@ -47,6 +47,10 @@ def plan_check(wire: dict, model: str, api: str = "tensorfold") -> dict:
         answers = from_wire(api, model, wire, internal)
     except DecisionError:
         raise
+    return verdict(answers)
+
+
+def verdict(answers: dict) -> dict:
     choice = answers["next"]["choice"]
     confidence = answers["next"]["confidence"]
     uwagi = []
