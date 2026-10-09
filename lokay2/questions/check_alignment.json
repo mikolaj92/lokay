@@ -1,0 +1,6 @@
+{
+  "id": "alignment",
+  "type": "bool",
+  "question": "Does this hunk miss or drift from the issue and the plan?",
+  "veto": 0.85
+}

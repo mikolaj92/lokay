@@ -53,6 +53,24 @@ trap = decide_hunks("tests", [{"plik": "t.py", "linia_od": 1, "linia_do": 2, "bo
     },
 }, "m")
 assert trap["next"] == "issue"
+extra = decide_hunks("correctness alignment architecture security production", rows, wire_bad, "m")
+assert extra["next"] == "issue" and extra["uwagi"][0]["plik"] == "a.py"
+assert extra["next"] in {"ok", "issue"}
+healed = aggregate("abc", {"result": "green", "sha": "abc", "failed": []}, [
+    {"next": "ok", "sha": "abc", "uwagi": []},
+    {"next": "ok", "sha": "abc", "uwagi": []},
+    {"next": "ok", "sha": "abc", "uwagi": []},
+    extra,
+])
+assert healed["result"] == "fix" and healed["uwagi"][0]["plik"] == "a.py"
+clean = dict(extra, next="ok", uwagi=[])
+landed = aggregate("abc", {"result": "green", "sha": "abc", "failed": []}, [
+    {"next": "ok", "sha": "abc", "uwagi": []},
+    {"next": "ok", "sha": "abc", "uwagi": []},
+    {"next": "ok", "sha": "abc", "uwagi": []},
+    clean,
+])
+assert landed["result"] == "merge"
 try:
     decide_hunks("scope", rows, {"model": "m", "usage": {"completion_tokens": 0}, "answers": {"next": {"choice": "maybe", "probabilities": {"maybe": 1}}}}, "m")
 except Exception:

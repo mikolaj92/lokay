@@ -1,0 +1,6 @@
+{
+  "id": "architecture",
+  "type": "bool",
+  "question": "Does this hunk break a module boundary, add a dependency, or duplicate existing code?",
+  "veto": 0.85
+}
