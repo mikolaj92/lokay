@@ -15,6 +15,10 @@ def load_repos(path: Path | None = None) -> list[dict]:
         keys = set(repo)
         if keys != {"name", "clone_path", "test", "merge"}:
             raise ValueError(f"repo keys must be name, clone_path, test, merge: {repo.get('name')}")
+        if repo["merge"] is True:
+            repo["merge"] = "on"
+        elif repo["merge"] is False:
+            repo["merge"] = "off"
         if repo["merge"] not in ("on", "off"):
             raise ValueError("merge must be on or off")
         if not isinstance(repo["test"], list):
