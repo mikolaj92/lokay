@@ -1,0 +1,22 @@
+{
+  "model": "GLM-5.3-Flash-EXL3",
+  "answers": {
+    "next": {
+      "type": "choice",
+      "choice": "ok",
+      "probabilities": {
+        "ok": 0.9,
+        "revise": 0.1
+      },
+      "confidence": 0.9
+    },
+    "k_cel": {
+      "type": "noul",
+      "choice": "oul",
+      "probabilities": {
+        "noul": 0.09
+      },
+      "confidence": 0.91
+    }
+  }
+}

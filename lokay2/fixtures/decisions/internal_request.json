@@ -1,0 +1,25 @@
+{
+  "state": {
+    "issue": 1
+  },
+  "questions": [
+    {
+      "id": "next",
+      "type": "choice",
+      "instructions": "route",
+      "options": {
+        "ok": "ship",
+        "revise": "again"
+      }
+    },
+    {
+      "id": "k_cel",
+      "type": "bool",
+      "instructions": "covers goal",
+      "options": {
+        "true": "yes",
+        "false": "no"
+      }
+    }
+  ]
+}

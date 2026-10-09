@@ -1,0 +1,28 @@
+{
+  "object": "decisions",
+  "model": "GLM-5.3-Flash-EXL3",
+  "answers": {
+    "next": {
+      "type": "choice",
+      "choice": "ok",
+      "probabilities": {
+        "ok": 0.9,
+        "revise": 0.1
+      },
+      "label_mass": 1
+    },
+    "k_cel": {
+      "type": "choice",
+      "choice": "true",
+      "probabilities": {
+        "true": 0.91,
+        "false": 0.09
+      },
+      "label_mass": 1
+    }
+  },
+  "usage": {
+    "completion_tokens": 0
+  },
+  "note": "shape copied from typed_decisions.py; not a live GB10 capture"
+}

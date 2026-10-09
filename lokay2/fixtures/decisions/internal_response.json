@@ -1,0 +1,18 @@
+{
+  "next": {
+    "choice": "ok",
+    "probabilities": {
+      "ok": 0.9,
+      "revise": 0.1
+    },
+    "confidence": 0.9
+  },
+  "k_cel": {
+    "choice": "true",
+    "probabilities": {
+      "true": 0.91,
+      "false": 0.09
+    },
+    "confidence": 0.91
+  }
+}
