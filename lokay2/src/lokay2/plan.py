@@ -12,9 +12,9 @@ CRITERIA = ("k_cel", "k_pliki", "k_testy", "k_zakres")
 THRESHOLD = 0.85
 
 
-def plan_questions() -> dict:
+def plan_questions(plan: str = "") -> dict:
     return {
-        "state": {},
+        "state": {"plan": plan},
         "questions": [
             {
                 "id": "next",
@@ -22,7 +22,20 @@ def plan_questions() -> dict:
                 "instructions": "Is the plan complete?",
                 "options": {"ok": "ship it", "revise": "fix the plan"},
             },
-            *[{"id": name, "type": "bool", "instructions": name, "options": {"true": "yes", "false": "no"}} for name in CRITERIA],
+            *[
+                {
+                    "id": name,
+                    "type": "bool",
+                    "instructions": text,
+                    "options": {"true": "yes", "false": "no"},
+                }
+                for name, text in {
+                    "k_cel": "Does Cel name the outcome?",
+                    "k_pliki": "Does Pliki name the files to change?",
+                    "k_testy": "Does Testy name a check that can fail?",
+                    "k_zakres": "Does Poza zakresem name what stays out?",
+                }.items()
+            ],
         ],
     }
 
