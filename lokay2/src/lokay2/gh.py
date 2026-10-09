@@ -1,17 +1,35 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from collections.abc import Mapping
+from pathlib import Path
 
 from lokay2.run import run_process
 from lokay2.safety import validate_argv
 
 ORIGIN = "lokay2"
+GH_CANDIDATES = (
+    Path.home() / ".local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    Path("/opt/homebrew/bin/gh"),
+    Path("/usr/local/bin/gh"),
+)
+
+
+def gh_bin() -> str:
+    found = shutil.which("gh")
+    if found:
+        return found
+    for path in GH_CANDIDATES:
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path)
+    return "gh"
 
 
 def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str, str]:
     validate_argv(["gh", *args])
-    proc = run_process(["gh", *args], env=env, timeout=60)
+    proc = run_process([gh_bin(), *args], env=env, timeout=60)
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
