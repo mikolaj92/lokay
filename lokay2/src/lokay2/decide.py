@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-import urllib.request
+import subprocess
 from collections.abc import Mapping
 
 EPS = 1e-5
@@ -128,18 +128,27 @@ def decide(internal: Mapping) -> dict:
     model = os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
     path = {"tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone"}[api]
-    body = json.dumps(to_wire(api, model, internal)).encode()
-    headers = {"content-type": "application/json"}
+    body = json.dumps(to_wire(api, model, internal))
+    timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or 30)))
+    cmd = [
+        "curl", "-sS", "-m", timeout,
+        "-w", "\n%{http_code}",
+        "-H", "content-type: application/json",
+        "-d", body,
+    ]
     key = os.environ.get("LOKAY2_DECISION_API_KEY")
     if key:
-        headers["authorization"] = f"Bearer {key}"
-    request = urllib.request.Request(base + path, data=body, headers=headers)
-    timeout = float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or 30)
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        raw = response.read().decode()
-        status = getattr(response, "status", 200)
-    if status != 200:
-        raise DecisionError(f"http {status}")
+        cmd.extend(["-H", f"authorization: Bearer {key}"])
+    cmd.append(base + path)
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=float(timeout) + 2)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DecisionError(str(exc)) from exc
+    if proc.returncode != 0:
+        raise DecisionError(proc.stderr.strip() or "curl failed")
+    raw, _, status = proc.stdout.rpartition("\n")
+    if status.strip() != "200":
+        raise DecisionError(f"http {status.strip()}")
     return from_wire(api, model, json.loads(raw), internal)
 
 
