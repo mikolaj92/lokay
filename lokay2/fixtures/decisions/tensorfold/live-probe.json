@@ -1,0 +1,1 @@
+{"object": "decisions", "model": "GLM-5.3-Flash-EXL3", "prompt_format_version": 1, "answers": {"up": {"type": "choice", "probabilities": {"true": 0.9046505351008906, "false": 0.0953494648991095}, "label_mass": 0.9364434034101954, "choice": "true"}}, "usage": {"prompt_tokens": 32, "completion_tokens": 0, "total_tokens": 32}}
