@@ -1,138 +1,18 @@
 [project]
 name = "lokay"
-version = "0.3.0"
-description = "Continuous multi-repo issue-to-PR lokay built from Unix atoms and Fala."
-readme = "README.md"
+version = "0.1.0"
+description = "Lokay beside the old one. Five nodes, then one nuke."
 requires-python = ">=3.12"
-license = "MIT"
-license-files = ["LICENSE"]
 dependencies = [
   "pyyaml>=6.0",
   "fala",
-  "mojo==1.0.0",
-  "lokay-review-open-code-review",
-  "app-factory[platform]",
-  "uvicorn>=0.52.4",
-  "kofte",
 ]
-
-[project.optional-dependencies]
-dev = ["pytest>=8.0", "httpx2>=2.12.0"]
 
 [tool.uv.sources]
 fala = { git = "https://github.com/mikolaj92/Fala.git", rev = "4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd" }
-app-factory = { git = "https://github.com/mikolaj92/app-factory.git", tag = "v0.6.22" }
-kofte = { git = "https://github.com/mikolaj92/Kofte.git", rev = "cc5674bf6c8d06bdd0a541c7e613ab45398ccc35" }
-lokay-review-open-code-review = { path = "plugins/pr_review_open_code_review", editable = true }
 
 [project.scripts]
-lokay-atom-inventory = "lokay.proc.atom_inventory:main"
-lokay-readme-check = "lokay.readme_state_machine:main"
 lokay = "lokay.cli:main"
-# Atomic processes (one job each)
-lokay-list-issues = "lokay.proc.list_issues:main"
-lokay-list-inbox = "lokay.proc.list_inbox:main"
-lokay-get-issue = "lokay.proc.get_issue:main"
-lokay-select-issue = "lokay.proc.select_issue:main"
-lokay-intake-check = "lokay.proc.intake_check:main"
-lokay-issue-split = "lokay.proc.issue_split:main"
-lokay-verify-issue-ready = "lokay.proc.verify_issue_ready:main"
-lokay-label-issue = "lokay.proc.label_issue:main"
-lokay-stage-label = "lokay.proc.stage_label:main"
-lokay-ready-hygiene = "lokay.proc.ready_hygiene:main"
-lokay-compact-state = "lokay.proc.compact_state:main"
-lokay-rotate-fala-journals = "lokay.proc.rotate_fala_journals:main"
-lokay-close-issue = "lokay.proc.close_issue:main"
-lokay-assign-issue = "lokay.proc.assign_issue:main"
-lokay-make-branch = "lokay.proc.make_branch:main"
-lokay-worktree-add = "lokay.proc.worktree_add:main"
-lokay-plan-issue = "lokay.proc.plan_issue:main"
-lokay-localize = "lokay.proc.localize:main"
-lokay-relocalize-off-goal = "lokay.proc.relocalize_off_goal:main"
-lokay-run-agent = "lokay.proc.run_agent:main"
-lokay-commit-all = "lokay.proc.commit_all:main"
-lokay-assert-real-diff = "lokay.proc.assert_real_diff:main"
-lokay-test-local = "lokay.proc.test_local:main"
-lokay-rebase-onto-base = "lokay.proc.rebase_onto_base:main"
-lokay-push = "lokay.proc.push_branch:main"
-lokay-pr-create = "lokay.proc.pr_create:main"
-lokay-pr-label = "lokay.proc.pr_label:main"
-lokay-list-prs = "lokay.proc.list_prs:main"
-lokay-pr-checks = "lokay.proc.pr_checks:main"
-lokay-probe-pr-state = "lokay.proc.probe_pr_state:main"
-lokay-admit-pr-repair = "lokay.proc.admit_pr_repair:main"
-lokay-pr-route = "lokay.proc.pr_route:main"
-lokay-collect-pr-review-evidence = "lokay.proc.collect_pr_review_evidence:main"
-lokay-collect-review-pr-metadata = "lokay.proc.collect_review_pr_metadata:main"
-lokay-collect-review-changed-files = "lokay.proc.collect_review_changed_files:main"
-lokay-collect-review-diff-tail = "lokay.proc.collect_review_diff_tail:main"
-lokay-collect-review-commit-summary = "lokay.proc.collect_review_commit_summary:main"
-lokay-select-evidence-review = "lokay.proc.select_evidence_review:main"
-lokay-finalize-pr-review = "lokay.proc.finalize_pr_review:main"
-lokay-verify-review-evidence-sha = "lokay.proc.verify_review_evidence_sha:main"
-lokay-resolve-sha-review = "lokay.proc.resolve_sha_review:main"
-lokay-run-pr-review-agent = "lokay.proc.run_pr_review_agent:main"
-lokay-select-pr-review-scope = "lokay.proc.select_pr_review_scope:main"
-lokay-run-pr-review-retry-agent = "lokay.proc.run_pr_review_retry_agent:main"
-lokay-run-evidence-review-agent = "lokay.proc.run_evidence_review_agent:main"
-lokay-validate-pr-review = "lokay.proc.validate_pr_review:main"
-lokay-select-pr-review = "lokay.proc.select_pr_review:main"
-lokay-publish-pr-review = "lokay.proc.publish_pr_review:main"
-lokay-review-repair-gate = "lokay.proc.review_repair_gate:main"
-lokay-classify-pr-triage-checks = "lokay.proc.classify_pr_triage_checks:main"
-lokay-select-pr-triage-outcome = "lokay.proc.select_pr_triage_outcome:main"
-lokay-review-terminal = "lokay.proc.review_terminal:main"
-lokay-pr-repair-subflow = "lokay.proc.pr_repair_subflow:main"
-lokay-pr-merge = "lokay.proc.pr_merge:main"
-lokay-pr-close = "lokay.proc.pr_close:main"
-lokay-verify-delivery-receipt = "lokay.proc.verify_delivery_receipt:main"
-# Graph (Fala) + composers
-lokay-run-path = "lokay.proc.run_path:main"
-lokay-factory-pass = "lokay.compose.factory:main"
-lokay-factory-tick = "lokay.proc.factory_tick:main"
-lokay-factory-begin = "lokay.proc.factory_begin:main"
-lokay-host-ff = "lokay.proc.host_ff:main"
-lokay-dispatch-triage = "lokay.proc.dispatch_triage:main"
-lokay-closeout = "lokay.proc.closeout:main"
-lokay-closeout-pr = "lokay.proc.closeout_pr:main"
-lokay-reap-stale-worktrees = "lokay.proc.reap_stale_worktrees:main"
-lokay-select-implement = "lokay.proc.select_implement:main"
-lokay-queue-conflict = "lokay.proc.queue_conflict:main"
-lokay-dispatch-implement = "lokay.proc.dispatch_implement:main"
-lokay-compute-health = "lokay.proc.compute_health:main"
-lokay-record-pass = "lokay.proc.record_pass:main"
-lokay-record-inflight-remaining = "lokay.proc.record_inflight_remaining:main"
-lokay-preflight = "lokay.proc.preflight:main"
-lokay-daemon = "lokay.proc.daemon:main"
-lokay-last-pass-moving = "lokay.proc.last_pass_moving:main"
-lokay-leftover-skip = "lokay.proc.leftover_skip:main"
-lokay-classify-leftover-remaining = "lokay.proc.classify_leftover_remaining:main"
-lokay-merge-leftover-remaining = "lokay.proc.merge_leftover_remaining:main"
-lokay-select-repair-route = "lokay.proc.select_repair_route:main"
-lokay-recovery-begin = "lokay.proc.recovery_begin:main"
-lokay-recovery-factory = "lokay.proc.recovery_factory:main"
-lokay-recovery-observe = "lokay.proc.recovery_observe:main"
-lokay-recovery-record = "lokay.proc.recovery_record:main"
-lokay-recovery-incident = "lokay.proc.recovery_incident:main"
-lokay-recovery-run-self-repair = "lokay.proc.recovery_run_self_repair:main"
-lokay-self-repair-prepare = "lokay.proc.self_repair_prepare:main"
-lokay-self-repair-validate = "lokay.proc.self_repair_validate:main"
-lokay-self-repair-push-main = "lokay.proc.self_repair_push_main:main"
-lokay-self-repair-activate = "lokay.proc.self_repair_activate:main"
-lokay-self-repair-preflight = "lokay.proc.self_repair_preflight:main"
-lokay-self-repair-close = "lokay.proc.self_repair_close:main"
-lokay-repos = "lokay.proc.repos_list:main"
-lokay-repos-clone-missing = "lokay.proc.repos_clone_missing:main"
-lokay-issue-to-pr = "lokay.compose.issue_to_pr:main"
-lokay-pr-repair = "lokay.compose.pr_repair:main"
-lokay-pr-triage = "lokay.compose.pr_triage:main"
-lokay-tick = "lokay.compose.tick:main"
-lokay-work = "lokay.compose.run:main"
-lokay-status = "lokay.compose.status:main"
-lokay-status-server = "lokay.proc.status_server:main"
-lokay-yield-report = "lokay.proc.yield_report:main"
-lokay-wake = "lokay.proc.wake:main"
-lokay-select-release-action = "lokay.proc.select_release_action:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -140,5 +20,3 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lokay"]
-[tool.hatch.build.targets.wheel.force-include]
-"fala/lokay.fala-package.toml" = "lokay/data/lokay.fala-package.toml"
