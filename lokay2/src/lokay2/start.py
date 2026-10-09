@@ -109,10 +109,20 @@ def advance(picked: dict) -> dict:
 
     art = Path.home() / ".lokay2/runs" / f"{picked['repo'].replace('/', '__')}" / str(picked["issue"]) / "plan.md"
     if not valid_plan(art):
+        import json
+
         from lokay2.plan import plan_write, prompt_for
 
         art.parent.mkdir(parents=True, exist_ok=True)
-        written = plan_write(prompt_for(f"issue {picked['issue']}", None), art)
+        from lokay2.gh import _gh
+
+        code, raw, _err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
+        title, body = f"issue {picked['issue']}", None
+        if code == 0 and raw.strip():
+            loaded = json.loads(raw)
+            title = loaded.get("title") or title
+            body = loaded.get("body")
+        written = plan_write(prompt_for(title, body), art)
         if written["result"] != "done" or not valid_plan(art):
             return {"result": "failed", "artifact": ""}
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
