@@ -66,6 +66,14 @@ def remote_sha(repo: Path, branch: str) -> str | None:
 
 def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int = 3) -> dict:
     current = remote_sha(repo, branch)
+    head_code, head_sha, _ = _git(repo, ["rev-parse", "HEAD"])
+    if (
+        expected_remote_sha
+        and head_code == 0
+        and current == head_sha.strip()
+        and current == expected_remote_sha
+    ):
+        return {"result": "pushed", "sha": current, "attempts": 0}
     if current != expected_remote_sha:
         return {"result": "remote_moved", "sha": current or ""}
     last = ""
