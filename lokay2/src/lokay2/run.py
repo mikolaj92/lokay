@@ -21,15 +21,11 @@ def run_process(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        start_new_session=True,
     ) as process:
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            process.kill()
             stdout, stderr = process.communicate(timeout=5)
             raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr)
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)

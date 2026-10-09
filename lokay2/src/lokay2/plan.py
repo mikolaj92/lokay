@@ -48,7 +48,7 @@ def valid_plan(path: Path) -> bool:
 
 
 def plan_write(prompt: str, artifact: Path, *, cwd: Path | None = None, env: dict | None = None) -> dict:
-    payload = pi_step(prompt, artifact, cwd=cwd, env=env)
+    payload = pi_step(prompt + f"\nWrite the plan only to {artifact}.\n", artifact, cwd=cwd, env=env)
     if payload["result"] == "done" and not valid_plan(artifact):
         return {"result": "failed", "artifact": ""}
     return payload
