@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
@@ -139,20 +140,60 @@ def advance(picked: dict) -> dict:
     published = build_publish(worktree, branch, None, picked["repo"], int(picked["issue"]), f"feat: issue {picked['issue']}")
     if published.get("result") != "pr_open" or not published.get("sha"):
         return published
+    return _finish(picked, worktree, branch, published["sha"], repo.get("test") or [])
+
+
+def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list) -> dict:
+    from lokay.check import aggregate, decide_hunks, hunks, questions
+    from lokay.decide import decide
+    from lokay.fix import fix_code, fix_publish
     from lokay.gh import open_pr_for
     from lokay.merge import merge_sha
+    from lokay.run import run_process
 
+    rounds = 0
+    while rounds < 3:
+        diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
+        rows = hunks(diff.stdout or "")
+        failed = []
+        for argv in tests:
+            proc = run_process(argv, cwd=worktree, timeout=600)
+            if proc.returncode != 0:
+                failed.append({"warstwa": " ".join(argv), "plik": "", "linia": None})
+        ci = {"result": "red" if failed else "green", "sha": sha, "failed": failed}
+        kind = "correctness alignment architecture security production"
+        answers = decide({"state": {"sha": sha, "kind": kind}, "questions": questions(kind, rows)["questions"]})
+        wire = {
+            "model": os.environ.get("LOKAY2_DECISION_MODEL") or os.environ.get("LOKAY2_MODEL", ""),
+            "usage": {"completion_tokens": 0},
+            "answers": {qid: {"choice": row["choice"], "probabilities": row["probabilities"]} for qid, row in answers.items()},
+        }
+        decision = decide_hunks(kind, rows, wire, wire["model"])
+        decision["sha"] = sha
+        verdict = aggregate(sha, ci, [decision])
+        rounds += 1
+        if verdict["result"] == "merge":
+            break
+        fixed = fix_code(worktree, sha, json.dumps(verdict["uwagi"]), dict(os.environ))
+        if fixed["result"] != "done":
+            return fixed
+        pushed = fix_publish(worktree, branch, sha)
+        if pushed["result"] != "pushed":
+            return pushed
+        sha = pushed["sha"]
+    else:
+        return {"result": "failed", "artifact": sha}
     pr = open_pr_for(picked["repo"], branch)
-    if pr is None or pr.get("headRefOid") != published["sha"]:
-        return published
+    if pr is None or pr.get("headRefOid") != sha:
+        return {"result": "pr_open", "sha": sha}
     return merge_sha(
         picked["repo"],
         pr["number"],
-        published["sha"],
-        {"result": "merge", "sha": published["sha"]},
+        sha,
+        {"result": "merge", "sha": sha},
         worktree,
         None,
         picked["repo"].split("/")[0],
         int(picked["issue"]),
-        {"plan_rounds": 1, "check_rounds": 0},
+        {"plan_rounds": 1, "check_rounds": rounds},
     )
