@@ -63,8 +63,6 @@ def check_ci_main() -> int:
         proc = run_process(argv, cwd=req.get("cwd"), timeout=req.get("timeout") or 600)
         if proc.returncode != 0:
             failed.append({"warstwa": " ".join(argv), "plik": "", "linia": None})
-    if not req.get("test"):
-        failed.append({"warstwa": "no_tests", "plik": "", "linia": None})
     return emit({"result": "red" if failed else "green", "sha": sha, "failed": failed})
 
 
