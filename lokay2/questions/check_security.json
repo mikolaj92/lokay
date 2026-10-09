@@ -1,0 +1,6 @@
+{
+  "id": "security",
+  "type": "bool",
+  "question": "Does this hunk add a secret, an injection, a permission change, or an unsafe call?",
+  "veto": 0.85
+}

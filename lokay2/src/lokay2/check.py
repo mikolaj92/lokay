@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from lokay2.decide import DecisionError, from_wire
+
+QUESTIONS = Path(__file__).parents[2] / "questions"
 
 THRESHOLD = 0.85
 NIT = 0.5
@@ -28,18 +33,26 @@ def hunks(diff: str) -> list[dict]:
     return rows
 
 
+def lens(kind: str) -> str:
+    path = QUESTIONS / f"check_{kind}.json"
+    if not path.is_file():
+        return kind
+    return json.loads(path.read_text())["question"]
+
+
 def questions(kind: str, rows: list[dict]) -> dict:
+    text = " ".join(lens(part) for part in kind.split())
     items = [{
         "id": "next",
         "type": "choice",
-        "instructions": kind,
+        "instructions": text,
         "options": {"ok": "no real bug", "issue": "real bug"},
     }]
     for index, row in enumerate(rows, start=1):
         items.append({
             "id": f"h{index}",
             "type": "bool",
-            "instructions": f"{kind} {row['plik']}:{row['linia_od']}-{row['linia_do']}",
+            "instructions": f"{text} {row['plik']}:{row['linia_od']}-{row['linia_do']}",
             "options": {"true": "problem", "false": "fine"},
         })
     return {"state": {}, "questions": items}

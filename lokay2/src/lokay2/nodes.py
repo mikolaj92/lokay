@@ -137,7 +137,7 @@ COMMANDS = {
     "check-ci": check_ci_main,
     "check-scope": lambda: _decision_step("scope"),
     "check-tests": lambda: _decision_step("tests"),
-    "check-correctness": lambda: _decision_step("correctness"),
+    "check-correctness": lambda: _decision_step("correctness alignment architecture security production"),
     "check-aggregate": check_aggregate_main,
     "fix-code": fix_code_main,
     "fix-publish": fix_publish_main,

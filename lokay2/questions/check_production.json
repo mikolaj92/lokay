@@ -1,0 +1,6 @@
+{
+  "id": "production",
+  "type": "bool",
+  "question": "Does this hunk miss error handling, logging, a migration, or a compatibility promise?",
+  "veto": 0.85
+}
