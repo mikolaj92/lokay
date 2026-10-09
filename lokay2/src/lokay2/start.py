@@ -20,8 +20,11 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     out["model"] = "ok" if child.get("LOKAY2_MODEL") else "fail"
     out["decision"] = "ok" if child.get("LOKAY2_DECISION_API") and child.get("LOKAY2_DECISION_MODEL") else "fail"
     out["pi"] = "ok" if shutil.which("pi", path=child.get("PATH")) else "fail"
-    gh = run_process(["gh", "auth", "status"], env=child, timeout=15)
-    out["gh"] = "ok" if gh.returncode == 0 else "fail"
+    try:
+        gh = run_process(["gh", "auth", "status"], env=child, timeout=15)
+        out["gh"] = "ok" if gh.returncode == 0 else "fail"
+    except FileNotFoundError:
+        out["gh"] = "fail"
     return out
 
 
