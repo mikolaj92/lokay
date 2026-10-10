@@ -20,6 +20,15 @@ def validate_argv(argv: Sequence[str]) -> None:
         "--force" in parts or "-f" in parts or "--force-with-lease" in parts
     ):
         raise SafetyError("force push is forbidden")
+    if parts[0] == "git" and "push" in parts:
+        refspecs = parts[parts.index("push") + 1:]
+        if any(
+            not ref.startswith("-")
+            and ref.rsplit(":", 1)[-1].lstrip("+")
+            in {"main", "master", "refs/heads/main", "refs/heads/master"}
+            for ref in refspecs
+        ):
+            raise SafetyError("push to main is forbidden; open a PR")
     if "rm" in parts and "-rf" in joined:
         raise SafetyError("recursive rm is forbidden")
 
