@@ -11,6 +11,50 @@ from lokay.lock import acquire, release
 from lokay.run import run_process
 
 
+def skip_file() -> Path:
+    return Path.home() / ".lokay" / "skip-issues.json"
+
+
+def load_skips(repo: str) -> set[int]:
+    path = skip_file()
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text() or "{}")
+    except json.JSONDecodeError:
+        return set()
+    rows = data.get(repo) if isinstance(data, dict) else None
+    if not isinstance(rows, dict):
+        return set()
+    found: set[int] = set()
+    for key in rows:
+        try:
+            found.add(int(key))
+        except (TypeError, ValueError):
+            continue
+    return found
+
+
+def remember_skip(repo: str, issue: int, explanation: str) -> None:
+    path = skip_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data: dict = {}
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text() or "{}")
+        except json.JSONDecodeError:
+            loaded = {}
+        if isinstance(loaded, dict):
+            data = loaded
+    bucket = data.get(repo)
+    if not isinstance(bucket, dict):
+        bucket = {}
+    bucket[str(issue)] = explanation
+    data[repo] = bucket
+    path.write_text(json.dumps(data))
+
+
+
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     child = dict(os.environ if env is None else env)
     out: dict[str, str] = {}
@@ -63,6 +107,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         except Exception:
             release(held)
             raise
+        issues = [row for row in issues if int(row["number"]) not in load_skips(name)]
         if not issues:
             release(held)
             continue
@@ -134,7 +179,16 @@ def advance(picked: dict) -> dict:
         added = worktree_add(root, branch, worktree)
         if added["result"] != "added":
             return {"result": "failed", "artifact": ""}
-    built = build_code(worktree, art.read_text(), f"issue {picked['issue']}", None, dict(os.environ))
+    built = build_code(
+        worktree,
+        art.read_text(),
+        f"issue {picked['issue']}",
+        None,
+        dict(os.environ),
+        expected_branch=branch,
+    )
+    if built.get("reason") == "outside_worktree":
+        remember_skip(picked["repo"], int(picked["issue"]), built.get("explanation") or "outside_worktree")
     if built["result"] != "done":
         return built
     published = build_publish(worktree, branch, None, picked["repo"], int(picked["issue"]), f"feat: issue {picked['issue']}")

@@ -22,7 +22,14 @@ def _git(repo: Path, args: list[str]) -> str:
     return (proc.stdout or "").strip()
 
 
-def build_code(worktree: Path, plan: str, title: str, body: str | None, env: dict[str, str]) -> dict:
+def build_code(
+    worktree: Path,
+    plan: str,
+    title: str,
+    body: str | None,
+    env: dict[str, str],
+    expected_branch: str | None = None,
+) -> dict:
     clean = child_env(env)
     proc = run_process(
         ["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), plan + "\n" + untrusted_issue_block(title, body)],
@@ -31,16 +38,30 @@ def build_code(worktree: Path, plan: str, title: str, body: str | None, env: dic
         timeout=3600,
     )
     if proc.returncode != 0:
-        return {"result": "failed", "artifact": ""}
+        explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
+        return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}
     status = _git(worktree, ["status", "--porcelain"])
     if status:
         _git(worktree, ["add", "-A"])
         _git(worktree, ["reset", "-q", "--", "__pycache__"])
         _git(worktree, ["commit", "-m", "lokay build"])
+    branch_now = _git(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])
     log = _git(worktree, ["log", "--oneline", "origin/main..HEAD"])
-    if not log:
-        return {"result": "failed", "artifact": ""}
-    return {"result": "done", "artifact": _git(worktree, ["rev-parse", "HEAD"])}
+    head = _git(worktree, ["rev-parse", "HEAD"])
+    wrong = expected_branch is not None and branch_now != expected_branch
+    if wrong or not log:
+        where = expected_branch or "lokay/<issue>"
+        explanation = (
+            f"commit is outside the issue worktree {worktree}: "
+            f"HEAD {head} on {branch_now}, expected branch {where}"
+        )
+        return {
+            "result": "failed",
+            "reason": "outside_worktree",
+            "explanation": explanation,
+            "artifact": str(worktree),
+        }
+    return {"result": "done", "artifact": head}
 
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str) -> dict:

@@ -47,7 +47,7 @@ def build_code_main() -> int:
         added = worktree_add(Path(req["repo"]), req["branch"], worktree)
         if added["result"] != "added":
             return emit({"result": "failed", "artifact": ""})
-    return emit(build_code(worktree, req["plan"], req["title"], req.get("body"), dict(os.environ)))
+    return emit(build_code(worktree, req["plan"], req["title"], req.get("body"), dict(os.environ), req.get("branch")))
 
 
 def build_publish_main() -> int:

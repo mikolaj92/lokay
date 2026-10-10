@@ -44,4 +44,22 @@ if grep -R -n -E 'push[^\n]*--force|push[^\n]* -f' "$(CDPATH= cd -- "$(dirname "
   echo "force push present" >&2
   exit 1
 fi
+uv run python - "$src" <<'PY'
+import subprocess
+import sys
+from pathlib import Path
+from lokay.git import push
+
+repo = Path(sys.argv[1])
+before = subprocess.check_output(["git", "rev-parse", "main"], cwd=repo, text=True).strip()
+for bad in ("HEAD:main", "+HEAD:main", "refs/heads/main", "main", "master"):
+    outcome = push(repo, bad, None)
+    if outcome.get("result") != "failed":
+        raise SystemExit(f"allowed {bad}: {outcome}")
+    print("rejected", bad)
+after = subprocess.check_output(["git", "rev-parse", "main"], cwd=repo, text=True).strip()
+if after != before:
+    raise SystemExit(f"main moved {before} -> {after}")
+print("main unchanged")
+PY
 rm -rf "$root"
