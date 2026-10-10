@@ -65,6 +65,11 @@ def remote_sha(repo: Path, branch: str) -> str | None:
 
 
 def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int = 3) -> dict:
+    if branch.lower() in {"main", "master", "refs/heads/main", "refs/heads/master"}:
+        return {
+            "result": "failed",
+            "error": f"push to protected branch {branch} is forbidden; open a PR from a branch",
+        }
     current = remote_sha(repo, branch)
     head_code, head_sha, _ = _git(repo, ["rev-parse", "HEAD"])
     if (
