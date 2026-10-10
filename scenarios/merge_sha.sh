@@ -13,8 +13,12 @@ if [ "$1" = "pr" ] && [ "$2" = "merge" ]; then
   exit 1
 fi
 if [ "$1" = "issue" ] && [ "$2" = "list" ]; then
-  printf '%s
-' '[{"number":2,"createdAt":"2026-10-09T00:00:02Z","title":"new"},{"number":1,"createdAt":"2026-10-09T00:00:01Z","title":"old"}]'
+  case " $* " in
+    *" --label "*) printf '%s
+' '[]' ;;
+    *) printf '%s
+' '[{"number":2,"createdAt":"2026-10-09T00:00:02Z","title":"new"},{"number":1,"createdAt":"2026-10-09T00:00:01Z","title":"old"}]' ;;
+  esac
   exit 0
 fi
 exit 0
@@ -30,6 +34,7 @@ from lokay.gh import issues_with_label, merge, pr_create
 
 rows = issues_with_label("mikolaj92/lokay-sandbox")
 assert [row["number"] for row in rows] == [1, 2], rows
+assert issues_with_label("mikolaj92/lokay-sandbox", "lokaj") == []
 moved = merge("mikolaj92/lokay-sandbox", 9, "abc")
 assert moved["result"] == "sha_moved", moved
 log = Path(os.environ["GH_LOG"]).read_text()

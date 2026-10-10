@@ -33,10 +33,11 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
-def issues_with_label(repo: str, label: str = "lokaj") -> list[dict]:
-    code, out, err = _gh(
-        ["issue", "list", "--repo", repo, "--label", label, "--state", "open", "--json", "number,createdAt,title"]
-    )
+def issues_with_label(repo: str, label: str | None = None) -> list[dict]:
+    args = ["issue", "list", "--repo", repo, "--state", "open", "--json", "number,createdAt,title"]
+    if label:
+        args[4:4] = ["--label", label]
+    code, out, err = _gh(args)
     if code != 0:
         raise RuntimeError(err.strip() or "issue list failed")
     rows = json.loads(out or "[]")
