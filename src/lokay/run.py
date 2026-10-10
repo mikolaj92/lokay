@@ -18,6 +18,7 @@ def run_process(
         list(argv),
         cwd=cwd,
         env=None if env is None else dict(env),
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
