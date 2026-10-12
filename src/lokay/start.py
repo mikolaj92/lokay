@@ -157,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(outcome, separators=(",", ":")))
     if outcome.get("node") == "plan":
         print(json.dumps(advance(outcome), separators=(",", ":")))
+    elif outcome.get("node") == "check":
+        print(json.dumps(resume(outcome), separators=(",", ":")))
     return 0
 
 
@@ -207,6 +209,29 @@ def advance(picked: dict) -> dict:
     if published.get("result") != "pr_open" or not published.get("sha"):
         return published
     return _finish(picked, worktree, branch, published["sha"], repo.get("test") or [])
+
+
+def resume(picked: dict) -> dict:
+    from lokay.git import _git
+
+    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    root = Path(os.path.expanduser(repo["clone_path"]))
+    worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
+    branch = f"lokay/{picked['issue']}"
+    if not worktree.exists():
+        for args in (
+            ["fetch", "origin", branch],
+            ["worktree", "add", "--track", "-b", branch, str(worktree), f"origin/{branch}"],
+        ):
+            code, out, err = _git(root, args)
+            if code != 0 and args[0] == "worktree" and "already exists" in (err + out):
+                code, out, err = _git(root, ["worktree", "add", str(worktree), branch])
+            if code != 0:
+                return {"result": "failed", "error": err.strip() or out.strip()}
+    pr = open_pr_for(picked["repo"], branch)
+    if pr is None or not pr.get("headRefOid"):
+        return {"result": "failed", "artifact": ""}
+    return _finish(picked, worktree, branch, pr["headRefOid"], repo.get("test") or [])
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list) -> dict:
