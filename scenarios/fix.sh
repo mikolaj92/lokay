@@ -35,12 +35,11 @@ env = {"PATH": os.environ["PATH"], "LOKAY2_PROVIDER": "p", "LOKAY2_MODEL": "m", 
 cache = wt / '__pycache__' / 'a.cpython-312.pyc'
 cache.parent.mkdir()
 cache.write_bytes(b'cache')
-__import__('subprocess').run(['git', 'add', '__pycache__'], cwd=wt, check=True)
 done = fix_code(wt, previous, "uwagi a.py:1", env)
 assert done["result"] == "done" and done["artifact"] != previous, done
 files = __import__('subprocess').check_output(['git', 'show', '--format=', '--name-only', 'HEAD'], cwd=wt, text=True).splitlines()
 assert 'a.py' in files and not any('__pycache__' in name for name in files), files
-assert cache.exists(), 'unstaging must preserve the cache file'
+assert not cache.exists(), 'tidy must remove untracked cache files'
 published = fix_publish(wt, "lokay/9b", None)
 assert published["result"] == "pushed", published
 assert published["sha"] == done["artifact"]

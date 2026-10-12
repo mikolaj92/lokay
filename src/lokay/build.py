@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from lokay.git import push, worktree_add
@@ -21,6 +22,64 @@ def _git(repo: Path, args: list[str]) -> str:
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout or "").strip())
     return (proc.stdout or "").strip()
+
+
+def tidy_and_commit(worktree: Path, message: str) -> tuple[list[str], list[str]]:
+    """Restore incidental lock edits, remove untracked caches, commit the rest."""
+    def names(args: list[str]) -> set[str]:
+        return set(filter(None, _git(worktree, args).split("\0")))
+
+    modified = names(["diff", "--name-only", "-z", "HEAD"])
+    manifests = (modified | names(["diff", "--name-only", "-z", "origin/main..HEAD"])
+                 | names(["ls-files", "--others", "--exclude-standard", "-z"]))
+    siblings = {"uv.lock": "pyproject.toml", "poetry.lock": "pyproject.toml",
+                "package-lock.json": "package.json"}
+    junk = sorted(path for path in modified if Path(path).name in siblings
+                  and str(Path(path).with_name(siblings[Path(path).name])) not in manifests)
+    if junk:
+        _git(worktree, ["checkout", "HEAD", "--", *junk])
+    caches = {"__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache", ".venv"}
+    untracked = names(["ls-files", "--others", "--exclude-standard", "-z"])
+    untracked |= names(["ls-files", "--others", "--ignored", "--exclude-standard", "-z"])
+    directories = set()
+    for name in sorted(untracked):
+        path = Path(name)
+        if not (set(path.parts) & caches or path.name.endswith(".pyc")):
+            continue
+        file = worktree / path
+        if file.is_file() or file.is_symlink():
+            file.unlink()
+        for parent in path.parents:
+            if set(parent.parts) & caches:
+                directories.add(worktree / parent)
+    # ls-files omits empty directories. Include them without following symlinks.
+    for root, dirs, _ in os.walk(worktree, followlinks=False):
+        dirs[:] = [name for name in dirs if name != ".git"]
+        relative = Path(root).relative_to(worktree)
+        if set(relative.parts) & caches:
+            directories.add(Path(root))
+    for directory in sorted(directories, key=lambda p: (-len(p.parts), str(p))):
+        try:
+            directory.rmdir()
+        except OSError:
+            pass  # Keep directories containing tracked files.
+    _git(worktree, ["add", "-A"])
+    committed = sorted(names(["diff", "--cached", "--name-only", "-z"]))
+    if committed:
+        _git(worktree, ["commit", "-m", message])
+    return committed, junk
+
+
+def pr_body(worktree: Path, plan_path: Path) -> str:
+    try:
+        plan = plan_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"cannot read plan {plan_path}: {exc}") from exc
+    goal = re.search(r"^## Cel[^\n]*\n.*?(?=^## |\Z)", plan, re.MULTILINE | re.DOTALL)
+    stat = _git(worktree, ["diff", "--stat", "origin/main...HEAD"])
+    subjects = _git(worktree, ["log", "--format=%s", "origin/main..HEAD"])
+    commits = "\n".join(f"- {subject}" for subject in subjects.splitlines())
+    return f"## Zmiany\n\n```text\n{stat}\n```\n\n{commits}\n\n## Plan\n\n" + (goal.group().strip() if goal else "") + "\n"
 
 
 def build_code(
@@ -54,6 +113,7 @@ def build_code(
     if changes["changed"]:
         return failure(changes, worktree)
     if proc.returncode != 0:
+        tidy_and_commit(worktree, "lokay build")
         explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
         return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}
     from lokay.scope import is_test
@@ -70,11 +130,7 @@ def build_code(
         file = worktree / path
         if file.exists() or file.is_symlink():
             file.unlink()
-    status = _git(worktree, ["status", "--porcelain"])
-    if status:
-        _git(worktree, ["add", "-A"])
-        _git(worktree, ["reset", "-q", "--", "__pycache__"])
-        _git(worktree, ["commit", "-m", "lokay build"])
+    tidy_and_commit(worktree, "lokay build")
     if removed:
         remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
         if not any(not is_test(path) for path in remaining):
@@ -108,10 +164,7 @@ def build_code(
 
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
-    try:
-        body = plan_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise RuntimeError(f"cannot read plan {plan_path}: {exc}") from exc
+    body = pr_body(worktree, plan_path)
     pushed = push(worktree, branch, expected)
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}

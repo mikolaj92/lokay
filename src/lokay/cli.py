@@ -8,6 +8,7 @@ from lokay.safety import SafetyError, validate_argv
 NODES = (
     "decide",
     "start",
+    "refresh-body",
     "status",
     "monitor",
 )
@@ -28,6 +29,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.node is None:
         parser.print_help()
         return 0
+    if args.node == "refresh-body":
+        from lokay.start import main as start_main
+
+        return start_main(["refresh-body", *rest])
     if args.node == "status":
         from lokay.observe import status
 

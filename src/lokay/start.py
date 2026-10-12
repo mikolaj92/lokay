@@ -225,11 +225,29 @@ def pick(env: dict[str, str] | None = None) -> dict:
     return chosen
 
 
+def refresh_body(repo: str, issue: int) -> dict:
+    from lokay.build import pr_body
+    from lokay.gh import pr_set_body
+
+    config = next(row for row in load_repos() if row["name"] == repo)
+    root = Path(os.path.expanduser(config["clone_path"]))
+    worktree = root.parent / f"{root.name}-wt-{issue}"
+    pr = open_pr_for(repo, f"lokay/{issue}")
+    if not pr:
+        raise RuntimeError(f"open PR missing for {repo} lokay/{issue}")
+    return pr_set_body(repo, pr["number"], pr_body(worktree, run_dir(repo, issue) / "plan.md"), issue)
+
+
 def main(argv: list[str] | None = None) -> int:
     import json
     import sys
 
     args = argv if argv is not None else sys.argv[1:]
+    if args and args[0] == "refresh-body":
+        if len(args) != 3 or not args[2].isdigit() or int(args[2]) < 1:
+            raise ValueError("usage: lokay refresh-body <repo> <issue>")
+        print(json.dumps(refresh_body(args[1], int(args[2])), separators=(",", ":")))
+        return 0
     if "--check" in args:
         report = probes()
         print(json.dumps(report, separators=(",", ":")))
@@ -440,7 +458,6 @@ def resume(picked: dict) -> dict:
         return needs_help(picked, "missing worktree", sha)
     for args, expected, reason in (
         (["branch", "--show-current"], branch, "branch mismatch"),
-        (["status", "--porcelain"], "", "dirty worktree"),
         (["rev-parse", "HEAD"], sha, "sha mismatch"),
     ):
         try:
@@ -449,11 +466,19 @@ def resume(picked: dict) -> dict:
             return needs_help(picked, f"{reason}: {type(exc).__name__}: {exc}", sha)
         if code != 0 or out.strip() != expected:
             return needs_help(picked, f"{reason}: {err.strip() or out.strip()}", sha)
+    from lokay.build import tidy_and_commit
+    from lokay.fix import fix_publish
+
+    committed, _ = tidy_and_commit(worktree, "lokay resume")
+    if committed:
+        published = _retry(picked, "fix", lambda: fix_publish(worktree, branch, sha), "pushed")
+        sha = published["sha"]
+        _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
     saved = state_read(picked["repo"], picked["issue"])
     if saved.get("sha") != sha or (saved.get("verdict") or {}).get("sha") != sha:
         state_update(picked["repo"], picked["issue"], node="check", verdict=None, fix_fingerprint=None)
     state_update(picked["repo"], picked["issue"], sha=sha)
-    return _finish(picked, worktree, branch, pr["headRefOid"], repo.get("test") or [])
+    return _finish(picked, worktree, branch, sha, repo.get("test") or [])
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
@@ -549,6 +574,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 if pushed["result"] != "pushed":
                     raise RuntimeError(f"main synchronization publish failed: {pushed}")
                 sha = pushed["sha"]
+                _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
                 state_update(picked["repo"], picked["issue"], sha=sha, verdict=None)
         def read_diff():
             diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
@@ -616,6 +642,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if pushed["result"] == "remote_moved" and pushed.get("sha"):
                 _retry(picked, "check", sync_head)
             sha = pushed["sha"]
+            if pushed["result"] == "pushed":
+                _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
             state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint)
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"

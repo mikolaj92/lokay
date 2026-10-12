@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lokay.build import child_env
+from lokay.build import child_env, tidy_and_commit
 from lokay.git import push
 from lokay.host_guard import guard, failure
 from lokay.run import run_process
@@ -33,13 +33,9 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
         raise
     if changes["changed"]:
         return failure(changes, worktree)
+    tidy_and_commit(worktree, "lokay fix")
     if proc.returncode != 0:
         return {"result": "failed", "artifact": ""}
-    status = _git(worktree, ["status", "--porcelain"])
-    if status:
-        _git(worktree, ["add", "-A"])
-        _git(worktree, ["reset", "-q", "--", "__pycache__"])
-        _git(worktree, ["commit", "-m", "lokay fix"])
     sha = _git(worktree, ["rev-parse", "HEAD"])
     if sha == previous:
         return {"result": "failed", "reason": "no_changes", "artifact": ""}

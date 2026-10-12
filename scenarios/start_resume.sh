@@ -45,6 +45,8 @@ with tempfile.TemporaryDirectory() as tmp:
         stack.enter_context(patch('lokay.start.load_repos', return_value=[
             {'name': repo, 'clone_path': str(clone), 'test': tests}]))
         stack.enter_context(patch('lokay.start.time.sleep', no_sleep))
+        tidy = stack.enter_context(patch('lokay.build.tidy_and_commit', return_value=([], [])))
+        refresh = stack.enter_context(patch('lokay.start.refresh_body', return_value={'result': 'updated'}))
         prepare = stack.enter_context(patch('lokay.start._prepare', side_effect=AssertionError('Plan/Build forbidden')))
         remote = stack.enter_context(patch('lokay.start.open_pr_for', return_value=pr))
         def git(path, args):
@@ -63,7 +65,7 @@ with tempfile.TemporaryDirectory() as tmp:
         prepare.assert_not_called()
 
         # Reject unsafe worktrees before any Check, Fix, fetch or Merge.
-        for kind in ('missing', 'branch', 'dirty', 'sha'):
+        for kind in ('missing', 'branch', 'sha'):
             reset(node='fix', verdict={'result': 'fix', 'sha': 'old', 'uwagi': []})
             if kind == 'missing':
                 worktree.rmdir()
@@ -91,6 +93,16 @@ with tempfile.TemporaryDirectory() as tmp:
             if kind == 'missing':
                 worktree.mkdir()
         git_mock.side_effect = git
+
+        # Dirty changes are committed and published before Check.
+        reset()
+        tidy.return_value = (['user.txt'], ['uv.lock'])
+        with patch('lokay.fix.fix_publish', return_value={'result': 'pushed', 'sha': 'tidied'}) as publish, \
+             patch('lokay.start._finish', return_value={'result': 'pending'}) as finish:
+            assert start.resume(picked)['result'] == 'pending'
+            publish.assert_called_once_with(worktree, 'lokay/7', 'new')
+            finish.assert_called_once_with(picked, worktree, 'lokay/7', 'tidied', tests)
+        tidy.return_value = ([], [])
 
         # A new PR SHA invalidates a saved Fix verdict, even without pick().
         reset(node='fix', sha='old', verdict={'result': 'fix', 'sha': 'old', 'uwagi': []})
@@ -258,6 +270,15 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert result['result'] == 'needs_help', result
                 finish.assert_not_called()
             prepare.assert_not_called()
+
+        # CLI refresh bypasses pick().
+        from lokay.cli import main as cli_main
+        refresh.reset_mock()
+        with patch('lokay.start.pick') as pick, redirect_stdout(io.StringIO()) as out:
+            assert cli_main(['refresh-body', repo, '7']) == 0
+            refresh.assert_called_once_with(repo, 7)
+            pick.assert_not_called()
+            assert json.loads(out.getvalue()) == {'result': 'updated'}
 
         # main dispatch, final JSON and finally-release contracts.
         for node, target in [('check', 'resume'), ('fix', 'resume'), ('merge', 'resume'), ('plan', 'advance'), ('build', 'advance')]:
