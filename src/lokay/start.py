@@ -135,41 +135,38 @@ def pick(env: dict[str, str] | None = None) -> dict:
             continue
         try:
             issues = open_issues(name)
-        except Exception:
+            skipped = load_skips(name)
+            issues = [
+                row for row in issues
+                if int(row["number"]) not in skipped
+                and not row["title"].lower().startswith("epic")
+                and (only_issue is None or int(row["number"]) == only_issue)
+            ]
+            issue = next((row for row in issues
+                          if state_read(name, row["number"]).get("retry_at", 0) <= time.time()), None)
+            if issue is None:
+                continue
+            saved = state_read(name, issue["number"])
+            branch = f"lokay/{issue['number']}"
+            pr = open_pr_for(name, branch)
+            chosen = {
+                "result": "picked",
+                "repo": name,
+                "issue": issue["number"],
+                "node": saved.get("node") or ("check" if pr else "plan"),
+                "pr": None if pr is None else pr.get("number"),
+                "held": held,
+            }
+            state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"])
+        except BaseException:
             release(held)
             raise
-        skipped = load_skips(name)
-        issues = [
-            row for row in issues
-            if int(row["number"]) not in skipped
-            and not row["title"].lower().startswith("epic")
-            and (only_issue is None or int(row["number"]) == only_issue)
-        ]
-        if not issues:
-            release(held)
-            continue
-        issue = next((row for row in issues
-                      if state_read(name, row["number"]).get("retry_at", 0) <= time.time()), None)
-        if issue is None:
-            release(held)
-            continue
-        saved = state_read(name, issue["number"])
-        branch = f"lokay/{issue['number']}"
-        try:
-            pr = open_pr_for(name, branch)
         finally:
-            release(held)
-        chosen = {
-            "result": "picked",
-            "repo": name,
-            "issue": issue["number"],
-            "node": saved.get("node") or ("check" if pr else "plan"),
-            "pr": None if pr is None else pr.get("number"),
-        }
+            if chosen is None:
+                release(held)
         break
     if chosen is None:
         return {"result": "idle", "reason": "no_work"}
-    state_update(chosen["repo"], chosen["issue"], node=chosen["node"], branch=branch, pr=chosen["pr"])
     return chosen
 
 
@@ -187,11 +184,14 @@ def main(argv: list[str] | None = None) -> int:
         extra = outcome.get("failed") or ""
         print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return 0
-    print(json.dumps(outcome, separators=(",", ":")))
-    if outcome.get("node") in ("plan", "build"):
-        print(json.dumps(advance(outcome), separators=(",", ":")))
-    elif outcome.get("node") in ("check", "fix", "merge"):
-        print(json.dumps(resume(outcome), separators=(",", ":")))
+    try:
+        print(json.dumps({k: v for k, v in outcome.items() if k != "held"}, separators=(",", ":")))
+        if outcome.get("node") in ("plan", "build"):
+            print(json.dumps(advance(outcome), separators=(",", ":")))
+        elif outcome.get("node") in ("check", "fix", "merge"):
+            print(json.dumps(resume(outcome), separators=(",", ":")))
+    finally:
+        release(outcome["held"])
     return 0
 
 
@@ -372,7 +372,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         sha,
         verdict,
         worktree,
-        None,
+        picked.get("held"),
         picked["repo"].split("/")[0],
         int(picked["issue"]),
         {"plan_rounds": plan_rounds, "check_rounds": rounds},

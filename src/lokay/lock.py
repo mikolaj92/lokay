@@ -28,7 +28,7 @@ def acquire(owner: str, repo: str) -> dict:
 
 
 def release(held: dict) -> None:
-    fd = held.get("fd")
+    fd = held.pop("fd", None)
     if not isinstance(fd, int):
         return
     import fcntl
