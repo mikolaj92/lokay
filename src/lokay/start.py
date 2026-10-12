@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -278,8 +279,8 @@ def _prepare(picked: dict) -> tuple:
     plan_rounds = saved.get("plan_rounds", 0)
     if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not plan.valid_plan(art):
         art.parent.mkdir(parents=True, exist_ok=True)
-        original_prompt = plan.prompt_for(title, body)
-        prompt = saved.get("plan_prompt") or original_prompt
+        original_prompt = saved.get("plan_prompt") or plan.prompt_for(title, body)
+        prompt = original_prompt
         phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
         while True:
             if phase == "write" or not plan.valid_plan(art):
@@ -448,17 +449,26 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 raise RuntimeError(diff.stderr or "diff failed")
             return diff
         diff = _retry(picked, "check", read_diff)
+        diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
+        state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
             uwagi = verdict["uwagi"]
-            fingerprint = json.dumps(sorted(json.dumps(row, sort_keys=True) for row in uwagi))
+            findings = {
+                json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")),
+                            row.get("linia", row.get("linia_od")), row.get("linia_do")])
+                for row in uwagi
+            }
+            fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
             saved = state_read(picked["repo"], picked["issue"])
             replan = saved.get("fix_fingerprint") == fingerprint
             if not replan:
-                state_update(picked["repo"], picked["issue"], fix_fingerprint=fingerprint)
+                art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
                 prompt = (
                     Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
                     + "\n\nUwagi:\n" + json.dumps(uwagi)
                     + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
+                    + "\n\nTest log:\n" + (saved.get("test_log") or "")
+                    + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                     + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
                 )
                 try:
@@ -466,17 +476,31 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 except Exception as exc:
                     fixed = {"result": "failed", "reason": str(exc)}
                 replan = fixed.get("reason") == "no_changes"
+                if fixed["result"] == "done":
+                    after = _retry(picked, "fix", read_diff)
+                    after_fingerprint = hashlib.sha256((after.stdout or "").encode()).hexdigest()
+                    state_update(picked["repo"], picked["issue"], diff_fingerprint=after_fingerprint)
+                    replan = after_fingerprint == diff_fingerprint
                 if fixed["result"] != "done" and not replan:
                     state_update(picked["repo"], picked["issue"], fix_reason=str(fixed))
                     time.sleep(60)
                     continue
+                state_update(picked["repo"], picked["issue"], fix_fingerprint=fingerprint)
             if replan:
                 code, raw, _err = _retry(picked, "plan", lambda: _gh(
                     ["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"]
                 ))
                 issue = json.loads(raw) if code == 0 and raw.strip() else {}
                 prompt = plan.prompt_for(issue.get("title") or f"issue {picked['issue']}", issue.get("body"))
-                prompt += "\n\nUwagi:\n" + json.dumps(uwagi) + "\nFix made no progress; revise the plan.\n"
+                rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
+                art = run_dir(picked["repo"], picked["issue"])
+                prompt += (
+                    "\n\nUwagi:\n" + json.dumps(uwagi)
+                    + "\n\nRounds:\n" + (art / "rounds.md").read_text()
+                    + "\n\nTest log:\n" + (saved.get("test_log") or "")
+                    + "\n\nPrevious plan:\n" + ((art / "plan.md").read_text() if (art / "plan.md").is_file() else "")
+                    + "\nFix made no progress; revise the plan.\n"
+                )
                 state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_prompt=prompt)
                 worktree, branch, sha, tests, plan_rounds = _prepare({**picked, "node": "plan"})
             else:
@@ -496,6 +520,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             continue
         rows = hunks(diff.stdout or "")
         failed = []
+        log = ""
         if tests:
             proc = _retry(picked, "check", lambda: run_process(tests, cwd=worktree, timeout=600))
             log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
@@ -521,7 +546,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rounds += 1
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
-            check_rounds=rounds, result=verdict["result"], verdict=verdict,
+            check_rounds=rounds, result=verdict["result"], verdict=verdict, test_log=log,
         )
         counts = ", ".join(
             f"{kind}={len(decision['uwagi'])}"
