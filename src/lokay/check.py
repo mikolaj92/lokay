@@ -35,8 +35,6 @@ def hunks(diff: str) -> list[dict]:
 
 def lens(kind: str) -> str:
     path = QUESTIONS / f"check_{kind}.json"
-    if not path.is_file():
-        return kind
     return json.loads(path.read_text())["question"]
 
 
@@ -71,14 +69,19 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
         elif p >= NIT:
             nits.append(item)
     choice = answers["next"]["choice"]
-    nxt = "issue" if uwagi else "ok"
-    if choice == "issue" and not uwagi:
-        nxt = "ok"
+    nxt = "issue" if uwagi or choice == "issue" else "ok"
     return {"next": nxt, "confidence": answers["next"]["confidence"], "uwagi": uwagi, "nits": nits}
 
 
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
+    from subprocess import CompletedProcess, TimeoutExpired
     from lokay.run import run_process
+
+    def execute(argv):
+        try:
+            return run_process(argv, cwd=cwd, timeout=timeout)
+        except (TimeoutExpired, OSError) as exc:
+            return CompletedProcess(argv, 1, "", str(exc))
 
     failed = []
     notes = []
@@ -86,10 +89,10 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     if not tests:
         failed.append({"warstwa": "tests", "plik": "", "log": "No test command configured."})
     for argv in tests:
-        proc = run_process(argv, cwd=cwd, timeout=timeout)
+        proc = execute(argv)
         log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
         if proc.returncode != 0:
-            retry = run_process(argv, cwd=cwd, timeout=timeout)
+            retry = execute(argv)
             retry_log = ((retry.stdout or "") + (retry.stderr or ""))[-3000:]
             flaky = retry.returncode == 0
             item = {"warstwa": " ".join(argv), "plik": "", "linia": None,

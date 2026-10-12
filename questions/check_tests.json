@@ -1,6 +1,6 @@
 {
   "id": "tests",
   "type": "bool",
-  "question": "Is this change missing a test that would fail without it, or does it break an existing test?",
+  "question": "Is this change missing a test that would fail without it, or does it break an existing test? Missing test results are not evidence of success.",
   "veto": 0.85
 }

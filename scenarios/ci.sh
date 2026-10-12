@@ -64,6 +64,13 @@ with tempfile.TemporaryDirectory() as tmp:
     request["test"] = []
     view["statusCheckRollup"] = []
     assert check()["result"] == "red"
+    timed_out = local_ci('timeout', [[sys.executable, '-c', 'import time; time.sleep(2)']], root, timeout=0.01)
+    assert timed_out['result'] == 'red' and timed_out['failed'], timed_out
+    unavailable = local_ci('missing', [[str(root / 'missing-command')]], root)
+    assert unavailable['result'] == 'red' and unavailable['failed'], unavailable
+    no_tests = local_ci('empty', [], root)
+    assert no_tests['result'] == 'red' and no_tests['failed'], no_tests
+    assert aggregate('empty', no_tests, [{'next': 'ok'}])['result'] == 'fix'
 
 # Resume the production Check path. Pending remote CI stops after local CI has
 # been persisted, without replacing the cache condition or invoking Fix.
@@ -143,5 +150,43 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     assert attempts.read_text().splitlines()[-2:] == ['2', '2']
     history = state.run_dir(picked['repo'], 1) / 'rounds.md'
     assert history.read_text().count('GitHub CI pending') == 6
-print('CI: mutation, flaky, remote guards, production resume SHA/argv cache OK')
+    # Use the real Check verdict and model response parser; only external effects are faked.
+    stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green', 'failed': []}))
+    merge = stack.enter_context(patch('lokay.merge.merge_sha', return_value={
+        'result': 'merged', 'merge_sha': 'merged'}))
+    fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
+    stack.enter_context(patch('lokay.start._retry', side_effect=lambda picked, node, action, *args: action()))
+    kinds = 'correctness alignment architecture security production scope tests'
+    from lokay.check import lens
+    for choice, exit_code in (('ok', 0), ('issue', 0), ('ok', 1), ('ok', None)):
+        argv = configure(exit_code or 0)
+        if exit_code is None:
+            argv = []
+            config.write_text('repos:\n  - name: example/resume\n'
+                             f'    clone_path: {clone}\n    test: []\n    merge: on\n')
+        cached = ({'sha': head['sha'], 'argv': [], 'result': 'green',
+                   'failed': [], 'notes': [], 'log': ''} if exit_code is None else None)
+        state.state_update(picked['repo'], 1, node='check', verdict=None, local_ci=cached)
+        merge.reset_mock(); fix.reset_mock()
+        calls = []
+        def model(request):
+            calls.append(request)
+            assert request['state']['kind'] == kinds, request
+            assert len(request['questions']) == 1, request
+            for kind in kinds.split():
+                assert lens(kind) in request['questions'][0]['instructions']
+            return {'next': {'choice': choice, 'probabilities': {
+                choice: 0.9, ('issue' if choice == 'ok' else 'ok'): 0.1}}}
+        with patch('lokay.decide.decide', side_effect=model):
+            result = start.resume.__wrapped__(picked)
+        assert len(calls) == 1, calls
+        if choice == 'ok' and exit_code == 0:
+            assert result['result'] == 'merged', result
+            merge.assert_called_once()
+            fix.assert_not_called()
+        else:
+            assert result['result'] == 'needs_help', result
+            merge.assert_not_called()
+            fix.assert_called_once()
+print('CI: mutation, timeout, flaky, remote guards, SHA/argv cache; 4 real Check → merge cases OK')
 PY

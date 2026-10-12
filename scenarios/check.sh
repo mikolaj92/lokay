@@ -77,6 +77,50 @@ except Exception:
     pass
 else:
     raise SystemExit("maybe accepted")
+# A global issue is a veto even without a high-confidence file finding.
+from copy import deepcopy
+from lokay.check import QUESTIONS, lens, questions
+import json
+
+kinds = 'correctness alignment architecture security production scope tests'
+for kind in kinds.split():
+    data = json.loads((QUESTIONS / f'check_{kind}.json').read_text())
+    assert set(data) == {'id', 'type', 'question', 'veto'}, data
+    assert data['id'] == kind and data['type'] == 'bool' and data['veto'] == 0.85
+    assert len(data['question']) > len(kind)
+    if kind == 'tests':
+        assert 'not evidence of success' in data['question']
+    for question in questions(kinds, rows)['questions']:
+        assert data['question'] in question['instructions']
+from lokay.decide import to_wire
+for api in ('tensorfold', 'openai-decisions', 'mini', 'systemone'):
+    wire_text = json.dumps(to_wire(api, 'm', questions(kinds, rows)))
+    for kind in kinds.split():
+        assert lens(kind) in wire_text, (api, kind)
+    assert 'a.py:10-12' in wire_text, api
+for confidence in (0.84, 0.85, 0.86):
+    for choice in ('ok', 'issue'):
+        wire = deepcopy(wire_ok)
+        wire['answers']['next'] = {'choice': choice, 'probabilities': {
+            choice: confidence, ('issue' if choice == 'ok' else 'ok'): 1 - confidence}}
+        verdict = decide_hunks(kinds, rows, wire, 'm')
+        assert verdict['uwagi'] == []
+        assert verdict['next'] == choice, (confidence, choice, verdict)
+        assert aggregate('abc', {'result': 'green', 'sha': 'abc'}, [verdict])['result'] == (
+            'merge' if choice == 'ok' else 'fix')
+for probability in (0.84, 0.85, 0.86):
+    wire = deepcopy(wire_ok)
+    wire['answers']['h1'] = {'choice': 'true', 'probabilities': {
+        'true': probability, 'false': 1 - probability}}
+    verdict = decide_hunks(kinds, rows, wire, 'm')
+    assert bool(verdict['uwagi']) == (probability >= 0.85)
+    assert verdict['next'] == ('issue' if probability >= 0.85 else 'ok')
+try:
+    lens('missing-lens')
+except FileNotFoundError:
+    pass
+else:
+    raise AssertionError('missing questions accepted')
 print("issue", bad["uwagi"][0]["plik"], bad["uwagi"][0]["linia_od"])
 print("merge")
 PY

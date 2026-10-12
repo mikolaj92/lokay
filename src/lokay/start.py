@@ -564,7 +564,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
         ci = saved.get("local_ci")
-        if not ci or ci.get("sha") != sha or ci.get("argv") != tests:
+        if not tests or not ci or ci.get("sha") != sha or ci.get("argv") != tests:
             ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
             ci = {**ci, "argv": list(tests)}
             state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
@@ -591,8 +591,16 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             for name in remote.get("failed") or []
         ], "result": "green" if ci["result"] == remote["result"] == "green" else "red"}
         decisions = []
-        for kind in ("scope", "tests", "correctness"):
-            answers = _retry(picked, "check", lambda: decide({"state": {"sha": sha, "kind": kind}, "questions": questions(kind, rows)["questions"]}))
+        kinds = ("correctness alignment architecture security production scope tests",)
+        for kind in kinds:
+            art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
+            answers = _retry(picked, "check", lambda: decide({
+                "state": {"sha": sha, "kind": kind, "repo": picked["repo"],
+                          "issue": picked["issue"], "diff": diff.stdout or "",
+                          "plan": art.read_text() if art.is_file() else "",
+                          "test_result": ci["result"], "test_log": log},
+                "questions": questions(kind, rows)["questions"],
+            }))
             wire = {
                 "model": os.environ.get("LOKAY2_DECISION_MODEL") or os.environ.get("LOKAY2_MODEL", ""),
                 "usage": {"completion_tokens": 0},
@@ -609,7 +617,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         )
         counts = ", ".join(
             f"{kind}={len(decision['uwagi'])}"
-            for kind, decision in zip(("scope", "tests", "correctness"), decisions)
+            for kind, decision in zip(kinds, decisions)
         )
         rounds_append(
             picked["repo"], picked["issue"],
