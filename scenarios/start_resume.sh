@@ -83,17 +83,14 @@ with tempfile.TemporaryDirectory() as tmp:
         prepare.assert_not_called()
 
         # Reject unsafe worktrees before any Check, Fix, fetch or Merge.
-        for kind in ('missing', 'branch', 'sha'):
+        git_mock.reset_mock()
+        for kind in ('missing', 'branch'):
             reset(node='fix', verdict={'result': 'fix', 'sha': 'old', 'uwagi': []})
             if kind == 'missing':
                 worktree.rmdir()
             def unsafe_git(path, args):
                 if kind == 'branch' and args == ['branch', '--show-current']:
                     return 0, 'user/branch', ''
-                if kind == 'dirty' and args == ['status', '--porcelain']:
-                    return 0, '?? user.txt', ''
-                if kind == 'sha' and args == ['rev-parse', 'HEAD']:
-                    return 0, 'old', ''
                 return git(path, args)
             git_mock.side_effect = unsafe_git
             with patch('lokay.start._finish') as finish:
@@ -117,12 +114,20 @@ with tempfile.TemporaryDirectory() as tmp:
         # Dirty changes are committed and published before Check.
         reset()
         tidy.return_value = (['user.txt'], ['uv.lock'])
+        def tidied_git(path, args):
+            if args == ['rev-parse', 'HEAD']:
+                return 0, 'tidied', ''
+            return git(path, args)
+        git_mock.side_effect = tidied_git
+        remote.side_effect = [pr, {'number': 12, 'headRefOid': 'tidied'}]
         with patch('lokay.fix.fix_publish', return_value={'result': 'pushed', 'sha': 'tidied'}) as publish, \
              patch('lokay.start._finish', return_value={'result': 'pending'}) as finish:
             assert start.resume(picked)['result'] == 'pending'
             publish.assert_called_once_with(worktree, 'lokay/7', 'new')
             finish.assert_called_once_with(picked, worktree, 'lokay/7', 'tidied', tests)
         tidy.return_value = ([], [])
+        git_mock.side_effect = git
+        remote.side_effect = None
 
         # A new PR SHA invalidates a saved Fix verdict, even without pick().
         reset(node='fix', sha='old', verdict={'result': 'fix', 'sha': 'old', 'uwagi': []})

@@ -155,7 +155,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
             continue
         node = "plan" if state_read(name, issue).get("node") == "plan" else "check"
         try:
-            state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"])
+            state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
+                         result="running", reason=None)
         except BaseException:
             release(held)
             raise
@@ -195,7 +196,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 "pr": None,
                 "held": held,
             }
-            state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"])
+            state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"],
+                         result="running", reason=None)
         except BaseException:
             chosen = None
             raise
@@ -450,24 +452,51 @@ def resume(picked: dict) -> dict:
         return needs_help(picked, "PR branch or number mismatch", sha)
     if not worktree.is_dir():
         return needs_help(picked, "missing worktree", sha)
-    for args, expected, reason in (
-        (["branch", "--show-current"], branch, "branch mismatch"),
-        (["rev-parse", "HEAD"], sha, "sha mismatch"),
-    ):
-        try:
-            code, out, err = _git(worktree, args)
-        except Exception as exc:
-            return needs_help(picked, f"{reason}: {type(exc).__name__}: {exc}", sha)
-        if code != 0 or out.strip() != expected:
-            return needs_help(picked, f"{reason}: {err.strip() or out.strip()}", sha)
+    try:
+        code, out, err = _git(worktree, ["branch", "--show-current"])
+    except Exception as exc:
+        return needs_help(picked, f"branch mismatch: {type(exc).__name__}: {exc}", sha)
+    if code != 0 or out.strip() != branch:
+        return needs_help(picked, f"branch mismatch: {err.strip() or out.strip()}", sha)
     from lokay.build import tidy_and_commit
     from lokay.fix import fix_publish
 
-    committed, _ = tidy_and_commit(worktree, "lokay resume")
-    if committed:
-        published = _retry(picked, "fix", lambda: fix_publish(worktree, branch, sha), "pushed")
-        sha = published["sha"]
-        _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
+    tidy_and_commit(worktree, "lokay resume")
+    code, out, err = _git(worktree, ["fetch", "origin", branch])
+    if code != 0:
+        return needs_help(picked, f"resume fetch: {err.strip() or out.strip()}", sha)
+    code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+    if code != 0:
+        return needs_help(picked, f"resume HEAD: {err.strip() or out.strip()}", sha)
+    local = out.strip()
+    if local != sha:
+        ahead, out, err = _git(worktree, ["merge-base", "--is-ancestor", sha, local])
+        if ahead not in (0, 1):
+            return needs_help(picked, f"resume ancestry: {err.strip() or out.strip()}", sha)
+        behind = 1
+        if ahead != 0:
+            behind, out, err = _git(worktree, ["merge-base", "--is-ancestor", local, sha])
+            if behind not in (0, 1):
+                return needs_help(picked, f"resume ancestry: {err.strip() or out.strip()}", sha)
+            code, out, err = _git(worktree, ["merge", "--ff-only" if behind == 0 else "--no-edit", f"origin/{branch}"])
+            if code != 0:
+                reason = "sha diverged: conflict" if behind != 0 else f"resume ff: {err.strip() or out.strip()}"
+                return needs_help(picked, reason, sha)
+        if behind != 0:
+            published = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+            if published.get("result") != "pushed":
+                if published.get("result") == "failed":
+                    return published
+                return needs_help(picked, f"fix_publish: {published}", sha)
+            pr = open_pr_for(picked["repo"], branch)
+            code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+            if code != 0 or not pr or pr.get("headRefOid") != out.strip():
+                return needs_help(picked, "sha mismatch after push", sha)
+            sha = out.strip()
+            _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
+    code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+    if code != 0 or out.strip() != sha:
+        return needs_help(picked, f"sha mismatch: {err.strip() or out.strip()}", sha)
     saved = state_read(picked["repo"], picked["issue"])
     if saved.get("sha") != sha or (saved.get("verdict") or {}).get("sha") != sha:
         state_update(picked["repo"], picked["issue"], node="check", verdict=None, fix_fingerprint=None)
