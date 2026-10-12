@@ -618,6 +618,36 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
 
     while True:
         if pending == "merge" and verdict and verdict.get("sha") == sha:
+            from lokay.merge_guard import merge_guard
+
+            saved = state_read(picked["repo"], picked["issue"])
+            if saved.get("issue_title") is None:
+                code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"],
+                                      "--json", "title,body"])
+                if code != 0:
+                    raise RuntimeError(err or "issue view failed")
+                issue = json.loads(raw)
+                saved = {**saved, "issue_title": issue["title"], "issue_body": issue.get("body")}
+                state_update(picked["repo"], picked["issue"], issue_title=issue["title"], issue_body=issue.get("body"))
+            guarded = _retry(picked, "merge", lambda: merge_guard(
+                worktree, saved.get("issue_title") or "", saved.get("issue_body")))
+            if guarded["removed"] or guarded["reset"]:
+                rounds_append(picked["repo"], picked["issue"],
+                              "Merge guard: removed " + ", ".join(guarded["removed"]) +
+                              ", reset " + ", ".join(guarded["reset"]))
+                state_update(picked["repo"], picked["issue"], node="check", verdict=None,
+                             local_ci=None, result="check")
+                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+                if pushed["result"] == "failed":
+                    return pushed
+                if pushed["result"] == "remote_moved" and pushed.get("sha"):
+                    _retry(picked, "check", sync_head)
+                if pushed["result"] not in ("pushed", "remote_moved"):
+                    raise RuntimeError(f"merge guard publish failed: {pushed}")
+                sha = pushed["sha"]
+                state_update(picked["repo"], picked["issue"], node="check", sha=sha,
+                             verdict=None, local_ci=None, result="check")
+                return {"result": "check", "sha": sha}
             pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
             if pr and pr.get("headRefOid") == sha:
                 state_update(picked["repo"], picked["issue"], node="merge", pr=pr["number"])

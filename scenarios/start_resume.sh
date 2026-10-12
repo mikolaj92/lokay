@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory() as tmp:
         path.unlink(missing_ok=True)
         start.skip_file().unlink(missing_ok=True)
         if fields:
-            state.state_update(repo, 7, **fields)
+            state.state_update(repo, 7, **{'issue_title': 'Fix code', 'issue_body': '', **fields})
 
     # Backoff grows once per failed tick, caps at one hour, and never writes skips.
     for failures in (0, 1, 6, 7, 20):
@@ -155,6 +155,7 @@ with tempfile.TemporaryDirectory() as tmp:
         aggregate = stack.enter_context(patch('lokay.check.aggregate'))
         code = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'done'}))
         publish = stack.enter_context(patch('lokay.fix.fix_publish', return_value={'result': 'pushed', 'sha': 'new'}))
+        stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={'removed': [], 'reset': []}))
         merge = stack.enter_context(patch('lokay.merge.merge_sha', return_value={'result': 'merged', 'merge_sha': 'merged'}))
         finding = {'result': 'fix', 'sha': 'new', 'uwagi': [{'plik': 'a', 'pytanie': 'bug'}]}
         green = {'result': 'merge', 'sha': 'new', 'uwagi': []}
