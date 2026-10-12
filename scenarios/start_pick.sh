@@ -14,7 +14,7 @@ if [ "$1" = "issue" ]; then
 fi
 if [ "$1" = "pr" ]; then
   if [ "${OPEN_PR:-}" = "yes" ]; then
-    printf '%s\n' '[{"number":10,"headRefOid":"abc"}]'
+    printf '%s\n' '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"}]'
     exit 0
   fi
   printf '%s
@@ -33,9 +33,13 @@ cat > "$root/repos.yaml" <<'EOF'
 repos:
   - name: example/first
     clone_path: /unused
-    test: []
+    test: ["python3", "verify.py"]
     merge: on
   - name: example/second
+    clone_path: /unused
+    test: ["python3", "verify.py"]
+    merge: on
+  - name: example/untested
     clone_path: /unused
     test: []
     merge: on
@@ -61,6 +65,8 @@ env = {
     "LOKAY2_DECISION_MODEL": "m",
     "LOKAY2_REPOS_FILE": os.environ["LOKAY2_REPOS_FILE"],
 }
+assert pick({**env, "LOKAY2_REPO": "example/untested"}) == {"result": "idle", "reason": "no_work"}
+assert "example/untested" not in open(os.environ["GH_LOG"]).read()
 got = pick(env)
 assert got["issue"] == 1 and got["node"] == "plan" and got["repo"] == "example/first", got
 assert pick({**env, "LOKAY2_REPO": "example/first"}) == {"result": "idle", "reason": "no_work"}

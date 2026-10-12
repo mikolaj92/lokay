@@ -6,13 +6,12 @@ import sys
 from pathlib import Path
 
 from lokay.build import build_code, build_publish
-from lokay.check import aggregate, decide_hunks, hunks
+from lokay.check import aggregate, decide_hunks, hunks, local_ci
 from lokay.decide import DecisionError, decide
 from lokay.fix import fix_code, fix_publish
 from lokay.git import worktree_add
 from lokay.merge import merge_sha
 from lokay.plan import plan_questions, plan_write, verdict
-from lokay.run import run_process
 
 
 def emit(payload: dict) -> int:
@@ -58,12 +57,16 @@ def build_publish_main() -> int:
 def check_ci_main() -> int:
     req = _req()
     sha = req["sha"]
-    failed = []
-    for argv in req.get("test") or []:
-        proc = run_process(argv, cwd=req.get("cwd"), timeout=req.get("timeout") or 600)
-        if proc.returncode != 0:
-            failed.append({"warstwa": " ".join(argv), "plik": "", "linia": None})
-    return emit({"result": "red" if failed else "green", "sha": sha, "failed": failed})
+    from lokay.gh import pr_checks
+
+    ci = local_ci(sha, req.get("test") or [], req.get("cwd"), req.get("timeout") or 600)
+    remote = pr_checks(req["repo"], int(req["pr"]), sha)
+    if remote["result"] in ("pending", "sha_moved"):
+        return emit({**ci, "result": remote["result"], "head_sha": remote["sha"]})
+    ci["failed"].extend({"warstwa": "GitHub CI", "plik": "", "log": name}
+                        for name in remote.get("failed") or [])
+    ci["result"] = "red" if ci["failed"] else "green"
+    return emit(ci)
 
 
 def _decision_step(kind: str) -> int:

@@ -77,11 +77,40 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
     return {"next": nxt, "confidence": answers["next"]["confidence"], "uwagi": uwagi, "nits": nits}
 
 
+def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
+    from lokay.run import run_process
+
+    failed = []
+    notes = []
+    logs = []
+    if not tests:
+        failed.append({"warstwa": "tests", "plik": "", "log": "No test command configured."})
+    for argv in tests:
+        proc = run_process(argv, cwd=cwd, timeout=timeout)
+        log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
+        if proc.returncode != 0:
+            retry = run_process(argv, cwd=cwd, timeout=timeout)
+            retry_log = ((retry.stdout or "") + (retry.stderr or ""))[-3000:]
+            flaky = retry.returncode == 0
+            item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
+                    "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log}
+            (notes if flaky else failed).append(item)
+            log = item["log"]
+        logs.append(log)
+    return {"result": "red" if failed else "green", "sha": sha,
+            "failed": failed, "notes": notes, "log": "\n".join(logs)}
+
+
 def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
     if ci.get("sha") != sha or any(item.get("sha", sha) != sha for item in decisions):
         raise DecisionError("sha mismatch")
+    if ci.get("result") in ("pending", "sha_moved"):
+        return {"result": "check", "sha": sha, "uwagi": []}
     uwagi = list(ci.get("failed") or [])
     for item in decisions:
         uwagi.extend(item.get("uwagi") or [])
     ok = ci.get("result") == "green" and all(item.get("next") == "ok" for item in decisions)
-    return {"result": "merge" if ok else "fix", "sha": sha, "uwagi": uwagi}
+    if not ok:
+        uwagi.extend(ci.get("notes") or [])
+    return {"result": "merge" if ok else "fix", "sha": sha, "uwagi": uwagi,
+            "notes": ci.get("notes") or []}
