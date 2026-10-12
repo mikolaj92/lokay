@@ -278,12 +278,18 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
         rows = hunks(diff.stdout or "")
         failed = []
-        for argv in tests:
-            proc = run_process(argv, cwd=worktree, timeout=600)
-            if proc.returncode != 0:
+        if tests:
+            try:
+                proc = run_process(tests, cwd=worktree, timeout=600)
+                log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
+                test_failed = proc.returncode != 0
+            except FileNotFoundError:
+                log = "not found"
+                test_failed = True
+            if test_failed:
                 failed.append({
-                    "warstwa": " ".join(argv), "plik": "", "linia": None,
-                    "log": ((proc.stdout or "") + (proc.stderr or ""))[-3000:],
+                    "warstwa": " ".join(tests), "plik": "", "linia": None,
+                    "log": log,
                 })
         ci = {"result": "red" if failed else "green", "sha": sha, "failed": failed}
         decisions = []
