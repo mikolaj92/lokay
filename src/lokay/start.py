@@ -141,7 +141,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     only_repo = child.get("LOKAY2_REPO")
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
-             if repo.get("test") and (not only_repo or repo["name"] == only_repo)]
+             if not only_repo or repo["name"] == only_repo]
     has_open_pr = False
     for repo in repos:
         name = repo["name"]
