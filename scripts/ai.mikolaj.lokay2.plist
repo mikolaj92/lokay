@@ -5,6 +5,10 @@
   <key>Label</key><string>ai.mikolaj.lokay2</string>
   <key>ProgramArguments</key>
   <array><string>/bin/bash</string><string>__LOKAY_SERVICE__</string></array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>LOKAY2_DECISION_BASE_URL</key><string>http://192.168.1.52:8005</string>
+  </dict>
   <key>KeepAlive</key><true/>
   <key>RunAtLoad</key><true/>
   <key>ThrottleInterval</key><integer>60</integer>

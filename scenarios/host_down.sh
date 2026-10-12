@@ -20,6 +20,7 @@ for _ in range(3):
     from lokay.start import pick
     outcome = pick({"PATH": os.environ["PATH"], "LOKAY2_GB10": "down", "LOKAY2_PROVIDER": "omniroute", "LOKAY2_MODEL": "m", "LOKAY2_DECISION_API": "tensorfold", "LOKAY2_DECISION_MODEL": "m"})
     assert outcome["result"] == "idle" and outcome["reason"] == "host", outcome
+    assert "decision_host=fail" in outcome["failed"], outcome
     print("host down")
 print("writes", open(os.environ["GH_LOG"]).read().count("\n"))
 PY
