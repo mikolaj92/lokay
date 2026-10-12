@@ -164,24 +164,21 @@ def main(argv: list[str] | None = None) -> int:
 
 def advance(picked: dict) -> dict:
     from lokay.build import build_code, build_publish
+    from lokay.gh import _gh
     from lokay.git import worktree_add
     from lokay.plan import valid_plan
 
+    code, raw, _err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
+    title, body = f"issue {picked['issue']}", None
+    if code == 0 and raw.strip():
+        loaded = json.loads(raw)
+        title = loaded.get("title") or title
+        body = loaded.get("body")
     art = Path.home() / ".lokay/runs" / f"{picked['repo'].replace('/', '__')}" / str(picked["issue"]) / "plan.md"
     if not valid_plan(art):
-        import json
-
         from lokay.plan import plan_write, prompt_for
 
         art.parent.mkdir(parents=True, exist_ok=True)
-        from lokay.gh import _gh
-
-        code, raw, _err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
-        title, body = f"issue {picked['issue']}", None
-        if code == 0 and raw.strip():
-            loaded = json.loads(raw)
-            title = loaded.get("title") or title
-            body = loaded.get("body")
         written = plan_write(prompt_for(title, body), art)
         if written["result"] != "done" or not valid_plan(art):
             return {"result": "failed", "artifact": ""}
@@ -193,11 +190,12 @@ def advance(picked: dict) -> dict:
         added = worktree_add(root, branch, worktree)
         if added["result"] != "added":
             return {"result": "failed", "artifact": ""}
+    plan = art.read_text()
     built = build_code(
         worktree,
-        art.read_text(),
-        f"issue {picked['issue']}",
-        None,
+        plan,
+        title,
+        body,
         dict(os.environ),
         expected_branch=branch,
     )
@@ -205,7 +203,10 @@ def advance(picked: dict) -> dict:
         remember_skip(picked["repo"], int(picked["issue"]), built.get("explanation") or "outside_worktree")
     if built["result"] != "done":
         return built
-    published = build_publish(worktree, branch, None, picked["repo"], int(picked["issue"]), f"feat: issue {picked['issue']}")
+    published = build_publish(
+        worktree, branch, None, picked["repo"], int(picked["issue"]),
+        title, f"Closes #{picked['issue']}\n\n" + plan[:6000],
+    )
     if published.get("result") != "pr_open" or not published.get("sha"):
         return published
     return _finish(picked, worktree, branch, published["sha"], repo.get("test") or [])
