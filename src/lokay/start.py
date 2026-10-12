@@ -15,13 +15,21 @@ from lokay.run import run_process
 from lokay.state import rounds_append, run_dir, state_read, state_update
 
 
+class RetryLater(RuntimeError):
+    pass
+
+
 def guarded_step(step):
     @wraps(step)
     def guarded(picked: dict) -> dict:
         try:
             outcome = step(picked)
+        except RetryLater as exc:
+            return {"result": "failed", "reason": str(exc)}
         except Exception as exc:
             outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+        if outcome.get("next") == "plan":
+            return outcome
         repo, issue = picked["repo"], picked["issue"]
         if outcome.get("result") in ("pending", "pr_open", "needs_help"):
             return outcome
@@ -162,13 +170,14 @@ def pick(env: dict[str, str] | None = None) -> dict:
         held = acquire(name.split("/")[0], name)
         if held["result"] != "held":
             continue
+        node = "plan" if state_read(name, issue).get("node") == "plan" else "check"
         try:
-            state_update(name, issue, node="check", branch=pr["headRefName"], pr=pr["number"])
+            state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"])
         except BaseException:
             release(held)
             raise
         return {"result": "picked", "repo": name, "issue": issue,
-                "node": "check", "pr": pr["number"], "held": held}
+                "node": node, "pr": pr["number"], "held": held}
     if has_open_pr:
         return {"result": "idle", "reason": "no_work"}
     chosen = None
@@ -245,32 +254,34 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _retry(picked: dict, node: str, action, expected: str | None = None):
-    failures = 0
-    while True:
-        state_update(picked["repo"], picked["issue"], node=node)
-        try:
-            outcome = action()
-            if expected is None or outcome.get("result") == expected:
-                state_update(picked["repo"], picked["issue"], failures=0, retry_at=0, reason=None)
-                return outcome
-            reason = outcome.get("reason") or outcome.get("error") or str(outcome)
-        except Exception as exc:
-            reason = f"{type(exc).__name__}: {exc}"
-        failures += 1
-        delay = min(3600, 60 * 2 ** min(failures - 1, 6))
-        state_update(picked["repo"], picked["issue"], failures=failures,
-                     reason=reason, retry_at=time.time() + delay)
-        rounds_append(picked["repo"], picked["issue"], f"{node}: retry, reason={reason}")
-        time.sleep(delay)
+    repo, issue = picked["repo"], picked["issue"]
+    state_update(repo, issue, node=node)
+    try:
+        outcome = action()
+        if expected is None or outcome.get("result") == expected:
+            state_update(repo, issue, failures=0, retry_at=0, reason=None)
+            return outcome
+        reason = outcome.get("reason") or outcome.get("error") or str(outcome)
+    except Exception as exc:
+        reason = f"{type(exc).__name__}: {exc}"
+    failures = state_read(repo, issue).get("failures", 0) + 1
+    delay = min(3600, 60 * 2 ** min(failures - 1, 6))
+    state_update(repo, issue, result="failed", failures=failures,
+                 reason=reason, retry_at=time.time() + delay)
+    rounds_append(repo, issue, f"{node}: retry, reason={reason}")
+    raise RetryLater(reason)
 
 
 @guarded_step
 def advance(picked: dict) -> dict:
-    worktree, branch, sha, tests, plan_rounds = _prepare(picked)
+    prepared = _prepare(picked)
+    if isinstance(prepared, dict):
+        return prepared
+    worktree, branch, sha, tests, plan_rounds = prepared
     return _finish(picked, worktree, branch, sha, tests, plan_rounds)
 
 
-def _prepare(picked: dict) -> tuple:
+def _prepare(picked: dict) -> tuple | dict:
     from lokay.build import build_code, build_publish
     from lokay.gh import _gh
     from lokay.git import worktree_add
@@ -344,9 +355,20 @@ def _prepare(picked: dict) -> tuple:
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
-    _retry(picked, "build", lambda: build_code(
-        worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
-    ), "done")
+    built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch)
+    if built.get("result") == "failed":
+        reason = built.get("reason") or "build failed"
+        explanation = built.get("explanation") or built.get("artifact") or ""
+        rounds_append(picked["repo"], picked["issue"], f"Build → Plan: {reason}")
+        state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+                     plan_evaluations=0, plan_accepted_sha=None,
+                     plan_prompt=plan.prompt_for(title, body) + f"\nUwagi (Build): {reason}: {explanation}\n",
+                     result="failed", reason=reason,
+                     failures=state_read(picked["repo"], picked["issue"]).get("failures", 0) + 1, retry_at=0)
+        return {**built, "next": "plan"}
+    if built.get("result") != "done":
+        raise RuntimeError(f"unexpected Build outcome: {built}")
+    state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0)
     def publish():
         pr = open_pr_for(picked["repo"], branch)
         expected = pr.get("headRefOid") if pr else None
@@ -434,8 +456,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.check import aggregate, decide_hunks, hunks, local_ci, questions
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
+    from lokay import plan
     from lokay.git import _git
-    from lokay.gh import open_pr_for, pr_checks, check_comment
+    from lokay.gh import _gh, open_pr_for, pr_checks, check_comment
     from lokay.merge import merge_sha
     from lokay.run import run_process
 
@@ -443,7 +466,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     clone_path = Path(os.path.expanduser(repo["clone_path"]))
     saved = state_read(picked["repo"], picked["issue"])
     rounds = saved.get("check_rounds", 0)
-    fix_calls = 0
     verdict = saved.get("verdict")
     pending = "check" if saved.get("node") == "merge" else saved.get("node")
 
@@ -534,10 +556,41 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
             uwagi = verdict["uwagi"]
-            if fix_calls >= 3:
-                return needs_help(picked, "Fix limit reached after 3 calls", sha)
+            findings = {
+                json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")),
+                            row.get("linia", row.get("linia_od")), row.get("linia_do")])
+                for row in uwagi
+            }
+            fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
             saved = state_read(picked["repo"], picked["issue"])
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
+            if saved.get("fix_fingerprint") == fingerprint:
+                rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
+                title, body = saved.get("issue_title"), saved.get("issue_body")
+                if not title:
+                    def read_issue():
+                        code, raw, err = _gh(["issue", "view", str(picked["issue"]),
+                                              "--repo", picked["repo"], "--json", "title,body"])
+                        if code != 0:
+                            raise RuntimeError(err or "issue view failed")
+                        return json.loads(raw)
+                    issue = _retry(picked, "plan", read_issue)
+                    title, body = issue["title"], issue.get("body")
+                prompt = plan.prompt_for(title, body) + (
+                    "\n\nUwagi:\n" + json.dumps(uwagi)
+                    + "\n\nRounds:\n" + (art.parent / "rounds.md").read_text()
+                    + "\n\nTest log:\n" + (saved.get("test_log") or "")
+                    + "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
+                    + "\nFix made no progress; revise the plan.\n"
+                )
+                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+                             plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
+                prepared = _prepare({**picked, "node": "plan"})
+                if isinstance(prepared, dict):
+                    return prepared
+                worktree, branch, sha, tests, plan_rounds = prepared
+                pending = "check"
+                continue
             prompt = (
                 Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
                 + "\n\nSHA:\n" + sha
@@ -547,7 +600,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                 + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
             )
-            fix_calls += 1
             fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ)), sha)
             if fixed["result"] == "needs_help":
                 return fixed
@@ -557,7 +609,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if pushed["result"] == "remote_moved" and pushed.get("sha"):
                 _retry(picked, "check", sync_head)
             sha = pushed["sha"]
-            state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None)
+            state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint)
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
             continue

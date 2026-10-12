@@ -51,7 +51,10 @@ env = {
 }
 done = build_code(wt, "plan", "title", None, env, expected_branch="lokay/7")
 assert done["result"] == "failed", done
-assert done["reason"] == "outside_worktree", done
+assert done["reason"] == "no_changes", done
+assert done['explanation'] == f'pi exited 0 but made no commits in {wt}', done
+wrong = build_code(wt, 'plan', 'title', None, env, expected_branch='lokay/other')
+assert wrong['reason'] == 'outside_worktree', wrong
 assert done["explanation"].strip(), done
 assert set(done) != {"result", "artifact"}, done
 after = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=wt, text=True).strip()
@@ -60,7 +63,8 @@ outside_after = __import__("subprocess").check_output(["git", "rev-parse", "HEAD
 assert outside_after != outside_before
 log = __import__("subprocess").check_output(["git", "log", "--oneline", "origin/main..HEAD"], cwd=wt, text=True)
 assert log.strip() == "", log
-print("outside_worktree", done["explanation"])
+print("no_changes", done["explanation"])
+print("outside_worktree", wrong["explanation"])
 print("worktree unchanged", after)
 PY
 home="$tmp/home"

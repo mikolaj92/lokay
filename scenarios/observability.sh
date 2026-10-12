@@ -21,12 +21,18 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, HOME=tmp, LOKA
             time.sleep(.06)
             path = Path(tmp) / ".lokay/heartbeat.json"
             first = json.loads(path.read_text())
-            state.state_update("example/repo", 7, reason="retry")
+            state.state_update("example/repo", 7, failures=1, reason="retry")
             time.sleep(.06)
             second = json.loads(path.read_text())
             assert second["time"] != first["time"]
             assert second["node_since"] == first["node_since"]
             assert second["issue"] == 7 and second["node"] == "check"
+            assert second['result'] == 'failed' and second['failures'] == 1
+            assert second['last_error'] == 'retry'
+            state.state_update('example/repo', 7, failures=0, reason=None)
+            cleared = observe.heartbeat(**observe.CURRENT)
+            assert cleared['result'] != 'failed' and cleared['failures'] == 0
+            assert cleared['last_error'] is None
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             assert main(["status"]) == 0

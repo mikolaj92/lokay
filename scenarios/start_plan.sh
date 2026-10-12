@@ -20,7 +20,7 @@ def answers(choice):
 
 
 def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
-             existing=False, accepted=False, changed=False, invalid=False, unknown=False):
+             existing=False, accepted=False, changed=False, invalid=False, unknown=False, build_failure=None):
     with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         root = Path(tmp)
         art = root / 'run' / 'plan.md'
@@ -52,7 +52,8 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             return answers(choice)
         def build(worktree, text, *args, **kwargs):
             events.append(('build', text))
-            return {'result': 'done'}
+            return ({'result': 'failed', 'reason': build_failure, 'explanation': 'fixture explanation'}
+                    if build_failure else {'result': 'done'})
         for target, replacement in {
             'lokay.start.state_read': lambda *a: dict(saved),
             'lokay.start.state_update': update,
@@ -72,15 +73,10 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             stack.enter_context(patch(target, replacement))
         if unknown:
             stack.enter_context(patch('lokay.plan.verdict', return_value={'next': 'ship'}))
-        if invalid:
-            # Stop the existing structural retry after observing its persisted error.
-            def stop_retry(*args):
-                raise RuntimeError(saved['reason'])
-            stack.enter_context(patch('lokay.start.time.sleep', stop_retry))
         picked = {'repo': 'example/repo', 'issue': 1, 'node': node}
         error = None
         try:
-            start.advance.__wrapped__(picked)
+            outcome = start.advance.__wrapped__(picked)
         except RuntimeError as exc:
             error = str(exc)
         builds = [text for kind, text in events if kind == 'build']
@@ -91,6 +87,13 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert error and expected_error in error, error
         else:
             assert error is None, error
+        if build_failure:
+            assert outcome['result'] == 'failed' and outcome['next'] == 'plan', outcome
+            assert saved['node'] == 'plan' and saved['plan_phase'] == 'write', saved
+            assert saved['plan_evaluations'] == 0 and saved['plan_accepted_sha'] is None
+            assert saved['plan_prompt'] == plan.prompt_for('title', 'body') + (
+                f'\nUwagi (Build): {build_failure}: fixture explanation\n')
+            assert saved['retry_at'] == 0 and saved['failures'] == 1
         if builds and decisions:
             assert builds == [decisions[-1]], events
             assert events[-2][0] == 'decide', events
@@ -100,6 +103,8 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert 'k_testy' in prompts[1], prompts
         print(f'{choices}: writes={len(prompts)}; decide={len(decisions)}; build={len(builds)}; error={error}')
 
+for reason in ('no_changes', 'outside_worktree', 'pi_exit'):
+    run_case(['ok'], expected_build=1, build_failure=reason)
 run_case(['revise'] * 4 + ['ok'], expected_build=1)
 run_case(['ok'], expected_build=1)
 run_case(['revise', 'ok'], expected_build=1)

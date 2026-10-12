@@ -54,7 +54,7 @@ def build_code(
     log = _git(worktree, ["log", "--oneline", "origin/main..HEAD"])
     head = _git(worktree, ["rev-parse", "HEAD"])
     wrong = expected_branch is not None and branch_now != expected_branch
-    if wrong or not log:
+    if wrong:
         where = expected_branch or "lokay/<issue>"
         explanation = (
             f"commit is outside the issue worktree {worktree}: "
@@ -64,6 +64,13 @@ def build_code(
             "result": "failed",
             "reason": "outside_worktree",
             "explanation": explanation,
+            "artifact": str(worktree),
+        }
+    if not log:
+        return {
+            "result": "failed",
+            "reason": "no_changes",
+            "explanation": f"pi exited 0 but made no commits in {worktree}",
             "artifact": str(worktree),
         }
     return {"result": "done", "artifact": head}
