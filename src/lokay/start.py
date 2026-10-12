@@ -279,14 +279,21 @@ def _prepare(picked: dict) -> tuple:
     from lokay import plan
     from lokay.decide import decide
 
-    code, raw, _err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
-    title, body = f"issue {picked['issue']}", None
-    if code == 0 and raw.strip():
-        loaded = json.loads(raw)
-        title = loaded.get("title") or title
-        body = loaded.get("body")
-    art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     saved = state_read(picked["repo"], picked["issue"])
+    if "issue_title" not in saved or "issue_body" not in saved:
+        code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
+        if code != 0:
+            raise RuntimeError(err.strip() or "issue view failed")
+        loaded = json.loads(raw)
+        if not isinstance(loaded.get("title"), str) or not loaded["title"].strip():
+            raise RuntimeError("issue title is missing or invalid")
+        body = loaded.get("body")
+        if body is not None and not isinstance(body, str):
+            raise RuntimeError("issue body is invalid")
+        state_update(picked["repo"], picked["issue"], issue_title=loaded["title"], issue_body=body)
+        saved = state_read(picked["repo"], picked["issue"])
+    title, body = saved["issue_title"], saved["issue_body"]
+    art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = saved.get("plan_rounds", 0)
     accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
                 hashlib.sha256(art.read_bytes()).hexdigest())
@@ -344,7 +351,7 @@ def _prepare(picked: dict) -> tuple:
         expected = pr.get("headRefOid") if pr else None
         outcome = build_publish(
             worktree, branch, expected, picked["repo"], int(picked["issue"]),
-            title, f"Closes #{picked['issue']}\n\n" + plan_text,
+            title, art,
         )
         if outcome.get("result") == "pr_open" and not outcome.get("sha"):
             return {"result": "failed", "reason": "missing published SHA"}

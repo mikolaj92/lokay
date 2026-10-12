@@ -69,7 +69,11 @@ def build_code(
     return {"result": "done", "artifact": head}
 
 
-def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, body: str) -> dict:
+def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
+    try:
+        body = plan_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise RuntimeError(f"cannot read plan {plan_path}: {exc}") from exc
     pushed = push(worktree, branch, expected)
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}
