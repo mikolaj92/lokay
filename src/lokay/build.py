@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from lokay.git import push, worktree_add
+from lokay.host_guard import guard, failure
 from lokay.gh import pr_create
 from lokay.run import run_process
 from lokay.safety import untrusted_issue_block
@@ -29,6 +30,7 @@ def build_code(
     body: str | None,
     env: dict[str, str],
     expected_branch: str | None = None,
+    clone_path: Path | str | None = None,
 ) -> dict:
     clean = child_env(env)
     prompt = (
@@ -36,12 +38,21 @@ def build_code(
         + "\n\nPlan:\n" + plan
         + "\n\n" + untrusted_issue_block(title, body)
     )
-    proc = run_process(
-        ["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt],
-        cwd=worktree,
-        env=clean,
-        timeout=3600,
-    )
+    changes = {"changed": False}
+    try:
+        with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
+            proc = run_process(
+                ["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt],
+                cwd=worktree,
+                env=clean,
+                timeout=3600,
+            )
+    except Exception:
+        if changes["changed"]:
+            return failure(changes, worktree)
+        raise
+    if changes["changed"]:
+        return failure(changes, worktree)
     if proc.returncode != 0:
         explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
         return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}

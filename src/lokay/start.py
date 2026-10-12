@@ -355,7 +355,7 @@ def _prepare(picked: dict) -> tuple | dict:
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
-    built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch)
+    built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch, clone_path=root)
     if built.get("result") == "failed":
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
@@ -601,7 +601,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                 + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
             )
-            fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ)), sha)
+            fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path), sha)
             if fixed["result"] == "needs_help":
                 return fixed
             pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
