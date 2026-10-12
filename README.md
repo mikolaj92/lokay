@@ -26,9 +26,10 @@ It parses the entire script before running, so an update cannot change a running
   between runs. A single long run can exceed this limit.
 - Merged worktrees are removed by the existing Merge step.
 
-Decision defaults to `LOKAY2_DECISION_BASE_URL=http://192.168.1.52:8005` on the mini.
-TensorFold uses `/v1/decisions`; the host probe requires `/health` to return
-HTTP 200 with `"ready": true`.
+Decision defaults to `LOKAY2_DECISION_API=mini` and
+`LOKAY2_DECISION_BASE_URL=http://192.168.1.52:8005`.
+Mini uses `/v1/decisions` without a model; the host probe requires `/health` to
+return HTTP 200 with `"ready": true`.
 
 Environment overrides can go in `~/.config/lokay/env`:
 `LOKAY_TICK_SECONDS` (60), `LOKAY_HEARTBEAT_MINUTES` (5),

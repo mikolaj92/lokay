@@ -99,22 +99,31 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 item["choices"] = [{"value": k, "description": v} for k, v in question["options"].items()]
             questions.append(item)
         return _trim_wire({"model": model, "input": internal.get("state") or {}, "questions": questions})
-    if api == "systemone":
+    if api in ("mini", "systemone"):
         questions = {}
         for question in internal["questions"]:
             kind = "noul" if question["type"] == "bool" else question["type"]
-            questions[question["id"]] = {
-                "type": kind,
-                "instructions": question["instructions"][:600],
-                "criteria": question["options"],
-            }
-        return _trim_wire({"model": model, "state": internal.get("state") or {}, "questions": questions})
+            item = {"type": kind, "instructions": question["instructions"][:600]}
+            if api != "mini" or kind != "noul":
+                item["criteria"] = question["options"]
+            questions[question["id"]] = item
+        wire = {"state": internal.get("state") or {}, "questions": questions}
+        if api != "mini":
+            wire["model"] = model
+        return _trim_wire(wire)
     raise DecisionError(f"unknown api {api}")
 
 
 def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict:
-    if payload.get("model") not in (None, model):
+    if api != "mini" and payload.get("model") not in (None, model):
         raise DecisionError("model mismatch")
+    if api == "mini":
+        mapped = {
+            qid: {"choice": answer.get("label"), "probabilities": answer.get("probabilities"),
+                  "confidence": answer.get("confidence")}
+            for qid, answer in payload.items()
+        }
+        return _check(internal, mapped)
     if api == "tensorfold":
         usage = payload.get("usage") or {}
         if int(usage.get("completion_tokens") or 0) > 0:
@@ -153,10 +162,10 @@ def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict
 
 
 def decide(internal: Mapping) -> dict:
-    api = os.environ["LOKAY2_DECISION_API"]
-    model = os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
+    api = os.environ.get("LOKAY2_DECISION_API") or "mini"
+    model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
-    path = {"tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone"}[api]
+    path = {"mini": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone"}[api]
     body = json.dumps(to_wire(api, model, internal))
     timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or 30)))
     cmd = [
