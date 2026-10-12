@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 
 from lokay.config import load_repos
-from lokay.gh import gh_bin, issues_with_label, open_pr_for
+from lokay.gh import gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.run import run_process
 
@@ -95,19 +95,31 @@ def pick(env: dict[str, str] | None = None) -> dict:
     if not host_ready(report):
         failed = " ".join(f"{name}={value}" for name, value in report.items() if value != "ok")
         return {"result": "idle", "reason": "host", "failed": failed}
+    child = os.environ if env is None else env
+    repos_file = child.get("LOKAY2_REPOS_FILE")
+    only_repo = child.get("LOKAY2_REPO")
+    only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
     chosen = None
-    for repo in load_repos():
+    for repo in load_repos(Path(repos_file) if repos_file else None):
         name = repo["name"]
+        if only_repo and name != only_repo:
+            continue
         owner = name.split("/")[0]
         held = acquire(owner, name)
         if held["result"] != "held":
             continue
         try:
-            issues = issues_with_label(name)
+            issues = open_issues(name)
         except Exception:
             release(held)
             raise
-        issues = [row for row in issues if int(row["number"]) not in load_skips(name)]
+        skipped = load_skips(name)
+        issues = [
+            row for row in issues
+            if int(row["number"]) not in skipped
+            and not row["title"].lower().startswith("epic")
+            and (only_issue is None or int(row["number"]) == only_issue)
+        ]
         if not issues:
             release(held)
             continue
