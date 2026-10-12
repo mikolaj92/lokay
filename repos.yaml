@@ -14,7 +14,7 @@ repos:
 - name: mikolaj92/Temida
   clone_path: ~/Developer/Temida/main
   # README: verify all four subtrees, not only the root pytest default.
-  test: ["sh", "-c", "for p in dike hermes mnemozyna posejdon; do (cd \"$p\" && uv run pytest) || exit; done"]
+  test: ["sh", "-c", "for p in dike hermes mnemozyna posejdon; do (cd \"packages/$p\" && uv run pytest) || exit; done"]
   merge: 'on'
 - name: mikolaj92/msds-portal
   clone_path: ~/Developer/msds-portal/main
