@@ -31,8 +31,13 @@ def build_code(
     expected_branch: str | None = None,
 ) -> dict:
     clean = child_env(env)
+    prompt = (
+        Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
+        + "\n\nPlan:\n" + plan
+        + "\n\n" + untrusted_issue_block(title, body)
+    )
     proc = run_process(
-        ["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), plan + "\n" + untrusted_issue_block(title, body)],
+        ["pi", "-p", "--provider", clean.get("LOKAY2_PROVIDER", ""), "--model", clean.get("LOKAY2_MODEL", ""), prompt],
         cwd=worktree,
         env=clean,
         timeout=3600,
