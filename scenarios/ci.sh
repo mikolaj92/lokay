@@ -87,10 +87,16 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         "print('result=' + sys.argv[1])\nsys.exit(int(sys.argv[1]))\n")
     stack.enter_context(patch.dict(os.environ, LOKAY2_REPOS_FILE=str(config)))
     stack.enter_context(patch('lokay.state.RUNS', root / 'runs'))
-    stack.enter_context(patch('lokay.git._git', return_value=(0, '', '')))
     head = {'sha': 'same-head'}
+    def git(path, args):
+        if args == ['branch', '--show-current']:
+            return 0, 'lokay/1', ''
+        if args == ['rev-parse', 'HEAD']:
+            return 0, head['sha'], ''
+        return 0, '', ''
+    stack.enter_context(patch('lokay.git._git', git))
     def pr(*args):
-        return {'number': 7, 'headRefOid': head['sha']}
+        return {'number': 7, 'headRefName': 'lokay/1', 'headRefOid': head['sha']}
     stack.enter_context(patch('lokay.gh.open_pr_for', pr))
     stack.enter_context(patch('lokay.start.open_pr_for', pr))
     stack.enter_context(patch('lokay.fix.fix_publish', side_effect=lambda *a:

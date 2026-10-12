@@ -25,7 +25,7 @@ def guarded_step(step):
             except Exception as exc:
                 outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
             repo, issue = picked["repo"], picked["issue"]
-            if outcome.get("result") == "pending":
+            if outcome.get("result") in ("pending", "pr_open", "needs_help"):
                 return outcome
             if outcome.get("result") == "merged":
                 state_update(repo, issue, failures=0, retry_at=0, reason=None)
@@ -151,9 +151,11 @@ def pick(env: dict[str, str] | None = None) -> dict:
         ])
         if code != 0:
             raise RuntimeError(err.strip() or "pr list failed")
+        skipped = load_skips(name)
         prs = [row for row in json.loads(out or "[]")
                if row["headRefName"].startswith("lokay/")
                and row["headRefName"][6:].isdecimal()
+               and int(row["headRefName"][6:]) not in skipped
                and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
         if not prs:
             continue
@@ -365,6 +367,31 @@ def _prepare(picked: dict) -> tuple:
     return worktree, branch, published["sha"], repo.get("test") or [], plan_rounds
 
 
+def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
+    saved = state_read(picked["repo"], picked["issue"])
+    outcome = {"result": "needs_help", "reason": reason, "repo": picked["repo"],
+               "issue": picked["issue"], "pr": saved.get("pr", picked.get("pr")),
+               "sha": sha if sha is not None else saved.get("sha")}
+    state_update(picked["repo"], picked["issue"], **{
+        key: value for key, value in outcome.items() if key not in ("repo", "issue")
+    }, retry_at=0)
+    remember_skip(picked["repo"], picked["issue"], json.dumps(outcome))
+    return outcome
+
+
+def fix_step(picked: dict, node: str, action, sha: str) -> dict:
+    try:
+        outcome = action()
+    except Exception as exc:
+        return needs_help(picked, f"{node}: {type(exc).__name__}: {exc}", sha)
+    expected = "done" if node == "fix_code" else "pushed"
+    if outcome.get("result") != expected and not (
+        node == "fix_publish" and outcome.get("result") == "remote_moved" and outcome.get("sha")
+    ):
+        return needs_help(picked, f"{node}: {outcome}", sha)
+    return outcome
+
+
 @guarded_step
 def resume(picked: dict) -> dict:
     from lokay.git import _git
@@ -373,21 +400,34 @@ def resume(picked: dict) -> dict:
     root = Path(os.path.expanduser(repo["clone_path"]))
     worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
     branch = f"lokay/{picked['issue']}"
-    if not worktree.exists():
-        for args in (
-            ["fetch", "origin", branch],
-            ["worktree", "add", "--track", "-b", branch, str(worktree), f"origin/{branch}"],
-        ):
-            def restore():
-                code, out, err = _git(root, args)
-                if code != 0 and args[0] == "worktree" and "already exists" in (err + out):
-                    code, out, err = _git(root, ["worktree", "add", str(worktree), branch])
-                return {"result": "done" if code == 0 else "failed", "error": err.strip() or out.strip()}
-            _retry(picked, picked["node"], restore, "done")
-    pr = _retry(picked, picked["node"], lambda: open_pr_for(picked["repo"], branch))
-    if pr is None or not pr.get("headRefOid"):
-        return advance({**picked, "node": "build"})
-    state_update(picked["repo"], picked["issue"], pr=pr["number"], sha=pr["headRefOid"])
+    try:
+        pr = open_pr_for(picked["repo"], branch)
+    except Exception as exc:
+        return needs_help(picked, f"resume PR: {type(exc).__name__}: {exc}")
+    if not pr or not pr.get("headRefOid"):
+        return needs_help(picked, "resume PR missing or missing SHA")
+    sha = pr["headRefOid"]
+    state_update(picked["repo"], picked["issue"], pr=pr["number"])
+    # open_pr_for filters by branch; its contract returns number and SHA only.
+    if pr.get("headRefName", branch) != branch or (picked.get("pr") and picked["pr"] != pr["number"]):
+        return needs_help(picked, "PR branch or number mismatch", sha)
+    if not worktree.is_dir():
+        return needs_help(picked, "missing worktree", sha)
+    for args, expected, reason in (
+        (["branch", "--show-current"], branch, "branch mismatch"),
+        (["status", "--porcelain"], "", "dirty worktree"),
+        (["rev-parse", "HEAD"], sha, "sha mismatch"),
+    ):
+        try:
+            code, out, err = _git(worktree, args)
+        except Exception as exc:
+            return needs_help(picked, f"{reason}: {type(exc).__name__}: {exc}", sha)
+        if code != 0 or out.strip() != expected:
+            return needs_help(picked, f"{reason}: {err.strip() or out.strip()}", sha)
+    saved = state_read(picked["repo"], picked["issue"])
+    if saved.get("sha") != sha or (saved.get("verdict") or {}).get("sha") != sha:
+        state_update(picked["repo"], picked["issue"], node="check", verdict=None, fix_fingerprint=None)
+    state_update(picked["repo"], picked["issue"], sha=sha)
     return _finish(picked, worktree, branch, pr["headRefOid"], repo.get("test") or [])
 
 
@@ -470,7 +510,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"],
                            rounds + 1, verdict, {"result": "conflict"}))
             else:
-                pushed = _retry(picked, "check", lambda: fix_publish(worktree, branch, sha))
+                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+                if pushed["result"] == "needs_help":
+                    return pushed
                 if pushed["result"] == "remote_moved" and pushed.get("sha"):
                     _retry(picked, "check", sync_head)
                     sha = pushed["sha"]
@@ -509,20 +551,15 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                     + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
                 )
-                try:
-                    fixed = fix_code(worktree, sha, prompt, dict(os.environ))
-                except Exception as exc:
-                    fixed = {"result": "failed", "reason": str(exc)}
-                replan = fixed.get("reason") == "no_changes"
+                fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ)), sha)
+                if fixed["result"] == "needs_help":
+                    return fixed
+                replan = False
                 if fixed["result"] == "done":
                     after = _retry(picked, "fix", read_diff)
                     after_fingerprint = hashlib.sha256((after.stdout or "").encode()).hexdigest()
                     state_update(picked["repo"], picked["issue"], diff_fingerprint=after_fingerprint)
                     replan = after_fingerprint == diff_fingerprint
-                if fixed["result"] != "done" and not replan:
-                    state_update(picked["repo"], picked["issue"], fix_reason=str(fixed))
-                    time.sleep(60)
-                    continue
                 state_update(picked["repo"], picked["issue"], fix_fingerprint=fingerprint)
             if replan:
                 code, raw, _err = _retry(picked, "plan", lambda: _gh(
@@ -543,14 +580,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                              plan_evaluations=0, plan_accepted_sha=None)
                 worktree, branch, sha, tests, plan_rounds = _prepare({**picked, "node": "plan"})
             else:
-                pushed = _retry(picked, "fix", lambda: fix_publish(worktree, branch, sha))
+                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+                if pushed["result"] == "needs_help":
+                    return pushed
                 if pushed["result"] == "remote_moved" and pushed.get("sha"):
                     _retry(picked, "check", sync_head)
                     sha = pushed["sha"]
-                elif pushed["result"] != "pushed":
-                    state_update(picked["repo"], picked["issue"], fix_reason=str(pushed))
-                    time.sleep(60)
-                    continue
                 else:
                     sha = pushed["sha"]
                 state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None)
