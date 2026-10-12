@@ -64,9 +64,9 @@ def build_code(
     return {"result": "done", "artifact": head}
 
 
-def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str) -> dict:
+def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, body: str) -> dict:
     pushed = push(worktree, branch, expected)
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}
-    created = pr_create(repo_name, branch, title, "plan.md", issue)
+    created = pr_create(repo_name, branch, title, body, issue)
     return {"result": "pr_open", "pr": created.get("url"), "sha": pushed["sha"]}

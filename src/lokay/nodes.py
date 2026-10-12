@@ -52,7 +52,7 @@ def build_code_main() -> int:
 
 def build_publish_main() -> int:
     req = _req()
-    return emit(build_publish(Path(req["worktree"]), req["branch"], req.get("expected"), req["repo_name"], int(req["issue"]), req["title"]))
+    return emit(build_publish(Path(req["worktree"]), req["branch"], req.get("expected"), req["repo_name"], int(req["issue"]), req["title"], req["body"]))
 
 
 def check_ci_main() -> int:
