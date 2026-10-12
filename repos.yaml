@@ -1,7 +1,7 @@
 repos:
 - name: mikolaj92/lokay-sandbox
   clone_path: ~/Developer/OSS/lokay-sandbox
-  test: ["python3", "-m", "pytest", "-q"]
+  test: ["uvx", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/lokay
   clone_path: /Users/mini-m4-0/.lokay/host
