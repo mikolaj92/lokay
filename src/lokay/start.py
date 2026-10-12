@@ -166,7 +166,10 @@ def advance(picked: dict) -> dict:
     from lokay.build import build_code, build_publish
     from lokay.gh import _gh
     from lokay.git import worktree_add
-    from lokay.plan import valid_plan
+    import sys
+
+    from lokay import plan
+    from lokay.decide import decide
 
     code, raw, _err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
     title, body = f"issue {picked['issue']}", None
@@ -175,13 +178,26 @@ def advance(picked: dict) -> dict:
         title = loaded.get("title") or title
         body = loaded.get("body")
     art = Path.home() / ".lokay/runs" / f"{picked['repo'].replace('/', '__')}" / str(picked["issue"]) / "plan.md"
-    if not valid_plan(art):
-        from lokay.plan import plan_write, prompt_for
-
+    plan_rounds = 1
+    if not plan.valid_plan(art):
         art.parent.mkdir(parents=True, exist_ok=True)
-        written = plan_write(prompt_for(title, body), art)
-        if written["result"] != "done" or not valid_plan(art):
-            return {"result": "failed", "artifact": ""}
+        original_prompt = plan.prompt_for(title, body)
+        prompt = original_prompt
+        for plan_rounds in range(1, 4):
+            written = plan.plan_write(prompt, art)
+            if written["result"] != "done" or not plan.valid_plan(art):
+                return {"result": "failed", "artifact": ""}
+            plan_text = art.read_text()
+            try:
+                answers = decide(plan.plan_questions(plan_text))
+            except Exception as exc:
+                print(f"plan_check: {exc}; treating as ok", file=sys.stderr)
+                break
+            verdict = plan.verdict(answers)
+            if verdict["next"] != "revise":
+                break
+            uwagi = ", ".join(row["kryterium"] for row in verdict["uwagi"])
+            prompt = original_prompt + f"\nUwagi: {uwagi or 'revise the plan'}.\n"
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root = Path(os.path.expanduser(repo["clone_path"]))
     worktree = root.parent / f"{root.name}-wt-{picked['issue']}"
@@ -190,10 +206,10 @@ def advance(picked: dict) -> dict:
         added = worktree_add(root, branch, worktree)
         if added["result"] != "added":
             return {"result": "failed", "artifact": ""}
-    plan = art.read_text()
+    plan_text = art.read_text()
     built = build_code(
         worktree,
-        plan,
+        plan_text,
         title,
         body,
         dict(os.environ),
@@ -205,11 +221,11 @@ def advance(picked: dict) -> dict:
         return built
     published = build_publish(
         worktree, branch, None, picked["repo"], int(picked["issue"]),
-        title, f"Closes #{picked['issue']}\n\n" + plan[:6000],
+        title, f"Closes #{picked['issue']}\n\n" + plan_text[:6000],
     )
     if published.get("result") != "pr_open" or not published.get("sha"):
         return published
-    return _finish(picked, worktree, branch, published["sha"], repo.get("test") or [])
+    return _finish(picked, worktree, branch, published["sha"], repo.get("test") or [], plan_rounds)
 
 
 def resume(picked: dict) -> dict:
@@ -235,7 +251,7 @@ def resume(picked: dict) -> dict:
     return _finish(picked, worktree, branch, pr["headRefOid"], repo.get("test") or [])
 
 
-def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list) -> dict:
+def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
     from lokay.check import aggregate, decide_hunks, hunks, questions
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
@@ -285,5 +301,5 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list) ->
         None,
         picked["repo"].split("/")[0],
         int(picked["issue"]),
-        {"plan_rounds": 1, "check_rounds": rounds},
+        {"plan_rounds": plan_rounds, "check_rounds": rounds},
     )
