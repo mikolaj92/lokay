@@ -1,9 +1,34 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 RUNS = Path.home() / ".lokay" / "runs"
+
+
+def run_dir(repo: str, issue: int) -> Path:
+    return RUNS / repo.replace("/", "__") / str(issue)
+
+
+def state_update(repo: str, issue: int, **fields) -> Path:
+    path = run_dir(repo, issue) / "state.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    current = json.loads(path.read_text()) if path.exists() else {}
+    current.update(fields)
+    current["updated_at"] = datetime.now(timezone.utc).isoformat()
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(current, indent=2) + "\n")
+    temporary.replace(path)
+    return path
+
+
+def rounds_append(repo: str, issue: int, line: str) -> Path:
+    path = run_dir(repo, issue) / "rounds.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as stream:
+        stream.write(f"- {datetime.now(timezone.utc).isoformat()} {line}\n")
+    return path
 
 
 def run_path(owner: str, repo: str, issue: int) -> Path:

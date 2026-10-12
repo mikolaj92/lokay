@@ -9,6 +9,7 @@ from lokay.config import load_repos
 from lokay.gh import gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.run import run_process
+from lokay.state import rounds_append, run_dir, state_update
 
 
 def skip_file() -> Path:
@@ -137,6 +138,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
         break
     if chosen is None:
         return {"result": "idle", "reason": "no_work"}
+    state_update(chosen["repo"], chosen["issue"], node=chosen["node"], branch=branch, pr=chosen["pr"])
     return chosen
 
 
@@ -177,7 +179,7 @@ def advance(picked: dict) -> dict:
         loaded = json.loads(raw)
         title = loaded.get("title") or title
         body = loaded.get("body")
-    art = Path.home() / ".lokay/runs" / f"{picked['repo'].replace('/', '__')}" / str(picked["issue"]) / "plan.md"
+    art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = 1
     if not plan.valid_plan(art):
         art.parent.mkdir(parents=True, exist_ok=True)
@@ -186,14 +188,20 @@ def advance(picked: dict) -> dict:
         for plan_rounds in range(1, 4):
             written = plan.plan_write(prompt, art)
             if written["result"] != "done" or not plan.valid_plan(art):
+                state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result="failed")
+                rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: failed")
                 return {"result": "failed", "artifact": ""}
             plan_text = art.read_text()
             try:
                 answers = decide(plan.plan_questions(plan_text))
             except Exception as exc:
                 print(f"plan_check: {exc}; treating as ok", file=sys.stderr)
+                state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result="ok")
+                rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: ok (plan_check failed: {exc})")
                 break
             verdict = plan.verdict(answers)
+            state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result=verdict["next"])
+            rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
             if verdict["next"] != "revise":
                 break
             uwagi = ", ".join(row["kryterium"] for row in verdict["uwagi"])
@@ -207,6 +215,7 @@ def advance(picked: dict) -> dict:
         if added["result"] != "added":
             return {"result": "failed", "artifact": ""}
     plan_text = art.read_text()
+    state_update(picked["repo"], picked["issue"], node="build", branch=branch)
     built = build_code(
         worktree,
         plan_text,
@@ -222,6 +231,10 @@ def advance(picked: dict) -> dict:
     published = build_publish(
         worktree, branch, None, picked["repo"], int(picked["issue"]),
         title, f"Closes #{picked['issue']}\n\n" + plan_text[:6000],
+    )
+    state_update(
+        picked["repo"], picked["issue"], pr=published.get("pr"),
+        sha=published.get("sha"), result=published["result"],
     )
     if published.get("result") != "pr_open" or not published.get("sha"):
         return published
@@ -248,6 +261,7 @@ def resume(picked: dict) -> dict:
     pr = open_pr_for(picked["repo"], branch)
     if pr is None or not pr.get("headRefOid"):
         return {"result": "failed", "artifact": ""}
+    state_update(picked["repo"], picked["issue"], pr=pr["number"], sha=pr["headRefOid"])
     return _finish(picked, worktree, branch, pr["headRefOid"], repo.get("test") or [])
 
 
@@ -285,6 +299,18 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             decisions.append(decision)
         verdict = aggregate(sha, ci, decisions)
         rounds += 1
+        state_update(
+            picked["repo"], picked["issue"], node="check", sha=sha,
+            check_rounds=rounds, result=verdict["result"],
+        )
+        counts = ", ".join(
+            f"{kind}={len(decision['uwagi'])}"
+            for kind, decision in zip(("scope", "tests", "correctness"), decisions)
+        )
+        rounds_append(
+            picked["repo"], picked["issue"],
+            f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}",
+        )
         if verdict["result"] == "merge":
             break
         prompt = (
@@ -292,6 +318,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             + "\n\nUwagi:\n" + json.dumps(verdict["uwagi"])
             + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
         )
+        state_update(picked["repo"], picked["issue"], node="fix")
         fixed = fix_code(worktree, sha, prompt, dict(os.environ))
         if fixed["result"] != "done":
             return fixed
@@ -299,10 +326,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if pushed["result"] != "pushed":
             return pushed
         sha = pushed["sha"]
+        state_update(picked["repo"], picked["issue"], sha=sha, result=pushed["result"])
+        rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
     pr = open_pr_for(picked["repo"], branch)
     if pr is None or pr.get("headRefOid") != sha:
         return {"result": "pr_open", "sha": sha}
-    return merge_sha(
+    state_update(picked["repo"], picked["issue"], node="merge", pr=pr["number"])
+    merged = merge_sha(
         picked["repo"],
         pr["number"],
         sha,
@@ -313,3 +343,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         int(picked["issue"]),
         {"plan_rounds": plan_rounds, "check_rounds": rounds},
     )
+    state_update(
+        picked["repo"], picked["issue"], result=merged["result"],
+        sha=merged["merge_sha"] if merged["result"] == "merged" else sha,
+    )
+    if merged["result"] == "merged":
+        rounds_append(picked["repo"], picked["issue"], f"Merge: sha={merged['merge_sha']}")
+    return merged
