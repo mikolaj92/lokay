@@ -1,26 +1,17 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
-
-[[package]]
-name = "fala"
-version = "0.9.4"
-source = { git = "https://github.com/mikolaj92/Fala.git?rev=4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd#4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd" }
 
 [[package]]
 name = "lokay"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "fala" },
     { name = "pyyaml" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "fala", git = "https://github.com/mikolaj92/Fala.git?rev=4a956c665c8e3cb9f10be9ffcb02e3b27b11c6bd" },
-    { name = "pyyaml", specifier = ">=6.0" },
-]
+requires-dist = [{ name = "pyyaml", specifier = ">=6.0" }]
 
 [[package]]
 name = "pyyaml"

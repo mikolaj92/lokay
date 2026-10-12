@@ -10,18 +10,6 @@ NODES = (
     "start",
     "status",
     "monitor",
-    "plan-write",
-    "plan-check",
-    "build-code",
-    "build-publish",
-    "check-ci",
-    "check-scope",
-    "check-tests",
-    "check-correctness",
-    "check-aggregate",
-    "fix-code",
-    "fix-publish",
-    "merge",
 )
 
 
@@ -65,9 +53,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.probe:
             sys.argv = ["lokay", "--probe"]
         return decide_main()
-    from lokay.nodes import COMMANDS
-
-    return COMMANDS[args.node]()
 
 
 if __name__ == "__main__":
