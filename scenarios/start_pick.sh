@@ -60,6 +60,7 @@ mkdir -p "$HOME"
 : > "$GH_LOG"
 uv run python - <<'PY'
 import os
+import json
 from lokay import start
 from lokay.start import pick
 start.probes = lambda env=None: {"scenario": "ok"}
@@ -96,7 +97,8 @@ assert got['node'] == 'plan' and got['pr'] == 10, got
 start.release(got['held'])
 assert pick({**env, "LOKAY2_ISSUE": "3"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, "LOKAY2_REPO": "example/missing"}) == {"result": "idle", "reason": "no_work"}
-start.remember_skip('example/second', 2, 'needs_help: fix_code; pr=10 sha=abc')
+# Historical needs_help skip: only unskip may remove it.
+start.skip_file().write_text(json.dumps({'example/second': {'2': 'needs_help: fix_code; pr=10 sha=abc', '99': 'keep'}}))
 os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"},{"number":11,"headRefName":"lokay/4","headRefOid":"def"}]'
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert got['issue'] == 4 and got['pr'] == 11, got
@@ -105,6 +107,20 @@ os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert got['issue'] == 1 and got['node'] == 'plan', got
 start.release(got['held'])
+from lokay.cli import main as cli_main
+state_update('example/second', 2, retry_at=time.time() + 3600)
+assert cli_main(['unskip', 'example/second', '2']) == 0
+assert start.load_skips('example/second') == {99}
+from lokay.state import state_read
+assert state_read('example/second', 2)['retry_at'] == 0
+assert cli_main(['unskip', 'example/second', '2']) == 0
+assert start.load_skips('example/second') == {99}
+got = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
+assert got['issue'] == 2 and got['pr'] == 10, got
+start.release(got['held'])
+start.skip_file().unlink()
+assert cli_main(['unskip', 'example/second', '2']) == 0
+assert not start.skip_file().exists()
 assert "--label" not in open(os.environ["GH_LOG"]).read()
 # Exceptions before selection release exactly once, not in except and finally.
 from unittest.mock import patch

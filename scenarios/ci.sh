@@ -102,6 +102,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
             return 0, head['sha'], ''
         return 0, '', ''
     stack.enter_context(patch('lokay.git._git', git))
+    stack.enter_context(patch('lokay.build.tidy_and_commit', return_value=([], [])))
+    stack.enter_context(patch('lokay.start.refresh_body', return_value={'result': 'updated'}))
     def pr(*args):
         return {'number': 7, 'headRefName': 'lokay/1', 'headRefOid': head['sha']}
     stack.enter_context(patch('lokay.gh.open_pr_for', pr))
@@ -185,7 +187,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
             merge.assert_called_once()
             fix.assert_not_called()
         else:
-            assert result['result'] == 'needs_help', result
+            assert result['result'] == 'failed', result
             merge.assert_not_called()
             fix.assert_called_once()
 print('CI: mutation, timeout, flaky, remote guards, SHA/argv cache; 4 real Check → merge cases OK')
