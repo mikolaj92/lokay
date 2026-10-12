@@ -8,7 +8,7 @@ from functools import wraps
 from pathlib import Path
 
 from lokay.config import load_repos
-from lokay.gh import gh_bin, open_issues, open_pr_for
+from lokay.gh import _gh, gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.run import run_process
 from lokay.state import rounds_append, run_dir, state_read, state_update
@@ -128,11 +128,41 @@ def pick(env: dict[str, str] | None = None) -> dict:
     repos_file = child.get("LOKAY2_REPOS_FILE")
     only_repo = child.get("LOKAY2_REPO")
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
-    chosen = None
-    for repo in load_repos(Path(repos_file) if repos_file else None):
+    repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
+             if not only_repo or repo["name"] == only_repo]
+    has_open_pr = False
+    for repo in repos:
         name = repo["name"]
-        if only_repo and name != only_repo:
+        code, out, err = _gh([
+            "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
+            "--json", "number,headRefName,headRefOid",
+        ])
+        if code != 0:
+            raise RuntimeError(err.strip() or "pr list failed")
+        prs = [row for row in json.loads(out or "[]")
+               if row["headRefName"].startswith("lokay/")
+               and row["headRefName"][6:].isdecimal()
+               and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
+        if not prs:
             continue
+        has_open_pr = True
+        pr = min(prs, key=lambda row: int(row["number"]))
+        issue = int(pr["headRefName"][6:])
+        held = acquire(name.split("/")[0], name)
+        if held["result"] != "held":
+            continue
+        try:
+            state_update(name, issue, node="check", branch=pr["headRefName"], pr=pr["number"])
+        except BaseException:
+            release(held)
+            raise
+        return {"result": "picked", "repo": name, "issue": issue,
+                "node": "check", "pr": pr["number"], "held": held}
+    if has_open_pr:
+        return {"result": "idle", "reason": "no_work"}
+    chosen = None
+    for repo in repos:
+        name = repo["name"]
         owner = name.split("/")[0]
         held = acquire(owner, name)
         if held["result"] != "held":
@@ -147,18 +177,18 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 and (only_issue is None or int(row["number"]) == only_issue)
             ]
             issue = next((row for row in issues
-                          if state_read(name, row["number"]).get("retry_at", 0) <= time.time()), None)
+                          if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
+                          and open_pr_for(name, f"lokay/{row['number']}") is None), None)
             if issue is None:
                 continue
             saved = state_read(name, issue["number"])
             branch = f"lokay/{issue['number']}"
-            pr = open_pr_for(name, branch)
             chosen = {
                 "result": "picked",
                 "repo": name,
                 "issue": issue["number"],
-                "node": saved.get("node") or ("check" if pr else "plan"),
-                "pr": None if pr is None else pr.get("number"),
+                "node": saved.get("node") or "plan",
+                "pr": None,
                 "held": held,
             }
             state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"])
