@@ -7,6 +7,7 @@ output=$(uv run --offline python - <<'PY'
 import hashlib
 import json
 import os
+import select
 import subprocess
 import sys
 import tempfile
@@ -242,12 +243,33 @@ sys.addaudithook(offline)
                LOKAY2_PROVIDER="fake", LOKAY2_MODEL="scenario", LOKAY2_DECISION_API="tensorfold",
                LOKAY2_DECISION_MODEL="scenario", LOKAY2_DECISION_BASE_URL=f"http://127.0.0.1:{server.server_port}",
                LOKAY_VERSION="darkfactory-scenario", LOKAY_TICK_SECONDS="0.05")
+    # Keep the CLI imported in one process across both ticks and the idle tick.
+    worker = subprocess.Popen([sys.executable, '-u', '-c', '''
+import contextlib
+import io
+import json
+import sys
+from lokay.cli import main
+for line in sys.stdin:
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = main(['start'])
+    print(json.dumps([code, out.getvalue(), err.getvalue()]), flush=True)
+'''], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    def run_tick(timeout=30):
+        worker.stdin.write('tick\n')
+        worker.stdin.flush()
+        if not select.select([worker.stdout], [], [], timeout)[0]:
+            raise subprocess.TimeoutExpired('persistent CLI tick', timeout)
+        line = worker.stdout.readline()
+        assert line, worker.stderr.read()
+        code, out, err = json.loads(line)
+        return subprocess.CompletedProcess(['lokay', 'start'], code, out, err)
     previous_time = None
     try:
         for issue in (1, 2):
             try:
-                tick = subprocess.run([sys.executable, "-m", "lokay.cli", "start"], env=env,
-                                      capture_output=True, text=True, timeout=30)
+                tick = run_tick()
             except subprocess.TimeoutExpired:
                 for path in (root / "home/.lokay").rglob("state.json"):
                     print(path.read_text(), file=sys.stderr)
@@ -264,6 +286,10 @@ sys.addaudithook(offline)
             assert state["failures"] == 0 and state["retry_at"] == 0, state
             assert state["local_ci"]["result"] == "green", state
             assert state["sha"] == state["verdict"]["sha"] == result["merge_sha"], state
+            external = json.loads((root / 'external.json').read_text())
+            assert external['prs'][state['branch']] == state['pr']
+            assert external['remote'][state['branch']] == state['sha']
+            assert state['sha'] == hashlib.sha1((state['branch'] + 'value = 42\n').encode()).hexdigest()
             rounds = (runs / str(issue) / "rounds.md").read_text().splitlines()
             verify_rounds(rounds, state['sha'])
             rejects(verify_rounds, rounds[:2] + rounds[3:], state['sha'])  # omitted Fix
@@ -293,8 +319,7 @@ sys.addaudithook(offline)
         second_state = (runs / '2/state.json').read_bytes()
         second_rounds = (runs / '2/rounds.md').read_bytes()
         # A further autonomous tick is idle: no duplicate pick or merge.
-        idle = subprocess.run([sys.executable, '-m', 'lokay.cli', 'start'], env=env,
-                              capture_output=True, text=True, timeout=10)
+        idle = run_tick(timeout=10)
         assert idle.returncode == 0 and not idle.stdout and 'idle no_work' in idle.stderr
         assert json.loads((root / 'external.json').read_text()) == external
         assert (runs / '1/state.json').read_bytes() == first_state
@@ -309,11 +334,23 @@ sys.addaudithook(offline)
             assert "**merge** · CI: **green**" in comments[1], comments
         calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
         assert sum(tool == "pi" for tool, _ in calls) == 6, calls
+        for issue in (1, 2):
+            state = json.loads((runs / str(issue) / 'state.json').read_text())
+            merges = [args for tool, args in calls
+                      if tool == 'gh' and args[:3] == ['pr', 'merge', str(state['pr'])]]
+            assert len(merges) == 1, merges
+            assert merges[0][merges[0].index('--match-head-commit') + 1] == state['sha']
         # Compare every external operation, including order, across fresh homes.
         normalized = json.dumps(calls, sort_keys=True).replace(str(root), '<root>')
         print('operations:', len(calls), hashlib.sha256(normalized.encode()).hexdigest())
         print("darkfactory: two autonomous ticks, red → fix → green → merge, state/rounds/heartbeat OK; mutations rejected=3")
     finally:
+        worker.stdin.close()
+        try:
+            worker.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            worker.kill()
+            worker.wait()
         server.shutdown()
         server.server_close()
         thread.join()

@@ -48,7 +48,8 @@ bash scripts/check.sh
 `repos.yaml` uses the same explicit inventory in `scripts/check.sh`. Missing files
 fail before any scenario runs; a red scenario stops the check. The summary counts
 executed/required scenarios. Only the live, separately authorized canary is excluded.
-`scenarios/suite.sh` verifies inventory completeness and missing/red failure paths.
+`scenarios/suite.sh` verifies inventory completeness, missing/red failure paths,
+and stale external configuration → repaired configuration reload, in temporary files.
 
 The old `scenarios/manifest.sh` was deleted in `df81eb38` together with the Fala
 manifest it inspected. It is not a lost Python runner test. `3f9097e2` removed its
@@ -57,8 +58,33 @@ Build, Fix, graph transitions in darkfactory, guards and observability instead o
 restoring an obsolete manifest test. A copied historical check command still fails
 with exit 127; use the configured check command above.
 
-`bash scenarios/darkfactory.sh` runs the real CLI twice in fresh temporary homes.
-Each repetition processes two issues, forces red → Fix → green → Merge, then
+### Checkout configuration is not host configuration
+
+`load_repos()` reads `LOKAY2_REPOS_FILE`, or `ROOT/repos.yaml` when unset.
+`ROOT` belongs to the installed Python package, not necessarily the PR checkout.
+Changing the PR's `repos.yaml` does not update a copied host file. Record the
+runner's effective path, `mikolaj92/lokay` test argv, PR number and head SHA;
+the current shell's environment alone does not prove the runner's configuration.
+Do not dump the environment or read credentials.
+
+If the effective file contains the historical loop, ask the host owner to
+replace **only** that repo's `test` with `["bash", "scripts/check.sh"]`.
+Preserve the old value for rollback and leave every other entry unchanged.
+Host edits and agent restarts require separate authorization.
+
+After authorization, let the existing runner resume PR #1784 with
+`LOKAY2_REPO=mikolaj92/lokay` and `LOKAY2_ISSUE=1759`. Do not open another PR.
+`resume()` reloads the repo configuration and reads the PR's current head SHA.
+An already running `_finish()` holds its test argv locally; its internal Check
+retry does not reload that list. Use a new runner invocation/resume after the
+active invocation ends, not a concurrent runner or a manual state edit.
+`lokay start --check` only probes host readiness; it does not execute the suite.
+Require the runner's Check log to show `bash scripts/check.sh` and the full
+summary on the final PR SHA. A manual green suite is not that evidence.
+
+`bash scenarios/darkfactory.sh` runs two repetitions in fresh temporary homes.
+Each repetition keeps one CLI process for both ticks and the idle tick.
+It processes two issues, forces red → Fix → green → Merge, then
 checks an idle tick. Fake pi, Git, GitHub and a local Decision HTTP server log
 calls and reject unexpected operations. It checks persisted states, separate
 round logs, SHA-bound checks, heartbeat timestamps and operation counts. It compares
@@ -112,5 +138,20 @@ with authorization. To stop all factory work, unload that existing agent with
 `launchctl bootout gui/$(id -u)/ai.mikolaj.lokay2` (also requires authorization).
 Disabling creation does not cancel already opened issues.
 
-Local scenario success and real canary success are separate results. Only two
-verified merges, both run logs and the between-run heartbeat prove the canary.
+Report evidence against `(mikolaj92/lokay, PR #1784, final SHA)` separately:
+
+| Gate | Required counters | Evidence |
+| --- | --- | --- |
+| Local suite | `scenarios=21/21; errors=0` | Full check summary |
+| Deterministic cycle | `autonomous_runs=2/2; mutations_rejected=3/3` | Same-process ticks, fake call trace, states, logs, heartbeat |
+| Runner Check | Full suite on final SHA | Effective config path, argv and existing PR's Check log |
+| Real canary | `merged_prs=2/2; rounds_logs=2/2; between_run_heartbeat=1/1` | Sandbox PR URLs and saved proof |
+| Real recurrence | One next pair due, no duplicates | Persisted deadline and existing LaunchAgent log |
+
+The fake canary scenario checks recovery, evidence collection, deadlines and
+failure handling. Its simulated clock/state does not prove real recurrence.
+Observe the next real pair without changing the clock or invoking a manual tick.
+Before the deadline expect no new pair; afterwards expect exactly one. Active
+pairs and failures must not create duplicates. Missing evidence stays unverified.
+Only two verified merges, both run logs and the between-run heartbeat prove
+the real canary. Local green results cannot replace these counters.
