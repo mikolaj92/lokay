@@ -4,7 +4,7 @@ cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 # Explicit inventory: a missing scenario is a failure, not a shorter green suite.
 scenarios='
 build check ci darkfactory darkfactory_canary decision_contract fix host_down
-lock merge merge_sha no_legacy_imports observability outside_worktree plan
+issue_flow lock merge merge_sha no_legacy_imports observability outside_worktree plan
 push_guard safety start_pick start_plan step_outputs suite worktree
 '
 required=0
