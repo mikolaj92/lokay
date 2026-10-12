@@ -293,6 +293,8 @@ def _prepare(picked: dict) -> tuple:
         original_prompt = saved.get("plan_prompt") or plan.prompt_for(title, body)
         prompt = original_prompt
         phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
+        previous_uwagi = None
+        identical_revises = 0
         while True:
             if phase == "write" or not plan.valid_plan(art):
                 state_update(picked["repo"], picked["issue"], plan_phase="write", plan_prompt=prompt)
@@ -309,13 +311,20 @@ def _prepare(picked: dict) -> tuple:
             verdict = plan.verdict(answers)
             state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result=verdict["next"])
             rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
-            if verdict["next"] == "ok":
+            current_uwagi = tuple(row["kryterium"] for row in verdict["uwagi"])
+            identical_revises = identical_revises + 1 if current_uwagi == previous_uwagi else 1
+            previous_uwagi = current_uwagi
+            repeated_revise = verdict["next"] == "revise" and identical_revises >= 3 and plan.valid_plan(art)
+            if verdict["next"] == "ok" or repeated_revise:
+                if repeated_revise:
+                    rounds_append(picked["repo"], picked["issue"], "plan accepted after repeated identical revise")
                 state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None)
                 break
-            uwagi = ", ".join(row["kryterium"] for row in verdict["uwagi"])
+            uwagi = ", ".join(current_uwagi)
             prompt = original_prompt + f"\nUwagi: {uwagi or 'revise the plan'}.\n"
             phase = "write"
             state_update(picked["repo"], picked["issue"], plan_phase=phase, plan_prompt=prompt)
+            time.sleep(20)
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root = Path(os.path.expanduser(repo["clone_path"]))
     worktree = root.parent / f"{root.name}-wt-{picked['issue']}"

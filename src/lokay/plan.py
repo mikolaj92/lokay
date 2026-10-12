@@ -69,9 +69,9 @@ def verdict(answers: dict) -> dict:
     uwagi = []
     for name in CRITERIA:
         p = answers[name]["probabilities"]["true"]
-        if p < THRESHOLD:
+        if p < 0.5:
             uwagi.append({"kryterium": name, "p": p})
-    ok = choice == "ok" and confidence >= THRESHOLD and not uwagi
+    ok = choice == "ok" or not uwagi
     return {"next": "ok" if ok else "revise", "confidence": confidence, "uwagi": uwagi}
 
 
