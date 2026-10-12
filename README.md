@@ -36,3 +36,69 @@ Environment overrides can go in `~/.config/lokay/env`:
 `LOKAY_NODE_MINUTES` (60), `LOKAY_ALARM_REPO` (`mikolaj92/lokay`).
 The service uses the checkout SHA as the heartbeat version after self-update;
 manual runs use the installed package version.
+
+## Dark factory proof
+
+Run the complete local suite (no package unit tests):
+
+```sh
+for scenario in scenarios/*.sh; do
+  [ "$scenario" = scenarios/darkfactory-canary.sh ] && continue
+  bash -n "$scenario" && bash "$scenario" || exit
+done
+```
+
+`bash scenarios/darkfactory.sh` runs the real CLI twice in fresh temporary homes.
+Each repetition processes two issues, forces red → Fix → green → Merge, then
+checks an idle tick. Fake pi, Git, GitHub and a local Decision HTTP server log
+calls and reject unexpected operations. It checks persisted states, separate
+round logs, SHA-bound checks, heartbeat timestamps and operation counts.
+`scenarios/darkfactory_canary.sh` checks the canary with fake GitHub; it does not
+prove a real canary run.
+
+### Real canary (separate authorization required)
+
+No canary is enabled by installation. After explicit authorization, use the
+existing `ai.mikolaj.lokay2` LaunchAgent, not another scheduler. Its template is
+`scripts/ai.mikolaj.lokay2.plist`; installation writes
+`~/Library/LaunchAgents/ai.mikolaj.lokay2.plist`.
+
+Prerequisites: a Mini with pi and Decision available, an existing authenticated
+`gh` session with issue/PR write and merge permissions in
+`mikolaj92/lokay-sandbox`, and a sandbox clone in the configured repos file.
+Configure the sandbox test command to run both generated scripts, for example
+`[python3, -m, unittest, discover, -p, test_darkfactory_*.py]`.
+The sandbox must allow automatic merge. Do not put credentials in scripts or
+proof artifacts.
+
+Set these in the existing `~/.config/lokay/env` only after authorization:
+
+```sh
+LOKAY_DARKFACTORY_CANARY=1
+LOKAY2_REPO=mikolaj92/lokay-sandbox
+```
+
+The caretaker invokes `scenarios/darkfactory-canary.sh` before each normal tick.
+It creates a slugify/version issue pair at most once every 24 hours. An unfinished
+pair blocks new pairs. Titles contain a persisted pair ID, so a retry recovers
+an issue created before local persistence failed. An advisory lock blocks
+concurrent creation. Existing open canary issues without local state block
+creation rather than silently starting another pair.
+
+Evidence lives in `~/.lokay/darkfactory-canary/<pair>/`: `proof.json` contains
+both merged PR URLs, run paths and SHAs; each issue directory copies the runner's
+`state.json` and `rounds.md`. `heartbeat-between.json` is captured after the first
+merge and must precede the second merge. The script never edits runner artifacts.
+`~/.lokay/darkfactory-canary/state.json` records progress and errors; caretaker
+logs remain in `~/.lokay/logs/lokay.log`. Missing between-run heartbeat is a
+failure, even if two PRs merged. Retain evidence and investigate errors before
+retrying; do not synthesize missing evidence.
+
+Disable pair creation by setting `LOKAY_DARKFACTORY_CANARY=0` in the same env
+file. The caretaker reads it on startup, so restart the existing agent only
+with authorization. To stop all factory work, unload that existing agent with
+`launchctl bootout gui/$(id -u)/ai.mikolaj.lokay2` (also requires authorization).
+Disabling creation does not cancel already opened issues.
+
+Local scenario success and real canary success are separate results. Only two
+verified merges, both run logs and the between-run heartbeat prove the canary.

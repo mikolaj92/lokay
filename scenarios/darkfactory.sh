@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+for repetition in 1 2; do
 uv run --offline python - <<'PY'
 import json
 import os
@@ -134,6 +135,10 @@ elif tool == "gh":
         n = int(args[2])
         assert option("--match-head-commit") == data["remote"][f"lokay/{n}"]
         assert n not in data["merged"]
+        checks = [body for issue, body in data['comments'] if issue == n]
+        assert len(checks) == 2 and '**fix** · CI: **red**' in checks[0]
+        assert '**merge** · CI: **green**' in checks[1], 'merge without green check'
+        assert data['contents'][str(root / f'clone-wt-{n}')] == 'value = 42\n'
         data["merged"].append(n)
         save()
     else:
@@ -189,7 +194,7 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
     server = ThreadingHTTPServer(("127.0.0.1", 0), DecisionAPI)
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    env = {key: value for key, value in os.environ.items()
+    env = {key: os.environ[key] for key in os.environ
            if not key.startswith(("LOKAY", "PI_")) and key not in ("GH_TOKEN", "GITHUB_TOKEN")}
     env.update(HOME=str(root / "home"), PATH=str(root / "bin") + os.pathsep + os.environ["PATH"],
                DARKFACTORY_ROOT=str(root), LOKAY2_REPOS_FILE=str(root / "repos.yaml"),
@@ -213,6 +218,7 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
             runs = root / "home/.lokay/runs/example__darkfactory"
             state = json.loads((runs / str(issue) / "state.json").read_text())
             assert state["node"] == "merge" and state["result"] == "merged", state
+            assert state['pr'] == issue and state['branch'] == f'lokay/{issue}', state
             assert state["plan_rounds"] == 1 and state["check_rounds"] == 2, state
             assert state["failures"] == 0 and state["retry_at"] == 0, state
             assert state["local_ci"]["result"] == "green", state
@@ -242,6 +248,13 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
             else:
                 assert (runs / "1/state.json").read_bytes() == first_state
                 assert (runs / "1/rounds.md").read_bytes() == first_rounds
+        # A further autonomous tick is idle: no duplicate pick or merge.
+        idle = subprocess.run([sys.executable, '-m', 'lokay.cli', 'start'], env=env,
+                              capture_output=True, text=True, timeout=10)
+        assert idle.returncode == 0 and not idle.stdout and 'idle no_work' in idle.stderr
+        assert json.loads((root / 'external.json').read_text()) == external
+        assert (runs / '1/state.json').read_bytes() == first_state
+        assert (runs / '1/rounds.md').read_bytes() == first_rounds
         assert len(requests) == 14, requests  # Plan + three lenses per Check, twice.
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
@@ -256,3 +269,4 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
         server.server_close()
         thread.join()
 PY
+done
