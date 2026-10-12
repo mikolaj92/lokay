@@ -77,14 +77,21 @@ env = {
 untested = pick({**env, "LOKAY2_REPO": "example/untested"})
 assert untested["result"] == "picked" and untested["repo"] == "example/untested", untested
 start.release(untested["held"])
+from lokay.state import state_read, state_update
+state_update('example/first', 1, result='failed', reason='old failure', failures=3, retry_at=0)
 got = pick(env)
+saved = state_read('example/first', 1)
+assert saved['result'] == 'running' and saved['reason'] is None and saved['failures'] == 3, saved
 assert got["issue"] == 1 and got["node"] == "plan" and got["repo"] == "example/first", got
 assert pick({**env, "LOKAY2_REPO": "example/first"}) == {"result": "idle", "reason": "no_work"}
 start.release(got["held"])
 start.release(got["held"])
 os.environ["OPEN_PR"] = "yes"
+state_update('example/second', 2, result='needs_help', reason='old failure', failures=2, retry_at=0)
 got = pick({**env, "LOKAY2_REPO": "example/second", "LOKAY2_ISSUE": "2"})
 assert got["repo"] == "example/second" and got["issue"] == 2 and got["node"] == "check" and got["pr"] == 10, got
+saved = state_read('example/second', 2)
+assert saved['result'] == 'running' and saved['reason'] is None and saved['failures'] == 2, saved
 start.release(got["held"])
 from lokay.state import state_update
 import time
