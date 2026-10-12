@@ -18,31 +18,27 @@ from lokay.state import rounds_append, run_dir, state_read, state_update
 def guarded_step(step):
     @wraps(step)
     def guarded(picked: dict) -> dict:
-        current_step = step
-        while True:
-            try:
-                outcome = current_step(picked)
-            except Exception as exc:
-                outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
-            repo, issue = picked["repo"], picked["issue"]
-            if outcome.get("result") in ("pending", "pr_open", "needs_help"):
-                return outcome
-            if outcome.get("result") == "merged":
-                state_update(repo, issue, failures=0, retry_at=0, reason=None)
-                from lokay.observe import current
+        try:
+            outcome = step(picked)
+        except Exception as exc:
+            outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+        repo, issue = picked["repo"], picked["issue"]
+        if outcome.get("result") in ("pending", "pr_open", "needs_help"):
+            return outcome
+        if outcome.get("result") == "merged":
+            state_update(repo, issue, failures=0, retry_at=0, reason=None)
+            from lokay.observe import current
 
-                current(result="merged", node=None, node_since=None)
-                return outcome
-            state = state_read(repo, issue)
-            failures = state.get("failures", 0) + 1
-            reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
-            delay = min(3600, 60 * 2 ** min(failures - 1, 6))
-            state_update(repo, issue, result="failed", reason=reason, failures=failures,
-                         retry_at=time.time() + delay)
-            rounds_append(repo, issue, f"{state.get('node', picked['node'])}: retry, reason={reason}")
-            time.sleep(delay)
-            picked = {**picked, "node": state.get("node", picked["node"])}
-            current_step = advance.__wrapped__ if picked["node"] in ("plan", "build") else resume.__wrapped__
+            current(result="merged", node=None, node_since=None)
+            return outcome
+        state = state_read(repo, issue)
+        failures = state.get("failures", 0) + 1
+        reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
+        delay = min(3600, 60 * 2 ** min(failures - 1, 6))
+        state_update(repo, issue, result="failed", reason=reason, failures=failures,
+                     retry_at=time.time() + delay)
+        rounds_append(repo, issue, f"{state.get('node', picked['node'])}: retry, reason={reason}")
+        return {"result": "failed", "reason": reason}
     return guarded
 
 
@@ -156,6 +152,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                if row["headRefName"].startswith("lokay/")
                and row["headRefName"][6:].isdecimal()
                and int(row["headRefName"][6:]) not in skipped
+               and state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()
                and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
         if not prs:
             continue
@@ -306,8 +303,6 @@ def _prepare(picked: dict) -> tuple:
         phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
         evaluations = saved.get("plan_evaluations", 0) if saved.get("plan_phase") else 0
         while True:
-            if evaluations >= 3:
-                raise RuntimeError("plan evaluation limit reached (3)")
             if phase == "write" or not plan.valid_plan(art):
                 state_update(picked["repo"], picked["issue"], plan_phase="write", plan_prompt=prompt)
                 def write_plan():
@@ -327,15 +322,19 @@ def _prepare(picked: dict) -> tuple:
                 raise RuntimeError(f"unknown plan verdict: {verdict.get('next')}")
             state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result=verdict["next"])
             rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
-            current_uwagi = tuple(row["kryterium"] for row in verdict["uwagi"])
             if verdict["next"] == "ok":
                 state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None,
                              plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest())
                 break
-            uwagi = ", ".join(current_uwagi)
+            uwagi = ", ".join(
+                ": ".join(str(row[field]) for field in ("kryterium", "text", "notes") if row.get(field))
+                for row in verdict["uwagi"]
+            )
             prompt = original_prompt + f"\nUwagi: {uwagi or 'revise the plan'}.\n"
+            evaluations = 0
             phase = "write"
-            state_update(picked["repo"], picked["issue"], plan_phase=phase, plan_prompt=prompt)
+            state_update(picked["repo"], picked["issue"], plan_evaluations=0,
+                         plan_phase=phase, plan_prompt=prompt)
             time.sleep(20)
     repo = next(row for row in load_repos() if row["name"] == picked["repo"])
     root = Path(os.path.expanduser(repo["clone_path"]))
