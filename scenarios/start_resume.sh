@@ -138,34 +138,42 @@ with tempfile.TemporaryDirectory() as tmp:
             args = merge.call_args.args
             assert args[:3] == (repo, 12, 'new') and args[3]['sha'] == 'new', args
 
-        # Repeated findings cannot bypass the three-call Fix budget via Plan.
-        for merge_after in (None, 1, 3):
+        # Repeated findings return through Plan instead of imposing a Fix cap.
+        reset(node='check', issue_title='title', issue_body='body')
+        aggregate.side_effect = [finding, finding, green]
+        code.reset_mock(); prepare.reset_mock()
+        with patch('lokay.start._prepare', return_value=(worktree, 'lokay/7', 'new', tests, 2)) as replan:
+            assert start.resume(picked)['result'] == 'merged'
+            replan.assert_called_once()
+        assert code.call_count == 1
+        saved = state.state_read(repo, 7)
+        assert 'Fix made no progress' in saved['plan_prompt']
+        assert 'Uwagi:' in saved['plan_prompt'] and 'Rounds:' in saved['plan_prompt']
+        assert 'Fix → Plan: no progress, findings=' in (state.run_dir(repo, 7) / 'rounds.md').read_text()
+
+        # Distinct findings can require more than three Fix calls.
+        for merge_after in (1, 3, 5):
             reset(node='check')
             aggregate.reset_mock(); code.reset_mock(); merge.reset_mock()
             checks = [0]
             def bounded_verdict(*args):
                 checks[0] += 1
-                assert checks[0] <= 4, 'Check/Fix loop exceeded its budget'
-                if merge_after is not None and checks[0] > merge_after:
+                assert checks[0] <= merge_after + 1, 'unexpected extra Check'
+                if checks[0] > merge_after:
                     return {**green, 'evidence': {'extra': [1, 2]}}
-                return finding
+                return {**finding, 'uwagi': [{'plik': 'a', 'pytanie': f'bug {checks[0]}'}]}
             aggregate.side_effect = bounded_verdict
             result = start.resume(picked)
-            expected_fixes = 3 if merge_after is None else merge_after
+            expected_fixes = merge_after
             assert code.call_count == expected_fixes, (result, code.call_count)
             assert checks[0] == expected_fixes + 1
-            if merge_after is None:
-                assert result['result'] == 'needs_help', result
-                assert state.state_read(repo, 7)['result'] == 'needs_help'
-                merge.assert_not_called()
-            else:
-                assert result['result'] == 'merged', result
-                merge.assert_called_once()
-                assert merge.call_args.args[3] == {**green, 'evidence': {'extra': [1, 2]}}
+            assert result['result'] == 'merged', result
+            merge.assert_called_once()
+            assert merge.call_args.args[3] == {**green, 'evidence': {'extra': [1, 2]}}
 
         # main owns a real lock through Check, Fix and Merge, including failures.
         from lokay.lock import acquire, release as real_release
-        for failure_at in (None, 'limit', 'check', 'fix', 'merge'):
+        for failure_at in (None, 'check', 'fix', 'merge'):
             reset(node='check')
             held = acquire('example', repo)
             assert held['result'] == 'held'
@@ -178,7 +186,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 check_calls[0] += 1
                 if failure_at == 'check':
                     raise RuntimeError('Check exception')
-                return finding if failure_at == 'limit' or check_calls[0] == 1 else green
+                return finding if check_calls[0] == 1 else green
             def fixed(*args):
                 busy()
                 if failure_at == 'fix':

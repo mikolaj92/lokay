@@ -85,6 +85,15 @@ os.environ["OPEN_PR"] = "yes"
 got = pick({**env, "LOKAY2_REPO": "example/second", "LOKAY2_ISSUE": "2"})
 assert got["repo"] == "example/second" and got["issue"] == 2 and got["node"] == "check" and got["pr"] == 10, got
 start.release(got["held"])
+from lokay.state import state_update
+import time
+state_update('example/second', 2, retry_at=time.time() + 3600, failures=1, reason='fixture')
+assert pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'}) == {
+    'result': 'idle', 'reason': 'no_work'}
+state_update('example/second', 2, node='plan', retry_at=0, failures=0, reason=None)
+got = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
+assert got['node'] == 'plan' and got['pr'] == 10, got
+start.release(got['held'])
 assert pick({**env, "LOKAY2_ISSUE": "3"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, "LOKAY2_REPO": "example/missing"}) == {"result": "idle", "reason": "no_work"}
 start.remember_skip('example/second', 2, 'needs_help: fix_code; pr=10 sha=abc')

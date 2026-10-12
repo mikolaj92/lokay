@@ -26,3 +26,46 @@ if accept(bad):
     raise SystemExit(1)
 sys.stderr.write("step outputs ok\n")
 PY
+uv run --offline python - <<'PY'
+import io
+import json
+import tempfile
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+from lokay import observe, start, state
+from lokay.lock import acquire, release
+
+with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp) / 'runs'):
+    repo = 'example/retry'
+    picked = {'repo': repo, 'issue': 1, 'node': 'check', 'result': 'picked'}
+    def action():
+        assert acquire('example', repo)['result'] == 'busy'
+        raise RuntimeError('fixture failure')
+    @start.guarded_step
+    def step(picked):
+        start._retry(picked, 'check', action)
+    with patch('lokay.start.time.sleep', side_effect=AssertionError('sleep under lock')):
+        for attempt in (1, 2):
+            held = acquire('example', repo)
+            assert held['result'] == 'held', held
+            with patch('lokay.start.pick', return_value={**picked, 'held': held}), \
+                 patch('lokay.start.resume', step), redirect_stdout(io.StringIO()) as out:
+                start.main([])
+            result = json.loads(out.getvalue().splitlines()[-1])
+            assert result == {'result': 'failed', 'reason': 'RuntimeError: fixture failure'}, result
+            saved = state.state_read(repo, 1)
+            assert saved['failures'] == attempt, saved
+            assert saved['retry_at'] > start.time.time() + 60 * 2 ** (attempt - 1) - 2
+            assert observe.CURRENT['result'] == 'failed'
+            assert observe.CURRENT['last_error'] == saved['reason']
+            free = acquire('example', repo)
+            assert free['result'] == 'held', free
+            release(free)
+        rounds = (state.run_dir(repo, 1) / 'rounds.md').read_text()
+        assert rounds.count('check: retry') == 2, rounds
+    start._retry(picked, 'check', lambda: {'result': 'done'}, 'done')
+    assert state.state_read(repo, 1)['failures'] == 0
+    assert observe.CURRENT['last_error'] is None
+print('retry: one attempt per tick, persisted backoff, lock release and cleared heartbeat OK')
+PY

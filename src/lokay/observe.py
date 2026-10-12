@@ -24,7 +24,8 @@ def current(**fields) -> None:
 @contextmanager
 def ticking():
     stopped = Event()
-    current(result="running", repo=None, issue=None, node=None, node_since=None)
+    current(result="running", repo=None, issue=None, node=None, node_since=None,
+            failures=0, last_error=None)
 
     def pulse():
         while not stopped.is_set():
@@ -50,7 +51,11 @@ def ticking():
 def heartbeat(result: str | None = None, **fields) -> dict:
     path = Path.home() / ".lokay" / "heartbeat.json"
     previous = json.loads(path.read_text()) if path.exists() else {}
+    previous.setdefault("failures", 0)
+    previous.setdefault("last_error", None)
     previous.update(fields)
+    if fields.get("failures") == 0:
+        previous["last_error"] = None
     if result is not None:
         previous["result"] = result
     try:

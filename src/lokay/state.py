@@ -27,8 +27,14 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     current.update(fields)
     from lokay.observe import current as observe_current
 
+    failures = current.get("failures", 0)
+    reason = current.get("reason") if failures else None
+    result = "failed" if failures and reason else current.get("result", "running")
+    if fields.get("failures") == 0 and "result" not in fields and current.get("result") == "failed":
+        current["result"] = result = "running"
     observe_current(repo=repo, issue=issue, node=current.get("node"),
-                    node_since=current.get("node_since"), result=current.get("result", "running"))
+                    node_since=current.get("node_since"), result=result,
+                    failures=failures, last_error=reason)
     current["updated_at"] = datetime.now(timezone.utc).isoformat()
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(current, indent=2) + "\n")
