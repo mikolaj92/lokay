@@ -1,0 +1,6 @@
+{
+  "id": "correctness",
+  "type": "bool",
+  "question": "Does this hunk contain a real bug: wrong logic, crash, or wrong output?",
+  "veto": 0.85
+}

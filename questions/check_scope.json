@@ -1,0 +1,6 @@
+{
+  "id": "scope",
+  "type": "bool",
+  "question": "Does this hunk change anything the issue and plan did not ask for?",
+  "veto": 0.85
+}

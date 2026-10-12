@@ -269,16 +269,18 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if proc.returncode != 0:
                 failed.append({"warstwa": " ".join(argv), "plik": "", "linia": None})
         ci = {"result": "red" if failed else "green", "sha": sha, "failed": failed}
-        kind = "correctness alignment architecture security production"
-        answers = decide({"state": {"sha": sha, "kind": kind}, "questions": questions(kind, rows)["questions"]})
-        wire = {
-            "model": os.environ.get("LOKAY2_DECISION_MODEL") or os.environ.get("LOKAY2_MODEL", ""),
-            "usage": {"completion_tokens": 0},
-            "answers": {qid: {"choice": row["choice"], "probabilities": row["probabilities"]} for qid, row in answers.items()},
-        }
-        decision = decide_hunks(kind, rows, wire, wire["model"])
-        decision["sha"] = sha
-        verdict = aggregate(sha, ci, [decision])
+        decisions = []
+        for kind in ("scope", "tests", "correctness"):
+            answers = decide({"state": {"sha": sha, "kind": kind}, "questions": questions(kind, rows)["questions"]})
+            wire = {
+                "model": os.environ.get("LOKAY2_DECISION_MODEL") or os.environ.get("LOKAY2_MODEL", ""),
+                "usage": {"completion_tokens": 0},
+                "answers": {qid: {"choice": row["choice"], "probabilities": row["probabilities"]} for qid, row in answers.items()},
+            }
+            decision = decide_hunks(kind, rows, wire, wire["model"])
+            decision["sha"] = sha
+            decisions.append(decision)
+        verdict = aggregate(sha, ci, decisions)
         rounds += 1
         if verdict["result"] == "merge":
             break
