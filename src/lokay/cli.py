@@ -8,6 +8,8 @@ from lokay.safety import SafetyError, validate_argv
 NODES = (
     "decide",
     "start",
+    "status",
+    "monitor",
     "plan-write",
     "plan-check",
     "build-code",
@@ -38,10 +40,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.node is None:
         parser.print_help()
         return 0
+    if args.node == "status":
+        from lokay.observe import status
+
+        status()
+        return 0
+    if args.node == "monitor":
+        import json
+        from lokay.observe import monitor
+
+        print(json.dumps(monitor()))
+        return 0
     if args.node == "start":
         from lokay.start import main as start_main
+        from lokay.observe import ticking
 
-        return start_main(["--check"] if args.check else rest)
+        if args.check:
+            return start_main(["--check"])
+        with ticking():
+            return start_main(rest)
     if args.node == "decide":
         from lokay.decide import main as decide_main
 

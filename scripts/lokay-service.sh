@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Caretaker for LaunchAgent ai.mikolaj.lokay.
+# Caretaker for LaunchAgent ai.mikolaj.lokay2.
+main() {
 set -uo pipefail
 
 export HOME="${HOME:-${TMPDIR:-/tmp}/lokay-${UID:-unknown}}"
@@ -28,13 +29,27 @@ fi
 
 LOG="$HOME/.lokay/logs/lokay.log"
 mkdir -p "$(dirname -- "$LOG")" || exit 73
+if [[ "${1:-}" == "--monitor" ]]; then
+  exec "$ROOT/.venv/bin/lokay" monitor >>"$LOG" 2>&1
+fi
 while true; do
-  {
-    date -u '+%Y-%m-%dT%H:%M:%SZ'
-    bash "$ROOT/scripts/self_update.sh" || true
-    "$ROOT/.venv/bin/lokay" start </dev/null
-  } >>"$LOG" 2>&1
+  if [[ -f "$LOG" ]] && (( $(wc -c <"$LOG") >= 10485760 )); then
+    mv -f "$LOG" "$LOG.1" || exit 73
+  fi
+  update=$(bash "$ROOT/scripts/self_update.sh" 2>>"$LOG")
+  update_rc=$?
+  printf '%s\n' "$update" >>"$LOG"
+  if (( update_rc == 0 )); then
+    export LOKAY_VERSION="$(printf '%s' "$update" | "$ROOT/.venv/bin/python" -c 'import json,sys; print(json.load(sys.stdin)["head"])')"
+    if [[ "$update" == *'"result":"updated"'* ]]; then
+      exec bash "$ROOT/scripts/lokay-service.sh" "$@"
+    fi
+  fi
+  date -u '+%Y-%m-%dT%H:%M:%SZ' >>"$LOG"
+  "$ROOT/.venv/bin/lokay" start </dev/null >>"$LOG" 2>&1
   rc=$?
   [[ "${1:-}" == "--once" ]] && exit "$rc"
   sleep "$LOKAY_TICK_SECONDS"
 done
+}
+main "$@"

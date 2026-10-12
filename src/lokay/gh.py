@@ -121,6 +121,20 @@ def comment_upsert(repo: str, number: int, marker: str, body: str) -> dict:
     return {"result": "created", "url": out.strip()}
 
 
+def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: dict) -> dict:
+    body = (f"### Lokay Check {round_number}\n"
+            f"SHA: `{verdict['sha']}`\n\n"
+            f"Wynik: **{verdict['result']}** · CI: **{ci['result']}**\n\n"
+            "Uwagi i CI:\n```json\n" + json.dumps({
+                "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
+                "failed": ci.get("failed", []), "pending": ci.get("pending", []),
+            }, ensure_ascii=False, indent=2) + "\n```")
+    code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", body])
+    if code != 0:
+        raise RuntimeError(err.strip() or "Check comment failed")
+    return {"result": "commented", "url": out.strip()}
+
+
 def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     code, out, err = _gh(
         ["pr", "merge", str(number), "--repo", repo, "--merge", "--match-head-commit", expected_head_sha]

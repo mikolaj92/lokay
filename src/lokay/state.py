@@ -20,7 +20,15 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     path = run_dir(repo, issue) / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     current = json.loads(path.read_text()) if path.exists() else {}
+    if "node" in fields and (fields["node"] != current.get("node") or "node_since" not in current):
+        import time
+
+        current["node_since"] = time.time()
     current.update(fields)
+    from lokay.observe import current as observe_current
+
+    observe_current(repo=repo, issue=issue, node=current.get("node"),
+                    node_since=current.get("node_since"), result=current.get("result", "running"))
     current["updated_at"] = datetime.now(timezone.utc).isoformat()
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(current, indent=2) + "\n")

@@ -29,6 +29,9 @@ def guarded_step(step):
                 return outcome
             if outcome.get("result") == "merged":
                 state_update(repo, issue, failures=0, retry_at=0, reason=None)
+                from lokay.observe import current
+
+                current(result="merged", node=None, node_since=None)
                 return outcome
             state = state_read(repo, issue)
             failures = state.get("failures", 0) + 1
@@ -181,6 +184,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 row for row in issues
                 if int(row["number"]) not in skipped
                 and not row["title"].lower().startswith("epic")
+                and row["title"] != "lokay-stalled"
                 and (only_issue is None or int(row["number"]) == only_issue)
             ]
             issue = next((row for row in issues
@@ -222,6 +226,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if host_ready(report) else 1
     outcome = pick()
     if outcome["result"] == "idle":
+        from lokay.observe import current
+
+        current(result="idle")
         extra = outcome.get("failed") or ""
         print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return 0
@@ -369,7 +376,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.fix import fix_code, fix_publish
     from lokay import plan
     from lokay.git import _git
-    from lokay.gh import _gh, open_pr_for, pr_checks
+    from lokay.gh import _gh, open_pr_for, pr_checks, check_comment
     from lokay.merge import merge_sha
     from lokay.run import run_process
 
@@ -437,6 +444,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 pending = "fix"
                 state_update(picked["repo"], picked["issue"], node="fix", verdict=verdict)
                 rounds_append(picked["repo"], picked["issue"], "Check: conflict, files=" + ", ".join(conflicts))
+                pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
+                if pr:
+                    _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"],
+                           rounds + 1, verdict, {"result": "conflict"}))
             else:
                 pushed = _retry(picked, "check", lambda: fix_publish(worktree, branch, sha))
                 if pushed["result"] == "remote_moved" and pushed.get("sha"):
@@ -545,6 +556,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         if remote["result"] == "pending":
             state_update(picked["repo"], picked["issue"], node="check", result="pending", verdict=None)
             rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, GitHub CI pending")
+            _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"], rounds + 1,
+                   {"result": "pending", "sha": sha, "uwagi": []}, remote))
             return {"result": "pending", "sha": sha}
         ci = {**ci, "failed": ci["failed"] + [
             {"warstwa": "GitHub CI", "plik": "", "log": name}
@@ -575,5 +588,6 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked["repo"], picked["issue"],
             f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}",
         )
+        _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"], rounds, verdict, ci))
         pending = verdict["result"]
         state_update(picked["repo"], picked["issue"], node=pending)
