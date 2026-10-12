@@ -116,7 +116,8 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     if child.get("LOKAY2_PROVIDER") and "PI_PROVIDER" not in child:
         out["provider"] = "ok"
     out["model"] = "ok" if child.get("LOKAY2_MODEL") else "fail"
-    out["decision"] = "ok" if child.get("LOKAY2_DECISION_API") and child.get("LOKAY2_DECISION_MODEL") else "fail"
+    api = child.get("LOKAY2_DECISION_API") or "mini"
+    out["decision"] = "ok" if api == "mini" or child.get("LOKAY2_DECISION_MODEL") else "fail"
     out["pi"] = "ok" if shutil.which("pi", path=child.get("PATH")) else "fail"
     try:
         gh = run_process([gh_bin(), "auth", "status"], env=child, timeout=15)
