@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from functools import wraps
@@ -28,7 +29,7 @@ def guarded_step(step):
             return {"result": "failed", "reason": str(exc)}
         except Exception as exc:
             outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
-        if outcome.get("next") == "plan":
+        if outcome.get("next") in ("plan", "build"):
             return outcome
         repo, issue = picked["repo"], picked["issue"]
         if outcome.get("result") in ("pending", "pr_open"):
@@ -129,7 +130,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
              if not only_repo or repo["name"] == only_repo]
-    has_open_pr = False
+    candidates = []
     for repo in repos:
         name = repo["name"]
         code, out, err = _gh([
@@ -147,22 +148,24 @@ def pick(env: dict[str, str] | None = None) -> dict:
                and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
         if not prs:
             continue
-        has_open_pr = True
-        pr = min(prs, key=lambda row: int(row["number"]))
+        candidates.extend((state_read(name, int(pr["headRefName"][6:])).get("last_attempt", 0),
+                           int(pr["number"]), name, pr) for pr in prs)
+    for _, _, name, pr in sorted(candidates, key=lambda row: row[:3]):
         issue = int(pr["headRefName"][6:])
         held = acquire(name.split("/")[0], name)
         if held["result"] != "held":
             continue
-        node = "plan" if state_read(name, issue).get("node") == "plan" else "check"
+        saved_node = state_read(name, issue).get("node")
+        node = saved_node if saved_node in ("plan", "build") else "check"
         try:
             state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
-                         result="running", reason=None)
+                         result="running", reason=None, last_attempt=time.time())
         except BaseException:
             release(held)
             raise
         return {"result": "picked", "repo": name, "issue": issue,
                 "node": node, "pr": pr["number"], "held": held}
-    if has_open_pr:
+    if candidates:
         return {"result": "idle", "reason": "no_work"}
     chosen = None
     for repo in repos:
@@ -197,7 +200,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
                 "held": held,
             }
             state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"],
-                         result="running", reason=None)
+                         result="running", reason=None, last_attempt=time.time())
         except BaseException:
             chosen = None
             raise
@@ -361,7 +364,9 @@ def _prepare(picked: dict) -> tuple | dict:
     from lokay.setup import prepare_dependencies
 
     prepare_dependencies(worktree, repo, int(picked["issue"]))
-    built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch, clone_path=root)
+    build_note = state_read(picked["repo"], picked["issue"]).get("build_note")
+    built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch,
+                       clone_path=root, **({"build_note": build_note} if build_note else {}))
     if built.get("result") == "failed":
         reason = built.get("reason") or "build failed"
         explanation = built.get("explanation") or built.get("artifact") or ""
@@ -375,7 +380,7 @@ def _prepare(picked: dict) -> tuple | dict:
         return {**built, "next": "plan"}
     if built.get("result") != "done":
         raise RuntimeError(f"unexpected Build outcome: {built}")
-    state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0)
+    state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0, build_note=None)
     def publish():
         pr = open_pr_for(picked["repo"], branch)
         expected = pr.get("headRefOid") if pr else None
@@ -418,11 +423,57 @@ def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
     return {"result": "failed", "reason": reason}
 
 
+def fix_to_build(picked: dict, worktree: Path) -> dict | None:
+    from lokay.git import _git
+    from lokay.scope import is_test
+
+    saved = state_read(picked["repo"], picked["issue"])
+    ci = saved.get("local_ci") or {}
+    if ci.get("result") != "red":
+        return None
+    log = ci.get("log") or ""
+    failed = re.findall(r"^FAILED\s+([^\s:]+)::", log, re.MULTILINE)
+    if not failed:
+        return None
+    code, added, err = _git(worktree, ["diff", "--name-status", "--diff-filter=A", "origin/main...HEAD"])
+    if code != 0:
+        raise RuntimeError(err or "added test diff failed")
+    added_tests = {line.split("\t", 1)[1] for line in added.splitlines()
+                   if "\t" in line and is_test(line.split("\t", 1)[1])}
+    code, tracked, err = _git(worktree, ["ls-files"])
+    if code != 0:
+        raise RuntimeError(err or "test paths lookup failed")
+    tests = [path for path in tracked.splitlines() if is_test(path)]
+    files = set()
+    for path in failed:
+        relative = path.removeprefix("./")
+        if Path(path).is_absolute():
+            try:
+                relative = str(Path(path).relative_to(worktree))
+            except ValueError:
+                continue
+        matches = [name for name in tests if name == relative or name.endswith("/" + relative)]
+        # Package-local pytest paths must identify one file, not an existing namesake.
+        if len(matches) == 1 and matches[0] in added_tests:
+            files.add(matches[0])
+    if not files:
+        return None
+    names = ", ".join(sorted(files))
+    note = (f"Failing test(s) added by this PR: {names}\n{log[-6000:]}\n"
+            "Fix the production code so they pass, or remove these newly added tests (new unit tests are not allowed).")
+    rounds_append(picked["repo"], picked["issue"], "Fix → Build: failing test added in this PR: " + names)
+    state_update(picked["repo"], picked["issue"], node="build", build_note=note,
+                 result="running", reason=None, failures=0, retry_at=0)
+    return {"next": "build"}
+
+
 def fix_step(picked: dict, node: str, action, sha: str) -> dict:
     try:
         outcome = action()
     except Exception as exc:
         return needs_help(picked, f"{node}: {type(exc).__name__}: {exc}", sha)
+    if node == "fix_code" and outcome.get("next") == "build":
+        return outcome
     expected = "done" if node == "fix_code" else "pushed"
     if outcome.get("result") != expected and not (
         node == "fix_publish" and outcome.get("result") == "remote_moved" and outcome.get("sha")
@@ -630,6 +681,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             saved = state_read(picked["repo"], picked["issue"])
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
             if saved.get("fix_fingerprint") == fingerprint:
+                redirected = fix_to_build(picked, worktree)
+                if redirected:
+                    return redirected
                 rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
                 title, body = saved.get("issue_title"), saved.get("issue_body")
                 if not title:
@@ -668,7 +722,16 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             from lokay.setup import prepare_dependencies
 
             prepare_dependencies(worktree, repo, int(picked["issue"]))
-            fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path), sha)
+            def fix_action():
+                outcome = fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path)
+                if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
+                    redirected = fix_to_build(picked, worktree)
+                    if redirected:
+                        return redirected
+                return outcome
+            fixed = fix_step(picked, "fix_code", fix_action, sha)
+            if fixed.get("next") == "build":
+                return fixed
             if fixed["result"] == "failed":
                 return fixed
             pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
