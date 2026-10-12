@@ -78,6 +78,14 @@ def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict
     return {"result": "pr_open", "url": out.strip()}
 
 
+def pr_set_body(repo: str, number: int, body: str, issue: int) -> dict:
+    marked = body.rstrip() + f"\n\nCloses #{issue}\n\nOpened by {ORIGIN}.\n"
+    code, out, err = _gh(["pr", "edit", str(number), "--repo", repo, "--body", marked])
+    if code != 0:
+        raise RuntimeError(err.strip() or "pr edit failed")
+    return {"result": "updated", "pr": number}
+
+
 def pr_checks(repo: str, number: int, sha: str) -> dict:
     code, out, err = _gh(["pr", "view", str(number), "--repo", repo, "--json", "statusCheckRollup,headRefOid"])
     if code != 0:
