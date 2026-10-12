@@ -19,7 +19,7 @@ def git(path, *args):
 
 
 with tempfile.TemporaryDirectory() as tmp:
-    for case in ('equal', 'ahead', 'dirty', 'behind', 'diverged', 'conflict', 'stale_pr'):
+    for case in ('equal', 'ahead', 'dirty', 'behind', 'diverged', 'conflict', 'stale_pr', 'delayed_pr'):
         root = Path(tmp) / case
         root.mkdir()
         remote = root / 'remote.git'
@@ -47,7 +47,7 @@ with tempfile.TemporaryDirectory() as tmp:
             git(path, 'add', '.')
             git(path, 'commit', '-m', text.strip())
 
-        if case in ('ahead', 'diverged', 'conflict', 'stale_pr'):
+        if case in ('ahead', 'diverged', 'conflict', 'stale_pr', 'delayed_pr'):
             commit(worktree, 'shared.txt' if case == 'conflict' else 'local.txt', 'local\n')
         if case == 'dirty':
             (worktree / 'dirty.txt').write_text('uncommitted\n')
@@ -59,13 +59,17 @@ with tempfile.TemporaryDirectory() as tmp:
         repo = f'example/{case}'
         picked = {'repo': repo, 'issue': 7, 'pr': 12, 'node': 'check'}
 
+        pr_calls = 0
         def pr(*args):
-            sha = initial_remote if case == 'stale_pr' else git(remote, 'rev-parse', 'refs/heads/lokay/7')
+            global pr_calls
+            pr_calls += 1
+            sha = initial_remote if case == 'stale_pr' or (case == 'delayed_pr' and pr_calls <= 3) else git(remote, 'rev-parse', 'refs/heads/lokay/7')
             return {'number': 12, 'headRefOid': sha}
 
         with patch('lokay.start.load_repos', return_value=[{'name': repo, 'clone_path': str(clone)}]), \
              patch('lokay.start.open_pr_for', side_effect=pr), \
              patch('lokay.start.refresh_body', return_value={'result': 'updated'}) as refresh, \
+             patch('lokay.start.time.sleep') as sleep, \
              patch('lokay.start._finish', return_value={'result': 'pending'}) as finish:
             result = start.resume(picked)
             if case in ('conflict', 'stale_pr'):
@@ -74,6 +78,8 @@ with tempfile.TemporaryDirectory() as tmp:
                 finish.assert_not_called()
                 saved = state.state_read(repo, 7)
                 assert saved['failures'] == 1 and saved['retry_at'] > start.time.time(), saved
+                if case == 'stale_pr':
+                    assert pr_calls == 7 and sleep.call_count == 5
                 if case == 'conflict':
                     assert git(remote, 'rev-parse', 'refs/heads/lokay/7') == initial_remote
                 continue
@@ -82,7 +88,9 @@ with tempfile.TemporaryDirectory() as tmp:
             assert head == git(remote, 'rev-parse', 'refs/heads/lokay/7'), case
             assert state.state_read(repo, 7)['sha'] == head
             finish.assert_called_once_with(picked, worktree, 'lokay/7', head, [])
-            assert refresh.call_count == int(case in ('ahead', 'dirty', 'diverged'))
+            assert refresh.call_count == int(case in ('ahead', 'dirty', 'diverged', 'delayed_pr'))
+            if case == 'delayed_pr':
+                assert sleep.call_count == 2 and all(call.args == (5,) for call in sleep.call_args_list)
             if case == 'behind':
                 assert head == initial_remote and head != initial_local
             if case == 'diverged':
@@ -92,5 +100,5 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert (worktree / 'remote.txt').read_text() == 'remote\n'
             if case == 'dirty':
                 assert head != base and not git(worktree, 'status', '--porcelain')
-print('resume push: equal, ahead, dirty, behind, diverged, conflict, stale PR OK')
+print('resume push: equal, ahead, dirty, behind, diverged, conflict, stale and delayed PR OK')
 PY

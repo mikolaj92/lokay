@@ -40,7 +40,7 @@ def _check(internal: Mapping, response: Mapping) -> dict:
     return out
 
 
-def _trim_wire(wire: dict) -> dict:
+def _trim_wire(wire: dict, limit: int = 6000) -> dict:
     strings = []
 
     def trim(value):
@@ -59,13 +59,23 @@ def _trim_wire(wire: dict) -> dict:
 
     field = "state" if "state" in wire else "input"
     wire[field] = trim(wire[field])
-    while (size := len(json.dumps(wire))) >= 6000:
-        if not strings:
-            raise DecisionError("request metadata exceeds character limit")
-        parent, key = max(strings, key=lambda item: len(item[0][item[1]]))
-        if not parent[key]:
-            raise DecisionError("request metadata exceeds character limit")
-        parent[key] = parent[key][:max(0, len(parent[key]) - (size - 5999))]
+    while (size := len(json.dumps(wire))) >= limit:
+        available = [(parent, key) for parent, key in strings if parent[key]]
+        if not available:
+            # Containers and numeric state metadata can also exceed the budget.
+            wire[field] = {}
+            strings = []
+            if len(json.dumps(wire)) < limit:
+                break
+            questions = wire["questions"]
+            items = list(questions.values()) if isinstance(questions, dict) else questions
+            available = [(item, "question" if "question" in item else "instructions")
+                         for item in items if item.get("question", item.get("instructions"))]
+            if not available:
+                raise DecisionError("request metadata exceeds character limit")
+            size = len(json.dumps(wire))
+        parent, key = max(available, key=lambda item: len(item[0][item[1]]))
+        parent[key] = parent[key][:max(0, len(parent[key]) - max(1, (size - limit + 1) // 6))]
     return wire
 
 
