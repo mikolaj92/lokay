@@ -267,7 +267,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         for argv in tests:
             proc = run_process(argv, cwd=worktree, timeout=600)
             if proc.returncode != 0:
-                failed.append({"warstwa": " ".join(argv), "plik": "", "linia": None})
+                failed.append({
+                    "warstwa": " ".join(argv), "plik": "", "linia": None,
+                    "log": ((proc.stdout or "") + (proc.stderr or ""))[-3000:],
+                })
         ci = {"result": "red" if failed else "green", "sha": sha, "failed": failed}
         decisions = []
         for kind in ("scope", "tests", "correctness"):
@@ -284,7 +287,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rounds += 1
         if verdict["result"] == "merge":
             break
-        fixed = fix_code(worktree, sha, json.dumps(verdict["uwagi"]), dict(os.environ))
+        prompt = (
+            Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
+            + "\n\nUwagi:\n" + json.dumps(verdict["uwagi"])
+            + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
+        )
+        fixed = fix_code(worktree, sha, prompt, dict(os.environ))
         if fixed["result"] != "done":
             return fixed
         pushed = fix_publish(worktree, branch, sha)
