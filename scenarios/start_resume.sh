@@ -149,9 +149,7 @@ with tempfile.TemporaryDirectory() as tmp:
         stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green', 'failed': []}))
         stack.enter_context(patch('lokay.gh.check_comment', return_value={'result': 'done'}))
         stack.enter_context(patch('lokay.check.hunks', return_value=[]))
-        stack.enter_context(patch('lokay.check.questions', return_value={'questions': []}))
-        stack.enter_context(patch('lokay.decide.decide', return_value={}))
-        stack.enter_context(patch('lokay.check.decide_hunks', return_value={'uwagi': []}))
+        stack.enter_context(patch('lokay.check.decide_batches', return_value={'next': 'ok', 'uwagi': []}))
         ci = stack.enter_context(patch('lokay.check.local_ci', side_effect=lambda sha, cmds, wt:
             {'result': 'green', 'sha': sha, 'failed': [], 'notes': [], 'log': 'ok'}))
         aggregate = stack.enter_context(patch('lokay.check.aggregate'))

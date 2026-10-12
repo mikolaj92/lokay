@@ -431,6 +431,16 @@ def fix_step(picked: dict, node: str, action, sha: str) -> dict:
     return outcome
 
 
+def pushed_pr(repo: str, branch: str, sha: str) -> dict | None:
+    for attempt in range(6):
+        pr = open_pr_for(repo, branch)
+        if pr and pr.get("headRefOid") == sha:
+            return pr
+        if attempt < 5:
+            time.sleep(5)
+    return None
+
+
 @guarded_step
 def resume(picked: dict) -> dict:
     from lokay.git import _git
@@ -488,9 +498,9 @@ def resume(picked: dict) -> dict:
                 if published.get("result") == "failed":
                     return published
                 return needs_help(picked, f"fix_publish: {published}", sha)
-            pr = open_pr_for(picked["repo"], branch)
             code, out, err = _git(worktree, ["rev-parse", "HEAD"])
-            if code != 0 or not pr or pr.get("headRefOid") != out.strip():
+            pr = pushed_pr(picked["repo"], branch, out.strip()) if code == 0 else None
+            if code != 0 or not pr:
                 return needs_help(picked, "sha mismatch after push", sha)
             sha = out.strip()
             _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
@@ -505,7 +515,7 @@ def resume(picked: dict) -> dict:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import aggregate, decide_hunks, hunks, local_ci, questions
+    from lokay.check import aggregate, check_state, decide_batches, hunks, local_ci
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
     from lokay import plan
@@ -597,6 +607,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 if pushed["result"] != "pushed":
                     raise RuntimeError(f"main synchronization publish failed: {pushed}")
                 sha = pushed["sha"]
+                if not pushed_pr(picked["repo"], branch, sha):
+                    return needs_help(picked, "sha mismatch after push", sha)
                 _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
                 state_update(picked["repo"], picked["issue"], sha=sha, verdict=None)
         def read_diff():
@@ -666,6 +678,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 _retry(picked, "check", sync_head)
             sha = pushed["sha"]
             if pushed["result"] == "pushed":
+                if not pushed_pr(picked["repo"], branch, sha):
+                    return needs_help(picked, "sha mismatch after push", sha)
                 _retry(picked, "fix", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
             state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None, fix_fingerprint=fingerprint)
             rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
@@ -681,6 +695,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             if ci["notes"]:
                 rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
         log = ci["log"]
+        directory = run_dir(picked["repo"], picked["issue"])
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / f"check-{rounds + 1}-diff.patch").write_text(diff.stdout or "")
+        (directory / f"check-{rounds + 1}-test.log").write_text(log)
         pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
         if not pr:
             raise RuntimeError("PR missing during Check")
@@ -700,23 +718,23 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             {"warstwa": "GitHub CI", "plik": "", "log": name}
             for name in remote.get("failed") or []
         ], "result": "green" if ci["result"] == remote["result"] == "green" else "red"}
+        def read_stat():
+            stat = run_process(["git", "diff", "--stat", "origin/main...HEAD"], cwd=worktree, timeout=30)
+            if stat.returncode != 0:
+                raise RuntimeError(stat.stderr or "diff stat failed")
+            return stat.stdout or ""
+
+        directory = run_dir(picked["repo"], picked["issue"])
+        art = directory / "plan.md"
+        decision_state = check_state(directory, rounds + 1, diff.stdout or "",
+                                     _retry(picked, "check", read_stat), ci,
+                                     sha=sha, repo=picked["repo"], issue=picked["issue"],
+                                     plan=art.read_text() if art.is_file() else "")
         decisions = []
         kinds = ("correctness alignment architecture security production scope tests",)
         for kind in kinds:
-            art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-            answers = _retry(picked, "check", lambda: decide({
-                "state": {"sha": sha, "kind": kind, "repo": picked["repo"],
-                          "issue": picked["issue"], "diff": diff.stdout or "",
-                          "plan": art.read_text() if art.is_file() else "",
-                          "test_result": ci["result"], "test_log": log},
-                "questions": questions(kind, rows)["questions"],
-            }))
-            wire = {
-                "model": os.environ.get("LOKAY2_DECISION_MODEL") or os.environ.get("LOKAY2_MODEL", ""),
-                "usage": {"completion_tokens": 0},
-                "answers": {qid: {"choice": row["choice"], "probabilities": row["probabilities"]} for qid, row in answers.items()},
-            }
-            decision = decide_hunks(kind, rows, wire, wire["model"])
+            decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
+                                      lambda request: _retry(picked, "check", lambda: decide(request)))
             decision["sha"] = sha
             decisions.append(decision)
         verdict = aggregate(sha, ci, decisions)

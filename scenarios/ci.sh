@@ -113,7 +113,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'pending'}))
     stack.enter_context(patch('lokay.gh.check_comment'))
     def processes(argv, **kwargs):
-        if argv == ['git', 'diff', 'origin/main...HEAD']:
+        if argv in (['git', 'diff', 'origin/main...HEAD'], ['git', 'diff', '--stat', 'origin/main...HEAD']):
             return CompletedProcess(argv, 0, '', '')
         return run_process(argv, **kwargs)
     stack.enter_context(patch('lokay.run.run_process', processes))

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from lokay.decide import DecisionError, from_wire
@@ -12,25 +13,33 @@ NIT = 0.5
 
 
 def hunks(diff: str) -> list[dict]:
-    rows = []
+    rows = {}
     current = None
+    old_file = None
     for line in diff.splitlines():
-        if line.startswith("+++ b/"):
-            if current:
-                rows.append(current)
-            current = {"plik": line[6:], "linia_od": 1, "linia_do": 1, "body": []}
-            continue
-        if line.startswith("@@") and current is not None:
+        if line.startswith("diff --git "):
+            current = None
+        elif line.startswith("--- a/"):
+            old_file = line[6:]
+        elif line.startswith("+++ "):
+            name = line[6:] if line.startswith("+++ b/") else old_file
+            if name is not None:
+                current = rows.setdefault(name, {"plik": name, "linia_od": None,
+                                                  "linia_do": 1, "added": 0, "deleted": 0})
+        elif line.startswith("@@") and current is not None:
             plus = line.split("+", 1)[1].split(" ", 1)[0]
             start, _, count = plus.partition(",")
-            current["linia_od"] = int(start)
-            current["linia_do"] = int(start) + max(int(count or "1") - 1, 0)
-            continue
-        if current is not None:
-            current["body"].append(line)
-    if current:
-        rows.append(current)
-    return rows
+            start = int(start)
+            end = start + max(int(count or "1") - 1, 0)
+            current["linia_od"] = min(current["linia_od"], start) if current["linia_od"] is not None else start
+            current["linia_do"] = max(current["linia_do"], end)
+        elif current is not None:
+            if line.startswith("+"):
+                current["added"] += 1
+            elif line.startswith("-"):
+                current["deleted"] += 1
+    return [{**row, "linia_od": row["linia_od"] if row["linia_od"] is not None else 1}
+            for row in rows.values()]
 
 
 def lens(kind: str) -> str:
@@ -73,6 +82,67 @@ def decide_hunks(kind: str, rows: list[dict], wire: dict, model: str) -> dict:
     return {"next": nxt, "confidence": answers["next"]["confidence"], "uwagi": uwagi, "nits": nits}
 
 
+def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **state) -> dict:
+    directory.mkdir(parents=True, exist_ok=True)
+    patch = directory / f"check-{round}-diff.patch"
+    log = directory / f"check-{round}-test.log"
+    patch.write_text(diff)
+    log.write_text(ci["log"])
+    return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
+            "test_log_path": str(log), "test_result": ci["result"],
+            "failures": [{**item, "log": item.get("log", "")[-800:]}
+                         for item in ci.get("failed") or []]}
+
+
+def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None) -> dict:
+    from lokay.decide import _trim_wire, decide, to_wire
+
+    decide_request = decide_request or decide
+    api = os.environ.get("LOKAY2_DECISION_API") or "mini"
+    model = "" if api == "mini" else os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
+
+    def request(batch):
+        internal = questions(kind, batch)
+        internal["state"] = {**state, "files": "\n".join(
+            f"{row['plik']} +{row.get('added', 0)} -{row.get('deleted', 0)}" for row in batch)}
+        return internal
+
+    batches = []
+    batch = []
+    for row in rows:
+        candidate = batch + [row]
+        try:
+            fits = len(json.dumps(to_wire(api, model, request(candidate)))) < 5500
+        except DecisionError:
+            fits = False
+        if batch and not fits:
+            batches.append(batch)
+            batch = [row]
+        else:
+            batch = candidate
+    batches.append(batch)
+    results = []
+    for batch in batches:
+        internal = request(batch)
+        # Last resort for a single oversized row or unusually large state.
+        wire = _trim_wire(to_wire(api, model, internal), limit=5500)
+        internal["state"] = wire.get("state", wire.get("input"))
+        wire_questions = wire["questions"]
+        for question, item in zip(internal["questions"],
+                                  wire_questions.values() if isinstance(wire_questions, dict) else wire_questions):
+            question["instructions"] = item.get("instructions", item.get("question"))
+        answers = decide_request(internal)
+        result = decide_hunks(kind, batch, {
+            "model": model, "usage": {"completion_tokens": 0},
+            "answers": answers,
+        }, model)
+        results.append(result)
+    return {"next": "issue" if any(result["next"] == "issue" for result in results) else "ok",
+            "confidence": min(result["confidence"] for result in results),
+            "uwagi": [item for result in results for item in result["uwagi"]],
+            "nits": [item for result in results for item in result["nits"]]}
+
+
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
     from subprocess import CompletedProcess, TimeoutExpired
     from lokay.run import run_process
@@ -96,10 +166,10 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
         notes.append({"warstwa": "tests", "plik": "", "log": "no tests configured"})
     for argv in tests:
         proc = execute(argv)
-        log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
+        log = (proc.stdout or "") + (proc.stderr or "")
         if not did_run(proc):
             retry = execute(argv)
-            retry_log = ((retry.stdout or "") + (retry.stderr or ""))[-3000:]
+            retry_log = (retry.stdout or "") + (retry.stderr or "")
             flaky = did_run(retry)
             item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
                     "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log}
