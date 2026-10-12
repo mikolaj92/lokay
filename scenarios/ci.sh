@@ -48,7 +48,8 @@ with tempfile.TemporaryDirectory() as tmp:
     flaky = check()
     assert flaky["result"] == "green" and flaky["notes"][0]["flaky"], flaky
     verdict = aggregate("head-b", flaky, [{"next": "issue", "uwagi": [{"pytanie": "correctness"}]}])
-    assert any(row.get("flaky") for row in verdict["uwagi"]), verdict
+    assert not any(row.get("flaky") for row in verdict["uwagi"]), verdict
+    assert any(row.get("flaky") for row in verdict['notes']), verdict
     view["statusCheckRollup"] = [{"context": "legacy", "state": "PENDING"}]
     pending = check()
     assert pending["result"] == "pending", pending
@@ -174,6 +175,11 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         def model(request):
             calls.append(request)
             assert request['state']['kind'] == kinds, request
+            if request['questions'][0]['id'] == 'where':
+                return {q['id']: {'choice': 'none' if q['id'] == 'where' else 'logic bug',
+                    'probabilities': {key: (1.0 if key == ('none' if q['id'] == 'where' else 'logic bug') else 0.0)
+                                      for key in q['options']}}
+                        for q in request['questions']}
             assert len(request['questions']) == 1, request
             for kind in kinds.split():
                 assert lens(kind) in request['questions'][0]['instructions']
@@ -181,8 +187,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
                 choice: 0.9, ('issue' if choice == 'ok' else 'ok'): 0.1}}}
         with patch('lokay.decide.decide', side_effect=model):
             result = start.resume.__wrapped__(picked)
-        assert len(calls) == 1, calls
-        if choice == 'ok' and exit_code in (0, None):
+        assert len(calls) == (2 if choice == 'issue' else 1), calls
+        if exit_code in (0, None):
             assert result['result'] == 'merged', result
             merge.assert_called_once()
             fix.assert_not_called()

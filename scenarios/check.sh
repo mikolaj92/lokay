@@ -77,7 +77,7 @@ except Exception:
     pass
 else:
     raise SystemExit("maybe accepted")
-# A global issue is a veto even without a high-confidence file finding.
+# A global issue triggers follow-up; only concrete findings block green CI.
 from copy import deepcopy
 from lokay.check import QUESTIONS, lens, questions
 import json
@@ -106,8 +106,7 @@ for confidence in (0.84, 0.85, 0.86):
         verdict = decide_hunks(kinds, rows, wire, 'm')
         assert verdict['uwagi'] == []
         assert verdict['next'] == choice, (confidence, choice, verdict)
-        assert aggregate('abc', {'result': 'green', 'sha': 'abc'}, [verdict])['result'] == (
-            'merge' if choice == 'ok' else 'fix')
+        assert aggregate('abc', {'result': 'green', 'sha': 'abc'}, [verdict])['result'] == 'merge'
 for probability in (0.84, 0.85, 0.86):
     wire = deepcopy(wire_ok)
     wire['answers']['h1'] = {'choice': 'true', 'probabilities': {

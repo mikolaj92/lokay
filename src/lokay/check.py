@@ -95,7 +95,7 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
 
 
 def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None) -> dict:
-    from lokay.decide import _trim_wire, decide, to_wire
+    from lokay.decide import decide
 
     decide_request = decide_request or decide
     api = os.environ.get("LOKAY2_DECISION_API") or "mini"
@@ -106,6 +106,47 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
         internal["state"] = {**state, "files": "\n".join(
             f"{row['plik']} +{row.get('added', 0)} -{row.get('deleted', 0)}" for row in batch)}
         return internal
+
+    results = []
+    for batch, answers in _decision_batches(rows, request, decide_request, api, model):
+        results.append(decide_hunks(kind, batch, {
+            "model": model, "usage": {"completion_tokens": 0}, "answers": answers,
+        }, model))
+    result = {"next": "issue" if any(item["next"] == "issue" for item in results) else "ok",
+              "confidence": min(item["confidence"] for item in results),
+              "uwagi": [row for item in results for row in item["uwagi"]],
+              "nits": [row for item in results for row in item["nits"]]}
+    if result["next"] == "issue" and not result["uwagi"]:
+        kinds = ("logic bug", "missing handling/validation", "wrong scope (unrelated change)",
+                 "security", "docs/plan only instead of code", "other")
+
+        def followup(batch):
+            options = {f"{row['plik']}:{row['linia_od']}-{row['linia_do']}": row['plik'] for row in batch}
+            return {"state": {**state, "kind": kind}, "questions": [
+                {"id": "where", "type": "choice",
+                 "instructions": lens_text + " Where is the problem?",
+                 "options": {**options, "none": "no concrete finding"}},
+                {"id": "change", "type": "choice",
+                 "instructions": "What kind of change is needed?",
+                 "options": {name: name for name in kinds}},
+            ]}
+
+        lens_text = " ".join(lens(part) for part in kind.split())
+        for batch, answers in _decision_batches(rows, followup, decide_request, api, model):
+            answers = from_wire("tensorfold", model, {"answers": answers}, followup(batch))
+            chosen = answers["where"]["choice"]
+            p = answers["where"]["probabilities"][chosen]
+            if chosen != "none" and p >= THRESHOLD:
+                row = next(row for row in batch if f"{row['plik']}:{row['linia_od']}-{row['linia_do']}" == chosen)
+                result["uwagi"].append({key: row[key] for key in ("plik", "linia_od", "linia_do")})
+                result["uwagi"][-1].update(pytanie=kind, p=p, zmiana=answers["change"]["choice"])
+        if not result["uwagi"]:
+            result["notes"] = [{"pytanie": kind, "note": "issue without concrete finding after follow-up"}]
+    return result
+
+
+def _decision_batches(rows, request, decide_request, api, model):
+    from lokay.decide import _trim_wire, to_wire
 
     batches = []
     batch = []
@@ -121,7 +162,6 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
         else:
             batch = candidate
     batches.append(batch)
-    results = []
     for batch in batches:
         internal = request(batch)
         # Last resort for a single oversized row or unusually large state.
@@ -132,15 +172,7 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
                                   wire_questions.values() if isinstance(wire_questions, dict) else wire_questions):
             question["instructions"] = item.get("instructions", item.get("question"))
         answers = decide_request(internal)
-        result = decide_hunks(kind, batch, {
-            "model": model, "usage": {"completion_tokens": 0},
-            "answers": answers,
-        }, model)
-        results.append(result)
-    return {"next": "issue" if any(result["next"] == "issue" for result in results) else "ok",
-            "confidence": min(result["confidence"] for result in results),
-            "uwagi": [item for result in results for item in result["uwagi"]],
-            "nits": [item for result in results for item in result["nits"]]}
+        yield batch, answers
 
 
 def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
@@ -188,8 +220,7 @@ def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
     uwagi = list(ci.get("failed") or [])
     for item in decisions:
         uwagi.extend(item.get("uwagi") or [])
-    ok = ci.get("result") == "green" and all(item.get("next") == "ok" for item in decisions)
-    if not ok:
-        uwagi.extend(ci.get("notes") or [])
+    ok = ci.get("result") == "green" and not uwagi
     return {"result": "merge" if ok else "fix", "sha": sha, "uwagi": uwagi,
-            "notes": ci.get("notes") or []}
+            "notes": [*(ci.get("notes") or []),
+                      *(note for item in decisions for note in item.get("notes") or [])]}
