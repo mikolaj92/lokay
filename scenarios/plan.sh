@@ -59,7 +59,15 @@ assert failed["result"] == "failed"
 before = art.read_text()
 plan_check(wire, "m")
 assert art.read_text() == before
-print("plan ok")
+# THRESHOLD is currently unused: preserve verdict's actual boundary (0.5),
+# including acceptance of revise when no criterion has a negative majority.
+for p in (0.849999, 0.85, 0.850001, 0.5):
+    boundary = json.loads(json.dumps(low))
+    boundary['answers']['k_testy'] = {
+        'choice': 'true', 'probabilities': {'true': p, 'false': 1 - p}}
+    assert plan_check(boundary, 'm')['next'] == 'ok', p
+assert plan_check(low, 'm')['next'] == 'revise'
+print("plan ok; probabilities below/at/above 0.85 preserve verdict semantics")
 print(json.dumps(checked))
 PY
 rm -rf "$root"

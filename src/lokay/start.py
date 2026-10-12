@@ -288,14 +288,17 @@ def _prepare(picked: dict) -> tuple:
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     saved = state_read(picked["repo"], picked["issue"])
     plan_rounds = saved.get("plan_rounds", 0)
-    if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not plan.valid_plan(art):
+    accepted = (plan.valid_plan(art) and saved.get("plan_accepted_sha") ==
+                hashlib.sha256(art.read_bytes()).hexdigest())
+    if saved.get("node", picked["node"]) == "plan" or saved.get("plan_phase") or not accepted:
         art.parent.mkdir(parents=True, exist_ok=True)
         original_prompt = saved.get("plan_prompt") or plan.prompt_for(title, body)
         prompt = original_prompt
         phase = saved.get("plan_phase") or ("check" if plan.valid_plan(art) else "write")
-        previous_uwagi = None
-        identical_revises = 0
+        evaluations = saved.get("plan_evaluations", 0) if saved.get("plan_phase") else 0
         while True:
+            if evaluations >= 3:
+                raise RuntimeError("plan evaluation limit reached (3)")
             if phase == "write" or not plan.valid_plan(art):
                 state_update(picked["repo"], picked["issue"], plan_phase="write", plan_prompt=prompt)
                 def write_plan():
@@ -307,18 +310,18 @@ def _prepare(picked: dict) -> tuple:
                 plan_rounds += 1
             state_update(picked["repo"], picked["issue"], plan_phase="check", plan_rounds=plan_rounds)
             plan_text = art.read_text()
-            answers = _retry(picked, "plan", lambda: decide(plan.plan_questions(plan_text)))
+            evaluations += 1
+            state_update(picked["repo"], picked["issue"], plan_evaluations=evaluations)
+            answers = decide(plan.plan_questions(plan_text))
             verdict = plan.verdict(answers)
+            if verdict.get("next") not in ("ok", "revise"):
+                raise RuntimeError(f"unknown plan verdict: {verdict.get('next')}")
             state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result=verdict["next"])
             rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
             current_uwagi = tuple(row["kryterium"] for row in verdict["uwagi"])
-            identical_revises = identical_revises + 1 if current_uwagi == previous_uwagi else 1
-            previous_uwagi = current_uwagi
-            repeated_revise = verdict["next"] == "revise" and identical_revises >= 3 and plan.valid_plan(art)
-            if verdict["next"] == "ok" or repeated_revise:
-                if repeated_revise:
-                    rounds_append(picked["repo"], picked["issue"], "plan accepted after repeated identical revise")
-                state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None)
+            if verdict["next"] == "ok":
+                state_update(picked["repo"], picked["issue"], node="build", plan_phase=None, plan_prompt=None,
+                             plan_accepted_sha=hashlib.sha256(art.read_bytes()).hexdigest())
                 break
             uwagi = ", ".join(current_uwagi)
             prompt = original_prompt + f"\nUwagi: {uwagi or 'revise the plan'}.\n"
@@ -529,7 +532,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     + "\n\nPrevious plan:\n" + ((art / "plan.md").read_text() if (art / "plan.md").is_file() else "")
                     + "\nFix made no progress; revise the plan.\n"
                 )
-                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_prompt=prompt)
+                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_prompt=prompt,
+                             plan_evaluations=0, plan_accepted_sha=None)
                 worktree, branch, sha, tests, plan_rounds = _prepare({**picked, "node": "plan"})
             else:
                 pushed = _retry(picked, "fix", lambda: fix_publish(worktree, branch, sha))
