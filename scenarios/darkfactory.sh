@@ -46,8 +46,10 @@ def head():
 def branch():
     return (cwd / ".branch").read_text()
 
-with (root / "calls.jsonl").open("a") as log:
-    log.write(json.dumps([tool, args]) + "\n")
+# Host guard snapshots use sets internally; their read order is not a graph operation.
+if not (tool == 'git' and args and args[0] == '-C'):
+    with (root / "calls.jsonl").open("a") as log:
+        log.write(json.dumps([tool, args]) + "\n")
 
 if tool == "pi":
     assert args[0] == "-p"
@@ -61,7 +63,17 @@ if tool == "pi":
         value = 42 if "\n\nUwagi:\n" in prompt else 0
         (cwd / "app.py").write_text(f"value = {value}\n")
 elif tool == "git":
-    if args == ["fetch", "origin", "main"]:
+    if args and args[0] == '-C':
+        if Path(args[1]) == root / 'clone':
+            if args[2:] == ['rev-parse', 'HEAD']:
+                print('base')
+            raise SystemExit(0)
+        os.execv('/usr/bin/git', ['git', *args])
+    if args[:3] == ['diff', '--name-status', '--diff-filter=A'] or args[:4] == ['diff', '--cached', '--name-status', '--diff-filter=A'] or args == ['ls-files', '--others', '--exclude-standard']:
+        pass
+    elif args == ['diff', '--name-only', 'origin/main...HEAD']:
+        print('app.py')
+    elif args == ["fetch", "origin", "main"]:
         pass
     elif args[:3] == ["worktree", "add", "-b"]:
         target = Path(args[4])
@@ -99,7 +111,7 @@ elif tool == "git":
         save()
     elif args == ["diff", "--name-only", "--diff-filter=U"]:
         pass
-    elif args == ["merge", "--no-edit", "--no-ff", "origin/main"]:
+    elif args == ["merge", "--no-edit", "origin/main"]:
         pass
     elif args == ["diff", "origin/main...HEAD"]:
         print("diff --git a/app.py b/app.py\n+++ b/app.py\n@@ -0,0 +1 @@\n+"

@@ -3,7 +3,7 @@ set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 # Explicit inventory: a missing scenario is a failure, not a shorter green suite.
 scenarios='
-build check ci darkfactory darkfactory_canary decision_contract fix host_down
+build check ci ci_not_run docs_only_fix no_new_tests setup_deps darkfactory darkfactory_canary decision_contract fix host_down host_guard
 issue_flow lock merge merge_sha no_legacy_imports observability outside_worktree plan
 push_guard safety start_pick start_plan start_resume step_outputs suite worktree
 '
