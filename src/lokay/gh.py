@@ -82,10 +82,23 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
     if view.get("headRefOid") != sha:
         return {"result": "sha_moved", "sha": view.get("headRefOid") or ""}
     rollup = view.get("statusCheckRollup") or []
-    failed = [item.get("name") for item in rollup if item.get("conclusion") not in (None, "SUCCESS", "NEUTRAL", "SKIPPED")]
-    pending = [item.get("name") for item in rollup if item.get("conclusion") is None and item.get("status") != "COMPLETED"]
-    if failed or pending:
-        return {"result": "red", "sha": sha, "failed": failed, "pending": pending}
+    failed = []
+    pending = []
+    for item in rollup:
+        name = item.get("name") or item.get("context") or "GitHub CI"
+        if item.get("__typename") == "StatusContext" or "state" in item:
+            if item.get("state") in ("ERROR", "FAILURE"):
+                failed.append(name)
+            elif item.get("state") != "SUCCESS":
+                pending.append(name)
+        elif item.get("status") != "COMPLETED":
+            pending.append(name)
+        elif item.get("conclusion") not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
+            failed.append(name)
+    if pending:
+        return {"result": "pending", "sha": sha, "failed": failed, "pending": pending}
+    if failed:
+        return {"result": "red", "sha": sha, "failed": failed}
     return {"result": "green", "sha": sha, "failed": []}
 
 

@@ -25,6 +25,8 @@ def guarded_step(step):
             except Exception as exc:
                 outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
             repo, issue = picked["repo"], picked["issue"]
+            if outcome.get("result") == "pending":
+                return outcome
             if outcome.get("result") == "merged":
                 state_update(repo, issue, failures=0, retry_at=0, reason=None)
                 return outcome
@@ -134,7 +136,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     only_repo = child.get("LOKAY2_REPO")
     only_issue = int(child["LOKAY2_ISSUE"]) if child.get("LOKAY2_ISSUE") else None
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
-             if not only_repo or repo["name"] == only_repo]
+             if repo.get("test") and (not only_repo or repo["name"] == only_repo)]
     has_open_pr = False
     for repo in repos:
         name = repo["name"]
@@ -362,12 +364,12 @@ def resume(picked: dict) -> dict:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import aggregate, decide_hunks, hunks, questions
+    from lokay.check import aggregate, decide_hunks, hunks, local_ci, questions
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
     from lokay import plan
     from lokay.git import _git
-    from lokay.gh import _gh, open_pr_for
+    from lokay.gh import _gh, open_pr_for, pr_checks
     from lokay.merge import merge_sha
     from lokay.run import run_process
 
@@ -519,18 +521,31 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pending = "check"
             continue
         rows = hunks(diff.stdout or "")
-        failed = []
-        log = ""
-        if tests:
-            proc = _retry(picked, "check", lambda: run_process(tests, cwd=worktree, timeout=600))
-            log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
-            test_failed = proc.returncode != 0
-            if test_failed:
-                failed.append({
-                    "warstwa": " ".join(tests), "plik": "", "linia": None,
-                    "log": log,
-                })
-        ci = {"result": "red" if failed else "green", "sha": sha, "failed": failed}
+        saved = state_read(picked["repo"], picked["issue"])
+        ci = saved.get("local_ci")
+        if not ci or ci.get("sha") != sha:
+            ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
+            state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
+            if ci["notes"]:
+                rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
+        log = ci["log"]
+        pr = _retry(picked, "check", lambda: open_pr_for(picked["repo"], branch))
+        if not pr:
+            raise RuntimeError("PR missing during Check")
+        remote = _retry(picked, "check", lambda: pr_checks(picked["repo"], pr["number"], sha))
+        if remote["result"] == "sha_moved":
+            _retry(picked, "check", sync_head)
+            sha = remote["sha"]
+            pending = "check"
+            continue
+        if remote["result"] == "pending":
+            state_update(picked["repo"], picked["issue"], node="check", result="pending", verdict=None)
+            rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, GitHub CI pending")
+            return {"result": "pending", "sha": sha}
+        ci = {**ci, "failed": ci["failed"] + [
+            {"warstwa": "GitHub CI", "plik": "", "log": name}
+            for name in remote.get("failed") or []
+        ], "result": "green" if ci["result"] == remote["result"] == "green" else "red"}
         decisions = []
         for kind in ("scope", "tests", "correctness"):
             answers = _retry(picked, "check", lambda: decide({"state": {"sha": sha, "kind": kind}, "questions": questions(kind, rows)["questions"]}))
