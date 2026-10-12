@@ -1,11 +1,11 @@
 repos:
 - name: mikolaj92/lokay-sandbox
   clone_path: ~/Developer/OSS/lokay-sandbox
-  test: []
+  test: ["python3", "-m", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/lokay
   clone_path: /Users/mini-m4-0/.lokay/host
-  test: []
+  test: ["bash", "-c", 'for s in scenarios/check.sh scenarios/decision_contract.sh scenarios/host_down.sh scenarios/lock.sh scenarios/manifest.sh scenarios/merge.sh scenarios/merge_sha.sh scenarios/plan.sh scenarios/safety.sh scenarios/start_pick.sh scenarios/step_outputs.sh; do bash "$s" || exit 1; done']
   merge: 'on'
 - name: mikolaj92/Temida
   clone_path: ~/Developer/Temida/main
