@@ -105,7 +105,7 @@ chmod +x "$tmp/gh"
 export PATH="$tmp:$PATH"
 uv run python - <<'PY'
 import os
-from lokay.start import pick, remember_skip
+from lokay.start import pick, needs_help
 
 env = {
     "PATH": os.environ["PATH"],
@@ -116,11 +116,11 @@ env = {
     "LOKAY2_DECISION_API": "tensorfold",
     "LOKAY2_DECISION_MODEL": "m",
 }
-remember_skip("mikolaj92/lokay-sandbox", 1, "commit is outside the issue worktree")
+needs_help({"repo": "mikolaj92/lokay-sandbox", "issue": 1}, "commit is outside the issue worktree")
 got = pick(env)
 assert got.get("issue") != 1, got
 assert got.get("issue") == 2, got
 assert got.get("repo") == "mikolaj92/lokay-sandbox", got
-print("pick skipped", 1, "selected", got["issue"])
+print("pick deferred", 1, "selected", got["issue"])
 PY
 rm -rf "$tmp"

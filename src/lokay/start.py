@@ -31,7 +31,7 @@ def guarded_step(step):
         if outcome.get("next") == "plan":
             return outcome
         repo, issue = picked["repo"], picked["issue"]
-        if outcome.get("result") in ("pending", "pr_open", "needs_help"):
+        if outcome.get("result") in ("pending", "pr_open"):
             return outcome
         if outcome.get("result") == "merged":
             state_update(repo, issue, failures=0, retry_at=0, reason=None)
@@ -40,6 +40,9 @@ def guarded_step(step):
             current(result="merged", node=None, node_since=None)
             return outcome
         state = state_read(repo, issue)
+        if (state.get("result") == "failed" and state.get("reason") == outcome.get("reason")
+                and state.get("retry_at", 0) > time.time()):
+            return outcome
         failures = state.get("failures", 0) + 1
         reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
         delay = min(3600, 60 * 2 ** min(failures - 1, 6))
@@ -72,26 +75,6 @@ def load_skips(repo: str) -> set[int]:
         except (TypeError, ValueError):
             continue
     return found
-
-
-def remember_skip(repo: str, issue: int, explanation: str) -> None:
-    path = skip_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data: dict = {}
-    if path.is_file():
-        try:
-            loaded = json.loads(path.read_text() or "{}")
-        except json.JSONDecodeError:
-            loaded = {}
-        if isinstance(loaded, dict):
-            data = loaded
-    bucket = data.get(repo)
-    if not isinstance(bucket, dict):
-        bucket = {}
-    bucket[str(issue)] = explanation
-    data[repo] = bucket
-    path.write_text(json.dumps(data))
-
 
 
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -411,15 +394,26 @@ def _prepare(picked: dict) -> tuple | dict:
 
 
 def needs_help(picked: dict, reason: str, sha: str | None = None) -> dict:
-    saved = state_read(picked["repo"], picked["issue"])
-    outcome = {"result": "needs_help", "reason": reason, "repo": picked["repo"],
-               "issue": picked["issue"], "pr": saved.get("pr", picked.get("pr")),
-               "sha": sha if sha is not None else saved.get("sha")}
-    state_update(picked["repo"], picked["issue"], **{
-        key: value for key, value in outcome.items() if key not in ("repo", "issue")
-    }, retry_at=0)
-    remember_skip(picked["repo"], picked["issue"], json.dumps(outcome))
-    return outcome
+    repo, issue = picked["repo"], picked["issue"]
+    saved = state_read(repo, issue)
+    failures = saved.get("failures", 0) + 1
+    delay = min(3600, 60 * 2 ** min(failures - 1, 6))
+    fields = {"node": "check"}
+    if reason.startswith("fix_code"):
+        from lokay.plan import prompt_for
+
+        prompt = saved.get("plan_prompt") or prompt_for(
+            saved.get("issue_title") or "", saved.get("issue_body"))
+        fields.update(node="plan", plan_phase="write", plan_evaluations=0,
+                      plan_accepted_sha=None,
+                      plan_prompt=prompt + f"\nUwagi (Fix): {reason}\n"
+                      + "Previous Fix made no changes. Revise the plan so it can be implemented now.\n")
+    state_update(repo, issue, **fields, result="failed", reason=reason,
+                 failures=failures, retry_at=time.time() + delay,
+                 pr=saved.get("pr", picked.get("pr")),
+                 sha=sha if sha is not None else saved.get("sha"))
+    rounds_append(repo, issue, f"{reason} → retry later")
+    return {"result": "failed", "reason": reason}
 
 
 def fix_step(picked: dict, node: str, action, sha: str) -> dict:
@@ -564,7 +558,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                            rounds + 1, verdict, {"result": "conflict"}))
             else:
                 pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
-                if pushed["result"] == "needs_help":
+                if pushed["result"] == "failed":
                     return pushed
                 if pushed["result"] == "remote_moved" and pushed.get("sha"):
                     _retry(picked, "check", sync_head)
@@ -634,10 +628,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
 
             prepare_dependencies(worktree, repo, int(picked["issue"]))
             fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path), sha)
-            if fixed["result"] == "needs_help":
+            if fixed["result"] == "failed":
                 return fixed
             pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
-            if pushed["result"] == "needs_help":
+            if pushed["result"] == "failed":
                 return pushed
             if pushed["result"] == "remote_moved" and pushed.get("sha"):
                 _retry(picked, "check", sync_head)

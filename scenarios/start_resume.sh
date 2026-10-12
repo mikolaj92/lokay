@@ -41,6 +41,24 @@ with tempfile.TemporaryDirectory() as tmp:
         if fields:
             state.state_update(repo, 7, **fields)
 
+    # Backoff grows once per failed tick, caps at one hour, and never writes skips.
+    for failures in (0, 1, 6, 7, 20):
+        reset(node='fix', failures=failures, plan_prompt='original prompt',
+              plan_evaluations=3, plan_accepted_sha='accepted')
+        reason = 'fix_code: no changes'
+        with patch('lokay.start.time.time', return_value=1000):
+            @start.guarded_step
+            def failed_tick(active):
+                return start.needs_help(active, reason, 'new')
+            assert failed_tick(picked) == {'result': 'failed', 'reason': reason}
+        saved = state.state_read(repo, 7)
+        assert saved['failures'] == failures + 1, saved
+        assert saved['retry_at'] == 1000 + min(3600, 60 * 2 ** min(failures, 6)), saved
+        assert saved['node'] == 'plan' and saved['plan_phase'] == 'write'
+        assert saved['plan_prompt'].startswith('original prompt') and reason in saved['plan_prompt']
+        assert saved['plan_evaluations'] == 0 and saved['plan_accepted_sha'] is None
+        assert not start.skip_file().exists()
+
     with ExitStack() as stack:
         stack.enter_context(patch('lokay.start.load_repos', return_value=[
             {'name': repo, 'clone_path': str(clone), 'test': tests}]))
@@ -80,16 +98,18 @@ with tempfile.TemporaryDirectory() as tmp:
             git_mock.side_effect = unsafe_git
             with patch('lokay.start._finish') as finish:
                 result = start.resume(picked)
-                assert result['result'] == 'needs_help', (kind, result)
-                assert result['repo'] == repo and result['issue'] == 7
-                assert result['pr'] == 12 and result['sha'] == 'new'
+                assert result['result'] == 'failed', (kind, result)
+                saved = state.state_read(repo, 7)
+                assert saved['pr'] == 12 and saved['sha'] == 'new'
                 assert kind in result['reason'], result
                 finish.assert_not_called()
             assert not any(call.args[1][0] in ('fetch', 'merge', 'reset', 'worktree')
                            for call in git_mock.call_args_list), git_mock.call_args_list
             git_mock.reset_mock()
-            assert state.state_read(repo, 7)['result'] == 'needs_help'
-            assert 7 in start.load_skips(repo)
+            saved = state.state_read(repo, 7)
+            assert saved['result'] == 'failed' and saved['node'] == 'check'
+            assert saved['failures'] == 1 and saved['retry_at'] > start.time.time()
+            assert 7 not in start.load_skips(repo)
             if kind == 'missing':
                 worktree.mkdir()
         git_mock.side_effect = git
@@ -221,8 +241,7 @@ with tempfile.TemporaryDirectory() as tmp:
                     raise AssertionError('a merge exception must end the run, not retry forever')
                 else:
                     result = json.loads(out.getvalue().splitlines()[-1])
-                    assert result['result'] == ( 'merged' if failure_at is None else
-                                                'failed' if failure_at == 'check' else 'needs_help'), result
+                    assert result['result'] == ('merged' if failure_at is None else 'failed'), result
                 release.assert_called_once_with(held)
             free = acquire('example', repo)
             assert free['result'] == 'held'
@@ -242,12 +261,20 @@ with tempfile.TemporaryDirectory() as tmp:
                 else:
                     failing.return_value = failure
                 result = start.resume(picked)
-                assert result['result'] == 'needs_help' and node in result['reason'], result
-                assert (result['repo'], result['issue'], result['pr'], result['sha']) == (repo, 7, 12, 'new')
+                assert result['result'] == 'failed' and node in result['reason'], result
+                saved = state.state_read(repo, 7)
+                assert (saved['pr'], saved['sha']) == (12, 'new')
                 assert failing.call_count == 1
                 merge.assert_not_called()
-                assert state.state_read(repo, 7)['result'] == 'needs_help'
-                assert 7 in start.load_skips(repo)
+                assert saved['result'] == 'failed' and saved['failures'] == 1, saved
+                assert saved['retry_at'] > start.time.time()
+                assert saved['node'] == ('plan' if node == 'fix_code' else 'check'), saved
+                if node == 'fix_code':
+                    assert saved['plan_phase'] == 'write' and saved['plan_evaluations'] == 0
+                    assert saved['plan_accepted_sha'] is None
+                    assert result['reason'] in saved['plan_prompt']
+                assert result['reason'] + ' → retry later' in (state.run_dir(repo, 7) / 'rounds.md').read_text()
+                assert 7 not in start.load_skips(repo)
         code.side_effect = None; publish.side_effect = None
         # Publication during main synchronization must not loop either.
         for failure in ({'result': 'failed'}, RuntimeError('sync publish')):
@@ -256,7 +283,7 @@ with tempfile.TemporaryDirectory() as tmp:
             publish.side_effect = failure if isinstance(failure, Exception) else None
             publish.return_value = failure if isinstance(failure, dict) else None
             result = start.resume(picked)
-            assert result['result'] == 'needs_help' and 'fix_publish' in result['reason'], result
+            assert result['result'] == 'failed' and 'fix_publish' in result['reason'], result
             assert publish.call_count == 1
             merge.assert_not_called()
 
@@ -267,7 +294,7 @@ with tempfile.TemporaryDirectory() as tmp:
             remote.return_value = missing if not isinstance(missing, Exception) else None
             with patch('lokay.start._finish') as finish:
                 result = start.resume(picked)
-                assert result['result'] == 'needs_help', result
+                assert result['result'] == 'failed', result
                 finish.assert_not_called()
             prepare.assert_not_called()
 
@@ -283,12 +310,12 @@ with tempfile.TemporaryDirectory() as tmp:
         # main dispatch, final JSON and finally-release contracts.
         for node, target in [('check', 'resume'), ('fix', 'resume'), ('merge', 'resume'), ('plan', 'advance'), ('build', 'advance')]:
             with patch('lokay.start.pick', return_value={**picked, 'node': node}), \
-                 patch('lokay.start.' + target, return_value={'result': 'needs_help'}) as step, \
+                 patch('lokay.start.' + target, return_value={'result': 'failed'}) as step, \
                  patch('lokay.start.release') as release, redirect_stdout(io.StringIO()) as out:
                 assert start.main([]) == 0
                 step.assert_called_once()
                 release.assert_called_once_with(picked['held'])
-                assert json.loads(out.getvalue().splitlines()[-1]) == {'result': 'needs_help'}
+                assert json.loads(out.getvalue().splitlines()[-1]) == {'result': 'failed'}
         with patch('lokay.start.pick', return_value=picked), patch('lokay.start.resume', side_effect=RuntimeError('resume')), \
              patch('lokay.start.release') as release, redirect_stdout(io.StringIO()):
             try:
