@@ -64,5 +64,78 @@ with tempfile.TemporaryDirectory() as tmp:
     request["test"] = []
     view["statusCheckRollup"] = []
     assert check()["result"] == "red"
-print("CI: mutation red, retry/flaky, GitHub pending/red, SHA guard, empty tests red OK")
+
+# Resume the production Check path. Pending remote CI stops after local CI has
+# been persisted, without replacing the cache condition or invoking Fix.
+import os
+from contextlib import ExitStack
+from subprocess import CompletedProcess
+from lokay import start, state
+from lokay.run import run_process
+
+with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+    root = Path(tmp)
+    clone = root / 'clone'
+    worktree = root / 'clone-wt-1'
+    clone.mkdir()
+    worktree.mkdir()
+    config = root / 'repos.yaml'
+    attempts = worktree / 'attempts'
+    (worktree / 'verify.py').write_text(
+        "import sys\nfrom pathlib import Path\n"
+        "with Path('attempts').open('a') as f: f.write(sys.argv[1] + '\\n')\n"
+        "print('result=' + sys.argv[1])\nsys.exit(int(sys.argv[1]))\n")
+    stack.enter_context(patch.dict(os.environ, LOKAY2_REPOS_FILE=str(config)))
+    stack.enter_context(patch('lokay.state.RUNS', root / 'runs'))
+    stack.enter_context(patch('lokay.git._git', return_value=(0, '', '')))
+    head = {'sha': 'same-head'}
+    def pr(*args):
+        return {'number': 7, 'headRefOid': head['sha']}
+    stack.enter_context(patch('lokay.gh.open_pr_for', pr))
+    stack.enter_context(patch('lokay.start.open_pr_for', pr))
+    stack.enter_context(patch('lokay.fix.fix_publish', side_effect=lambda *a:
+        {'result': 'pushed', 'sha': head['sha']}))
+    stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'pending'}))
+    stack.enter_context(patch('lokay.gh.check_comment'))
+    def processes(argv, **kwargs):
+        if argv == ['git', 'diff', 'origin/main...HEAD']:
+            return CompletedProcess(argv, 0, '', '')
+        return run_process(argv, **kwargs)
+    stack.enter_context(patch('lokay.run.run_process', processes))
+    picked = {'repo': 'example/resume', 'issue': 1, 'node': 'check'}
+    state.state_update(picked['repo'], 1, node='check')
+    def configure(exit_code):
+        argv = [sys.executable, '-B', 'verify.py', str(exit_code)]
+        config.write_text('repos:\n  - name: example/resume\n'
+                          f'    clone_path: {clone}\n    test: {json.dumps(argv)}\n    merge: on\n')
+        return argv
+    def resume():
+        assert start.resume.__wrapped__(picked)['result'] == 'pending'
+        return state.state_read(picked['repo'], 1)['local_ci']
+    old_argv = configure(1)
+    red = resume()
+    assert red['result'] == 'red' and attempts.read_text().splitlines() == ['1', '1']
+    new_argv = configure(0)
+    green = resume()
+    assert green['result'] == 'green', 'changed argv reused stale red CI on the same SHA'
+    assert green['sha'] == red['sha'] == head['sha']
+    assert green['argv'] == new_argv and 'result=0' in green['log'], green
+    assert attempts.read_text().splitlines() == ['1', '1', '0']
+    assert resume() == green
+    assert attempts.read_text().splitlines() == ['1', '1', '0'], 'same SHA/argv reran CI'
+    head['sha'] = 'new-head'
+    assert resume()['sha'] == 'new-head'
+    assert attempts.read_text().splitlines() == ['1', '1', '0', '0']
+    legacy = state.state_read(picked['repo'], 1)['local_ci']
+    del legacy['argv']
+    state.state_update(picked['repo'], 1, local_ci=legacy)
+    assert resume()['argv'] == new_argv
+    assert attempts.read_text().splitlines() == ['1', '1', '0', '0', '0']
+    configure(2)
+    failed = resume()
+    assert failed['result'] == 'red' and 'result=2' in failed['log'], failed
+    assert attempts.read_text().splitlines()[-2:] == ['2', '2']
+    history = state.run_dir(picked['repo'], 1) / 'rounds.md'
+    assert history.read_text().count('GitHub CI pending') == 6
+print('CI: mutation, flaky, remote guards, production resume SHA/argv cache OK')
 PY

@@ -75,6 +75,12 @@ Host edits and agent restarts require separate authorization.
 After authorization, let the existing runner resume PR #1784 with
 `LOKAY2_REPO=mikolaj92/lokay` and `LOKAY2_ISSUE=1759`. Do not open another PR.
 `resume()` reloads the repo configuration and reads the PR's current head SHA.
+Persisted local CI is reusable only when both SHA and exact test argv match.
+A changed argv or legacy state without argv forces a new local check, even on
+an unchanged SHA. The new result replaces the cache through normal state writes;
+round logs remain intact. No extra commit is needed to invalidate this cache.
+`scenarios/ci.sh` exercises production resume with temporary configuration and
+state, real local commands, and fake external Git/PR operations.
 An already running `_finish()` holds its test argv locally; its internal Check
 retry does not reload that list. Use a new runner invocation/resume after the
 active invocation ends, not a concurrent runner or a manual state edit.
@@ -93,6 +99,14 @@ missing Fix, merge with red CI and missing second tick. Python network calls and
 the runner's curl health probe are restricted to loopback in this scenario.
 `scenarios/darkfactory_canary.sh` checks the canary with fake GitHub; it does not
 prove a real canary run.
+
+Report the deterministic counters separately: `autonomous_runs=2/2`,
+`mutations_rejected=3/3`, `rounds_logs=2/2`, `between_run_heartbeat=1/1`.
+For the sandbox, measure `merged_prs=2/2`, `rounds_logs=2/2`,
+`between_run_heartbeat=1/1` and `next_scheduled_pair=1/1` separately.
+Fake recurrence checks do not confirm a scheduled LaunchAgent cycle.
+An unmeasured counter is unconfirmed, not successful. Attribute runner evidence
+to `(mikolaj92/lokay, PR #1784, final SHA)`; a local suite is separate evidence.
 
 ### Real canary (separate authorization required)
 
