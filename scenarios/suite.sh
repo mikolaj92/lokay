@@ -20,7 +20,14 @@ assert {f'{name}.sh' for name in names} == {
     path.name for path in Path('scenarios').glob('*.sh')
     if path.name != 'darkfactory-canary.sh'
 }, 'suite inventory is stale'
-repo = next(row for row in load_repos(Path('repos.yaml')) if row['name'] == 'mikolaj92/lokay')
+configured = load_repos(Path('repos.yaml'))
+assert len(configured) == 31
+assert len({row['name'] for row in configured}) == len(configured)
+for row in configured:
+    assert isinstance(row['test'], list)
+    assert all(isinstance(arg, str) and arg for arg in row['test'])
+    assert '/OSS/' not in row['clone_path'], row
+repo = next(row for row in configured if row['name'] == 'mikolaj92/lokay')
 assert repo['test'] == ['bash', 'scripts/check.sh'], repo
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)

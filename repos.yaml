@@ -1,6 +1,10 @@
+# Commands below are taken from checkout configuration or documented gates.
+# This is not execution evidence: Check runs them for the exact candidate SHA.
+# Empty commands mean no confirmed complete gate and must block merge.
 repos:
 - name: mikolaj92/lokay-sandbox
-  clone_path: ~/Developer/OSS/lokay-sandbox
+  # Checkout unavailable at the canonical path: Check must stay red until restored.
+  clone_path: ~/Developer/lokay-sandbox/main
   test: ["uvx", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/lokay
@@ -9,117 +13,146 @@ repos:
   merge: 'on'
 - name: mikolaj92/Temida
   clone_path: ~/Developer/Temida/main
-  test: []
+  # README: verify all four subtrees, not only the root pytest default.
+  test: ["sh", "-c", "for p in dike hermes mnemozyna posejdon; do (cd \"$p\" && uv run pytest) || exit; done"]
   merge: 'on'
 - name: mikolaj92/msds-portal
   clone_path: ~/Developer/msds-portal/main
-  test: []
+  # Makefile: worker, portal, root and VLM suites.
+  test: ["make", "test"]
   merge: 'on'
 - name: mikolaj92/Fala
   clone_path: ~/Developer/Fala/main
-  test: []
+  # pixi.toml / README: native core and adapters, including Python bindings.
+  test: ["pixi", "run", "full-smoke"]
   merge: 'on'
 - name: mikolaj92/reviewkit
   clone_path: ~/Developer/reviewkit/main
+  # No confirmed complete local gate (integration workflow is not a local suite).
   test: []
   merge: 'on'
 - name: mikolaj92/heimdall
   clone_path: ~/Developer/heimdall/main
+  # No documented complete local test command confirmed.
   test: []
   merge: 'on'
 - name: mikolaj92/Docxtor
   clone_path: ~/Developer/Docxtor/main
-  test: []
+  # pyproject.toml: tool.lokay.test.
+  test: ["sh", "-c", "uv run --extra dev ruff check . && uv run --extra dev pytest -q"]
   merge: 'on'
 - name: mikolaj92/Posejdon
   clone_path: ~/Developer/Posejdon/main
-  test: []
+  # README.
+  test: ["uv", "run", "--extra", "dev", "pytest"]
   merge: 'on'
 - name: mikolaj92/PlnFlr
   clone_path: ~/Developer/PlnFlr/main
-  test: []
+  # README: all three Swift packages; pyproject.toml: Python gate.
+  test: ["sh", "-c", "swift test --package-path Kernel && swift test --package-path Web && swift test --package-path App && uv run pytest -q"]
   merge: 'on'
 - name: mikolaj92/anonimizator3000
   clone_path: ~/Developer/Anonimizator3000/main
-  test: []
+  # README.
+  test: ["uv", "run", "pytest"]
   merge: 'on'
 - name: mikolaj92/emitype
   clone_path: ~/Developer/emitype/main
-  test: []
+  # pyproject.toml: tool.lokay.test.
+  test: ["uv", "run", "--extra", "dev", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/wolnyrolnik
   clone_path: ~/Developer/wolnyrolnik/main
-  test: []
+  # Makefile.
+  test: ["make", "test"]
   merge: 'on'
 - name: mikolaj92/rnkstr
   clone_path: ~/Developer/rnkstr/main
-  test: []
+  # pyproject.toml: tool.lokay.test (includes backend and e2e).
+  test: ["uv", "run", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/app-factory
   clone_path: ~/Developer/app-factory/main
-  test: []
+  # README.
+  test: ["uv", "run", "pytest"]
   merge: 'on'
 - name: mikolaj92/basecoat-factory
   clone_path: ~/Developer/basecoat-factory/main
-  test: []
+  # README / package.json.
+  test: ["npm", "test"]
   merge: 'on'
 - name: mikolaj92/my-usermanager
   clone_path: ~/Developer/my-usermanager/main
-  test: []
+  # README.
+  test: ["uv", "run", "pytest"]
   merge: 'on'
 - name: mikolaj92/my-auth
   clone_path: ~/Developer/my-auth/main
+  # Compatibility workflow alone does not establish the complete local gate.
   test: []
   merge: 'on'
 - name: mikolaj92/datasource-kit
   clone_path: ~/Developer/datasource-kit/main
-  test: []
+  # pyproject.toml dev extra / README.
+  test: ["uv", "run", "--extra", "dev", "pytest"]
   merge: 'on'
 - name: mikolaj92/splot
   clone_path: ~/Developer/Splot/main
-  test: []
+  # pixi.toml native gate; pyproject.toml Python binding tests.
+  test: ["sh", "-c", "pixi run full-smoke && uv run --extra dev pytest"]
   merge: 'on'
 - name: mikolaj92/takt
   clone_path: ~/Developer/takt/main
-  test: []
+  # pixi.toml native gate; README Python binding tests.
+  test: ["sh", "-c", "pixi run core-smoke && uv run pytest"]
   merge: 'on'
 - name: mikolaj92/swift-openapi-dynamic
   clone_path: ~/Developer/swift-openapi-dynamic/main
+  # Both Swift and Python trees exist; no complete documented gate confirmed.
   test: []
   merge: 'on'
 - name: mikolaj92/OpenAPITransportKit
   clone_path: ~/Developer/swift-openapi-transport-kit/main
-  test: []
+  # README Swift suites; pyproject.toml Python binding tests.
+  test: ["sh", "-c", "swift test && swift test --package-path IntegrationTests/GeneratedClient && swift test -c release && swift test -c release --package-path IntegrationTests/GeneratedClient && uv run --extra dev pytest"]
   merge: 'on'
 - name: mikolaj92/sqlite.fire
   clone_path: ~/Developer/sqlite.fire/main
-  test: []
+  # README: canonical local gate.
+  test: ["pixi", "run", "./scripts/test.sh"]
   merge: 'on'
 - name: mikolaj92/ShowMeThePlayer
   clone_path: ~/Developer/ShowMeThePlayer/main
-  test: []
+  # pyproject.toml: tool.lokay.test.
+  test: ["uv", "run", "--extra", "dev", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/PunkRecords
   clone_path: ~/Developer/PunkRecords/main
-  test: []
+  # README.
+  test: ["uv", "run", "pytest"]
   merge: 'on'
 - name: mikolaj92/influenzer
   clone_path: ~/Developer/influenzer/main
-  test: []
+  # pyproject.toml / README: canonical local gate.
+  test: ["uv", "run", "python", "-m", "unittest", "discover", "-s", "tests"]
   merge: 'on'
 - name: mikolaj92/VibeTLA
   clone_path: ~/Developer/VibeTLA/main
-  test: []
+  # pyproject.toml: tool.lokay.test.
+  test: ["uv", "run", "pytest", "-q"]
   merge: 'on'
 - name: mikolaj92/VibeFront
   clone_path: ~/Developer/VibeFront/main
+  # Skill pin checking is not a behavioral test suite.
   test: []
   merge: 'on'
 - name: mikolaj92/hermetic-alchemy
   clone_path: ~/Developer/hermetic-alchemy/main
+  # No complete local test gate confirmed.
   test: []
   merge: 'on'
 - name: mikolaj92/dotfiles
   clone_path: ~/Developer/dotfiles/main
+  # No complete local test gate confirmed.
   test: []
   merge: 'on'

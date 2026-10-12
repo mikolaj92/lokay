@@ -40,7 +40,7 @@ for api in ("mini", "tensorfold", "openai-decisions", "systemone"):
     assert len(state["nested"][0]) <= 3000
     assert len(state["nested"][1]["log"]) <= 3000
     question = wire["questions"]["up"] if api in ("mini", "systemone") else wire["questions"][0]
-    assert len(question.get("question", question.get("instructions"))) == 600
+    assert question.get("question", question.get("instructions")) == large['questions'][0]['instructions']
 assert len(large["state"]["plan"]) == 10000
 print("request character limits ok")
 tf = json.loads((root / "tensorfold" / "response.json").read_text())

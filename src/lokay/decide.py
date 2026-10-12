@@ -77,7 +77,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 {
                     "id": question["id"],
                     "type": "choice",
-                    "question": question["instructions"][:600],
+                    "question": question["instructions"],
                     "options": [{"name": k, "description": v} for k, v in question["options"].items()],
                 }
             )
@@ -92,7 +92,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
         questions = []
         for question in internal["questions"]:
             kind = {"choice": "choice", "bool": "predicate", "score": "score"}[question["type"]]
-            item = {"type": kind, "name": question["id"], "instructions": question["instructions"][:600]}
+            item = {"type": kind, "name": question["id"], "instructions": question["instructions"]}
             if kind == "score":
                 item["levels"] = [{"label": k} for k in question["options"]]
             else:
@@ -103,7 +103,7 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
         questions = {}
         for question in internal["questions"]:
             kind = "noul" if question["type"] == "bool" else question["type"]
-            item = {"type": kind, "instructions": question["instructions"][:600]}
+            item = {"type": kind, "instructions": question["instructions"]}
             if api != "mini" or kind != "noul":
                 item["criteria"] = question["options"]
             questions[question["id"]] = item

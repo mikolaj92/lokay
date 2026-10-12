@@ -196,7 +196,7 @@ class DecisionAPI(BaseHTTPRequestHandler):
         for question in wire["questions"]:
             options = [row["name"] for row in question["options"]]
             choice = "ok" if question["id"] == "next" else (
-                "true" if "plan" in wire["input"] else "false")
+                "true" if "kind" not in wire["input"] else "false")
             assert choice in options
             answers[question["id"]] = {"choice": choice,
                 "probabilities": {name: float(name == choice) for name in options}}
@@ -326,7 +326,7 @@ for line in sys.stdin:
         assert (runs / '1/rounds.md').read_bytes() == first_rounds
         assert (runs / '2/state.json').read_bytes() == second_state
         assert (runs / '2/rounds.md').read_bytes() == second_rounds
-        assert len(requests) == 14, requests  # Plan + three lenses per Check, twice.
+        assert len(requests) == 6, requests  # Plan + one combined call per Check, twice.
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
             assert len(comments) == 2, comments
