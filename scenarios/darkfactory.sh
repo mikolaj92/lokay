@@ -155,8 +155,8 @@ class DecisionAPI(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(payload).encode())
 
     def do_GET(self):
-        assert self.path == "/v1/models"
-        self.reply({"data": [{"id": "scenario"}]})
+        assert self.path == "/health"
+        self.reply({"ready": True})
 
     def do_POST(self):
         assert self.path == "/v1/decisions"

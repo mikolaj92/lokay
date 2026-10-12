@@ -94,10 +94,10 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     child = dict(os.environ if env is None else env)
     out: dict[str, str] = {}
     if child.get("LOKAY2_GB10") == "down":
-        out["gb10"] = "fail"
+        out["decision_host"] = "fail"
     else:
-        url = (child.get("LOKAY2_DECISION_BASE_URL") or "http://192.168.1.60:8888").rstrip("/") + "/v1/models"
-        args = ["/usr/bin/curl", "-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}"]
+        url = (child.get("LOKAY2_DECISION_BASE_URL") or "http://192.168.1.52:8005").rstrip("/") + "/health"
+        args = ["/usr/bin/curl", "-sS", "-m", "5", "-w", "\n%{http_code}"]
         if child.get("LOKAY2_DECISION_API_KEY"):
             args.extend(["-H", f"authorization: Bearer {child['LOKAY2_DECISION_API_KEY']}"])
         args.append(url)
@@ -107,10 +107,11 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
                 env=child,
                 timeout=8,
             )
-            code = (fetched.stdout or "").strip()
-            out["gb10"] = "ok" if code == "200" else "fail"
+            raw, _, code = (fetched.stdout or "").rpartition("\n")
+            ready = fetched.returncode == 0 and code.strip() == "200" and json.loads(raw).get("ready") is True
+            out["decision_host"] = "ok" if ready else "fail"
         except Exception:
-            out["gb10"] = "fail"
+            out["decision_host"] = "fail"
     out["provider"] = "ok" if child.get("LOKAY2_PROVIDER") and child.get("LOKAY2_PROVIDER") != child.get("PI_PROVIDER", "") else "fail"
     if child.get("LOKAY2_PROVIDER") and "PI_PROVIDER" not in child:
         out["provider"] = "ok"

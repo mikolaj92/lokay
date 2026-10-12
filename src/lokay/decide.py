@@ -40,6 +40,35 @@ def _check(internal: Mapping, response: Mapping) -> dict:
     return out
 
 
+def _trim_wire(wire: dict) -> dict:
+    strings = []
+
+    def trim(value):
+        if isinstance(value, str):
+            return value[:3000]
+        if isinstance(value, Mapping):
+            value = {key: trim(item) for key, item in value.items()}
+        elif isinstance(value, list):
+            value = [trim(item) for item in value]
+        else:
+            return value
+        for key, item in (value.items() if isinstance(value, dict) else enumerate(value)):
+            if isinstance(item, str):
+                strings.append((value, key))
+        return value
+
+    field = "state" if "state" in wire else "input"
+    wire[field] = trim(wire[field])
+    while (size := len(json.dumps(wire))) >= 6000:
+        if not strings:
+            raise DecisionError("request metadata exceeds character limit")
+        parent, key = max(strings, key=lambda item: len(item[0][item[1]]))
+        if not parent[key]:
+            raise DecisionError("request metadata exceeds character limit")
+        parent[key] = parent[key][:max(0, len(parent[key]) - (size - 5999))]
+    return wire
+
+
 def to_wire(api: str, model: str, internal: Mapping) -> dict:
     if api == "tensorfold":
         questions = []
@@ -48,38 +77,38 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
                 {
                     "id": question["id"],
                     "type": "choice",
-                    "question": question["instructions"],
+                    "question": question["instructions"][:600],
                     "options": [{"name": k, "description": v} for k, v in question["options"].items()],
                 }
             )
-        return {
+        return _trim_wire({
             "model": model,
             "input": internal.get("state") or {},
             "questions": questions,
             "chat_template_kwargs": {"enable_thinking": False},
             "prompt_format_version": 1,
-        }
+        })
     if api == "openai-decisions":
         questions = []
         for question in internal["questions"]:
             kind = {"choice": "choice", "bool": "predicate", "score": "score"}[question["type"]]
-            item = {"type": kind, "name": question["id"], "instructions": question["instructions"]}
+            item = {"type": kind, "name": question["id"], "instructions": question["instructions"][:600]}
             if kind == "score":
                 item["levels"] = [{"label": k} for k in question["options"]]
             else:
                 item["choices"] = [{"value": k, "description": v} for k, v in question["options"].items()]
             questions.append(item)
-        return {"model": model, "input": internal.get("state") or {}, "questions": questions}
+        return _trim_wire({"model": model, "input": internal.get("state") or {}, "questions": questions})
     if api == "systemone":
         questions = {}
         for question in internal["questions"]:
             kind = "noul" if question["type"] == "bool" else question["type"]
             questions[question["id"]] = {
                 "type": kind,
-                "instructions": question["instructions"],
+                "instructions": question["instructions"][:600],
                 "criteria": question["options"],
             }
-        return {"model": model, "state": internal.get("state") or {}, "questions": questions}
+        return _trim_wire({"model": model, "state": internal.get("state") or {}, "questions": questions})
     raise DecisionError(f"unknown api {api}")
 
 
@@ -142,8 +171,8 @@ def decide(internal: Mapping) -> dict:
     cmd.append(base + path)
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=float(timeout) + 2)
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise DecisionError(str(exc)) from exc
+    except (OSError, subprocess.TimeoutExpired):
+        raise DecisionError("decision request failed or timed out") from None
     if proc.returncode != 0:
         raise DecisionError(proc.stderr.strip() or "curl failed")
     raw, _, status = proc.stdout.rpartition("\n")

@@ -17,6 +17,22 @@ for api in ("tensorfold", "openai-decisions", "systemone"):
     assert got == expected, (api, got)
     assert wire["model"] == model
 print("contract ok")
+large = {
+    "state": {"plan": "x" * 10000, "nested": ["ż\\\"" * 5000, {"log": "y" * 10000}]},
+    "questions": [{"id": "up", "type": "bool", "instructions": "z" * 1000,
+                   "options": {"true": "yes", "false": "no"}}],
+}
+for api in ("tensorfold", "openai-decisions", "systemone"):
+    wire = to_wire(api, model, large)
+    assert len(json.dumps(wire)) < 6000, api
+    state = wire.get("input", wire.get("state"))
+    assert len(state["plan"]) <= 3000
+    assert len(state["nested"][0]) <= 3000
+    assert len(state["nested"][1]["log"]) <= 3000
+    question = wire["questions"]["up"] if api == "systemone" else wire["questions"][0]
+    assert len(question.get("question", question.get("instructions"))) == 600
+assert len(large["state"]["plan"]) == 10000
+print("request character limits ok")
 tf = json.loads((root / "tensorfold" / "response.json").read_text())
 cases = []
 missing = json.loads(json.dumps(tf)); del missing["answers"]["k_cel"]; cases.append(missing)
