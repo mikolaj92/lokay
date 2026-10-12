@@ -336,7 +336,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         picked["repo"],
         pr["number"],
         sha,
-        {"result": "merge", "sha": sha},
+        verdict,
         worktree,
         None,
         picked["repo"].split("/")[0],
