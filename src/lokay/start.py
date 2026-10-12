@@ -223,7 +223,13 @@ def refresh_body(repo: str, issue: int) -> dict:
     pr = open_pr_for(repo, f"lokay/{issue}")
     if not pr:
         raise RuntimeError(f"open PR missing for {repo} lokay/{issue}")
-    return pr_set_body(repo, pr["number"], pr_body(worktree, run_dir(repo, issue) / "plan.md"), issue)
+    body = pr_body(worktree, run_dir(repo, issue) / "plan.md")
+    notes = (state_read(repo, issue).get("verdict") or {}).get("notes") or []
+    lens_notes = [note for note in notes if note.get("pytanie")]
+    if lens_notes:
+        body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
+            f"- {note['pytanie']}: {note['note']}" for note in lens_notes)
+    return pr_set_body(repo, pr["number"], body, issue)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -683,6 +689,11 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
             uwagi = verdict["uwagi"]
+            if not uwagi:
+                state_update(picked["repo"], picked["issue"], node="check", verdict=None,
+                             local_ci=None, test_log=None, fix_fingerprint=None, fix_reason=None,
+                             result="check")
+                return {"result": "check", "sha": sha}
             findings = {
                 json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")),
                             row.get("linia", row.get("linia_od")), row.get("linia_do")])
@@ -846,6 +857,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             picked["repo"], picked["issue"],
             f"Check {rounds}: sha={sha}, result={verdict['result']}, uwagi: {counts}, ci={ci['result']}",
         )
+        lens_notes = [note["pytanie"] for note in verdict.get("notes", []) if note.get("pytanie")]
+        if lens_notes:
+            rounds_append(picked["repo"], picked["issue"], f"Check {rounds}: notes=" + ", ".join(lens_notes))
         _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"], rounds, verdict, ci))
+        _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
         pending = verdict["result"]
         state_update(picked["repo"], picked["issue"], node=pending)

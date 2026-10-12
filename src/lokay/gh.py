@@ -141,6 +141,10 @@ def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: 
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
                 "failed": ci.get("failed", []), "pending": ci.get("pending", []),
             }, ensure_ascii=False, indent=2) + "\n```")
+    notes = [note for note in verdict.get("notes", []) if note.get("pytanie")]
+    if notes:
+        body += "\n\n## Uwagi bez konkretu\n" + "\n".join(
+            f"- {note['pytanie']}: {note['note']}" for note in notes)
     code, out, err = _gh(["pr", "comment", str(number), "--repo", repo, "--body", body])
     if code != 0:
         raise RuntimeError(err.strip() or "Check comment failed")
