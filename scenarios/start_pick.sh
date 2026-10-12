@@ -63,9 +63,13 @@ env = {
 }
 got = pick(env)
 assert got["issue"] == 1 and got["node"] == "plan" and got["repo"] == "example/first", got
+assert pick({**env, "LOKAY2_REPO": "example/first"}) == {"result": "idle", "reason": "no_work"}
+start.release(got["held"])
+start.release(got["held"])
 os.environ["OPEN_PR"] = "yes"
 got = pick({**env, "LOKAY2_REPO": "example/second", "LOKAY2_ISSUE": "2"})
 assert got["repo"] == "example/second" and got["issue"] == 2 and got["node"] == "check" and got["pr"] == 10, got
+start.release(got["held"])
 assert pick({**env, "LOKAY2_ISSUE": "3"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, "LOKAY2_REPO": "example/missing"}) == {"result": "idle", "reason": "no_work"}
 assert "--label" not in open(os.environ["GH_LOG"]).read()
