@@ -46,6 +46,17 @@ while true; do
     fi
   fi
   date -u '+%Y-%m-%dT%H:%M:%SZ' >>"$LOG"
+  if [[ "${LOKAY_DARKFACTORY_CANARY:-0}" == "1" ]]; then
+    if [[ "${LOKAY2_REPO:-}" != "mikolaj92/lokay-sandbox" ]]; then
+      printf 'canary requires sandbox-only LOKAY2_REPO\n' >>"$LOG"
+      exit 64
+    fi
+    bash "$ROOT/scenarios/darkfactory-canary.sh" >>"$LOG" 2>&1 || {
+      [[ "${1:-}" == "--once" ]] && exit 1
+      sleep "$LOKAY_TICK_SECONDS"
+      continue
+    }
+  fi
   "$ROOT/.venv/bin/lokay" start </dev/null >>"$LOG" 2>&1
   rc=$?
   [[ "${1:-}" == "--once" ]] && exit "$rc"

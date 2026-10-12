@@ -549,8 +549,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
         ci = saved.get("local_ci")
-        if not ci or ci.get("sha") != sha:
+        if not ci or ci.get("sha") != sha or ci.get("argv") != tests:
             ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
+            ci = {**ci, "argv": list(tests)}
             state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
             if ci["notes"]:
                 rounds_append(picked["repo"], picked["issue"], f"Check: sha={sha}, flaky=" + json.dumps(ci["notes"]))
