@@ -8,14 +8,18 @@ from lokay.lock import release
 from lokay.state import write_run
 
 
-def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, held: dict | None, owner: str, issue: int, rounds: dict) -> dict:
+def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Path | None, held: dict | None, owner: str, issue: int, rounds: dict, *, clone_path: Path | None = None) -> dict:
     if verdict.get("result") != "merge" or verdict.get("sha") != sha:
         return {"result": "sha_moved", "merge_sha": None}
+    if worktree is not None and clone_path is None:
+        raise ValueError("clone_path is required to remove a worktree")
     outcome = gh_merge(repo_name, number, sha)
     if outcome["result"] != "merged":
         return outcome
     if worktree is not None:
-        worktree_remove(worktree.parent if worktree.parent.name != "" else worktree, worktree)
+        removed = worktree_remove(clone_path, worktree)
+        if removed["result"] != "removed":
+            raise RuntimeError(removed.get("error") or "worktree removal failed")
     if held is not None:
         release(held)
     write_run(owner, repo_name, issue, rounds)

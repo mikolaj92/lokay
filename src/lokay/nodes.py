@@ -126,6 +126,7 @@ def merge_main() -> int:
             req["owner"],
             int(req["issue"]),
             req.get("rounds") or {},
+            clone_path=Path(req["clone_path"]) if req.get("clone_path") else None,
         )
     )
 

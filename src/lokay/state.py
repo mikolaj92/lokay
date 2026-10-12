@@ -37,20 +37,12 @@ def rounds_append(repo: str, issue: int, line: str) -> Path:
 
 
 def run_path(owner: str, repo: str, issue: int) -> Path:
-    return RUNS / f"{owner}__{repo.replace('/', '__')}" / f"{issue}.json"
+    return run_dir(repo if "/" in repo else f"{owner}/{repo}", issue) / "state.json"
 
 
 def write_run(owner: str, repo: str, issue: int, fields: dict) -> Path:
-    path = run_path(owner, repo, issue)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    current = json.loads(path.read_text()) if path.exists() else {}
-    current.update(fields)
-    path.write_text(json.dumps(current, indent=2) + "\n")
-    return path
+    return state_update(repo if "/" in repo else f"{owner}/{repo}", issue, **fields)
 
 
 def read_run(owner: str, repo: str, issue: int) -> dict:
-    path = run_path(owner, repo, issue)
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text())
+    return state_read(repo if "/" in repo else f"{owner}/{repo}", issue)
