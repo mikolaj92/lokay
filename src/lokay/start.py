@@ -91,9 +91,13 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
         out["gb10"] = "fail"
     else:
         url = (child.get("LOKAY2_DECISION_BASE_URL") or "http://192.168.1.60:8888").rstrip("/") + "/v1/models"
+        args = ["/usr/bin/curl", "-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}"]
+        if child.get("LOKAY2_DECISION_API_KEY"):
+            args.extend(["-H", f"authorization: Bearer {child['LOKAY2_DECISION_API_KEY']}"])
+        args.append(url)
         try:
             fetched = run_process(
-                ["/usr/bin/curl", "-sS", "-m", "5", "-o", "/dev/null", "-w", "%{http_code}", url],
+                args,
                 env=child,
                 timeout=8,
             )
