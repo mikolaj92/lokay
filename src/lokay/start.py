@@ -323,7 +323,7 @@ def _prepare(picked: dict) -> tuple:
         expected = pr.get("headRefOid") if pr else None
         outcome = build_publish(
             worktree, branch, expected, picked["repo"], int(picked["issue"]),
-            title, f"Closes #{picked['issue']}\n\n" + plan_text[:6000],
+            title, f"Closes #{picked['issue']}\n\n" + plan_text,
         )
         if outcome.get("result") == "pr_open" and not outcome.get("sha"):
             return {"result": "failed", "reason": "missing published SHA"}
@@ -467,6 +467,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
                 prompt = (
                     Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
+                    + "\n\nSHA:\n" + sha
                     + "\n\nUwagi:\n" + json.dumps(uwagi)
                     + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
                     + "\n\nTest log:\n" + (saved.get("test_log") or "")
