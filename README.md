@@ -42,17 +42,29 @@ manual runs use the installed package version.
 Run the complete local suite (no package unit tests):
 
 ```sh
-for scenario in scenarios/*.sh; do
-  [ "$scenario" = scenarios/darkfactory-canary.sh ] && continue
-  bash -n "$scenario" && bash "$scenario" || exit
-done
+bash scripts/check.sh
 ```
+
+`repos.yaml` uses the same explicit inventory in `scripts/check.sh`. Missing files
+fail before any scenario runs; a red scenario stops the check. The summary counts
+executed/required scenarios. Only the live, separately authorized canary is excluded.
+`scenarios/suite.sh` verifies inventory completeness and missing/red failure paths.
+
+The old `scenarios/manifest.sh` was deleted in `df81eb38` together with the Fala
+manifest it inspected. It is not a lost Python runner test. `3f9097e2` removed its
+stale reference, but still checked only 11 scenarios. The full inventory includes
+Build, Fix, graph transitions in darkfactory, guards and observability instead of
+restoring an obsolete manifest test. A copied historical check command still fails
+with exit 127; use the configured check command above.
 
 `bash scenarios/darkfactory.sh` runs the real CLI twice in fresh temporary homes.
 Each repetition processes two issues, forces red → Fix → green → Merge, then
 checks an idle tick. Fake pi, Git, GitHub and a local Decision HTTP server log
 calls and reject unexpected operations. It checks persisted states, separate
-round logs, SHA-bound checks, heartbeat timestamps and operation counts.
+round logs, SHA-bound checks, heartbeat timestamps and operation counts. It compares
+the complete ordered external call trace across repetitions. Mutation checks reject
+missing Fix, merge with red CI and missing second tick. Python network calls and
+the runner's curl health probe are restricted to loopback in this scenario.
 `scenarios/darkfactory_canary.sh` checks the canary with fake GitHub; it does not
 prove a real canary run.
 

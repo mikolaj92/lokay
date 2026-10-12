@@ -1,8 +1,10 @@
 #!/bin/sh
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+previous=''
 for repetition in 1 2; do
-uv run --offline python - <<'PY'
+output=$(uv run --offline python - <<'PY'
+import hashlib
 import json
 import os
 import subprocess
@@ -149,6 +151,27 @@ else:
 
 requests = []
 
+def verify_rounds(rounds, sha):
+    assert len(rounds) == 5, rounds
+    assert 'Plan 1: ok' in rounds[0], rounds
+    assert 'Check 1:' in rounds[1] and 'result=fix' in rounds[1] and 'ci=red' in rounds[1], rounds
+    assert 'Fix: sha=' in rounds[2], rounds
+    assert 'Check 2:' in rounds[3] and 'result=merge' in rounds[3] and 'ci=green' in rounds[3], rounds
+    assert f'Merge: sha={sha}' in rounds[4], rounds
+
+def verify_runs(runs):
+    assert sorted(path.name for path in runs.iterdir()) == ['1', '2'], 'missing second tick'
+    for issue in (1, 2):
+        state = json.loads((runs / str(issue) / 'state.json').read_text())
+        assert state['result'] == 'merged' and state['pr'] == issue, state
+
+def rejects(check, *args):
+    try:
+        check(*args)
+    except AssertionError:
+        return
+    raise AssertionError('mutation escaped the evidence gate')
+
 class DecisionAPI(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -182,6 +205,23 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
     root = Path(temporary).resolve()
     (root / "bin").mkdir()
     (root / "clone").mkdir()
+    # Guard the real runner and its children, not just the fake tool arguments.
+    (root / 'sitecustomize.py').write_text('''
+import socket
+import sys
+
+def offline(event, args):
+    if event == 'socket.connect':
+        address = args[1]
+        if not isinstance(address, tuple) or address[0] != '127.0.0.1':
+            raise RuntimeError(f'non-loopback network blocked: {address}')
+    if event == 'subprocess.Popen':
+        command = args[1]
+        if command and command[0] == '/usr/bin/curl':
+            if not command[-1].startswith('http://127.0.0.1:'):
+                raise RuntimeError(f'non-loopback curl blocked: {command}')
+sys.addaudithook(offline)
+''')
     (root / "external.json").write_text(json.dumps({
         "heads": {}, "contents": {}, "remote": {}, "prs": {}, "merged": [], "comments": []}))
     for name in ("pi", "gh", "git"):
@@ -196,7 +236,8 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
     thread.start()
     env = {key: os.environ[key] for key in os.environ
            if not key.startswith(("LOKAY", "PI_")) and key not in ("GH_TOKEN", "GITHUB_TOKEN")}
-    env.update(HOME=str(root / "home"), PATH=str(root / "bin") + os.pathsep + os.environ["PATH"],
+    env.update(PYTHONPATH=str(root) + os.pathsep + str(Path('src').resolve()),
+               HOME=str(root / "home"), PATH=str(root / "bin") + os.pathsep + os.environ["PATH"],
                DARKFACTORY_ROOT=str(root), LOKAY2_REPOS_FILE=str(root / "repos.yaml"),
                LOKAY2_PROVIDER="fake", LOKAY2_MODEL="scenario", LOKAY2_DECISION_API="tensorfold",
                LOKAY2_DECISION_MODEL="scenario", LOKAY2_DECISION_BASE_URL=f"http://127.0.0.1:{server.server_port}",
@@ -224,12 +265,11 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
             assert state["local_ci"]["result"] == "green", state
             assert state["sha"] == state["verdict"]["sha"] == result["merge_sha"], state
             rounds = (runs / str(issue) / "rounds.md").read_text().splitlines()
-            assert len(rounds) == 5, rounds
-            assert "Plan 1: ok" in rounds[0], rounds
-            assert "Check 1:" in rounds[1] and "result=fix" in rounds[1] and "ci=red" in rounds[1], rounds
-            assert "Fix: sha=" in rounds[2], rounds
-            assert "Check 2:" in rounds[3] and "result=merge" in rounds[3] and "ci=green" in rounds[3], rounds
-            assert f"Merge: sha={state['sha']}" in rounds[4], rounds
+            verify_rounds(rounds, state['sha'])
+            rejects(verify_rounds, rounds[:2] + rounds[3:], state['sha'])  # omitted Fix
+            red_merge = list(rounds)
+            red_merge[3] = red_merge[3].replace('ci=green', 'ci=red')
+            rejects(verify_rounds, red_merge, state['sha'])
             beat = json.loads((root / "home/.lokay/heartbeat.json").read_text())
             assert (beat["repo"], beat["issue"], beat["result"]) == ("example/darkfactory", issue, "merged"), beat
             assert beat["node"] is None and beat["node_since"] is None, beat
@@ -243,11 +283,15 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
             assert not (root / f"clone-wt-{issue}").exists()
             if issue == 1:
                 assert not (runs / "2").exists(), "second issue started before the second tick"
+                rejects(verify_runs, runs)  # no second tick is not a complete proof
                 first_state = (runs / "1/state.json").read_bytes()
                 first_rounds = (runs / "1/rounds.md").read_bytes()
             else:
                 assert (runs / "1/state.json").read_bytes() == first_state
                 assert (runs / "1/rounds.md").read_bytes() == first_rounds
+        verify_runs(runs)
+        second_state = (runs / '2/state.json').read_bytes()
+        second_rounds = (runs / '2/rounds.md').read_bytes()
         # A further autonomous tick is idle: no duplicate pick or merge.
         idle = subprocess.run([sys.executable, '-m', 'lokay.cli', 'start'], env=env,
                               capture_output=True, text=True, timeout=10)
@@ -255,6 +299,8 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
         assert json.loads((root / 'external.json').read_text()) == external
         assert (runs / '1/state.json').read_bytes() == first_state
         assert (runs / '1/rounds.md').read_bytes() == first_rounds
+        assert (runs / '2/state.json').read_bytes() == second_state
+        assert (runs / '2/rounds.md').read_bytes() == second_rounds
         assert len(requests) == 14, requests  # Plan + three lenses per Check, twice.
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
@@ -263,10 +309,17 @@ with tempfile.TemporaryDirectory(prefix="lokay-darkfactory-") as temporary:
             assert "**merge** · CI: **green**" in comments[1], comments
         calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
         assert sum(tool == "pi" for tool, _ in calls) == 6, calls
-        print("darkfactory: two autonomous ticks, red → fix → green → merge, state/rounds/heartbeat OK")
+        # Compare every external operation, including order, across fresh homes.
+        normalized = json.dumps(calls, sort_keys=True).replace(str(root), '<root>')
+        print('operations:', len(calls), hashlib.sha256(normalized.encode()).hexdigest())
+        print("darkfactory: two autonomous ticks, red → fix → green → merge, state/rounds/heartbeat OK; mutations rejected=3")
     finally:
         server.shutdown()
         server.server_close()
         thread.join()
 PY
+)
+printf '%s\n' "$output"
+[ -z "$previous" ] || [ "$output" = "$previous" ] || { echo 'non-deterministic operations' >&2; exit 1; }
+previous=$output
 done
