@@ -27,8 +27,22 @@ It parses the entire script before running, so an update cannot change a running
 - Merged worktrees are removed by the existing Merge step.
 
 Decision defaults to `LOKAY2_DECISION_BASE_URL=http://192.168.1.52:8005` on the mini.
-TensorFold uses `/v1/decisions`; the host probe requires `/health` to return
+The launcher defaults to `LOKAY2_DECISION_API=typed-decisions` and
+`LOKAY2_DECISION_MODEL=embeddinggemma-2-ft-typed-decision`. This backend posts
+`state`, a question dictionary and optional `workflow` to `/v1/decisions` (no
+`model` field). Choice criteria preserve option names; bool uses `noul` with no
+criteria and fixed `false`/`true` probabilities; named score levels map to numeric
+labels in declared order, while numeric levels retain their values. Top-level
+typed answers normalize to the internal choice/probabilities contract with strict
+option, sum and argmax checks. The existing character trimming is not a token
+budget; the API rejects inputs exceeding its runtime token limit. Other decision
+backends remain available unchanged.
+Set the private `LOKAY2_DECISION_API_KEY` in `~/.config/lokay/env` (mode 600)
+for Bearer authentication. The host probe requires `/health` to return
 HTTP 200 with `"ready": true`.
+
+Run the protocol regression with `sh scenarios/decision_contract.sh`; it includes
+a local HTTP exchange for choice, bool and score without starting the factory.
 
 Environment overrides can go in `~/.config/lokay/env`:
 `LOKAY_TICK_SECONDS` (60), `LOKAY_HEARTBEAT_MINUTES` (5),

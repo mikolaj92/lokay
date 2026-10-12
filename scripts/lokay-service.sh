@@ -14,9 +14,9 @@ fi
 export LOKAY_ROOT="${LOKAY_ROOT-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 export LOKAY2_PROVIDER="${LOKAY2_PROVIDER-omniroute}"
 export LOKAY2_MODEL="${LOKAY2_MODEL-pi}"
-export LOKAY2_DECISION_API="${LOKAY2_DECISION_API-tensorfold}"
+export LOKAY2_DECISION_API="${LOKAY2_DECISION_API-typed-decisions}"
 export LOKAY2_DECISION_BASE_URL="${LOKAY2_DECISION_BASE_URL-http://192.168.1.52:8005}"
-export LOKAY2_DECISION_MODEL="${LOKAY2_DECISION_MODEL-GLM-5.3-Flash-EXL3}"
+export LOKAY2_DECISION_MODEL="${LOKAY2_DECISION_MODEL-embeddinggemma-2-ft-typed-decision}"
 export LOKAY_TICK_SECONDS="${LOKAY_TICK_SECONDS-60}"
 ROOT="$LOKAY_ROOT"
 if [[ -z "${GH_TOKEN:-}" ]]; then

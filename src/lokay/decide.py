@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 from collections.abc import Mapping
@@ -69,7 +70,41 @@ def _trim_wire(wire: dict) -> dict:
     return wire
 
 
+def _typed_labels(question: Mapping) -> dict:
+    options = question["options"]
+    if question["type"] == "bool":
+        if set(options) != {"false", "true"}:
+            raise DecisionError(f"options {question['id']}")
+    if question["type"] == "score":
+        # Numeric levels keep their meaning; named levels use their declared order.
+        if all(isinstance(k, str) and k.lstrip("-").isdigit() for k in options):
+            return {k: k for k in options}
+        return {str(i): k for i, k in enumerate(options)}
+    return {k: k for k in options}
+
+
 def to_wire(api: str, model: str, internal: Mapping) -> dict:
+    if api == "typed-decisions":
+        questions = {}
+        for question in internal["questions"]:
+            kind = "noul" if question["type"] == "bool" else question["type"]
+            if kind not in ("choice", "score", "noul"):
+                raise DecisionError(f"type {question['id']}")
+            labels = _typed_labels(question)
+            item = {"type": kind, "instructions": question["instructions"][:600]}
+            if kind != "noul":
+                item["criteria"] = {
+                    label: (f"{option}: {question['options'][option]}" if label != option
+                            else question["options"][option])
+                    for label, option in labels.items()
+                }
+            if question["id"] in questions:
+                raise DecisionError(f"duplicate {question['id']}")
+            questions[question["id"]] = item
+        wire = {"state": internal.get("state") or {}, "questions": questions}
+        if "workflow" in internal:
+            wire["workflow"] = internal["workflow"]
+        return _trim_wire(wire)
     if api == "tensorfold":
         questions = []
         for question in internal["questions"]:
@@ -113,6 +148,35 @@ def to_wire(api: str, model: str, internal: Mapping) -> dict:
 
 
 def from_wire(api: str, model: str, payload: Mapping, internal: Mapping) -> dict:
+    if api == "typed-decisions":
+        mapped = {}
+        if not isinstance(payload, Mapping) or set(payload) != {q["id"] for q in internal["questions"]}:
+            raise DecisionError("questions mismatch")
+        for question in internal["questions"]:
+            qid = question["id"]
+            answer = payload[qid]
+            kind = "noul" if question["type"] == "bool" else question["type"]
+            if not isinstance(answer, Mapping) or answer.get("kind") != kind:
+                raise DecisionError(f"kind {qid}")
+            labels = _typed_labels(question)
+            label = answer.get("label")
+            probs = answer.get("probabilities")
+            if not isinstance(probs, Mapping) or set(probs) != set(labels):
+                raise DecisionError(f"options {qid}")
+            if not isinstance(label, str) or label not in labels:
+                raise DecisionError(f"choice {qid}")
+            value = answer.get("value")
+            expected = label == "true" if kind == "noul" else int(label) if kind == "score" else label
+            if type(value) is not type(expected) or value != expected:
+                raise DecisionError(f"value {qid}")
+            confidence = answer.get("confidence")
+            if any(type(v) not in (int, float) or not math.isfinite(v) or not 0 <= v <= 1
+                   for v in [confidence, *probs.values()]):
+                raise DecisionError(f"probabilities {qid}")
+            mapped[qid] = {"choice": labels[label],
+                           "probabilities": {labels[k]: v for k, v in probs.items()},
+                           "confidence": confidence}
+        return _check(internal, mapped)
     if payload.get("model") not in (None, model):
         raise DecisionError("model mismatch")
     if api == "tensorfold":
@@ -156,7 +220,7 @@ def decide(internal: Mapping) -> dict:
     api = os.environ["LOKAY2_DECISION_API"]
     model = os.environ.get("LOKAY2_DECISION_MODEL") or os.environ["LOKAY2_MODEL"]
     base = os.environ["LOKAY2_DECISION_BASE_URL"].rstrip("/")
-    path = {"tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone"}[api]
+    path = {"typed-decisions": "/v1/decisions", "tensorfold": "/v1/decisions", "openai-decisions": "/decisions", "systemone": "/systemone"}[api]
     body = json.dumps(to_wire(api, model, internal))
     timeout = str(int(float(os.environ.get("LOKAY2_DECISION_TIMEOUT") or 30)))
     cmd = [
