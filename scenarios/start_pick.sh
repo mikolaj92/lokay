@@ -2,6 +2,7 @@
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 root=$(mktemp -d)
+trap 'rm -rf "$root"' EXIT
 cat > "$root/gh" <<'EOF'
 #!/bin/sh
 printf '%s
@@ -13,8 +14,15 @@ if [ "$1" = "issue" ]; then
   exit 0
 fi
 if [ "$1" = "pr" ]; then
+  case "$*" in
+    *"--head lokay/1"*) printf '%s\n' '[]'; exit 0 ;;
+  esac
   if [ "${OPEN_PR:-}" = "yes" ]; then
-    printf '%s\n' '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"}]'
+    if [ -n "${PR_ROWS:-}" ]; then
+      printf '%s\n' "$PR_ROWS"
+    else
+      printf '%s\n' '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"}]'
+    fi
     exit 0
   fi
   printf '%s
@@ -79,6 +87,15 @@ assert got["repo"] == "example/second" and got["issue"] == 2 and got["node"] == 
 start.release(got["held"])
 assert pick({**env, "LOKAY2_ISSUE": "3"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, "LOKAY2_REPO": "example/missing"}) == {"result": "idle", "reason": "no_work"}
+start.remember_skip('example/second', 2, 'needs_help: fix_code; pr=10 sha=abc')
+os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"},{"number":11,"headRefName":"lokay/4","headRefOid":"def"}]'
+got = pick({**env, 'LOKAY2_REPO': 'example/second'})
+assert got['issue'] == 4 and got['pr'] == 11, got
+start.release(got['held'])
+os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"}]'
+got = pick({**env, 'LOKAY2_REPO': 'example/second'})
+assert got['issue'] == 1 and got['node'] == 'plan', got
+start.release(got['held'])
 assert "--label" not in open(os.environ["GH_LOG"]).read()
 print("pick: oldest, tie-break, Epic, overrides, open PR OK")
 PY
