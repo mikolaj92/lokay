@@ -10,7 +10,7 @@ from lokay.decide import to_wire
 os.environ['LOKAY2_DECISION_API'] = 'mini'
 rows = [{'plik': 'a.py', 'linia_od': 10, 'linia_do': 12}]
 
-def run(chosen, probability=.9, files=rows):
+def run(chosen, probability=.9, files=rows, distribution=None, kind='correctness'):
     calls = []
     def decide(request):
         calls.append(request)
@@ -21,9 +21,11 @@ def run(chosen, probability=.9, files=rows):
             choice = {'next': 'issue', 'where': chosen, 'change': 'logic bug'}.get(question['id'], 'false')
             p = probability if question['id'] == 'where' else .9
             probabilities = {key: p if key == choice else (1-p)/(len(options)-1) for key in options}
+            if question['id'] == 'where' and distribution is not None:
+                probabilities = distribution
             answers[question['id']] = {'choice': choice, 'probabilities': probabilities, 'confidence': p}
         return answers
-    result = decide_batches('correctness', files, {'sha': 'abc'}, decide)
+    result = decide_batches(kind, files, {'sha': 'abc', 'repo': 'example/repo', 'issue': 1}, decide)
     return result, calls
 
 concrete, calls = run('a.py:10-12')
@@ -38,10 +40,40 @@ green = aggregate('abc', {'sha': 'abc', 'result': 'green'}, [noted])
 assert green['result'] == 'merge' and green['notes'] == noted['notes']
 red = aggregate('abc', {'sha': 'abc', 'result': 'red', 'failed': [{'warstwa': 'CI'}]}, [noted])
 assert red['result'] == 'fix' and red['uwagi'] == [{'warstwa': 'CI'}]
-low, _ = run('a.py:10-12', .84)
-assert not low['uwagi'] and low['notes']
-edge, _ = run('a.py:10-12', .85)
-assert edge['uwagi']
+from unittest.mock import patch
+from lokay.check import FOLLOWUP_THRESHOLD, THRESHOLD
+assert FOLLOWUP_THRESHOLD == .5 and THRESHOLD == .85
+files = rows + [{'plik': 'b.py', 'linia_od': 1, 'linia_do': 2}]
+with patch('lokay.state.rounds_append') as log:
+    edge, _ = run('a.py:10-12', files=files,
+                  distribution={'a.py:10-12': .5, 'b.py:1-2': .25, 'none': .25})
+    assert edge['uwagi']
+    text = log.call_args.args[2]
+    assert 'correctness' in text and 'chosen=a.py:10-12, p=0.5, none=0.25' in text
+    assert 'top-3=[["a.py:10-12", 0.5], ["b.py:1-2", 0.25], ["none", 0.25]]' in text
+    assert 'change=logic bug, change_p=0.9' in text
+with patch('lokay.state.rounds_append') as log:
+    run('none', kind='correctness alignment architecture security production scope tests')
+    assert log.call_count == 7
+    for call, kind in zip(log.call_args_list, 'correctness alignment architecture security production scope tests'.split()):
+        assert f'Check follow-up {kind}:' in call.args[2]
+for distribution in (
+    {'a.py:10-12': .49, 'b.py:1-2': .31, 'none': .2},
+    {'a.py:10-12': .5, 'b.py:1-2': .24, 'none': .26},
+):
+    low, _ = run('a.py:10-12', files=files, distribution=distribution)
+    assert not low['uwagi'] and low['notes']
+accepted, _ = run('a.py:10-12', .7)
+assert accepted['uwagi']
+# Malformed choice must never accept a non-argmax finding.
+try:
+    low, _ = run('a.py:10-12', files=files,
+                 distribution={'a.py:10-12': .2, 'b.py:1-2': .7, 'none': .1})
+except Exception as exc:
+    from lokay.decide import DecisionError
+    assert isinstance(exc, DecisionError)
+else:
+    assert not low['uwagi']
 many = [{'plik': f'file-{n:03d}-' + 'x'*100 + '.py', 'linia_od': 1, 'linia_do': 2} for n in range(100)]
 noted, calls = run('none', files=many)
 assert sum(any(q['id'] == 'where' for q in call['questions']) for call in calls) > 1

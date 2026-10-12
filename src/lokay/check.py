@@ -8,7 +8,10 @@ from lokay.decide import DecisionError, from_wire
 
 QUESTIONS = Path(__file__).parents[2] / "questions"
 
+# Binary per-file questions require 0.85; N files + none follow-ups require 0.5
+# and a winning file at least twice as likely as none.
 THRESHOLD = 0.85
+FOLLOWUP_THRESHOLD = 0.5
 NIT = 0.5
 
 
@@ -135,8 +138,21 @@ def decide_batches(kind: str, rows: list[dict], state: dict, decide_request=None
         for batch, answers in _decision_batches(rows, followup, decide_request, api, model):
             answers = from_wire("tensorfold", model, {"answers": answers}, followup(batch))
             chosen = answers["where"]["choice"]
-            p = answers["where"]["probabilities"][chosen]
-            if chosen != "none" and p >= THRESHOLD:
+            probabilities = answers["where"]["probabilities"]
+            p = probabilities[chosen]
+            none = probabilities["none"]
+            top = sorted(probabilities.items(), key=lambda item: item[1], reverse=True)[:3]
+            change = answers["change"]["choice"]
+            if state.get("repo") and state.get("issue") is not None:
+                from lokay.state import rounds_append
+
+                for part in kind.split():
+                    rounds_append(state["repo"], state["issue"],
+                                  f"Check follow-up {part}: chosen={chosen}, p={p}, none={none}, "
+                                  f"top-3={json.dumps(top)}, change={change}, "
+                                  f"change_p={answers['change']['probabilities'][change]}")
+            if (chosen != "none" and p == max(probabilities.values())
+                    and p >= FOLLOWUP_THRESHOLD and p >= 2 * none):
                 row = next(row for row in batch if f"{row['plik']}:{row['linia_od']}-{row['linia_do']}" == chosen)
                 result["uwagi"].append({key: row[key] for key in ("plik", "linia_od", "linia_do")})
                 result["uwagi"][-1].update(pytanie=kind, p=p, zmiana=answers["change"]["choice"])
