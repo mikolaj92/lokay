@@ -138,6 +138,77 @@ with tempfile.TemporaryDirectory() as tmp:
             args = merge.call_args.args
             assert args[:3] == (repo, 12, 'new') and args[3]['sha'] == 'new', args
 
+        # Repeated findings cannot bypass the three-call Fix budget via Plan.
+        for merge_after in (None, 1, 3):
+            reset(node='check')
+            aggregate.reset_mock(); code.reset_mock(); merge.reset_mock()
+            checks = [0]
+            def bounded_verdict(*args):
+                checks[0] += 1
+                assert checks[0] <= 4, 'Check/Fix loop exceeded its budget'
+                if merge_after is not None and checks[0] > merge_after:
+                    return {**green, 'evidence': {'extra': [1, 2]}}
+                return finding
+            aggregate.side_effect = bounded_verdict
+            result = start.resume(picked)
+            expected_fixes = 3 if merge_after is None else merge_after
+            assert code.call_count == expected_fixes, (result, code.call_count)
+            assert checks[0] == expected_fixes + 1
+            if merge_after is None:
+                assert result['result'] == 'needs_help', result
+                assert state.state_read(repo, 7)['result'] == 'needs_help'
+                merge.assert_not_called()
+            else:
+                assert result['result'] == 'merged', result
+                merge.assert_called_once()
+                assert merge.call_args.args[3] == {**green, 'evidence': {'extra': [1, 2]}}
+
+        # main owns a real lock through Check, Fix and Merge, including failures.
+        from lokay.lock import acquire, release as real_release
+        for failure_at in (None, 'limit', 'check', 'fix', 'merge'):
+            reset(node='check')
+            held = acquire('example', repo)
+            assert held['result'] == 'held'
+            active = {**picked, 'held': held}
+            check_calls = [0]
+            def busy():
+                assert acquire('example', repo)['result'] == 'busy'
+            def checked(*args):
+                busy()
+                check_calls[0] += 1
+                if failure_at == 'check':
+                    raise RuntimeError('Check exception')
+                return finding if failure_at == 'limit' or check_calls[0] == 1 else green
+            def fixed(*args):
+                busy()
+                if failure_at == 'fix':
+                    raise RuntimeError('Fix exception')
+                return {'result': 'done'}
+            def merged(*args, **kwargs):
+                busy()
+                assert args[3] is green, 'verdict must not be replaced'
+                if failure_at == 'merge':
+                    raise RuntimeError('Merge exception')
+                return {'result': 'merged', 'merge_sha': 'new'}
+            aggregate.side_effect = checked
+            code.side_effect = fixed
+            merge.side_effect = merged
+            with patch('lokay.start.pick', return_value=active), \
+                 patch('lokay.start.release', wraps=real_release) as release, redirect_stdout(io.StringIO()) as out:
+                try:
+                    start.main([])
+                except RetryLoop:
+                    raise AssertionError('a merge exception must end the run, not retry forever')
+                else:
+                    result = json.loads(out.getvalue().splitlines()[-1])
+                    assert result['result'] == ( 'merged' if failure_at is None else
+                                                'failed' if failure_at == 'check' else 'needs_help'), result
+                release.assert_called_once_with(held)
+            free = acquire('example', repo)
+            assert free['result'] == 'held'
+            real_release(free)
+        code.side_effect = None; merge.side_effect = None
+
         # Each failing Fix node runs once; result and exception are separate cases.
         for node in ('fix_code', 'fix_publish'):
             for failure in ({'result': 'failed', 'reason': 'fixture failure'}, RuntimeError('fixture exception')):
