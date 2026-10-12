@@ -71,6 +71,14 @@ after = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=
 assert after == before, (before, after)
 outside_after = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=outside, text=True).strip()
 assert outside_after != outside_before
+protected = build_code(wt, 'plan', 'title', None, env,
+                       expected_branch='lokay/7', clone_path=outside)
+assert protected['reason'] == 'outside_worktree', protected
+assert 'restored. Work only inside' in protected['explanation'], protected
+assert __import__('subprocess').check_output(
+    ['git', 'rev-parse', 'HEAD'], cwd=outside, text=True).strip() == outside_after
+assert not __import__('subprocess').check_output(
+    ['git', 'status', '--porcelain'], cwd=outside, text=True).strip()
 log = __import__("subprocess").check_output(["git", "log", "--oneline", "origin/main..HEAD"], cwd=wt, text=True)
 assert log.strip() == "", log
 print("no_changes", done["explanation"])

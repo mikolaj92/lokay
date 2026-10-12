@@ -187,7 +187,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 if failure_at == 'check':
                     raise RuntimeError('Check exception')
                 return finding if check_calls[0] == 1 else green
-            def fixed(*args):
+            def fixed(*args, **kwargs):
                 busy()
                 if failure_at == 'fix':
                     raise RuntimeError('Fix exception')

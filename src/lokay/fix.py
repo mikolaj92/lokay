@@ -4,6 +4,7 @@ from pathlib import Path
 
 from lokay.build import child_env
 from lokay.git import push
+from lokay.host_guard import guard, failure
 from lokay.run import run_process
 
 
@@ -14,16 +15,24 @@ def _git(repo: Path, args: list[str]) -> str:
     return (proc.stdout or "").strip()
 
 
-def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str]) -> dict:
+def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
+    changes = {"changed": False}
     try:
-        proc = run_process(
-            ["pi", "-p", "--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt],
-            cwd=worktree,
-            env=child_env(env),
-            timeout=3600,
-        )
-    except FileNotFoundError:
-        return {"result": "failed", "artifact": ""}
+        with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
+            proc = run_process(
+                ["pi", "-p", "--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt],
+                cwd=worktree,
+                env=child_env(env),
+                timeout=3600,
+            )
+    except Exception as exc:
+        if changes["changed"]:
+            return failure(changes, worktree)
+        if isinstance(exc, FileNotFoundError):
+            return {"result": "failed", "artifact": ""}
+        raise
+    if changes["changed"]:
+        return failure(changes, worktree)
     if proc.returncode != 0:
         return {"result": "failed", "artifact": ""}
     status = _git(worktree, ["status", "--porcelain"])
