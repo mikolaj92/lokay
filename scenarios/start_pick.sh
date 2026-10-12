@@ -65,8 +65,9 @@ env = {
     "LOKAY2_DECISION_MODEL": "m",
     "LOKAY2_REPOS_FILE": os.environ["LOKAY2_REPOS_FILE"],
 }
-assert pick({**env, "LOKAY2_REPO": "example/untested"}) == {"result": "idle", "reason": "no_work"}
-assert "example/untested" not in open(os.environ["GH_LOG"]).read()
+untested = pick({**env, "LOKAY2_REPO": "example/untested"})
+assert untested["result"] == "picked" and untested["repo"] == "example/untested", untested
+start.release(untested["held"])
 got = pick(env)
 assert got["issue"] == 1 and got["node"] == "plan" and got["repo"] == "example/first", got
 assert pick({**env, "LOKAY2_REPO": "example/first"}) == {"result": "idle", "reason": "no_work"}

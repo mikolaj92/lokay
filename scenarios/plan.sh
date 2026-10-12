@@ -39,6 +39,7 @@ wire = {
 checked = plan_check(wire, "m")
 assert checked["next"] == "ok", checked
 low = json.loads(json.dumps(wire))
+low["answers"]["next"] = {"choice": "revise", "probabilities": {"ok": 0.1, "revise": 0.9}}
 low["answers"]["k_testy"]["probabilities"] = {"true": 0.2, "false": 0.8}
 low["answers"]["k_testy"]["choice"] = "false"
 revised = plan_check(low, "m")

@@ -48,10 +48,10 @@ assert done["result"] == "done", done
 dumped = Path(os.environ["PI_ENV"]).read_text()
 assert "GH_TOKEN" not in dumped and "GITHUB_TOKEN" not in dumped
 assert child_env(env).get("GH_TOKEN") is None
-published = build_publish(wt, "lokay/7", None, "mikolaj92/lokay-sandbox", 7, "title")
+published = build_publish(wt, "lokay/7", None, "mikolaj92/lokay-sandbox", 7, "title", "body")
 assert published["result"] == "pr_open", published
 assert published["sha"] == done["artifact"]
-moved = build_publish(wt, "lokay/7", "0"*40, "mikolaj92/lokay-sandbox", 7, "title")
+moved = build_publish(wt, "lokay/7", "0"*40, "mikolaj92/lokay-sandbox", 7, "title", "body")
 assert moved["result"] == "remote_moved", moved
 print("pr_open", published["sha"][:12])
 print("remote_moved")
