@@ -92,7 +92,8 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert saved['node'] == 'plan' and saved['plan_phase'] == 'write', saved
             assert saved['plan_evaluations'] == 0 and saved['plan_accepted_sha'] is None
             assert saved['plan_prompt'] == plan.prompt_for('title', 'body') + (
-                f'\nUwagi (Build): {build_failure}: fixture explanation\n')
+                f'\nUwagi (Build): {build_failure}: fixture explanation\n'
+                'Previous Build made no changes. Make the plan concrete and self-contained so it can be implemented now in this repo; if a dependency is missing, plan to implement the minimal part needed.\n')
             assert saved['retry_at'] == 0 and saved['failures'] == 1
         if builds and decisions:
             assert builds == [decisions[-1]], events

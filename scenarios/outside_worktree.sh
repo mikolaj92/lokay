@@ -22,6 +22,8 @@ cat > "$tmp/pi" <<EOF
 echo again >> "$outside/f"
 git -C "$outside" add f
 git -C "$outside" commit -m 'outside commit' >/dev/null
+printf '%s' "\$PI_STDOUT"
+printf '%s' "\$PI_STDERR" >&2
 exit 0
 EOF
 chmod +x "$tmp/pi"
@@ -48,13 +50,21 @@ env = {
     "GIT_AUTHOR_EMAIL": "a@b.c",
     "GIT_COMMITTER_NAME": "t",
     "GIT_COMMITTER_EMAIL": "a@b.c",
+    "PI_STDOUT": "x" * 1600 + "Blocked: dependency is missing.",
+    "PI_STDERR": "stderr must not override stdout",
 }
 done = build_code(wt, "plan", "title", None, env, expected_branch="lokay/7")
 assert done["result"] == "failed", done
 assert done["reason"] == "no_changes", done
-assert done['explanation'] == f'pi exited 0 but made no commits in {wt}', done
+assert done['explanation'] == f'pi exited 0 but made no commits in {wt}. pi said:\n' + env['PI_STDOUT'][-1500:], done
 wrong = build_code(wt, 'plan', 'title', None, env, expected_branch='lokay/other')
 assert wrong['reason'] == 'outside_worktree', wrong
+assert wrong['explanation'].endswith('. pi said:\n' + env['PI_STDOUT'][-1500:]), wrong
+fallback = build_code(wt, 'plan', 'title', None,
+                      {**env, 'PI_STDOUT': '', 'PI_STDERR': 'y' * 1600 + 'stderr blocker'},
+                      expected_branch='lokay/7')
+assert fallback['reason'] == 'no_changes', fallback
+assert fallback['explanation'] == f'pi exited 0 but made no commits in {wt}. pi said:\n' + ('y' * 1600 + 'stderr blocker')[-1500:], fallback
 assert done["explanation"].strip(), done
 assert set(done) != {"result", "artifact"}, done
 after = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=wt, text=True).strip()
