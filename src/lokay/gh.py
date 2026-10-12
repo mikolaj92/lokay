@@ -33,6 +33,16 @@ def _gh(args: list[str], env: Mapping[str, str] | None = None) -> tuple[int, str
     return proc.returncode, proc.stdout or "", proc.stderr or ""
 
 
+def open_issues(repo: str) -> list[dict]:
+    code, out, err = _gh(
+        ["issue", "list", "--repo", repo, "--state", "open", "--limit", "1000000", "--json", "number,createdAt,title"]
+    )
+    if code != 0:
+        raise RuntimeError(err.strip() or "issue list failed")
+    rows = json.loads(out or "[]")
+    return sorted(rows, key=lambda row: (row["createdAt"], int(row["number"])))
+
+
 def issues_with_label(repo: str, label: str | None = None) -> list[dict]:
     args = ["issue", "list", "--repo", repo, "--state", "open", "--json", "number,createdAt,title"]
     if label:

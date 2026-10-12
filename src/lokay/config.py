@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import yaml
@@ -9,7 +10,9 @@ STATE = Path.home() / ".lokay"
 
 
 def load_repos(path: Path | None = None) -> list[dict]:
-    raw = yaml.safe_load((path or ROOT / "repos.yaml").read_text()) or {}
+    if path is None:
+        path = Path(os.environ.get("LOKAY2_REPOS_FILE") or ROOT / "repos.yaml")
+    raw = yaml.safe_load(path.read_text()) or {}
     repos = raw.get("repos") or []
     for repo in repos:
         keys = set(repo)
