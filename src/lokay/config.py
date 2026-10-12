@@ -16,8 +16,11 @@ def load_repos(path: Path | None = None) -> list[dict]:
     repos = raw.get("repos") or []
     for repo in repos:
         keys = set(repo)
-        if keys != {"name", "clone_path", "test", "merge"}:
-            raise ValueError(f"repo keys must be name, clone_path, test, merge: {repo.get('name')}")
+        if keys - {"setup"} != {"name", "clone_path", "test", "merge"}:
+            raise ValueError(f"repo keys must be name, clone_path, test, merge, optional setup: {repo.get('name')}")
+        if "setup" in repo and (not isinstance(repo["setup"], list) or
+                                any(not isinstance(arg, str) for arg in repo["setup"])):
+            raise ValueError("setup must be a list of argv strings")
         if repo["merge"] is True:
             repo["merge"] = "on"
         elif repo["merge"] is False:

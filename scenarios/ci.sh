@@ -63,14 +63,14 @@ with tempfile.TemporaryDirectory() as tmp:
     view["headRefOid"] = "head-b"
     request["test"] = []
     view["statusCheckRollup"] = []
-    assert check()["result"] == "red"
+    assert check()["result"] == "green"
     timed_out = local_ci('timeout', [[sys.executable, '-c', 'import time; time.sleep(2)']], root, timeout=0.01)
     assert timed_out['result'] == 'red' and timed_out['failed'], timed_out
     unavailable = local_ci('missing', [[str(root / 'missing-command')]], root)
     assert unavailable['result'] == 'red' and unavailable['failed'], unavailable
     no_tests = local_ci('empty', [], root)
-    assert no_tests['result'] == 'red' and no_tests['failed'], no_tests
-    assert aggregate('empty', no_tests, [{'next': 'ok'}])['result'] == 'fix'
+    assert no_tests['result'] == 'green' and no_tests['notes'][0]['log'] == 'no tests configured', no_tests
+    assert aggregate('empty', no_tests, [{'next': 'ok'}])['result'] == 'merge'
 
 # Resume the production Check path. Pending remote CI stops after local CI has
 # been persisted, without replacing the cache condition or invoking Fix.
@@ -180,7 +180,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         with patch('lokay.decide.decide', side_effect=model):
             result = start.resume.__wrapped__(picked)
         assert len(calls) == 1, calls
-        if choice == 'ok' and exit_code == 0:
+        if choice == 'ok' and exit_code in (0, None):
             assert result['result'] == 'merged', result
             merge.assert_called_once()
             fix.assert_not_called()

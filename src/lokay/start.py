@@ -355,6 +355,9 @@ def _prepare(picked: dict) -> tuple | dict:
         _retry(picked, "build", lambda: worktree_add(root, branch, worktree), "added")
     plan_text = art.read_text()
     state_update(picked["repo"], picked["issue"], node="build", branch=branch)
+    from lokay.setup import prepare_dependencies
+
+    prepare_dependencies(worktree, repo, int(picked["issue"]))
     built = build_code(worktree, plan_text, title, body, dict(os.environ), expected_branch=branch, clone_path=root)
     if built.get("result") == "failed":
         reason = built.get("reason") or "build failed"
@@ -485,7 +488,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             raise RuntimeError(err or out)
         if out.strip():
             return out.splitlines()
-        code, out, err = _git(worktree, ["merge", "--no-edit", "--no-ff", "origin/main"])
+        code, out, err = _git(worktree, ["merge", "--no-edit", "origin/main"])
         if code != 0:
             conflict_code, files, conflict_err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
             if conflict_code == 0 and files.strip():
@@ -601,6 +604,9 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                 + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
             )
+            from lokay.setup import prepare_dependencies
+
+            prepare_dependencies(worktree, repo, int(picked["issue"]))
             fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path), sha)
             if fixed["result"] == "needs_help":
                 return fixed
@@ -663,6 +669,23 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             decision["sha"] = sha
             decisions.append(decision)
         verdict = aggregate(sha, ci, decisions)
+        from lokay.scope import code_scope_issue
+
+        code, changed, err = _git(worktree, ["diff", "--name-only", "origin/main...HEAD"])
+        if code != 0:
+            raise RuntimeError(err or "scope diff failed")
+        files = changed.splitlines()
+        saved = state_read(picked["repo"], picked["issue"])
+        if files and not saved.get("issue_title"):
+            code, raw, err = _gh(["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"])
+            if code != 0:
+                raise RuntimeError(err or "issue view failed")
+            issue = json.loads(raw)
+            state_update(picked["repo"], picked["issue"], issue_title=issue["title"], issue_body=issue.get("body"))
+            saved = state_read(picked["repo"], picked["issue"])
+        scope = code_scope_issue(files, saved.get("issue_title") or "", saved.get("issue_body"))
+        if scope:
+            verdict = {**verdict, "result": "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
         rounds += 1
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,

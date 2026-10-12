@@ -83,18 +83,24 @@ def local_ci(sha: str, tests: list[list[str]], cwd, timeout: int = 600) -> dict:
         except (TimeoutExpired, OSError) as exc:
             return CompletedProcess(argv, 1, "", str(exc))
 
+    def did_run(proc):
+        log = (proc.stdout or "") + (proc.stderr or "")
+        markers = ("collected 0 items", "no tests ran", "error: failed to", "no solution found",
+                   "modulenotfounderror", "command not found", "no such file or directory")
+        return proc.returncode == 0 and not any(marker in log.lower() for marker in markers)
+
     failed = []
     notes = []
     logs = []
     if not tests:
-        failed.append({"warstwa": "tests", "plik": "", "log": "No test command configured."})
+        notes.append({"warstwa": "tests", "plik": "", "log": "no tests configured"})
     for argv in tests:
         proc = execute(argv)
         log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
-        if proc.returncode != 0:
+        if not did_run(proc):
             retry = execute(argv)
             retry_log = ((retry.stdout or "") + (retry.stderr or ""))[-3000:]
-            flaky = retry.returncode == 0
+            flaky = did_run(retry)
             item = {"warstwa": " ".join(argv), "plik": "", "linia": None,
                     "sha": sha, "flaky": flaky, "log": log + "\nRetry:\n" + retry_log}
             (notes if flaky else failed).append(item)

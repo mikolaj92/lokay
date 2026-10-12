@@ -56,11 +56,30 @@ def build_code(
     if proc.returncode != 0:
         explanation = ((proc.stderr or proc.stdout or "").strip() or "pi exited non-zero")[-500:]
         return {"result": "failed", "reason": "pi_exit", "explanation": explanation, "artifact": explanation}
+    from lokay.scope import is_test
+
+    added = set()
+    for args in (["diff", "--name-status", "--diff-filter=A", "origin/main..HEAD"],
+                 ["diff", "--name-status", "--diff-filter=A", "HEAD"],
+                 ["diff", "--cached", "--name-status", "--diff-filter=A"]):
+        added.update(line.split("\t", 1)[1] for line in _git(worktree, args).splitlines() if "\t" in line)
+    added.update(_git(worktree, ["ls-files", "--others", "--exclude-standard"]).splitlines())
+    removed = sorted(path for path in added if is_test(path))
+    for path in removed:
+        _git(worktree, ["rm", "-f", "--ignore-unmatch", "--", path])
+        file = worktree / path
+        if file.exists() or file.is_symlink():
+            file.unlink()
     status = _git(worktree, ["status", "--porcelain"])
     if status:
         _git(worktree, ["add", "-A"])
         _git(worktree, ["reset", "-q", "--", "__pycache__"])
         _git(worktree, ["commit", "-m", "lokay build"])
+    if removed:
+        remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
+        if not any(not is_test(path) for path in remaining):
+            return {"result": "failed", "reason": "tests_only",
+                    "explanation": "Build added only tests: " + ", ".join(removed) + ". Implement the production change."}
     branch_now = _git(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])
     log = _git(worktree, ["log", "--oneline", "origin/main..HEAD"])
     head = _git(worktree, ["rev-parse", "HEAD"])
