@@ -3,13 +3,37 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
+from functools import wraps
 from pathlib import Path
 
 from lokay.config import load_repos
 from lokay.gh import gh_bin, open_issues, open_pr_for
 from lokay.lock import acquire, release
 from lokay.run import run_process
-from lokay.state import rounds_append, run_dir, state_update
+from lokay.state import rounds_append, run_dir, state_read, state_update
+
+
+def guarded_step(step):
+    @wraps(step)
+    def guarded(picked: dict) -> dict:
+        try:
+            outcome = step(picked)
+        except Exception as exc:
+            outcome = {"result": "failed", "reason": f"{type(exc).__name__}: {exc}"}
+        repo, issue = picked["repo"], picked["issue"]
+        if outcome.get("result") == "failed":
+            state = state_read(repo, issue)
+            failures = state.get("failures", 0) + 1
+            reason = outcome.get("reason") or outcome.get("error") or outcome.get("artifact") or "node failed"
+            outcome["reason"] = reason
+            state_update(repo, issue, result="failed", reason=reason, failures=failures,
+                         retry_at=time.time() + min(3600, 60 * 2 ** min(failures - 1, 6)))
+            rounds_append(repo, issue, f"{state.get('node', picked['node'])}: failed, reason={reason}")
+        else:
+            state_update(repo, issue, failures=0, retry_at=0, reason=None)
+        return outcome
+    return guarded
 
 
 def skip_file() -> Path:
@@ -71,7 +95,7 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
             )
             code = (fetched.stdout or "").strip()
             out["gb10"] = "ok" if code == "200" else "fail"
-        except (FileNotFoundError, OSError):
+        except Exception:
             out["gb10"] = "fail"
     out["provider"] = "ok" if child.get("LOKAY2_PROVIDER") and child.get("LOKAY2_PROVIDER") != child.get("PI_PROVIDER", "") else "fail"
     if child.get("LOKAY2_PROVIDER") and "PI_PROVIDER" not in child:
@@ -82,7 +106,7 @@ def probes(env: dict[str, str] | None = None) -> dict[str, str]:
     try:
         gh = run_process([gh_bin(), "auth", "status"], env=child, timeout=15)
         out["gh"] = "ok" if gh.returncode == 0 else "fail"
-    except FileNotFoundError:
+    except Exception:
         out["gh"] = "fail"
     return out
 
@@ -124,17 +148,24 @@ def pick(env: dict[str, str] | None = None) -> dict:
         if not issues:
             release(held)
             continue
-        issue = issues[0]
+        issue = next((row for row in issues
+                      if state_read(name, row["number"]).get("retry_at", 0) <= time.time()), None)
+        if issue is None:
+            release(held)
+            continue
+        saved = state_read(name, issue["number"])
         branch = f"lokay/{issue['number']}"
-        pr = open_pr_for(name, branch)
+        try:
+            pr = open_pr_for(name, branch)
+        finally:
+            release(held)
         chosen = {
             "result": "picked",
             "repo": name,
             "issue": issue["number"],
-            "node": "check" if pr else "plan",
+            "node": saved.get("node") or ("check" if pr else "plan"),
             "pr": None if pr is None else pr.get("number"),
         }
-        release(held)
         break
     if chosen is None:
         return {"result": "idle", "reason": "no_work"}
@@ -157,18 +188,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"idle {outcome['reason']} {extra}".rstrip(), file=sys.stderr)
         return 0
     print(json.dumps(outcome, separators=(",", ":")))
-    if outcome.get("node") == "plan":
+    if outcome.get("node") in ("plan", "build"):
         print(json.dumps(advance(outcome), separators=(",", ":")))
-    elif outcome.get("node") == "check":
+    elif outcome.get("node") in ("check", "fix", "merge"):
         print(json.dumps(resume(outcome), separators=(",", ":")))
     return 0
 
 
+@guarded_step
 def advance(picked: dict) -> dict:
     from lokay.build import build_code, build_publish
     from lokay.gh import _gh
     from lokay.git import worktree_add
-    import sys
 
     from lokay import plan
     from lokay.decide import decide
@@ -181,24 +212,18 @@ def advance(picked: dict) -> dict:
         body = loaded.get("body")
     art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
     plan_rounds = 1
-    if not plan.valid_plan(art):
+    if picked["node"] == "plan" or not plan.valid_plan(art):
         art.parent.mkdir(parents=True, exist_ok=True)
         original_prompt = plan.prompt_for(title, body)
         prompt = original_prompt
         for plan_rounds in range(1, 4):
-            written = plan.plan_write(prompt, art)
+            written = {"result": "done"} if plan_rounds == 1 and plan.valid_plan(art) else plan.plan_write(prompt, art)
             if written["result"] != "done" or not plan.valid_plan(art):
                 state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result="failed")
                 rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: failed")
                 return {"result": "failed", "artifact": ""}
             plan_text = art.read_text()
-            try:
-                answers = decide(plan.plan_questions(plan_text))
-            except Exception as exc:
-                print(f"plan_check: {exc}; treating as ok", file=sys.stderr)
-                state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result="ok")
-                rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: ok (plan_check failed: {exc})")
-                break
+            answers = decide(plan.plan_questions(plan_text))
             verdict = plan.verdict(answers)
             state_update(picked["repo"], picked["issue"], node="plan", plan_rounds=plan_rounds, result=verdict["next"])
             rounds_append(picked["repo"], picked["issue"], f"Plan {plan_rounds}: {verdict['next']}")
@@ -241,6 +266,7 @@ def advance(picked: dict) -> dict:
     return _finish(picked, worktree, branch, published["sha"], repo.get("test") or [], plan_rounds)
 
 
+@guarded_step
 def resume(picked: dict) -> dict:
     from lokay.git import _git
 
@@ -273,19 +299,21 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.merge import merge_sha
     from lokay.run import run_process
 
-    rounds = 0
-    while True:
+    saved = state_read(picked["repo"], picked["issue"])
+    rounds = saved.get("check_rounds", 0)
+    verdict = saved.get("verdict")
+    pending = saved.get("node")
+    while pending != "merge":
+        state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
+        if pending == "fix":
+            break
         diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
         rows = hunks(diff.stdout or "")
         failed = []
         if tests:
-            try:
-                proc = run_process(tests, cwd=worktree, timeout=600)
-                log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
-                test_failed = proc.returncode != 0
-            except FileNotFoundError:
-                log = "not found"
-                test_failed = True
+            proc = run_process(tests, cwd=worktree, timeout=600)
+            log = ((proc.stdout or "") + (proc.stderr or ""))[-3000:]
+            test_failed = proc.returncode != 0
             if test_failed:
                 failed.append({
                     "warstwa": " ".join(tests), "plik": "", "linia": None,
@@ -307,7 +335,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rounds += 1
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
-            check_rounds=rounds, result=verdict["result"],
+            check_rounds=rounds, result=verdict["result"], verdict=verdict,
         )
         counts = ", ".join(
             f"{kind}={len(decision['uwagi'])}"

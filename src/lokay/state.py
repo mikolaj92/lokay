@@ -11,6 +11,11 @@ def run_dir(repo: str, issue: int) -> Path:
     return RUNS / repo.replace("/", "__") / str(issue)
 
 
+def state_read(repo: str, issue: int) -> dict:
+    path = run_dir(repo, issue) / "state.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
 def state_update(repo: str, issue: int, **fields) -> Path:
     path = run_dir(repo, issue) / "state.json"
     path.parent.mkdir(parents=True, exist_ok=True)
