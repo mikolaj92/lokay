@@ -114,7 +114,9 @@ def merge(repo: str, number: int, expected_head_sha: str) -> dict:
     )
     if code != 0:
         blob = (err or out).lower()
-        if "match" in blob or "head" in blob or "not mergeable" in blob:
+        if "not mergeable" in blob or "behind" in blob or "conflict" in blob:
+            return {"result": "conflict", "merge_sha": None}
+        if "match" in blob or "head" in blob:
             return {"result": "sha_moved", "merge_sha": None}
         raise RuntimeError(err.strip() or out.strip() or "merge failed")
     return {"result": "merged", "merge_sha": expected_head_sha}

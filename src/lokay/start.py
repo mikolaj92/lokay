@@ -373,13 +373,30 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     saved = state_read(picked["repo"], picked["issue"])
     rounds = saved.get("check_rounds", 0)
     verdict = saved.get("verdict")
-    pending = saved.get("node")
+    pending = "check" if saved.get("node") == "merge" else saved.get("node")
 
     def sync_head():
         for args in (["fetch", "origin", branch], ["merge", "--ff-only", f"origin/{branch}"]):
             code, out, err = _git(worktree, args)
             if code != 0:
                 raise RuntimeError(err or out)
+
+    def sync_main():
+        code, out, err = _git(worktree, ["fetch", "origin", "main"])
+        if code != 0:
+            raise RuntimeError(err or out)
+        code, out, err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
+        if code != 0:
+            raise RuntimeError(err or out)
+        if out.strip():
+            return out.splitlines()
+        code, out, err = _git(worktree, ["merge", "--no-edit", "--no-ff", "origin/main"])
+        if code != 0:
+            conflict_code, files, conflict_err = _git(worktree, ["diff", "--name-only", "--diff-filter=U"])
+            if conflict_code == 0 and files.strip():
+                return files.splitlines()
+            raise RuntimeError(conflict_err or err or out)
+        return []
 
     while True:
         if pending == "merge" and verdict and verdict.get("sha") == sha:
@@ -397,12 +414,34 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     rounds_append(picked["repo"], picked["issue"], f"Merge: sha={merged['merge_sha']}")
                     return merged
                 rounds_append(picked["repo"], picked["issue"], f"Merge: retry, result={merged['result']}")
-                time.sleep(60)
+                if merged["result"] != "conflict":
+                    time.sleep(60)
             if pr and pr.get("headRefOid") and pr["headRefOid"] != sha:
                 _retry(picked, "check", sync_head)
                 sha = pr["headRefOid"]
             pending = "check"
         state_update(picked["repo"], picked["issue"], node="fix" if pending == "fix" else "check", sha=sha)
+        if pending != "fix":
+            conflicts = _retry(picked, "check", sync_main)
+            if conflicts:
+                verdict = {"result": "fix", "sha": sha, "uwagi": [
+                    {"pytanie": "conflict", "plik": file, "log": "Resolve the merge with origin/main."}
+                    for file in conflicts
+                ]}
+                pending = "fix"
+                state_update(picked["repo"], picked["issue"], node="fix", verdict=verdict)
+                rounds_append(picked["repo"], picked["issue"], "Check: conflict, files=" + ", ".join(conflicts))
+            else:
+                pushed = _retry(picked, "check", lambda: fix_publish(worktree, branch, sha))
+                if pushed["result"] == "remote_moved" and pushed.get("sha"):
+                    _retry(picked, "check", sync_head)
+                    sha = pushed["sha"]
+                    pending = "check"
+                    continue
+                if pushed["result"] != "pushed":
+                    raise RuntimeError(f"main synchronization publish failed: {pushed}")
+                sha = pushed["sha"]
+                state_update(picked["repo"], picked["issue"], sha=sha, verdict=None)
         def read_diff():
             diff = run_process(["git", "diff", "origin/main...HEAD"], cwd=worktree, timeout=30)
             if diff.returncode != 0:
