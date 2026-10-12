@@ -2,7 +2,7 @@
 
 The graph is Plan, Build, Check, Fix, Merge. Merge is the only end.
 
-A step ends as JSON on stdout. Decision steps print `next`. LLM and code steps print `result`. Fala reads only that field. A transport failure prints nothing and exits non-zero.
+`lokay start` runs the only graph, in Python (`src/lokay/start.py`). Decision steps return `next`. LLM and code steps return `result`. The runtime retries failed steps, checks revised plans again, and returns from Fix to Check.
 
 `pi -p` writes code. Decision steps return probabilities, not prose. Do not import `lokay` from `src/lokay`.
 

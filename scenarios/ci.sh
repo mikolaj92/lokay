@@ -2,16 +2,14 @@
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 uv run python - <<'PY'
-import contextlib
-import io
 import json
 import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from lokay.check import aggregate
-from lokay.nodes import check_ci_main
+from lokay.check import aggregate, local_ci
+from lokay.gh import pr_checks
 
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
@@ -25,10 +23,15 @@ with tempfile.TemporaryDirectory() as tmp:
         assert args[:3] == ["pr", "view", "7"]
         return 0, json.dumps(view), ""
     def check():
-        output = io.StringIO()
-        with patch("sys.stdin", io.StringIO(json.dumps(request))), patch("lokay.gh._gh", gh), contextlib.redirect_stdout(output):
-            assert check_ci_main() == 0
-        return json.loads(output.getvalue())
+        ci = local_ci(request["sha"], request["test"], request["cwd"])
+        with patch("lokay.gh._gh", gh):
+            remote = pr_checks(request["repo"], request["pr"], request["sha"])
+        if remote["result"] in ("pending", "sha_moved"):
+            return {**ci, "result": remote["result"], "head_sha": remote["sha"]}
+        ci["failed"].extend({"warstwa": "GitHub CI", "plik": "", "log": name}
+                            for name in remote.get("failed") or [])
+        ci["result"] = "red" if ci["failed"] else "green"
+        return ci
 
     assert check()["result"] == "green"
     # The PR mutation must be rejected even when GitHub and the model approve it.
