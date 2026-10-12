@@ -373,6 +373,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.merge import merge_sha
     from lokay.run import run_process
 
+    repo = next(row for row in load_repos() if row["name"] == picked["repo"])
+    clone_path = Path(os.path.expanduser(repo["clone_path"]))
     saved = state_read(picked["repo"], picked["issue"])
     rounds = saved.get("check_rounds", 0)
     verdict = saved.get("verdict")
@@ -410,6 +412,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                     picked["repo"], pr["number"], sha, verdict, worktree,
                     picked.get("held"), picked["repo"].split("/")[0], int(picked["issue"]),
                     {"plan_rounds": plan_rounds, "check_rounds": rounds},
+                    clone_path=clone_path,
                 ))
                 state_update(picked["repo"], picked["issue"], result=merged["result"])
                 if merged["result"] == "merged":
