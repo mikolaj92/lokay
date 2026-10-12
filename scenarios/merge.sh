@@ -23,7 +23,10 @@ uv run python - <<'PY'
 import os
 from pathlib import Path
 from lokay.merge import merge_sha
-from lokay.lock import acquire
+from lokay.lock import acquire, release
+from lokay import state
+from unittest.mock import patch
+import subprocess
 
 home_repo = "mikolaj92/lokay-sandbox"
 held = acquire("mikolaj92", home_repo)
@@ -33,8 +36,61 @@ log = Path(os.environ["GH_LOG"]).read_text()
 assert "--match-head-commit" in log and os.environ["SHA"] in log
 moved = merge_sha(home_repo, 3, "other", {"result": "merge", "sha": os.environ["SHA"]}, None, None, "mikolaj92", 3, {})
 assert moved["result"] == "sha_moved"
+assert acquire('mikolaj92', home_repo)['result'] == 'busy', 'merge must not release the run lock'
+release(held)
 again = acquire("mikolaj92", home_repo)
 assert again["result"] == "held"
+release(again)
+
+# A real clone owns the worktree; its parent is not a Git repository.
+root = Path(os.environ['HOME']).parent
+origin = root / 'origin.git'
+clone = root / 'main'
+wt = root / 'main-wt-1783'
+def git(*args):
+    return subprocess.check_output(['git', *map(str, args)], text=True, stderr=subprocess.STDOUT)
+git('init', '--bare', '-b', 'main', origin)
+git('clone', origin, clone)
+git('-C', clone, 'config', 'user.name', 'mikolaj92')
+git('-C', clone, 'config', 'user.email', 'fixture@example.invalid')
+(clone / 'code.py').write_text('pass\n')
+git('-C', clone, 'add', '.')
+git('-C', clone, 'commit', '-m', 'fixture')
+git('-C', clone, 'worktree', 'add', '-b', 'fixture', wt)
+held = acquire('mikolaj92', home_repo)
+with patch('lokay.merge.gh_merge', return_value={'result': 'merged'}):
+    assert merge_sha(home_repo, 3, 'abc', {'result': 'merge', 'sha': 'abc'}, wt, held,
+                     'mikolaj92', 1783, {}, clone_path=clone)['result'] == 'merged'
+assert not wt.exists()
+assert str(wt) not in git('-C', clone, 'worktree', 'list', '--porcelain')
+assert acquire('mikolaj92', home_repo)['result'] == 'busy'
+release(held)
+
+held = acquire('mikolaj92', home_repo)
+with patch('lokay.merge.gh_merge', return_value={'result': 'merged'}), \
+     patch('lokay.merge.worktree_remove', return_value={'result': 'failed', 'error': 'cannot remove'}):
+    try:
+        merge_sha(home_repo, 3, 'abc', {'result': 'merge', 'sha': 'abc'}, wt, held,
+                  'mikolaj92', 1783, {}, clone_path=clone)
+    except RuntimeError as exc:
+        assert str(exc) == 'cannot remove'
+    else:
+        raise AssertionError('cleanup error hidden')
+assert acquire('mikolaj92', home_repo)['result'] == 'busy'
+release(held)
+with patch('lokay.merge.gh_merge') as merge:
+    merge_sha(home_repo, 3, 'abc', {'result': 'fix', 'sha': 'abc'}, None, None,
+              'mikolaj92', 1783, {})
+    merge.assert_not_called()
+
+expected = state.RUNS / 'mikolaj92__lokay' / '1783' / 'state.json'
+for repo in ('lokay', 'mikolaj92/lokay'):
+    assert state.run_path('mikolaj92', repo, 1783) == expected
+    assert state.write_run('mikolaj92', repo, 1783, {'sha': 'real'}) == expected
+    assert state.read_run('mikolaj92', repo, 1783)['sha'] == 'real'
+assert expected.parent == state.run_dir('mikolaj92/lokay', 1783)
+(expected.parent / 'plan.md').write_text('plan')
+assert not (state.RUNS / 'mikolaj92__mikolaj92__lokay').exists()
 print("merged")
 print("sha_moved")
 PY

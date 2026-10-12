@@ -4,7 +4,6 @@ from pathlib import Path
 
 from lokay.gh import merge as gh_merge
 from lokay.git import worktree_remove
-from lokay.lock import release
 from lokay.state import write_run
 
 
@@ -20,7 +19,6 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
         removed = worktree_remove(clone_path, worktree)
         if removed["result"] != "removed":
             raise RuntimeError(removed.get("error") or "worktree removal failed")
-    if held is not None:
-        release(held)
+    # The run owner (start.main) releases the lock after all merge work.
     write_run(owner, repo_name, issue, rounds)
     return {"result": "merged", "merge_sha": sha}

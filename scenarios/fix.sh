@@ -32,8 +32,15 @@ added = worktree_add(repo, "lokay/9b", wt)
 assert added["result"] == "added", added
 previous = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=wt, text=True).strip()
 env = {"PATH": os.environ["PATH"], "LOKAY2_PROVIDER": "p", "LOKAY2_MODEL": "m", "GH_TOKEN": "nope", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "a@b.c", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "a@b.c"}
+cache = wt / '__pycache__' / 'a.cpython-312.pyc'
+cache.parent.mkdir()
+cache.write_bytes(b'cache')
+__import__('subprocess').run(['git', 'add', '__pycache__'], cwd=wt, check=True)
 done = fix_code(wt, previous, "uwagi a.py:1", env)
 assert done["result"] == "done" and done["artifact"] != previous, done
+files = __import__('subprocess').check_output(['git', 'show', '--format=', '--name-only', 'HEAD'], cwd=wt, text=True).splitlines()
+assert 'a.py' in files and not any('__pycache__' in name for name in files), files
+assert cache.exists(), 'unstaging must preserve the cache file'
 published = fix_publish(wt, "lokay/9b", None)
 assert published["result"] == "pushed", published
 assert published["sha"] == done["artifact"]

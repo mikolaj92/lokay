@@ -205,7 +205,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
             }
             state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"])
         except BaseException:
-            release(held)
+            chosen = None
             raise
         finally:
             if chosen is None:
@@ -434,9 +434,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     from lokay.check import aggregate, decide_hunks, hunks, local_ci, questions
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
-    from lokay import plan
     from lokay.git import _git
-    from lokay.gh import _gh, open_pr_for, pr_checks, check_comment
+    from lokay.gh import open_pr_for, pr_checks, check_comment
     from lokay.merge import merge_sha
     from lokay.run import run_process
 
@@ -444,6 +443,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
     clone_path = Path(os.path.expanduser(repo["clone_path"]))
     saved = state_read(picked["repo"], picked["issue"])
     rounds = saved.get("check_rounds", 0)
+    fix_calls = 0
     verdict = saved.get("verdict")
     pending = "check" if saved.get("node") == "merge" else saved.get("node")
 
@@ -475,12 +475,15 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             pr = _retry(picked, "merge", lambda: open_pr_for(picked["repo"], branch))
             if pr and pr.get("headRefOid") == sha:
                 state_update(picked["repo"], picked["issue"], node="merge", pr=pr["number"])
-                merged = _retry(picked, "merge", lambda: merge_sha(
-                    picked["repo"], pr["number"], sha, verdict, worktree,
-                    picked.get("held"), picked["repo"].split("/")[0], int(picked["issue"]),
-                    {"plan_rounds": plan_rounds, "check_rounds": rounds},
-                    clone_path=clone_path,
-                ))
+                try:
+                    merged = merge_sha(
+                        picked["repo"], pr["number"], sha, verdict, worktree,
+                        picked.get("held"), picked["repo"].split("/")[0], int(picked["issue"]),
+                        {"plan_rounds": plan_rounds, "check_rounds": rounds},
+                        clone_path=clone_path,
+                    )
+                except Exception as exc:
+                    return needs_help(picked, f"merge: {type(exc).__name__}: {exc}", sha)
                 state_update(picked["repo"], picked["issue"], result=merged["result"])
                 if merged["result"] == "merged":
                     state_update(picked["repo"], picked["issue"], sha=merged["merge_sha"])
@@ -531,64 +534,31 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
             uwagi = verdict["uwagi"]
-            findings = {
-                json.dumps([row.get("plik"), row.get("pytanie", row.get("warstwa")),
-                            row.get("linia", row.get("linia_od")), row.get("linia_do")])
-                for row in uwagi
-            }
-            fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
+            if fix_calls >= 3:
+                return needs_help(picked, "Fix limit reached after 3 calls", sha)
             saved = state_read(picked["repo"], picked["issue"])
-            replan = saved.get("fix_fingerprint") == fingerprint
-            if not replan:
-                art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-                prompt = (
-                    Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
-                    + "\n\nSHA:\n" + sha
-                    + "\n\nUwagi:\n" + json.dumps(uwagi)
-                    + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
-                    + "\n\nTest log:\n" + (saved.get("test_log") or "")
-                    + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
-                    + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
-                )
-                fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ)), sha)
-                if fixed["result"] == "needs_help":
-                    return fixed
-                replan = False
-                if fixed["result"] == "done":
-                    after = _retry(picked, "fix", read_diff)
-                    after_fingerprint = hashlib.sha256((after.stdout or "").encode()).hexdigest()
-                    state_update(picked["repo"], picked["issue"], diff_fingerprint=after_fingerprint)
-                    replan = after_fingerprint == diff_fingerprint
-                state_update(picked["repo"], picked["issue"], fix_fingerprint=fingerprint)
-            if replan:
-                code, raw, _err = _retry(picked, "plan", lambda: _gh(
-                    ["issue", "view", str(picked["issue"]), "--repo", picked["repo"], "--json", "title,body"]
-                ))
-                issue = json.loads(raw) if code == 0 and raw.strip() else {}
-                prompt = plan.prompt_for(issue.get("title") or f"issue {picked['issue']}", issue.get("body"))
-                rounds_append(picked["repo"], picked["issue"], "Fix → Plan: no progress, findings=" + fingerprint)
-                art = run_dir(picked["repo"], picked["issue"])
-                prompt += (
-                    "\n\nUwagi:\n" + json.dumps(uwagi)
-                    + "\n\nRounds:\n" + (art / "rounds.md").read_text()
-                    + "\n\nTest log:\n" + (saved.get("test_log") or "")
-                    + "\n\nPrevious plan:\n" + ((art / "plan.md").read_text() if (art / "plan.md").is_file() else "")
-                    + "\nFix made no progress; revise the plan.\n"
-                )
-                state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write", plan_prompt=prompt,
-                             plan_evaluations=0, plan_accepted_sha=None)
-                worktree, branch, sha, tests, plan_rounds = _prepare({**picked, "node": "plan"})
-            else:
-                pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
-                if pushed["result"] == "needs_help":
-                    return pushed
-                if pushed["result"] == "remote_moved" and pushed.get("sha"):
-                    _retry(picked, "check", sync_head)
-                    sha = pushed["sha"]
-                else:
-                    sha = pushed["sha"]
-                state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None)
-                rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
+            art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
+            prompt = (
+                Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
+                + "\n\nSHA:\n" + sha
+                + "\n\nUwagi:\n" + json.dumps(uwagi)
+                + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
+                + "\n\nTest log:\n" + (saved.get("test_log") or "")
+                + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
+                + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
+            )
+            fix_calls += 1
+            fixed = fix_step(picked, "fix_code", lambda: fix_code(worktree, sha, prompt, dict(os.environ)), sha)
+            if fixed["result"] == "needs_help":
+                return fixed
+            pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
+            if pushed["result"] == "needs_help":
+                return pushed
+            if pushed["result"] == "remote_moved" and pushed.get("sha"):
+                _retry(picked, "check", sync_head)
+            sha = pushed["sha"]
+            state_update(picked["repo"], picked["issue"], sha=sha, fix_reason=None)
+            rounds_append(picked["repo"], picked["issue"], f"Fix: sha={sha}")
             pending = "check"
             continue
         rows = hunks(diff.stdout or "")

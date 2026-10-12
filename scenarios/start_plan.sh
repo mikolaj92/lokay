@@ -98,19 +98,9 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert [text for kind, text in events if kind == 'write'] == decisions[-len(prompts):], events
         if 'revise' in choices[:-1]:
             assert 'k_testy' in prompts[1], prompts
-        if expected_error == 'limit':
-            # A runtime retry must not reset the budget and eventually reach Build.
-            before = list(events)
-            try:
-                start.advance.__wrapped__(picked)
-            except RuntimeError as exc:
-                assert 'limit' in str(exc), exc
-            else:
-                raise AssertionError('exhausted planning resumed')
-            assert events == before, events
         print(f'{choices}: writes={len(prompts)}; decide={len(decisions)}; build={len(builds)}; error={error}')
 
-run_case(['revise'] * 3, expected_error='limit')
+run_case(['revise'] * 4 + ['ok'], expected_build=1)
 run_case(['ok'], expected_build=1)
 run_case(['revise', 'ok'], expected_build=1)
 run_case(['revise', 'revise', 'ok'], expected_build=1)

@@ -29,6 +29,7 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str]) ->
     status = _git(worktree, ["status", "--porcelain"])
     if status:
         _git(worktree, ["add", "-A"])
+        _git(worktree, ["reset", "-q", "--", "__pycache__"])
         _git(worktree, ["commit", "-m", "lokay fix"])
     sha = _git(worktree, ["rev-parse", "HEAD"])
     if sha == previous:

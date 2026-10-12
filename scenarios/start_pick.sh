@@ -97,6 +97,18 @@ got = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert got['issue'] == 1 and got['node'] == 'plan', got
 start.release(got['held'])
 assert "--label" not in open(os.environ["GH_LOG"]).read()
-print("pick: oldest, tie-break, Epic, overrides, open PR OK")
+# Exceptions before selection release exactly once, not in except and finally.
+from unittest.mock import patch
+os.environ.pop('OPEN_PR', None)
+with patch('lokay.start.open_issues', side_effect=RuntimeError('lookup failed')), \
+     patch('lokay.start.release', wraps=start.release) as released:
+    try:
+        pick({**env, 'LOKAY2_REPO': 'example/first'})
+    except RuntimeError as exc:
+        assert str(exc) == 'lookup failed'
+    else:
+        raise AssertionError('missing lookup failure')
+    released.assert_called_once()
+print("pick: oldest, tie-break, Epic, overrides, open PR, exception release OK")
 PY
 rm -rf "$root"
