@@ -429,6 +429,11 @@ def fix_to_build(picked: dict, worktree: Path) -> dict | None:
 
     saved = state_read(picked["repo"], picked["issue"])
     ci = saved.get("local_ci") or {}
+    code, head, err = _git(worktree, ["rev-parse", "HEAD"])
+    if code != 0:
+        raise RuntimeError(err or "HEAD lookup failed")
+    if ci.get("sha") != head.strip():
+        return None
     if ci.get("result") != "red":
         return None
     log = ci.get("log") or ""
@@ -668,6 +673,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 raise RuntimeError(diff.stderr or "diff failed")
             return diff
         diff = _retry(picked, "check", read_diff)
+        def read_head():
+            code, out, err = _git(worktree, ["rev-parse", "HEAD"])
+            if code != 0:
+                raise RuntimeError(err or "HEAD lookup failed")
+            return out.strip()
+        head = _retry(picked, "check", read_head)
         diff_fingerprint = hashlib.sha256((diff.stdout or "").encode()).hexdigest()
         state_update(picked["repo"], picked["issue"], diff_fingerprint=diff_fingerprint)
         if pending == "fix" and verdict:
@@ -679,6 +690,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             }
             fingerprint = hashlib.sha256(json.dumps(sorted(findings)).encode()).hexdigest()
             saved = state_read(picked["repo"], picked["issue"])
+            test_log = (saved.get("test_log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
             if saved.get("fix_fingerprint") == fingerprint:
                 redirected = fix_to_build(picked, worktree)
@@ -698,7 +710,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 prompt = plan.prompt_for(title, body) + (
                     "\n\nUwagi:\n" + json.dumps(uwagi)
                     + "\n\nRounds:\n" + (art.parent / "rounds.md").read_text()
-                    + "\n\nTest log:\n" + (saved.get("test_log") or "")
+                    + "\n\nTest log:\n" + test_log
                     + "\n\nPrevious plan:\n" + (art.read_text() if art.is_file() else "")
                     + "\nFix made no progress; revise the plan.\n"
                 )
@@ -715,7 +727,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 + "\n\nSHA:\n" + sha
                 + "\n\nUwagi:\n" + json.dumps(uwagi)
                 + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
-                + "\n\nTest log:\n" + (saved.get("test_log") or "")
+                + "\n\nTest log:\n" + test_log
                 + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                 + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
             )
@@ -751,7 +763,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         rows = hunks(diff.stdout or "")
         saved = state_read(picked["repo"], picked["issue"])
         ci = saved.get("local_ci")
-        if not tests or not ci or ci.get("sha") != sha or ci.get("argv") != tests:
+        if ci and (ci.get("sha") != sha or ci.get("sha") != head):
+            state_update(picked["repo"], picked["issue"], local_ci=None, test_log=None)
+            ci = None
+        if not tests or not ci or ci.get("argv") != tests:
             ci = _retry(picked, "check", lambda: local_ci(sha, [tests] if tests else [], worktree))
             ci = {**ci, "argv": list(tests)}
             state_update(picked["repo"], picked["issue"], local_ci=ci, test_log=ci["log"])
