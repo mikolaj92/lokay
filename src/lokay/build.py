@@ -90,12 +90,15 @@ def build_code(
     env: dict[str, str],
     expected_branch: str | None = None,
     clone_path: Path | str | None = None,
+    build_note: str | None = None,
 ) -> dict:
+    previous_head = _git(worktree, ["rev-parse", "HEAD"])
     clean = child_env(env)
     prompt = (
         Path(__file__).resolve().parents[2].joinpath("prompts/build.md").read_text()
         + "\n\nPlan:\n" + plan
         + "\n\n" + untrusted_issue_block(title, body)
+        + ("\n\n" + build_note if build_note else "")
     )
     changes = {"changed": False}
     try:
@@ -133,7 +136,8 @@ def build_code(
     tidy_and_commit(worktree, "lokay build")
     if removed:
         remaining = _git(worktree, ["diff", "--name-only", "origin/main", "HEAD"]).splitlines()
-        if not any(not is_test(path) for path in remaining):
+        deleted = set(_git(worktree, ["diff", "--name-only", "--diff-filter=D", previous_head, "HEAD"]).splitlines())
+        if not any(not is_test(path) for path in remaining) and not (deleted & set(removed)):
             return {"result": "failed", "reason": "tests_only",
                     "explanation": "Build added only tests: " + ", ".join(removed) + ". Implement the production change."}
     branch_now = _git(worktree, ["rev-parse", "--abbrev-ref", "HEAD"])
