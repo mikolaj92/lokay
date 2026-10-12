@@ -32,7 +32,7 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str]) ->
         _git(worktree, ["commit", "-m", "lokay fix"])
     sha = _git(worktree, ["rev-parse", "HEAD"])
     if sha == previous:
-        return {"result": "failed", "artifact": ""}
+        return {"result": "failed", "reason": "no_changes", "artifact": ""}
     return {"result": "done", "artifact": sha}
 
 
