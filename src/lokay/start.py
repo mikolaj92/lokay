@@ -362,7 +362,8 @@ def _prepare(picked: dict) -> tuple | dict:
         rounds_append(picked["repo"], picked["issue"], f"Build → Plan: {reason}")
         state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
                      plan_evaluations=0, plan_accepted_sha=None,
-                     plan_prompt=plan.prompt_for(title, body) + f"\nUwagi (Build): {reason}: {explanation}\n",
+                     plan_prompt=plan.prompt_for(title, body) + f"\nUwagi (Build): {reason}: {explanation}\n"
+                     + "Previous Build made no changes. Make the plan concrete and self-contained so it can be implemented now in this repo; if a dependency is missing, plan to implement the minimal part needed.\n",
                      result="failed", reason=reason,
                      failures=state_read(picked["repo"], picked["issue"]).get("failures", 0) + 1, retry_at=0)
         return {**built, "next": "plan"}
