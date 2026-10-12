@@ -70,6 +70,10 @@ def pr_create(repo: str, branch: str, title: str, body: str, issue: int) -> dict
         ["pr", "create", "--repo", repo, "--head", branch, "--title", title, "--body", marked]
     )
     if code != 0:
+        if "already exists" in err:
+            pr = open_pr_for(repo, branch)
+            if pr:
+                return {"result": "pr_open", "url": f"https://github.com/{repo}/pull/{pr['number']}"}
         raise RuntimeError(err.strip() or "pr create failed")
     return {"result": "pr_open", "url": out.strip()}
 
