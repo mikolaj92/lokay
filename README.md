@@ -2,6 +2,8 @@
 
 Plan, Build, Check, Fix, Merge. The LaunchAgent label is `ai.mikolaj.lokay`. It runs `lokay start`.
 
+Before each service iteration, `scripts/self_update.sh` fast-forwards a clean `main` checkout in `LOKAY_ROOT` to `origin/main` and runs `uv sync` when HEAD changes and uv is available.
+
 ```xml
 <plist version="1.0">
 <dict>

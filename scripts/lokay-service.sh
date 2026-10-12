@@ -31,6 +31,7 @@ mkdir -p "$(dirname -- "$LOG")" || exit 73
 while true; do
   {
     date -u '+%Y-%m-%dT%H:%M:%SZ'
+    bash "$ROOT/scripts/self_update.sh" || true
     "$ROOT/.venv/bin/lokay" start </dev/null
   } >>"$LOG" 2>&1
   rc=$?
