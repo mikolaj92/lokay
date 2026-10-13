@@ -16,6 +16,23 @@ with tempfile.TemporaryDirectory() as tmp:
     _git(root, ['add', '.']); _git(root, ['commit', '-m', 'base'])
     _git(root, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
     (root / 'plan.md').write_text('plan\n')
+    (root / 'scripts').mkdir()
+    (root / 'scripts/x.py').write_text('print("report")\n')
+    _git(root, ['add', '.']); _git(root, ['commit', '-m', 'plan'])
+    files = _git(root, ['diff', '--name-only', 'origin/main...HEAD']).splitlines()
+    added = {line.split('\t', 1)[1] for line in
+             _git(root, ['diff', '--name-status', '--diff-filter=A', 'origin/main...HEAD']).splitlines()}
+    scope = code_scope_issue(files, 'Implement feature', '', added=added)
+    assert scope and scope['warstwa'] == 'scope'
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    _git(root, ['init', '-b', 'main'])
+    _git(root, ['config', 'user.name', 'fixture'])
+    _git(root, ['config', 'user.email', 'fixture@example.test'])
+    (root / 'code.py').write_text('old\n')
+    _git(root, ['add', '.']); _git(root, ['commit', '-m', 'base'])
+    _git(root, ['update-ref', 'refs/remotes/origin/main', 'HEAD'])
+    (root / 'plan.md').write_text('plan\n')
     _git(root, ['add', '.']); _git(root, ['commit', '-m', 'plan'])
     files = _git(root, ['diff', '--name-only', 'origin/main...HEAD']).splitlines()
     for title in ('Implement feature', 'fix bug', 'Naprawić błąd', 'Zmiana src/main.swift', 'Zmiana a.ts', 'Dodać funkcję'):
@@ -73,11 +90,15 @@ with tempfile.TemporaryDirectory() as tmp:
     with ExitStack() as stack:
         stack.enter_context(patch('lokay.state.RUNS', root / 'runs'))
         stack.enter_context(patch('lokay.start.load_repos', return_value=[repo]))
+        stack.enter_context(patch('lokay.start.refresh_body', return_value={'result': 'updated'}))
         stack.enter_context(patch('lokay.git._git', side_effect=git))
+        stack.enter_context(patch('lokay.merge_guard._git', side_effect=lambda path, args:
+                                  '' if args[0] == 'fetch' else _git(path, args)))
         stack.enter_context(patch('lokay.fix.fix_publish', side_effect=publish))
         stack.enter_context(patch('lokay.fix.fix_code', side_effect=fix))
         stack.enter_context(patch('lokay.check.local_ci', side_effect=ci))
         stack.enter_context(patch('lokay.gh.open_pr_for', side_effect=lambda *a: {'number': 1, 'headRefOid': head['sha']}))
+        stack.enter_context(patch('lokay.start.open_pr_for', side_effect=lambda *a: {'number': 1, 'headRefOid': head['sha']}))
         stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green', 'failed': []}))
         stack.enter_context(patch('lokay.gh.check_comment'))
         stack.enter_context(patch('lokay.merge.merge_sha', side_effect=merge))
