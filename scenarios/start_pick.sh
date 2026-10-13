@@ -10,7 +10,7 @@ printf '%s
 if [ "$1" = "auth" ]; then exit 0; fi
 if [ "$1" = "issue" ]; then
   printf '%s
-' '[{"number":2,"createdAt":"2026-10-09T01:00:00Z","title":"b"},{"number":3,"createdAt":"2026-10-08T01:00:00Z","title":"ePiC: skip"},{"number":1,"createdAt":"2026-10-09T01:00:00Z","title":"a"}]'
+' '[{"number":2,"createdAt":"2026-10-09T01:00:00Z","title":"b"},{"number":3,"createdAt":"2026-10-08T01:00:00Z","title":"ePiC: tasks"},{"number":1,"createdAt":"2026-10-09T01:00:00Z","title":"a"},{"number":4,"createdAt":"2026-10-07T01:00:00Z","title":"lokay-stalled"}]'
   exit 0
 fi
 if [ "$1" = "pr" ]; then
@@ -60,7 +60,6 @@ mkdir -p "$HOME"
 : > "$GH_LOG"
 uv run python - <<'PY'
 import os
-import json
 from lokay import start
 from lokay.start import pick
 start.probes = lambda env=None: {"scenario": "ok"}
@@ -96,7 +95,8 @@ start.release(got["held"])
 from lokay.state import state_update
 import time
 state_update('example/second', 2, retry_at=time.time() + 3600, failures=1, reason='fixture')
-idle = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
+# A PR in backoff blocks new issues, even without an issue override.
+idle = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert idle['result'] == 'idle' and idle['reason'] == 'idle_backoff', idle
 assert idle['failures'] == 1 and idle['last_error'] == 'fixture', idle
 assert idle['issue_since'] == saved['issue_since'], idle
@@ -106,30 +106,20 @@ assert got['node'] == 'plan' and got['pr'] == 10, got
 start.release(got['held'])
 assert pick({**env, "LOKAY2_ISSUE": "3"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, "LOKAY2_REPO": "example/missing"}) == {"result": "idle", "reason": "no_work"}
-# Historical needs_help skip: only unskip may remove it.
-start.skip_file().write_text(json.dumps({'example/second': {'2': 'needs_help: fix_code; pr=10 sha=abc', '99': 'keep'}}))
-os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"},{"number":11,"headRefName":"lokay/4","headRefOid":"def"}]'
+assert pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '4'}) == {'result': 'idle', 'reason': 'no_work'}
+# Backoff on one PR still allows another open PR, but never a new task.
+state_update('example/second', 2, retry_at=time.time() + 3600, failures=0)
+os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"},{"number":11,"headRefName":"lokay/5","headRefOid":"def"}]'
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
-assert got['issue'] == 4 and got['pr'] == 11, got
+assert got['issue'] == 5 and got['pr'] == 11, got
 start.release(got['held'])
-os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"}]'
+os.environ.pop('PR_ROWS')
+idle = pick({**env, 'LOKAY2_REPO': 'example/second'})
+assert idle['reason'] == 'idle_backoff' and idle['issue'] == 2, idle
+state_update('example/second', 2, retry_at=0)
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
-assert got['issue'] == 1 and got['node'] == 'plan', got
-start.release(got['held'])
-from lokay.cli import main as cli_main
-state_update('example/second', 2, retry_at=time.time() + 3600)
-assert cli_main(['unskip', 'example/second', '2']) == 0
-assert start.load_skips('example/second') == {99}
-from lokay.state import state_read
-assert state_read('example/second', 2)['retry_at'] == 0
-assert cli_main(['unskip', 'example/second', '2']) == 0
-assert start.load_skips('example/second') == {99}
-got = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
 assert got['issue'] == 2 and got['pr'] == 10, got
 start.release(got['held'])
-start.skip_file().unlink()
-assert cli_main(['unskip', 'example/second', '2']) == 0
-assert not start.skip_file().exists()
 assert "--label" not in open(os.environ["GH_LOG"]).read()
 # Exceptions before selection release exactly once, not in except and finally.
 from unittest.mock import patch

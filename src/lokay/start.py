@@ -51,28 +51,9 @@ def guarded_step(step):
     return guarded
 
 
-def skip_file() -> Path:
-    return Path.home() / ".lokay" / "skip-issues.json"
-
-
-def load_skips(repo: str) -> set[int]:
-    path = skip_file()
-    if not path.is_file():
-        return set()
-    try:
-        data = json.loads(path.read_text() or "{}")
-    except json.JSONDecodeError:
-        return set()
-    rows = data.get(repo) if isinstance(data, dict) else None
-    if not isinstance(rows, dict):
-        return set()
-    found: set[int] = set()
-    for key in rows:
-        try:
-            found.add(int(key))
-        except (TypeError, ValueError):
-            continue
-    return found
+def is_task(issue: dict) -> bool:
+    # An epic groups tasks; lokay-stalled is an alarm, not a task.
+    return not issue["title"].lower().startswith("epic") and issue["title"] != "lokay-stalled"
 
 
 def probes(env: dict[str, str] | None = None) -> dict[str, str]:
@@ -145,19 +126,16 @@ def pick(env: dict[str, str] | None = None) -> dict:
         ])
         if code != 0:
             raise RuntimeError(err.strip() or "pr list failed")
-        skipped = load_skips(name)
         for row in json.loads(out or "[]"):
             branch = row["headRefName"]
             if branch.startswith("lokay/") and branch[6:].isdecimal():
                 number = int(branch[6:])
                 saved = state_read(name, number)
-                if number not in skipped and (only_issue is None or number == only_issue) and saved.get("failures", 0):
+                if (only_issue is None or number == only_issue) and saved.get("retry_at", 0) > time.time():
                     blocked.append((name, number, saved))
         prs = [row for row in json.loads(out or "[]")
                if row["headRefName"].startswith("lokay/")
                and row["headRefName"][6:].isdecimal()
-               and int(row["headRefName"][6:]) not in skipped
-               and state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()
                and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
         if not prs:
             continue
@@ -165,6 +143,8 @@ def pick(env: dict[str, str] | None = None) -> dict:
                            int(pr["number"]), name, pr) for pr in prs)
     for _, _, name, pr in sorted(candidates, key=lambda row: row[:3]):
         issue = int(pr["headRefName"][6:])
+        if state_read(name, issue).get("retry_at", 0) > time.time():
+            continue
         held = acquire(name.split("/")[0], name)
         if held["result"] != "held":
             continue
@@ -189,12 +169,9 @@ def pick(env: dict[str, str] | None = None) -> dict:
             continue
         try:
             issues = open_issues(name)
-            skipped = load_skips(name)
             issues = [
                 row for row in issues
-                if int(row["number"]) not in skipped
-                and not row["title"].lower().startswith("epic")
-                and row["title"] != "lokay-stalled"
+                if is_task(row)
                 and (only_issue is None or int(row["number"]) == only_issue)
             ]
             for row in issues:
