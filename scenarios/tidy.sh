@@ -117,7 +117,7 @@ with tempfile.TemporaryDirectory() as tmp:
              patch('lokay.gh.pr_set_body', return_value={'result': 'updated'}) as setter:
             assert refresh_body('example/repo', 7) == {'result': 'updated'}
             lookup.assert_called_once_with('example/repo', 'lokay/7')
-            builder.assert_called_once_with(root / 'main-wt-7', plan.parent / 'plan.md')
+            builder.assert_called_once_with(root / 'main-wt-7', plan.parent / 'plan.md', '')
             setter.assert_called_once_with('example/repo', 12, body, 7)
     finally:
         plan.unlink(missing_ok=True)

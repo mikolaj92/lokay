@@ -16,6 +16,8 @@ git -C "$src" push -u origin lokay/9 >/dev/null 2>&1
 cat > "$tmp/pi" <<'EOF'
 #!/bin/sh
 echo fixed >> a.py
+printf '%1600s' '' | tr ' ' x
+printf '\nPoprawiono a.py.\n'
 exit 0
 EOF
 chmod +x "$tmp/pi"
@@ -37,6 +39,7 @@ cache.parent.mkdir()
 cache.write_bytes(b'cache')
 done = fix_code(wt, previous, "uwagi a.py:1", env)
 assert done["result"] == "done" and done["artifact"] != previous, done
+assert len(done['pi_response']) == 1500 and done['pi_response'].endswith('Poprawiono a.py.\n')
 files = __import__('subprocess').check_output(['git', 'show', '--format=', '--name-only', 'HEAD'], cwd=wt, text=True).splitlines()
 assert 'a.py' in files and not any('__pycache__' in name for name in files), files
 assert not cache.exists(), 'tidy must remove untracked cache files'

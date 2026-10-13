@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from lokay.gh import merge as gh_merge
@@ -15,10 +16,15 @@ def merge_sha(repo_name: str, number: int, sha: str, verdict: dict, worktree: Pa
     outcome = gh_merge(repo_name, number, sha)
     if outcome["result"] != "merged":
         return outcome
+    write_run(owner, repo_name, issue, {**rounds, "result": "merged", "sha": sha,
+                                      "failures": 0, "retry_at": 0, "reason": None, "last_error": None})
     if worktree is not None:
-        removed = worktree_remove(clone_path, worktree)
-        if removed["result"] != "removed":
-            raise RuntimeError(removed.get("error") or "worktree removal failed")
+        try:
+            removed = worktree_remove(clone_path, worktree)
+            if removed["result"] != "removed":
+                raise RuntimeError(removed.get("error") or "worktree removal failed")
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Merged %s#%s; worktree cleanup failed for %s: %s",
+                                               repo_name, issue, worktree, exc)
     # The run owner (start.main) releases the lock after all merge work.
-    write_run(owner, repo_name, issue, rounds)
     return {"result": "merged", "merge_sha": sha}

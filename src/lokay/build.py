@@ -134,7 +134,7 @@ def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) ->
     return committed, junk
 
 
-def pr_body(worktree: Path, plan_path: Path) -> str:
+def pr_body(worktree: Path, plan_path: Path, pi_response: str = "") -> str:
     try:
         plan = plan_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
@@ -143,7 +143,10 @@ def pr_body(worktree: Path, plan_path: Path) -> str:
     stat = _git(worktree, ["diff", "--stat", "origin/main...HEAD"])
     subjects = _git(worktree, ["log", "--format=%s", "origin/main..HEAD"])
     commits = "\n".join(f"- {subject}" for subject in subjects.splitlines())
-    return f"## Zmiany\n\n```text\n{stat}\n```\n\n{commits}\n\n## Plan\n\n" + (goal.group().strip() if goal else "") + "\n"
+    files = _git(worktree, ["diff", "--name-only", "-z", "origin/main...HEAD"])
+    changed = "\n".join(f"- `{name}`" for name in files.split("\0") if name)
+    done = f"## Co zrobiono\n\n{pi_response[-1500:].strip()}\n\n### Zmienione pliki\n\n{changed}\n\n"
+    return done + f"## Zmiany\n\n```text\n{stat}\n```\n\n{commits}\n\n## Plan\n\n" + (goal.group().strip() if goal else "") + "\n"
 
 
 def build_code(
@@ -231,11 +234,13 @@ def build_code(
             "explanation": f"pi exited 0 but made no commits in {worktree}. pi said:\n" + pi_tail,
             "artifact": str(worktree),
         }
-    return {"result": "done", "artifact": head}
+    return {"result": "done", "artifact": head, "pi_response": pi_tail}
 
 
 def build_publish(worktree: Path, branch: str, expected: str | None, repo_name: str, issue: int, title: str, plan_path: Path) -> dict:
-    body = pr_body(worktree, plan_path)
+    from lokay.state import state_read
+
+    body = pr_body(worktree, plan_path, state_read(repo_name, issue).get("pi_response") or "")
     pushed = push(worktree, branch, expected)
     if pushed["result"] != "pushed":
         return {"result": pushed["result"], "pr": None, "sha": pushed.get("sha", "")}

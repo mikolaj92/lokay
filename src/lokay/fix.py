@@ -42,7 +42,7 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
     sha = _git(worktree, ["rev-parse", "HEAD"])
     if sha == previous:
         return {"result": "failed", "reason": "no_changes", "artifact": ""}
-    return {"result": "done", "artifact": sha}
+    return {"result": "done", "artifact": sha, "pi_response": (proc.stdout or proc.stderr or "")[-1500:]}
 
 
 def fix_publish(worktree: Path, branch: str, expected: str | None) -> dict:

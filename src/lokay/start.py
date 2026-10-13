@@ -240,7 +240,8 @@ def refresh_body(repo: str, issue: int) -> dict:
     pr = open_pr_for(repo, f"lokay/{issue}")
     if not pr:
         raise RuntimeError(f"open PR missing for {repo} lokay/{issue}")
-    body = pr_body(worktree, run_dir(repo, issue) / "plan.md")
+    body = pr_body(worktree, run_dir(repo, issue) / "plan.md",
+                   state_read(repo, issue).get("pi_response") or "")
     notes = (state_read(repo, issue).get("verdict") or {}).get("notes") or []
     lens_notes = [note for note in notes if note.get("pytanie")]
     if lens_notes:
@@ -442,7 +443,7 @@ def _prepare(picked: dict) -> tuple | dict:
     if built.get("result") != "done":
         raise RuntimeError(f"unexpected Build outcome: {built}")
     state_update(picked["repo"], picked["issue"], failures=0, reason=None, retry_at=0, build_note=None,
-                 previous_head=None)
+                 previous_head=None, pi_response=built.get("pi_response") or "")
     def publish():
         pr = open_pr_for(picked["repo"], branch)
         expected = pr.get("headRefOid") if pr else None
@@ -878,6 +879,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 return fixed
             if fixed["result"] == "failed":
                 return fixed
+            state_update(picked["repo"], picked["issue"], pi_response=fixed.get("pi_response") or "")
             pushed = fix_step(picked, "fix_publish", lambda: fix_publish(worktree, branch, sha), sha)
             if pushed["result"] == "failed":
                 return pushed
