@@ -893,6 +893,12 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             prompt = (
                 Path(__file__).resolve().parents[2].joinpath("prompts/fix.md").read_text()
                 + "\n\nSHA:\n" + sha
+                + "\n\nIssue:\n" + (saved.get("issue_title") or "")
+                + "\n" + (saved.get("issue_body") or "")[:6000]
+                + ("\n\nCI is red. Making CI green takes precedence over scope/alignment notes: "
+                   "changes needed for CI to pass are in scope and must not be reverted."
+                   if saved.get("ci") == "red" or (saved.get("local_ci") or {}).get("result") == "red"
+                   else "")
                 + "\n\nUwagi:\n" + json.dumps(uwagi)
                 + "\n\nDiff:\n" + (diff.stdout or "")[:20000]
                 + "\n\nTest log:\n" + test_log
@@ -984,7 +990,8 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                    {"result": "pending", "sha": sha, "uwagi": []}, remote))
             return {"result": "pending", "sha": sha}
         ci = {**ci, "failed": ci["failed"] + [
-            {"warstwa": "GitHub CI", "plik": "", "log": name}
+            {"warstwa": "GitHub CI", "plik": "", "check": name,
+             "log": name + "\n" + (remote.get("failed_logs") or {}).get(name, name)}
             for name in remote.get("failed") or []
         ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
             "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}

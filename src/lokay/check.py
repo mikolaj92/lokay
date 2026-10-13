@@ -98,7 +98,8 @@ def check_state(directory: Path, round: int, diff: str, stat: str, ci: dict, **s
     return {**state, "diff_stat": stat[:1500], "diff_path": str(patch),
             "test_log_path": str(log), "test_result": ci["result"],
             "tested": ci.get("tested", False), "ci": ci.get("ci"),
-            "failures": [{**item, "log": item.get("log", "")[-800:]}
+            "failures": [{**item, "log": item.get("log", "")[
+                -3000 if item.get("warstwa") == "GitHub CI" else -800:]}
                          for item in ci.get("failed") or []]}
 
 
