@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+# Never let an inherited uv environment select another checkout.
+export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 # Prepare this checkout before isolating the scenario environment.
 env -u UV_NO_SYNC -u UV_OFFLINE uv sync --frozen
 .venv/bin/python - <<'PY'
