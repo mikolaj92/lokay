@@ -40,8 +40,21 @@ with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as runs
     assert code_scope_issue(['code.py', 'scripts/x.py'], plan)
     assert code_scope_issue(['code.py', 'extra.md'], plan)
     assert code_scope_issue(['code.py', 'tests/test_a.py', 'uv.lock', 'package-lock.json'], plan) is None
-    assert code_scope_issue(['plan.md'], '## Pliki\nplan.md\n## Testy\n') is None
-    assert code_scope_issue(['code.py'], '## Pliki\ncode.py — implement\n## Testy\n') is None
+    assert code_scope_issue(['plan.md'], '## Pliki\n- plan.md\n## Testy\n') is None
+    assert code_scope_issue(['code.py'], '## Pliki\n- code.py — implement\n## Testy\n') is None
+    detailed_plan = '''## Pliki
+- `src/posejdon/detectors/llm_review.py` — opis `LocalLLMProvider` z `origin/main`.
+* **README.md**: — instrukcje dostawcy `LocalLLMProvider`.
++ docs/fallback-inventory.md, — historia `MLXProvider`.
+1. `tests/unit/test_llm_review_fail_closed.py` — istniejący test.
+Wszystkie ścieżki dotyczą `other.py`. Przed zakończeniem sprawdzić diff.
+## Testy
+'''
+    planned_files = ['src/posejdon/detectors/llm_review.py', 'README.md',
+                     'docs/fallback-inventory.md', 'tests/unit/test_llm_review_fail_closed.py']
+    assert code_scope_issue(planned_files, detailed_plan) is None
+    for outside in ('LocalLLMProvider', 'origin/main', 'MLXProvider', 'other.py', 'Wszystkie'):
+        assert code_scope_issue(planned_files + [outside], detailed_plan)
     verdict = aggregate('sha', {'sha': 'sha', 'result': 'green'}, [{'next': 'ok'}])
     scope = code_scope_issue(files, plan)
     if scope:
