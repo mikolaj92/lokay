@@ -95,10 +95,9 @@ start.release(got["held"])
 from lokay.state import state_update
 import time
 state_update('example/second', 2, retry_at=time.time() + 3600, failures=1, reason='fixture')
-# A PR in backoff does not block new issues.
+# A PR in backoff blocks new issues.
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
-assert got['issue'] == 1 and got['pr'] is None, got
-start.release(got['held'])
+assert got['result'] == 'idle' and got['reason'] == 'idle_backoff', got
 idle = pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '2'})
 assert idle['result'] == 'idle' and idle['reason'] == 'idle_backoff', idle
 assert idle['failures'] == 1 and idle['last_error'] == 'fixture', idle
@@ -110,19 +109,23 @@ start.release(got['held'])
 assert pick({**env, "LOKAY2_ISSUE": "3"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, "LOKAY2_REPO": "example/missing"}) == {"result": "idle", "reason": "no_work"}
 assert pick({**env, 'LOKAY2_REPO': 'example/second', 'LOKAY2_ISSUE': '4'}) == {'result': 'idle', 'reason': 'no_work'}
-# New issues alternate with eligible PRs while another PR is in backoff.
+# Eligible PRs always win while another PR is in backoff.
 state_update('example/second', 2, retry_at=time.time() + 3600, failures=0)
 os.environ['PR_ROWS'] = '[{"number":10,"headRefName":"lokay/2","headRefOid":"abc"},{"number":11,"headRefName":"lokay/5","headRefOid":"def"}]'
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
-assert got['issue'] == 1 and got['pr'] is None, got
+assert got['issue'] == 5 and got['pr'] == 11, got
 start.release(got['held'])
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert got['issue'] == 5 and got['pr'] == 11, got
 start.release(got['held'])
 os.environ.pop('PR_ROWS')
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
+assert got['result'] == 'idle' and got['reason'] == 'idle_backoff', got
+os.environ.pop('OPEN_PR')
+got = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert got['issue'] == 1 and got['pr'] is None, got
 start.release(got['held'])
+os.environ['OPEN_PR'] = 'yes'
 state_update('example/second', 2, retry_at=0)
 got = pick({**env, 'LOKAY2_REPO': 'example/second'})
 assert got['issue'] == 2 and got['pr'] == 10, got

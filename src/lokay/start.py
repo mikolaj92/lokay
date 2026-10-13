@@ -115,6 +115,7 @@ def pick(env: dict[str, str] | None = None) -> dict:
     repos = [repo for repo in load_repos(Path(repos_file) if repos_file else None)
              if not only_repo or repo["name"] == only_repo]
     blocked = []
+    has_prs = False
 
     def idle():
         if blocked:
@@ -125,37 +126,42 @@ def pick(env: dict[str, str] | None = None) -> dict:
         return {"result": "idle", "reason": "no_work"}
 
     def choose(turn):
+        nonlocal has_prs
         for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
             check_deadline()
             name = repo["name"]
+            if turn == "pr":
+                # Discover PRs even when the repository lock is busy.
+                code, out, err = _gh([
+                    "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
+                    "--json", "number,headRefName,headRefOid",
+                ])
+                if code != 0:
+                    raise RuntimeError(err.strip() or "pr list failed")
+                prs = [row for row in json.loads(out or "[]") if row["headRefName"].startswith("lokay/")]
+                has_prs = has_prs or bool(prs)
+                prs = [row for row in prs if row["headRefName"][6:].isdecimal()
+                       and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
+                ready = []
+                for row in prs:
+                    number = int(row["headRefName"][6:])
+                    saved = state_read(name, number)
+                    if saved.get("retry_at", 0) > time.time():
+                        blocked.append((name, number, saved))
+                    else:
+                        ready.append(row)
+                if not ready:
+                    continue
             held = acquire(name.split("/")[0], name)
             if held["result"] != "held":
+                if turn == "pr":
+                    blocked.extend((name, int(row["headRefName"][6:]),
+                                    state_read(name, int(row["headRefName"][6:]))) for row in ready)
                 continue
             chosen = None
             try:
                 repo_attempt(name, time.time())
                 if turn == "pr":
-                    code, out, err = _gh([
-                        "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                        "--json", "number,headRefName,headRefOid",
-                    ])
-                    if code != 0:
-                        raise RuntimeError(err.strip() or "pr list failed")
-                    for row in json.loads(out or "[]"):
-                        branch = row["headRefName"]
-                        if branch.startswith("lokay/") and branch[6:].isdecimal():
-                            number = int(branch[6:])
-                            saved = state_read(name, number)
-                            if (only_issue is None or number == only_issue) and saved.get("retry_at", 0) > time.time():
-                                blocked.append((name, number, saved))
-                    prs = [row for row in json.loads(out or "[]")
-                           if row["headRefName"].startswith("lokay/")
-                           and row["headRefName"][6:].isdecimal()
-                           and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
-                    ready = [row for row in prs
-                             if state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()]
-                    if not ready:
-                        continue
                     pr = min(ready, key=lambda row: (
                         state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
                     issue = int(pr["headRefName"][6:])
@@ -202,23 +208,12 @@ def pick(env: dict[str, str] | None = None) -> dict:
             return chosen
         return None
 
-    turn_file = Path.home() / ".lokay" / "pick-turn"
-    try:
-        last_turn = turn_file.read_text().strip()
-    except FileNotFoundError:
-        last_turn = None
-    turns = ("issue", "pr") if last_turn == "pr" else ("pr", "issue")
-    for turn in turns:
-        chosen = choose(turn)
-        if chosen is not None:
-            try:
-                turn_file.parent.mkdir(parents=True, exist_ok=True)
-                turn_file.write_text(turn)
-            except BaseException:
-                release(chosen["held"])
-                raise
-            return chosen
-    return idle()
+    chosen = choose("pr")
+    if chosen is not None:
+        return chosen
+    if has_prs:
+        return idle()
+    return choose("issue") or idle()
 
 
 def refresh_body(repo: str, issue: int) -> dict:
