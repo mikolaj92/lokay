@@ -94,6 +94,9 @@ def pr_checks(repo: str, number: int, sha: str) -> dict:
     if view.get("headRefOid") != sha:
         return {"result": "sha_moved", "sha": view.get("headRefOid") or ""}
     rollup = view.get("statusCheckRollup") or []
+    if not rollup:
+        return {"result": "no_ci", "sha": sha, "failed": [],
+                "notes": [{"warstwa": "GitHub CI", "log": "no GitHub checks configured"}]}
     failed = []
     pending = []
     for item in rollup:
@@ -136,7 +139,8 @@ def comment_upsert(repo: str, number: int, marker: str, body: str) -> dict:
 def check_comment(repo: str, number: int, round_number: int, verdict: dict, ci: dict) -> dict:
     body = (f"### Lokay Check {round_number}\n"
             f"SHA: `{verdict['sha']}`\n\n"
-            f"Wynik: **{verdict['result']}** · CI: **{ci['result']}**\n\n"
+            f"Wynik: **{verdict['result']}** · CI: **{ci.get('ci', ci['result'])}** · "
+            f"tests: **{ci['result']}** · tested={str(ci.get('tested', False)).lower()}\n\n"
             "Uwagi i CI:\n```json\n" + json.dumps({
                 "uwagi": verdict.get("uwagi", []), "notes": verdict.get("notes", []),
                 "failed": ci.get("failed", []), "pending": ci.get("pending", []),

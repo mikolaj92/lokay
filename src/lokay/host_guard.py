@@ -95,4 +95,5 @@ def failure(report: dict, worktree: Path) -> dict:
         "result": "failed", "reason": "outside_worktree",
         "explanation": f"pi modified {details}; restored. Work only inside {worktree}.",
         "artifact": str(worktree),
+        "paths": report["paths"], "files": report["files"],
     }

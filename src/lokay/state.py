@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,19 +38,22 @@ def state_update(repo: str, issue: int, **fields) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     current = json.loads(path.read_text()) if path.exists() else {}
     if "node" in fields and (fields["node"] != current.get("node") or "node_since" not in current):
-        import time
-
         current["node_since"] = time.time()
+    if fields.get("last_attempt") and not current.get("issue_since"):
+        current["issue_since"] = time.time()
+    if fields.get("result") == "merged":
+        current["issue_since"] = None
     current.update(fields)
     from lokay.observe import current as observe_current
 
     failures = current.get("failures", 0)
-    reason = current.get("reason") if failures else None
-    result = "failed" if failures and reason else current.get("result", "running")
+    reason = (current.get("reason") or current.get("last_error")) if failures else None
+    result = "failed" if failures and current.get("reason") else current.get("result", "running")
     if fields.get("failures") == 0 and "result" not in fields and current.get("result") == "failed":
         current["result"] = result = "running"
     observe_current(repo=repo, issue=issue, node=current.get("node"),
                     node_since=current.get("node_since"), result=result,
+                    issue_since=current.get("issue_since"), idle_reason=None,
                     failures=failures, last_error=reason)
     current["updated_at"] = datetime.now(timezone.utc).isoformat()
     temporary = path.with_suffix(".json.tmp")

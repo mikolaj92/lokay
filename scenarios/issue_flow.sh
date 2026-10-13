@@ -103,6 +103,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
 with ExitStack() as stack:
     process = stack.enter_context(patch('lokay.build.run_process'))
     process.return_value.returncode = 0
+    stack.enter_context(patch('lokay.build.tidy_and_commit', return_value=([], [])))
     stack.enter_context(patch('lokay.build._git', side_effect=lambda path, args:
         'lokay/17' if args == ['rev-parse', '--abbrev-ref', 'HEAD'] else
         'head' if args == ['rev-parse', 'HEAD'] else

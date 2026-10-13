@@ -136,9 +136,10 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert outcome['result'] == 'failed' and outcome['next'] == 'plan', outcome
             assert saved['node'] == 'plan' and saved['plan_phase'] == 'write', saved
             assert saved['plan_evaluations'] == 0 and saved['plan_accepted_sha'] is None
-            assert saved['plan_prompt'] == plan.prompt_for('title', 'body') + (
-                f'\nUwagi (Build): {build_failure}: fixture explanation\n'
-                'Previous Build made no changes. Make the plan concrete and self-contained so it can be implemented now in this repo; if a dependency is missing, plan to implement the minimal part needed.\n')
+            assert saved['plan_prompt'].startswith(plan.prompt_for('title', 'body'))
+            assert f'Uwagi (Build): {build_failure}: fixture explanation' in saved['plan_prompt']
+            assert decisions[-1] in saved['plan_prompt']
+            assert 'Rounds:' in saved['plan_prompt'] and 'Uwagi:' in saved['plan_prompt']
             assert saved['retry_at'] == 0 and saved['failures'] == 1
         if builds and decisions:
             assert builds == [decisions[-1]], events
@@ -146,7 +147,10 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
         if prompts and not invalid:
             assert [text for kind, text in events if kind == 'write'] == decisions[-len(prompts):], events
         if 'revise' in choices[:-1]:
-            assert 'k_testy' in prompts[1], prompts
+            assert 'k_testy' in prompts[1] and decisions[0] in prompts[1], prompts
+            assert len(saved['plan_history']) >= choices.count('revise')
+            if choices.count('revise') > 1:
+                assert 'Repeated plan rejection' in prompts[2], prompts
         print(f'{choices}: writes={len(prompts)}; decide={len(decisions)}; build={len(builds)}; error={error}')
 
 run_case(['ok'], budget='write')

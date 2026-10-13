@@ -25,7 +25,7 @@ for value in ('', '0', '-1', 'text', 'nan', 'inf', '-inf', '1e999', None, True, 
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     (root / "code.py").write_text("def value(): return 42\n")
-    (root / "verify.py").write_text("from code import value\nassert value() == 42\n")
+    (root / "verify.py").write_text("from code import value\nassert value() == 42\nprint('1 passed')\n")
     request = {"repo": "example/repo", "pr": 7, "sha": "head-a", "cwd": tmp,
                "test": [[sys.executable, "-B", "verify.py"]]}
     view = {"headRefOid": "head-a", "statusCheckRollup": [
@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / "verify.py").write_text(
         "from pathlib import Path\nfrom code import value\n"
         "p = Path('attempt')\nfirst = not p.exists()\np.touch()\n"
-        "assert not first, 'transient failure'\nassert value() == 42\n")
+        "assert not first, 'transient failure'\nassert value() == 42\nprint('1 passed')\n")
     flaky = check()
     assert flaky["result"] == "green" and flaky["notes"][0]["flaky"], flaky
     verdict = aggregate("head-b", flaky, [{"next": "issue", "uwagi": [{"pytanie": "correctness"}]}])
@@ -76,6 +76,8 @@ with tempfile.TemporaryDirectory() as tmp:
     request["test"] = []
     view["statusCheckRollup"] = []
     assert check()["result"] == "green"
+    with patch('lokay.gh._gh', gh):
+        assert pr_checks(request['repo'], 7, 'head-b')['result'] == 'no_ci'
     timed_out = local_ci('timeout', [[sys.executable, '-c', 'import time; time.sleep(2)']], root, timeout=0.01)
     assert timed_out['result'] == 'red' and timed_out['failed'], timed_out
     unavailable = local_ci('missing', [[str(root / 'missing-command')]], root)
@@ -103,7 +105,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     (worktree / 'verify.py').write_text(
         "import sys\nfrom pathlib import Path\n"
         "with Path('attempts').open('a') as f: f.write(sys.argv[1] + '\\n')\n"
-        "print('result=' + sys.argv[1])\nsys.exit(int(sys.argv[1]))\n")
+        "print('result=' + sys.argv[1])\nprint('1 passed')\nsys.exit(int(sys.argv[1]))\n")
     stack.enter_context(patch.dict(os.environ, LOKAY2_REPOS_FILE=str(config)))
     stack.enter_context(patch('lokay.state.RUNS', root / 'runs'))
     head = {'sha': 'same-head'}
@@ -123,7 +125,7 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     stack.enter_context(patch('lokay.fix.fix_publish', side_effect=lambda *a:
         {'result': 'pushed', 'sha': head['sha']}))
     stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'pending'}))
-    stack.enter_context(patch('lokay.gh.check_comment'))
+    comment = stack.enter_context(patch('lokay.gh.check_comment'))
     def issue_view(args):
         assert args == ['issue', 'view', '1', '--repo', 'example/resume', '--json', 'title,body'], args
         return 0, json.dumps({'title': 'Fix code', 'body': ''}), ''
@@ -134,7 +136,14 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     # Guard behavior has its own real-Git scenario; this fixture has no Git repository.
     guard = stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={
         'removed': [], 'reset': []}))
+    package_diff = False
+    package = worktree / 'packages' / 'argus'
+    package.mkdir(parents=True)
+    (package / 'pyproject.toml').touch()
     def processes(argv, **kwargs):
+        if argv == ['git', 'diff', 'origin/main...HEAD'] and package_diff:
+            return CompletedProcess(argv, 0, 'diff --git a/packages/argus/code.py b/packages/argus/code.py\n'
+                '--- a/packages/argus/code.py\n+++ b/packages/argus/code.py\n@@ -1 +1 @@\n-old\n+new\n', '')
         if argv in (['git', 'diff', 'origin/main...HEAD'], ['git', 'diff', '--stat', 'origin/main...HEAD']):
             return CompletedProcess(argv, 0, '', '')
         return run_process(argv, **kwargs)
@@ -175,14 +184,16 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
     history = state.run_dir(picked['repo'], 1) / 'rounds.md'
     assert history.read_text().count('GitHub CI pending') == 6
     # Use the real Check verdict and model response parser; only external effects are faked.
-    stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green', 'failed': []}))
+    stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'no_ci', 'failed': [],
+        'notes': [{'warstwa': 'GitHub CI', 'log': 'no GitHub checks configured'}]}))
     merge = stack.enter_context(patch('lokay.merge.merge_sha', return_value={
         'result': 'merged', 'merge_sha': 'merged'}))
     fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
     stack.enter_context(patch('lokay.start._retry', side_effect=lambda picked, node, action, *args: action()))
     kinds = 'correctness alignment architecture security production scope tests'
     from lokay.check import lens
-    for choice, exit_code in (('ok', 0), ('issue', 0), ('ok', 1), ('ok', None)):
+    for choice, exit_code, package_diff in (('ok', 0, False), ('issue', 0, False),
+            ('ok', 1, False), ('ok', None, False), ('ok', 0, True), ('ok', None, True)):
         argv = configure(exit_code or 0)
         if exit_code is None:
             argv = []
@@ -190,34 +201,50 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
                              f'    clone_path: {clone}\n    test: []\n    merge: on\n')
         cached = ({'sha': head['sha'], 'argv': [], 'result': 'green',
                    'failed': [], 'notes': [], 'log': ''} if exit_code is None else None)
-        state.state_update(picked['repo'], 1, node='check', verdict=None, local_ci=cached)
+        state.state_update(picked['repo'], 1, node='check', verdict=None, local_ci=cached,
+                           issue_title='fixture', issue_body='')
         merge.reset_mock(); fix.reset_mock()
         calls = []
         def model(request):
             calls.append(request)
-            assert request['state']['kind'] == kinds, request
+            assert request['state']['kind'] in kinds.split(), request
             if request['questions'][0]['id'] == 'where':
                 return {q['id']: {'choice': 'none' if q['id'] == 'where' else 'logic bug',
                     'probabilities': {key: (1.0 if key == ('none' if q['id'] == 'where' else 'logic bug') else 0.0)
                                       for key in q['options']}}
                         for q in request['questions']}
+            if package_diff:
+                return {q['id']: {'choice': 'ok' if q['id'] == 'next' else 'false',
+                    'probabilities': {key: (1.0 if key == ('ok' if q['id'] == 'next' else 'false') else 0.0)
+                                      for key in q['options']}} for q in request['questions']}
             assert len(request['questions']) == 1, request
-            for kind in kinds.split():
-                assert lens(kind) in request['questions'][0]['instructions']
+            assert lens(request['state']['kind']) in request['questions'][0]['instructions']
             return {'next': {'choice': choice, 'probabilities': {
                 choice: 0.9, ('issue' if choice == 'ok' else 'ok'): 0.1}}}
-        with patch('lokay.decide.decide', side_effect=model):
+        with patch('lokay.decide.decide', side_effect=model), \
+             patch('lokay.start._prepare', return_value={'result': 'fixture-plan'}) as prepare:
             result = start.resume.__wrapped__(picked)
-        assert len(calls) == (2 if choice == 'issue' else 1), calls
-        if exit_code in (0, None):
+        assert len(calls) == (14 if choice == 'issue' else 7), calls
+        if choice == 'issue':
+            assert result['result'] == 'fixture-plan', result
+            prepare.assert_called_once()
+            merge.assert_not_called()
+            fix.assert_not_called()
+        elif exit_code is None or (exit_code == 0 and not package_diff):
             assert result['result'] == 'merged', result
             merge.assert_called_once()
             guard.assert_called()
-            assert issue.call_count == 1, 'issue metadata should be cached across resumes'
+            issue.assert_not_called()  # Saved issue metadata must not be fetched again.
             fix.assert_not_called()
+            saved = state.state_read(picked['repo'], 1)
+            assert saved['ci'] == 'no_ci' and saved['tested'] == (exit_code == 0), saved
+            assert comment.call_args.args[-1]['tested'] == (exit_code == 0)
         else:
             assert result['result'] == 'failed', result
             merge.assert_not_called()
             fix.assert_called_once()
+            if package_diff:
+                assert any('changed package' in row.get('log', '') for row in
+                           state.state_read(picked['repo'], 1)['verdict']['uwagi'])
 print('CI: mutation, timeout, flaky, remote guards, SHA/argv cache; 4 real Check → merge cases OK')
 PY

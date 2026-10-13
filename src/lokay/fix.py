@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from lokay.build import child_env, tidy_and_commit
+from lokay.build import child_env, tidy_and_commit, worktree_status
 from lokay.git import push
 from lokay.host_guard import guard, failure
 from lokay.run import run_process
@@ -16,13 +16,16 @@ def _git(repo: Path, args: list[str]) -> str:
 
 
 def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], clone_path: Path | str | None = None) -> dict:
+    before = worktree_status(worktree)
+    clean = child_env(env)
+    clean["UV_PROJECT_ENVIRONMENT"] = str(worktree.resolve() / ".venv")
     changes = {"changed": False}
     try:
         with guard([Path(__file__).resolve().parents[2], clone_path]) as changes:
             proc = run_process(
                 ["pi", "-p", "--provider", env.get("LOKAY2_PROVIDER", ""), "--model", env.get("LOKAY2_MODEL", ""), prompt],
                 cwd=worktree,
-                env=child_env(env),
+                env=clean,
                 timeout=3600,
             )
     except Exception as exc:
@@ -33,7 +36,7 @@ def fix_code(worktree: Path, previous: str, prompt: str, env: dict[str, str], cl
         raise
     if changes["changed"]:
         return failure(changes, worktree)
-    tidy_and_commit(worktree, "lokay fix")
+    tidy_and_commit(worktree, "lokay fix", before)
     if proc.returncode != 0:
         return {"result": "failed", "artifact": ""}
     sha = _git(worktree, ["rev-parse", "HEAD"])

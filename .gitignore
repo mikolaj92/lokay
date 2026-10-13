@@ -8,6 +8,7 @@ __pycache__/
 dist/
 build/
 .uv/
+.check-local/
 config.yaml
 # Host session dumps. Living contract stays in docs/.
 .prime/

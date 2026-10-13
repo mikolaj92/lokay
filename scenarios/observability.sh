@@ -52,6 +52,31 @@ with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, HOME=tmp, LOKA
             return 0, "[]" if args[:2] == ["issue", "list"] else "", ""
         with patch.object(observe, "_gh", gh):
             assert observe.monitor()["result"] == "ok"
+            # The issue clock survives Check ↔ Fix and a new tick.
+            started = time.time() - 7200
+            state.state_update('example/repo', 7, issue_since=started, last_attempt=time.time())
+            with observe.ticking():
+                for node in ('fix', 'check', 'fix', 'check'):
+                    state.state_update('example/repo', 7, node=node)
+                    assert state.state_read('example/repo', 7)['issue_since'] == started
+            alarm = observe.monitor()
+            assert alarm['result'] == 'stalled' and any('Issue 7 age' in r for r in alarm['reasons'])
+            assert calls[-1][calls[-1].index('--title') + 1] == 'lokay-stalled'
+            state.state_update('example/repo', 7, result='merged', failures=0)
+            assert state.state_read('example/repo', 7)['issue_since'] is None
+            observe.heartbeat(**observe.CURRENT)
+            assert observe.monitor()['result'] == 'ok'
+            state.state_update('example/repo', 7, failures=3, reason='same error')
+            observe.heartbeat(**observe.CURRENT)
+            assert any('Failures: 3; last_error: same error' in r for r in observe.monitor()['reasons'])
+            state.state_update('example/repo', 7, failures=0, reason=None)
+            for reason in ('idle_backoff', 'host_down'):
+                observe.heartbeat(result='idle', idle_reason=reason)
+                assert f'Idle: {reason}' in observe.monitor()['reasons']
+            observe.heartbeat(result='running', idle_reason=None, queue_since=started)
+            assert any('No merge with queued work' in r for r in observe.monitor()['reasons'])
+            observe.heartbeat(result='idle', idle_reason='no_work', **{'failures': 0})
+            assert observe.monitor()['result'] == 'ok'
             beat = json.loads(path.read_text())
             beat["node_since"] = time.time() - 7200
             path.write_text(json.dumps(beat))

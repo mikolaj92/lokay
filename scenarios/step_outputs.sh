@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     picked = {'repo': repo, 'issue': 1, 'node': 'check', 'result': 'picked'}
     def action():
         assert acquire('example', repo)['result'] == 'busy'
-        raise RuntimeError('fixture failure')
+        raise RuntimeError('network connection failed')
     @start.guarded_step
     def step(picked):
         start._retry(picked, 'check', action)
@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
                  patch('lokay.start.resume', step), redirect_stdout(io.StringIO()) as out:
                 start.main([])
             result = json.loads(out.getvalue().splitlines()[-1])
-            assert result == {'result': 'failed', 'reason': 'RuntimeError: fixture failure'}, result
+            assert result == {'result': 'failed', 'reason': 'RuntimeError: network connection failed'}, result
             saved = state.state_read(repo, 1)
             assert saved['failures'] == attempt, saved
             assert saved['retry_at'] > start.time.time() + 60 * 2 ** (attempt - 1) - 2
@@ -63,7 +63,20 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
             assert free['result'] == 'held', free
             release(free)
         rounds = (state.run_dir(repo, 1) / 'rounds.md').read_text()
-        assert rounds.count('check: retry') == 2, rounds
+        assert rounds.count('→ retry later') == 2, rounds
+    # Successful intermediate operations must not erase repeated deterministic failures.
+    for attempt in (1, 2):
+        start.needs_help(picked, 'dirty worktree', 'abc')
+        saved = state.state_read(repo, 1)
+        assert saved['retry_at'] == 0
+        if attempt == 1:
+            assert saved['node'] == 'check'
+            start._retry(picked, 'merge', lambda: {'result': 'done'})
+        else:
+            assert saved['node'] == 'plan' and saved['plan_phase'] == 'write'
+            assert 'dirty worktree' in saved['plan_prompt']
+            assert 'Last state:' in saved['plan_prompt'] and 'Rounds:' in saved['plan_prompt']
+    assert '→ Plan: dirty worktree' in (state.run_dir(repo, 1) / 'rounds.md').read_text()
     start._retry(picked, 'check', lambda: {'result': 'done'}, 'done')
     assert state.state_read(repo, 1)['failures'] == 0
     assert observe.CURRENT['last_error'] is None

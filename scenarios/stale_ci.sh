@@ -31,12 +31,12 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     tests = ['pytest']
     log = 'STALE FAILURE\nFAILED test_added.py::test_new - AssertionError\n'
     findings = [{'plik': 'code.py', 'pytanie': 'tests'}]
-    fingerprint = hashlib.sha256(json.dumps(sorted({json.dumps(['code.py', 'tests', None, None])})).encode()).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps(sorted({json.dumps(['code.py', 'tests', None])})).encode()).hexdigest()
 
     def reset(ci_sha, node='check', **fields):
         state.state_update(picked['repo'], 7, node=node, sha=head,
             local_ci={'sha': ci_sha, 'argv': tests, 'result': 'red', 'log': log,
-                      'failed': [], 'notes': []}, test_log=log,
+                      'failed': [], 'notes': [], 'tested': False, 'tested_cwds': []}, test_log=log,
             verdict={'sha': head, 'result': 'fix', 'uwagi': findings},
             fix_fingerprint=None, issue_title='title', issue_body='', **fields)
 
@@ -82,7 +82,7 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
             for replan in (False, True):
                 reset(ci_sha, node='fix')
                 if replan:
-                    state.state_update(picked['repo'], 7, fix_fingerprint=fingerprint)
+                    state.state_update(picked['repo'], 7, fix_fingerprint=fingerprint, fix_counts=[1, 1])
                 def fix(worktree, sha, prompt, *args, **kwargs):
                     assert (log in prompt) == (ci_sha == head), prompt
                     return {'result': 'failed', 'reason': 'fixture'}

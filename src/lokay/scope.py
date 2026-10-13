@@ -5,6 +5,13 @@ import re
 from pathlib import PurePosixPath
 
 
+def is_artifact(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    return (path.endswith(".log") or path.startswith((".check-local/", ".validation/"))
+            or (path.startswith("tmp/") and path.endswith(".lock"))
+            or parts[-2:] == ("bin", "gh"))
+
+
 def is_test(path: str) -> bool:
     parts = PurePosixPath(path).parts
     name = parts[-1] if parts else ""
@@ -12,14 +19,24 @@ def is_test(path: str) -> bool:
                                    ("test_*.py", "*_test.py", "*.test.*", "*.spec.*"))
 
 
-def code_scope_issue(files: list[str], title: str, body: str | None, added: set[str] | None = None) -> dict | None:
-    text = title + "\n" + (body or "")
-    code = re.search(r"\.(?:py|ts|swift)\b|\bsrc/|\b(?:implement|fix|bug|dodać|naprawić|zaimplementować|błąd|refactor)\b", text, re.I)
-    docs = re.search(r"\b(?:docs|dokumentacja|readme|opis)\b", text, re.I)
-    # A docs word alone is not enough to override explicit production intent.
-    docs_only = docs and (not code or re.search(r"\b(?:only|tylko)\b", text, re.I) or
-                          not re.search(r"\.(?:py|ts|swift)\b|\bsrc/|\b(?:bug|błąd|refactor|implement|dodać|zaimplementować)\b", text, re.I))
-    non_code = lambda path: is_test(path) or path.startswith("docs/") or PurePosixPath(path).suffix.lower() in (".md", ".rst", ".txt") or (added is not None and path in added and "scripts" in PurePosixPath(path).parts[:-1])
-    if files and all(non_code(path) for path in files) and code and not docs_only:
-        return {"warstwa": "scope", "plik": "", "log": "PR changes only docs/tests; the issue asks for a code change."}
+def code_scope_issue(files: list[str], plan: str) -> dict | None:
+    section = re.search(r"^## Pliki\s*\n(.*?)(?=^## |\Z)", plan, re.M | re.S)
+    planned = set()
+    if section:
+        for line in section[1].splitlines():
+            line = re.sub(r"^\s*(?:[-*+] |\d+[.)] )", "", line).strip()
+            paths = re.findall(r"`([^`]+)`", line) or line.split()[:1]
+            planned.update(path.removeprefix("./").rstrip(":,") for path in paths)
+    outside = [path for path in files if path not in planned and not is_test(path)
+               and not (PurePosixPath(path).name.endswith(".lock") or
+                        PurePosixPath(path).name in ("package-lock.json", "npm-shrinkwrap.json"))]
+    code = {path for path in planned if not is_test(path) and not path.startswith("docs/")
+            and PurePosixPath(path).suffix.lower() not in (".md", ".rst", ".txt")}
+    reasons = []
+    if code and not code.intersection(files):
+        reasons.append("Diff does not touch any planned code file: " + ", ".join(sorted(code)))
+    if outside:
+        reasons.append("Diff contains files outside ## Pliki: " + ", ".join(outside))
+    if reasons:
+        return {"warstwa": "scope", "plik": "", "log": "; ".join(reasons)}
     return None

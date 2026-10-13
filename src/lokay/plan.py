@@ -71,7 +71,7 @@ def verdict(answers: dict) -> dict:
         p = answers[name]["probabilities"]["true"]
         if p < 0.5:
             uwagi.append({"kryterium": name, "p": p})
-    ok = choice == "ok" or not uwagi
+    ok = choice == "ok" and not uwagi
     return {"next": "ok" if ok else "revise", "confidence": confidence, "uwagi": uwagi}
 
 

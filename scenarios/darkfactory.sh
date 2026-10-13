@@ -71,18 +71,30 @@ elif tool == "git":
                 print('base')
             raise SystemExit(0)
         os.execv('/usr/bin/git', ['git', *args])
+    if args and args[0] == '--literal-pathspecs':
+        args = args[1:]
     if args[:3] == ['diff', '--name-status', '--diff-filter=A'] or args[:4] == ['diff', '--cached', '--name-status', '--diff-filter=A'] or args == ['ls-files', '--others', '--exclude-standard']:
         pass
-    elif args == ['diff', '--name-only', '-z', 'HEAD'] or args == ['diff', '--cached', '--name-only', '-z']:
-        if (cwd / 'app.py').read_text() != data['contents'][str(cwd)]:
-            sys.stdout.write('app.py\0')
-    elif args == ['diff', '--name-only', '-z', 'origin/main..HEAD']:
-        sys.stdout.write('app.py\0')
+    elif args == ['ls-files', '-m', '-d', '--others', '--exclude-standard', '-z']:
+        if (cwd / 'app.py').exists() and (cwd / 'app.py').read_text() != data['contents'][str(cwd)]:
+            print('app.py\0', end='')
+    elif args == ['diff', '--cached', '--binary', '--', 'app.py']:
+        pass
+    elif args in (['ls-files', '-z'], ['diff', '--name-only', '-z', 'origin/main...HEAD'],
+                  ['diff', '--name-only', '-z', 'HEAD'],
+                  ['diff', '--name-only', '-z', 'origin/main..HEAD'],
+                  ['diff', '--cached', '--name-only', '-z'],
+                  ['ls-tree', '-r', '--name-only', '-z', 'HEAD']):
+        print('app.py\0', end='')
     elif args in (['ls-files', '--others', '--exclude-standard', '-z'],
                   ['ls-files', '--others', '--ignored', '--exclude-standard', '-z']):
         pass
     elif args == ['diff', '--name-status', '-z', 'origin/main...HEAD']:
-        sys.stdout.write('A\0app.py\0')
+        print('A\0app.py\0', end='')
+    elif args == ['diff', '--stat', 'origin/main...HEAD']:
+        print(' app.py | 1 +')
+    elif args == ['log', '--format=%s', 'origin/main..HEAD']:
+        print('scenario commit')
     elif args == ['diff', '--name-only', 'origin/main...HEAD']:
         print('app.py')
     elif args == ["fetch", "origin", "main"]:
@@ -91,18 +103,18 @@ elif tool == "git":
         target = Path(args[4])
         target.mkdir()
         (target / ".branch").write_text(args[3])
-        (target / "verify.py").write_text("from app import value\nassert value == 42, value\n")
+        (target / "verify.py").write_text("from app import value\nassert value == 42, value\nprint('1 passed')\n")
         data["heads"][str(target)] = "base"
         data["contents"][str(target)] = ""
         save()
     elif args[:3] == ["worktree", "remove", "--force"]:
         shutil.rmtree(args[3])
-    elif args == ["status", "--porcelain"]:
-        if (cwd / "app.py").read_text() != data["contents"][str(cwd)]:
+    elif args[:2] == ["status", "--porcelain"]:
+        if (cwd / "app.py").exists() and (cwd / "app.py").read_text() != data["contents"][str(cwd)]:
             print(" M app.py")
-    elif args in (["add", "-A"], ["reset", "-q", "--", "__pycache__"]):
+    elif args[:2] == ["add", "-A"] or args == ["reset", "-q", "--", "__pycache__"]:
         pass
-    elif args[:2] == ["commit", "-m"]:
+    elif args[:2] in (["commit", "-m"], ["commit", "--only"]):
         content = (cwd / "app.py").read_text()
         data["heads"][str(cwd)] = hashlib.sha1((branch() + content).encode()).hexdigest()
         data["contents"][str(cwd)] = content
@@ -111,10 +123,9 @@ elif tool == "git":
         print(branch())
     elif args == ["rev-parse", "HEAD"]:
         print(head())
-    elif args == ['log', '--format=%s', 'origin/main..HEAD']:
-        print('Implement app value')
-    elif args == ["log", "--oneline", "origin/main..HEAD"]:
-        print(head() + " scenario commit")
+    elif args[:2] == ["log", "--oneline"] and args[2].endswith('..HEAD'):
+        if args[2].removesuffix('..HEAD') != head():
+            print(head() + " scenario commit")
     elif args[:2] == ["ls-remote", "origin"]:
         remote = data["remote"].get(args[2].removeprefix("refs/heads/"))
         if remote:
@@ -157,6 +168,8 @@ elif tool == "gh":
         data["prs"][b] = n
         save()
         print(f"https://example.invalid/pull/{n}")
+    elif args[:2] == ["pr", "edit"]:
+        assert f"Closes #{args[2]}" in option("--body")
     elif args[:2] == ["pr", "view"]:
         emit({"headRefOid": data["remote"][f"lokay/{args[2]}"], "statusCheckRollup": []})
     elif args[:2] == ["pr", "edit"]:
@@ -170,8 +183,8 @@ elif tool == "gh":
         assert option("--match-head-commit") == data["remote"][f"lokay/{n}"]
         assert n not in data["merged"]
         checks = [body for issue, body in data['comments'] if issue == n]
-        assert len(checks) == 2 and '**fix** · CI: **red**' in checks[0]
-        assert '**merge** · CI: **green**' in checks[1], 'merge without green check'
+        assert len(checks) == 2 and '**fix** · CI: **no_ci** · tests: **red**' in checks[0]
+        assert '**merge** · CI: **no_ci** · tests: **green** · tested=true' in checks[1], 'merge without green check'
         assert data['contents'][str(root / f'clone-wt-{n}')] == 'value = 42\n'
         data["merged"].append(n)
         save()
@@ -184,6 +197,11 @@ else:
 requests = []
 
 def verify_rounds(rounds, sha):
+    progress = [line for line in rounds if 'Fix progress:' in line]
+    assert len(progress) == 1 and 'counts=[1]' in progress[0], rounds
+    lenses = [line for line in rounds if 'Check lens ' in line]
+    assert len(lenses) == 14, rounds
+    rounds = [line for line in rounds if 'Fix progress:' not in line and 'Check lens ' not in line]
     assert len(rounds) == 5, rounds
     assert 'Plan 1: ok' in rounds[0], rounds
     assert 'Check 1:' in rounds[1] and 'result=fix' in rounds[1] and 'ci=red' in rounds[1], rounds
@@ -323,9 +341,9 @@ for line in sys.stdin:
             assert state['sha'] == hashlib.sha1((state['branch'] + 'value = 42\n').encode()).hexdigest()
             rounds = (runs / str(issue) / "rounds.md").read_text().splitlines()
             verify_rounds(rounds, state['sha'])
-            rejects(verify_rounds, rounds[:2] + rounds[3:], state['sha'])  # omitted Fix
+            rejects(verify_rounds, [line for line in rounds if 'Fix: sha=' not in line], state['sha'])
             red_merge = list(rounds)
-            red_merge[3] = red_merge[3].replace('ci=green', 'ci=red')
+            red_merge = [line.replace('ci=green', 'ci=red') for line in red_merge]
             rejects(verify_rounds, red_merge, state['sha'])
             beat = json.loads((root / "home/.lokay/heartbeat.json").read_text())
             assert (beat["repo"], beat["issue"], beat["result"]) == ("example/darkfactory", issue, "merged"), beat
@@ -357,12 +375,12 @@ for line in sys.stdin:
         assert (runs / '1/rounds.md').read_bytes() == first_rounds
         assert (runs / '2/state.json').read_bytes() == second_state
         assert (runs / '2/rounds.md').read_bytes() == second_rounds
-        assert len(requests) == 6, requests  # Plan + one combined call per Check, twice.
+        assert len(requests) == 30, requests  # Plan + seven lenses per Check, twice.
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
             assert len(comments) == 2, comments
-            assert "**fix** · CI: **red**" in comments[0], comments
-            assert "**merge** · CI: **green**" in comments[1], comments
+            assert "**fix** · CI: **no_ci** · tests: **red**" in comments[0], comments
+            assert "**merge** · CI: **no_ci** · tests: **green** · tested=true" in comments[1], comments
         calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
         assert sum(tool == "pi" for tool, _ in calls) == 6, calls
         for issue in (1, 2):

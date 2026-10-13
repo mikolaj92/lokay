@@ -45,6 +45,8 @@ assert added["result"] == "added", added
 env = {"PATH": os.environ["PATH"], "GH_TOKEN": "secret", "GITHUB_TOKEN": "secret", "LOKAY2_PROVIDER": "omniroute", "LOKAY2_MODEL": "m", "PI_ENV": os.environ["PI_ENV"], "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "a@b.c", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "a@b.c"}
 done = build_code(wt, "plan", "title", "body", env)
 assert done["result"] == "done", done
+unchanged = build_code(wt, "re-plan", "title", "body", env, previous_head=done['artifact'])
+assert unchanged['reason'] == 'no_changes', unchanged
 dumped = Path(os.environ["PI_ENV"]).read_text()
 assert "GH_TOKEN" not in dumped and "GITHUB_TOKEN" not in dumped
 assert child_env(env).get("GH_TOKEN") is None

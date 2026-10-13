@@ -24,13 +24,21 @@ with tempfile.TemporaryDirectory() as tmp:
     (worktree / 'code.py').write_text('pass\n')
     (worktree / 'pyproject.toml').write_text('[project]\n')
     (worktree / 'uv.lock').write_text('original\n')
+    (worktree / 'tracked.log').write_text('baseline\n')
     local('add', '.')
     local('commit', '-m', 'fixture')
     local('push', 'origin', 'main')
     base = local('rev-parse', 'HEAD')
 
-    def finish(branch, title, body, dirty):
+    def finish(branch, title, body, dirty, artifacts=()):
         local('checkout', '-b', branch, base)
+        if artifacts:
+            for name in artifacts:
+                file = worktree / name
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text('junk\n')
+            local('add', '.')
+            local('commit', '-m', 'earlier artifacts')
         if dirty:
             (worktree / 'tests').mkdir(exist_ok=True)
             (worktree / 'tests' / 'new test.py').write_text('assert True\n')
@@ -46,6 +54,8 @@ with tempfile.TemporaryDirectory() as tmp:
         with ExitStack() as stack:
             stack.enter_context(patch('lokay.state.RUNS', root / branch / 'runs'))
             state.state_update('example/repo', 1, node='check', issue_title=title, issue_body=body)
+            (state.run_dir('example/repo', 1) / 'plan.md').write_text(
+                '## Pliki\ncode.py\npyproject.toml\n' + '\n'.join(artifacts) + '\n## Testy\n')
             stack.enter_context(patch('lokay.start.load_repos', return_value=[
                 {'name': 'example/repo', 'clone_path': str(worktree)}]))
             stack.enter_context(patch('lokay.start.pushed_pr', return_value=True))
@@ -55,11 +65,26 @@ with tempfile.TemporaryDirectory() as tmp:
             stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'green', 'failed': []}))
             stack.enter_context(patch('lokay.gh.check_comment', return_value={'result': 'done'}))
             stack.enter_context(patch('lokay.check.decide_batches', return_value={'next': 'ok', 'uwagi': []}))
+            stack.enter_context(patch('lokay.check.local_ci', side_effect=lambda head, *args: {
+                'result': 'green', 'sha': head, 'tested': True,
+                'tested_cwds': [str(worktree.resolve())], 'failed': [], 'notes': [], 'log': '1 passed'}))
             merge = stack.enter_context(patch('lokay.merge.merge_sha', return_value={
                 'result': 'merged', 'merge_sha': sha}))
             outcome = start._finish(picked, worktree, branch, sha, ['true'])
             saved = state.state_read('example/repo', 1)
-            if dirty and 'test' not in title:
+            if artifacts:
+                assert outcome['result'] == 'check', outcome
+                merge.assert_not_called()
+                assert saved['node'] == 'check' and saved['verdict'] is None and saved['local_ci'] is None
+                assert not any((worktree / name).exists() for name in artifacts)
+                assert local('log', '-1', '--format=%s') == 'lokay merge-guard: drop artifacts'
+                assert local('rev-parse', 'HEAD') == local('rev-parse', f'origin/{branch}')
+                assert not local('status', '--porcelain')
+                assert merge_guard(worktree, title, body) == {'removed': [], 'reset': []}
+                outcome = start._finish(picked, worktree, branch, local('rev-parse', 'HEAD'), ['true'])
+                assert outcome['result'] == 'merged', outcome
+                merge.assert_called_once()
+            elif dirty and 'test' not in title:
                 assert outcome['result'] == 'check', outcome
                 merge.assert_not_called()
                 assert saved['node'] == 'check' and saved['verdict'] is None and saved['local_ci'] is None
@@ -88,6 +113,11 @@ with tempfile.TemporaryDirectory() as tmp:
     local('commit', '-m', 'requested test')
     assert merge_guard(worktree, 'Dodaj testy', '') == {'removed': [], 'reset': []}
     assert merge_guard(worktree, '', 'Add regression coverage') == {'removed': [], 'reset': []}
+    finish('artifacts', 'Add test coverage', '', False, (
+        'tracked.log', 'nested/suite.log', '.check-local/suite.log',
+        '.check-local/validation.log', '.check-local/tmp/uv-1.lock',
+        '.check-local/bin/gh', '.check-local/ignore', 'tmp/uv-2.lock',
+        'tmp/nested/uv-3.lock', 'tmp/uv.lock', 'bin/gh', 'nested/bin/gh'))
     finish('clean', 'Fix code', '', False)
 print('merge guard: removed/reset → committed/pushed → Check; requested tests kept; clean → Merge OK')
 PY
