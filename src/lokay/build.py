@@ -78,6 +78,13 @@ def generated_cleanup(worktree: Path):
 
 def tidy_and_commit(worktree: Path, message: str, before: dict | None = None) -> tuple[list[str], list[str]]:
     """Restore incidental edits, remove untracked artifacts, commit pi's paths."""
+    merge_head = worktree / _git(worktree, ["rev-parse", "--git-path", "MERGE_HEAD"])
+    if merge_head.exists():
+        if _git(worktree, ["ls-files", "-u"]):
+            _git(worktree, ["merge", "--abort"])
+        else:
+            _git(worktree, ["commit", "--no-edit"])
+
     def names(args: list[str]) -> set[str]:
         return set(filter(None, _git(worktree, args).split("\0")))
 
@@ -244,6 +251,12 @@ def build_code(
             "artifact": str(worktree),
         }
     if not log:
+        upstream = (_git(worktree, ["for-each-ref", "--format=%(upstream:short)",
+                                   f"refs/heads/{expected_branch}"]) if expected_branch else "")
+        if upstream == f"origin/{expected_branch}":
+            _git(worktree, ["fetch", "origin", expected_branch])
+            if int(_git(worktree, ["rev-list", "--count", f"{upstream}..HEAD"])) > 0:
+                return {"result": "done", "artifact": head, "pi_response": pi_tail}
         return {
             "result": "failed",
             "reason": "no_changes",
