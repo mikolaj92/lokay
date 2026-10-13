@@ -873,7 +873,13 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                        or (len(counts) == 3 and min(counts[1:]) >= counts[0]))
             test_log = (saved.get("test_log") or "") if (saved.get("local_ci") or {}).get("sha") == head else ""
             art = run_dir(picked["repo"], picked["issue"]) / "plan.md"
-            if stalled:
+            ci = saved.get("local_ci") or {}
+            lens_kinds = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
+            can_dispute = (head == sha == verdict.get("sha") == ci.get("sha")
+                           and ci.get("result") == "green"
+                           and ci.get("ci") in ("green", "no_ci")
+                           and all(row.get("pytanie") in lens_kinds and "warstwa" not in row for row in uwagi))
+            if stalled and not can_dispute:
                 redirected = fix_to_build(picked, worktree)
                 if redirected:
                     return redirected
@@ -916,6 +922,10 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 + "\n\nPlan:\n" + (art.read_text() if art.is_file() else "")
                 + "\n\nPrevious failure:\n" + (saved.get("fix_reason") or "")
             )
+            if stalled:
+                prompt += ("\n\nThese findings repeat after previous fix attempts. "
+                           "Either make a concrete change that resolves them, or, if a finding is wrong "
+                           "or not actionable, make no commit and explain why in a '## Dispute' section.")
             from lokay.setup import prepare_dependencies
 
             prepare_dependencies(worktree, repo, int(picked["issue"]))
@@ -924,12 +934,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
                 if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
                     response = outcome.get("pi_response") or outcome.get("explanation") or ""
                     state_update(picked["repo"], picked["issue"], pi_response=response)
-                    ci = saved.get("local_ci") or {}
-                    lens_kinds = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
-                    if (head == sha == verdict.get("sha") == ci.get("sha")
-                            and ci.get("result") == "green"
-                            and ci.get("ci") in ("green", "no_ci")
-                            and all(row.get("pytanie") in lens_kinds and "warstwa" not in row for row in uwagi)):
+                    if can_dispute:
                         justification = (response.split("## Dispute", 1)[1].strip()
                                          if "## Dispute" in response else response[-2000:])
                         upheld = {}
