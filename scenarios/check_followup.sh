@@ -39,7 +39,7 @@ assert noted['replan'][0]['prompt'] == 'lens correctness widzi problem w a.py, w
 green = aggregate('abc', {'sha': 'abc', 'result': 'green'}, [noted])
 assert green['result'] == 'plan' and green['replan'] == noted['replan']
 red = aggregate('abc', {'sha': 'abc', 'result': 'red', 'failed': [{'warstwa': 'CI'}]}, [noted])
-assert red['result'] == 'plan' and red['uwagi'] == [{'warstwa': 'CI'}]
+assert red['result'] == 'fix' and red['uwagi'] == [{'warstwa': 'CI'}]
 from unittest.mock import patch
 from lokay.check import THRESHOLD
 assert THRESHOLD == .85

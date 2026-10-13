@@ -279,8 +279,11 @@ def aggregate(sha: str, ci: dict, decisions: list[dict]) -> dict:
         uwagi.extend(item.get("uwagi") or [])
     replan = [finding for item in decisions if item.get("next") == "issue" and not item.get("uwagi")
               for finding in (item.get("replan") or [{"prompt": "Check sees a problem; identify a concrete location."}])]
+    fix = bool(uwagi) or ci.get("result") == "red"
     ok = ci.get("result") == "green" and not uwagi
-    return {"result": "plan" if replan else "merge" if ok else "fix", "sha": sha, "uwagi": uwagi,
+    return {"result": "fix" if fix else "plan" if replan else "merge" if ok else "fix", "sha": sha, "uwagi": uwagi,
             "replan": replan,
             "notes": [*(ci.get("notes") or []),
-                      *(note for item in decisions for note in item.get("notes") or [])]}
+                      *(note for item in decisions for note in item.get("notes") or []),
+                      *({**item, "pytanie": item.get("pytanie", ""), "note": item["prompt"]}
+                        for item in replan if fix)]}
