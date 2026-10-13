@@ -69,3 +69,99 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     assert observe.CURRENT['last_error'] is None
 print('retry: one attempt per tick, persisted backoff, lock release and cleared heartbeat OK')
 PY
+uv run --offline python - <<'PY'
+import signal
+import subprocess
+import sys
+import tempfile
+from unittest.mock import MagicMock, call, patch
+from lokay import run
+
+clock = MagicMock(return_value=9.0)
+token = run.tick_deadline.set(10.0)
+try:
+    with patch.object(run.time, 'monotonic', clock):
+        run.check_deadline()
+        clock.return_value = 10.0
+        try:
+            run.check_deadline()
+        except run.TickExpired:
+            pass
+        else:
+            raise AssertionError('deadline boundary accepted')
+        with patch.object(run.subprocess, 'Popen') as popen:
+            try:
+                run.run_process(['fixture'])
+            except run.TickExpired:
+                pass
+            else:
+                raise AssertionError('process started at deadline')
+            popen.assert_not_called()
+
+        clock.return_value = 9.0
+        with patch.object(run.time, 'sleep', side_effect=lambda seconds: setattr(clock, 'return_value', 10.0)) as sleep:
+            try:
+                run.retry_sleep(60)
+            except run.TickExpired:
+                pass
+            else:
+                raise AssertionError('wait did not expire')
+            sleep.assert_called_once_with(1.0)
+            sleep.reset_mock()
+            try:
+                run.retry_sleep(60)
+            except run.TickExpired:
+                pass
+            else:
+                raise AssertionError('wait accepted at deadline')
+            sleep.assert_not_called()
+finally:
+    run.tick_deadline.reset(token)
+
+assert run.tick_deadline.get() is None
+with tempfile.TemporaryDirectory() as tmp:
+    for limit, expected in ((None, 3600), (7200, 3600), (0.25, 0.25)):
+        process = MagicMock(pid=123, returncode=0)
+        process.__enter__.return_value = process
+        process.communicate.return_value = ('stdout', 'stderr')
+        with patch.object(run.subprocess, 'Popen', return_value=process) as popen:
+            result = run.run_process(['fixture'], cwd=tmp, timeout=limit)
+        process.communicate.assert_called_once_with(timeout=expected)
+        assert result.stdout == 'stdout' and result.stderr == 'stderr'
+        assert popen.call_args.kwargs['start_new_session'] is True
+        process.__exit__.assert_called_once()
+
+    for limit in (0, -1, float('nan'), float('inf')):
+        with patch.object(run.subprocess, 'Popen') as popen:
+            try:
+                run.run_process(['fixture'], timeout=limit)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f'invalid timeout accepted: {limit}')
+            popen.assert_not_called()
+
+    process = MagicMock(pid=123, returncode=-signal.SIGKILL)
+    process.__enter__.return_value = process
+    process.communicate.side_effect = [subprocess.TimeoutExpired(['fixture'], 0.25), ('partial stdout', 'partial stderr')]
+    with patch.object(run.subprocess, 'Popen', return_value=process), patch.object(run.os, 'killpg') as killpg:
+        try:
+            run.run_process(['fixture'], timeout=0.25)
+        except subprocess.TimeoutExpired as error:
+            assert error.cmd == ['fixture'] and error.timeout == 0.25
+            assert error.output == 'partial stdout' and error.stderr == 'partial stderr'
+        else:
+            raise AssertionError('process timeout swallowed')
+        killpg.assert_called_once_with(123, signal.SIGKILL)
+    assert process.communicate.call_args_list == [call(timeout=0.25), call(timeout=5)]
+    process.__exit__.assert_called_once()
+
+    try:
+        run.run_process([sys.executable, '-c', 'import time; time.sleep(30)'], cwd=tmp, timeout=0.05)
+    except subprocess.TimeoutExpired:
+        pass
+    else:
+        raise AssertionError('real process timeout swallowed')
+
+print('tick primitives: boundary=2; waits=2; caps=3; invalid=4; cleanup=1; real_timeout=1')
+PY
