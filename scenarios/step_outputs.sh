@@ -82,3 +82,176 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     assert observe.CURRENT['last_error'] is None
 print('retry: one attempt per tick, persisted backoff, lock release and cleared heartbeat OK')
 PY
+uv run --offline python - <<'PY'
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from unittest.mock import MagicMock, call, patch
+from lokay import run
+
+clock = MagicMock(return_value=9.0)
+token = run.tick_deadline.set(10.0)
+try:
+    with patch.object(run.time, 'monotonic', clock):
+        run.check_deadline()
+        clock.return_value = 10.0
+        try:
+            run.check_deadline()
+        except run.TickExpired:
+            pass
+        else:
+            raise AssertionError('deadline boundary accepted')
+        with patch.object(run.subprocess, 'Popen') as popen:
+            try:
+                run.run_process(['fixture'])
+            except run.TickExpired:
+                pass
+            else:
+                raise AssertionError('process started at deadline')
+            popen.assert_not_called()
+
+        clock.return_value = 9.0
+        for operation, effective in ((30, 1), (0.25, 0.25), (1, 1)):
+            process = MagicMock(pid=123, returncode=0)
+            process.__enter__.return_value = process
+            process.communicate.return_value = ('stdout', 'stderr')
+            with patch.object(run.subprocess, 'Popen', return_value=process):
+                run.run_process(['fixture'], timeout=operation)
+            process.communicate.assert_called_once_with(timeout=effective)
+            process.reset_mock()
+            # Starting the process also consumes the tick budget.
+            with patch.object(run.subprocess, 'Popen', return_value=process), \
+                 patch.object(run.time, 'monotonic', side_effect=[9.0, 9.5]):
+                run.run_process(['fixture'], timeout=operation)
+            process.communicate.assert_called_once_with(timeout=min(effective, 0.5))
+            for drain_timeout in (False, True):
+                for vanished in (False, True):
+                    process.reset_mock()
+                    process.returncode = None if drain_timeout else -signal.SIGKILL
+                    process.communicate.side_effect = [
+                        subprocess.TimeoutExpired(['fixture'], effective, output='early'),
+                        subprocess.TimeoutExpired(['fixture'], 5, output='partial stdout', stderr='partial stderr')
+                        if drain_timeout else ('partial stdout', 'partial stderr')]
+                    with patch.object(run.subprocess, 'Popen', return_value=process), \
+                         patch.object(run.os, 'killpg', side_effect=ProcessLookupError if vanished else None) as killpg, \
+                         patch.object(run.time, 'monotonic', side_effect=[9.0, 9.0, 9.0, 9.0, 14.0]):
+                        try:
+                            run.run_process(['fixture'], timeout=operation)
+                        except run.TickExpired:
+                            assert effective == 1, 'operation timeout became tick expiry'
+                        except subprocess.TimeoutExpired as error:
+                            assert effective == 0.25, 'tick expiry became operation timeout'
+                            assert error.timeout == operation
+                            assert error.output == 'partial stdout' and error.stderr == 'partial stderr'
+                        else:
+                            raise AssertionError('timeout swallowed')
+                        killpg.assert_called_once_with(123, signal.SIGKILL)
+                    assert process.communicate.call_args_list == [call(timeout=effective), call(timeout=5)]
+                    if drain_timeout:
+                        process.wait.assert_called_once_with(timeout=0)
+                    else:
+                        process.wait.assert_not_called()
+            process.communicate.side_effect = None
+        with patch.object(run.time, 'sleep', side_effect=lambda seconds: setattr(clock, 'return_value', 10.0)) as sleep:
+            try:
+                run.retry_sleep(60)
+            except run.TickExpired:
+                pass
+            else:
+                raise AssertionError('wait did not expire')
+            sleep.assert_called_once_with(1.0)
+            sleep.reset_mock()
+            try:
+                run.retry_sleep(60)
+            except run.TickExpired:
+                pass
+            else:
+                raise AssertionError('wait accepted at deadline')
+            sleep.assert_not_called()
+finally:
+    run.tick_deadline.reset(token)
+
+assert run.tick_deadline.get() is None
+with tempfile.TemporaryDirectory() as tmp:
+    for limit, expected in ((None, 3600), (7200, 3600), (0.25, 0.25)):
+        process = MagicMock(pid=123, returncode=0)
+        process.__enter__.return_value = process
+        process.communicate.return_value = ('stdout', 'stderr')
+        with patch.object(run.subprocess, 'Popen', return_value=process) as popen:
+            result = run.run_process(['fixture'], cwd=tmp, timeout=limit)
+        process.communicate.assert_called_once_with(timeout=expected)
+        assert result.stdout == 'stdout' and result.stderr == 'stderr'
+        assert popen.call_args.kwargs['start_new_session'] is True
+        process.wait.assert_not_called()
+
+    for limit in (0, -1, float('nan'), float('inf')):
+        with patch.object(run.subprocess, 'Popen') as popen:
+            try:
+                run.run_process(['fixture'], timeout=limit)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError(f'invalid timeout accepted: {limit}')
+            popen.assert_not_called()
+
+    process = MagicMock(pid=123, returncode=-signal.SIGKILL)
+    process.__enter__.return_value = process
+    process.communicate.side_effect = [subprocess.TimeoutExpired(['fixture'], 0.25), ('partial stdout', 'partial stderr')]
+    with patch.object(run.subprocess, 'Popen', return_value=process), patch.object(run.os, 'killpg') as killpg:
+        try:
+            run.run_process(['fixture'], timeout=0.25)
+        except subprocess.TimeoutExpired as error:
+            assert error.cmd == ['fixture'] and error.timeout == 0.25
+            assert error.output == 'partial stdout' and error.stderr == 'partial stderr'
+        else:
+            raise AssertionError('process timeout swallowed')
+        killpg.assert_called_once_with(123, signal.SIGKILL)
+    assert process.communicate.call_args_list[0] == call(timeout=0.25)
+    assert len(process.communicate.call_args_list) == 2
+    assert 0 < process.communicate.call_args_list[1].kwargs['timeout'] <= 5
+    process.wait.assert_not_called()
+
+    argv = [sys.executable, '-c',
+            'import sys, time; print("ready", flush=True); '
+            'print("waiting", file=sys.stderr, flush=True); time.sleep(30)']
+    try:
+        run.run_process(argv, cwd=tmp, timeout=0.05)
+    except subprocess.TimeoutExpired as error:
+        assert error.cmd == argv and error.timeout == 0.05
+        assert error.output == 'ready\n' and error.stderr == 'waiting\n'
+    else:
+        raise AssertionError('real process timeout swallowed')
+
+# A real child inherits the process group and must not write after expiry.
+with tempfile.TemporaryDirectory() as tmp:
+    marker = Path(tmp) / 'late'
+    pids = Path(tmp) / 'pids'
+    child = 'import time; from pathlib import Path; time.sleep(2); Path(' + repr(str(marker)) + ').touch()'
+    parent = ('import os, subprocess, sys, time; from pathlib import Path; '
+              'p = subprocess.Popen([sys.executable, "-c", ' + repr(child) + ']); '
+              'Path(' + repr(str(pids)) + ').write_text(f"{os.getpid()} {p.pid}"); time.sleep(30)')
+    started = time.monotonic()
+    token = run.tick_deadline.set(started + 0.75)
+    try:
+        try:
+            run.run_process([sys.executable, '-c', parent], timeout=30)
+        except run.TickExpired:
+            pass
+        else:
+            raise AssertionError('real tick timeout swallowed')
+    finally:
+        run.tick_deadline.reset(token)
+    assert time.monotonic() - started < 12, 'cleanup exceeded tolerance'
+    parent_pid, child_pid = map(int, pids.read_text().split())
+    # An orphan may briefly remain a zombie; it cannot run or write the marker.
+    for pid in (parent_pid, child_pid):
+        status = subprocess.run(['ps', '-o', 'stat=', '-p', str(pid)], capture_output=True, text=True).stdout.strip()
+        assert not status or status.startswith('Z'), (pid, status)
+    time.sleep(2)
+    assert not marker.exists(), 'child survived tick expiry'
+
+print('tick primitives: boundary=2; waits=2; caps=3; invalid=4; cleanup=1; real_timeout=1; real_tick_group=1')
+PY

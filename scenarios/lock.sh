@@ -14,7 +14,7 @@ from lokay.lock import acquire, release
 
 first = acquire("mikolaj92", "mikolaj92/lokay-sandbox")
 assert first["result"] == "held", first
-kid_out = Path("/tmp/lokay-lock-kid")
+kid_out = Path(os.environ['HOME']) / 'lokay-lock-kid'
 pid = os.fork()
 if pid == 0:
     second = acquire("mikolaj92", "mikolaj92/lokay-sandbox")

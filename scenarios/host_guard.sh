@@ -54,5 +54,16 @@ assert committed['changed']
 assert subprocess.check_output(['git', '-C', str(host), 'rev-parse', 'HEAD']) == head
 assert (host / 'tracked').read_text() == 'base\n'
 assert not (host / 'new').exists()
-print('host_guard: restored tracked, new files, dirty baseline, exception, and HEAD')
+# Git pathspec metacharacters in a filename must not select another file.
+(host / '[ab]').write_text('literal baseline\n')
+(host / 'a').write_text('tracked baseline\n')
+subprocess.run(['git', '-C', str(host), 'add', '.'], check=True)
+subprocess.run(['git', '-C', str(host), 'commit', '-qm', 'literal filenames'], check=True)
+(host / 'a').write_text('earlier dirty edit\n')
+with guard([host]) as literal:
+    (host / '[ab]').write_text('changed\n')
+assert literal['changed']
+assert (host / '[ab]').read_text() == 'literal baseline\n'
+assert (host / 'a').read_text() == 'earlier dirty edit\n'
+print('host_guard: restored tracked, new files, dirty baseline, exception, HEAD and literal filenames')
 PY

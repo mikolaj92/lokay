@@ -176,6 +176,48 @@ with tempfile.TemporaryDirectory() as tmp:
             args = merge.call_args.args
             assert args[:3] == (repo, 12, 'new') and args[3]['sha'] == 'new', args
 
+        # Fix starts before the deadline; publication waits for the next tick.
+        from lokay.run import tick_deadline
+        reset(node='fix', sha='new', pr=12, verdict=finding)
+        code.reset_mock(); publish.reset_mock(); merge.reset_mock()
+        clock = [9.0]
+        token = tick_deadline.set(10.0)
+        try:
+            with patch('lokay.run.time.monotonic', side_effect=lambda: clock[0]), \
+                 patch('lokay.fix.fix_code', side_effect=lambda *a, **kw:
+                       (clock.__setitem__(0, 10.0) or {'result': 'done'})) as bounded_code:
+                result = start.resume(picked)
+                assert result == {'result': 'pending', 'reason': 'tick budget exhausted'}, result
+                bounded_code.assert_called_once()
+                publish.assert_not_called(); merge.assert_not_called()
+                saved = state.state_read(repo, 7)
+                assert (saved['node'], saved['sha'], saved['pr']) == ('fix', 'new', 12), saved
+                assert saved['verdict'] == finding and saved['failures'] == 0, saved
+                # At the exact boundary even the initial PR lookup must not start.
+                remote.reset_mock()
+                assert start.resume(picked)['result'] == 'pending'
+                remote.assert_not_called()
+                clock[0] = 9.0
+                aggregate.side_effect = [green]
+                bounded_code.side_effect = None
+                bounded_code.return_value = {'result': 'done'}
+                assert start.resume(picked)['result'] == 'merged'
+                assert bounded_code.call_count == 2
+                merge.assert_called_once()
+        finally:
+            tick_deadline.reset(token)
+
+        # An unknown merge failure ends this tick after one attempt, without sleep.
+        reset(node='check', sha='new', pr=12)
+        aggregate.side_effect = [green]
+        merge.reset_mock()
+        with patch('lokay.merge.merge_sha', side_effect=RuntimeError('head match service unavailable')) as unknown:
+            result = start.resume(picked)
+            assert result['result'] == 'failed' and 'head match' in result['reason'], result
+            unknown.assert_called_once()
+        saved = state.state_read(repo, 7)
+        assert saved['node'] == 'merge' and saved['sha'] == 'new' and saved['pr'] == 12, saved
+
         # Repeated findings return through Plan instead of imposing a Fix cap.
         reset(node='check', issue_title='title', issue_body='body')
         aggregate.side_effect = [
@@ -238,8 +280,12 @@ with tempfile.TemporaryDirectory() as tmp:
 
         # main owns a real lock through Check, Fix and Merge, including failures.
         from lokay.lock import acquire, release as real_release
-        for failure_at in (None, 'check', 'fix', 'merge'):
-            reset(node='check')
+        for failure_at in (None, 'check', 'fix', 'merge', 'tick_fix'):
+            if failure_at == 'tick_fix':
+                reset(node='fix', sha='new', pr=12, verdict=finding)
+            else:
+                reset(node='check', sha='new', pr=12)
+            publish.reset_mock(); merge.reset_mock()
             held = acquire('example', repo)
             assert held['result'] == 'held'
             active = {**picked, 'held': held}
@@ -254,6 +300,9 @@ with tempfile.TemporaryDirectory() as tmp:
                 return finding if check_calls[0] == 1 else green
             def fixed(*args, **kwargs):
                 busy()
+                if failure_at == 'tick_fix':
+                    from lokay.run import TickExpired
+                    raise TickExpired()
                 if failure_at == 'fix':
                     raise RuntimeError('Fix exception')
                 return {'result': 'done'}
@@ -274,11 +323,31 @@ with tempfile.TemporaryDirectory() as tmp:
                     raise AssertionError('a merge exception must end the run, not retry forever')
                 else:
                     result = json.loads(out.getvalue().splitlines()[-1])
-                    assert result['result'] == ('merged' if failure_at is None else 'failed'), result
+                    expected = 'merged' if failure_at is None else 'pending' if failure_at == 'tick_fix' else 'failed'
+                    assert result['result'] == expected, result
+                    if failure_at == 'tick_fix':
+                        saved = state.state_read(repo, 7)
+                        assert (active['repo'], active['issue'], saved['node'], saved['pr'], saved['sha']) == (repo, 7, 'fix', 12, 'new'), saved
+                        assert saved['verdict'] == finding and saved['failures'] == 0, saved
+                        assert not saved.get('retry_at'), saved
+                        publish.assert_not_called(); merge.assert_not_called()
                 release.assert_called_once_with(held)
             free = acquire('example', repo)
             assert free['result'] == 'held'
             real_release(free)
+            if failure_at == 'tick_fix':
+                code.side_effect = None
+                aggregate.side_effect = [green]
+                merge.side_effect = None
+                token = tick_deadline.set(start.time.monotonic() + 30)
+                try:
+                    assert start.resume(picked)['result'] == 'merged'
+                    # Fix publishes, then Check verifies/publishes its starting head.
+                    assert publish.call_count == 2
+                    aggregate.assert_called()
+                    merge.assert_called_once()
+                finally:
+                    tick_deadline.reset(token)
         code.side_effect = None; merge.side_effect = None
 
         # Each failing Fix node runs once; result and exception are separate cases.
@@ -301,7 +370,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 merge.assert_not_called()
                 assert saved['result'] == 'failed' and saved['failures'] == 1, saved
                 assert saved['retry_at'] == 0
-                assert saved['node'] == ('plan' if node == 'fix_code' else 'check'), saved
+                assert saved['node'] == ('plan' if node == 'fix_code' else 'fix'), saved
                 if node == 'fix_code':
                     assert saved['plan_phase'] == 'write' and saved['plan_evaluations'] == 0
                     assert saved['plan_accepted_sha'] is None

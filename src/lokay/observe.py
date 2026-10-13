@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from threading import Event, Thread
+from tempfile import NamedTemporaryFile
 import sys
 
 from lokay.gh import _gh
@@ -74,9 +75,16 @@ def heartbeat(result: str | None = None, **fields) -> dict:
     previous.update(time=datetime.now(timezone.utc).isoformat(),
                     version=os.environ.get("LOKAY_VERSION", installed))
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(previous) + "\n")
-    temporary.replace(path)
+    # Concurrent pulses must not share the file used for atomic replacement.
+    with NamedTemporaryFile(mode="w", dir=path.parent, prefix="heartbeat.",
+                            suffix=".tmp", delete=False) as file:
+        temporary = Path(file.name)
+        try:
+            file.write(json.dumps(previous) + "\n")
+            file.close()
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
     return previous
 
 

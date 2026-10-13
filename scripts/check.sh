@@ -1,12 +1,36 @@
 #!/bin/sh
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+# Never let an inherited uv environment select another checkout.
+export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
+# Prepare this checkout before isolating the scenario environment.
+env -u UV_NO_SYNC -u UV_OFFLINE uv sync --frozen
+# Ignore inherited PYTHONPATH and user site packages during the import gate.
+.venv/bin/python -I - <<'PY'
+from pathlib import Path
+
+import lokay
+import yaml
+
+expected = (Path.cwd() / 'src/lokay').resolve()
+if lokay.__file__ is None or Path(lokay.__file__).resolve().parent != expected:
+    raise SystemExit(f'wrong lokay location: {lokay.__file__}; expected {expected}')
+PY
+# Keep host state and tool caches out of the local proof.
+mkdir -p .uv
+sandbox=$(mktemp -d "$PWD/.uv/check.XXXXXX")
+trap 'rm -rf "$sandbox"' EXIT HUP INT TERM
+mkdir -p "$sandbox/home" "$sandbox/tmp" "$sandbox/cache" "$sandbox/bin"
+printf '%s\n' '#!/bin/sh' 'echo "unexpected external gh (blocked by local check)" >&2' 'exit 1' > "$sandbox/bin/gh"
+chmod +x "$sandbox/bin/gh"
+export HOME="$sandbox/home" TMPDIR="$sandbox/tmp" UV_CACHE_DIR="$sandbox/cache"
+# Use the prepared environment; the isolated cache cannot support a sync.
+export UV_NO_SYNC=1 UV_PYTHON_DOWNLOADS=never UV_OFFLINE=1 PATH="$sandbox/bin:$PATH"
 # Explicit inventory: a missing scenario is a failure, not a shorter green suite.
 scenarios='
-build check ci ci_not_run docs_only_fix no_new_tests setup_deps darkfactory darkfactory_canary decision_contract fix host_down host_guard
-issue_flow lock merge merge_sha no_legacy_imports observability outside_worktree plan
-push_guard safety start_pick start_plan start_resume step_outputs suite worktree
-check_followup decision_batches fair_pick fix_to_build merge_guard resume_push stale_ci tidy
+build check check_followup ci ci_not_run docs_only_fix no_new_tests setup_deps darkfactory darkfactory_canary decision_batches decision_contract fair_pick fix fix_to_build host_down host_guard
+issue_flow lock merge merge_guard merge_sha no_legacy_imports observability outside_worktree plan
+push_guard resume_push safety stale_ci start_pick start_plan start_resume step_outputs suite tidy worktree
 '
 required=0
 for name in $scenarios; do

@@ -61,7 +61,14 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / 'scripts/check.sh').write_text(source)
     (root / 'scenarios').mkdir()
     log = root / 'executed'
-    env = dict(os.environ, SUITE_LOG=str(log))
+    # This fixture checks inventory execution, not environment preparation.
+    (root / 'bin').mkdir()
+    (root / '.venv/bin').mkdir(parents=True)
+    for tool in (root / 'bin/uv', root / '.venv/bin/python'):
+        tool.write_text('#!/bin/sh\nexit 0\n')
+        tool.chmod(0o755)
+    env = dict(os.environ, SUITE_LOG=str(log),
+               PATH=f'{root / "bin"}:{os.environ["PATH"]}')
     for name in names:
         (root / f'scenarios/{name}.sh').write_text(f'echo {name} >> "$SUITE_LOG"\n')
     def run():

@@ -99,7 +99,9 @@ def push(repo: Path, branch: str, expected_remote_sha: str | None, attempts: int
         locked = any(mark in last for mark in REF_LOCK)
         if not locked or attempt == attempts:
             return {"result": "failed", "error": (err or out).strip()}
-        time.sleep(0.2 * attempt)
+        from lokay.run import retry_sleep
+
+        retry_sleep(0.2 * attempt)
     return {"result": "failed", "error": last}
 
 

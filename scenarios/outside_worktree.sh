@@ -117,6 +117,7 @@ chmod +x "$tmp/gh"
 export PATH="$tmp:$PATH"
 uv run python - <<'PY'
 import os
+from unittest.mock import patch
 from lokay.start import pick, needs_help
 
 env = {
@@ -129,7 +130,9 @@ env = {
     "LOKAY2_DECISION_MODEL": "m",
 }
 needs_help({"repo": "mikolaj92/lokay-sandbox", "issue": 1}, "commit is outside the issue worktree")
-got = pick(env)
+with patch('lokay.start.load_repos', return_value=[{'name': 'mikolaj92/lokay-sandbox'}]), \
+     patch('lokay.start.probes', return_value={'fixture': 'ok'}):
+    got = pick(env)
 assert got.get("issue") == 1, got
 assert got.get("repo") == "mikolaj92/lokay-sandbox", got
 from lokay.lock import release

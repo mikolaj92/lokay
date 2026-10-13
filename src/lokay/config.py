@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 
@@ -7,6 +8,19 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 STATE = Path.home() / ".lokay"
+
+
+def tick_budget(env: dict[str, str] | None = None) -> float:
+    value = (os.environ if env is None else env).get("LOKAY_TICK_BUDGET", "2700")
+    if not isinstance(value, str):
+        raise ValueError("LOKAY_TICK_BUDGET must be finite positive seconds")
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise ValueError("LOKAY_TICK_BUDGET must be finite positive seconds") from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError("LOKAY_TICK_BUDGET must be finite positive seconds")
+    return seconds
 
 
 def load_repos(path: Path | None = None) -> list[dict]:

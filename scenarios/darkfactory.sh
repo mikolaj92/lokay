@@ -47,7 +47,7 @@ def branch():
     return (cwd / ".branch").read_text()
 
 # Host guard snapshots use sets internally; their read order is not a graph operation.
-if not (tool == 'git' and args and args[0] == '-C'):
+if not (tool == 'git' and args and args[0] in ('-C', '--literal-pathspecs')):
     with (root / "calls.jsonl").open("a") as log:
         log.write(json.dumps([tool, args]) + "\n")
 
@@ -63,6 +63,8 @@ if tool == "pi":
         value = 42 if "\n\nUwagi:\n" in prompt else 0
         (cwd / "app.py").write_text(f"value = {value}\n")
 elif tool == "git":
+    if args and args[0] == '--literal-pathspecs':
+        args = args[1:]
     if args and args[0] == '-C':
         if Path(args[1]) == root / 'clone':
             if args[2:] == ['rev-parse', 'HEAD']:
@@ -136,6 +138,8 @@ elif tool == "git":
         pass
     elif args == ["merge", "--no-edit", "origin/main"]:
         pass
+    elif args == ['diff', '--stat', 'origin/main...HEAD']:
+        print(' app.py | 1 +\n 1 file changed, 1 insertion(+)')
     elif args == ["diff", "origin/main...HEAD"]:
         print("diff --git a/app.py b/app.py\n+++ b/app.py\n@@ -0,0 +1 @@\n+"
               + (cwd / "app.py").read_text().strip())
@@ -168,6 +172,9 @@ elif tool == "gh":
         assert f"Closes #{args[2]}" in option("--body")
     elif args[:2] == ["pr", "view"]:
         emit({"headRefOid": data["remote"][f"lokay/{args[2]}"], "statusCheckRollup": []})
+    elif args[:2] == ["pr", "edit"]:
+        assert f"Closes #{args[2]}" in option("--body")
+        assert int(args[2]) in data["prs"].values()
     elif args[:2] == ["pr", "comment"]:
         data["comments"].append([int(args[2]), option("--body")])
         save()
@@ -203,7 +210,7 @@ def verify_rounds(rounds, sha):
     assert f'Merge: sha={sha}' in rounds[4], rounds
 
 def verify_runs(runs):
-    assert sorted(path.name for path in runs.iterdir()) == ['1', '2'], 'missing second tick'
+    assert sorted(path.name for path in runs.iterdir() if path.is_dir()) == ['1', '2'], 'missing second tick'
     for issue in (1, 2):
         state = json.loads((runs / str(issue) / 'state.json').read_text())
         assert state['result'] == 'merged' and state['pr'] == issue, state

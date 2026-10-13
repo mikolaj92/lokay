@@ -6,10 +6,21 @@ import json
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from lokay.check import aggregate, local_ci
 from lokay.gh import pr_checks
+from lokay.config import tick_budget
+
+assert tick_budget({}) == 2700
+assert tick_budget({'LOKAY_TICK_BUDGET': '0.25'}) == 0.25
+for value in ('', '0', '-1', 'text', 'nan', 'inf', '-inf', '1e999', None, True, 30):
+    try:
+        tick_budget({'LOKAY_TICK_BUDGET': value})
+    except ValueError as exc:
+        assert str(exc) == 'LOKAY_TICK_BUDGET must be finite positive seconds'
+    else:
+        raise AssertionError(f'invalid tick budget accepted: {value!r}')
 
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
@@ -115,6 +126,16 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         {'result': 'pushed', 'sha': head['sha']}))
     stack.enter_context(patch('lokay.gh.pr_checks', return_value={'result': 'pending'}))
     comment = stack.enter_context(patch('lokay.gh.check_comment'))
+    def issue_view(args):
+        assert args == ['issue', 'view', '1', '--repo', 'example/resume', '--json', 'title,body'], args
+        return 0, json.dumps({'title': 'Fix code', 'body': ''}), ''
+    issue = Mock(side_effect=issue_view)
+    # start also holds an imported reference; keep both API entry points isolated.
+    stack.enter_context(patch('lokay.gh._gh', issue))
+    stack.enter_context(patch('lokay.start._gh', issue))
+    # Guard behavior has its own real-Git scenario; this fixture has no Git repository.
+    guard = stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={
+        'removed': [], 'reset': []}))
     package_diff = False
     package = worktree / 'packages' / 'argus'
     package.mkdir(parents=True)
@@ -169,7 +190,6 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         'result': 'merged', 'merge_sha': 'merged'}))
     fix = stack.enter_context(patch('lokay.fix.fix_code', return_value={'result': 'failed'}))
     stack.enter_context(patch('lokay.start._retry', side_effect=lambda picked, node, action, *args: action()))
-    stack.enter_context(patch('lokay.merge_guard.merge_guard', return_value={'removed': [], 'reset': []}))
     kinds = 'correctness alignment architecture security production scope tests'
     from lokay.check import lens
     for choice, exit_code, package_diff in (('ok', 0, False), ('issue', 0, False),
@@ -213,6 +233,8 @@ with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
         elif exit_code is None or (exit_code == 0 and not package_diff):
             assert result['result'] == 'merged', result
             merge.assert_called_once()
+            guard.assert_called()
+            issue.assert_not_called()  # Saved issue metadata must not be fetched again.
             fix.assert_not_called()
             saved = state.state_read(picked['repo'], 1)
             assert saved['ci'] == 'no_ci' and saved['tested'] == (exit_code == 0), saved
