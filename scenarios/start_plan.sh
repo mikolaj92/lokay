@@ -43,6 +43,9 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             artifact.write_text('missing sections' if invalid else
                                 '\n'.join(plan.SECTIONS) + f'\nversion {len(prompts)}')
             events.append(('write', artifact.read_text()))
+            if budget == 'write' and len(prompts) == 1:
+                from lokay.run import TickExpired
+                raise TickExpired()
             return {'result': 'done'}
         iterator = iter(choices)
         def decide(request):
@@ -80,13 +83,30 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             from lokay.run import tick_deadline
             clock = [9.0]
             stack.enter_context(patch('lokay.run.time.monotonic', side_effect=lambda: clock[0]))
-            stack.enter_context(patch('lokay.setup.prepare_dependencies',
-                                      side_effect=lambda *a: clock.__setitem__(0, 10.0)))
+            if budget == 'revise':
+                stack.enter_context(patch('lokay.run.time.sleep',
+                                          side_effect=lambda *a: clock.__setitem__(0, 10.0)))
+            elif budget is True:
+                stack.enter_context(patch('lokay.setup.prepare_dependencies',
+                                          side_effect=lambda *a: clock.__setitem__(0, 10.0)))
             token = tick_deadline.set(10.0)
             try:
                 outcome = start.advance(picked)
                 assert outcome['result'] == 'pending', outcome
                 assert not any(kind == 'build' for kind, _ in events), events
+                if budget in ('write', 'revise'):
+                    assert saved['node'] == 'plan' and saved['plan_phase'] == 'write', saved
+                    assert saved['plan_prompt'] and not saved.get('plan_accepted_sha'), saved
+                    assert saved.get('plan_rounds', 0) == int(budget == 'revise'), saved
+                    if budget == 'revise':
+                        assert 'Uwagi:' in saved['plan_prompt'] and 'k_testy' in saved['plan_prompt']
+                    clock[0] = 9.0
+                    assert start.advance(picked)['result'] == 'pending'
+                    assert saved['node'] == 'check' and saved['plan_accepted_sha'], saved
+                    assert len(prompts) == 2, prompts
+                    assert [text for kind, text in events if kind == 'build'] == [art.read_text()]
+                    assert saved['plan_rounds'] == (1 if budget == 'write' else 2), saved
+                    return
                 assert saved['node'] == 'build' and saved['plan_phase'] is None, saved
                 accepted_sha = saved['plan_accepted_sha']
                 assert accepted_sha and saved['issue_title'] == 'title'
@@ -129,6 +149,8 @@ def run_case(choices, *, expected_build=0, expected_error=None, node='plan',
             assert 'k_testy' in prompts[1], prompts
         print(f'{choices}: writes={len(prompts)}; decide={len(decisions)}; build={len(builds)}; error={error}')
 
+run_case(['ok'], budget='write')
+run_case(['revise', 'ok'], budget='revise')
 run_case(['ok'], budget=True)
 for reason in ('no_changes', 'outside_worktree', 'pi_exit'):
     run_case(['ok'], expected_build=1, build_failure=reason)

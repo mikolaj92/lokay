@@ -99,6 +99,36 @@ try:
             popen.assert_not_called()
 
         clock.return_value = 9.0
+        for operation, effective in ((30, 1), (0.25, 0.25), (1, 1)):
+            process = MagicMock(pid=123, returncode=0)
+            process.__enter__.return_value = process
+            process.communicate.return_value = ('stdout', 'stderr')
+            with patch.object(run.subprocess, 'Popen', return_value=process):
+                run.run_process(['fixture'], timeout=operation)
+            process.communicate.assert_called_once_with(timeout=effective)
+            for drain_timeout in (False, True):
+                for vanished in (False, True):
+                    process.reset_mock()
+                    process.communicate.side_effect = [
+                        subprocess.TimeoutExpired(['fixture'], effective, output='early'),
+                        subprocess.TimeoutExpired(['fixture'], 5, output='partial stdout', stderr='partial stderr')
+                        if drain_timeout else ('partial stdout', 'partial stderr')]
+                    with patch.object(run.subprocess, 'Popen', return_value=process), \
+                         patch.object(run.os, 'killpg', side_effect=ProcessLookupError if vanished else None) as killpg:
+                        try:
+                            run.run_process(['fixture'], timeout=operation)
+                        except run.TickExpired:
+                            assert effective == 1, 'operation timeout became tick expiry'
+                        except subprocess.TimeoutExpired as error:
+                            assert effective == 0.25, 'tick expiry became operation timeout'
+                            assert error.timeout == operation
+                            assert error.output == 'partial stdout' and error.stderr == 'partial stderr'
+                        else:
+                            raise AssertionError('timeout swallowed')
+                        killpg.assert_called_once_with(123, signal.SIGKILL)
+                    assert process.communicate.call_args_list == [call(timeout=effective), call(timeout=5)]
+                    assert not any(c.kwargs.get('timeout') is None for c in process.wait.call_args_list)
+            process.communicate.side_effect = None
         with patch.object(run.time, 'sleep', side_effect=lambda seconds: setattr(clock, 'return_value', 10.0)) as sleep:
             try:
                 run.retry_sleep(60)
@@ -129,7 +159,7 @@ with tempfile.TemporaryDirectory() as tmp:
         process.communicate.assert_called_once_with(timeout=expected)
         assert result.stdout == 'stdout' and result.stderr == 'stderr'
         assert popen.call_args.kwargs['start_new_session'] is True
-        process.__exit__.assert_called_once()
+        process.wait.assert_called_once_with(timeout=5)
 
     for limit in (0, -1, float('nan'), float('inf')):
         with patch.object(run.subprocess, 'Popen') as popen:
@@ -154,7 +184,7 @@ with tempfile.TemporaryDirectory() as tmp:
             raise AssertionError('process timeout swallowed')
         killpg.assert_called_once_with(123, signal.SIGKILL)
     assert process.communicate.call_args_list == [call(timeout=0.25), call(timeout=5)]
-    process.__exit__.assert_called_once()
+    process.wait.assert_called_once_with(timeout=5)
 
     argv = [sys.executable, '-c',
             'import sys, time; print("ready", flush=True); '

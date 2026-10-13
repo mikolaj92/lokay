@@ -37,13 +37,18 @@ def run_process(
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    check_deadline()
     # Even callers without a timeout cannot hold a tick indefinitely.
     timeout = 3600 if timeout is None else timeout
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("process timeout must be finite and positive")
     timeout = min(timeout, 3600)
-    with subprocess.Popen(
+    deadline = tick_deadline.get()
+    remaining = None if deadline is None else deadline - time.monotonic()
+    if remaining is not None and remaining <= 0:
+        raise TickExpired()
+    tick_limited = remaining is not None and remaining <= timeout
+    effective_timeout = timeout if remaining is None else min(timeout, remaining)
+    process = subprocess.Popen(
         list(argv),
         cwd=cwd,
         env=None if env is None else dict(env),
@@ -52,11 +57,30 @@ def run_process(
         stderr=subprocess.PIPE,
         text=True,
         start_new_session=True,
-    ) as process:
+    )
+    try:
         try:
-            stdout, stderr = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            stdout, stderr = process.communicate(timeout=5)
-            raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr)
+            stdout, stderr = process.communicate(timeout=effective_timeout)
+        except subprocess.TimeoutExpired as error:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                stdout, stderr = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired as drain_error:
+                stdout = drain_error.output if drain_error.output is not None else error.output
+                stderr = drain_error.stderr if drain_error.stderr is not None else error.stderr
+            if tick_limited:
+                raise TickExpired() from None
+            raise subprocess.TimeoutExpired(list(argv), timeout, output=stdout, stderr=stderr) from None
         return subprocess.CompletedProcess(list(argv), process.returncode or 0, stdout, stderr)
+    finally:
+        # Popen.__exit__ waits without a limit, even if draining pipes timed out.
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
