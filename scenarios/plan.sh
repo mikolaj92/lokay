@@ -59,19 +59,21 @@ assert failed["result"] == "failed"
 before = art.read_text()
 plan_check(wire, "m")
 assert art.read_text() == before
-# THRESHOLD is currently unused: preserve verdict's actual boundary (0.5),
-# but revise never passes, even with positive criteria.
-for p in (0.849999, 0.85, 0.850001, 0.5):
-    boundary = json.loads(json.dumps(low))
-    boundary['answers']['k_testy'] = {
-        'choice': 'true', 'probabilities': {'true': p, 'false': 1 - p}}
-    assert plan_check(boundary, 'm')['next'] == 'revise', p
-    boundary['answers']['next'] = wire['answers']['next']
-    assert plan_check(boundary, 'm')['next'] == 'ok', p
-boundary['answers']['k_testy'] = low['answers']['k_testy']
-assert plan_check(boundary, 'm')['next'] == 'revise'
+# Only clear false criteria block; uncertain criteria are non-blocking notes.
+for p in (0.349999, 0.35, 0.350001, 0.39, 0.499999, 0.5, 0.85):
+    for next_answer in (low['answers']['next'], wire['answers']['next']):
+        boundary = json.loads(json.dumps(wire))
+        boundary['answers']['next'] = next_answer
+        boundary['answers']['k_testy'] = {
+            'choice': 'true' if p >= 0.5 else 'false',
+            'probabilities': {'true': p, 'false': 1 - p}}
+        result = plan_check(boundary, 'm')
+        finding = {'kryterium': 'k_testy', 'p': p}
+        assert result['next'] == ('revise' if p < 0.35 else 'ok'), result
+        assert result['uwagi'] == ([finding] if p < 0.35 else []), result
+        assert result['notes'] == ([finding] if 0.35 <= p < 0.5 else []), result
 assert plan_check(low, 'm')['next'] == 'revise'
-print("plan ok; probabilities below/at/above 0.85 preserve verdict semantics")
+print("plan ok; blocking below 0.35, notes below 0.5, choice alone never blocks")
 print(json.dumps(checked))
 PY
 rm -rf "$root"

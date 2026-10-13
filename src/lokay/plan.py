@@ -64,15 +64,16 @@ def plan_check(wire: dict, model: str, api: str = "tensorfold") -> dict:
 
 
 def verdict(answers: dict) -> dict:
-    choice = answers["next"]["choice"]
     confidence = answers["next"]["confidence"]
     uwagi = []
+    notes = []
     for name in CRITERIA:
         p = answers[name]["probabilities"]["true"]
-        if p < 0.5:
+        if p < 0.35:
             uwagi.append({"kryterium": name, "p": p})
-    ok = choice == "ok" and not uwagi
-    return {"next": "ok" if ok else "revise", "confidence": confidence, "uwagi": uwagi}
+        elif p < 0.5:
+            notes.append({"kryterium": name, "p": p})
+    return {"next": "revise" if uwagi else "ok", "confidence": confidence, "uwagi": uwagi, "notes": notes}
 
 
 def prompt_for(title: str, body: str | None) -> str:

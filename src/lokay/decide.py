@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Mapping
 
 EPS = 1e-5
@@ -189,6 +190,8 @@ def decide(internal: Mapping) -> dict:
     if key:
         cmd.extend(["-H", f"authorization: Bearer {key}"])
     cmd.append(base + path)
+    size = len(body.encode("utf-8"))
+    print(f"decide: request bytes={size} approx_tokens={size // 3}", file=sys.stderr)
     try:
         proc = run_process(cmd, timeout=float(timeout) + 2)
     except (OSError, subprocess.TimeoutExpired):
