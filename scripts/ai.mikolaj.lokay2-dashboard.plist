@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>ai.mikolaj.lokay2-dashboard</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>ThrottleInterval</key><integer>30</integer>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/mini-m4-0/.lokay/host/scripts/lokay-dashboard.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key><string>/Users/mini-m4-0</string>
+        <key>PATH</key><string>/Users/mini-m4-0/.local/bin:/Users/mini-m4-0/.local/share/mise/shims:/Users/mini-m4-0/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>StandardOutPath</key><string>/Users/mini-m4-0/.lokay/logs/dashboard.out.log</string>
+    <key>StandardErrorPath</key><string>/Users/mini-m4-0/.lokay/logs/dashboard.err.log</string>
+</dict>
+</plist>
