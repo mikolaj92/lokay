@@ -72,10 +72,13 @@ Run the complete local suite (no package unit tests):
 bash scripts/check.sh
 ```
 
-The check uses a temporary home, temporary directory and uv cache inside the
-checkout. uv runs offline; dependencies and the Python interpreter must already
-be installed. An unexpected GitHub CLI call fails without logging its arguments.
-Scenario fixtures replace this blocker with their own fake GitHub CLI.
+The check first prepares this checkout with `uv sync --frozen` and verifies local
+`lokay` and `yaml` imports. Initial preparation may require network access;
+an unavailable dependency fails the check. It then isolates the home, temporary
+directory and uv cache inside the checkout and runs all 37 scenarios offline,
+without syncing dependencies. An unexpected GitHub CLI call fails without
+logging its arguments. Scenario fixtures replace this blocker with their own
+fake GitHub CLI.
 
 `repos.yaml` uses the same explicit inventory in `scripts/check.sh`. Missing files
 fail before any scenario runs; a red scenario stops the check. The summary counts

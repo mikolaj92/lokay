@@ -1,6 +1,18 @@
 #!/bin/sh
 set -eu
 cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+# Prepare this checkout before isolating the scenario environment.
+env -u UV_NO_SYNC -u UV_OFFLINE uv sync --frozen
+.venv/bin/python - <<'PY'
+from pathlib import Path
+
+import lokay
+import yaml
+
+expected = (Path.cwd() / 'src/lokay').resolve()
+if lokay.__file__ is None or Path(lokay.__file__).resolve().parent != expected:
+    raise SystemExit(f'wrong lokay location: {lokay.__file__}; expected {expected}')
+PY
 # Keep host state and tool caches out of the local proof.
 mkdir -p .uv
 sandbox=$(mktemp -d "$PWD/.uv/check.XXXXXX")
@@ -9,7 +21,7 @@ mkdir -p "$sandbox/home" "$sandbox/tmp" "$sandbox/cache" "$sandbox/bin"
 printf '%s\n' '#!/bin/sh' 'echo "unexpected external gh (blocked by local check)" >&2' 'exit 1' > "$sandbox/bin/gh"
 chmod +x "$sandbox/bin/gh"
 export HOME="$sandbox/home" TMPDIR="$sandbox/tmp" UV_CACHE_DIR="$sandbox/cache"
-# Use the preinstalled environment; the isolated cache cannot support a sync.
+# Use the prepared environment; the isolated cache cannot support a sync.
 export UV_NO_SYNC=1 UV_PYTHON_DOWNLOADS=never UV_OFFLINE=1 PATH="$sandbox/bin:$PATH"
 # Explicit inventory: a missing scenario is a failure, not a shorter green suite.
 scenarios='

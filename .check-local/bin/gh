@@ -1,3 +1,0 @@
-#!/bin/sh
-printf '%s\n' 'unexpected external gh (blocked by local check)' >&2
-exit 1
