@@ -124,81 +124,100 @@ def pick(env: dict[str, str] | None = None) -> dict:
                     "last_error": saved.get("reason") or saved.get("last_error")}
         return {"result": "idle", "reason": "no_work"}
 
-    for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
-        check_deadline()
-        name = repo["name"]
-        held = acquire(name.split("/")[0], name)
-        if held["result"] != "held":
-            continue
-        chosen = None
-        try:
-            repo_attempt(name, time.time())
-            code, out, err = _gh([
-                "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
-                "--json", "number,headRefName,headRefOid",
-            ])
-            if code != 0:
-                raise RuntimeError(err.strip() or "pr list failed")
-            for row in json.loads(out or "[]"):
-                branch = row["headRefName"]
-                if branch.startswith("lokay/") and branch[6:].isdecimal():
-                    number = int(branch[6:])
-                    saved = state_read(name, number)
-                    if (only_issue is None or number == only_issue) and saved.get("retry_at", 0) > time.time():
-                        blocked.append((name, number, saved))
-            prs = [row for row in json.loads(out or "[]")
-                   if row["headRefName"].startswith("lokay/")
-                   and row["headRefName"][6:].isdecimal()
-                   and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
-            if prs:
-                ready = [row for row in prs
-                         if state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()]
-                if not ready:
-                    continue
-                pr = min(ready, key=lambda row: (
-                    state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
-                issue = int(pr["headRefName"][6:])
-                saved_node = state_read(name, issue).get("node")
-                node = saved_node if saved_node in ("plan", "build", "check", "fix", "merge") else "check"
-                state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
-                             result="running", reason=None, last_attempt=time.time())
-                chosen = {"result": "picked", "repo": name, "issue": issue,
-                          "node": node, "pr": pr["number"], "held": held}
-                return chosen
-            issues = open_issues(name)
-            issues = [
-                row for row in issues
-                if is_task(row)
-                and (only_issue is None or int(row["number"]) == only_issue)
-            ]
-            for row in issues:
-                saved = state_read(name, row["number"])
-                if saved.get("failures", 0):
-                    blocked.append((name, row["number"], saved))
-            issue = next((row for row in issues
-                          if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
-                          and open_pr_for(name, f"lokay/{row['number']}") is None), None)
-            if issue is None:
+    def choose(turn):
+        for repo in sorted(repos, key=lambda row: (repo_last_attempt(row["name"]), row["name"])):
+            check_deadline()
+            name = repo["name"]
+            held = acquire(name.split("/")[0], name)
+            if held["result"] != "held":
                 continue
-            saved = state_read(name, issue["number"])
-            branch = f"lokay/{issue['number']}"
-            chosen = {
-                "result": "picked",
-                "repo": name,
-                "issue": issue["number"],
-                "node": saved.get("node") or "plan",
-                "pr": None,
-                "held": held,
-            }
-            state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"],
-                         result="running", reason=None, last_attempt=time.time())
-        except BaseException:
             chosen = None
-            raise
-        finally:
-            if chosen is None:
-                release(held)
-        return chosen
+            try:
+                repo_attempt(name, time.time())
+                if turn == "pr":
+                    code, out, err = _gh([
+                        "pr", "list", "--repo", name, "--state", "open", "--limit", "1000000",
+                        "--json", "number,headRefName,headRefOid",
+                    ])
+                    if code != 0:
+                        raise RuntimeError(err.strip() or "pr list failed")
+                    for row in json.loads(out or "[]"):
+                        branch = row["headRefName"]
+                        if branch.startswith("lokay/") and branch[6:].isdecimal():
+                            number = int(branch[6:])
+                            saved = state_read(name, number)
+                            if (only_issue is None or number == only_issue) and saved.get("retry_at", 0) > time.time():
+                                blocked.append((name, number, saved))
+                    prs = [row for row in json.loads(out or "[]")
+                           if row["headRefName"].startswith("lokay/")
+                           and row["headRefName"][6:].isdecimal()
+                           and (only_issue is None or int(row["headRefName"][6:]) == only_issue)]
+                    ready = [row for row in prs
+                             if state_read(name, int(row["headRefName"][6:])).get("retry_at", 0) <= time.time()]
+                    if not ready:
+                        continue
+                    pr = min(ready, key=lambda row: (
+                        state_read(name, int(row["headRefName"][6:])).get("last_attempt", 0), row["number"]))
+                    issue = int(pr["headRefName"][6:])
+                    saved_node = state_read(name, issue).get("node")
+                    node = saved_node if saved_node in ("plan", "build", "check", "fix", "merge") else "check"
+                    state_update(name, issue, node=node, branch=pr["headRefName"], pr=pr["number"],
+                                 result="running", reason=None, last_attempt=time.time())
+                    chosen = {"result": "picked", "repo": name, "issue": issue,
+                              "node": node, "pr": pr["number"], "held": held}
+                    return chosen
+                issues = open_issues(name)
+                issues = [
+                    row for row in issues
+                    if is_task(row)
+                    and (only_issue is None or int(row["number"]) == only_issue)
+                ]
+                for row in issues:
+                    saved = state_read(name, row["number"])
+                    if saved.get("failures", 0):
+                        blocked.append((name, row["number"], saved))
+                issue = next((row for row in issues
+                              if state_read(name, row["number"]).get("retry_at", 0) <= time.time()
+                              and open_pr_for(name, f"lokay/{row['number']}") is None), None)
+                if issue is None:
+                    continue
+                saved = state_read(name, issue["number"])
+                branch = f"lokay/{issue['number']}"
+                chosen = {
+                    "result": "picked",
+                    "repo": name,
+                    "issue": issue["number"],
+                    "node": saved.get("node") or "plan",
+                    "pr": None,
+                    "held": held,
+                }
+                state_update(name, issue["number"], node=chosen["node"], branch=branch, pr=chosen["pr"],
+                             result="running", reason=None, last_attempt=time.time())
+            except BaseException:
+                chosen = None
+                raise
+            finally:
+                if chosen is None:
+                    release(held)
+            return chosen
+        return None
+
+    turn_file = Path.home() / ".lokay" / "pick-turn"
+    try:
+        last_turn = turn_file.read_text().strip()
+    except FileNotFoundError:
+        last_turn = None
+    turns = ("issue", "pr") if last_turn == "pr" else ("pr", "issue")
+    for turn in turns:
+        chosen = choose(turn)
+        if chosen is not None:
+            try:
+                turn_file.parent.mkdir(parents=True, exist_ok=True)
+                turn_file.write_text(turn)
+            except BaseException:
+                release(chosen["held"])
+                raise
+            return chosen
     return idle()
 
 

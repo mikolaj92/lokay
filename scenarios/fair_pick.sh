@@ -3,6 +3,7 @@ set -eu
 cd "$(dirname "$0")/.."
 uv run --offline python - <<'PY'
 import json
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -17,10 +18,13 @@ rows = {'example/first': [{'number': 1, 'headRefName': 'lokay/11'}],
 def gh(args):
     return 0, json.dumps(rows[args[args.index('--repo') + 1]]), ''
 with tempfile.TemporaryDirectory() as tmp, \
+     patch.dict(os.environ, HOME=tmp), \
      patch.object(state, 'RUNS', Path(tmp)), \
      patch('lokay.start.probes', return_value={'fixture': 'ok'}), \
      patch('lokay.start.load_repos', return_value=repos), \
      patch('lokay.start._gh', side_effect=gh), \
+     patch('lokay.start.open_issues', return_value=[{'number': 44, 'title': 'fix'}]), \
+     patch('lokay.start.open_pr_for', return_value=None), \
      patch('lokay.start.acquire', return_value={'result': 'held'}), \
      patch('lokay.start.release'):
     state.state_update('example/first', 11, last_attempt=200)
@@ -31,12 +35,22 @@ with tempfile.TemporaryDirectory() as tmp, \
     assert (got['repo'], got['pr']) == ('example/second', 20), got
     assert state.state_read('example/second', 22)['last_attempt'] >= before
     got = start.pick({})
-    assert got['pr'] == 1, got  # A busy repo cannot take consecutive ticks.
+    assert got['repo'] == 'example/first' and got['pr'] is None and got['issue'] == 44, got
+    assert (Path(tmp) / '.lokay' / 'pick-turn').read_text() == 'issue'
+    got = start.pick({})
+    assert got['pr'] == 30, got  # PR order within the least-recently attempted repo.
+    assert (Path(tmp) / '.lokay' / 'pick-turn').read_text() == 'pr'
     state.state_update('example/second', 22, last_attempt=0)
     state.state_update('example/first', 11, last_attempt=0)
     state.state_update('example/second', 33, last_attempt=0)
     for repo in repos:
         state.repo_attempt(repo['name'], 0)
+        state.state_update(repo['name'], 44, last_attempt=0)
+    got = start.pick({})
+    assert got['issue'] == 44 and got['pr'] is None, got
+    for repo in repos:
+        state.repo_attempt(repo['name'], 0)
+        state.state_update(repo['name'], 44, last_attempt=0)
     got = start.pick({})
     assert got['pr'] == 1, got  # Repo ties use name; PR ties use number.
     with patch('lokay.start.acquire', side_effect=lambda owner, repo:
@@ -45,8 +59,10 @@ with tempfile.TemporaryDirectory() as tmp, \
         assert got['repo'] == 'example/first', got
     for repo in repos:
         state.repo_attempt(repo['name'], 0)
+        state.state_update(repo['name'], 44, last_attempt=0)
         for pr in rows[repo['name']]:
             state.state_update(repo['name'], int(pr['headRefName'][6:]), last_attempt=0)
+    (Path(tmp) / '.lokay' / 'pick-turn').write_text('issue')
     with patch('lokay.start._gh', side_effect=RuntimeError('API unavailable')), \
          patch('lokay.start.release') as released:
         try:
@@ -66,6 +82,7 @@ with tempfile.TemporaryDirectory() as tmp, \
         assert state.state_read(got['repo'], 44)['last_attempt'] >= before
 # Expiry rotates a PR repository behind an issue-only repository, under real locks.
 with tempfile.TemporaryDirectory() as tmp, \
+     patch.dict(os.environ, HOME=tmp), \
      patch.object(state, 'RUNS', Path(tmp) / 'runs'), \
      patch.object(lock, 'STATE', Path(tmp) / 'locks'), \
      patch('lokay.start.probes', return_value={'fixture': 'ok'}), \
@@ -89,5 +106,5 @@ with tempfile.TemporaryDirectory() as tmp, \
         assert state.repo_last_attempt('example/first') > 0
     finally:
         lock.release(got['held'])
-print('fair_pick: global order, repo order, ties, busy locks, timestamps, PR/issue expiry rotation OK')
+print('fair_pick: alternation, repo order, PR order, ties, busy locks, timestamps, API failure, expiry rotation OK')
 PY
