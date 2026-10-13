@@ -346,6 +346,17 @@ def replan_prompt(picked: dict, reason: str, findings: list, head: str | None = 
         + "\n\nRounds:\n" + ("\n".join(rounds.read_text().splitlines()[-20:]) if rounds.is_file() else "")
         + "\n\n" + reason + "\n"
     )
+    ci = saved.get("local_ci") or {}
+    ci_failures = [row for row in (saved.get("verdict") or {}).get("uwagi", [])
+                   if row.get("warstwa") == "GitHub CI"]
+    if ci.get("result") == "red" and (not ci.get("sha") or ci["sha"] == head):
+        ci_failures = [*(ci.get("failed") or [{"log": ci.get("log") or ""}]), *ci_failures]
+    if ci_failures:
+        tail_size = 4000 // len(ci_failures)
+        prompt += "\n\nCI failures:\n" + "\n".join(
+            (str(row.get("check") or row.get("warstwa") or "CI") + "\n" + (row.get("log") or ""))[-tail_size:]
+            if tail_size else "" for row in ci_failures
+        )
     rounds_append(repo, issue, "Re-Plan prompt:\n" + prompt)
     return prompt
 
