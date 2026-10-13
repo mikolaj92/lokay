@@ -252,7 +252,10 @@ with tempfile.TemporaryDirectory() as tmp:
         # main owns a real lock through Check, Fix and Merge, including failures.
         from lokay.lock import acquire, release as real_release
         for failure_at in (None, 'check', 'fix', 'merge', 'tick_fix'):
-            reset(node='check', sha='new', pr=12)
+            if failure_at == 'tick_fix':
+                reset(node='fix', sha='new', pr=12, verdict=finding)
+            else:
+                reset(node='check', sha='new', pr=12)
             publish.reset_mock(); merge.reset_mock()
             held = acquire('example', repo)
             assert held['result'] == 'held'
@@ -310,7 +313,9 @@ with tempfile.TemporaryDirectory() as tmp:
                 token = tick_deadline.set(start.time.monotonic() + 30)
                 try:
                     assert start.resume(picked)['result'] == 'merged'
-                    publish.assert_called_once()
+                    # Fix publishes, then Check verifies/publishes its starting head.
+                    assert publish.call_count == 2
+                    aggregate.assert_called()
                     merge.assert_called_once()
                 finally:
                     tick_deadline.reset(token)

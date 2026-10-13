@@ -80,7 +80,9 @@ def run_process(
         for stream in (process.stdout, process.stderr):
             if stream is not None:
                 stream.close()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            pass
+        # communicate() already reaps the process unless pipe draining failed.
+        if process.returncode is None:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass

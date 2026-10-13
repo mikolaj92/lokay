@@ -45,11 +45,13 @@ selection. Plan, Check/Fix, Merge and process retries stop starting work at the
 deadline. The saved node, SHA, findings and Plan phase resume on the next tick;
 the tick owner releases its lock even if saving fails.
 
-A tick can exceed its budget by at most one already started bounded operation,
-plus local state/guard cleanup. Process calls are capped at 3600 seconds (pi);
-GitHub calls use 60 seconds, setup/local CI use 600 seconds. Timed-out process
-groups are killed. Retry waits stop at the deadline. This is not a hard wall-clock
-limit on filesystem operations or guard cleanup.
+Process calls use the minimum of their operation timeout, 3600 seconds and the
+remaining tick budget. GitHub calls use 60 seconds; setup/local CI use 600 seconds.
+Timed-out process groups are killed. Output draining and process reaping each
+have a five-second cleanup limit. Tick expiry saves `pending`, without failure
+backoff; an operation timeout remains an ordinary error. Retry waits stop at the
+deadline. This is not a hard wall-clock limit on filesystem operations or guard
+cleanup.
 
 Ready repositories are ordered by their latest persisted attempt, oldest first.
 Each repository saves `runs/<repo>/attempt.json` under its lock before fetching
@@ -60,9 +62,10 @@ attempt, then PR number.
 The attempt timestamp is saved before processing, including failed or exhausted
 ticks. An issue-only repository now competes with PR repositories, but continuous
 PR arrivals **can still starve issues within the same repository**.
-For two ready repositories, estimate the second repository's wait as one tick
-budget + one operation limit + cleanup + the service interval. This does not
-establish a one-hour guarantee; production timing has not been measured.
+For two ready repositories with the default budget, estimate the second
+repository's wait as about 2700 seconds + cleanup + the service interval.
+This is not a one-hour guarantee for arbitrary budgets, more repositories, host
+failures or unbounded filesystem I/O. Production timing has not been measured.
 
 ## Dark factory proof
 

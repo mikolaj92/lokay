@@ -7,7 +7,8 @@ import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
-from lokay import start, state
+from lokay import lock, start, state
+from lokay.run import TickExpired
 
 repos = [{'name': 'example/first'}, {'name': 'example/second'}]
 rows = {'example/first': [{'number': 1, 'headRefName': 'lokay/11'}],
@@ -64,5 +65,31 @@ with tempfile.TemporaryDirectory() as tmp, \
          patch('lokay.start.open_pr_for', return_value=None):
         got = start.pick({})
         assert state.state_read(got['repo'], 44)['last_attempt'] >= before
-print('fair_pick: global order, repo order, ties, busy locks, timestamps OK')
+# Expiry rotates a PR repository behind an issue-only repository, under real locks.
+with tempfile.TemporaryDirectory() as tmp, \
+     patch.object(state, 'RUNS', Path(tmp) / 'runs'), \
+     patch.object(lock, 'STATE', Path(tmp) / 'locks'), \
+     patch('lokay.start.probes', return_value={'fixture': 'ok'}), \
+     patch('lokay.start.load_repos', return_value=list(reversed(repos))), \
+     patch('lokay.start.load_skips', return_value=set()), \
+     patch('lokay.start._gh', side_effect=gh), \
+     patch('lokay.start.open_issues', return_value=[{'number': 44, 'title': 'fix'}]), \
+     patch('lokay.start.open_pr_for', return_value=None):
+    rows = {'example/first': [{'number': 1, 'headRefName': 'lokay/11'}],
+            'example/second': []}
+    with patch('lokay.start.advance', side_effect=TickExpired), \
+         patch('lokay.start.resume', side_effect=TickExpired):
+        assert start.main([]) == 0
+    assert state.repo_last_attempt('example/first') > 0
+    assert state.repo_last_attempt('example/second') == 0
+    held = lock.acquire('example', 'example/first')
+    assert held['result'] == 'held', 'expired tick retained its lock'
+    lock.release(held)
+    got = start.pick({})
+    try:
+        assert (got['repo'], got['issue']) == ('example/second', 44), got
+        assert state.repo_last_attempt('example/first') > 0
+    finally:
+        lock.release(got['held'])
+print('fair_pick: global order, repo order, ties, busy locks, timestamps, PR/issue expiry rotation OK')
 PY
