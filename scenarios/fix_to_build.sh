@@ -30,17 +30,16 @@ with tempfile.TemporaryDirectory() as tmp, patch.object(state, 'RUNS', Path(tmp)
     sha = _git(root, ['rev-parse', 'HEAD'])
     picked = {'repo': 'example/repo', 'issue': 7, 'node': 'check'}
     findings = [{'plik': 'code.py', 'pytanie': 'tests'}]
-    fingerprint = hashlib.sha256(json.dumps(sorted({json.dumps(['code.py', 'tests', None, None])})).encode()).hexdigest()
     log = 'failure details\nFAILED tests/test_added.py::test_new - AssertionError\n'
     def reset(**fields):
         state.state_update(picked['repo'], 7, node='fix', sha=sha,
             verdict={'sha': sha, 'result': 'fix', 'uwagi': findings},
-            plan_accepted_sha='accepted', fix_fingerprint=None, build_note=None,
+            plan_accepted_sha='accepted', fix_fingerprint=None, fix_counts=[], build_note=None,
             test_log=log, local_ci={'result': 'red', 'sha': sha, 'log': log}, **fields)
     for no_progress in (False, True):
         reset()
         if no_progress:
-            state.state_update(picked['repo'], 7, fix_fingerprint=fingerprint)
+            state.state_update(picked['repo'], 7, fix_counts=[1, 1])
         with ExitStack() as stack:
             stack.enter_context(patch('lokay.start.load_repos', return_value=[
                 {'name': picked['repo'], 'clone_path': str(root)}]))

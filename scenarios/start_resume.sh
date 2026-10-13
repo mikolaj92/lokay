@@ -55,7 +55,8 @@ with tempfile.TemporaryDirectory() as tmp:
         assert saved['failures'] == failures + 1, saved
         assert saved['retry_at'] == 1000 + min(3600, 60 * 2 ** min(failures, 6)), saved
         assert saved['node'] == 'plan' and saved['plan_phase'] == 'write'
-        assert saved['plan_prompt'].startswith('original prompt') and reason in saved['plan_prompt']
+        assert 'Previous plan:' in saved['plan_prompt'] and reason in saved['plan_prompt']
+        assert 'Uwagi:' in saved['plan_prompt'] and 'Rounds:' in saved['plan_prompt']
         assert saved['plan_evaluations'] == 0 and saved['plan_accepted_sha'] is None
         assert not start.skip_file().exists()
 
@@ -176,16 +177,40 @@ with tempfile.TemporaryDirectory() as tmp:
 
         # Repeated findings return through Plan instead of imposing a Fix cap.
         reset(node='check', issue_title='title', issue_body='body')
-        aggregate.side_effect = [finding, finding, green]
+        aggregate.side_effect = [
+            {**finding, 'uwagi': [{**finding['uwagi'][0], 'linia_od': 1, 'linia_do': end}]}
+            for end in (81, 114, 554)
+        ] + [green]
         code.reset_mock(); prepare.reset_mock()
         with patch('lokay.start._prepare', return_value=(worktree, 'lokay/7', 'new', tests, 2)) as replan:
             assert start.resume(picked)['result'] == 'merged'
             replan.assert_called_once()
-        assert code.call_count == 1
+        assert code.call_count == 2
         saved = state.state_read(repo, 7)
+        assert len(saved['fix_history']) == 3
+        assert '554' in saved['plan_prompt'] and '81' in saved['plan_prompt']
         assert 'Fix made no progress' in saved['plan_prompt']
         assert 'Uwagi:' in saved['plan_prompt'] and 'Rounds:' in saved['plan_prompt']
-        assert 'Fix → Plan: no progress, findings=' in (state.run_dir(repo, 7) / 'rounds.md').read_text()
+        rounds_text = (state.run_dir(repo, 7) / 'rounds.md').read_text()
+        assert 'Fix → Plan: no progress, findings=' in rounds_text
+        fingerprints = [line.split('findings=')[1].split(',')[0]
+                        for line in rounds_text.splitlines() if 'Fix progress:' in line][-3:]
+        assert len(fingerprints) == 3 and len(set(fingerprints)) == 1, fingerprints
+        assert 'Re-Plan prompt:' in rounds_text
+        assert saved['plan_prompt'].split('\n\nTest log:')[0] in rounds_text
+
+        # An unchanged diff is no progress even when the finding count drops.
+        reset(node='check', issue_title='title', issue_body='body')
+        aggregate.side_effect = [
+            {**finding, 'uwagi': [finding['uwagi'][0]] * 2}, finding, green]
+        code.reset_mock()
+        with patch('lokay.run.run_process', return_value=SimpleNamespace(
+                returncode=0, stdout='unchanged diff', stderr='')), \
+             patch('lokay.start._prepare', return_value=(worktree, 'lokay/7', 'new', tests, 2)) as replan:
+            assert start.resume(picked)['result'] == 'merged'
+            replan.assert_called_once()
+        assert code.call_count == 1
+        assert len(state.state_read(repo, 7)['fix_history']) == 2
 
         # Distinct findings can require more than three Fix calls.
         for merge_after in (1, 3, 5):
@@ -197,7 +222,10 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert checks[0] <= merge_after + 1, 'unexpected extra Check'
                 if checks[0] > merge_after:
                     return {**green, 'evidence': {'extra': [1, 2]}}
-                return {**finding, 'uwagi': [{'plik': 'a', 'pytanie': f'bug {checks[0]}'}]}
+                return {**finding, 'uwagi': [
+                    {'plik': 'a', 'pytanie': f'bug {checks[0]}-{index}'}
+                    for index in range(merge_after - checks[0] + 1)
+                ]}
             aggregate.side_effect = bounded_verdict
             result = start.resume(picked)
             expected_fixes = merge_after
