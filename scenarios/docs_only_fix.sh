@@ -55,6 +55,21 @@ Wszystkie ścieżki dotyczą `other.py`. Przed zakończeniem sprawdzić diff.
     assert code_scope_issue(planned_files, detailed_plan) is None
     for outside in ('LocalLLMProvider', 'origin/main', 'MLXProvider', 'other.py', 'Wszystkie'):
         assert code_scope_issue(planned_files + [outside], detailed_plan)
+    table_plan = '''## Pliki
+| Plik | Zmiana |
+| --- | --- |
+| `.gitignore` | opis `other.py` |
+| README.md | dokumentacja |
+| `pyproject.toml` | zależności |
+| File | Change |
+| :--- | ---: |
+Proza wspomina `outside.py`.
+## Testy
+'''
+    table_files = ['.gitignore', 'README.md', 'pyproject.toml', 'uv.lock']
+    assert code_scope_issue(table_files, table_plan) is None
+    for outside in ('Plik', 'File', '---', ':---', 'other.py', 'outside.py'):
+        assert code_scope_issue(table_files + [outside], table_plan)
     verdict = aggregate('sha', {'sha': 'sha', 'result': 'green'}, [{'next': 'ok'}])
     scope = code_scope_issue(files, plan)
     if scope:
