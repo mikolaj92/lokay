@@ -5,7 +5,8 @@ cd "$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 export UV_PROJECT_ENVIRONMENT="$PWD/.venv"
 # Prepare this checkout before isolating the scenario environment.
 env -u UV_NO_SYNC -u UV_OFFLINE uv sync --frozen
-.venv/bin/python - <<'PY'
+# Ignore inherited PYTHONPATH and user site packages during the import gate.
+.venv/bin/python -I - <<'PY'
 from pathlib import Path
 
 import lokay
