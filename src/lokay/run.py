@@ -58,16 +58,18 @@ def run_process(
         text=True,
         start_new_session=True,
     )
+    cleanup_deadline = None
     try:
         try:
             stdout, stderr = process.communicate(timeout=effective_timeout)
         except subprocess.TimeoutExpired as error:
+            cleanup_deadline = time.monotonic() + 5
             try:
                 os.killpg(process.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
             try:
-                stdout, stderr = process.communicate(timeout=5)
+                stdout, stderr = process.communicate(timeout=max(0, cleanup_deadline - time.monotonic()))
             except subprocess.TimeoutExpired as drain_error:
                 stdout = drain_error.output if drain_error.output is not None else error.output
                 stderr = drain_error.stderr if drain_error.stderr is not None else error.stderr
@@ -83,6 +85,6 @@ def run_process(
         # communicate() already reaps the process unless pipe draining failed.
         if process.returncode is None:
             try:
-                process.wait(timeout=5)
+                process.wait(timeout=5 if cleanup_deadline is None else max(0, cleanup_deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 pass

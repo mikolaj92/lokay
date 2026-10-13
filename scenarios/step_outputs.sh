@@ -189,7 +189,9 @@ with tempfile.TemporaryDirectory() as tmp:
         else:
             raise AssertionError('process timeout swallowed')
         killpg.assert_called_once_with(123, signal.SIGKILL)
-    assert process.communicate.call_args_list == [call(timeout=0.25), call(timeout=5)]
+    assert process.communicate.call_args_list[0] == call(timeout=0.25)
+    assert len(process.communicate.call_args_list) == 2
+    assert 0 < process.communicate.call_args_list[1].kwargs['timeout'] <= 5
     process.wait.assert_not_called()
 
     argv = [sys.executable, '-c',

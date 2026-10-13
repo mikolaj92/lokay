@@ -47,8 +47,8 @@ the tick owner releases its lock even if saving fails.
 
 Process calls use the minimum of their operation timeout, 3600 seconds and the
 remaining tick budget. GitHub calls use 60 seconds; setup/local CI use 600 seconds.
-Timed-out process groups are killed. Output draining and process reaping each
-have a five-second cleanup limit. Tick expiry saves `pending`, without failure
+Timed-out process groups are killed. Output draining and process reaping share
+a five-second cleanup budget. Tick expiry saves `pending`, without failure
 backoff; an operation timeout remains an ordinary error. Retry waits stop at the
 deadline. This is not a hard wall-clock limit on filesystem operations or guard
 cleanup.
