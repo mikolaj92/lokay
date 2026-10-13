@@ -922,11 +922,76 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             def fix_action():
                 outcome = fix_code(worktree, sha, prompt, dict(os.environ), clone_path=clone_path)
                 if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
-                    redirected = fix_to_build(picked, worktree)
-                    if redirected:
-                        return redirected
+                    response = outcome.get("pi_response") or outcome.get("explanation") or ""
+                    state_update(picked["repo"], picked["issue"], pi_response=response)
+                    ci = saved.get("local_ci") or {}
+                    lens_kinds = {path.stem.removeprefix("check_") for path in QUESTIONS.glob("check_*.json")}
+                    if (head == sha == verdict.get("sha") == ci.get("sha")
+                            and ci.get("result") == "green"
+                            and ci.get("ci") in ("green", "no_ci")
+                            and all(row.get("pytanie") in lens_kinds and "warstwa" not in row for row in uwagi)):
+                        justification = (response.split("## Dispute", 1)[1].strip()
+                                         if "## Dispute" in response else response[-2000:])
+                        upheld = {}
+                        rejected = []
+                        for kind in sorted({row["pytanie"] for row in uwagi}):
+                            findings = [row for row in uwagi if row["pytanie"] == kind]
+                            request = {
+                                "questions": [{
+                                    "id": "valid", "type": "bool",
+                                    "instructions": "Given the developer's justification, the diff and the issue goal, "
+                                                    "is this review finding still valid and actionable?",
+                                    "options": {"true": "finding still valid, must be fixed", "false": "finding rejected"},
+                                }],
+                                "state": {"issue_title": saved.get("issue_title") or "",
+                                          "issue_body": (saved.get("issue_body") or "")[:4000],
+                                          "findings": findings, "justification": justification[:3000],
+                                          "diff": (diff.stdout or "")[:20000]},
+                            }
+                            answer = _retry(picked, "check", lambda: decide(request))["valid"]
+                            valid = answer["choice"] == "true"
+                            probabilities = answer["probabilities"]
+                            rounds_append(picked["repo"], picked["issue"],
+                                          f"Dispute: {kind} {'upheld' if valid else 'rejected'} "
+                                          f"(p={json.dumps(probabilities)})")
+                            if valid:
+                                upheld[kind] = probabilities
+                            else:
+                                rejected.extend({**row, "zmiana": (row.get("zmiana") or "") +
+                                                 "\nDispute: " + justification} for row in findings)
+                        if rejected:
+                            current = state_read(picked["repo"], picked["issue"])
+                            dismissed = current.get("dispute_dismissed") or {}
+                            keys = dismissed.get("keys", []) if dismissed.get("sha") == sha else []
+                            keys += [[row.get(field) for field in ("plik", "linia_od", "linia_do", "pytanie")]
+                                     for row in rejected]
+                            state_update(picked["repo"], picked["issue"],
+                                         check_notes=current.get("check_notes", []) + rejected,
+                                         dispute_dismissed={"sha": sha, "keys": keys})
+                            _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
+                        if not upheld:
+                            return {"result": "done", "dispute_rejected": True}
+                        remaining = [row for row in uwagi if row["pytanie"] in upheld]
+                        retry_prompt = prompt.replace("\n\nUwagi:\n" + json.dumps(uwagi),
+                                                      "\n\nUwagi:\n" + json.dumps(remaining))
+                        retry_prompt += "\n\nThe finding was upheld after your dispute. Reason to treat it as valid: "
+                        retry_prompt += json.dumps(upheld) + "; your dispute was: " + justification
+                        retry_prompt += ". Make a concrete change.\nRemaining findings:\n"
+                        retry_prompt += json.dumps(remaining)
+                        outcome = fix_code(worktree, sha, retry_prompt, dict(os.environ), clone_path=clone_path)
+                        state_update(picked["repo"], picked["issue"],
+                                     pi_response=outcome.get("pi_response") or outcome.get("explanation") or "")
+                    if outcome.get("result") == "no_changes" or outcome.get("reason") == "no_changes":
+                        redirected = fix_to_build(picked, worktree)
+                        if redirected:
+                            return redirected
                 return outcome
             fixed = fix_step(picked, "fix_code", fix_action, sha)
+            if fixed.get("dispute_rejected"):
+                verdict = {**verdict, "result": "merge", "uwagi": []}
+                pending = "merge"
+                state_update(picked["repo"], picked["issue"], node="merge", result="merge", verdict=verdict)
+                continue
             if fixed.get("next") in ("build", "plan"):
                 return fixed
             if fixed["result"] == "failed":
@@ -1006,6 +1071,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             for name in remote.get("failed") or []
         ], "ci": remote["result"], "notes": [*ci["notes"], *(remote.get("notes") or [])],
             "result": "green" if ci["result"] == "green" and remote["result"] in ("green", "no_ci") else "red"}
+        state_update(picked["repo"], picked["issue"], local_ci=ci)
         def read_stat():
             stat = run_process(["git", "diff", "--stat", "origin/main...HEAD"], cwd=worktree, timeout=30)
             if stat.returncode != 0:
@@ -1051,11 +1117,15 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             print(json.dumps({"event": "check_degenerate_answer", "categories": categories,
                               "plik": file, "linia_od": first, "linia_do": last, "zmiana": change}),
                   file=sys.stderr, flush=True)
+        dismissed = state_read(picked["repo"], picked["issue"]).get("dispute_dismissed") or {}
+        dismissed_keys = dismissed.get("keys", []) if dismissed.get("sha") == sha else []
         for decision in decisions:
             original = decision["uwagi"]
             decision["uwagi"] = [finding for finding in original
                                  if tuple(finding.get(field, "") for field in ("plik", "linia_od", "linia_do", "zmiana"))
-                                 not in degenerate]
+                                 not in degenerate
+                                 and [finding.get(field) for field in ("plik", "linia_od", "linia_do", "pytanie")]
+                                 not in dismissed_keys]
             if original and not decision["uwagi"] and not decision.get("replan"):
                 decision["next"] = "ok"
         verdict = aggregate(sha, ci, decisions)
