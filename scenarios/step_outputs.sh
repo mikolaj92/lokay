@@ -156,10 +156,14 @@ with tempfile.TemporaryDirectory() as tmp:
     assert process.communicate.call_args_list == [call(timeout=0.25), call(timeout=5)]
     process.__exit__.assert_called_once()
 
+    argv = [sys.executable, '-c',
+            'import sys, time; print("ready", flush=True); '
+            'print("waiting", file=sys.stderr, flush=True); time.sleep(30)']
     try:
-        run.run_process([sys.executable, '-c', 'import time; time.sleep(30)'], cwd=tmp, timeout=0.05)
-    except subprocess.TimeoutExpired:
-        pass
+        run.run_process(argv, cwd=tmp, timeout=0.05)
+    except subprocess.TimeoutExpired as error:
+        assert error.cmd == argv and error.timeout == 0.05
+        assert error.output == 'ready\n' and error.stderr == 'waiting\n'
     else:
         raise AssertionError('real process timeout swallowed')
 
