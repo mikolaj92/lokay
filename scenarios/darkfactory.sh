@@ -184,7 +184,9 @@ requests = []
 def verify_rounds(rounds, sha):
     progress = [line for line in rounds if 'Fix progress:' in line]
     assert len(progress) == 1 and 'counts=[1]' in progress[0], rounds
-    rounds = [line for line in rounds if 'Fix progress:' not in line]
+    lenses = [line for line in rounds if 'Check lens ' in line]
+    assert len(lenses) == 14, rounds
+    rounds = [line for line in rounds if 'Fix progress:' not in line and 'Check lens ' not in line]
     assert len(rounds) == 5, rounds
     assert 'Plan 1: ok' in rounds[0], rounds
     assert 'Check 1:' in rounds[1] and 'result=fix' in rounds[1] and 'ci=red' in rounds[1], rounds
@@ -324,9 +326,9 @@ for line in sys.stdin:
             assert state['sha'] == hashlib.sha1((state['branch'] + 'value = 42\n').encode()).hexdigest()
             rounds = (runs / str(issue) / "rounds.md").read_text().splitlines()
             verify_rounds(rounds, state['sha'])
-            rejects(verify_rounds, rounds[:3] + rounds[4:], state['sha'])  # omitted Fix
+            rejects(verify_rounds, [line for line in rounds if 'Fix: sha=' not in line], state['sha'])
             red_merge = list(rounds)
-            red_merge[4] = red_merge[4].replace('ci=green', 'ci=red')
+            red_merge = [line.replace('ci=green', 'ci=red') for line in red_merge]
             rejects(verify_rounds, red_merge, state['sha'])
             beat = json.loads((root / "home/.lokay/heartbeat.json").read_text())
             assert (beat["repo"], beat["issue"], beat["result"]) == ("example/darkfactory", issue, "merged"), beat
@@ -358,7 +360,7 @@ for line in sys.stdin:
         assert (runs / '1/rounds.md').read_bytes() == first_rounds
         assert (runs / '2/state.json').read_bytes() == second_state
         assert (runs / '2/rounds.md').read_bytes() == second_rounds
-        assert len(requests) == 6, requests  # Plan + one combined call per Check, twice.
+        assert len(requests) == 30, requests  # Plan + seven lenses per Check, twice.
         for issue in (1, 2):
             comments = [body for n, body in external["comments"] if n == issue]
             assert len(comments) == 2, comments

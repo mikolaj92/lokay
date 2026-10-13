@@ -630,7 +630,7 @@ def resume(picked: dict) -> dict:
 
 
 def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, plan_rounds: int = 1) -> dict:
-    from lokay.check import aggregate, check_state, decide_batches, hunks, local_ci
+    from lokay.check import QUESTIONS, aggregate, check_state, decide_batches, hunks, local_ci
     from lokay.decide import decide
     from lokay.fix import fix_code, fix_publish
     from lokay.git import _git
@@ -907,18 +907,19 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             return stat.stdout or ""
 
         directory = run_dir(picked["repo"], picked["issue"])
-        art = directory / "plan.md"
         decision_state = check_state(directory, rounds + 1, diff.stdout or "",
                                      _retry(picked, "check", read_stat), ci,
-                                     sha=sha, repo=picked["repo"], issue=picked["issue"],
-                                     plan=art.read_text() if art.is_file() else "")
+                                     sha=sha, repo=picked["repo"], issue=picked["issue"])
         decisions = []
-        kinds = ("correctness alignment architecture security production scope tests",)
+        kinds = tuple(p.stem.removeprefix("check_") for p in sorted(QUESTIONS.glob("check_*.json")))
         for kind in kinds:
             decision = decide_batches(kind, rows, {**decision_state, "kind": kind},
                                       lambda request: _retry(picked, "check", lambda: decide(request)))
             decision["sha"] = sha
             decisions.append(decision)
+            rounds_append(picked["repo"], picked["issue"],
+                          f"Check lens {kind}, round={rounds + 1}: next={decision['next']}, "
+                          f"p={json.dumps(decision.get('probabilities', []))}")
         verdict = aggregate(sha, ci, decisions)
         from lokay.scope import code_scope_issue
 
@@ -940,7 +941,7 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
             saved = state_read(picked["repo"], picked["issue"])
         scope = code_scope_issue(files, saved.get("issue_title") or "", saved.get("issue_body"), added=added_files)
         if scope:
-            verdict = {**verdict, "result": "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
+            verdict = {**verdict, "result": "plan" if verdict["result"] == "plan" else "fix", "uwagi": [*verdict.get("uwagi", []), scope]}
         rounds += 1
         state_update(
             picked["repo"], picked["issue"], node="check", sha=sha,
@@ -960,4 +961,17 @@ def _finish(picked: dict, worktree: Path, branch: str, sha: str, tests: list, pl
         _retry(picked, "check", lambda: check_comment(picked["repo"], pr["number"], rounds, verdict, ci))
         _retry(picked, "check", lambda: refresh_body(picked["repo"], int(picked["issue"])), "updated")
         pending = verdict["result"]
+        if pending == "plan":
+            findings = verdict["replan"] + verdict["uwagi"]
+            reason = "\n".join(item["prompt"] for item in verdict["replan"])
+            rounds_append(picked["repo"], picked["issue"], "Check → Plan: " + reason)
+            prompt = replan_prompt(picked, reason, findings, head)
+            state_update(picked["repo"], picked["issue"], node="plan", plan_phase="write",
+                         plan_prompt=prompt, plan_evaluations=0, plan_accepted_sha=None)
+            prepared = _prepare({**picked, "node": "plan"})
+            if isinstance(prepared, dict):
+                return prepared
+            worktree, branch, sha, tests, plan_rounds = prepared
+            pending = "check"
+            continue
         state_update(picked["repo"], picked["issue"], node=pending)
